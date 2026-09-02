@@ -19,10 +19,12 @@ from .adapters import (
     expected_files,
     expected_links,
     hook_owners,
-    strip_hook,
+    shared_files,
+    strip_hooks,
 )
 from .errors import ConfigurationError
 from .locking import exclusive_lock
+from .shared import GENERATED
 
 STATE_SCHEMA = 2
 START = "# >>> hard-eng repository fallback >>>"
@@ -38,6 +40,7 @@ IGNORED = (
     ".github/hooks/hard-eng.json",
     ".github/instructions/hard-eng.instructions.md",
 )
+IGNORED_SHARED = ("CLAUDE.local.md", ".agents/hard-eng/")
 STATE_FIELDS = {
     "created_directories",
     "created_paths",
@@ -48,6 +51,7 @@ STATE_FIELDS = {
     "generated",
     "repository",
     "schema_version",
+    "shared",
     "snapshots",
 }
 EDITED_BY_HAND = (
@@ -83,6 +87,24 @@ def _run_git(repository: Path, *arguments: str) -> subprocess.CompletedProcess[s
 def _tracked(repository: Path, relative: Path) -> bool:
     result = _run_git(repository, "ls-files", "--error-unmatch", "--", relative.as_posix())
     return result.returncode == 0
+
+
+def _foreign_tracked(repository: Path, relative: Path, shared: bool) -> bool:
+    """Tracked files are off limits, except the generated set a shared repository commits on purpose."""
+    if shared and repository / relative in shared_files(repository):
+        return False
+    return _tracked(repository, relative)
+
+
+def _healable(path: Path, expected: bytes) -> bool:
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_SNAPSHOT_BYTES:
+        return False
+    actual = path.read_bytes()
+    return actual == expected or GENERATED.encode() in actual[:4096]
+
+
+def _ignored(shared: bool, created_paths: list[str]) -> list[str]:
+    return [*(IGNORED_SHARED if shared else IGNORED), *created_paths]
 
 
 def _git_exclude(repository: Path) -> Path:
@@ -239,21 +261,27 @@ def _create_link(
         raise ConfigurationError(f"fallback would replace tracked repository state: {relative}")
     _ensure_parent(path, created_directories, repository)
     if path.is_symlink():
-        if path.resolve(strict=False) == target.resolve(strict=False):
-            return
-        raise ConfigurationError(f"fallback link has another owner: {relative}")
-    if path.exists():
+        if path.resolve(strict=False) != target.resolve(strict=False):
+            raise ConfigurationError(f"fallback link has another owner: {relative}")
+    elif path.exists():
         raise ConfigurationError(f"fallback link path has another owner: {relative}")
-    path.symlink_to(os.path.relpath(target, path.parent), target_is_directory=target.is_dir())
+    else:
+        path.symlink_to(os.path.relpath(target, path.parent), target_is_directory=target.is_dir())
     if relative.as_posix() not in created_paths:
         created_paths.append(relative.as_posix())
 
 
 def _write_managed(
-    repository: Path, path: Path, raw: bytes, mode: int, snapshots: dict[str, dict[str, object]]
+    repository: Path,
+    path: Path,
+    raw: bytes,
+    mode: int,
+    snapshots: dict[str, dict[str, object]],
+    *,
+    shared: bool = False,
 ) -> None:
     relative = Path(_relative(repository, path))
-    if _tracked(repository, relative):
+    if _foreign_tracked(repository, relative, shared):
         raise ConfigurationError(f"fallback would replace tracked repository state: {relative}")
     snapshots.setdefault(relative.as_posix(), _snapshot(path))
     _atomic_write(path, raw, mode)
@@ -289,8 +317,9 @@ def _load_state(path: Path) -> dict[str, object] | None:
             "fallback ownership state has an unsupported schema; remove .agents/hard-eng and the generated "
             "AGENTS.override.md, CLAUDE.local.md, and hook files, then rerun the setup"
         )
-    if set(value) != STATE_FIELDS:
+    if not STATE_FIELDS - {"shared"} <= set(value) <= STATE_FIELDS:
         raise ConfigurationError("fallback ownership state has unsupported fields")
+    value["shared"] = value.get("shared") is True
     return value
 
 
@@ -323,14 +352,15 @@ def _reconcile(repository: Path, payload: Path, state: dict[str, object], *, hea
         raise ConfigurationError("fallback file ownership state is invalid")
     created_paths = _string_list(state.get("created_paths"), "link")
     created_directories = _string_list(state.get("created_directories"), "directory")
-    files = expected_files(repository, payload)
+    shared = state["shared"] is True
+    files = expected_files(repository, payload, shared=shared)
     links = expected_links(repository, payload)
-    composable = composable_files(repository)
+    composable = composable_files(repository, shared=shared)
     stale: list[str] = []
     changed = False
     for path, (expected, mode) in files.items():
         relative = _relative(repository, path)
-        if _tracked(repository, Path(relative)):
+        if _foreign_tracked(repository, Path(relative), shared):
             raise ConfigurationError(f"fallback would replace tracked repository state: {relative}")
         if path.is_symlink() or (path.exists() and not path.is_file()):
             raise ConfigurationError(f"generated Hard Eng file changed type: {relative}")
@@ -379,7 +409,7 @@ def _reconcile(repository: Path, payload: Path, state: dict[str, object], *, hea
         raise ConfigurationError("fallback Git exclude ownership path changed")
     if exclude.is_symlink() or (exclude.exists() and not exclude.is_file()):
         raise ConfigurationError("fallback Git exclude ownership state is invalid")
-    ignored = [*IGNORED, *created_paths]
+    ignored = _ignored(shared, created_paths)
     block = _exclude_block(ignored)
     current = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
     try:
@@ -404,7 +434,7 @@ def _reconcile(repository: Path, payload: Path, state: dict[str, object], *, hea
     return stale
 
 
-def _install_wiring(repository: Path, payload: Path) -> None:
+def _install_wiring(repository: Path, payload: Path, *, shared: bool) -> None:
     state_path = repository / ".agents/hard-eng/wiring.json"
     snapshots: dict[str, dict[str, object]] = {}
     generated: dict[str, str] = {}
@@ -413,20 +443,22 @@ def _install_wiring(repository: Path, payload: Path) -> None:
     exclude = _git_exclude(repository)
     exclude_snapshot: dict[str, object] | None = None
     try:
-        files = expected_files(repository, payload)
-        composable = composable_files(repository)
-        for path in files:
-            if path not in composable and (path.exists() or path.is_symlink()):
+        files = expected_files(repository, payload, shared=shared)
+        composable = composable_files(repository, shared=shared)
+        for path, (raw, _) in files.items():
+            if path in composable or not (path.exists() or path.is_symlink()):
+                continue
+            if not (shared and _healable(path, raw)):
                 raise ConfigurationError(f"fallback generated file has another owner: {_relative(repository, path)}")
         for path, (raw, mode) in files.items():
             _ensure_parent(path, created_directories, repository)
-            _write_managed(repository, path, raw, mode, snapshots)
+            _write_managed(repository, path, raw, mode, snapshots, shared=shared)
             generated[_relative(repository, path)] = _digest(raw)
         for path, target in expected_links(repository, payload).items():
             _create_link(repository, path, target, created_paths, created_directories)
         exclude_snapshot = _snapshot(exclude)
         current_exclude = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
-        ignored = [*IGNORED, *created_paths]
+        ignored = _ignored(shared, created_paths)
         installed_exclude = _compose_exclude(current_exclude, ignored)
         exclude_mode = stat.S_IMODE(exclude.stat().st_mode) if exclude.is_file() else 0o600
         _atomic_write(exclude, installed_exclude, exclude_mode)
@@ -442,6 +474,7 @@ def _install_wiring(repository: Path, payload: Path) -> None:
                 "generated": generated,
                 "repository": str(repository),
                 "schema_version": STATE_SCHEMA,
+                "shared": shared,
                 "snapshots": snapshots,
             },
         )
@@ -464,13 +497,15 @@ def _install_wiring(repository: Path, payload: Path) -> None:
         raise
 
 
-def _release_composable(repository: Path, payload: Path, relative: str, snapshot: dict[str, object]) -> None:
+def _release_composable(
+    repository: Path, payload: Path, relative: str, snapshot: dict[str, object], *, shared: bool
+) -> None:
     path = _inside(repository, relative)
-    owner = next((item for item in hook_owners(repository, payload) if item.path == path), None)
-    if owner is None or not path.is_file() or path.is_symlink():
+    owners = [item for item in hook_owners(repository, payload, shared=shared) if item.path == path]
+    if not owners or not path.is_file() or path.is_symlink():
         return
-    stripped = strip_hook(owner)
-    if stripped == b"{}\n" and snapshot.get("kind") == "absent":
+    stripped = strip_hooks(path, owners)
+    if stripped == b"{}\n" and (shared or snapshot.get("kind") == "absent"):
         path.unlink()
         return
     _atomic_write(path, stripped, stat.S_IMODE(path.stat().st_mode))
@@ -483,6 +518,8 @@ def _uninstall_wiring(repository: Path, payload: Path) -> None:
         return
     if state.get("repository") != str(repository):
         raise ConfigurationError("fallback ownership state belongs to another repository")
+    shared = state["shared"] is True
+    committed = set(shared_files(repository)) if shared else set()
     snapshots = state.get("snapshots")
     generated = state.get("generated")
     exclude_path = state.get("exclude_path")
@@ -500,7 +537,7 @@ def _uninstall_wiring(repository: Path, payload: Path) -> None:
         raise ConfigurationError("fallback ownership state is incomplete")
     created_paths = _string_list(state.get("created_paths"), "link")
     created_directories = _string_list(state.get("created_directories"), "directory")
-    composable = {_relative(repository, path) for path in composable_files(repository)}
+    composable = {_relative(repository, path) for path in composable_files(repository, shared=shared)}
     for relative, snapshot in snapshots.items():
         path = _inside(repository, relative)
         if not isinstance(snapshot, dict):
@@ -514,8 +551,15 @@ def _uninstall_wiring(repository: Path, payload: Path) -> None:
     exclude_mode = stat.S_IMODE(exclude.stat().st_mode) if exclude.is_file() else 0o600
     for relative, snapshot in snapshots.items():
         path = _inside(repository, relative)
-        if relative in composable and path.is_file() and _digest(path.read_bytes()) != generated.get(relative):
-            _release_composable(repository, payload, relative, snapshot)
+        if (
+            relative in composable
+            and path.is_file()
+            and (shared or _digest(path.read_bytes()) != generated.get(relative))
+        ):
+            _release_composable(repository, payload, relative, snapshot, shared=shared)
+        elif path in committed:
+            if path.is_file() or path.is_symlink():
+                path.unlink()
         else:
             _restore(path, snapshot)
     for relative in reversed(created_paths):
@@ -537,11 +581,14 @@ def _uninstall_wiring(repository: Path, payload: Path) -> None:
             pass
 
 
-def install_wiring(repository: Path, payload: Path) -> None:
+def install_wiring(repository: Path, payload: Path, *, shared: bool = False) -> None:
     with _wiring_lock(repository):
         state = _load_state(repository / ".agents/hard-eng/wiring.json")
+        if state is not None and state["shared"] is not shared:
+            _uninstall_wiring(repository, payload)
+            state = None
         if state is None:
-            _install_wiring(repository, payload)
+            _install_wiring(repository, payload, shared=shared)
         else:
             _reconcile(repository, payload, state, heal=True)
 

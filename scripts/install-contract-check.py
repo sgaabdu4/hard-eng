@@ -101,10 +101,13 @@ def assert_arguments(root: Path, env: dict[str, str]) -> None:
     cwd.mkdir(parents=True)
     helped = install(["--help"], cwd=cwd, env=env)
     assert "--global" in helped.stdout and "--repo" in helped.stdout and "--ignore" in helped.stdout
+    assert "--shared" in helped.stdout
     for arguments, message in (
         ([], "choose --global or --repo"),
         (["--global", "--repo"], "choose one of --global or --repo"),
         (["--global", "--ignore"], "--ignore works only with --repo"),
+        (["--global", "--shared"], "--shared works only with --repo"),
+        (["--repo", "--ignore", "--shared"], "choose one of --ignore or --shared"),
         (["--bogus"], "unknown option"),
     ):
         failed = install(arguments, cwd=cwd, env=env, check=False)

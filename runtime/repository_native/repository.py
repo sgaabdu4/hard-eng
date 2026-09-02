@@ -14,10 +14,12 @@ from pathlib import Path
 
 from . import DEFAULT_RELEASE_REPOSITORY, LAUNCHER_SCHEMA
 from .errors import ConfigurationError
-from .models import GlobalState, MarkerPolicy, RepositoryState
+from .models import GlobalState, MarkerPolicy, ReleasePin, RepositoryState
 
 MAX_MARKER_BYTES = 1024 * 1024
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
+RELEASE_TAG = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+(?:-alpha\.g[0-9a-f]{40})?$")
 OWNER_START = "# >>> hard-eng repository owners >>>"
 OWNER_END = "# <<< hard-eng repository owners <<<"
 AGENT_HOME_VARIABLES = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR", "copilot": "COPILOT_HOME"}
@@ -33,6 +35,7 @@ RUNTIME_FILES = (
     "prepare.py",
     "release.py",
     "repository.py",
+    "shared.py",
     "wiring.py",
 )
 
@@ -106,10 +109,22 @@ def _regular_file(path: Path, label: str) -> None:
         raise ConfigurationError(f"{label} must be a regular file: {path}")
 
 
+def _release_pin(value: object) -> ReleasePin:
+    if not isinstance(value, dict) or set(value) != {"tag", "archive_sha256", "manifest_sha256"}:
+        raise ConfigurationError("hard_eng.pin must contain exactly tag, archive_sha256, and manifest_sha256")
+    tag = value["tag"]
+    if not isinstance(tag, str) or not RELEASE_TAG.fullmatch(tag):
+        raise ConfigurationError("hard_eng.pin.tag must be a Hard Eng release tag")
+    for name in ("archive_sha256", "manifest_sha256"):
+        if not isinstance(value[name], str) or not SHA256.fullmatch(value[name]):
+            raise ConfigurationError(f"hard_eng.pin.{name} must be a lowercase hex SHA-256")
+    return ReleasePin(tag, value["archive_sha256"], value["manifest_sha256"])
+
+
 def _marker_policy(value: object) -> MarkerPolicy:
     if not isinstance(value, dict):
         raise ConfigurationError("hard_eng in hard-eng.gates.json must be an object")
-    allowed = {"channel", "minimum_version", "release_repository", "schema_version"}
+    allowed = {"channel", "minimum_version", "pin", "release_repository", "schema_version", "wiring"}
     unknown = sorted(set(value) - allowed)
     if unknown:
         raise ConfigurationError(f"hard_eng has unsupported keys: {', '.join(unknown)}")
@@ -124,7 +139,13 @@ def _marker_policy(value: object) -> MarkerPolicy:
     release_repository = value.get("release_repository", DEFAULT_RELEASE_REPOSITORY)
     if release_repository != DEFAULT_RELEASE_REPOSITORY:
         raise ConfigurationError(f"hard_eng.release_repository must be {DEFAULT_RELEASE_REPOSITORY}")
-    return MarkerPolicy(channel, minimum, release_repository)
+    wiring = value.get("wiring")
+    if wiring is not None and wiring != "shared":
+        raise ConfigurationError("hard_eng.wiring must be shared when present")
+    if (wiring == "shared") != ("pin" in value):
+        raise ConfigurationError("hard_eng.wiring = shared and hard_eng.pin must be set together")
+    pin = _release_pin(value["pin"]) if "pin" in value else None
+    return MarkerPolicy(channel, minimum, release_repository, wiring == "shared", pin)
 
 
 def inspect_repository(start: Path) -> RepositoryState:

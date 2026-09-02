@@ -10,10 +10,11 @@ import subprocess
 from pathlib import Path
 
 from . import DEFAULT_RELEASE_REPOSITORY, SUPPORTED_AGENTS
+from .adapters import shared_files
 from .errors import ConfigurationError, ReleaseUnavailable
 from .locking import exclusive_lock
 from .models import MarkerPolicy, PreparedState
-from .prepare import prepare, remove_fallback
+from .prepare import prepare, remove_fallback, share
 from .release import select_release, stage_release
 from .repository import (
     AGENT_LABELS,
@@ -170,6 +171,15 @@ class OwnerJournal:
                 raise ConfigurationError(f"could not stage {name}; use --repo --ignore to keep it local")
             self.staged.append(name)
 
+    def stage_shared(self) -> list[str]:
+        names = ["hard-eng.gates.json"] + [
+            path.relative_to(self.root).as_posix() for path in shared_files(self.root) if path.is_file()
+        ]
+        added = git(self.root, "add", "--", *names, check=False)
+        if added.returncode != 0:
+            raise ConfigurationError(f"could not stage the shared Hard Eng files: {added.stderr.strip()}")
+        return names
+
     def rollback(self) -> None:
         for name in self.staged:
             git(self.root, "rm", "--cached", "--quiet", "--", name, check=False)
@@ -314,7 +324,7 @@ def install_global(home: Path) -> int:
     return 0
 
 
-def install_repository(start: Path, home: Path, *, private: bool) -> int:
+def install_repository(start: Path, home: Path, *, private: bool, shared: bool = False) -> int:
     root = find_repository(start)
     if Path.cwd().resolve() != root:
         raise ConfigurationError(f"run this from the repository root: {root}")
@@ -326,17 +336,25 @@ def install_repository(start: Path, home: Path, *, private: bool) -> int:
             if not private:
                 journal.stage()
             agents = [agent for agent in SUPPORTED_AGENTS if agent_installed(agent)] or ["codex"]
-            prepared = {agent: prepare(root, home, agent) for agent in agents}
+            prepared = {
+                agent: share(root, home, agent, repin=True) if shared else prepare(root, home, agent)
+                for agent in agents
+            }
             modes = {state.mode for state in prepared.values()}
-            if len(modes) != 1 or not modes <= {"global", "fallback"}:
+            allowed = {"shared"} if shared else {"global", "fallback"}
+            if len(modes) != 1 or not modes <= allowed:
                 raise ConfigurationError("Hard Eng did not prepare this repository the same way for every agent")
         except BaseException:
             journal.rollback()
             raise
+        staged_shared = journal.stage_shared() if shared else []
     state = next(iter(prepared.values()))
     identity = state.version or state.hard_eng_root
     print(f"Hard Eng repository setup: {state.mode} ({identity}) in {root}")
     for line in agent_lines(home, {agent: state for agent in SUPPORTED_AGENTS}):
         print(f"  {line}")
-    print(journal.summary())
+    if staged_shared:
+        print(f"Staged {', '.join(staged_shared)}; commit them so every clone bootstraps Hard Eng {state.version}.")
+    else:
+        print(journal.summary())
     return 0

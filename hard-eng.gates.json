@@ -22,6 +22,9 @@
       "scripts/hooks/agent-hook.sh",
       "scripts/repository-native-agent-contract-check.py",
       "scripts/repository-native-contract-check.py",
+      "scripts/repository-native-shared-contract-check.py",
+      "scripts/rollout-shared.py",
+      "scripts/rollout-shared-contract-check.py",
       "scripts/install-contract-check.py",
       "scripts/setup/repository-native.sh",
       "runtime/repository_native/__init__.py",
@@ -34,6 +37,7 @@
       "runtime/repository_native/prepare.py",
       "runtime/repository_native/release.py",
       "runtime/repository_native/repository.py",
+      "runtime/repository_native/shared.py",
       "runtime/repository_native/wiring.py",
       "scripts/machine-scope-guard-contract.py",
       "skills/he-learn/scripts/learning_state.py",
@@ -49,6 +53,16 @@
         "checkpoint check",
         "runtime/repository_native/cli.py",
         "scripts/repository-native-contract-check.py"
+      ],
+      "shared-clone-bootstrap": [
+        "checkpoint check",
+        "runtime/repository_native/shared.py",
+        "scripts/repository-native-shared-contract-check.py"
+      ],
+      "shared-rollout": [
+        "checkpoint check",
+        "scripts/rollout-shared.py",
+        "scripts/rollout-shared-contract-check.py"
       ],
       "terminal-install": ["checkpoint check", "install.sh", "scripts/install-contract-check.py"],
       "active-plan-delete": [
@@ -86,7 +100,7 @@
         "scripts/enforcement_checkpoint.pl",
         "scripts/agent-hook-contract-check.py"
       ],
-      "direct-receipt-scope-freeze": [
+      "direct-receipt-scope": [
         "checkpoint check",
         "skills/he/scripts/execution_direct.py",
         "scripts/agent-hook-contract-check.py"

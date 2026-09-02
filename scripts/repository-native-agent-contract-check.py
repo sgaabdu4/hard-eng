@@ -27,7 +27,7 @@ from git_env import git_env
 INSTALL = ROOT / "install.sh"
 CONTRACT = ROOT / "scripts/repository-native-contract-check.py"
 AGENTS = ("codex", "claude", "copilot")
-CASES = ("no-git", "unmarked", "fallback", "global")
+CASES = ("no-git", "unmarked", "fallback", "global", "shared")
 HOMES = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR", "copilot": "COPILOT_HOME"}
 RULES_PROMPT = (
     "Do not run any tools. Reply with exactly one line of JSON and nothing else, with these keys: "
@@ -116,6 +116,10 @@ def build_release(work: Path) -> tuple[Path, dict[str, str]]:
     real_gh = shutil.which("gh")
     if real_gh is None:
         raise SystemExit("the GitHub CLI is required")
+    downloads = work / "release/downloads" / contract.TAG
+    downloads.mkdir(parents=True)
+    for name in (f"hard-eng-{contract.TAG}.tar.gz", f"hard-eng-{contract.TAG}.manifest.json"):
+        shutil.copy2(assets / name, downloads / name)
     env = {
         name: value
         for name, value in os.environ.items()
@@ -124,6 +128,7 @@ def build_release(work: Path) -> tuple[Path, dict[str, str]]:
     env["PATH"] = os.pathsep.join((str(fake_bin), env["PATH"]))
     env["HARD_ENG_TEST_ASSETS"] = str(assets)
     env["HARD_ENG_TEST_REAL_GH"] = real_gh
+    env["HARD_ENG_RELEASE_BASE_URL"] = downloads.parent.as_uri()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     return payload, env
 
@@ -311,7 +316,9 @@ def expect(report: dict, key: str, ok: bool, detail: str) -> None:
     report[key] = {"ok": ok, "detail": detail[:600]}
 
 
-def rules_check(sandbox: Sandbox, agent: str, cwd: Path, *, hard_eng: bool, timeout: int) -> dict:
+def rules_check(
+    sandbox: Sandbox, agent: str, cwd: Path, *, hard_eng: bool, timeout: int, skill_required: bool = True
+) -> dict:
     report: dict = {}
     code, text, stderr = sandbox.run_agent(agent, cwd, RULES_PROMPT, timeout=timeout)
     value = parse_json(text) or {}
@@ -324,16 +331,25 @@ def rules_check(sandbox: Sandbox, agent: str, cwd: Path, *, hard_eng: bool, time
         report, "repository", (value.get("repository") == "loaded") == repository_expected, str(value.get("repository"))
     )
     expect(report, "hard_eng", (value.get("hard_eng") == "Direct") == hard_eng, str(value.get("hard_eng")))
-    expect(report, "skill", (value.get("skill") == "plain-english") == hard_eng, str(value.get("skill")))
+    skill_ok = (value.get("skill") == "plain-english") == hard_eng
+    expect(report, "skill", skill_ok or not skill_required, str(value.get("skill")))
     return report
 
 
-def block_check(sandbox: Sandbox, agent: str, cwd: Path, *, timeout: int, codex_flags: tuple[str, ...] = ()) -> dict:
+def block_check(
+    sandbox: Sandbox,
+    agent: str,
+    cwd: Path,
+    *,
+    timeout: int,
+    codex_flags: tuple[str, ...] = (),
+    denial: str = "Blocked git",
+) -> dict:
     sentinel = cwd / "hook-sentinel.txt"
     sentinel.write_text(SENTINEL_UNCOMMITTED, encoding="utf-8")
     code, text, stderr = sandbox.run_agent(agent, cwd, BLOCK_PROMPT, timeout=timeout, codex_flags=codex_flags)
     survived = sentinel.read_text(encoding="utf-8") == SENTINEL_UNCOMMITTED
-    hook_seen = "Blocked git" in text
+    hook_seen = denial in text
     report: dict = {"exit": code, "reply": text.strip()[-600:]}
     if code != 0:
         report["stderr"] = stderr
@@ -345,10 +361,62 @@ def block_check(sandbox: Sandbox, agent: str, cwd: Path, *, timeout: int, codex_
     return report
 
 
-def prepare_repository(sandbox: Sandbox, repository: Path, *, expected_mode: str) -> dict:
-    result = shell(["bash", str(INSTALL), "--repo"], cwd=repository, env=sandbox.env, timeout=600)
+def prepare_repository(sandbox: Sandbox, repository: Path, *, expected_mode: str, shared: bool = False) -> dict:
+    command = ["bash", str(INSTALL), "--repo", *(["--shared"] if shared else [])]
+    result = shell(command, cwd=repository, env=sandbox.env, timeout=600)
     ok = result.returncode == 0 and f"Hard Eng repository setup: {expected_mode}" in result.stdout
     return {"ok": ok, "stdout": result.stdout[-1200:], "stderr": result.stderr[-1200:]}
+
+
+def run_shared_case(sandbox: Sandbox, case_root: Path, repository: Path, options: argparse.Namespace) -> dict:
+    """Share the repository once, then prove fresh clones bootstrap Hard Eng and stay guarded without it."""
+    report: dict = {"home": str(sandbox.home)}
+    timeout = options.timeout
+    report["prepare"] = prepare_repository(sandbox, repository, expected_mode="shared", shared=True)
+    if not report["prepare"]["ok"]:
+        return report
+    subprocess.run(["git", "add", "-A"], cwd=repository, env=git_env(), check=True)
+    subprocess.run(
+        ["git", *contract.IDENTITY, "commit", "-qm", "wire Hard Eng"], cwd=repository, env=git_env(), check=True
+    )
+    for variant in ("clone", "offline"):
+        clone = case_root / variant
+        subprocess.run(["git", "clone", "-q", str(repository), str(clone)], cwd=case_root, env=git_env(), check=True)
+        saved_base_url = sandbox.env["HARD_ENG_RELEASE_BASE_URL"]
+        if variant == "offline":
+            sandbox.env["HARD_ENG_RELEASE_BASE_URL"] = (case_root / "nowhere").as_uri()
+        for agent in options.agents:
+            agent_report: dict = {}
+            if agent == "codex":
+                sandbox.write_codex_config(trusted=clone)
+            if agent == "copilot":
+                sandbox.trust_copilot(clone)
+            if variant == "clone":
+                agent_report["rules-first"] = rules_check(
+                    sandbox, agent, clone, hard_eng=True, timeout=timeout, skill_required=agent == "claude"
+                )
+                agent_report["block"] = block_check(
+                    sandbox, agent, clone, timeout=timeout, codex_flags=CODEX_HOOKS_TRUSTED
+                )
+                agent_report["rules"] = rules_check(sandbox, agent, clone, hard_eng=True, timeout=timeout)
+                status = subprocess.run(
+                    ["git", "status", "--short"], cwd=clone, env=git_env(), check=True, capture_output=True, text=True
+                ).stdout
+                agent_report["clean"] = {
+                    "exit": 0,
+                    "tree": {"ok": status == "", "detail": status or "clone stayed clean"},
+                }
+            else:
+                agent_report["block"] = block_check(
+                    sandbox, agent, clone, timeout=timeout, codex_flags=CODEX_HOOKS_TRUSTED, denial="not downloaded"
+                )
+            if agent == "codex":
+                sandbox.write_codex_config()
+            if agent == "copilot":
+                sandbox.trust_copilot(None)
+            report[f"{agent}-{variant}"] = agent_report
+        sandbox.env["HARD_ENG_RELEASE_BASE_URL"] = saved_base_url
+    return report
 
 
 def install_global(sandbox: Sandbox) -> dict:
@@ -369,6 +437,8 @@ def run_case(name: str, work: Path, base_env: dict[str, str], options: argparse.
         return report
     repository = work / name / "repository"
     init_repository(repository, marked=name != "unmarked")
+    if name == "shared":
+        return run_shared_case(sandbox, work / name, repository, options)
     if name == "global":
         report["install"] = install_global(sandbox)
         if not report["install"]["ok"]:
@@ -415,7 +485,8 @@ def run_case(name: str, work: Path, base_env: dict[str, str], options: argparse.
 def summarize(report: dict) -> list[str]:
     lines: list[str] = []
     for case, value in report.items():
-        for agent in (*AGENTS, *(f"{item}-no-git" for item in AGENTS)):
+        variants = ("", "-no-git", "-clone", "-offline")
+        for agent in (f"{item}{variant}" for item in AGENTS for variant in variants):
             entry = value.get(agent)
             if not isinstance(entry, dict):
                 continue
