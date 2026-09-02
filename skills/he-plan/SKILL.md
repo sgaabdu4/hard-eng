@@ -20,18 +20,19 @@ description: Produce and approve one lean living Feature Brief after he selects 
 
 | # | Step | Receipt (`record-step --step`) | Content |
 |---|---|---|---|
-| 1 | Code study | `code-study` | `owners` = repository files that own the change + `callers` + `notes`; bound to HEAD, re-record after any commit |
+| 1 | Code study | `code-study` | `owners` = repository files that own the change + `callers` + `answers` = `could_break` + `owner` + `existing_capability` (or `none`) + `external_contract` (or `none`); bound to HEAD, re-record after any commit |
 | 2 | Outside research | `research` (= `execution_evidence.py record-research`) | current primary sources for every external fact + verified/unknown lists |
 | 3 | Edge-case scan | `edge-scan` | one entry per axis: `actors`, `empty-error-retry`, `data-lifecycle`, `delivery-form`, `external-concurrency`, `accessibility`, `rollout-rollback`; `none` when the axis has no material hit |
-| 4 | Decision inventory + questions | `decisions` | every material decision `D-n` with `status` = `settled|user-decision|deferred|out-of-scope|blocked-external` + `settled_by` (evidence, research, or the user's reply); `question-me` runs until no `user-decision` remains |
-| 5 | Slice graph | `slices` | every vertical slice `S-n` with `depends_on`; numbered without gaps; no loop |
-| 6 | Closing question | `closing` | `plan_state.py probe-trackers` first (live `gh auth status`, Jira `myself`, Azure project GET; credentials from env or `.env`); offer only `available=yes` trackers + name the missing variable for the rest; `tickets` = `none|local|github|jira|azdo` + the user's `reply`; asked in the same message as the Ready-to-build ask |
+| 4 | Decision inventory + questions | `decisions` | every material decision `D-n` with `status` = `settled|user-decision|deferred|out-of-scope|blocked-external` + `settled_by` (evidence, research, or the user's reply) + `rejected` = alternatives considered + why not (open decision = the options offered); `question-me` runs until no `user-decision` remains |
+| 5 | Slice graph | `slices` | every vertical slice `S-n` with `depends_on`; numbered without gaps; no loop; `answers` = `thinnest_path` (why S-1 alone proves value) + `parallel` (slices that can run at once, or `none`) |
+| 6 | Closing question | `closing` | `plan_state.py probe-trackers` first (live `gh auth status`, Jira `myself`, Azure project GET; credentials from env or `.env`); offer only `available=yes` trackers + name the missing variable for the rest; `tickets` = `none|local|github|jira|azdo` + the user's `reply` + `answers` = `unknowns` (still unknown going into build, or `none`); asked in the same message as the Ready-to-build ask |
 
 ```sh
 python3 <he-dir>/scripts/plan_state.py record-step --repo <repo> --plan <PLAN.md> --step <step> --payload-file <json|->
 python3 <he-dir>/scripts/plan_state.py probe-trackers --repo <repo> --plan <PLAN.md> [--write-env-example]
 ```
 
+- Answer rule = every listed key required + nonempty + unknown keys refused + placeholder text (`tbd`, `todo`, `tba`, `n/a`, `?`) refused; a receipt proves the step said something, never that it was right.
 - `validate`/`inspect` print `plan_steps=<done>/6` + `plan_steps_missing` + `plan_steps_open_decisions`; `ready_for_approval=yes` only when the brief and every step are complete.
 - After approval `inspect` prints the handoff block: `handoff_root`, `handoff_branch`, `handoff_plan`, `handoff_prompt` (single mode) or one `handoff_ticket_N` + prompt per claimable ticket; show it verbatim to the user as the last planning message.
 - Missing/stale root `PRODUCT.md` + product-truth change → load [product-md.md](references/product-md.md).
