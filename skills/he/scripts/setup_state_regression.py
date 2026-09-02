@@ -363,7 +363,10 @@ def install_global_hooks(module, base: Path) -> None:
     post_checkout.write_text(f'#!/bin/sh\nexec bash "{module.COPY_HOOK}" "$@"\n', encoding="utf-8")
     post_checkout.chmod(0o755)
     config = base / "gitconfig"
-    config.write_text(f"[core]\n\thooksPath = {hooks}\n", encoding="utf-8")
+    config.write_text(
+        f"[core]\n\thooksPath = {hooks}\n[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n",
+        encoding="utf-8",
+    )
     GLOBAL_CONFIG = str(config)
 
 
