@@ -24,6 +24,7 @@ from evidence_lib import (
     utc_text,
 )
 from execution_evidence import validate_research
+from plan_sections import PlanError, parse_sections, parse_slices
 
 RECEIPT_NAME = "plan-steps.json"
 SCHEMA_VERSION = 1
@@ -127,6 +128,14 @@ def validate_decisions(repo: Path, payload: dict[str, object]) -> dict[str, obje
     return {"decisions": decisions}
 
 
+def brief_slices(plan: Path) -> list[dict[str, object]]:
+    try:
+        graph = parse_slices(parse_sections(plan.read_text(encoding="utf-8"))["Vertical slices"])
+    except (OSError, UnicodeError, PlanError) as error:
+        raise PlanStepError(f"Vertical slices section is not recordable: {error}") from error
+    return [{"id": identifier, "depends_on": list(dependencies)} for identifier, dependencies in graph.items()]
+
+
 def validate_slices(repo: Path, payload: dict[str, object]) -> dict[str, object]:
     entries = payload.get("slices")
     if not isinstance(entries, list) or not entries:
@@ -211,6 +220,8 @@ def record(repo: Path, plan: Path, step: str, payload: dict[str, object]) -> dic
     if step not in VALIDATORS:
         raise PlanStepError(f"step must be one of {', '.join(RECORDED_STEPS)}")
     receipt = load(repo, plan)
+    if step == "slices" and "slices" not in payload:
+        payload = {"slices": brief_slices(plan)}
     entry = VALIDATORS[step](repo, payload)
     entry["recorded_at"] = utc_text(utc_now())
     entry["repository_head"] = current_head(repo)

@@ -27,7 +27,16 @@ from plan_cleanup import draft as run_plan_draft
 from plan_cleanup import run as run_plan_cleanup
 from plan_parser import build as build_parser
 from plan_paths import safe_plan_path as _resolve_safe_plan_path
-from plan_sections import PlanError, frozen_fingerprint, parse_sections, risk_fields, token_for
+from plan_sections import (
+    PlanError,
+    closing_fields,
+    frozen_fingerprint,
+    parse_sections,
+    parse_slices,
+    risk_fields,
+    token_for,
+    with_closing_rows,
+)
 from plan_template import render as render_template
 from safe_plan_io import (
     SafePlanIOError,
@@ -216,6 +225,9 @@ def validate_text(
     elif artifact != "none":
         raise PlanError("non-green state requires green_artifact = none")
     risk_fields(sections["Risk and rollback"])
+    closing_fields(sections["Risk and rollback"])
+    if not PLACEHOLDER.search(sections["Vertical slices"]):
+        parse_slices(sections["Vertical slices"])
     ux_matches = re.findall(r"(?m)^- ux_reference = (.+)$", sections["Material decisions"])
     if not (allow_legacy_missing_ux_reference and not ux_matches):
         try:
@@ -616,7 +628,15 @@ def command_record_step(args: argparse.Namespace) -> None:
     path, text, _, state = read_checked(repo, args.plan, validate_authorization=False)
     if state["lifecycle_status"] != "planning":
         raise PlanError("record-step requires a planning brief")
-    entry = plan_steps.record(repo, path, args.step, plan_steps.read_payload(args.payload_file))
+    payload = plan_steps.read_payload(args.payload_file)
+    with plan_lock(repo, path):
+        path, text, mode, state = read_checked(repo, str(path), validate_authorization=False)
+        entry = plan_steps.record(repo, path, args.step, payload)
+        if args.step == "closing":
+            candidate = with_closing_rows(text, str(entry["tickets"]), str(entry["tracker"]))
+            state = validate_text(candidate)
+            replace_if_unchanged(repo, path.relative_to(repo), text.encode("utf-8"), mode, candidate.encode("utf-8"))
+            text = candidate
     emit(path, text, state)
     print(f"recorded_step={args.step}")
     print(f"recorded_at={entry['recorded_at']}")

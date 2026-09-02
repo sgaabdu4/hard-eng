@@ -17,7 +17,7 @@
 
 - Path = `features/<feature-slug>/PLAN.md`.
 - State block = script-owned; prose sections = living accepted state.
-- Required order = Outcome → Non-goals → Material decisions → Acceptance examples → Affected canonical areas → Risk and rollback → First vertical slice.
+- Required order = Outcome → Non-goals → Material decisions → Acceptance examples → Affected canonical areas → Risk and rollback → Vertical slices.
 - Entry = concise bullets; evidence links/commands only when they change a decision.
 - Placeholder = allowed during planning + forbidden at Ready-to-build approval.
 - Material decisions requires `ux_reference` + `ux_reference_sources`; no visual surface → both `n/a`.
@@ -33,7 +33,7 @@
 - Frozen = Outcome + Non-goals + Material decisions + Acceptance examples + `risk_level` + `critical_overlay`.
 - Approval fingerprint = frozen content only.
 - Changed frozen bytes after approval = deterministic FAIL → restore approved bytes; reopen only when accepted constraints materially changed.
-- Engineering context = Affected canonical areas + rollback + `deferred` + `blocked_on` + First vertical slice; edit without reapproval.
+- Engineering context = Affected canonical areas + rollback + `deferred` + `blocked_on` + `tickets`/`tracker` + Vertical slices; edit without reapproval.
 
 ## Risk
 
@@ -44,6 +44,8 @@
 - `rollback` = safest recovery action or `not-applicable: <reason>`.
 - `deferred` = visible decision not yet precisely phrasable + what must sharpen it, or `none`; graduate it when an accepted answer sharpens it; never a reason to hold the brief.
 - `blocked_on` = exact user action outside the agent + dependent slice, or `none`; it delays approval only when it changes a frozen constraint.
+- `tickets` = closing answer `none|local|github|jira|azdo` + `tracker` = probe result; written by `record-step closing`; living rows outside the fingerprint.
+- Vertical slices = every `S-n = <behavior>; depends_on = none|S-a, S-b` row + its `proof`; validator rejects gaps, unknown dependencies, and loops; the graph feeds `record-step slices` and ticket decomposition.
 - Both rows are living engineering context; recording one keeps unblocked planning and building moving.
 
 ## Applicability Scan
@@ -80,8 +82,12 @@
 - rollback = disable the publish route and preserve drafts.
 - deferred = public URL format; sharpens once the first published draft exists.
 - blocked_on = none
+- tickets = local
+- tracker = not-probed
 
-## First vertical slice
-- S-1 = authorized publish command → stored published state → visible URL.
+## Vertical slices
+- S-1 = authorized publish command → stored published state → visible URL; depends_on = none
 - proof = focused command tests + denied-role test + one end-to-end publish scenario.
+- S-2 = public URL shown in the editor list; depends_on = S-1
+- proof = list render test.
 ```

@@ -78,7 +78,7 @@ BRIEF_SECTIONS = """
 - deferred = none
 - blocked_on = none
 
-## First vertical slice
+## Vertical slices
 - S-1 = complete the behavior.
 - proof = focused test + full gate.
 """
@@ -201,7 +201,7 @@ def approval_fixture(root: Path) -> tuple[Path, Path, str]:
 - deferred = none
 - blocked_on = none
 
-## First vertical slice
+## Vertical slices
 - S-1 = complete the behavior.
 - proof = focused test + full gate.
 """
@@ -655,6 +655,7 @@ def main() -> int:
         missing_steps = subprocess.run(approve, text=True, capture_output=True, check=False)
         require(missing_steps.returncode != 0, "configured approval skipped the planning steps")
         record_planning_steps(approval_repo, approval_plan)
+        approve[approve.index("--expect-token") + 1] = plan_state.token_for(approval_plan.read_text(encoding="utf-8"))
         approved = subprocess.run(approve, text=True, capture_output=True, check=False)
         require(approved.returncode == 0, approved.stderr)
         integrated = json.loads((approval_plan.parent / "receipts" / "authorization.json").read_text())

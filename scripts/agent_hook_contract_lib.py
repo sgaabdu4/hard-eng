@@ -43,7 +43,7 @@ BRIEF_SECTIONS = """
 - deferred = none
 - blocked_on = none
 
-## First vertical slice
+## Vertical slices
 - S-1 = complete the behavior.
 - proof = focused test + full gate.
 """
