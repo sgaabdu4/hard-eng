@@ -17,6 +17,7 @@ from pathlib import Path
 
 from bounded_run import run as run_bounded_process
 from bounded_run import run_captured
+from clones_family import ClonesFamilyError, validate_clones
 from enforcement_benchmark import benchmark
 from git_env import git_env
 from source_tree_coordination import (
@@ -46,6 +47,7 @@ FAMILY_PATTERNS = {
     "lint": re.compile(r"\beslint\b|\boxlint\b|\bbiome\b.*\blint\b|\blint\b"),
     "tests": re.compile(r"\bvitest\b|\bjest\b|\bplaywright\b|--test\b|\btests?\b"),
     "fallow": re.compile(r"\bfallow\b"),
+    "clones": re.compile(r"\bjscpd\b|\bcpd\b"),
     "python-types": re.compile(r"\bpyright\b"),
     "skill-contracts": re.compile(r"check-skill-contracts\.py"),
     "managed-skills": re.compile(r"check-managed-skills\.js"),
@@ -174,6 +176,10 @@ def load_manifest(
         if executable in {"npx", "npx.cmd"}:
             _validate_npx(family, command)
         _validate_quality_scope(family, command)
+        try:
+            validate_clones(repo, family, command)
+        except ClonesFamilyError as error:
+            raise ProjectGateError(str(error)) from error
         _validate_python_security(family, command)
         validated[family] = tuple(command)
     if validate_external and any(command[0].lower() in {"npx", "npx.cmd"} for command in validated.values()):
@@ -294,12 +300,11 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
         )
     if family == "fallow":
         if (
-            "--fail-on-issues" not in command
-            or "audit" in command
-            or "--format" not in command
-            or command[command.index("--format") + 1 : command.index("--format") + 2] != ["json"]
+            "audit" not in command
+            or _option_value(command, "--format") != "json"
+            or _option_value(command, "--max-crap") is None
         ):
-            raise ProjectGateError("fallow requires full combined JSON mode with --fail-on-issues")
+            raise ProjectGateError("fallow requires audit mode with --format json and --max-crap <N>")
     elif family == "react-doctor":
         if (
             len(command) < 4
@@ -426,40 +431,30 @@ def validate_quality_report(family: str, output: str) -> None:
         report = json.loads(output)
     except ValueError as error:
         raise ProjectGateError("fallow did not emit one valid JSON report") from error
-    if not isinstance(report, dict) or report.get("kind") != "combined":
-        raise ProjectGateError("fallow report is not a full combined scan")
-    check = report.get("check")
-    dupes = report.get("dupes")
-    health = report.get("health")
-    if not isinstance(check, dict) or not isinstance(dupes, dict) or not isinstance(health, dict):
-        raise ProjectGateError("fallow combined report is missing check/dupes/health")
-    total_issues = check.get("total_issues")
-    clone_groups = dupes.get("clone_groups")
-    clone_families = dupes.get("clone_families")
-    findings = health.get("findings")
-    styling_findings = health.get("styling_findings", [])
-    if (
-        not isinstance(total_issues, int)
-        or not isinstance(clone_groups, list)
-        or not isinstance(clone_families, list)
-        or not isinstance(findings, list)
-        or not isinstance(styling_findings, list)
-    ):
-        raise ProjectGateError("fallow combined report has an invalid finding shape")
-    if total_issues or clone_groups or clone_families or findings or styling_findings:
-        first = findings[0] if findings else None
-        first_label = ""
-        if isinstance(first, dict):
-            first_label = (
-                f"; first={first.get('path', '?')}:{first.get('line', '?')}"
-                f" {first.get('name', '?')} severity={first.get('severity', '?')}"
-            )
-        raise ProjectGateError(
-            "fallow report contains findings: "
-            f"check={total_issues} duplicate_groups={len(clone_groups)} "
-            f"duplicate_families={len(clone_families)} health={len(findings)} "
-            f"styling={len(styling_findings)}{first_label}"
-        )
+    if not isinstance(report, dict) or report.get("kind") != "audit":
+        raise ProjectGateError("fallow report is not an audit report")
+    verdict = report.get("verdict")
+    summary = report.get("summary")
+    attribution = report.get("attribution")
+    if verdict not in {"pass", "warn", "fail"} or not isinstance(summary, dict) or not isinstance(attribution, dict):
+        raise ProjectGateError("fallow audit report is missing verdict/summary/attribution")
+    if verdict == "fail":
+        counts = ", ".join(f"{key}={value}" for key, value in sorted(attribution.items()) if isinstance(value, int))
+        first = _first_audit_finding(report)
+        raise ProjectGateError(f"fallow audit verdict=fail: {counts}{first}")
+
+
+def _first_audit_finding(report: dict) -> str:
+    for section in ("health", "complexity", "dead_code", "duplication"):
+        block = report.get(section)
+        findings = block.get("findings") if isinstance(block, dict) else None
+        if not isinstance(findings, list):
+            continue
+        for finding in findings:
+            if isinstance(finding, dict) and finding.get("introduced", True):
+                where = f"{finding.get('path', finding.get('file', '?'))}:{finding.get('line', '?')}"
+                return f"; first={where} {finding.get('name', finding.get('rule', '?'))}"
+    return ""
 
 
 def _run_family(

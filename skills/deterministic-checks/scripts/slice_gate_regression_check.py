@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -165,9 +166,8 @@ def make_repo(
         "value = mode.read_text().strip() if mode.is_file() else ''\n"
         "failed = value == f'fail:{family}'\n"
         "if family == 'fallow' and not failed:\n"
-        "    print(json.dumps({'kind': 'combined', 'check': {'total_issues': 0}, "
-        "'dupes': {'clone_groups': [], 'clone_families': []}, "
-        "'health': {'findings': []}}))\n"
+        "    print(json.dumps({'kind': 'audit', 'verdict': 'pass', "
+        "'summary': {'dead_code_issues': 0}, 'attribution': {'gate': 'new-only'}}))\n"
         "if family == 'react-doctor' and not failed:\n"
         "    print(json.dumps({'schemaVersion': 3, 'mode': 'full', "
         "'reactDetected': True, 'ok': True, 'error': None, 'diagnostics': [], "
@@ -190,7 +190,7 @@ def make_repo(
     if boundary:
         family_args["boundary-contracts"] = ["boundary-contracts"]
     quality_commands = {
-        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
+        "fallow": ["npx", "--yes", "fallow@latest", "audit", "--max-crap", "30", "--format", "json"],
         "react-doctor": list(REACT_DOCTOR_COMMAND),
         "dart-decimate": ["npx", "--yes", "dart-decimate@latest", "json", "."],
     }
@@ -887,6 +887,39 @@ def lifecycle_drift_cases(state, root: Path) -> None:
         fail(f"shipped checkpoint after the ship-commit assert-green failed: {shipped.stderr}")
 
 
+def seed_build_records(repo: Path) -> None:
+    import build_steps
+    import review_packet
+
+    plan = plan_path(repo)
+    (repo / "reviewed.txt").write_text("slice change under review\n", encoding="utf-8")
+    evidence = plan.parent / "receipts" / "verify-state.json"
+    evidence.parent.mkdir(exist_ok=True)
+    evidence.write_text('{"state": "fixture"}', encoding="utf-8")
+    proof = [{"path": str(evidence.relative_to(repo)), "sha256": hashlib.sha256(evidence.read_bytes()).hexdigest()}]
+    records = {
+        "edges": {"cases": [{"name": "fixture", "success_test": "ok", "failure_test": "refused"}]},
+        "green": {"command": ["fixture"], "exit": 0},
+        "review": {"rounds": [{"reviewer": "fixture", "findings": []}]},
+        "verify": {
+            "mode": "logic",
+            "fakes": [],
+            "outside_calls": [],
+            "before": proof,
+            "after": proof,
+            "edge_cases": [],
+        },
+    }
+    for step, payload in records.items():
+        if step == "review":
+            _, sha = review_packet.write(repo, plan, "S-1", 1, build_steps.edges_of(repo, plan, "S-1"))
+            payload["rounds"][0]["packet_sha256"] = sha
+        if step == "verify":
+            edges = build_steps.edges_of(repo, plan, "S-1")
+            _, payload["packet_sha256"] = review_packet.write_verify(repo, plan, "S-1", edges)
+        build_steps.record(repo, plan, "S-1", step, payload)
+
+
 def stale_research_cases(state, root: Path) -> None:
     from datetime import datetime, timedelta, timezone
 
@@ -926,10 +959,14 @@ def stale_research_cases(state, root: Path) -> None:
     )
     if record.returncode != 0:
         fail(f"fixture research recording failed: {record.stderr}")
+    if gate(repo, ("--slice", "S-1"), ("targeted",)).returncode == 0:
+        fail("enforced fixture without build records must refuse the gate")
+    seed_build_records(repo)
     if gate(repo, ("--slice", "S-1"), ("targeted",)).returncode != 0:
         fail("staleresearch gate with current research failed")
     (repo / "advance.txt").write_text("advance\n", encoding="utf-8")
     commit_fixture(repo, "advance")
+    seed_build_records(repo)
     if gate(repo, ("--slice", "S-1"), ("targeted",)).returncode != 0:
         fail("an unrelated commit must not stale the research receipt")
     research_path = receipt_of(repo, "research")
@@ -948,7 +985,7 @@ def doc_parity_cases() -> None:
     gate_source = GATE_PATH.read_text(encoding="utf-8")
     families = ["typecheck", "format", "lint", "tests", "fallow", "react-doctor", "dart-analyze", "dart-test"]
     families += ["dart-decimate", "python-format", "python-lint", "python-tests", "python-types"]
-    families += ["boundary-contracts", "targeted"]
+    families += ["boundary-contracts", "clones", "targeted"]
     for family in families:
         if f'"{family}"' not in gate_source or family not in reference:
             fail(f"family drift between slice_gate.py and slice-gate.md: {family}")
@@ -965,6 +1002,12 @@ def python_family_cases(_state, root: Path) -> None:
     derived = applicable_families(repo, ("tool.py",))
     if derived != ("python-format", "python-lint", "python-types"):
         fail(f"declared python families were not derived for .py paths: {derived}")
+    declared["clones"] = ["gate.py"]
+    manifest.write_text(json.dumps({"schema_version": 1, "families": declared}), encoding="utf-8")
+    if applicable_families(repo, ("tool.py",)) != ("clones", "python-format", "python-lint", "python-types"):
+        fail("declared clones family was not derived for .py paths")
+    if "clones" in applicable_families(repo, ("notes.txt",)):
+        fail("clones derived for a non-Python non-Dart path")
     manifest.write_text(json.dumps({"schema_version": 1, "families": {"targeted": ["gate.py"]}}), encoding="utf-8")
     if applicable_families(repo, ("tool.py",)) != ("targeted",):
         fail("undeclared python repo stopped falling back to targeted")

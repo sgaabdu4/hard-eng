@@ -8,7 +8,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 ## Contract
 
 - Input = `he` route + approved PLAN Feature Brief + Ready-to-build approval + `lifecycle_status=build-ready|building` + repository `write` PASS.
-- Output = demonstrated slices + one successful full pre-ship gate + exact local `green` snapshot.
+- Output = demonstrated slices + four build records per slice (`edges` `green` `review` `verify`) + one successful full pre-ship gate + `full` verify record + mutation receipt + closing walkthrough answer + generated `BUILD.md` + exact local `green` snapshot.
 - Owner = Implement ⇄ Verify loop + actual diff review + affected behavior proof + build findings.
 - Publish/rebase/commit/push/PR/CI = `he-ship`; forbidden here.
 - Decomposed epic ticket = this same contract, scoped to the ticket's own slices + worktree; entry/exit + integration steps = workflow.md `Ticket Loop` / `Ticket Integration`.
@@ -38,6 +38,10 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Loop = reproduce/RED where applicable → canonical-owner change + connected callers/schema/routes → targeted GREEN → SSOT/DRY/YAGNI refactor → actual-diff review → relevant E2E/security proof.
 - One active slice only; slice completion requires observable behavior, not path/task completion.
 - Slice completion + `building → green` = current `deterministic-checks` slice-gate receipt on the final tree; checkpoint rejects missing/stale/uncovered proof.
+- Build records = `plan_state.py record-build` per slice: `edges` (every edge case → success test + failure test) → `green` (exact passing command) → `review` (fresh reviewer on the generated packet, findings ledger, ≤3 rounds, no open finding) → `verify` (independent verifier, faked outside hosts, before/after evidence, edge names ⊆ edges); every record binds to the exact tree and goes stale on change; the slice gate refuses a slice missing any record when enforcement is configured.
+- Reviewer = fresh subagent reading only `receipts/<S-ID>-review-<k>.txt`; verifier = separate subagent reading only `receipts/<S-ID>-verify.txt`; the builder never records its own opinion as either.
+- Mutation receipt = `plan_state.py record-mutation` per runner over every source file changed since the approval base, recorded on the green tree; `he-ship` `assert-green` refuses without it.
+- Closing question = after the full gate, ask once: walkthrough video yes|no → `checkpoint --set walkthrough=yes|no`; `yes` requires a decodable video in the `full` verify record; the `green` checkpoint refuses a `pending` answer, writes `features/<slug>/BUILD.md`, and `inspect` prints `handoff=ship`.
 - Build-ready entry = preserve completed slices + select first remaining slice; progress reset = forbidden.
 - Standard work = one actual-diff review + scoped re-review only for accepted findings.
 - Critical/risky slice = standard review + targeted independent review by every applicable protected-boundary owner; whole-feature ceremony is forbidden merely because one slice is risky.
@@ -58,6 +62,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Actual diff = reviewed; accepted findings = closed by affected proof + scoped re-review.
 - Applicable risky boundary + E2E evidence = PASS.
 - Docs/context = accepted current behavior.
-- One successful full pre-ship gate = current exact local snapshot.
+- One successful full pre-ship gate + `full` verify record + mutation receipt = current exact local snapshot.
+- Closing walkthrough answer recorded; `BUILD.md` generated; `inspect` prints `handoff=ship`.
 - Blocker/unknown count = zero.
 - `he` checkpoint = `lifecycle_status=green`; authorized delivery → `he-ship`.

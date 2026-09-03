@@ -1,0 +1,18 @@
+{
+  "captured_via": "plan_state.py inspect, immediately after fixture plan creation (before any record-step)",
+  "state": {
+    "result": "valid",
+    "plan": "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk/features/steps-demo/PLAN.md",
+    "token": "sha256:cda45a5adaccdae7cc939eab075759ba6a8472b24bc2dac7b31a8cb66c9953eb",
+    "lifecycle_status": "planning",
+    "approval_status": "pending",
+    "brief_fingerprint": "sha256:0f4471a6ebe76b5061748e4d3368d9d16fa6953cef6605a995cb2b9543874679",
+    "route_target": "he-plan",
+    "active_slice": "S-1",
+    "completed_slices": "none",
+    "next_action": "Complete the brief and request Ready-to-build approval.",
+    "plan_steps": "0/6",
+    "plan_steps_missing": "code-study, research, edge-scan, decisions, slices, closing",
+    "ready_for_approval": "no"
+  }
+}
