@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -8,11 +7,15 @@ from operating_contracts import FORBIDDEN, REQUIRED
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "scripts/operating_contracts.py"
+sys.path[:0] = [str(ROOT / "skills/deterministic-checks/scripts")]
+
+from script_runner import ScriptResult, run_script
+
 FIXTURES = ROOT / "scripts/test_fixtures/operating-contracts"
 
 
-def run(root: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run((sys.executable, str(CHECKER), str(root)), capture_output=True, text=True, check=False)
+def run(root: Path) -> ScriptResult:
+    return run_script(CHECKER, [str(root)])
 
 
 def require(condition: bool, message: str) -> None:

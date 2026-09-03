@@ -10,8 +10,9 @@ import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+for directory in (SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts", SCRIPT_DIR):
+    if str(directory) not in sys.path:
+        sys.path.insert(0, str(directory))
 GIT_ENV_SCRIPTS = SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
@@ -24,6 +25,7 @@ from lifecycle_excludes import (
     activate_lifecycle_artifacts,
     exclude_terminal_artifacts,
 )
+from script_runner import ScriptResult, run_script
 from setup_state import seed_receipt_for_fixture
 
 sys.dont_write_bytecode = True
@@ -38,15 +40,8 @@ def run(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     return result
 
 
-def run_plan_state(*args: str) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        [sys.executable, str(SCRIPT_DIR / "plan_state.py"), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=20,
-        env=git_env(),
-    )
+def run_plan_state(*args: str) -> ScriptResult:
+    result = run_script(SCRIPT_DIR / "plan_state.py", args, env=git_env())
     if result.returncode != 0:
         raise AssertionError(result.stderr or result.stdout)
     return result

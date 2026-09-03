@@ -1,0 +1,5 @@
+[tool.mutmut]
+source_paths = ["skills/he/scripts", "skills/deterministic-checks/scripts"]
+pytest_add_cli_args_test_selection = ["tests/"]
+also_copy = ["AGENTS.md", "package.json", "hard-eng.gates.json", "scripts/", "skills/e2e/scripts/", "skills/he/references/", "skills/deterministic-checks/references/", "skills/he-build/", "skills/he-plan/", "skills/he-ship/", "skills/he/SKILL.md", "skills/deterministic-checks/SKILL.md"]
+do_not_mutate = ["skills/he/scripts/*_regression.py", "skills/deterministic-checks/scripts/*_regression_check.py"]

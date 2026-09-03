@@ -19,6 +19,7 @@ for entry in (SCRIPTS, GIT_ENV_SCRIPTS):
         sys.path.insert(0, str(entry))
 
 from git_env import scrub_environ
+from script_runner import ScriptResult, run_script
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -39,10 +40,8 @@ def load_lib():
     return module
 
 
-def run_cli(*arguments: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(EVIDENCE), *arguments], input=stdin, capture_output=True, text=True, check=False
-    )
+def run_cli(*arguments: str, stdin: str | None = None) -> ScriptResult:
+    return run_script(EVIDENCE, arguments, stdin=stdin)
 
 
 def make_repo(root: Path, slug: str) -> Path:
@@ -67,7 +66,7 @@ def receipt_file(repo: Path) -> Path:
     return repo / ".git" / "hard-eng" / "protected-action.json"
 
 
-def authorize(repo: Path, digest: str, *extra: str) -> subprocess.CompletedProcess[str]:
+def authorize(repo: Path, digest: str, *extra: str) -> ScriptResult:
     return run_cli(
         "authorize-protected",
         "--repo",
@@ -90,7 +89,7 @@ def authorize(repo: Path, digest: str, *extra: str) -> subprocess.CompletedProce
     )
 
 
-def consume(repo: Path, digest: str) -> subprocess.CompletedProcess[str]:
+def consume(repo: Path, digest: str) -> ScriptResult:
     return run_cli(
         "consume-protected",
         "--repo",

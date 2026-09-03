@@ -17,6 +17,8 @@ from bounded_run import CapturedRunResult, run_captured
 from git_env import git_env
 
 HELPER = ROOT / "scripts/managed-skill-update-state.py"
+from script_runner import ScriptResult, in_process, run_script
+
 UPDATER = ROOT / "scripts/update-managed-skills.sh"
 
 
@@ -28,10 +30,12 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> 
     return run_captured(command, timeout=30, grace=1, cwd=str(cwd), env=env)
 
 
-def require_ok(result: CapturedRunResult, action: str) -> bytes:
+def require_ok(result: CapturedRunResult | ScriptResult, action: str) -> bytes:
+    stdout = result.stdout if isinstance(result.stdout, bytes) else result.stdout.encode("utf-8")
+    stderr = result.stderr if isinstance(result.stderr, bytes) else result.stderr.encode("utf-8")
     if result.returncode:
-        fail(f"{action} failed: {result.stderr.decode('utf-8', 'replace').strip()}")
-    return result.stdout.strip()
+        fail(f"{action} failed: {stderr.decode('utf-8', 'replace').strip()}")
+    return stdout.strip()
 
 
 def git(repo: Path, *args: str) -> None:
@@ -118,8 +122,8 @@ def check_host_git_config_isolation(parent: Path) -> None:
             os.environ["GIT_CONFIG_GLOBAL"] = previous_global
 
 
-def helper(repo: Path, command: str) -> CapturedRunResult:
-    return run([sys.executable, str(HELPER), command, "--repo", str(repo)], cwd=repo)
+def helper(repo: Path, command: str) -> ScriptResult:
+    return run_script(HELPER, [command, "--repo", str(repo)], cwd=repo)
 
 
 def check_snapshot_boundaries(parent: Path) -> None:
@@ -235,7 +239,8 @@ def main() -> int:
         parent = Path(temporary)
         check_host_git_config_isolation(parent)
         check_snapshot_boundaries(parent)
-        check_updater_wiring(parent)
+        if not in_process():
+            check_updater_wiring(parent)
         check_starting_state(parent)
     print("managed-skill-update-regressions: PASS")
     return 0

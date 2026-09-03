@@ -23,6 +23,7 @@ PYTHON_PROCESS_CALLS = {
 RUNTIME_ALLOWLIST = {
     "skills/adversarial-review/scripts/run_review.py",
     "skills/deterministic-checks/scripts/bounded_run.py",
+    "skills/deterministic-checks/scripts/script_runner.py",
     "skills/he-plan/scripts/check.py",
     "scripts/rollout-shared.py",
 }
@@ -89,6 +90,10 @@ def under_managed(relative: str) -> bool:
 
 
 def required_anchors(relative: str, source: str) -> None:
+    if relative == "skills/deterministic-checks/scripts/script_runner.py":
+        for anchor in ("CHILD_TIMEOUT", "run_captured(", "def spawn_script", "PROCESS_STATE"):
+            if anchor not in source:
+                fail(f"script runner seam lost {anchor}")
     if relative == "skills/deterministic-checks/scripts/bounded_run.py":
         for anchor in ("start_new_session", "stop_group", "timeout"):
             if anchor not in source:

@@ -24,6 +24,7 @@ from project_gate import (
     load_phase,
     validate_quality_report,
 )
+from script_runner import ScriptResult, run_script
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 GATE = SCRIPT_DIR / "project_gate.py"
@@ -59,22 +60,20 @@ def write_phases(repo: Path, families: dict[str, list[str]], phases: dict[str, l
 
 
 def gate_command(repo: Path, family: str, timeout: str = "30") -> list[str]:
-    return [sys.executable, str(GATE), "run", "--repo", str(repo), "--timeout", timeout, "--family", family]
+    return ["run", "--timeout", timeout, "--family", family, "--repo", str(repo)]
 
 
 def invoke(
     repo: Path, family: str = "targeted", timeout: str = "30", environment: dict[str, str] | None = None
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        gate_command(repo, family, timeout), check=False, capture_output=True, text=True, env=environment
-    )
+) -> ScriptResult:
+    return run_script(GATE, gate_command(repo, family, timeout), env=environment)
 
 
-def invoke_families(repo: Path, families: tuple[str, ...], timeout: str = "30") -> subprocess.CompletedProcess[str]:
-    command = [sys.executable, str(GATE), "run", "--repo", str(repo), "--timeout", timeout]
+def invoke_families(repo: Path, families: tuple[str, ...], timeout: str = "30") -> ScriptResult:
+    command = ["run", "--repo", str(repo), "--timeout", timeout]
     for family in families:
         command += ["--family", family]
-    return subprocess.run(command, check=False, capture_output=True, text=True)
+    return run_script(GATE, command)
 
 
 def check_migration_contract() -> None:
@@ -594,9 +593,8 @@ def check_commit_divergence(repo: Path) -> None:
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=git_env())
     source.write_text("good = 'worktree'\n", encoding="utf-8")
 
-    def phase(name: str) -> subprocess.CompletedProcess[str]:
-        command = [sys.executable, str(GATE), "phase", "--repo", str(repo), "--timeout", "30", "--phase", name]
-        return subprocess.run(command, check=False, capture_output=True, text=True)
+    def phase(name: str) -> ScriptResult:
+        return run_script(GATE, ["phase", "--repo", str(repo), "--timeout", "30", "--phase", name])
 
     rejected = phase("commit")
     if rejected.returncode == 0 or "diverged.py" not in rejected.stderr:
