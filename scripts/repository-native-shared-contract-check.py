@@ -5,15 +5,15 @@ every fresh clone then downloads exactly that release at session start and stays
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import os
 import shutil
 import tempfile
 from pathlib import Path
 
+from repository_native_contract_loader import load_contract
+
 ROOT = Path(__file__).resolve().parents[1]
-CONTRACT = ROOT / "scripts/repository-native-contract-check.py"
 SHARED_FILES = (
     "AGENTS.override.md",
     ".github/instructions/hard-eng.instructions.md",
@@ -51,14 +51,6 @@ echo "fake bootstrap: contacting release host" >&2
 echo 'fake bootstrap: cannot reach "origin" \ retry later' >&2
 exit 1
 """
-
-
-def load_contract():
-    spec = importlib.util.spec_from_file_location("repository_native_contract", CONTRACT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 contract = load_contract()

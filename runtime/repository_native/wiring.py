@@ -24,7 +24,7 @@ from .adapters import (
 )
 from .errors import ConfigurationError
 from .locking import exclusive_lock
-from .shared import GENERATED
+from .shared import GENERATED, replace_file
 
 STATE_SCHEMA = 2
 START = "# >>> hard-eng repository fallback >>>"
@@ -59,15 +59,6 @@ EDITED_BY_HAND = (
     "generated Hard Eng file was edited by hand: {relative}. Move the edits into the repository AGENTS.md, "
     "then rerun `npx -y github:sgaabdu4/hard-eng --repo`, or run `hard-eng uninstall` first."
 )
-
-
-def _write_all(descriptor: int, data: bytes) -> None:
-    remaining = memoryview(data)
-    while remaining:
-        written = os.write(descriptor, remaining)
-        if written <= 0:
-            raise OSError("file write made no progress")
-        remaining = remaining[written:]
 
 
 def _run_git(repository: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
@@ -150,26 +141,6 @@ def _snapshot(path: Path) -> dict[str, object]:
     return {"kind": "absent"}
 
 
-def _atomic_write(path: Path, raw: bytes, mode: int) -> None:
-    if path.is_symlink() or (path.exists() and not path.is_file()):
-        raise ConfigurationError(f"refusing to replace unsafe path: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    try:
-        descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, mode)
-        try:
-            _write_all(descriptor, raw)
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-        os.replace(temporary, path)
-        os.chmod(path, mode)
-    except BaseException:
-        if temporary.is_file() and not temporary.is_symlink():
-            temporary.unlink()
-        raise
-
-
 def _restore(path: Path, snapshot: dict[str, object]) -> None:
     kind = snapshot.get("kind")
     if path.is_symlink() or path.is_file():
@@ -189,7 +160,7 @@ def _restore(path: Path, snapshot: dict[str, object]) -> None:
     mode = snapshot.get("mode")
     if kind != "file" or not isinstance(data, str) or not isinstance(mode, int):
         raise ConfigurationError("stored file snapshot is invalid")
-    _atomic_write(path, base64.b64decode(data, validate=True), mode)
+    replace_file(path, base64.b64decode(data, validate=True), mode)
 
 
 def _relative(repository: Path, path: Path) -> str:
@@ -285,7 +256,7 @@ def _write_managed(
     if _foreign_tracked(repository, relative, shared):
         raise ConfigurationError(f"fallback would replace tracked repository state: {relative}")
     snapshots.setdefault(relative.as_posix(), _snapshot(path))
-    _atomic_write(path, raw, mode)
+    replace_file(path, raw, mode)
 
 
 def preflight_wiring(repository: Path) -> None:
@@ -325,7 +296,7 @@ def _load_state(path: Path) -> dict[str, object] | None:
 
 
 def _write_state(path: Path, state: dict[str, object]) -> None:
-    _atomic_write(path, (json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n").encode(), 0o600)
+    replace_file(path, (json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n").encode(), 0o600)
 
 
 def _string_list(value: object, label: str) -> list[str]:
@@ -375,7 +346,7 @@ def _reconcile(repository: Path, payload: Path, state: dict[str, object], *, hea
             continue
         _ensure_parent(path, created_directories, repository)
         snapshots.setdefault(relative, _snapshot(path))
-        _atomic_write(path, expected, mode)
+        replace_file(path, expected, mode)
         generated[relative] = _digest(expected)
         changed = True
     link_names = {_relative(repository, link) for link in links}
@@ -424,7 +395,7 @@ def _reconcile(repository: Path, payload: Path, state: dict[str, object], *, hea
         else:
             installed = _compose_exclude(current, ignored)
             mode = stat.S_IMODE(exclude.stat().st_mode) if exclude.is_file() else 0o600
-            _atomic_write(exclude, installed, mode)
+            replace_file(exclude, installed, mode)
             state["exclude_block"] = block
             state["exclude_installed"] = base64.b64encode(installed).decode("ascii")
             changed = True
@@ -462,7 +433,7 @@ def _install_wiring(repository: Path, payload: Path, *, shared: bool) -> None:
         ignored = _ignored(shared, created_paths)
         installed_exclude = _compose_exclude(current_exclude, ignored)
         exclude_mode = stat.S_IMODE(exclude.stat().st_mode) if exclude.is_file() else 0o600
-        _atomic_write(exclude, installed_exclude, exclude_mode)
+        replace_file(exclude, installed_exclude, exclude_mode)
         _write_state(
             state_path,
             {
@@ -510,7 +481,7 @@ def _release_composable(
     if stripped in EMPTY_COMPOSABLE and (shared or snapshot.get("kind") == "absent"):
         path.unlink()
         return
-    _atomic_write(path, stripped, stat.S_IMODE(path.stat().st_mode))
+    replace_file(path, stripped, stat.S_IMODE(path.stat().st_mode))
 
 
 def _uninstall_wiring(repository: Path, payload: Path) -> None:
@@ -573,7 +544,7 @@ def _uninstall_wiring(repository: Path, payload: Path) -> None:
     if restore_exclude:
         _restore(exclude, exclude_snapshot)
     else:
-        _atomic_write(exclude, updated_exclude, exclude_mode)
+        replace_file(exclude, updated_exclude, exclude_mode)
     if state_path.is_file() and not state_path.is_symlink():
         state_path.unlink()
     for relative in reversed(created_directories):

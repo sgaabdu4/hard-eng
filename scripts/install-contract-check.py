@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import os
 import shutil
@@ -12,9 +11,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from repository_native_contract_loader import CONTRACT, load_contract
+
 ROOT = Path(__file__).resolve().parents[1]
 INSTALL = ROOT / "install.sh"
-CONTRACT = ROOT / "scripts/repository-native-contract-check.py"
 AGENTS = ("codex", "claude", "copilot")
 LABELS = {"codex": "Codex", "claude": "Claude Code", "copilot": "Copilot CLI"}
 OWNER_FILES = ("AGENTS.md", "CLAUDE.md", "hard-eng.gates.json")
@@ -36,14 +36,6 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 module.wire_global(Path(os.environ["HOME"]), root, ("codex", "claude", "copilot"))
 """
-
-
-def load_contract():
-    spec = importlib.util.spec_from_file_location("repository_native_contract", CONTRACT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 contract = load_contract()
