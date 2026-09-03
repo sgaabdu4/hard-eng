@@ -20,7 +20,7 @@ GATES: dict[str, object] = {
     "schema_version": 1,
     "families": {
         "targeted": ["npm", "run", "build"],
-        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
+        "fallow": ["npx", "--yes", "fallow@latest", "audit", "--max-crap", "30", "--format", "json"],
         "long": [f"--option-number-{index:02d}" for index in range(12)],
     },
     "phases": {"pre-commit": ["targeted"], "pre-push": ["targeted", "fallow", "long"]},

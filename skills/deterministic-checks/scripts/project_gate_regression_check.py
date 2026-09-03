@@ -216,34 +216,69 @@ def check_react_doctor_report() -> None:
 
 def check_quality_report() -> None:
     clean = {
-        "kind": "combined",
-        "check": {"total_issues": 0},
-        "dupes": {"clone_groups": [], "clone_families": []},
-        "health": {"findings": []},
+        "kind": "audit",
+        "verdict": "pass",
+        "summary": {"dead_code_issues": 0, "complexity_findings": 0, "duplication_clone_groups": 0},
+        "attribution": {"gate": "new-only", "dead_code_introduced": 0},
     }
     validate_quality_report("fallow", json.dumps(clean))
+    validate_quality_report("fallow", json.dumps({**clean, "verdict": "warn"}))
     finding = {
         **clean,
-        "health": {"findings": [{"path": "src/owner.ts", "line": 7, "name": "owner", "severity": "critical"}]},
+        "verdict": "fail",
+        "attribution": {"gate": "new-only", "complexity_introduced": 1},
+        "health": {"findings": [{"path": "src/owner.ts", "line": 7, "name": "owner", "introduced": True}]},
     }
     try:
         validate_quality_report("fallow", json.dumps(finding))
     except ProjectGateError as error:
-        if "health=1" not in str(error) or "src/owner.ts:7" not in str(error):
-            fail("Fallow finding failure lost compact evidence")
+        if "complexity_introduced=1" not in str(error) or "src/owner.ts:7" not in str(error):
+            fail(f"Fallow audit failure lost compact evidence: {error}")
     else:
-        fail("Fallow exit-zero findings were accepted")
-    for malformed in ("", "{}", json.dumps({**clean, "kind": "audit"})):
+        fail("Fallow fail verdict was accepted")
+    combined = {"kind": "combined", "check": {"total_issues": 0}, "dupes": {}, "health": {}}
+    for malformed in ("", "{}", json.dumps(combined), json.dumps({**clean, "verdict": "maybe"})):
         try:
             validate_quality_report("fallow", malformed)
         except ProjectGateError:
             continue
-        fail("malformed or scoped Fallow report was accepted")
+        fail("malformed or non-audit Fallow report was accepted")
+
+
+def check_clones_manifest(repo: Path) -> None:
+    baseline = repo / ".jscpd-baseline.json"
+    baseline.write_text('{"version": 1, "fingerprints": {}}', encoding="utf-8")
+    good = ["jscpd", "--format", "python,dart", "--reporters", "console", "--baseline", ".jscpd-baseline.json"]
+    good += ["--fail-on-new-clones", "."]
+    write_families(repo, {"clones": good})
+    load_manifest(repo)
+    write_families(
+        repo, {"clones": ["jscpd", "--baseline-from-ref", "origin/main", "-r", "console", "--fail-on-new-clones", "."]}
+    )
+    load_manifest(repo)
+    rejected = {
+        "--update-baseline": [*good, "--update-baseline"],
+        "--reporters console": [item if item != "console" else "json" for item in good],
+        "--fail-on-new-clones": [item for item in good if item != "--fail-on-new-clones"],
+        "--baseline": ["jscpd", "--reporters", "console", "--fail-on-new-clones", "."],
+        "baseline file is missing": [item if item != ".jscpd-baseline.json" else "absent.json" for item in good],
+    }
+    for expected, command in rejected.items():
+        write_families(repo, {"clones": command})
+        try:
+            load_manifest(repo)
+        except ProjectGateError as error:
+            if expected not in str(error):
+                fail(f"clones rejection lost its reason ({expected}): {error}")
+            continue
+        fail(f"clones manifest accepted a command lacking {expected}")
+    baseline.unlink()
+    write_families(repo, {})
 
 
 def latest_commands() -> dict[str, list[str]]:
     return {
-        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
+        "fallow": ["npx", "--yes", "fallow@latest", "audit", "--max-crap", "30", "--format", "json"],
         "react-doctor": list(REACT_DOCTOR_COMMAND),
         "dart-decimate": ["npx", "--yes", "dart-decimate@latest", "json", ".", "--workspace", "functions/example"],
     }
@@ -407,6 +442,14 @@ def check_npx_contract(repo: Path) -> None:
     wrapper.unlink()
     wrapper.parent.rmdir()
 
+    write_families(repo, {"fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json"]})
+    try:
+        load_manifest(repo)
+    except ProjectGateError as error:
+        if "audit mode" not in str(error):
+            fail(f"non-audit fallow command rejected for the wrong reason: {error}")
+    else:
+        fail("non-audit fallow command was accepted")
     scoped = {
         "fallow": ["npx", "--yes", "fallow@latest", "audit", "--changed-since", "main"],
         "react-doctor": [*latest_commands()["react-doctor"], "--changed-files-from"],
@@ -421,6 +464,7 @@ def check_npx_contract(repo: Path) -> None:
         fail(f"{family} accepted a changed/baseline-only quality gate")
 
     check_react_doctor_manifest(repo)
+    check_clones_manifest(repo)
 
 
 def check_execution(repo: Path) -> None:

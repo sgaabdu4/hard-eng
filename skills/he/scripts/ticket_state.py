@@ -128,8 +128,20 @@ def _dependencies_shipped(repo: Path, epic_plan: Path, depends_on: tuple[str, ..
     return unmet
 
 
+MAX_WORKERS = 4
+IN_FLIGHT_STATUSES = frozenset({"claimed", "building", "green"})
+
+
 def _claimable(state: dict[str, str]) -> bool:
     return state["status"] == "todo"
+
+
+def _in_flight(repo: Path, epic_plan: Path) -> int:
+    count = 0
+    for path in list_tickets(epic_plan):
+        _, _, state, _ = read_ticket(repo, path)
+        count += state["status"] in IN_FLIGHT_STATUSES
+    return count
 
 
 def _next_claimable(repo: Path, epic_plan: Path) -> Path | None:
@@ -190,6 +202,8 @@ def command_claim(args: argparse.Namespace) -> None:
 
         if not _claimable(state):
             raise TicketError(f"ticket {state['ticket_id']} is not claimable (status={state['status']})")
+        if _in_flight(primary, epic_plan) >= MAX_WORKERS:
+            raise TicketError(f"worker cap reached: {MAX_WORKERS} tickets are already claimed, building, or green")
         unmet = _dependencies_shipped(primary, epic_plan, ticket_parser.parse_list(state["depends_on"]))
         if unmet:
             raise TicketError(f"ticket {state['ticket_id']} depends on unshipped ticket(s): {', '.join(unmet)}")

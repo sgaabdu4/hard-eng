@@ -1,0 +1,6 @@
+{
+  "stage": "before",
+  "exit": 4,
+  "output": "result=fail\nerror=slice S-1 has no edges record (plan_state.py record-build --slice S-1 --step edges)\n",
+  "receipt_exists": false
+}

@@ -83,7 +83,7 @@ def wait_for(path: Path, process: subprocess.Popen[str]) -> None:
 
 def families() -> dict[str, list[str]]:
     return {
-        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
+        "fallow": ["npx", "--yes", "fallow@latest", "audit", "--max-crap", "30", "--format", "json"],
         "react-doctor": list(REACT_DOCTOR_COMMAND),
     }
 
@@ -164,11 +164,12 @@ def install_fake_npx(path: Path) -> None:
         "            time.sleep(0.1)\n"
         "        transient = 'eslint_disable' in source.read_text(encoding='utf-8')\n"
         "        print(json.dumps({\n"
-        "            'kind': 'combined',\n"
-        "            'check': {'total_issues': 0},\n"
-        "            'dupes': {'clone_groups': [], 'clone_families': []},\n"
+        "            'kind': 'audit',\n"
+        "            'verdict': 'fail' if transient else 'pass',\n"
+        "            'summary': {'dead_code_issues': 0},\n"
+        "            'attribution': {'gate': 'new-only', 'complexity_introduced': 1 if transient else 0},\n"
         "            'health': {'findings': ([{'path': 'source.tsx', 'line': 1, "
-        "'name': 'transient rewrite', 'severity': 'critical'}] if transient else [])},\n"
+        "'name': 'transient rewrite', 'introduced': True}] if transient else [])},\n"
         "        }))\n"
         "    finally:\n"
         "        if active:\n"

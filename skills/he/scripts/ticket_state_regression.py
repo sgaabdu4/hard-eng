@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPT_DIR.parents[2]
 DET_SCRIPTS = SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"
 REPO_ROOT = SCRIPT_DIR.parents[2]
 for _extra in (DET_SCRIPTS, SCRIPT_DIR, REPO_ROOT):
@@ -506,6 +507,75 @@ def check_concurrent_claim_race(base: Path) -> None:
     require(bool(state.get("claimed_by")), "claimed_by must be recorded")
 
 
+def check_worker_cap_and_orchestrator_guard(base: Path) -> None:
+    import ticket_guard
+
+    repo, plan = setup_epic(base, "worker-cap", "workercap", behaves("S-1", "S-2", "S-3", "S-4", "S-5"))
+    tickets = [
+        ticket_entry(f"T-{n}", [f"S-{n}"], [f"A-{n}"], [f"skills/cap{n}/scripts/owner{n}.py"]) for n in range(1, 6)
+    ]
+    run_decompose(repo, plan, tickets)
+    reauthorize(repo, plan)
+    for n in range(1, 5):
+        claim(repo, plan, ticket=f"T-{n}")
+    reject_has(lambda: claim(repo, plan, ticket="T-5"), "worker cap reached")
+    require(read_ticket_state(repo, "workercap", "T-5").get("status") == "todo", "fifth ticket stays todo")
+    require(ticket_guard.is_primary_checkout(repo), "fixture repo must be the primary checkout")
+    owned = "skills/cap1/scripts/owner1.py"
+    guard = ticket_guard.guard_error(repo, [owned])
+    require(guard is not None and "T-1" in guard and owned in guard, f"orchestrator edit of a claimed path: {guard}")
+    require(ticket_guard.guard_error(repo, ["skills/cap5/scripts/owner5.py"]) is None, "unclaimed ticket path is free")
+    require(ticket_guard.guard_error(repo, ["README.md"]) is None, "path outside every ticket is free")
+    worktree = Path(read_ticket_state(repo, "workercap", "T-1")["worktree"])
+    require(worktree.is_dir() and not ticket_guard.is_primary_checkout(worktree), "ticket worktree is not primary")
+    require(ticket_guard.guard_error(worktree, [owned]) is None, "worker edits its own claimed path freely")
+    hook = ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."]
+    manifest = repo / "hard-eng.gates.json"
+    wired = json.loads(manifest.read_text(encoding="utf-8"))
+    wired["enforcement"] = {
+        "schema_version": 1,
+        "coverage": {"fixture-check": ["checkpoint check", "hard-eng.gates.json", "hard-eng.gates.json"]},
+    }
+    manifest.write_text(json.dumps(wired), encoding="utf-8")
+    research = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "execution_evidence.py"),
+            "record-research",
+            "--repo",
+            str(repo),
+            "--plan",
+            str(repo.resolve() / "features" / "workercap" / "PLAN.md"),
+            "--scope",
+            "local",
+            "--question",
+            "fixture question",
+            "--decision",
+            "fixture decision",
+            "--source",
+            "hard-eng.gates.json",
+            "--verified",
+            "fixture result",
+            "--unknown",
+            "none",
+            "--fresh-until",
+            "2999-01-01",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    require(research.returncode == 0, f"fixture research must record: {research.stderr[-300:]}")
+    (repo / owned).parent.mkdir(parents=True, exist_ok=True)
+    (repo / owned).write_text("value = 1\n", encoding="utf-8")
+    blocked = subprocess.run(hook, cwd=repo, capture_output=True, text=True, check=False)
+    (repo / owned).unlink()
+    require(
+        blocked.returncode != 0 and "T-1" in blocked.stderr + blocked.stdout,
+        f"checkpoint hook must refuse the orchestrator edit: exit={blocked.returncode} {blocked.stderr[-400:]}",
+    )
+
+
 def check_dependency_gating_and_next(base: Path) -> None:
     repo, plan = setup_epic(base, "dependency-gating", "depgate", behaves("S-1", "S-2", "S-3"))
     tickets = three_way_tickets()
@@ -728,6 +798,7 @@ CASES = (
     ("epic green gate", check_epic_green_gate),
     ("concurrent claim race: exactly one winner", check_concurrent_claim_race),
     ("dependency gating + --next ordering", check_dependency_gating_and_next),
+    ("worker cap + orchestrator write guard", check_worker_cap_and_orchestrator_guard),
     ("ticket checkpoint contiguity + release semantics", check_ticket_checkpoint_and_release),
     ("forged/invalid ticket states fail loud", check_invalid_and_forged_states),
     ("shipped ticket worktree cleanup", check_release_shipped_cleanup),

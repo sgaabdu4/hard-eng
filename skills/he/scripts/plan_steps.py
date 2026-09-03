@@ -25,6 +25,7 @@ from evidence_lib import (
     utc_text,
 )
 from execution_evidence import validate_research
+from external_claims import claim_error as external_claim_error
 from plan_sections import PlanError, parse_sections, parse_slices
 
 RECEIPT_NAME = "plan-steps.json"
@@ -347,7 +348,7 @@ def approval_error(repo: Path, plan: Path) -> str | None:
         return f"planning step is stale for the current HEAD: {summary['stale'][0]} (re-run record-step)"
     if summary["open_decisions"]:
         return f"decisions still waiting on the user: {', '.join(summary['open_decisions'])}"
-    return None
+    return external_claim_error(repo, plan)
 
 
 def emit_lines(repo: Path, plan: Path) -> list[str]:
