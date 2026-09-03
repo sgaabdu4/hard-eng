@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -49,7 +50,7 @@ def exclusive_lock(path: Path, *, timeout: float, holder: str) -> Iterator[None]
                 raise ConfigurationError(f"{holder} did not finish within {int(timeout)} seconds: {path}")
             if not waited:
                 waited = True
-                print(f"hard-eng: waiting for {holder} to finish", flush=True)
+                print(f"hard-eng: waiting for {holder} to finish", file=sys.stderr, flush=True)
             time.sleep(0.1)
         except OSError as error:
             os.close(handle)
