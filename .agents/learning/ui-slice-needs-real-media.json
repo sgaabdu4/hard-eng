@@ -1,0 +1,26 @@
+{
+  "evidence": [
+    "2026-09-03 frontline-fitness sales-queue-controls: filter bar, row status control and toast built under ux_reference = n/a, no screen proof at any gate; slice_gate.media_error returned None whenever ux_reference was n/a",
+    "2026-09-03 af5346a: slice_gate.ui_path + media_error refuse --e2e not-applicable for any changed non-test .tsx/.jsx/.dart path"
+  ],
+  "failure": "a slice that changed UI files passed the slice gate with --e2e not-applicable because the brief said ux_reference = n/a",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "ui-slice-needs-real-media",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/deterministic-checks/scripts/slice_gate.py",
+    "proof": "skills/deterministic-checks/scripts/slice_gate_regression_check.py",
+    "valid_fixture": "skills/deterministic-checks/scripts/slice_gate_regression_check.py",
+    "violation_fixture": "skills/deterministic-checks/scripts/slice_gate_regression_check.py"
+  },
+  "root_cause": "the media rule keyed on ux_reference, an author-written value, instead of on the UI paths the slice actually changed",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "false-passing-check"
+}
