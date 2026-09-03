@@ -77,11 +77,14 @@ def filled_brief(slug: str) -> str:
         "## Outcome\n- TBD": "## Outcome\n- A user receives one observable result.",
         "## Non-goals\n- TBD": "## Non-goals\n- Adjacent workflow changes are excluded.",
         "## Material decisions\n- TBD": "## Material decisions\n- Existing policy remains canonical.",
-        "- ux_reference = TBD": "- ux_reference = n/a",
-        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a",
+        "- ux_reference = TBD": "- ux_reference = n/a: command output only",
+        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a: no screen changes",
         "## Acceptance examples\n- TBD": "## Acceptance examples\n- Given a user, when they act, then the result shows.",
         "## Affected canonical areas\n- TBD": "## Affected canonical areas\n- Existing command owner and route.",
         "- rollback = TBD": "- rollback = disable the route and preserve stored state.",
+        "- critical_overlay = none\n": "- critical_overlay = none: standard risk\n",
+        "- deferred = none\n": "- deferred = none: nothing open\n",
+        "- blocked_on = none\n": "- blocked_on = none: nothing waiting\n",
         "## Vertical slices\n- S-1 = TBD; depends_on = none\n- proof = TBD": (
             "## Vertical slices\n- S-1 = command to stored result to visible response.\n- proof = focused test."
         ),
@@ -176,22 +179,22 @@ def approve(repo: Path, plan: Path) -> tuple[int, str]:
 CODE_STUDY_ANSWERS = {
     "could_break": "owner.py callers",
     "owner": "owner.py",
-    "existing_capability": "none",
-    "external_contract": "none",
+    "existing_capability": "none: first command of its kind",
+    "external_contract": "none: local files only",
 }
-SLICE_ANSWERS = {"thinnest_path": "S-1 alone proves the flow", "parallel": "none"}
+SLICE_ANSWERS = {"thinnest_path": "S-1 alone proves the flow", "parallel": "none: one slice"}
 DECISION = {"rejected": "doing nothing"}
-CLOSING = {"unknowns": "none"}
+CLOSING = {"unknowns": "none: every owner read"}
 GOOD_PAYLOADS = {
     "code-study": {"owners": ["owner.py"], "callers": [], "answers": CODE_STUDY_ANSWERS},
     "edge-scan": {
         "axes": {
             "actors": "single signed-in user",
-            "empty-error-retry": "none",
-            "data-lifecycle": "none",
+            "empty-error-retry": "none: single command",
+            "data-lifecycle": "none: no stored data",
             "delivery-form": "repository",
-            "external-concurrency": "none",
-            "accessibility": "none",
+            "external-concurrency": "none: no outside service",
+            "accessibility": "none: no screen",
             "rollout-rollback": "revert commit",
         }
     },
@@ -217,7 +220,12 @@ GOOD_PAYLOADS = {
         "slices": [{"id": "S-1", "depends_on": []}, {"id": "S-2", "depends_on": ["S-1"]}],
         "answers": SLICE_ANSWERS,
     },
-    "closing": {"tickets": "local", "tracker": "not-probed", "reply": "no split", "answers": {"unknowns": "none"}},
+    "closing": {
+        "tickets": "local",
+        "tracker": "not-probed",
+        "reply": "no split",
+        "answers": {"unknowns": "none: all read"},
+    },
 }
 
 
@@ -254,6 +262,7 @@ def check_single_plan(base: Path) -> None:
     parsed = values(output)
     require(parsed.get("plan_steps") == "6/6" and "plan_steps_missing" not in parsed, f"all steps done: {output}")
     require(parsed.get("ready_for_approval") == "yes", f"complete steps must be ready: {output}")
+    check_bare_none_refused(repo, plan)
     code, output = approve(repo, plan)
     require(code == 0, f"complete plan must approve: {output}")
     parsed = values(output)
@@ -266,6 +275,26 @@ def check_single_plan(base: Path) -> None:
 
     code, output = record_step(repo, plan, "closing", GOOD_PAYLOADS["closing"])
     require(code != 0 and "planning brief" in output, "record-step after approval must refuse")
+
+
+def check_bare_none_refused(repo: Path, plan: Path) -> None:
+    ready = plan.read_text(encoding="utf-8")
+    for old, new, key in (
+        ("- blocked_on = none: nothing waiting", "- blocked_on = none", "blocked_on"),
+        ("- ux_reference = n/a: command output only", "- ux_reference = N/A: tbd", "ux_reference"),
+        ("; depends_on = S-1", "; depends_on = none", "S-2 depends_on"),
+    ):
+        text = ready.replace(old, new)
+        if old.startswith(";"):
+            text = ready.replace(
+                "- proof = focused test.", "- proof = focused test.\n- S-2 = second; depends_on = none"
+            )
+        plan.write_text(text, encoding="utf-8")
+        code, output = run(STATE_SCRIPT, "validate", "--repo", str(repo), "--plan", str(plan))
+        require(code == 0 and values(output).get("ready_for_approval") == "no", f"{key}: shape stays valid: {output}")
+        code, output = approve(repo, plan)
+        require(code != 0 and "needs a short reason" in output and key in output, f"{key} bare must refuse: {output}")
+    plan.write_text(ready, encoding="utf-8")
 
 
 def check_bad_payloads(base: Path) -> None:
@@ -285,9 +314,12 @@ def check_bad_payloads(base: Path) -> None:
         ("slices", {"answers": {**SLICE_ANSWERS, "thinnest_path": "TBD"}}, "placeholder"),
         (
             "closing",
-            {"tickets": "none", "reply": "y", "answers": {"unknowns": "none", "extra": "x"}},
+            {"tickets": "none", "reply": "y", "answers": {"unknowns": "none: all read", "extra": "x"}},
             "unknown answers",
         ),
+        ("closing", {"tickets": "none", "reply": "y", "answers": {"unknowns": "none"}}, "needs a short reason"),
+        ("edge-scan", {"axes": {**GOOD_PAYLOADS["edge-scan"]["axes"], "accessibility": "n/a"}}, "needs a short reason"),
+        ("slices", {"answers": {**SLICE_ANSWERS, "parallel": "none: tbd"}}, "needs a short reason"),
         (
             "decisions",
             {"decisions": [{"id": "D-1", "decision": "x", "status": "settled", "settled_by": "y"}]},

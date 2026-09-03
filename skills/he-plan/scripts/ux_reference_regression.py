@@ -261,8 +261,8 @@ def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str],
             (str(media / "real-mock.png"), "DESIGN.md + src/theme.css", True),
         )
         for value, sources, expected in cases:
-            text = base.replace("- ux_reference = n/a", f"- ux_reference = {value}").replace(
-                "- ux_reference_sources = n/a", f"- ux_reference_sources = {sources}"
+            text = base.replace("- ux_reference = n/a: no screen", f"- ux_reference = {value}").replace(
+                "- ux_reference_sources = n/a: no screen", f"- ux_reference_sources = {sources}"
             )
             plan.write_text(text, encoding="utf-8")
             approved = run_script(
@@ -305,8 +305,8 @@ def check_linked_worktree(state, git_repo: Callable[[Path], None], fail: Callabl
         plan.parent.mkdir(parents=True)
         brief = (
             _filled(state.template("lean-loop", "linked-worktree-test"))
-            .replace("- ux_reference = n/a", f"- ux_reference = {media}")
-            .replace("- ux_reference_sources = n/a", "- ux_reference_sources = DESIGN.md + src/theme.css")
+            .replace("- ux_reference = n/a: no screen", f"- ux_reference = {media}")
+            .replace("- ux_reference_sources = n/a: no screen", "- ux_reference_sources = DESIGN.md + src/theme.css")
         )
         plan.write_text(brief, encoding="utf-8")
         subprocess.run(
@@ -381,24 +381,4 @@ def check_linked_worktree(state, git_repo: Callable[[Path], None], fail: Callabl
             fail(f"fresh linked-worktree approval failed: {approved.stderr}")
 
 
-def _filled(text: str) -> str:
-    replacements = {
-        "## Outcome\n- TBD": "## Outcome\n- A user receives one observable result.",
-        "## Non-goals\n- TBD": "## Non-goals\n- Adjacent workflow changes are excluded.",
-        "## Material decisions\n- TBD": ("## Material decisions\n- Existing policy remains canonical."),
-        "- ux_reference = TBD": "- ux_reference = n/a",
-        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a",
-        "## Acceptance examples\n- TBD": (
-            "## Acceptance examples\n- Given an eligible user, when they act, then the result is visible."
-        ),
-        "## Affected canonical areas\n- TBD": ("## Affected canonical areas\n- Existing command owner and route."),
-        "- rollback = TBD": "- rollback = disable the route and preserve stored state.",
-        "## Vertical slices\n- S-1 = TBD; depends_on = none\n- proof = TBD": (
-            "## Vertical slices\n"
-            "- S-1 = command to stored result to visible response.\n"
-            "- proof = focused behavior test."
-        ),
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    return text
+from authorization_recovery_regression import filled as _filled

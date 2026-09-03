@@ -31,13 +31,16 @@ def filled(text: str) -> str:
         "## Outcome\n- TBD": "## Outcome\n- A user receives one observable result.",
         "## Non-goals\n- TBD": "## Non-goals\n- Adjacent workflow changes are excluded.",
         "## Material decisions\n- TBD": "## Material decisions\n- Existing policy remains canonical.",
-        "- ux_reference = TBD": "- ux_reference = n/a",
-        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a",
+        "- ux_reference = TBD": "- ux_reference = n/a: no screen",
+        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a: no screen",
         "## Acceptance examples\n- TBD": (
             "## Acceptance examples\n- Given an eligible user, when they act, then the result is visible."
         ),
         "## Affected canonical areas\n- TBD": ("## Affected canonical areas\n- Existing command owner and route."),
         "- rollback = TBD": "- rollback = disable the route and preserve stored state.",
+        "- critical_overlay = none\n": "- critical_overlay = none: standard risk\n",
+        "- deferred = none\n": "- deferred = none: nothing open\n",
+        "- blocked_on = none\n": "- blocked_on = none: nothing waiting\n",
         "## Vertical slices\n- S-1 = TBD; depends_on = none\n- proof = TBD": (
             "## Vertical slices\n"
             "- S-1 = command to stored result to visible response.\n"

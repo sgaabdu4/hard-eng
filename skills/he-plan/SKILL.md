@@ -32,13 +32,14 @@ python3 <he-dir>/scripts/plan_state.py record-step --repo <repo> --plan <PLAN.md
 python3 <he-dir>/scripts/plan_state.py probe-trackers --repo <repo> --plan <PLAN.md> [--write-env-example]
 ```
 
-- Answer rule = every listed key required + nonempty + unknown keys refused + placeholder text (`tbd`, `todo`, `tba`, `n/a`, `?`) refused; a receipt proves the step said something, never that it was right.
+- Answer rule = every listed key required + nonempty + unknown keys refused + placeholder text (`tbd`, `todo`, `tba`, `?`) refused + bare `none`/`n/a` refused (`none: <why>` accepted); a receipt proves the step said something, never that it was right.
 - `validate`/`inspect` print `plan_steps=<done>/6` + `plan_steps_missing` + `plan_steps_open_decisions`; `ready_for_approval=yes` only when the brief and every step are complete.
 - After approval `inspect` prints the handoff block: `handoff_root`, `handoff_branch`, `handoff_plan`, `handoff_prompt` (single mode) or one `handoff_ticket_N` + prompt per claimable ticket; show it verbatim to the user as the last planning message.
 - Missing/stale root `PRODUCT.md` + product-truth change → load [product-md.md](references/product-md.md).
 
 - No serial planning stages, trace graph, exact path manifest, semantic-completeness prediction, or repeated plan challenge.
 - Research + `codebase-design` + `test-quality` = evidence specialists only when the brief needs them.
+- Every author-written `none`/`n/a` in the brief or a step receipt = `none: <few-word why>`; bare value → `ready_for_approval=no` + `approve` refuses naming the row.
 - Non-`n/a` `ux_reference` → design-forensics evidence first + `atomic-ui` PASS before reference creation/selection.
 - Generated/reference media = local lifecycle evidence + show in chat before Ready-to-build approval; product commit requires explicit product-asset acceptance.
 - External contract/current vendor fact → `research` PASS before acceptance.
@@ -51,11 +52,11 @@ python3 <he-dir>/scripts/plan_state.py probe-trackers --repo <repo> --plan <PLAN
 |---|---|
 | Outcome | one observable user/system result |
 | Non-goals | explicit boundary |
-| Material decisions | accepted constraints + material delivery form/lifetime when applicable + grounded `ux_reference`/sources or n/a + unresolved material choice = none |
+| Material decisions | accepted constraints + material delivery form/lifetime when applicable + grounded `ux_reference`/sources or `n/a: <why>` + unresolved material choice = none |
 | Acceptance examples | concrete Given/When/Then or equivalent examples |
 | Affected canonical areas | known owner surfaces; path precision optional |
 | Risk and rollback | `risk_level`, scoped `critical_overlay`, recovery route, living `deferred`/`blocked_on` rows |
-| Vertical slices | every slice `S-n = <behavior>; depends_on = none|S-a, S-b` + proof; numbered without gaps; no loop; S-1 = smallest end-to-end behavior |
+| Vertical slices | every slice `S-n = <behavior>; depends_on = none: <why>|S-a, S-b` + proof; numbered without gaps; no loop; S-1 = smallest end-to-end behavior |
 
 - Unknown implementation owner/file/test = discover during build + update brief if useful; non-`n/a` visual sources excluded.
 - Such discoveries never trigger replan/reapproval.
