@@ -20,7 +20,8 @@
 - Required order = Outcome → Non-goals → Material decisions → Acceptance examples → Affected canonical areas → Risk and rollback → Vertical slices.
 - Entry = concise bullets; evidence links/commands only when they change a decision.
 - Placeholder = allowed during planning + forbidden at Ready-to-build approval.
-- Material decisions requires `ux_reference` + `ux_reference_sources`; no visual surface → both `n/a`.
+- Material decisions requires `ux_reference` + `ux_reference_sources`; no visual surface → both `n/a: <why>`.
+- Empty value rule = every author-written `none`/`n/a` carries a few-word reason (`none: <why>`); bare `none`/`n/a` in `ux_reference`, `ux_reference_sources`, `critical_overlay`, `deferred`, `blocked_on`, `tickets`, `depends_on`, step answers, or edge axes = `ready_for_approval=no` + `approve`/`record-step` refuse; State block values stay bare.
 - Non-`n/a` reference = absolute local lifecycle-media image outside the repository + sibling `<image>.visual-review.json` + `ux_reference_sources = DESIGN.md + <repo-relative-production-owner>...`; canonical `e2e` receipt PASS binds exact route, real baseline, reviewed delivery images, source hashes + presentation label; reference media stays outside Git.
 - Existing screen = render exact running route OR production component; planning-only static data on that route uses label `static preview on current app screen`; standalone HTML/ImageGen/invented combined page = invalid.
 - Genuinely new surface = nearest existing flow + explicit gap + standalone concept allowed; `new-ui-concept` may not represent an existing screen.
@@ -38,14 +39,14 @@
 ## Risk
 
 - `risk_level = standard|critical`.
-- `critical_overlay = none` for standard.
+- `critical_overlay = none: <why>` for standard.
 - Critical = payment/auth/security/privacy/destructive-data/irreversibility OR unresolved material safety uncertainty.
 - Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof.
 - `rollback` = safest recovery action or `not-applicable: <reason>`.
-- `deferred` = visible decision not yet precisely phrasable + what must sharpen it, or `none`; graduate it when an accepted answer sharpens it; never a reason to hold the brief.
-- `blocked_on` = exact user action outside the agent + dependent slice, or `none`; it delays approval only when it changes a frozen constraint.
-- `tickets` = closing answer `none|local|github|jira|azdo` + `tracker` = probe result; written by `record-step closing`; living rows outside the fingerprint.
-- Vertical slices = every `S-n = <behavior>; depends_on = none|S-a, S-b` row + its `proof`; validator rejects gaps, unknown dependencies, and loops; the graph feeds `record-step slices` and ticket decomposition.
+- `deferred` = visible decision not yet precisely phrasable + what must sharpen it, or `none: <why>`; graduate it when an accepted answer sharpens it; never a reason to hold the brief.
+- `blocked_on` = exact user action outside the agent + dependent slice, or `none: <why>`; it delays approval only when it changes a frozen constraint.
+- `tickets` = closing answer `none|local|github|jira|azdo` + `tracker` = probe result; written by `record-step closing` (`none: <user's reply>`); living rows outside the fingerprint.
+- Vertical slices = every `S-n = <behavior>; depends_on = none: <why>|S-a, S-b` row + its `proof`; validator rejects gaps, unknown dependencies, and loops; the graph feeds `record-step slices` and ticket decomposition.
 - Both rows are living engineering context; recording one keeps unblocked planning and building moving.
 
 ## Applicability Scan
@@ -66,8 +67,8 @@
 
 ## Material decisions
 - Existing authorization policy remains canonical.
-- ux_reference = n/a
-- ux_reference_sources = n/a
+- ux_reference = n/a: command-line only
+- ux_reference_sources = n/a: no screen
 
 ## Acceptance examples
 - Given an authorized editor, when they publish a valid draft, then its public URL resolves.
@@ -81,12 +82,12 @@
 - critical_overlay = S-1 authorization + no-unauthorized-write proof
 - rollback = disable the publish route and preserve drafts.
 - deferred = public URL format; sharpens once the first published draft exists.
-- blocked_on = none
+- blocked_on = none: nothing waiting on the user
 - tickets = local
 - tracker = not-probed
 
 ## Vertical slices
-- S-1 = authorized publish command → stored published state → visible URL; depends_on = none
+- S-1 = authorized publish command → stored published state → visible URL; depends_on = none: first slice
 - proof = focused command tests + denied-role test + one end-to-end publish scenario.
 - S-2 = public URL shown in the editor list; depends_on = S-1
 - proof = list render test.

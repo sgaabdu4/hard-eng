@@ -32,7 +32,10 @@ def record_step(args: argparse.Namespace, state) -> None:
             raise PlanError("record-step requires a planning brief")
         entry = plan_steps.record(repo, path, args.step, payload)
         if args.step == "closing":
-            candidate = with_closing_rows(text, str(entry["tickets"]), str(entry["tracker"]))
+            tickets = str(entry["tickets"])
+            if tickets == "none":
+                tickets = "none: " + " ".join(str(entry["reply"]).split())
+            candidate = with_closing_rows(text, tickets, str(entry["tracker"]))
             plan = state.validate_text(candidate)
             replace_if_unchanged(repo, path.relative_to(repo), text.encode("utf-8"), mode, candidate.encode("utf-8"))
             text = candidate

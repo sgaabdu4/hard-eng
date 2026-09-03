@@ -64,8 +64,8 @@ BRIEF_SECTIONS = """
 
 ## Material decisions
 - Existing owners remain canonical.
-- ux_reference = n/a
-- ux_reference_sources = n/a
+- ux_reference = n/a: no screen
+- ux_reference_sources = n/a: no screen
 
 ## Acceptance examples
 - Given valid input, when the action runs, then the result is visible.
@@ -75,10 +75,10 @@ BRIEF_SECTIONS = """
 
 ## Risk and rollback
 - risk_level = standard
-- critical_overlay = none
+- critical_overlay = none: standard risk
 - rollback = revert the change.
-- deferred = none
-- blocked_on = none
+- deferred = none: nothing open
+- blocked_on = none: nothing waiting
 
 ## Vertical slices
 - S-1 = complete the behavior.
@@ -161,7 +161,8 @@ def approval_fixture(root: Path) -> tuple[Path, Path, str]:
     (repo / "hard-eng.gates.json").write_text(
         json.dumps({"schema_version": 1, "enforcement": {"schema_version": 1}}), encoding="utf-8"
     )
-    text = """# Feature Brief: Approval
+    text = (
+        """# Feature Brief: Approval
 
 <!-- hard-eng-state:v1 -->
 - state_version = 1
@@ -176,35 +177,9 @@ def approval_fixture(root: Path) -> tuple[Path, Path, str]:
 - next_action = Request approval.
 - replan_reason = none
 <!-- /hard-eng-state -->
-
-## Outcome
-- A complete behavior is delivered.
-
-## Non-goals
-- Unrelated work is excluded.
-
-## Material decisions
-- Existing owners remain canonical.
-- ux_reference = n/a
-- ux_reference_sources = n/a
-
-## Acceptance examples
-- Given valid input, when the action runs, then the result is visible.
-
-## Affected canonical areas
-- Existing owner + test.
-
-## Risk and rollback
-- risk_level = standard
-- critical_overlay = none
-- rollback = revert the change.
-- deferred = none
-- blocked_on = none
-
-## Vertical slices
-- S-1 = complete the behavior.
-- proof = focused test + full gate.
 """
+        + BRIEF_SECTIONS
+    )
     plan.write_text(text, encoding="utf-8")
     digest = "sha256:" + __import__("hashlib").sha256(text.encode()).hexdigest()
     return repo, plan, digest
@@ -235,10 +210,15 @@ def record_approval_research(repo: Path, plan: Path) -> ScriptResult:
     )
 
 
-ANSWERS = {"could_break": "fixture", "owner": "fixture", "existing_capability": "none", "external_contract": "none"}
+ANSWERS = {
+    "could_break": "fixture",
+    "owner": "fixture",
+    "existing_capability": "none: fixture",
+    "external_contract": "none: fixture",
+}
 PLANNING_STEPS = {
     "code-study": {"owners": ["hard-eng.gates.json"], "callers": [], "answers": ANSWERS},
-    "edge-scan": {"axes": dict.fromkeys(plan_steps.AXES, "none")},
+    "edge-scan": {"axes": dict.fromkeys(plan_steps.AXES, "none: fixture")},
     "decisions": {
         "decisions": [
             dict.fromkeys(("decision", "settled_by", "rejected"), "fixture") | {"id": "D-1", "status": "settled"}
@@ -246,9 +226,14 @@ PLANNING_STEPS = {
     },
     "slices": {
         "slices": [{"id": "S-1", "depends_on": []}],
-        "answers": {"thinnest_path": "fixture", "parallel": "none"},
+        "answers": {"thinnest_path": "fixture", "parallel": "none: fixture"},
     },
-    "closing": {"tickets": "none", "tracker": "not-probed", "reply": "fixture", "answers": {"unknowns": "none"}},
+    "closing": {
+        "tickets": "none",
+        "tracker": "not-probed",
+        "reply": "fixture",
+        "answers": {"unknowns": "none: fixture"},
+    },
 }
 
 

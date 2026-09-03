@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import NoReturn
 
 from authorization_recovery_regression import check as check_authorization_recovery
+from authorization_recovery_regression import filled
 from safe_plan_io_regression import (
     check_ancestor_swap,
     check_exchange_editor_save,
@@ -56,36 +57,13 @@ def authorize_fixture(state, repo: Path, plan: Path, fingerprint: str) -> None:
     state.authorize_execution(repo, plan, fingerprint, AUTONOMOUS_DIRECTIVE, ["build-and-verify"])
 
 
-def filled(text: str) -> str:
-    replacements = {
-        "## Outcome\n- TBD": "## Outcome\n- A user receives one observable result.",
-        "## Non-goals\n- TBD": "## Non-goals\n- Adjacent workflow changes are excluded.",
-        "## Material decisions\n- TBD": "## Material decisions\n- Existing policy remains canonical.",
-        "- ux_reference = TBD": "- ux_reference = n/a",
-        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a",
-        "## Acceptance examples\n- TBD": (
-            "## Acceptance examples\n- Given an eligible user, when they act, then the result is visible."
-        ),
-        "## Affected canonical areas\n- TBD": ("## Affected canonical areas\n- Existing command owner and route."),
-        "- rollback = TBD": "- rollback = disable the route and preserve stored state.",
-        "## Vertical slices\n- S-1 = TBD; depends_on = none\n- proof = TBD": (
-            "## Vertical slices\n"
-            "- S-1 = command to stored result to visible response.\n"
-            "- proof = focused behavior test."
-        ),
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    return text
-
-
 def ux_reference_cases(state) -> None:
     brief = filled(state.template("lean-loop", "lean-loop-test"))
     try:
         state.approval_candidate(brief)
     except state.PlanError:
-        fail("ux_reference = n/a must allow Ready-to-build")
-    missing = brief.replace("- ux_reference = n/a\n", "")
+        fail("ux_reference = n/a: no screen must allow Ready-to-build")
+    missing = brief.replace("- ux_reference = n/a: no screen\n", "")
     try:
         state.validate_text(missing)
     except state.PlanError as error:
@@ -93,7 +71,7 @@ def ux_reference_cases(state) -> None:
             fail("missing ux_reference row must name the field")
     else:
         fail("missing ux_reference row must be invalid")
-    referenced_without_sources = brief.replace("- ux_reference = n/a", "- ux_reference = docs/mock-home.png")
+    referenced_without_sources = brief.replace("- ux_reference = n/a: no screen", "- ux_reference = docs/mock-home.png")
     try:
         state.require_ux_reference_target(Path.cwd(), referenced_without_sources)
     except state.PlanError as error:
@@ -101,7 +79,7 @@ def ux_reference_cases(state) -> None:
             fail("missing ux_reference provenance must name ux_reference_sources")
     else:
         fail("visual ux_reference without provenance must be invalid")
-    pending = brief.replace("- ux_reference = n/a", "- ux_reference = TBD")
+    pending = brief.replace("- ux_reference = n/a: no screen", "- ux_reference = TBD")
     try:
         state.approval_candidate(pending)
     except state.PlanError as error:
@@ -109,7 +87,7 @@ def ux_reference_cases(state) -> None:
             fail("TBD ux_reference must block approval as a placeholder")
     else:
         fail("TBD ux_reference must not reach Ready-to-build")
-    referenced = brief.replace("- ux_reference = n/a", "- ux_reference = docs/mock-home.png")
+    referenced = brief.replace("- ux_reference = n/a: no screen", "- ux_reference = docs/mock-home.png")
     candidate, _ = state.approval_candidate(referenced)
     mutated = candidate.replace("- ux_reference = docs/mock-home.png", "- ux_reference = docs/mock-home-v2.png")
     try:
@@ -213,7 +191,9 @@ def approval_reply_cases(state) -> None:
         if stale_direct.exists():
             fail("Feature approval did not invalidate the stale Direct receipt")
         approved_text = plan.read_text(encoding="utf-8")
-        legacy_text = approved_text.replace("- ux_reference = n/a\n", "").replace("- ux_reference_sources = n/a\n", "")
+        legacy_text = approved_text.replace("- ux_reference = n/a: no screen\n", "").replace(
+            "- ux_reference_sources = n/a: no screen\n", ""
+        )
         legacy_text = state.render_state(
             legacy_text, {"approval_fingerprint": state.frozen_fingerprint(state.parse_sections(legacy_text))}
         )

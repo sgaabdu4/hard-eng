@@ -13,6 +13,7 @@ E2E_SCRIPTS = Path(__file__).resolve().parents[2] / "e2e/scripts"
 if str(E2E_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(E2E_SCRIPTS))
 
+from plan_sections import empty_value
 from visual_evidence import evaluate_receipt, sha256
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
@@ -244,13 +245,13 @@ def validated_delivery_paths(repo: Path, target: Path, source_values: list[str])
 
 
 def validate(repo: Path, value: str, sources: str) -> list[Path] | None:
-    if value == "n/a":
-        if sources != "n/a":
+    if empty_value(value) is not None:
+        if empty_value(sources) is None:
             raise UXReferenceError("ux_reference = n/a requires ux_reference_sources = n/a")
         return None
 
     source_values = sources.split(" + ")
-    if sources == "n/a" or len(source_values) < 2 or source_values[0] != "DESIGN.md":
+    if empty_value(sources) is not None or len(source_values) < 2 or source_values[0] != "DESIGN.md":
         raise UXReferenceError(
             "visual ux_reference requires ux_reference_sources = DESIGN.md + <existing production owner path>"
         )
