@@ -264,9 +264,11 @@ sub plan_status {
             path => normalise($plan), plan_id => $plan_id, state => $state,
         };
     }
-    if (@active > 1) {
-        return (\@active, 'multiple active Feature Briefs: ' . join(', ', map { $_->{path} } @active));
+    my @building = grep { $_->{state} ne 'green' } @active;
+    if (@building > 1) {
+        return (\@active, 'multiple Feature Briefs under construction: ' . join(', ', map { $_->{path} } @building));
     }
+    @active = (@building, grep { $_->{state} eq 'green' } @active);
     return (\@active, undef);
 }
 
@@ -280,6 +282,14 @@ sub inspect_repo {
 }
 
 sub changed_source_error { load_checkpoint_helper(); return changed_source_error_impl(@_); }
+
+sub snapshot_error {
+    my ($repo, $active) = @_;
+    my @green = grep { $_->{state} eq 'green' } @$active;
+    return changed_source_error($repo, @$active ? $active->[0] : undef) unless @green;
+    my @errors = grep { defined } map { changed_source_error($repo, $_) } @green;
+    return @errors == @green ? $errors[0] : undef;
+}
 sub learning_status_error { load_checkpoint_helper(); return learning_status_error_impl(@_); }
 
 sub lifecycle_target_allowed {
@@ -341,8 +351,10 @@ sub write_decision {
         my $relative = substr($target, length($repo) + 1);
         return 'Hard Eng blocked this raw write to lifecycle-owned PLAN.md or receipt state. Use the lifecycle command owner.'
             if $relative =~ m{\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/[a-z0-9][a-z0-9._-]*\.json|tickets/T-(?:[1-9][0-9]*|int)\.md)\z};
-        return "Hard Eng blocked permanently deleting active $active->{path}."
-            if $active && $target eq $active->{path} && $deletes->{$target};
+        for my $plan (@{$status->{active} // []}) {
+            return "Hard Eng blocked permanently deleting active $plan->{path}."
+                if $target eq $plan->{path} && $deletes->{$target};
+        }
     }
     my ($receipt, $direct_error) = direct_action_receipt($repo, $status, $active);
     return $direct_error if $direct_error;
@@ -599,8 +611,7 @@ if (($ARGV[0] // '') eq 'check') {
         warn "Hard Eng enforcement check failed: $coverage_error\n";
         exit 4;
     }
-    my $active = @{$status->{active}} ? $status->{active}[0] : undef;
-    if (my $change_error = changed_source_error($repo, $active)) {
+    if (my $change_error = snapshot_error($repo, $status->{active})) {
         warn "Hard Eng enforcement check failed: $change_error\n";
         exit 4;
     }

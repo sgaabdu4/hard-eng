@@ -22,6 +22,7 @@ import plan_state
 import safe_plan_io
 import setup_state
 from git_env import scrub_environ
+from script_runner import run_script
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -74,12 +75,7 @@ def check_init_preimage(fail: Failure) -> None:
         repo = Path(directory).resolve()
         subprocess.run(["git", "init", "-q", str(repo)], check=True)
         setup_state.seed_receipt_for_fixture(repo)
-        initialized = subprocess.run(
-            [sys.executable, str(STATE_PATH), "init", "--repo", str(repo), "--feature-slug", "fresh-loop"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        initialized = run_script(STATE_PATH, ["init", "--repo", str(repo), "--feature-slug", "fresh-loop"])
         relative = Path("features/fresh-loop/PLAN.md")
         plan = repo / relative
         if initialized.returncode != 0 or not plan.is_file():

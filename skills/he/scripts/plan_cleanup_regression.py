@@ -18,14 +18,15 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(SCRIPTS.parents[1] / "deterministic-checks/scripts"))
 import plan_state
 from git_env import git_env
+from script_runner import ScriptResult, run_script
 
 
 def fail(message: str) -> None:
     raise SystemExit(f"plan-cleanup-regression: {message}")
 
 
-def run(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([sys.executable, str(STATE), *args], capture_output=True, text=True, check=False)
+def run(*args: str) -> ScriptResult:
+    return run_script(STATE, args)
 
 
 def digest(path: Path) -> str:

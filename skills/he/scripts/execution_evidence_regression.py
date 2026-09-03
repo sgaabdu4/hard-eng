@@ -13,6 +13,7 @@ sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts
 import plan_state
 import plan_steps
 from git_env import git_env
+from script_runner import ScriptResult, run_script
 
 OWNER = Path(__file__).with_name("execution_evidence.py")
 PLAN_STATE = Path(__file__).with_name("plan_state.py")
@@ -99,14 +100,12 @@ def protected_digest(value: str) -> str:
     return "sha256:" + hashlib.sha256(payload.encode("ascii")).hexdigest()
 
 
-def run(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([sys.executable, str(OWNER), *args], cwd=repo, text=True, capture_output=True, check=False)
+def run(repo: Path, *args: str) -> ScriptResult:
+    return run_script(OWNER, args, cwd=repo)
 
 
-def run_plan(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(PLAN_STATE), *args], cwd=repo, text=True, capture_output=True, check=False
-    )
+def run_plan(repo: Path, *args: str) -> ScriptResult:
+    return run_script(PLAN_STATE, args, cwd=repo)
 
 
 def require(condition: bool, message: str) -> None:
@@ -211,7 +210,7 @@ def approval_fixture(root: Path) -> tuple[Path, Path, str]:
     return repo, plan, digest
 
 
-def record_approval_research(repo: Path, plan: Path) -> subprocess.CompletedProcess[str]:
+def record_approval_research(repo: Path, plan: Path) -> ScriptResult:
     return run(
         repo,
         "record-research",
@@ -255,11 +254,8 @@ PLANNING_STEPS = {
 
 def record_planning_steps(repo: Path, plan: Path) -> None:
     for step, payload in PLANNING_STEPS.items():
-        command = [sys.executable, str(PLAN_STATE), "record-step", "--repo", str(repo), "--plan", str(plan)]
-        command += ["--step", step, "--payload-file", "-"]
-        result = subprocess.run(
-            command, input=json.dumps(payload), text=True, capture_output=True, env=git_env(), check=False
-        )
+        command = ["record-step", "--repo", str(repo), "--plan", str(plan), "--step", step, "--payload-file", "-"]
+        result = run_script(PLAN_STATE, command, env=git_env(), stdin=json.dumps(payload))
         require(result.returncode == 0, f"planning step {step} failed: {result.stderr}")
 
 
@@ -615,8 +611,6 @@ def main() -> int:
 
         approval_repo, approval_plan, token = approval_fixture(root)
         approve = [
-            sys.executable,
-            str(PLAN_STATE),
             "approve",
             "--repo",
             str(approval_repo),
@@ -629,15 +623,15 @@ def main() -> int:
             "--allowed-action",
             "parallel-subagents",
         ]
-        missing_research = subprocess.run(approve, text=True, capture_output=True, check=False)
+        missing_research = run_script(PLAN_STATE, approve)
         require(missing_research.returncode != 0, "configured approval skipped research")
         recorded = record_approval_research(approval_repo, approval_plan)
         require(recorded.returncode == 0, recorded.stderr)
-        missing_steps = subprocess.run(approve, text=True, capture_output=True, check=False)
+        missing_steps = run_script(PLAN_STATE, approve)
         require(missing_steps.returncode != 0, "configured approval skipped the planning steps")
         record_planning_steps(approval_repo, approval_plan)
         approve[approve.index("--expect-token") + 1] = plan_state.token_for(approval_plan.read_text(encoding="utf-8"))
-        approved = subprocess.run(approve, text=True, capture_output=True, check=False)
+        approved = run_script(PLAN_STATE, approve)
         require(approved.returncode == 0, approved.stderr)
         integrated = json.loads((approval_plan.parent / "receipts" / "authorization.json").read_text())
         require(integrated["mode"] == "autonomous", "plan approval lost the explicit autonomous directive")

@@ -13,13 +13,16 @@ from pathlib import Path
 from typing import NoReturn
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+CHECKS_DIR = SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"
+for directory in (CHECKS_DIR, SCRIPT_DIR):
+    if str(directory) not in sys.path:
+        sys.path.insert(0, str(directory))
 
 import plan_state
 import ticket_parser
 import ticket_template
 from git_env import git_env, scrub_environ
+from script_runner import run_script
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -55,10 +58,8 @@ def git(repo: Path, *arguments: str) -> str:
 
 
 def run(script: Path, *arguments: str, stdin: str | None = None) -> tuple[int, str]:
-    result = subprocess.run(
-        [sys.executable, str(script), *arguments], check=False, capture_output=True, text=True, env=env(), input=stdin
-    )
-    return result.returncode, result.stdout + result.stderr
+    result = run_script(script, arguments, env=env(), stdin=stdin)
+    return result.returncode, result.output
 
 
 def values(output: str) -> dict[str, str]:
@@ -477,14 +478,12 @@ def fake_gh(base: Path, exit_code: int) -> str:
 
 
 def probe(repo: Path, plan: Path, path_value: str, extra_env: dict[str, str], *flags: str) -> tuple[int, str]:
-    result = subprocess.run(
-        [sys.executable, str(STATE_SCRIPT), "probe-trackers", "--repo", str(repo), "--plan", str(plan), *flags],
-        check=False,
-        capture_output=True,
-        text=True,
+    result = run_script(
+        STATE_SCRIPT,
+        ["probe-trackers", "--repo", str(repo), "--plan", str(plan), *flags],
         env={**env(), **extra_env, "PATH": path_value},
     )
-    return result.returncode, result.stdout + result.stderr
+    return result.returncode, result.output
 
 
 def check_tracker_probe(base: Path) -> None:

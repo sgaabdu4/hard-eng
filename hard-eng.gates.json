@@ -46,11 +46,14 @@
       "scripts/machine-scope-guard-contract.py",
       "skills/he-learn/scripts/learning_state.py",
       "skills/he/scripts/build_report.py",
+      "skills/deterministic-checks/scripts/script_runner.py",
+      "scripts/inprocess-seam-contract.py",
       "skills/he/scripts/external_claims.py",
       "skills/he/scripts/build_steps.py",
       "skills/he/scripts/execution_direct.py",
       "skills/he/scripts/execution_evidence.py",
       "skills/he/scripts/mutation_receipt.py",
+      "skills/he/scripts/mutation_payload.py",
       "skills/he/scripts/plan_state.py",
       "skills/he/scripts/plan_steps.py",
       "skills/he/scripts/setup_state.py",
@@ -122,6 +125,11 @@
         "checkpoint check",
         "skills/he/scripts/external_claims.py",
         "skills/he/scripts/external_claims_regression.py"
+      ],
+      "in-process-seam": [
+        "checkpoint check",
+        "skills/deterministic-checks/scripts/script_runner.py",
+        "skills/deterministic-checks/scripts/script_runner_regression_check.py"
       ],
       "mutation-before-ship": [
         "checkpoint check",

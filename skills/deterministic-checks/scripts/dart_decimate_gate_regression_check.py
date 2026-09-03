@@ -19,6 +19,7 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
 from git_env import git_env, scrub_environ
+from script_runner import ScriptResult, run_script
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -39,14 +40,8 @@ def write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def invoke(package: Path, environment: dict[str, str], *extra: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(GATE), "--package", str(package), "--timeout", "10", *extra],
-        capture_output=True,
-        text=True,
-        env=environment,
-        check=False,
-    )
+def invoke(package: Path, environment: dict[str, str], *extra: str, timeout: str = "10") -> ScriptResult:
+    return run_script(GATE, ["--package", str(package), "--timeout", timeout, *extra], env=environment)
 
 
 def main() -> int:
@@ -165,13 +160,7 @@ def main() -> int:
         if not marker.exists():
             holder.kill()
             fail("exclusive source-lock fixture did not start")
-        blocked = subprocess.run(
-            [sys.executable, str(GATE), "--package", str(package), "--timeout", "0.15"],
-            capture_output=True,
-            text=True,
-            env=environment,
-            check=False,
-        )
+        blocked = invoke(package, environment, timeout="0.15")
         if blocked.returncode != 2 or "timeout" not in blocked.stderr:
             holder.kill()
             fail("Dart Decimate did not share source-tree coordination")
@@ -179,13 +168,7 @@ def main() -> int:
             fail("exclusive source-lock fixture failed")
 
         for invalid_timeout in ("nan", "inf", "0", "-1"):
-            rejected = subprocess.run(
-                [sys.executable, str(GATE), "--package", str(package), "--timeout", invalid_timeout],
-                capture_output=True,
-                text=True,
-                env=environment,
-                check=False,
-            )
+            rejected = invoke(package, environment, timeout=invalid_timeout)
             if rejected.returncode != 2 or "Traceback" in rejected.stderr:
                 fail(f"invalid timeout was not rejected cleanly: {invalid_timeout}")
 

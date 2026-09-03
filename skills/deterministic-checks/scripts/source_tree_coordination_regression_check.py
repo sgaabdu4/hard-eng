@@ -16,6 +16,7 @@ from typing import NoReturn
 import project_gate as project_gate_module
 from git_env import git_env, scrub_environ
 from project_gate import REACT_DOCTOR_COMMAND, run_families
+from script_runner import ScriptResult, run_script, spawn_script
 from source_tree_coordination import (
     LOCK_NAME,
     POISON_NAME,
@@ -56,15 +57,11 @@ def run_git(repo: Path, *args: str) -> str:
 
 
 def gate_command(repo: Path, family: str, timeout: str = "30") -> list[str]:
-    return [sys.executable, str(GATE), "run", "--repo", str(repo), "--timeout", timeout, "--family", family]
+    return ["run", "--repo", str(repo), "--timeout", timeout, "--family", family]
 
 
-def invoke(
-    repo: Path, family: str, environment: dict[str, str], timeout: str = "30"
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        gate_command(repo, family, timeout), check=False, capture_output=True, text=True, env=environment
-    )
+def invoke(repo: Path, family: str, environment: dict[str, str], timeout: str = "30") -> ScriptResult:
+    return run_script(GATE, gate_command(repo, family, timeout), env=environment)
 
 
 def wait_for(path: Path, process: subprocess.Popen[str]) -> None:
@@ -205,13 +202,9 @@ def check_normal_coordination(repo: Path, marker: Path, environment: dict[str, s
         fail("symlink alias resolved a different source-tree lock")
     alias_release = repo.parent / ".react-doctor-alias-release"
     held = {**environment, "HARD_ENG_DOCTOR_DELAY": "0", "HARD_ENG_DOCTOR_HOLD_FILE": str(alias_release)}
-    doctor = subprocess.Popen(
-        gate_command(alias, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=held
-    )
+    doctor = spawn_script(GATE, gate_command(alias, "react-doctor"), env=held)
     wait_for(marker, doctor)
-    fallow = subprocess.Popen(
-        gate_command(repo, "fallow"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment
-    )
+    fallow = spawn_script(GATE, gate_command(repo, "fallow"), env=environment)
     alias_release.write_text("release\n", encoding="utf-8")
     doctor_output = doctor.communicate(timeout=30)
     fallow_output = fallow.communicate(timeout=30)
@@ -230,9 +223,7 @@ def check_normal_coordination(repo: Path, marker: Path, environment: dict[str, s
     timeout_release = repo.parent / ".react-doctor-timeout-release"
     slow = {**environment, "HARD_ENG_DOCTOR_DELAY": "0", "HARD_ENG_DOCTOR_HOLD_FILE": str(timeout_release)}
     startup_started = time.monotonic()
-    doctor = subprocess.Popen(
-        gate_command(repo, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=slow
-    )
+    doctor = spawn_script(GATE, gate_command(repo, "react-doctor"), env=slow)
     wait_for(marker, doctor)
     startup_elapsed = time.monotonic() - startup_started
     blocked = invoke(repo, "fallow", environment, timeout="0.1")
@@ -250,16 +241,7 @@ def check_normal_coordination(repo: Path, marker: Path, environment: dict[str, s
     probe = repo.parent / "fallow-parallel"
     probe.mkdir()
     parallel_environment = {**environment, "HARD_ENG_FALLOW_PARALLEL_PROBE": str(probe)}
-    gates = [
-        subprocess.Popen(
-            gate_command(repo, "fallow"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=parallel_environment,
-        )
-        for _ in range(2)
-    ]
+    gates = [spawn_script(GATE, gate_command(repo, "fallow"), env=parallel_environment) for _ in range(2)]
     outputs = [gate.communicate(timeout=30) for gate in gates]
     if any(gate.returncode for gate in gates):
         fail("safe shared scans were serialized: " + "".join(sum(outputs, ())))
@@ -276,13 +258,7 @@ def check_quarantine(
     crash_timeout = max(15.0, startup_elapsed * 4 + 5.0)
     crash_hold = repo.parent / ".react-doctor-crash-hold"
     crashing = {**environment, "HARD_ENG_DOCTOR_DELAY": "0", "HARD_ENG_DOCTOR_HOLD_FILE": str(crash_hold)}
-    doctor = subprocess.Popen(
-        gate_command(repo, "react-doctor", timeout=f"{crash_timeout:.3f}"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=crashing,
-    )
+    doctor = spawn_script(GATE, gate_command(repo, "react-doctor", timeout=f"{crash_timeout:.3f}"), env=crashing)
     wait_for(marker, doctor)
     stdout, stderr = doctor.communicate(timeout=crash_timeout + 20)
     if doctor.returncode == 0:
@@ -304,9 +280,7 @@ def check_quarantine(
     }
     release = repo.parent / ".react-doctor-release"
     delayed["HARD_ENG_DOCTOR_HOLD_FILE"] = str(release)
-    owner = subprocess.Popen(
-        gate_command(repo, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=delayed
-    )
+    owner = spawn_script(GATE, gate_command(repo, "react-doctor"), env=delayed)
     wait_for(marker, owner)
     owner.kill()
     if owner.wait(timeout=2) != -signal.SIGKILL:
@@ -366,12 +340,7 @@ def check_quarantine(
 
     orphan = lock_path.parent / "hard-eng-terminal-999999999-deadbeef.json"
     atomic_json(orphan, {"terminal": True, "token": "b" * 64})
-    cleaners = [
-        subprocess.Popen(
-            gate_command(repo, "fallow"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment
-        )
-        for _ in range(2)
-    ]
+    cleaners = [spawn_script(GATE, gate_command(repo, "fallow"), env=environment) for _ in range(2)]
     cleaner_output = [cleaner.communicate(timeout=30) for cleaner in cleaners]
     if any(cleaner.returncode for cleaner in cleaners) or orphan.exists():
         fail("concurrent dead-owner receipt cleanup failed: " + "".join(sum(cleaner_output, ())))
@@ -507,9 +476,7 @@ def check_linked_worktree(repo: Path, marker: Path, environment: dict[str, str])
         fail("linked worktrees unexpectedly shared one source-tree lock")
     linked_release = repo.parent / ".react-doctor-linked-release"
     delayed = {**environment, "HARD_ENG_DOCTOR_DELAY": "0", "HARD_ENG_DOCTOR_HOLD_FILE": str(linked_release)}
-    doctor = subprocess.Popen(
-        gate_command(repo, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=delayed
-    )
+    doctor = spawn_script(GATE, gate_command(repo, "react-doctor"), env=delayed)
     wait_for(marker, doctor)
     linked_result = invoke(linked, "fallow", environment)
     holder_active = marker.exists()

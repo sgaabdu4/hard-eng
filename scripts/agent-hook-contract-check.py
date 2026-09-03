@@ -1097,6 +1097,21 @@ def check_repository_checkpoint(root: Path) -> None:
 
     clean = run()
     check("clean checkpoint passes", clean.returncode == 0, clean.stderr)
+    shipping = plan(repo, "shipping", "green")
+    with_green = run()
+    check(
+        "checkpoint checks the green brief beside the one being built",
+        with_green.returncode != 0 and "green repository snapshot no longer matches" in with_green.stderr,
+        with_green.stderr,
+    )
+    shipping.write_text(shipping.read_text().replace("= green", "= building"), encoding="utf-8")
+    two_building = run()
+    check(
+        "checkpoint blocks two briefs under construction",
+        two_building.returncode != 0 and "under construction" in two_building.stderr,
+        two_building.stderr,
+    )
+    shipping.write_text(shipping.read_text().replace("= building", "= shipped"), encoding="utf-8")
     invalid_learning = repo / ".agents/learning/broken.json"
     invalid_learning.parent.mkdir(parents=True)
     invalid_learning.write_text("{}\n", encoding="utf-8")
@@ -1165,6 +1180,7 @@ def check_repository_checkpoint(root: Path) -> None:
         "    and '--session-id' not in sys.argv\n"
         "    and '--request-digest' not in sys.argv\n"
         "    and os.environ.get('GREEN_FIXTURE_FAIL') != '1'\n"
+        "    and os.environ.get('GREEN_FIXTURE_STALE', '/none/') not in ' '.join(sys.argv)\n"
         ")\n"
         "raise SystemExit(0 if valid else 1)\n",
         encoding="utf-8",
@@ -1175,16 +1191,14 @@ def check_repository_checkpoint(root: Path) -> None:
     (green_repo / "ready.py").write_text("value = 1\n", encoding="utf-8")
     write_evidence(green_repo, green_plan.parent, "one")
     green_command = ["perl", str(install / "scripts/enforcement_policy.pl"), "check", "."]
-    exact_green = subprocess.run(green_command, cwd=green_repo, capture_output=True, text=True, check=False)
+
+    def green_run(**extra_env: str) -> subprocess.CompletedProcess[str]:
+        env = {**os.environ, **extra_env}
+        return subprocess.run(green_command, cwd=green_repo, capture_output=True, text=True, check=False, env=env)
+
+    exact_green = green_run()
     check("checkpoint accepts an exact green artifact", exact_green.returncode == 0, exact_green.stderr)
-    stale_green = subprocess.run(
-        green_command,
-        cwd=green_repo,
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "GREEN_FIXTURE_FAIL": "1"},
-    )
+    stale_green = green_run(GREEN_FIXTURE_FAIL="1")
     check(
         "checkpoint rejects a stale green artifact",
         stale_green.returncode != 0 and "green repository snapshot no longer matches" in stale_green.stderr,
@@ -1194,6 +1208,16 @@ def check_repository_checkpoint(root: Path) -> None:
         "green validation ignores a repository-planted validator",
         stale_green.returncode != 0,
         "repository copy of plan_state.py was executed",
+    )
+    second_green = plan(green_repo, "two", "green")
+    write_evidence(green_repo, second_green.parent, "two")
+    one_matches = green_run(GREEN_FIXTURE_STALE="features/two/")
+    check("checkpoint accepts two green briefs when one matches", one_matches.returncode == 0, one_matches.stderr)
+    none_match = green_run(GREEN_FIXTURE_STALE="features/")
+    check(
+        "checkpoint rejects two green briefs when neither matches",
+        none_match.returncode != 0 and "green repository snapshot no longer matches" in none_match.stderr,
+        none_match.stderr,
     )
 
 
