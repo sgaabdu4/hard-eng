@@ -446,7 +446,7 @@ def media_error(plan: Path, paths: tuple[str, ...], e2e_value: str) -> str | Non
         return None
     match = re.search(r"(?m)^- ux_reference = (.+)$", text)
     ux = match.group(1).strip() if match else "n/a"
-    if ux in {"n/a", "TBD"}:
+    if ux == "TBD" or re.match(r"(?i)(n/a|none)(:|$)", ux):
         return None
     if any(Path(path).suffix.lower() in UI_EXT for path in paths):
         return (

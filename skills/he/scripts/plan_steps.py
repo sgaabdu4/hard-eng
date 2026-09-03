@@ -26,7 +26,7 @@ from evidence_lib import (
 )
 from execution_evidence import validate_research
 from external_claims import claim_error as external_claim_error
-from plan_sections import PlanError, parse_sections, parse_slices
+from plan_sections import PlanError, brief_reason_error, parse_sections, parse_slices, reason_error
 
 RECEIPT_NAME = "plan-steps.json"
 SCHEMA_VERSION = 2
@@ -67,6 +67,8 @@ def _text(payload: dict[str, object], key: str) -> str:
 
 def _answer(payload: dict[str, object], key: str) -> str:
     value = _text(payload, key)
+    if error := reason_error(key, value):
+        raise PlanStepError(error)
     if value.lower() in PLACEHOLDERS:
         raise PlanStepError(f"{key} is a placeholder, not an answer: {value}")
     return value
@@ -126,7 +128,7 @@ def validate_edge_scan(repo: Path, payload: dict[str, object]) -> dict[str, obje
     unknown = sorted(set(axes) - set(AXES))
     if unknown:
         raise PlanStepError(f"edge-scan has unknown axes: {', '.join(unknown)}")
-    return {"axes": {axis: str(axes[axis]).strip() for axis in AXES}}
+    return {"axes": {axis: _answer(axes, axis) for axis in AXES}}
 
 
 def validate_decisions(repo: Path, payload: dict[str, object]) -> dict[str, object]:
@@ -339,6 +341,12 @@ def status(repo: Path, plan: Path) -> dict[str, list[str]]:
 
 
 def approval_error(repo: Path, plan: Path) -> str | None:
+    try:
+        reason_gap = brief_reason_error(parse_sections(plan.read_text(encoding="utf-8")))
+    except (OSError, UnicodeError, PlanError):
+        reason_gap = None
+    if reason_gap:
+        return reason_gap
     if not enforcement_configured(repo):
         return None
     summary = status(repo, plan)

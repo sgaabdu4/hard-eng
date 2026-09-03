@@ -25,6 +25,46 @@ LEGACY_SLICES_HEADING = "First vertical slice"
 SLICE_ROW = re.compile(r"(?m)^- (S-[1-9][0-9]*) = (.+)$")
 DEPENDS_ON = re.compile(r";\s*depends_on\s*=\s*([^;]+?)\s*$")
 TICKET_CHOICES = ("none", "local", "github", "jira", "azdo")
+EMPTY_WORDS = ("none", "n/a")
+REASON_PLACEHOLDERS = frozenset({"tbd", "todo", "tba", "?", *EMPTY_WORDS})
+REASON_ROWS = {
+    "Material decisions": ("ux_reference", "ux_reference_sources"),
+    "Risk and rollback": ("critical_overlay", "deferred", "blocked_on", "tickets"),
+}
+
+
+def empty_value(value: str) -> tuple[str, str] | None:
+    stripped = value.strip()
+    lowered = stripped.lower()
+    for word in EMPTY_WORDS:
+        if lowered == word:
+            return word, ""
+        if lowered.startswith(word + ":"):
+            return word, stripped[len(word) + 1 :].strip()
+    return None
+
+
+def reason_error(key: str, value: str) -> str | None:
+    empty = empty_value(value)
+    if empty is None:
+        return None
+    word, reason = empty
+    if not reason or reason.lower() in REASON_PLACEHOLDERS:
+        return f"{key} = {word} needs a short reason: write `{word}: <why>`"
+    return None
+
+
+def brief_reason_error(sections: dict[str, str]) -> str | None:
+    for heading, keys in REASON_ROWS.items():
+        for key in keys:
+            for value in re.findall(rf"(?m)^- {key} = (.+)$", sections[heading]):
+                if error := reason_error(key, value):
+                    return error
+    for identifier, body in SLICE_ROW.findall(sections[SLICES_SECTION]):
+        match = DEPENDS_ON.search(body)
+        if match and (error := reason_error(f"{identifier} depends_on", match.group(1))):
+            return error
+    return None
 
 
 def token_for(text: str) -> str:
@@ -56,9 +96,10 @@ def risk_fields(section: str) -> tuple[str, str]:
     if values["risk_level"] not in {"standard", "critical"}:
         raise PlanError("risk_level must be standard or critical")
     overlay = values["critical_overlay"]
-    if values["risk_level"] == "standard" and overlay != "none":
-        raise PlanError("standard risk requires critical_overlay = none")
-    if values["risk_level"] == "critical" and overlay == "none":
+    overlay_empty = empty_value(overlay) is not None
+    if values["risk_level"] == "standard" and not overlay_empty:
+        raise PlanError("standard risk requires critical_overlay = none: <why>")
+    if values["risk_level"] == "critical" and overlay_empty:
         raise PlanError("critical risk requires a scoped critical_overlay")
     return values["risk_level"], overlay
 
@@ -77,7 +118,7 @@ def parse_slices(section: str) -> dict[str, tuple[str, ...]]:
             raise PlanError(f"duplicate slice row: {identifier}")
         match = DEPENDS_ON.search(body)
         raw = match.group(1).strip() if match else "none"
-        graph[identifier] = () if raw == "none" else tuple(item.strip() for item in raw.split(",") if item.strip())
+        graph[identifier] = () if empty_value(raw) else tuple(item.strip() for item in raw.split(",") if item.strip())
     if not graph:
         raise PlanError("Vertical slices requires at least one `- S-n = ...` row")
     expected = [f"S-{index}" for index in range(1, len(graph) + 1)]
@@ -118,8 +159,10 @@ def closing_fields(section: str) -> dict[str, str]:
             raise PlanError(f"Risk and rollback allows at most one `{key}` row")
         if matches:
             values[key] = matches[0].strip()
-    if "tickets" in values and values["tickets"] not in TICKET_CHOICES:
-        raise PlanError(f"tickets must be one of {', '.join(TICKET_CHOICES)}")
+    if "tickets" in values:
+        empty = empty_value(values["tickets"])
+        if (empty[0] if empty else values["tickets"]) not in TICKET_CHOICES:
+            raise PlanError(f"tickets must be one of {', '.join(TICKET_CHOICES)}")
     return values
 
 

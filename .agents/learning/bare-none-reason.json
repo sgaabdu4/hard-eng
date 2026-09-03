@@ -1,0 +1,26 @@
+{
+  "evidence": [
+    "2026-09-03 frontline-fitness sales-queue-controls: approve refused a ux_reference without a reviewed picture, so the agent wrote ux_reference = n/a on a brief that adds controls to an existing screen and approved; the user had to shout for the before screenshot",
+    "2026-09-03: plan_sections.brief_reason_error + plan_steps._answer refuse bare none/n/a; regression cases in skills/he/scripts/plan_steps_regression.py check_bare_none_refused and check_bad_payloads"
+  ],
+  "failure": "a bare none or n/a in a Feature Brief row or step answer let the agent skip a required step without saying why",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "bare-none-reason",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/he/scripts/plan_sections.py",
+    "proof": "skills/he/scripts/plan_steps_regression.py",
+    "valid_fixture": "skills/he/scripts/plan_steps_regression.py",
+    "violation_fixture": "skills/he/scripts/plan_steps_regression.py"
+  },
+  "root_cause": "the validator accepted none and n/a on trust; nothing asked the author to justify an empty answer",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "repeated-manual-waste"
+}

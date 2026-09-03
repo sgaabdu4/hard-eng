@@ -67,8 +67,11 @@ def filled(state, slug: str, plan_id: str) -> str:
         "## Outcome\n- TBD": "## Outcome\n- A user receives one observable result.",
         "## Non-goals\n- TBD": "## Non-goals\n- Adjacent workflow changes are excluded.",
         "## Material decisions\n- TBD": "## Material decisions\n- Existing policy remains canonical.",
-        "- ux_reference = TBD": "- ux_reference = n/a",
-        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a",
+        "- ux_reference = TBD": "- ux_reference = n/a: no screen",
+        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a: no screen",
+        "- critical_overlay = none\n": "- critical_overlay = none: standard risk\n",
+        "- deferred = none\n": "- deferred = none: nothing open\n",
+        "- blocked_on = none\n": "- blocked_on = none: nothing waiting\n",
         "## Acceptance examples\n- TBD": (
             "## Acceptance examples\n- Given a user, when they act, then the result is visible."
         ),
@@ -242,12 +245,14 @@ def make_repo(
         media = root / f"{slug}-media/mock.png"
         media.parent.mkdir()
         media.write_bytes(VALID_PNG)
-        text = text.replace("- ux_reference = n/a", f"- ux_reference = {media}").replace(
-            "- ux_reference_sources = n/a", "- ux_reference_sources = DESIGN.md + owner.txt"
+        text = text.replace("- ux_reference = n/a: no screen", f"- ux_reference = {media}").replace(
+            "- ux_reference_sources = n/a: no screen", "- ux_reference_sources = DESIGN.md + owner.txt"
         )
     if critical:
         text = text.replace("- risk_level = standard", "- risk_level = critical")
-        text = text.replace("- critical_overlay = none", "- critical_overlay = S-1 protected boundary + negative proof")
+        text = text.replace(
+            "- critical_overlay = none: standard risk", "- critical_overlay = S-1 protected boundary + negative proof"
+        )
     changes = {
         "lifecycle_status": "building",
         "approval_status": "approved",
@@ -673,7 +678,9 @@ def evidence_hardening_cases(state, root: Path) -> None:
     plan = plan_path(escalated)
     text = plan.read_text(encoding="utf-8")
     text = text.replace("- risk_level = standard", "- risk_level = critical")
-    text = text.replace("- critical_overlay = none", "- critical_overlay = S-1 protected boundary + negative proof")
+    text = text.replace(
+        "- critical_overlay = none: standard risk", "- critical_overlay = S-1 protected boundary + negative proof"
+    )
     text = state.render_state(text, {"approval_fingerprint": state.frozen_fingerprint(state.parse_sections(text))})
     plan.write_text(text, encoding="utf-8")
     completed = checkpoint(
