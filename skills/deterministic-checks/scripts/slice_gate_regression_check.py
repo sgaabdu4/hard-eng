@@ -45,6 +45,8 @@ EVIDENCE = (
 VALID_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk/x8AAusB9Wl2nS8AAAAASUVORK5CYII="
 )
+WAIVED_MEDIA = "not-applicable:fixture slice"
+MEDIA_RECEIPT: Path | None = None
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
 
 
@@ -280,7 +282,9 @@ def checkpoint(state, repo: Path, *sets: str) -> ScriptResult:
     return run_script(STATE_PATH, command)
 
 
-def gate(repo: Path, scope: tuple[str, ...], checks: tuple[str, ...], *extra: str) -> ScriptResult:
+def gate(
+    repo: Path, scope: tuple[str, ...], checks: tuple[str, ...], *extra: str, e2e: str | None = None
+) -> ScriptResult:
     command = [
         "run",
         "--repo",
@@ -292,7 +296,7 @@ def gate(repo: Path, scope: tuple[str, ...], checks: tuple[str, ...], *extra: st
         "120",
         *EVIDENCE,
         "--e2e",
-        "not-applicable:fixture slice",
+        e2e or str(MEDIA_RECEIPT),
     ]
     for check in checks:
         command += ["--check", check]
@@ -697,18 +701,27 @@ def evidence_hardening_cases(state, root: Path) -> None:
         fail("non-canonical e2e receipt was accepted")
 
     surface = make_repo(root, state, react=True, ux="assets/mock.png", slug="surface")
-    waived_media = gate(surface, ("--slice", "S-1"), REACT_CHECKS)
+    waived_media = gate(surface, ("--slice", "S-1"), REACT_CHECKS, e2e=WAIVED_MEDIA)
     if waived_media.returncode == 0 or "actual-media" not in waived_media.stderr:
         fail("UI slice with ux_reference accepted --e2e not-applicable")
+    declared_na = make_repo(root, state, react=True, slug="declaredna")
+    waived_na = gate(declared_na, ("--slice", "S-1"), REACT_CHECKS, e2e=WAIVED_MEDIA)
+    if waived_na.returncode == 0 or "actual-media" not in waived_na.stderr:
+        fail("UI slice with ux_reference n/a accepted --e2e not-applicable")
     plain_ux = make_repo(root, state, ux="assets/mock.png", slug="plainux")
-    non_ui = gate(plain_ux, ("--slice", "S-1"), ("targeted",))
+    non_ui = gate(plain_ux, ("--slice", "S-1"), ("targeted",), e2e=WAIVED_MEDIA)
     if non_ui.returncode != 0:
         fail(f"non-UI slice under ux_reference demanded media proof: {non_ui.stderr}")
+    tests_only = make_repo(root, state, slug="testsonly")
+    (tests_only / "__tests__/page.test.tsx").parent.mkdir(parents=True, exist_ok=True)
+    (tests_only / "__tests__/page.test.tsx").write_text("export const t = 1\n", encoding="utf-8")
+    test_change = gate(tests_only, ("--slice", "S-1"), REACT_CHECKS, e2e=WAIVED_MEDIA)
+    if test_change.returncode != 0:
+        fail(f"test-only .tsx change demanded media proof: {test_change.stderr}")
 
     e2e_receipt = e2e_fixture(root)
     if e2e_receipt is None:
-        print("slice-gate-check: e2e PASS-path skipped (ffmpeg unavailable)")
-        return
+        fail("ffmpeg fixture failed")
     proven_surface = gate(surface, ("--slice", "S-1"), REACT_CHECKS, "--e2e", str(e2e_receipt))
     if proven_surface.returncode != 0:
         fail(f"UI slice with actual-media receipt failed: {proven_surface.stderr}")
@@ -779,14 +792,7 @@ def transcript_shaped_cases(state, root: Path) -> None:
         fail(f"fully proven completion failed: {completed.stderr}")
 
     claude = make_repo(root, state, react=True, slug="iterations")
-    media_root = root / "iterations-media"
-    media_root.mkdir()
-    e2e_receipt = e2e_fixture(media_root)
-    media_proof = (
-        ("--e2e", str(e2e_receipt))
-        if e2e_receipt is not None
-        else ("--e2e", "not-applicable:ffmpeg unavailable in fixture")
-    )
+    media_proof = ("--e2e", str(MEDIA_RECEIPT))
     for index, slice_id in enumerate(("S-1", "S-2", "S-3")):
         (claude / "app/page.tsx").write_text(f"export const x = () => {index}\n", encoding="utf-8")
         blocked = checkpoint(
@@ -1012,9 +1018,13 @@ def run_group(group, state, base: Path) -> None:
 
 
 def main() -> int:
+    global MEDIA_RECEIPT
     state = load_state()
     with tempfile.TemporaryDirectory() as directory:
         base = Path(directory).resolve()
+        MEDIA_RECEIPT = e2e_fixture(base)
+        if MEDIA_RECEIPT is None:
+            fail("ffmpeg and ffprobe are required to build the actual-media fixture")
         with ThreadPoolExecutor(max_workers=min(4, len(GROUPS))) as pool:
             submitted = [pool.submit(run_group, group, state, base) for group in GROUPS]
         errors = [future.exception() for future in submitted]
