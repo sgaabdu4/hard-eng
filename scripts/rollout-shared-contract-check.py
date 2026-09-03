@@ -4,15 +4,15 @@ or falls back to a branch when the push is refused."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
 import tempfile
 from pathlib import Path
 
+from repository_native_contract_loader import load_contract
+
 ROOT = Path(__file__).resolve().parents[1]
 ROLLOUT = ROOT / "scripts/rollout-shared.py"
-CONTRACT = ROOT / "scripts/repository-native-contract-check.py"
 SHARED_FILES = (
     "AGENTS.override.md",
     ".github/instructions/hard-eng.instructions.md",
@@ -33,14 +33,6 @@ while read old new ref; do
 done
 exit 0
 """
-
-
-def load_contract():
-    spec = importlib.util.spec_from_file_location("repository_native_contract", CONTRACT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 contract = load_contract()

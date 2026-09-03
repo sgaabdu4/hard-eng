@@ -9,7 +9,6 @@ Credentials are copied into the throwaway HOME with 0600 modes and deleted with 
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import re
@@ -20,12 +19,13 @@ import tempfile
 import time
 from pathlib import Path
 
+from repository_native_contract_loader import load_contract
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skills/deterministic-checks/scripts"))
 from git_env import git_env
 
 INSTALL = ROOT / "install.sh"
-CONTRACT = ROOT / "scripts/repository-native-contract-check.py"
 AGENTS = ("codex", "claude", "copilot")
 CASES = ("no-git", "unmarked", "fallback", "global", "shared")
 HOMES = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR", "copilot": "COPILOT_HOME"}
@@ -52,14 +52,6 @@ case " $* " in
 esac
 exec "$HARD_ENG_TEST_REAL_GH" "$@"
 """
-
-
-def load_contract():
-    spec = importlib.util.spec_from_file_location("repository_native_contract", CONTRACT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 contract = load_contract()
