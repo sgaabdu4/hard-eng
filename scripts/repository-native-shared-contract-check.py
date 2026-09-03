@@ -35,6 +35,22 @@ PRIVATE_FILES = (
 DENY = '"permissionDecision":"deny"'
 RESOLVE_TOPLEVEL = "$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git rev-parse --show-toplevel)"
 OLD_PYTHON3 = '#!/bin/sh\ncase "$1" in\n  -c) exit 1 ;;\nesac\necho "Python 3.11.9"\n'
+FAKE_BOOTSTRAP_OK = r"""#!/usr/bin/env bash
+set -eu
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+mkdir -p "$root/.agents/hard-eng/current/scripts/hooks"
+cat <<'GUARD' > "$root/.agents/hard-eng/current/scripts/hooks/agent-hook.sh"
+#!/usr/bin/env bash
+exit 0
+GUARD
+chmod +x "$root/.agents/hard-eng/current/scripts/hooks/agent-hook.sh"
+echo "fake bootstrap: healed" >&2
+"""
+FAKE_BOOTSTRAP_FAIL = r"""#!/usr/bin/env bash
+echo "fake bootstrap: contacting release host" >&2
+echo 'fake bootstrap: cannot reach "origin" \ retry later' >&2
+exit 1
+"""
 
 
 def load_contract():
@@ -181,19 +197,23 @@ def assert_clone(root: Path, env: dict[str, str], repository: Path, base_url: st
     clone = root / "clone"
     contract.run(["git", "clone", "-q", str(repository), str(clone)], cwd=root)
     home = root / "clone-home"
+    broken_env = clone_env(env, home, (root / "unreachable").as_uri())
     env = clone_env(env, home, base_url)
-    denied = shim(clone, env, "claude", "pretooluse")
+    denied = shim(clone, broken_env, "claude", "pretooluse")
     assert denied.startswith('{"hookSpecificOutput":{"hookEventName":"PreToolUse",') and DENY in denied, denied
-    assert "not downloaded" in denied and "bash .hard-eng/bootstrap.sh claude" in denied, denied
-    assert shim(clone, env, "claude", "posttooluse") == "" and shim(clone, env, "claude", "stop") == ""
-    copilot_denied = shim(clone, env, "copilot", "pretooluse")
+    reason = json.loads(denied)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "not downloaded" in reason and "bash .hard-eng/bootstrap.sh claude" in reason, reason
+    assert "could not download" in reason, reason
+    assert shim(clone, broken_env, "claude", "posttooluse") == "" and shim(clone, broken_env, "claude", "stop") == ""
+    copilot_denied = shim(clone, broken_env, "copilot", "pretooluse")
     assert copilot_denied.startswith('{"permissionDecision":"deny"'), copilot_denied
+    assert not (clone / ".agents/hard-eng/current").exists()
     subdirectory = clone / "nested/deeper"
     subdirectory.mkdir(parents=True)
     command = hook_commands(read_json(clone / ".claude/settings.json"), "PreToolUse")[0]
-    from_subdirectory = contract.run(["bash", "-c", command], cwd=subdirectory, environment=env).stdout
+    from_subdirectory = contract.run(["bash", "-c", command], cwd=subdirectory, environment=broken_env).stdout
     assert DENY in from_subdirectory, from_subdirectory
-    inherited = {**env, "GIT_DIR": str(repository / ".git"), "GIT_WORK_TREE": str(repository)}
+    inherited = {**broken_env, "GIT_DIR": str(repository / ".git"), "GIT_WORK_TREE": str(repository)}
     from_inherited_env = contract.run(["bash", "-c", command], cwd=subdirectory, environment=inherited).stdout
     assert DENY in from_inherited_env, from_inherited_env
     assert git_status(clone) == set()
@@ -234,6 +254,37 @@ def assert_clone(root: Path, env: dict[str, str], repository: Path, base_url: st
     via_launcher = state(clone, home, env, "prepare", "--agent", "claude")
     assert via_launcher["mode"] == "shared" and (clone / ".agents/hard-eng/current").is_symlink(), via_launcher
     assert git_status(clone) == set(), git_status(clone)
+
+
+def assert_worktree_self_heal(root: Path, env: dict[str, str], repository: Path) -> None:
+    """A fresh linked worktree has no session-downloaded cache: the shim must heal itself, not just deny."""
+    root.mkdir(parents=True, exist_ok=True)
+    before = contract.tree_digest(repository / ".agents")
+    healed = root / "healed-worktree"
+    contract.run(["git", "worktree", "add", "-q", "--detach", str(healed)], cwd=repository, environment=env)
+    guard = healed / ".agents/hard-eng/current/scripts/hooks/agent-hook.sh"
+    assert not (healed / ".agents").exists()
+    assert shim(healed, env, "claude", "posttooluse") == "" and shim(healed, env, "claude", "stop") == ""
+    assert not (healed / ".agents").exists(), "posttooluse/stop passthrough must not trigger a heal"
+    contract.write(healed / ".hard-eng/bootstrap.sh", FAKE_BOOTSTRAP_OK, 0o755)
+    allowed = shim(healed, env, "claude", "pretooluse")
+    assert allowed == "", allowed
+    assert guard.is_file() and os.access(guard, os.X_OK)
+    assert str(guard.resolve()).startswith(str(healed.resolve())), "heal must write under the worktree's own root"
+    assert shim(healed, env, "claude", "pretooluse") == ""
+    assert contract.tree_digest(repository / ".agents") == before, "healing a worktree must not touch the primary cache"
+
+    failing = root / "failing-worktree"
+    contract.run(["git", "worktree", "add", "-q", "--detach", str(failing)], cwd=repository, environment=env)
+    contract.write(failing / ".hard-eng/bootstrap.sh", FAKE_BOOTSTRAP_FAIL, 0o755)
+    denied = shim(failing, env, "claude", "pretooluse")
+    parsed = json.loads(denied)["hookSpecificOutput"]
+    assert parsed["permissionDecision"] == "deny", parsed
+    reason = parsed["permissionDecisionReason"]
+    assert "not downloaded" in reason and "bash .hard-eng/bootstrap.sh claude" in reason, reason
+    assert 'cannot reach "origin" \\ retry later' in reason, reason
+    assert not (failing / ".agents/hard-eng/current").exists()
+    assert shim(failing, env, "claude", "posttooluse") == "" and shim(failing, env, "claude", "stop") == ""
 
 
 def assert_download_failure(root: Path, env: dict[str, str], repository: Path, tampered_url: str) -> None:
@@ -430,12 +481,16 @@ def main() -> int:
         tampered_url = downloads(assets, "tampered", tamper=True)
         repository = assert_share(root / "share", env, assets)
         assert_clone(root / "share", env, repository, base_url)
+        assert_worktree_self_heal(root / "worktree-heal", env, repository)
         assert_download_failure(root / "failure", env, repository, tampered_url)
         assert_python_version_gate(root / "old-python", env, repository, base_url)
         assert_merge(root / "merge", env)
         assert_global_machine(root / "global", env, repository, assets, base_url)
         assert_update_and_uninstall(root / "update", assets, release)
-    print("repository-native-shared-contract: PASS share clone failure python-gate merge global update uninstall")
+    print(
+        "repository-native-shared-contract: PASS share clone worktree-heal failure python-gate merge global "
+        "update uninstall"
+    )
     return 0
 
 
