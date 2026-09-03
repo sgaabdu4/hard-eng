@@ -303,7 +303,7 @@ sub lifecycle_target_allowed {
     return 1 if $relative eq 'hard-eng.gates.json';
     return 1 if $relative eq "features/$feature/PLAN.md";
     return 1 if $relative eq "features/$feature/BUILD.md";
-    return 1 if $relative =~ m{\Afeatures/\Q$feature\E/receipts/[a-z0-9][a-z0-9._-]*\.json\z};
+    return 1 if $relative =~ m{\Afeatures/\Q$feature\E/receipts/[A-Za-z0-9][A-Za-z0-9._-]*\.json\z};
     return 1 if $relative =~ m{\Afeatures/\Q$feature\E/tickets/T-(?:[1-9][0-9]*|int)\.md\z};
     return 1 if $relative =~ m{\A\.agents/learning/[a-z0-9]+(?:-[a-z0-9]+)*\.json\z};
     return 0;
@@ -350,7 +350,8 @@ sub write_decision {
         }
         my $relative = substr($target, length($repo) + 1);
         return 'Hard Eng blocked this raw write to lifecycle-owned PLAN.md or receipt state. Use the lifecycle command owner.'
-            if $relative =~ m{\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/[a-z0-9][a-z0-9._-]*\.json|tickets/T-(?:[1-9][0-9]*|int)\.md)\z};
+            if $relative =~ m{\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/[A-Za-z0-9][A-Za-z0-9._-]*\.json|tickets/T-(?:[1-9][0-9]*|int)\.md)\z}
+            && $relative !~ m{\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/receipts/(?:full|S-[1-9][0-9]*)-verify-(?:before|after)\.json\z};
         for my $plan (@{$status->{active} // []}) {
             return "Hard Eng blocked permanently deleting active $plan->{path}."
                 if $target eq $plan->{path} && $deletes->{$target};
