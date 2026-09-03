@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import atexit
+import fcntl
 import hashlib
 import io
 import json
@@ -12,6 +13,7 @@ import stat
 import subprocess
 import tarfile
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -600,14 +602,22 @@ def assert_concurrent_prepare(root: Path, env: dict[str, str]) -> None:
     home = root / "home"
     home.mkdir(parents=True)
     init_repository(repository, marked=True)
+    assert prepared(repository, home, env)["version"] == TAG
     command = [str(LAUNCHER), "prepare", "--repo", str(repository), "--home", str(home), "--json"]
-    processes = [
-        subprocess.Popen(command, cwd=repository, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        for _ in range(2)
-    ]
+    with open(repository / ".agents/hard-eng/.wiring.lock", "a+", encoding="utf-8") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        processes = [
+            subprocess.Popen(
+                command, cwd=repository, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            for _ in range(2)
+        ]
+        time.sleep(1)
+        fcntl.flock(held, fcntl.LOCK_UN)
     results = [process.communicate(timeout=90) + (process.returncode,) for process in processes]
     assert all(result[2] == 0 for result in results), results
-    assert all(json.loads(result[0])["version"] == TAG for result in results)
+    assert all(json.loads(result[0])["version"] == TAG for result in results), results
+    assert all("waiting for another Hard Eng wiring update" in result[1] for result in results), results
 
 
 def assert_update(root: Path) -> None:
