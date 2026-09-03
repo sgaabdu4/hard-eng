@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "2026-09-03 frontline-fitness commit dfbd795c8 (origin/main 4bc520c8e): 45 product files, PLAN.md at building S-1, review and verify records missing, no slice gate receipt, no green"
+  ],
+  "failure": "a session committed and pushed six unreceipted slices of product code while its Feature Brief said building; no commit or push hook read the plan state",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "hooks-read-lifecycle-state",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/deterministic-checks/scripts/lifecycle_guard.py",
+    "proof": "skills/deterministic-checks/scripts/lifecycle_guard_regression_check.py",
+    "valid_fixture": "skills/deterministic-checks/scripts/lifecycle_guard_regression_check.py",
+    "violation_fixture": "skills/deterministic-checks/scripts/lifecycle_guard_regression_check.py"
+  },
+  "root_cause": "project_gate.py phase/run never read features/*/PLAN.md, so the only wall a session hit was format and lint",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "protected-boundary-gap"
+}

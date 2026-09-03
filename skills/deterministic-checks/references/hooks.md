@@ -3,6 +3,7 @@
 1. Existing tracked hook manager = owner; absent → `.githooks/` + setup runs `git config core.hooksPath .githooks`.
 2. `pre-commit` = fast commit gate (`project_gate.py phase --phase commit`); the gate scans the worktree and refuses staged-vs-worktree divergence, and hook files must keep the executable bit or Git silently ignores them; React adds its staged scanner command.
 3. `pre-push` = affected-full from push base..head → universal + impacted-owner gates.
+4. Lifecycle guard = global dispatcher runs `lifecycle_guard.py commit|push` in every repository before the native hook; any `features/*/PLAN.md` at `build-ready|building` (commit = working tree incl. untracked; push = the pushed commit) + staged/pushed path outside the lifecycle set (`features/<slug>/PLAN.md|BUILD.md|receipts/|tickets/`, `.agents/learning/*.json`) = refused; product commits happen at `he-ship` on a `green` plan, or after `he reopen`/cancel.
 4. CI = same classifier + gate commands; required status = one always-run aggregate; expensive jobs skip only proven non-impacted scope.
 5. Protected CI control signal = unique non-secret marker + downstream exact comparison; generic boolean/secret-derived output = forbidden because GitHub can suppress secret-matching job outputs.
 6. Hooks invoke project commands only; non-blocking/failed/cancelled result = `FAIL`.
