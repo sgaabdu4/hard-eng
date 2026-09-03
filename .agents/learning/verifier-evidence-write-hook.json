@@ -1,6 +1,7 @@
 {
   "evidence": [
-    "whole-feature verifier report for mutation-seam on 2026-09-03: enforcement_policy.pl write_decision refused Write on full-verify-before.json; evidence written via Bash instead; same workaround used by every S-2 and S-3 verifier run this session"
+    "whole-feature verifier report for mutation-seam on 2026-09-03: enforcement_policy.pl write_decision refused Write on full-verify-before.json; evidence written via Bash instead; same workaround used by every S-2 and S-3 verifier run this session",
+    "2026-09-03: write_decision now lets features/<slug>/receipts/(full|S-n)-verify-(before|after).json through to the Direct receipt path; two cases in scripts/agent-hook-contract-check.py check_lifecycle"
   ],
   "failure": "the Write and Edit tools are blocked for features/<slug>/receipts/*.json, so every outside verifier had to write its before/after evidence through shell redirection",
   "helper": {
@@ -9,17 +10,17 @@
     "state": "selected"
   },
   "learning_id": "verifier-evidence-write-hook",
-  "next_action": "Apply the designed write_decision exception for features/<slug>/receipts/(full|S-n)-verify-(before|after).json in scripts/enforcement_policy.pl plus two check_lifecycle cases in scripts/agent-hook-contract-check.py; proof = perl -c and the hook contract check",
+  "next_action": "none",
   "occurrences": 6,
   "prevention": {
     "kind": "deterministic",
     "owner": "scripts/enforcement_policy.pl",
-    "blocked_by": "coordinator scope freeze on product-file edits while features/mutation-seam S-3 build closes"
+    "violation_fixture": "scripts/agent-hook-contract-check.py",
+    "valid_fixture": "scripts/agent-hook-contract-check.py",
+    "proof": "scripts/agent-hook-contract-check.py"
   },
   "root_cause": "the policy has no lifecycle owner for verifier evidence files, while the verifier packet Rules require them at exactly that path",
   "schema_version": 1,
-  "status": "deferred",
-  "trigger": "repeated-manual-waste",
-  "deferred_owner": "Direct change in this repository after mutation-seam ships: apply the write_decision exception and the two hook-contract cases",
-  "design": "deterministic prevention designed, not applied (build was mid-close, product-file edits paused): in scripts/enforcement_policy.pl write_decision (the block at the 'Hard Eng blocked this raw write to lifecycle-owned PLAN.md or receipt state' return, matching m{\\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\\.md|receipts/[a-z0-9][a-z0-9._-]*\\.json|tickets/T-(?:[1-9][0-9]*|int)\\.md)\\z}), add a negative lookahead/exclusion so the block does not fire when $relative also matches m{\\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/receipts/(?:full|S-[1-9][0-9]*)-verify-(?:before|after)\\.json\\z} (slice ids are S-<n> per build_steps.SLICE_ID; 'full' per build_steps.FULL, both from skills/he/scripts/build_steps.py). Excluded writes fall through to the normal direct_action_receipt path (still Direct-receipt gated, not a blanket bypass). Regression seam: scripts/agent-hook-contract-check.py check_lifecycle (building-state block) has no case for the receipts/*.json message at all today; add two cases there: (1) an Edit/Write to features/<slug>/receipts/S-1-verify-before.json and .../full-verify-after.json is allowed (response is None) while a Direct receipt covers the repo, (2) an Edit/Write to features/<slug>/receipts/S-1.json (the ordinary lifecycle receipt, no '-verify-' segment) is still blocked with the lifecycle-owned message, proving the exception stays exact-filename-scoped and does not open receipts/*.json generally. Apply this once product-file edits resume for mutation-seam; run `perl -c scripts/enforcement_policy.pl` and `python3 scripts/agent-hook-contract-check.py` as proof."
+  "status": "resolved",
+  "trigger": "repeated-manual-waste"
 }
