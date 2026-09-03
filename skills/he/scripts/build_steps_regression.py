@@ -14,11 +14,13 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT = SCRIPT_DIR.parents[2]
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+for directory in (ROOT / "skills" / "deterministic-checks" / "scripts", SCRIPT_DIR):
+    if str(directory) not in sys.path:
+        sys.path.insert(0, str(directory))
 
 import plan_steps_regression as fixture
 from plan_steps_regression import SLUG, STATE_SCRIPT, git, record_step, require, run, values
+from script_runner import run_script
 
 GATE_SCRIPT = ROOT / "skills/deterministic-checks/scripts/slice_gate.py"
 EDGES = {"cases": [{"name": "empty input", "success_test": "test_empty_ok", "failure_test": "test_empty_refused"}]}
@@ -56,10 +58,9 @@ def checkpoint(repo: Path, plan: Path, *sets: str) -> tuple[int, str]:
 
 
 def gate(repo: Path, plan: Path, *scope: str) -> tuple[int, str]:
-    result = subprocess.run(
+    result = run_script(
+        GATE_SCRIPT,
         [
-            sys.executable,
-            str(GATE_SCRIPT),
             "run",
             "--repo",
             str(repo),
@@ -79,12 +80,9 @@ def gate(repo: Path, plan: Path, *scope: str) -> tuple[int, str]:
             "--review",
             "review record round 1",
         ],
-        check=False,
-        capture_output=True,
-        text=True,
         env=fixture.env(),
     )
-    return result.returncode, result.stdout + result.stderr
+    return result.returncode, result.output
 
 
 def evidence(repo: Path, name: str, body: bytes | None = None) -> dict[str, str]:
@@ -333,6 +331,9 @@ def check_mutation_before_ship(repo: Path, plan: Path) -> None:
 
     stale = mutation_receipt.ship_error(repo, plan, "sha256:" + "0" * 64)
     require(stale is not None and "green tree" in stale, f"receipt for another tree must not count: {stale}")
+    for name in ("scripts/state-regression.py", "skills/x/scripts/state_regression.py", "tests/conftest.py"):
+        require(mutation_receipt.TEST_FILE.search(name) is not None, f"{name} is a test file, never mutation scope")
+    require(mutation_receipt.TEST_FILE.search("skills/x/scripts/state.py") is None, "source file stays in scope")
 
 
 def check_unwired_repo(base: Path) -> None:

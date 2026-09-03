@@ -23,6 +23,7 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
 
 from git_env import scrub_environ
 from project_gate import REACT_DOCTOR_COMMAND
+from script_runner import ScriptResult, run_script
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -265,29 +266,17 @@ def plan_path(repo: Path) -> Path:
     return next((repo / "features").glob("*/PLAN.md"))
 
 
-def checkpoint(state, repo: Path, *sets: str) -> subprocess.CompletedProcess[str]:
+def checkpoint(state, repo: Path, *sets: str) -> ScriptResult:
     plan = plan_path(repo)
     token = state.token_for(plan.read_text(encoding="utf-8"))
-    command = [
-        sys.executable,
-        str(STATE_PATH),
-        "checkpoint",
-        "--repo",
-        str(repo),
-        "--plan",
-        str(plan),
-        "--expect-token",
-        token,
-    ]
+    command = ["checkpoint", "--repo", str(repo), "--plan", str(plan), "--expect-token", token]
     for assignment in sets:
         command += ["--set", assignment]
-    return subprocess.run(command, check=False, capture_output=True, text=True)
+    return run_script(STATE_PATH, command)
 
 
-def gate(repo: Path, scope: tuple[str, ...], checks: tuple[str, ...], *extra: str) -> subprocess.CompletedProcess[str]:
+def gate(repo: Path, scope: tuple[str, ...], checks: tuple[str, ...], *extra: str) -> ScriptResult:
     command = [
-        sys.executable,
-        str(GATE_PATH),
         "run",
         "--repo",
         str(repo),
@@ -304,16 +293,15 @@ def gate(repo: Path, scope: tuple[str, ...], checks: tuple[str, ...], *extra: st
         command += ["--check", check]
     command += extra
     environment = {**os.environ, "PATH": f"{repo.parent / 'scanner-bin'}{os.pathsep}{os.environ.get('PATH', '')}"}
-    return subprocess.run(command, check=False, capture_output=True, text=True, env=environment)
+    return run_script(GATE_PATH, command, env=environment)
 
 
-def inspect(repo: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(STATE_PATH), "inspect", "--repo", str(repo), "--plan", str(plan_path(repo))],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+def inspect(repo: Path) -> ScriptResult:
+    return run_script(STATE_PATH, ["inspect", "--repo", str(repo), "--plan", str(plan_path(repo))])
+
+
+def state_command(repo: Path, command: str) -> ScriptResult:
+    return run_script(STATE_PATH, [command, "--repo", str(repo), "--plan", str(plan_path(repo))])
 
 
 def receipt_of(repo: Path, name: str) -> Path:
@@ -630,12 +618,7 @@ def resume_and_full_gate_cases(state, root: Path) -> None:
     if green.returncode != 0:
         fail(f"green transition with full receipt failed: {green.stderr}")
     (repo / "owner.txt").write_text("drift\n", encoding="utf-8")
-    asserted = subprocess.run(
-        [sys.executable, str(STATE_PATH), "assert-green", "--repo", str(repo), "--plan", str(plan_path(repo))],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    asserted = state_command(repo, "assert-green")
     if asserted.returncode == 0:
         fail("green proof survived a snapshot change")
 
@@ -853,12 +836,7 @@ def lifecycle_drift_cases(state, root: Path) -> None:
     inspected = inspect(repo)
     if inspected.returncode != 0 or "result=valid" not in inspected.stdout:
         fail(f"inspect must tolerate committed/worktree drift: {inspected.stdout}{inspected.stderr}")
-    validated = subprocess.run(
-        [sys.executable, str(STATE_PATH), "validate", "--repo", str(repo), "--plan", str(plan_path(repo))],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    validated = state_command(repo, "validate")
     if validated.returncode != 0:
         fail(f"validate must tolerate committed/worktree drift: {validated.stdout}{validated.stderr}")
 
@@ -874,12 +852,7 @@ def lifecycle_drift_cases(state, root: Path) -> None:
     if green.returncode != 0:
         fail(f"driftship green transition failed: {green.stderr}")
     commit_fixture(repo2, "ship commit")
-    asserted = subprocess.run(
-        [sys.executable, str(STATE_PATH), "assert-green", "--repo", str(repo2), "--plan", str(plan_path(repo2))],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    asserted = state_command(repo2, "assert-green")
     if asserted.returncode != 0:
         fail(f"assert-green must tolerate the ship commit: {asserted.stderr}")
     shipped = checkpoint(state, repo2, "lifecycle_status=shipped", "next_action=None.")
@@ -929,10 +902,9 @@ def stale_research_cases(state, root: Path) -> None:
     manifest["enforcement"] = {"required_paths": ["owner.txt"]}
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     commit_fixture(repo, "seed")
-    record = subprocess.run(
+    record = run_script(
+        ROOT / "skills/he/scripts/execution_evidence.py",
         [
-            sys.executable,
-            str(ROOT / "skills/he/scripts/execution_evidence.py"),
             "record-research",
             "--repo",
             str(repo),
@@ -953,9 +925,6 @@ def stale_research_cases(state, root: Path) -> None:
             "--fresh-until",
             (datetime.now(tz=timezone.utc).date() + timedelta(days=2)).isoformat(),
         ],
-        check=False,
-        capture_output=True,
-        text=True,
     )
     if record.returncode != 0:
         fail(f"fixture research recording failed: {record.stderr}")

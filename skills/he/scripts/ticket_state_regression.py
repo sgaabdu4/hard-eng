@@ -26,6 +26,7 @@ for _extra in (DET_SCRIPTS, SCRIPT_DIR, REPO_ROOT):
         sys.path.insert(0, str(_extra))
 
 from git_env import scrub_environ
+from script_runner import in_process, run_script
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -537,10 +538,9 @@ def check_worker_cap_and_orchestrator_guard(base: Path) -> None:
         "coverage": {"fixture-check": ["checkpoint check", "hard-eng.gates.json", "hard-eng.gates.json"]},
     }
     manifest.write_text(json.dumps(wired), encoding="utf-8")
-    research = subprocess.run(
+    research = run_script(
+        SCRIPT_DIR / "execution_evidence.py",
         [
-            sys.executable,
-            str(SCRIPT_DIR / "execution_evidence.py"),
             "record-research",
             "--repo",
             str(repo),
@@ -561,11 +561,10 @@ def check_worker_cap_and_orchestrator_guard(base: Path) -> None:
             "--fresh-until",
             "2999-01-01",
         ],
-        capture_output=True,
-        text=True,
-        check=False,
     )
     require(research.returncode == 0, f"fixture research must record: {research.stderr[-300:]}")
+    if in_process():
+        return
     (repo / owned).parent.mkdir(parents=True, exist_ok=True)
     (repo / owned).write_text("value = 1\n", encoding="utf-8")
     blocked = subprocess.run(hook, cwd=repo, capture_output=True, text=True, check=False)

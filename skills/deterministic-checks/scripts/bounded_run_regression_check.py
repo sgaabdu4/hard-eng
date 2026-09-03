@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 RUNNER = ROOT / "skills/deterministic-checks/scripts/bounded_run.py"
 sys.path.insert(0, str(RUNNER.parent))
 from bounded_run import CAPTURE_LIMIT_BYTES, INPUT_LIMIT_BYTES, OUTPUT_LIMIT_EXIT, run_captured
+from script_runner import ScriptResult, run_script, spawn_script
 
 
 def fail(message: str) -> NoReturn:
@@ -107,22 +108,7 @@ def check_pid_readiness(root: Path) -> None:
 def check_timeout(root: Path) -> None:
     pid_path = root / "timeout.pid"
     receipt, receipt_path, token = receipt_args(root, "timeout")
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(RUNNER),
-            "--timeout",
-            "1",
-            "--grace",
-            "0.1",
-            *receipt,
-            "--",
-            *stubborn_child_command(pid_path),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = run_script(RUNNER, ["--timeout", "1", "--grace", "0.1", *receipt, "--", *stubborn_child_command(pid_path)])
     if result.returncode != 124 or "TIMEOUT" not in result.stderr:
         fail("deadline did not fail explicitly with exit 124")
     require_gone(wait_pid(pid_path), "timed-out descendant")
@@ -132,21 +118,8 @@ def check_timeout(root: Path) -> None:
 def check_completed_parent(root: Path) -> None:
     pid_path = root / "completed.pid"
     receipt, receipt_path, token = receipt_args(root, "completed")
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(RUNNER),
-            "--timeout",
-            "5",
-            "--grace",
-            "0.1",
-            *receipt,
-            "--",
-            *child_command(pid_path, parent_wait=0.05),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+    result = run_script(
+        RUNNER, ["--timeout", "5", "--grace", "0.1", *receipt, "--", *child_command(pid_path, parent_wait=0.05)]
     )
     if result.returncode != 125 or "BACKGROUND" not in result.stderr:
         fail("background descendant did not fail the command explicitly")
@@ -157,20 +130,11 @@ def check_completed_parent(root: Path) -> None:
 def check_terminal_loss(root: Path) -> None:
     pid_path = root / "hangup.pid"
     receipt, receipt_path, token = receipt_args(root, "hangup")
-    owner = subprocess.Popen(
-        [
-            sys.executable,
-            str(RUNNER),
-            "--timeout",
-            "60",
-            "--grace",
-            "0.1",
-            *receipt,
-            "--",
-            *stubborn_child_command(pid_path),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    owner = spawn_script(
+        RUNNER,
+        ["--timeout", "60", "--grace", "0.1", *receipt, "--", *stubborn_child_command(pid_path)],
+        env=os.environ,
+        quiet=True,
     )
     descendant = wait_pid(pid_path)
     owner.send_signal(signal.SIGHUP)
@@ -190,23 +154,11 @@ def check_sigkill_has_no_receipt(root: Path) -> None:
         "{'group':os.getpid(),'descendant':p.pid}));"
         "time.sleep(60)"
     )
-    owner = subprocess.Popen(
-        [
-            sys.executable,
-            str(RUNNER),
-            "--timeout",
-            "60",
-            "--grace",
-            "0.1",
-            *receipt,
-            "--",
-            sys.executable,
-            "-c",
-            source,
-            str(state_path),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    owner = spawn_script(
+        RUNNER,
+        ["--timeout", "60", "--grace", "0.1", *receipt, "--", sys.executable, "-c", source, str(state_path)],
+        env=os.environ,
+        quiet=True,
     )
     deadline = time.monotonic() + 3
     state: dict[str, int] | None = None
@@ -236,12 +188,7 @@ def check_sigkill_has_no_receipt(root: Path) -> None:
 
 def check_launch_failure_receipt(root: Path) -> None:
     missing_args, missing_receipt, missing_token = receipt_args(root, "missing")
-    missing = subprocess.run(
-        [sys.executable, str(RUNNER), "--timeout", "2", *missing_args, "--", str(root / "missing-command")],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    missing = run_script(RUNNER, ["--timeout", "2", *missing_args, "--", str(root / "missing-command")])
     if missing.returncode != 127 or "command not found" not in missing.stderr:
         fail("missing command launch failure was not preserved")
     require_receipt(missing_receipt, missing_token, "missing command")
@@ -250,23 +197,13 @@ def check_launch_failure_receipt(root: Path) -> None:
     blocked_command.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     blocked_command.chmod(0o600)
     denied_args, denied_receipt, denied_token = receipt_args(root, "denied")
-    denied = subprocess.run(
-        [sys.executable, str(RUNNER), "--timeout", "2", *denied_args, "--", str(blocked_command)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    denied = run_script(RUNNER, ["--timeout", "2", *denied_args, "--", str(blocked_command)])
     if denied.returncode != 126 or "launch failed" not in denied.stderr:
         fail("pre-spawn permission failure was not preserved")
     require_receipt(denied_receipt, denied_token, "permission-denied command")
 
     identity_args, identity_receipt, identity_token = receipt_args(root, "identity")
-    identity = subprocess.run(
-        [sys.executable, str(RUNNER), "--timeout", "2", *identity_args, "--", str(root)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    identity = run_script(RUNNER, ["--timeout", "2", *identity_args, "--", str(root)])
     if identity.returncode != 126 or "executable identity failed" not in identity.stderr:
         fail("unhashable executable identity did not fail closed")
     if "@unhashed" in identity.stderr:
@@ -278,20 +215,7 @@ def check_status() -> None:
     with tempfile.TemporaryDirectory(prefix="bounded-status-") as temporary:
         root = Path(temporary)
         receipt, receipt_path, token = receipt_args(root, "status")
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(RUNNER),
-                "--timeout",
-                "2",
-                *receipt,
-                "--",
-                sys.executable,
-                "-c",
-                "raise SystemExit(7)",
-            ],
-            check=False,
-        )
+        result = run_script(RUNNER, ["--timeout", "2", *receipt, "--", sys.executable, "-c", "raise SystemExit(7)"])
         if result.returncode != 7:
             fail("child failure status was not preserved")
         require_receipt(receipt_path, token, "failed command")
@@ -299,41 +223,10 @@ def check_status() -> None:
 
 def check_cwd(root: Path) -> None:
     probe = "import os,sys;sys.exit(0 if os.path.realpath(os.getcwd())==os.path.realpath(sys.argv[1]) else 1)"
-    bound = subprocess.run(
-        [
-            sys.executable,
-            str(RUNNER),
-            "--timeout",
-            "5",
-            "--cwd",
-            str(root),
-            "--",
-            sys.executable,
-            "-c",
-            probe,
-            str(root),
-        ],
-        check=False,
-    )
+    bound = run_script(RUNNER, ["--timeout", "5", "--cwd", str(root), "--", sys.executable, "-c", probe, str(root)])
     if bound.returncode != 0:
         fail("--cwd did not bind the command working directory")
-    missing = subprocess.run(
-        [
-            sys.executable,
-            str(RUNNER),
-            "--timeout",
-            "5",
-            "--cwd",
-            str(root / "absent"),
-            "--",
-            sys.executable,
-            "-c",
-            "pass",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    missing = run_script(RUNNER, ["--timeout", "5", "--cwd", str(root / "absent"), "--", sys.executable, "-c", "pass"])
     if missing.returncode == 0 or "cwd" not in missing.stderr:
         fail("missing --cwd directory was accepted")
 
@@ -351,13 +244,8 @@ def check_safe_argv_receipt() -> None:
     signed_url = "https://example.invalid/download?X-Amz-Signature=signature-value&X-Amz-Credential=credential-value"
     alternate_url = signed_url.replace("signature-value", "different-signature")
 
-    def invoke(token: str, url: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, str(RUNNER), "--timeout", "5", "--", sys.executable, "-c", "pass", "--token", token, url],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    def invoke(token: str, url: str) -> ScriptResult:
+        return run_script(RUNNER, ["--timeout", "5", "--", sys.executable, "-c", "pass", "--token", token, url])
 
     first = invoke(secret, signed_url)
     second = invoke(alternate_secret, alternate_url)

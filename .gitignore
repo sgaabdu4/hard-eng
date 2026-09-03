@@ -2,3 +2,6 @@ __pycache__/
 *.py[cod]
 node_modules/
 .fallow/
+mutants/
+.venv-mutation/
+.pytest_cache/

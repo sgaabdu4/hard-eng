@@ -323,6 +323,12 @@ def check_external_contracts() -> None:
         ("planning step receipts", (sys.executable, "skills/he/scripts/plan_steps_regression.py")),
         ("build step records", (sys.executable, "skills/he/scripts/build_steps_regression.py")),
         ("external claims", (sys.executable, "skills/he/scripts/external_claims_regression.py")),
+        (
+            "script runner seam",
+            (sys.executable, "skills/deterministic-checks/scripts/script_runner_regression_check.py"),
+        ),
+        ("in-process seam guard", (sys.executable, "scripts/inprocess-seam-contract.py")),
+        ("mutation payload", (sys.executable, "skills/he/scripts/mutation_payload_regression.py")),
         ("tracker hierarchy mirror", (sys.executable, "skills/he/scripts/tracker_github_regression.py")),
         ("tracker HTTP adapters", (sys.executable, "skills/he/scripts/tracker_http_regression.py")),
         ("parallel ticket state", (sys.executable, "skills/he/scripts/ticket_state_regression.py")),

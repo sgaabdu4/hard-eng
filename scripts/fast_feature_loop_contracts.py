@@ -46,6 +46,8 @@ SCRIPT_OWNERS = {
         "execution_evidence_regression.py",
         "lifecycle_excludes.py",
         "mutation_receipt.py",
+        "mutation_payload.py",
+        "mutation_payload_regression.py",
         "lifecycle_excludes_regression.py",
         "plan_cleanup.py",
         "plan_cleanup_regression.py",

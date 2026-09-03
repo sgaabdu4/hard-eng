@@ -20,6 +20,7 @@ if str(DETERMINISTIC_SCRIPTS) not in sys.path:
 
 import worktree
 from git_env import git_env, scrub_environ
+from script_runner import run_script
 
 scrub_environ()
 
@@ -91,14 +92,7 @@ def run_git(repo: Path, *arguments: str, path: str = BASE_PATH) -> None:
 
 
 def run_state(repo: Path, *arguments: str, path: str = BASE_PATH) -> tuple[int, dict[str, str], str]:
-    completed = subprocess.run(
-        [sys.executable, str(SETUP_STATE), *arguments, "--repo", str(repo)],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=fixture_env(path),
-        timeout=RUN_TIMEOUT,
-    )
+    completed = run_script(SETUP_STATE, [*arguments, "--repo", str(repo)], env=fixture_env(path), timeout=RUN_TIMEOUT)
     values: dict[str, str] = {}
     for line in completed.stdout.splitlines():
         key, separator, value = line.partition("=")

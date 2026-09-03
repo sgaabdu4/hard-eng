@@ -13,7 +13,9 @@
       "!skills/appwrite-backend",
       "!skills/building-flutter-apps",
       "!skills/vercel-react-best-practices",
-      "!node_modules"
+      "!node_modules",
+      "!.venv-mutation",
+      "!mutants"
     ]
   },
   "formatter": {

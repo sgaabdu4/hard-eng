@@ -19,6 +19,7 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
 from git_env import git_env
+from script_runner import run_script
 
 
 def png_bytes(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
@@ -264,10 +265,9 @@ def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str],
                 "- ux_reference_sources = n/a", f"- ux_reference_sources = {sources}"
             )
             plan.write_text(text, encoding="utf-8")
-            approved = subprocess.run(
+            approved = run_script(
+                STATE_PATH,
                 [
-                    sys.executable,
-                    str(STATE_PATH),
                     "approve",
                     "--repo",
                     str(repo),
@@ -279,9 +279,6 @@ def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str],
                     AUTONOMOUS_DIRECTIVE,
                     *APPROVAL_CONTEXT,
                 ],
-                check=False,
-                capture_output=True,
-                text=True,
             )
             if (approved.returncode == 0) != expected:
                 fail(f"ux_reference target rule failed for: {value} from {sources}: {approved.stderr}")
@@ -350,12 +347,7 @@ def check_linked_worktree(state, git_repo: Callable[[Path], None], fail: Callabl
             env=git_env(),
         )
         worktree_plan = worktree / "features/lean-loop/PLAN.md"
-        validated = subprocess.run(
-            [sys.executable, str(STATE_PATH), "validate", "--repo", str(worktree), "--plan", str(worktree_plan)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        validated = run_script(STATE_PATH, ["validate", "--repo", str(worktree), "--plan", str(worktree_plan)])
         expected_markdown = f"ux_reference_markdown=![UX reference](<{media}>)"
         if validated.returncode != 0 or expected_markdown not in validated.stdout:
             fail(
@@ -364,26 +356,15 @@ def check_linked_worktree(state, git_repo: Callable[[Path], None], fail: Callabl
             )
         worktree_alias = root / "project-worktree-alias"
         worktree_alias.symlink_to(worktree, target_is_directory=True)
-        aliased = subprocess.run(
-            [
-                sys.executable,
-                str(STATE_PATH),
-                "validate",
-                "--repo",
-                str(worktree_alias),
-                "--plan",
-                str(worktree_alias / "features/lean-loop/PLAN.md"),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
+        aliased = run_script(
+            STATE_PATH,
+            ["validate", "--repo", str(worktree_alias), "--plan", str(worktree_alias / "features/lean-loop/PLAN.md")],
         )
         if aliased.returncode != 0:
             fail(f"aliased worktree root rejected its absolute PLAN path: {aliased.stderr}")
-        approved = subprocess.run(
+        approved = run_script(
+            STATE_PATH,
             [
-                sys.executable,
-                str(STATE_PATH),
                 "approve",
                 "--repo",
                 str(worktree),
@@ -395,9 +376,6 @@ def check_linked_worktree(state, git_repo: Callable[[Path], None], fail: Callabl
                 AUTONOMOUS_DIRECTIVE,
                 *APPROVAL_CONTEXT,
             ],
-            check=False,
-            capture_output=True,
-            text=True,
         )
         if approved.returncode != 0:
             fail(f"fresh linked-worktree approval failed: {approved.stderr}")

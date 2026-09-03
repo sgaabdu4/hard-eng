@@ -5,12 +5,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any, NoReturn
 
-from bounded_run import run_captured
+from script_runner import run_script
 
 ROOT = Path(__file__).resolve().parents[3]
 VERIFIER = ROOT / "skills/deterministic-checks/scripts/github_delivery.py"
@@ -150,8 +149,6 @@ def check_cli() -> None:
         run_path.write_text(json.dumps(run), encoding="utf-8")
         jobs_path.write_text(json.dumps(jobs), encoding="utf-8")
         command = [
-            sys.executable,
-            str(VERIFIER),
             "--run-json",
             str(run_path),
             "--jobs-json",
@@ -183,13 +180,13 @@ def check_cli() -> None:
             "--require-step",
             "deploy::Deploy production",
         ]
-        passed = run_captured(command, timeout=30, cwd=str(ROOT))
-        if passed.returncode != 0 or b"github-delivery: PASS" not in passed.stdout:
+        passed = run_script(VERIFIER, command, cwd=ROOT, timeout=30)
+        if passed.returncode != 0 or "github-delivery: PASS" not in passed.stdout:
             fail("valid CLI fixture did not pass")
         jobs["jobs"][0]["steps"][0]["conclusion"] = "skipped"
         jobs_path.write_text(json.dumps(jobs), encoding="utf-8")
-        failed = run_captured(command, timeout=30, cwd=str(ROOT))
-        if failed.returncode != 1 or b"github-delivery: FAIL" not in failed.stderr:
+        failed = run_script(VERIFIER, command, cwd=ROOT, timeout=30)
+        if failed.returncode != 1 or "github-delivery: FAIL" not in failed.stderr:
             fail("skipped required step did not fail CLI")
 
 

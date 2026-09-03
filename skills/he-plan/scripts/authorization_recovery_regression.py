@@ -13,10 +13,10 @@ from typing import NoReturn
 ROOT = Path(__file__).resolve().parents[3]
 STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
-if str(GIT_ENV_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(GIT_ENV_SCRIPTS))
+sys.path[:0] = [str(GIT_ENV_SCRIPTS)]
 
 from git_env import git_env
+from script_runner import ScriptResult, run_script
 
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
 APPROVAL_CONTEXT = ("--allowed-action", "build-and-verify")
@@ -53,10 +53,8 @@ def git_repo(path: Path) -> None:
     subprocess.run(["git", "init", "-q", str(path)], check=True, env=git_env(ceiling=tempfile.gettempdir()))
 
 
-def run(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(STATE_PATH), *args], cwd=repo, check=False, capture_output=True, text=True
-    )
+def run(repo: Path, *args: str) -> ScriptResult:
+    return run_script(STATE_PATH, args, cwd=repo)
 
 
 def check(state) -> None:

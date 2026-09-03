@@ -34,7 +34,7 @@ MUTABLE_SUFFIXES = set().union(*RUNNERS.values()) | NO_RUNNER_SUFFIXES
 TOTALS = ("killed", "survived", "timeout", "no_coverage")
 DISPOSITIONS = ("fixed", "equivalent", "invalid", "deferred")
 TEST_FILE = re.compile(
-    r"(^|/)(tests?|__tests__|spec)/|(_regression(_check)?|_test|\.test|\.spec|[-_]contract(-check)?|[-_]contracts?)\."
+    r"(^|/)(tests?|__tests__|spec)/|([-_]regression(_check)?|_test|\.test|\.spec|[-_]contract(-check)?|[-_]contracts?)\."
 )
 
 
