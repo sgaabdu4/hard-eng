@@ -111,6 +111,26 @@ if [[ "$hook" == "pre-commit" || "$hook" == "pre-push" ]]; then
     fi
     "$gate" "${hook#pre-}" || exit $?
   fi
+  if [[ -n "$repo_top" ]]; then
+    guard="$owner_root/skills/deterministic-checks/scripts/lifecycle_guard.py"
+    if [[ ! -f "$guard" ]]; then
+      printf 'hard-eng-hook: lifecycle guard missing: %s\n' "$guard" >&2
+      exit 1
+    fi
+    if [[ "$hook" == "pre-push" ]]; then
+      push_refs=$(mktemp "${TMPDIR:-/tmp}/hard-eng-push-refs.XXXXXX")
+      cat > "$push_refs"
+      python3 "$guard" push --repo "$repo_top" --refs-file "$push_refs" || {
+        guard_status=$?
+        rm -f "$push_refs"
+        exit "$guard_status"
+      }
+      exec < "$push_refs"
+      rm -f "$push_refs"
+    else
+      python3 "$guard" commit --repo "$repo_top" || exit $?
+    fi
+  fi
 fi
 
 common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) ||

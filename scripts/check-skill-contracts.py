@@ -282,6 +282,10 @@ def check_external_contracts() -> None:
             (sys.executable, "skills/deterministic-checks/scripts/project_gate_regression_check.py"),
         ),
         (
+            "lifecycle guard contract",
+            (sys.executable, "skills/deterministic-checks/scripts/lifecycle_guard_regression_check.py"),
+        ),
+        (
             "source-tree coordination contract",
             (sys.executable, "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py"),
         ),
