@@ -3,14 +3,14 @@
 <!-- hard-eng-state:v1 -->
 - state_version = 1
 - plan_id = build-loop-records-5a7f9509
-- lifecycle_status = green
+- lifecycle_status = building
 - approval_status = approved
 - approval_fingerprint = sha256:6db10bc363b5dd5d06e008f53eded81666f9ec0a9d8e5540466738940c59150b
 - approval_provenance = ready-to-build
-- green_artifact = sha256:3affa17186d2d52cc0691c8b98093fe71052181ae892d98f66b0402d6e14e581
+- green_artifact = none
 - active_slice = none
 - completed_slices = S-1,S-2,S-3,S-4,S-5,S-6,S-7,S-8,S-9
-- next_action = Ship: record the mutation receipt (blocked: no in-process test seam), then he-ship.
+- next_action = Re-green on the tree after mutation-seam shipped (50a33bd): full verify record, mutation receipt, full gate, green, ship
 - replan_reason = none
 - walkthrough = no
 <!-- /hard-eng-state -->
