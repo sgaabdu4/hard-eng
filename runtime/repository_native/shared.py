@@ -255,7 +255,18 @@ fi
 case $event in
   posttooluse|stop) exit 0 ;;
 esac
+detail=""
+bootstrap=$root/.hard-eng/bootstrap.sh
+if [ -f "$bootstrap" ]; then
+  heal=$(bash "$bootstrap" download 2>&1 >/dev/null)
+  printf '%s\n' "$heal" >&2
+  if [ -f "$guard" ]; then
+    exec bash "$guard" "$@"
+  fi
+  detail=$(printf '%s\n' "$heal" | tail -n1 | tr -d '\000-\037' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+fi
 reason="Hard Eng is not downloaded for this repository yet, so this tool call was denied. Run: bash .hard-eng/bootstrap.sh $agent"
+[ -n "$detail" ] && reason="$reason ($detail)"
 if [ "$agent" = copilot ]; then
   printf '{"permissionDecision":"deny","permissionDecisionReason":"%s"}' "$reason"
 else
