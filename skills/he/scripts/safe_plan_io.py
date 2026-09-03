@@ -100,7 +100,7 @@ def _frame(digest, value: bytes) -> None:
 
 def lifecycle_excluded(relative: Path) -> bool:
     parts = relative.parts
-    if len(parts) == 3 and parts[0] == "features" and parts[2] == "PLAN.md":
+    if len(parts) == 3 and parts[0] == "features" and parts[2] in {"PLAN.md", "BUILD.md"}:
         return True
     if len(parts) >= 4 and parts[0] == "features" and parts[2] == "receipts":
         return True

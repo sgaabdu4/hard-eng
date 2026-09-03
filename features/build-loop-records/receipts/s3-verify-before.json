@@ -1,0 +1,15 @@
+{
+  "no_packet_exit": 4,
+  "no_packet_output": "result=invalid\nerror=verify has no packet; run plan_state.py verify-packet --slice S-1 first\n",
+  "edges_record": {
+    "exit": 0,
+    "output": "result=valid\nplan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build/features/steps-demo/PLAN.md\ntoken=sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:1/4\nbuild_steps_missing=green, review, verify\nhandoff=ready\nhandoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-02T22:27:30Z\n"
+  },
+  "green_record": {
+    "exit": 0,
+    "output": "result=valid\nplan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build/features/steps-demo/PLAN.md\ntoken=sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:2/4\nbuild_steps_missing=review, verify\nhandoff=ready\nhandoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpnoj6831r/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-02T22:27:30Z\n"
+  },
+  "packet_sha256": "d8300889cb29d87509a8d6734e26132312ce801d2e34b988858cbf81e5c0aabc",
+  "packet_has_rules": true,
+  "packet_has_real_outside_call": true
+}

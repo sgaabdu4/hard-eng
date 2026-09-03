@@ -7,7 +7,7 @@ description: Deliver one exact green Hard Eng snapshot through publish gates, au
 
 ## Contract
 
-- Input = `he` route + approved PLAN + `lifecycle_status=green` + exact green snapshot.
+- Input = `he` route + approved PLAN + `lifecycle_status=green` + exact green snapshot + `inspect` `handoff=ship` block (root, branch, plan, `BUILD.md`, prompt).
 - Output = verified repository-policy delivery + `shipped`, or return to `he-build`.
 - Owner = sync + snapshot continuity + publish gates + verified commit/push/PR/CI/merge + delivery receipt.
 - Code/test/doc fixes = `he-build`; ship never patches a failing artifact.
@@ -24,7 +24,8 @@ description: Deliver one exact green Hard Eng snapshot through publish gates, au
 - Explicit terminal delivery outcome persists across recoverable build/CI failures, retries, and turn boundaries; one failed attempt never narrows the goal.
 - Missing project gate manifest/family = invalid green snapshot → `he-build` + `deterministic-checks` `gate-migration`; Ship never wires it.
 - Sync/content/CI change → `he-build` final loop; green evidence becomes stale.
-- `assert-green` = working artifact at Ship entry; `assert-green --delivered-head` = post-commit HEAD/index/worktree exactness before push; either failure returns to `he-build`.
+- `assert-green` = working artifact at Ship entry + current mutation receipt covering every source file changed since the approval base (`mutation=missing` → `he-build` records it); `assert-green --delivered-head` = post-commit HEAD/index/worktree exactness before push; either failure returns to `he-build`.
+- Read `features/<slug>/BUILD.md` before delivery; it is the human summary of every slice's edge, green, review, and verify records.
 - Publish gate = `deterministic-checks` `publish` PASS on exact intended diff.
 - Delivery SHA = remote product artifact identity; later local lifecycle-state bytes are not part of that artifact.
 - Force push without exact protected approval + bypassed hook/check + hidden path + fabricated remote result = forbidden.

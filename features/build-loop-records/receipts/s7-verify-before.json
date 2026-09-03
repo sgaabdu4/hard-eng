@@ -1,0 +1,37 @@
+{
+  "state_before_closing_checkpoint": {
+    "result": "valid",
+    "plan": "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md",
+    "token": "sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063",
+    "lifecycle_status": "building",
+    "approval_status": "approved",
+    "brief_fingerprint": "sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+    "route_target": "he-build",
+    "active_slice": "S-1",
+    "completed_slices": "none",
+    "next_action": "Build the first vertical slice.",
+    "slice_receipt": "current",
+    "build_steps": "S-1:4/4",
+    "handoff": "ready",
+    "handoff_root": "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+    "handoff_branch": "main",
+    "handoff_plan": "features/steps-demo/PLAN.md",
+    "handoff_prompt": "Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
+  },
+  "feature_files_before_closing_checkpoint": [
+    "features/steps-demo/PLAN.md",
+    "features/steps-demo/receipts/S-1-review-1.txt",
+    "features/steps-demo/receipts/S-1-review-2.txt",
+    "features/steps-demo/receipts/S-1-verify.txt",
+    "features/steps-demo/receipts/S-1.json",
+    "features/steps-demo/receipts/after.json",
+    "features/steps-demo/receipts/authorization.json",
+    "features/steps-demo/receipts/before.json",
+    "features/steps-demo/receipts/before.png",
+    "features/steps-demo/receipts/broken.png",
+    "features/steps-demo/receipts/build-steps.json",
+    "features/steps-demo/receipts/fakes.log",
+    "features/steps-demo/receipts/plan-steps.json",
+    "features/steps-demo/receipts/research.json"
+  ]
+}

@@ -89,6 +89,7 @@ sub changed_source_error_impl {
     local $/;
     my $raw = <$status> // '';
     close $status or return 'cannot inspect repository changes at the checkpoint';
+    my @building;
     for my $entry (split /\0/, $raw) {
         next if $entry eq '';
         $entry =~ s/\A..\s//;
@@ -99,11 +100,29 @@ sub changed_source_error_impl {
                 unless lifecycle_target_allowed($repo, $active, $target);
             next;
         }
-        next if $active;
+        if ($active) { push @building, $entry; next; }
         return "repository path changed without a current direct-route receipt: $entry"
             unless $direct && direct_allows_target($repo, $direct, $target);
     }
+    return orchestrator_guard_error($repo, \@building) if $active && @building;
     return undef;
+}
+
+sub orchestrator_guard_error {
+    my ($repo, $entries) = @_;
+    my $python = trusted_python();
+    my $tool = Cwd::abs_path(__FILE__);
+    $tool =~ s{scripts/enforcement_checkpoint\.pl\z}{skills/he/scripts/ticket_guard.py};
+    return 'orchestrator write guard is missing or unsafe' unless -f $tool && !-l $tool;
+    local %ENV = %ENV;
+    $ENV{PATH} = trusted_command_path();
+    my @command = ($python, $tool, '--repo', $repo, map { ('--path', $_) } @$entries);
+    open my $guard, '-|', @command or return 'cannot run the orchestrator write guard';
+    local $/;
+    my $output = <$guard> // '';
+    return undef if close $guard;
+    $output =~ s/[\x00-\x1f\x7f]+/ /g;
+    return 'orchestrator write guard refused the checkpoint' . ($output ne '' ? ": " . substr($output, 0, 300) : '');
 }
 
 1;

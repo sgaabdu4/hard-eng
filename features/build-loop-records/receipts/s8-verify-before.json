@@ -1,0 +1,37 @@
+[
+  {
+    "path": "skills/he-build/references/workflow.md",
+    "sha256": "10eb0a2c52bc1c276a22f5beab15881ad3044c9a787c0e7772ce56e6d0748534",
+    "lines": 99
+  },
+  {
+    "path": "skills/he-build/SKILL.md",
+    "sha256": "6d7a521f13e14de94a1038ba71b5bb5ad4810111ce1344cbc8ae6abba4eb05b4",
+    "lines": 68
+  },
+  {
+    "path": "skills/he-ship/SKILL.md",
+    "sha256": "c1e595bbaf16ccb454186c3a03637806239006c38a6fbd3ac7698ebbb8ea4fbe",
+    "lines": 41
+  },
+  {
+    "path": "skills/deterministic-checks/references/clones.md",
+    "sha256": "109a43a5355b99bb33f6df1d877818dba352d002b3726a488faa3661b1d563a6",
+    "lines": 7
+  },
+  {
+    "path": "skills/deterministic-checks/references/mutation.md",
+    "sha256": "272284c2ec359cc8b5aa34629b7bdd592ae7750b560e59110b836cbb9c509be2",
+    "lines": 9
+  },
+  {
+    "path": "skills/deterministic-checks/references/slice-gate.md",
+    "sha256": "b88cb3ebfa8cc397010f731e38dbb25a115dd4288664ec8f911af02413b4471f",
+    "lines": 25
+  },
+  {
+    "path": "PRODUCT.md",
+    "sha256": "2253a79d9fc8217c0a6cc927dc2dcc3711468199834eae13f0b6267f8ccb237e",
+    "lines": 102
+  }
+]

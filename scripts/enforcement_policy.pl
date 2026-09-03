@@ -141,6 +141,7 @@ sub markdown_files {
             my $path = "$directory/$name";
             push @pending, $path if -d $path && !-l $path;
             next if -f $path && $path =~ m{\A\Q$folder\E/tickets/T-(?:[1-9][0-9]*|int)\.md\z};
+            next if -f $path && $path eq "$folder/BUILD.md";
             push @found, $path if -f $path && $path =~ /\.md\z/ && $path ne $plan;
         }
         closedir $handle;
@@ -291,6 +292,7 @@ sub lifecycle_target_allowed {
     return 0 unless $feature;
     return 1 if $relative eq 'hard-eng.gates.json';
     return 1 if $relative eq "features/$feature/PLAN.md";
+    return 1 if $relative eq "features/$feature/BUILD.md";
     return 1 if $relative =~ m{\Afeatures/\Q$feature\E/receipts/[a-z0-9][a-z0-9._-]*\.json\z};
     return 1 if $relative =~ m{\Afeatures/\Q$feature\E/tickets/T-(?:[1-9][0-9]*|int)\.md\z};
     return 1 if $relative =~ m{\A\.agents/learning/[a-z0-9]+(?:-[a-z0-9]+)*\.json\z};

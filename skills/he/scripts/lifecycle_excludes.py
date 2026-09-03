@@ -33,7 +33,7 @@ TERMINAL_STATUSES = {"shipped", "cancelled"}
 LEGACY_MARKER = b"# Hard Eng terminal lifecycle state (shared by linked worktrees)"
 BEGIN = b"# >>> Hard Eng terminal lifecycle state >>>"
 END = b"# <<< Hard Eng terminal lifecycle state <<<"
-OWNED_PATTERN = re.compile(rb"/features/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/|tickets/)")
+OWNED_PATTERN = re.compile(rb"/features/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|BUILD\.md|receipts/|tickets/)")
 
 
 def _git_path(repo: Path, *arguments: str) -> Path:
@@ -150,26 +150,22 @@ def _exclude_target(repo: Path, plan: Path) -> tuple[Path, str]:
     return exclude, slug
 
 
+def _owned_patterns(slug: str) -> tuple[bytes, ...]:
+    return tuple(f"/features/{slug}/{name}".encode() for name in ("PLAN.md", "BUILD.md", "receipts/", "tickets/"))
+
+
 def exclude_terminal_artifacts(repo: Path, plan: Path, lifecycle_status: str) -> Path:
     """Register exact terminal PLAN/receipt paths in the shared local exclude."""
     if lifecycle_status not in TERMINAL_STATUSES:
         raise LifecycleExcludeError("only terminal lifecycle state can be excluded")
     exclude, slug = _exclude_target(repo, plan)
-    patterns = (
-        f"/features/{slug}/PLAN.md".encode(),
-        f"/features/{slug}/receipts/".encode(),
-        f"/features/{slug}/tickets/".encode(),
-    )
+    patterns = _owned_patterns(slug)
     _update_owned(exclude, patterns, add=True)
     return exclude
 
 
 def activate_lifecycle_artifacts(repo: Path, plan: Path) -> Path:
     exclude, slug = _exclude_target(repo, plan)
-    patterns = (
-        f"/features/{slug}/PLAN.md".encode(),
-        f"/features/{slug}/receipts/".encode(),
-        f"/features/{slug}/tickets/".encode(),
-    )
+    patterns = _owned_patterns(slug)
     _update_owned(exclude, patterns, add=False)
     return exclude

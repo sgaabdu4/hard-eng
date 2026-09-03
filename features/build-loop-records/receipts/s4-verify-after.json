@@ -1,0 +1,80 @@
+{
+  "audit_manifest_accepted": true,
+  "audit_manifest_message": "ok",
+  "report_cases": {
+    "pass": {
+      "accepted": true,
+      "message": "ok"
+    },
+    "warn": {
+      "accepted": true,
+      "message": "ok"
+    },
+    "fail": {
+      "accepted": false,
+      "message": "fallow audit verdict=fail: complexity_introduced=1; first=a.ts:3 f",
+      "refused": true,
+      "has_complexity_introduced_1": true,
+      "has_a_ts_3": true
+    }
+  },
+  "clones_cases": {
+    "update_baseline": {
+      "accepted": false,
+      "message": "clones must be read-only: --update-baseline and file reporters are forbidden",
+      "refused": true
+    },
+    "reporters_silent": {
+      "accepted": false,
+      "message": "clones requires --reporters console so new pairs print and no report file is written",
+      "refused": true
+    },
+    "reporters_json": {
+      "accepted": false,
+      "message": "clones requires --reporters console so new pairs print and no report file is written",
+      "refused": true
+    },
+    "missing_baseline_file": {
+      "accepted": false,
+      "message": "clones baseline file is missing: .jscpd-baseline.json",
+      "refused": true,
+      "names_file": true
+    },
+    "baseline_from_ref": {
+      "accepted": true,
+      "message": "ok",
+      "refused": false
+    }
+  },
+  "clones_rejections_of_4": 4,
+  "clones_ref_form_ok": true,
+  "real_jscpd": {
+    "command": [
+      "/Users/abid/.agents/node_modules/.bin/jscpd",
+      ".",
+      "--format",
+      "python",
+      "--reporters",
+      "console",
+      "--baseline",
+      "/Users/abid/.agents/.jscpd-baseline.json",
+      "--fail-on-new-clones"
+    ],
+    "cwd": "/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/s4-verify-yj2aw5gs/real_jscpd",
+    "exit_code": 1,
+    "stdout_has_NEW": true,
+    "stdout_has_b_py": true,
+    "report_dir_created": false,
+    "stdout_tail": "\u001b[1mClone found (python)\u001b[22m \u001b[31m[NEW]\u001b[39m\n - \u001b[1m\u001b[32ma.py\u001b[39m\u001b[22m [1:1 - 127:16] (127 lines, 1158 tokens)\n   b.py [1:1 - 127:16]\n\u001b[90m\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\u001b[39m\n\u001b[90m\u2502\u001b[39m\u001b[31m Format \u001b[39m\u001b[90m\u2502\u001b[39m\u001b[31m Files analyzed \u001b[39m\u001b[90m\u2502\u001b[39m\u001b[31m Total lines \u001b[39m\u001b[90m\u2502\u001b[39m\u001b[31m Total tokens \u001b[39m\u001b[90m\u2502\u001b[39m\u001b[31m Clones found \u001b[39m\u001b[90m\u2502\u001b[39m\u001b[31m Duplicated lines \u001b[39m\u001b[90m\u2502\u001b[39m\u001b[31m Duplicated tokens \u001b[39m\u001b[90m\u2502\u001b[39m\n\u001b[90m\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\u001b[39m\n\u001b[90m\u2502\u001b[39m python \u001b[90m\u2502\u001b[39m 2              \u001b[90m\u2502\u001b[39m 254         \u001b[90m\u2502\u001b[39m 2316         \u001b[90m\u2502\u001b[39m 1            \u001b[90m\u2502\u001b[39m 126 (49.61%)     \u001b[90m\u2502\u001b[39m 1158 (50.00%)     \u001b[90m\u2502\u001b[39m\n\u001b[90m\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\u001b[39m\n\u001b[90m\u2502\u001b[39m \u001b[1mTotal:\u001b[22m \u001b[90m\u2502\u001b[39m 2              \u001b[90m\u2502\u001b[39m 254         \u001b[90m\u2502\u001b[39m 2316         \u001b[90m\u2502\u001b[39m 1            \u001b[90m\u2502\u001b[39m 126 (49.61%)     \u001b[90m\u2502\u001b[39m 1158 (50.00%)     \u001b[90m\u2502\u001b[39m\n\u001b[90m\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\u001b[39m\n\u001b[90mFound 1 clones (1 new).\u001b[39m\n\u001b[90mtime: 4.685ms\u001b[39m\n\n\u001b[90m\ud83d\udca1 Auto-refactor with AI: \u001b[1m\u001b[39mnpx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring\u001b[90m\u001b[22m\n\u001b[90m\ud83c\udfa9 New: Gangsta Agents \u2014 discipline your AI coding \u2192 gangsta.page\u001b[39m\n\u001b[90m\ud83d\udc96 Support jscpd project \u2192 https://opencollective.com/jscpd\u001b[39m\n",
+    "stderr_tail": "ERROR: jscpd found 1 new clones not in the baseline (allowed: 0)\n"
+  },
+  "py_families": [
+    "clones",
+    "python-format",
+    "python-lint",
+    "python-types"
+  ],
+  "txt_families": [
+    "targeted"
+  ]
+}

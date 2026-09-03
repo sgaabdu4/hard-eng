@@ -20,11 +20,12 @@
 ## Slice Loop
 
 1. Select one independently demonstrable end-to-end behavior from active slice → state precondition + action + durable observable result; required persistence/API/backend/UI = one path, never separate skeleton-first completion.
+   - Record the edge list first: `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" record-build --repo <repo> --plan <PLAN> --slice <S-ID> --step edges --payload-file <json>` with `{"cases": [{"name", "success_test", "failure_test"}]}`; `inspect` prints `build_steps=<S-ID>:k/4` + `build_steps_missing=`.
 2. Bug/regression → reproduce first; behavior with a useful automated seam → `test-quality` RED for intended reason; non-applicable RED or no feasible real-boundary seam → record why.
 3. Change canonical owner + every connected caller/schema/key/route/config/test/doc required by that behavior.
-4. Run targeted GREEN + smallest relevant deterministic checks.
+4. Run targeted GREEN + smallest relevant deterministic checks → `record-build --step green` with `{"command": [...], "exit": 0}`.
 5. Refactor → remove legacy/alias/dual paths + enforce SSOT/DRY/YAGNI → rerun targeted GREEN.
-6. Review actual diff once with `code-review`; standard slice requires no independent whole-feature audit.
+6. Review actual diff once: `plan_state.py review-packet --slice <S-ID>` writes `receipts/<S-ID>-review-<k>.txt` (slice row + brief sections + edge list + diff) → one fresh reviewer subagent reads only that packet → `record-build --step review` with `{"rounds": [{"reviewer", "packet_sha256", "findings": [{"id", "text", "status": open|fixed|rejected, "reason" when rejected}]}]}`; rounds accumulate, max 3; an open finding in the last round blocks the slice gate; standard slice requires no independent whole-feature audit.
 7. Validate each finding:
    - implementation defect → fix root in place + connected blast radius → affected proof + finding-scoped re-review;
    - accepted outcome change → `he` `reopen --reason changed-outcome` → `he-plan`;
@@ -36,15 +37,16 @@
    - other scoped critical overlay → its named specialist owner.
    - scope = changed protected boundary only; unrelated slices = forbidden.
 9. UI/runtime behavior → finish every backend/persistence connection required by the active behavior → `e2e` actual environment + canonical `e2e` receipt PASS; inspect requested/produced media; reference/screenshot/receipt work never gates unfinished backend/persistence wiring.
-10. Demonstrate acceptance example + rollback/observability when applicable → run the slice gate on the final slice tree → receipt PASS via the `deterministic-checks` slice-gate reference; checkpoint rejects missing/stale receipts.
-11. Refresh PLAN token → one atomic `he` checkpoint:
+10. Independent verification: `plan_state.py verify-packet --slice <S-ID>` writes `receipts/<S-ID>-verify.txt` → one separate verifier subagent drives the behavior from the outside with every outside host faked, writes before/after evidence under `receipts/` (`ui` = screenshots, `logic` = JSON), and reports hosts + edge names → `record-build --step verify` with `{"mode", "packet_sha256", "fakes": [{"host", "log"}], "outside_calls", "before": [{"path", "sha256"}], "after": [...], "edge_cases"}`; an unfaked host or unknown edge name is refused.
+11. Demonstrate acceptance example + rollback/observability when applicable → run the slice gate on the final slice tree → receipt PASS via the `deterministic-checks` slice-gate reference; checkpoint rejects missing/stale receipts; any tree change after a record stales it → re-record on the final tree.
+12. Refresh PLAN token → one atomic `he` checkpoint:
     - append current `S-ID` once to comma-separated `completed_slices`;
     - more slices → `active_slice=<next-S-ID>` + `next_action=<next-observable-behavior>`;
     - no slices remain → `active_slice=none` + `next_action=Run the full pre-ship gate.`
     - command = `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set "completed_slices=<ordered-comma-list>" --set active_slice=<next-S-ID|none> --set "next_action=<exact-next-action>"`.
-12. First completed end-to-end surface slice (`ux_reference` != n/a) → display the receipt's actual screenshots/video in the conversation (per-view, desktop + mobile as applicable; never only paths) → one `question-me` user look-and-feel acceptance before the next independently complete behavior; visual acceptance never pauses persistence/API/backend work required by the current behavior; changed look → `ux_reference` change = `he` reopen route.
-13. Inspect checkpoint → require recorded completed/active/next values → continue the recorded next action.
-14. Before slice close/turn end → reconcile current messages + ledger; any omitted open item keeps slice/task nonterminal.
+13. First completed end-to-end surface slice (`ux_reference` != n/a) → display the receipt's actual screenshots/video in the conversation (per-view, desktop + mobile as applicable; never only paths) → one `question-me` user look-and-feel acceptance before the next independently complete behavior; visual acceptance never pauses persistence/API/backend work required by the current behavior; changed look → `ux_reference` change = `he` reopen route.
+14. Inspect checkpoint → require recorded completed/active/next values → continue the recorded next action.
+15. Before slice close/turn end → reconcile current messages + ledger; any omitted open item keeps slice/task nonterminal.
 
 ## Finding Rules
 
@@ -58,14 +60,18 @@
 ## Final Pre-ship Gate
 
 1. All slices demonstrated → update README/API/user/operator/design docs only for accepted current truth.
-2. Run one full repository gate through `deterministic-checks` with explicit timeout + slice gate `--full` receipt on the same snapshot; the `green` checkpoint rejects a missing/stale `full` receipt.
+2. Run one full repository gate through `deterministic-checks` with explicit timeout + slice gate `--full` receipt on the same snapshot; `--full` also requires every completed slice's four records + a current `full` verify record (`verify-packet --slice full` → separate verifier over the whole feature → `record-build --slice full --step verify`); the `green` checkpoint rejects a missing/stale `full` receipt.
 3. User-visible journeys → replay relevant cross-slice behavior through `e2e`; requested/produced visual proof requires canonical actual-media receipt PASS.
 4. Applicable protected boundaries → confirm every targeted independent review remains current.
 5. Full-gate finding → return to final build loop → root fix + affected proof → rerun the full gate on the corrected exact snapshot.
 6. Repeat finding → fix → affected proof → full-gate run while findings or snapshot changes remain; convergence requires one unchanged corrected snapshot with full gate PASS.
-7. Unchanged full-gate PASS + actual diff reviewed + zero open finding/unknown → refresh token → run:
+7. Mutation receipt on the green tree: run the pinned runner (Stryker for JS/TS, mutmut for Python; Dart = `runner none` + sensitivity proof) over every source file changed since the approval base → `plan_state.py record-mutation --payload-file <json>` per runner (`runner` `version` `argv` `scope` `totals` `survivors` rows = `mutant` + `reason` + `disposition` fixed|equivalent|invalid|deferred + `consequence` when deferred; `runner none` adds `sensitivity_proof`); `inspect` prints `mutation=current|missing`.
+8. Closing question = ask the user once: walkthrough video yes|no; `yes` → `product-walkthrough-video` output listed in the `full` verify record's `after` list.
+9. Unchanged full-gate PASS + actual diff reviewed + zero open finding/unknown → refresh token → run:
 
-   `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=green --set active_slice=none --set "completed_slices=<ordered-comma-list>" --set "next_action=<exact-delivery-action-or-approval-boundary>"`
+   `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=green --set walkthrough=<yes|no> --set active_slice=none --set "completed_slices=<ordered-comma-list>" --set "next_action=<exact-delivery-action-or-approval-boundary>"`
+
+   The green checkpoint writes `features/<slug>/BUILD.md` (every slice's records, mutation totals, full gate) and `inspect` prints `handoff=ship` with root, branch, plan, report, and a paste-ready ship prompt; `plan_state.py build-report` regenerates it on demand.
 
 ## Ticket Loop
 

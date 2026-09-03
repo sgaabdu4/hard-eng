@@ -1,0 +1,1009 @@
+{
+  "events": [
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "code-study"
+      ],
+      "exit": 0,
+      "name": "record-step-code-study",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:5d6394d5f15ca9eab138615f832ddec41e19e0df10132fdeee822c95e7e2b7b6",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=2/6",
+        "plan_steps_missing=edge-scan, decisions, slices, closing",
+        "ready_for_approval=no",
+        "recorded_step=code-study",
+        "recorded_at=2026-09-02T23:46:18Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "edge-scan"
+      ],
+      "exit": 0,
+      "name": "record-step-edge-scan",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:5d6394d5f15ca9eab138615f832ddec41e19e0df10132fdeee822c95e7e2b7b6",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=3/6",
+        "plan_steps_missing=decisions, slices, closing",
+        "ready_for_approval=no",
+        "recorded_step=edge-scan",
+        "recorded_at=2026-09-02T23:46:18Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "decisions"
+      ],
+      "exit": 0,
+      "name": "record-step-decisions",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:5d6394d5f15ca9eab138615f832ddec41e19e0df10132fdeee822c95e7e2b7b6",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=4/6",
+        "plan_steps_missing=slices, closing",
+        "ready_for_approval=no",
+        "recorded_step=decisions",
+        "recorded_at=2026-09-02T23:46:18Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "slices"
+      ],
+      "exit": 0,
+      "name": "record-step-slices",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:5d6394d5f15ca9eab138615f832ddec41e19e0df10132fdeee822c95e7e2b7b6",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=5/6",
+        "plan_steps_missing=closing",
+        "ready_for_approval=no",
+        "recorded_step=slices",
+        "recorded_at=2026-09-02T23:46:19Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "closing"
+      ],
+      "exit": 0,
+      "name": "record-step-closing",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=no",
+        "recorded_step=closing",
+        "recorded_at=2026-09-02T23:46:19Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "validate",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md"
+      ],
+      "exit": 4,
+      "name": "validate",
+      "output_lines": [
+        "result=invalid",
+        "error=external claim `fallow` in Material decisions has no research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "inspect"
+      ],
+      "exit": 0,
+      "name": "inspect-for-token",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=no"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "approve",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "--approval-reply",
+        "yes go"
+      ],
+      "exit": 4,
+      "name": "approve",
+      "output_lines": [
+        "result=invalid",
+        "error=external claim `fallow` in Material decisions has no research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "inspect"
+      ],
+      "exit": 0,
+      "name": "inspect-for-token",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=no"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "approve",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "--approval-reply",
+        "yes go"
+      ],
+      "exit": 4,
+      "name": "approve",
+      "output_lines": [
+        "result=invalid",
+        "error=external claim `fallow` in Material decisions has no research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/execution_evidence.py",
+        "record-research",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "--scope",
+        "external",
+        "--question",
+        "Which vendor tools?",
+        "--decision",
+        "Use them.",
+        "--fresh-until",
+        "2099-12-31",
+        "--verified",
+        "docs read",
+        "--unknown",
+        "none",
+        "--source",
+        "https://docs.fallow.tools/cli/audit",
+        "--source-version",
+        "3.22.0"
+      ],
+      "exit": 0,
+      "name": "record-research-external",
+      "output_lines": [
+        "research-evidence: PASS plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md scope=external"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "validate",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md"
+      ],
+      "exit": 0,
+      "name": "validate",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=yes"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "inspect"
+      ],
+      "exit": 0,
+      "name": "inspect-for-token",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=yes"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "approve",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "--approval-reply",
+        "yes go"
+      ],
+      "exit": 0,
+      "name": "approve",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims/features/steps-demo/PLAN.md",
+        "token=sha256:e3b643a6f43b8fc079595b44983678397b7c9121b26536404c27a9d233d54afb",
+        "lifecycle_status=build-ready",
+        "approval_status=approved",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-build",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Build the first vertical slice.",
+        "handoff=ready",
+        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
+        "handoff_branch=main",
+        "handoff_plan=features/steps-demo/PLAN.md",
+        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "code-study"
+      ],
+      "exit": 0,
+      "name": "record-step-code-study",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "token=sha256:47a3e37d4e58dd571264af016c916e180766e3e225875412a250285637de4011",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=2/6",
+        "plan_steps_missing=edge-scan, decisions, slices, closing",
+        "ready_for_approval=no",
+        "recorded_step=code-study",
+        "recorded_at=2026-09-02T23:46:20Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "edge-scan"
+      ],
+      "exit": 0,
+      "name": "record-step-edge-scan",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "token=sha256:47a3e37d4e58dd571264af016c916e180766e3e225875412a250285637de4011",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=3/6",
+        "plan_steps_missing=decisions, slices, closing",
+        "ready_for_approval=no",
+        "recorded_step=edge-scan",
+        "recorded_at=2026-09-02T23:46:20Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "decisions"
+      ],
+      "exit": 0,
+      "name": "record-step-decisions",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "token=sha256:47a3e37d4e58dd571264af016c916e180766e3e225875412a250285637de4011",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=4/6",
+        "plan_steps_missing=slices, closing",
+        "ready_for_approval=no",
+        "recorded_step=decisions",
+        "recorded_at=2026-09-02T23:46:20Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "slices"
+      ],
+      "exit": 0,
+      "name": "record-step-slices",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "token=sha256:47a3e37d4e58dd571264af016c916e180766e3e225875412a250285637de4011",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=5/6",
+        "plan_steps_missing=closing",
+        "ready_for_approval=no",
+        "recorded_step=slices",
+        "recorded_at=2026-09-02T23:46:20Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "closing"
+      ],
+      "exit": 0,
+      "name": "record-step-closing",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "token=sha256:9784d6a3c47727a11fd9b115dc9002bb117f3ec80d289648bcecce9c544ba0af",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=no",
+        "recorded_step=closing",
+        "recorded_at=2026-09-02T23:46:20Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "validate",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md"
+      ],
+      "exit": 4,
+      "name": "validate",
+      "output_lines": [
+        "result=invalid",
+        "error=external claim `mutmut` in code-study external_contract has no research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "inspect"
+      ],
+      "exit": 0,
+      "name": "inspect-for-token",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "token=sha256:9784d6a3c47727a11fd9b115dc9002bb117f3ec80d289648bcecce9c544ba0af",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=no"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "approve",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:9784d6a3c47727a11fd9b115dc9002bb117f3ec80d289648bcecce9c544ba0af",
+        "--approval-reply",
+        "yes go"
+      ],
+      "exit": 4,
+      "name": "approve",
+      "output_lines": [
+        "result=invalid",
+        "error=external claim `mutmut` in code-study external_contract has no research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/execution_evidence.py",
+        "record-research",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "--scope",
+        "external",
+        "--question",
+        "Which vendor tools?",
+        "--decision",
+        "Use them.",
+        "--fresh-until",
+        "2099-12-31",
+        "--verified",
+        "docs read",
+        "--unknown",
+        "none",
+        "--source",
+        "https://mutmut.readthedocs.io/en/latest/",
+        "--source-version",
+        "2.5.1"
+      ],
+      "exit": 0,
+      "name": "record-research-external",
+      "output_lines": [
+        "research-evidence: PASS plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md scope=external"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "validate",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md"
+      ],
+      "exit": 0,
+      "name": "validate",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "token=sha256:9784d6a3c47727a11fd9b115dc9002bb117f3ec80d289648bcecce9c544ba0af",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=yes"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "inspect"
+      ],
+      "exit": 0,
+      "name": "inspect-for-token",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "token=sha256:9784d6a3c47727a11fd9b115dc9002bb117f3ec80d289648bcecce9c544ba0af",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=yes"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "approve",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:9784d6a3c47727a11fd9b115dc9002bb117f3ec80d289648bcecce9c544ba0af",
+        "--approval-reply",
+        "yes go"
+      ],
+      "exit": 0,
+      "name": "approve",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy/features/steps-demo/PLAN.md",
+        "token=sha256:77a6e3d12dda9bdff86ef23a9ad09805d45b3e2589ecf63894b9ac6e6fb3ce74",
+        "lifecycle_status=build-ready",
+        "approval_status=approved",
+        "brief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+        "route_target=he-build",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Build the first vertical slice.",
+        "handoff=ready",
+        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
+        "handoff_branch=main",
+        "handoff_plan=features/steps-demo/PLAN.md",
+        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/execution_evidence.py",
+        "record-research",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "--scope",
+        "external",
+        "--question",
+        "Which vendor tools?",
+        "--decision",
+        "Use them.",
+        "--fresh-until",
+        "2099-12-31",
+        "--verified",
+        "docs read",
+        "--unknown",
+        "none",
+        "--source",
+        "https://docs.fallow.tools/cli/audit",
+        "--source-version",
+        "3.22.0"
+      ],
+      "exit": 0,
+      "name": "record-research-external",
+      "output_lines": [
+        "research-evidence: PASS plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md scope=external"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "code-study"
+      ],
+      "exit": 0,
+      "name": "record-step-code-study",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "token=sha256:5d6394d5f15ca9eab138615f832ddec41e19e0df10132fdeee822c95e7e2b7b6",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=2/6",
+        "plan_steps_missing=edge-scan, decisions, slices, closing",
+        "ready_for_approval=no",
+        "recorded_step=code-study",
+        "recorded_at=2026-09-02T23:46:21Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "edge-scan"
+      ],
+      "exit": 0,
+      "name": "record-step-edge-scan",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "token=sha256:5d6394d5f15ca9eab138615f832ddec41e19e0df10132fdeee822c95e7e2b7b6",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=3/6",
+        "plan_steps_missing=decisions, slices, closing",
+        "ready_for_approval=no",
+        "recorded_step=edge-scan",
+        "recorded_at=2026-09-02T23:46:22Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "decisions"
+      ],
+      "exit": 0,
+      "name": "record-step-decisions",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "token=sha256:5d6394d5f15ca9eab138615f832ddec41e19e0df10132fdeee822c95e7e2b7b6",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=4/6",
+        "plan_steps_missing=slices, closing",
+        "ready_for_approval=no",
+        "recorded_step=decisions",
+        "recorded_at=2026-09-02T23:46:22Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "slices"
+      ],
+      "exit": 0,
+      "name": "record-step-slices",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "token=sha256:5d6394d5f15ca9eab138615f832ddec41e19e0df10132fdeee822c95e7e2b7b6",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=5/6",
+        "plan_steps_missing=closing",
+        "ready_for_approval=no",
+        "recorded_step=slices",
+        "recorded_at=2026-09-02T23:46:22Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-step",
+        "--step",
+        "closing"
+      ],
+      "exit": 0,
+      "name": "record-step-closing",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "token=sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=yes",
+        "recorded_step=closing",
+        "recorded_at=2026-09-02T23:46:22Z"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "inspect"
+      ],
+      "exit": 0,
+      "name": "inspect-for-token",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "token=sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "lifecycle_status=planning",
+        "approval_status=pending",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-plan",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Complete the brief and request Ready-to-build approval.",
+        "plan_steps=6/6",
+        "ready_for_approval=yes"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "approve",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:bb41e7bcc093d4a38090e68f967b907981248bcc1c980699d447c4a5f76c2020",
+        "--approval-reply",
+        "yes go"
+      ],
+      "exit": 0,
+      "name": "approve",
+      "output_lines": [
+        "result=valid",
+        "plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "token=sha256:e3b643a6f43b8fc079595b44983678397b7c9121b26536404c27a9d233d54afb",
+        "lifecycle_status=build-ready",
+        "approval_status=approved",
+        "brief_fingerprint=sha256:19a3426834c6e9d80efd7fe8e7124c04d19dfaf9d8893266874b11e65f7dd129",
+        "route_target=he-build",
+        "active_slice=S-1",
+        "completed_slices=none",
+        "next_action=Build the first vertical slice.",
+        "handoff=ready",
+        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
+        "handoff_branch=main",
+        "handoff_plan=features/steps-demo/PLAN.md",
+        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3 --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
+      ]
+    },
+    {
+      "argv": [
+        "manifest_claim_error"
+      ],
+      "exit": 1,
+      "name": "manifest_claim_error-before-cite",
+      "output_lines": [
+        "hard-eng.gates.json introduces `jscpd` without a research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "run",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "--slice",
+        "S-1",
+        "--timeout",
+        "60",
+        "--behavior",
+        "one behavior",
+        "--check",
+        "targeted",
+        "--e2e",
+        "not-applicable:cli",
+        "--security",
+        "not-applicable:cli",
+        "--review",
+        "none"
+      ],
+      "exit": 4,
+      "name": "slice_gate-run-before-cite",
+      "output_lines": [
+        "result=fail",
+        "error=hard-eng.gates.json introduces `jscpd` without a research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/execution_evidence.py",
+        "record-research",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "--scope",
+        "external",
+        "--question",
+        "Which vendor tools?",
+        "--decision",
+        "Use them.",
+        "--fresh-until",
+        "2099-12-31",
+        "--verified",
+        "docs read",
+        "--unknown",
+        "none",
+        "--source",
+        "https://docs.fallow.tools/cli/audit",
+        "--source-version",
+        "3.22.0",
+        "--source",
+        "https://github.com/kucherenko/jscpd",
+        "--source-version",
+        "5.1.1"
+      ],
+      "exit": 0,
+      "name": "record-research-external",
+      "output_lines": [
+        "research-evidence: PASS plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md scope=external"
+      ]
+    },
+    {
+      "argv": [
+        "manifest_claim_error"
+      ],
+      "exit": 0,
+      "name": "manifest_claim_error-after-cite",
+      "output_lines": [
+        "None"
+      ]
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "run",
+        "--repo",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
+        "--plan",
+        "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3/features/steps-demo/PLAN.md",
+        "--slice",
+        "S-1",
+        "--timeout",
+        "60",
+        "--behavior",
+        "one behavior",
+        "--check",
+        "targeted",
+        "--e2e",
+        "not-applicable:cli",
+        "--security",
+        "not-applicable:cli",
+        "--review",
+        "none"
+      ],
+      "exit": 4,
+      "name": "slice_gate-run-after-cite",
+      "output_lines": [
+        "result=fail",
+        "error=slice S-1 has no edges record (plan_state.py record-build --slice S-1 --step edges)"
+      ]
+    },
+    {
+      "argv": [
+        "claim_error"
+      ],
+      "exit": 0,
+      "name": "unwired-claim_error",
+      "output_lines": [
+        "None"
+      ]
+    },
+    {
+      "argv": [
+        "manifest_claim_error"
+      ],
+      "exit": 0,
+      "name": "unwired-manifest_claim_error",
+      "output_lines": [
+        "None"
+      ]
+    }
+  ]
+}

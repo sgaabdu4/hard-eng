@@ -1,0 +1,38 @@
+{
+  "packet_code": 0,
+  "packet_sha256": "054ce333b2cc9db0a8afcbf0444e90bdac73c2f665cdab0447e2ed3a74a9f88f",
+  "packet_headings_present": {
+    "## Slice": true,
+    "## Outcome": true,
+    "## Material decisions": true,
+    "## Acceptance examples": true,
+    "## Edge list": true,
+    "## Diff": true
+  },
+  "packet_risk_absent": true,
+  "open_review_record": {
+    "exit": 0,
+    "output": "result=valid\nplan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build/features/steps-demo/PLAN.md\ntoken=sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-02T22:20:30Z\n"
+  },
+  "verify_record": {
+    "exit": 0,
+    "output": "result=valid\nplan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build/features/steps-demo/PLAN.md\ntoken=sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:4/4\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:verify\nrecorded_at=2026-09-02T22:20:30Z\n"
+  },
+  "open_finding_gate": {
+    "exit": 4,
+    "output": "result=fail\nerror=slice S-1 review still has an open finding: R-1: missing null check\n"
+  },
+  "open_inspect_line": "build_steps_open_finding=R-1: missing null check",
+  "fixed_review_record": {
+    "exit": 0,
+    "output": "result=valid\nplan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build/features/steps-demo/PLAN.md\ntoken=sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-02T22:20:31Z\n"
+  },
+  "fixed_gate": {
+    "exit": 0,
+    "output": "result=pass\nreceipt=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build/features/steps-demo/receipts/S-1.json\nartifact=sha256:8307e2da2070173ca24aeb3e4c35793adc97ad2a2ffab2d454cb536a9de6faef\napplicable=targeted\nchecks=1\nbounded-run: receipt exe=/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14@sha256:e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b cwd=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpha6_behn/build argv_count=3 argv_sha256=ea3a85087a7c518b7737f72090af264ed679bde1b68ecb7bc41118436a673262 exit=0\n"
+  },
+  "fourth_round": {
+    "exit": 4,
+    "output": "result=invalid\nerror=review allows at most 3 rounds; round 4 needs the user\n"
+  }
+}

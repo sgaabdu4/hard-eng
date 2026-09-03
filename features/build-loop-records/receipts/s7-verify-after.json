@@ -1,0 +1,228 @@
+{
+  "commands": [
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "inspect",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md"
+      ],
+      "exit": 0,
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=current\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n"
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "checkpoint",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063",
+        "--set",
+        "completed_slices=S-1",
+        "--set",
+        "active_slice=none"
+      ],
+      "exit": 0,
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/abid/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "run",
+        "--full"
+      ],
+      "exit": 4,
+      "output": "result=fail\nerror=full gate has no verify record (plan_state.py record-build --slice full --step verify)\n"
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "record-build",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md",
+        "--slice",
+        "full",
+        "--step",
+        "verify",
+        "--payload-file",
+        "-",
+        "<stdin-payload>"
+      ],
+      "exit": 0,
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:1/4\nbuild_steps_missing=edges, green, review\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=full:verify\nrecorded_at=2026-09-02T23:29:48Z\n"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/abid/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "run",
+        "--full"
+      ],
+      "exit": 0,
+      "output": "result=pass\nreceipt=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/receipts/full.json\nartifact=sha256:1d2e1cdd49eae58a1b467f75163a456b3f5888a976e48d84f9538d068511c4d5\napplicable=targeted\nchecks=1\nbounded-run: receipt exe=/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14@sha256:e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b cwd=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build argv_count=3 argv_sha256=ea3a85087a7c518b7737f72090af264ed679bde1b68ecb7bc41118436a673262 exit=0\n"
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "build-report",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md"
+      ],
+      "exit": 0,
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=current\nbuild_steps=full:1/4\nbuild_steps_missing=edges, green, review\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nbuild_report=features/steps-demo/BUILD.md\n"
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "checkpoint",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297",
+        "--set",
+        "lifecycle_status=green"
+      ],
+      "exit": 4,
+      "output": "result=invalid\nerror=green requires the closing answer: checkpoint --set walkthrough=yes|no (walkthrough video?)\n"
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "checkpoint",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297",
+        "--set",
+        "lifecycle_status=green",
+        "--set",
+        "walkthrough=yes"
+      ],
+      "exit": 4,
+      "output": "result=invalid\nerror=walkthrough=yes requires a video (mp4/webm/mov) in the full verify record's after list\n"
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "checkpoint",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297",
+        "--set",
+        "walkthrough=maybe"
+      ],
+      "exit": 4,
+      "output": "result=invalid\nerror=walkthrough must be pending, yes, or no\n"
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "checkpoint",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md",
+        "--expect-token",
+        "sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297",
+        "--set",
+        "lifecycle_status=green",
+        "--set",
+        "walkthrough=no"
+      ],
+      "exit": 0,
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:813348693897f39d0805c9c83b22d85049ecdf8d85a4cddb8a11bb7a63945fb4\nlifecycle_status=green\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-ship\nactive_slice=none\ncompleted_slices=S-1\nwalkthrough=no\nnext_action=Build the first vertical slice.\nmutation=missing (ship requires a mutation receipt for the green tree (plan_state.py record-mutation))\nhandoff=ship\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_report=features/steps-demo/BUILD.md\nhandoff_prompt=Ship Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: read features/steps-demo/PLAN.md and features/steps-demo/BUILD.md, then follow he-ship from assert-green to the shipped checkpoint.\n"
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "inspect",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md"
+      ],
+      "exit": 0,
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:813348693897f39d0805c9c83b22d85049ecdf8d85a4cddb8a11bb7a63945fb4\nlifecycle_status=green\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-ship\nactive_slice=none\ncompleted_slices=S-1\nwalkthrough=no\nnext_action=Build the first vertical slice.\nmutation=missing (ship requires a mutation receipt for the green tree (plan_state.py record-mutation))\nhandoff=ship\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_report=features/steps-demo/BUILD.md\nhandoff_prompt=Ship Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: read features/steps-demo/PLAN.md and features/steps-demo/BUILD.md, then follow he-ship from assert-green to the shipped checkpoint.\n"
+    },
+    {
+      "argv": [
+        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
+        "build-report",
+        "--repo",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-plan-86ygmz25/planonly",
+        "--plan",
+        "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-plan-86ygmz25/planonly/features/steps-demo/PLAN.md"
+      ],
+      "exit": 4,
+      "output": "result=invalid\nerror=build-report requires building or green state\n"
+    }
+  ],
+  "edges_observed": {
+    "green_without_walkthrough_refused": true,
+    "walkthrough_yes_no_video_refused": true,
+    "walkthrough_maybe_refused": true,
+    "green_walkthrough_no_success": true,
+    "build_md_exists": true,
+    "build_md_lists_all_slices": true,
+    "inspect_handoff_ship": true,
+    "build_report_building_ok": true,
+    "build_report_planning_refused": true
+  },
+  "after_inspect_state": {
+    "result": "valid",
+    "plan": "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md",
+    "token": "sha256:813348693897f39d0805c9c83b22d85049ecdf8d85a4cddb8a11bb7a63945fb4",
+    "lifecycle_status": "green",
+    "approval_status": "approved",
+    "brief_fingerprint": "sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5",
+    "route_target": "he-ship",
+    "active_slice": "none",
+    "completed_slices": "S-1",
+    "walkthrough": "no",
+    "next_action": "Build the first vertical slice.",
+    "mutation": "missing (ship requires a mutation receipt for the green tree (plan_state.py record-mutation))",
+    "handoff": "ship",
+    "handoff_root": "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
+    "handoff_branch": "main",
+    "handoff_plan": "features/steps-demo/PLAN.md",
+    "handoff_report": "features/steps-demo/BUILD.md",
+    "handoff_prompt": "Ship Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: read features/steps-demo/PLAN.md and features/steps-demo/BUILD.md, then follow he-ship from assert-green to the shipped checkpoint."
+  },
+  "after_feature_files": [
+    "features/steps-demo/BUILD.md",
+    "features/steps-demo/PLAN.md",
+    "features/steps-demo/receipts/S-1-review-1.txt",
+    "features/steps-demo/receipts/S-1-review-2.txt",
+    "features/steps-demo/receipts/S-1-verify.txt",
+    "features/steps-demo/receipts/S-1.json",
+    "features/steps-demo/receipts/after.json",
+    "features/steps-demo/receipts/authorization.json",
+    "features/steps-demo/receipts/before.json",
+    "features/steps-demo/receipts/before.png",
+    "features/steps-demo/receipts/broken.png",
+    "features/steps-demo/receipts/build-steps.json",
+    "features/steps-demo/receipts/fakes.log",
+    "features/steps-demo/receipts/full-verify.txt",
+    "features/steps-demo/receipts/full.json",
+    "features/steps-demo/receipts/plan-steps.json",
+    "features/steps-demo/receipts/research.json"
+  ],
+  "build_md_first_40_lines": "# Build record: steps-demo\n\nGenerated from the build receipts; edit the receipts, not this file.\n\n## Outcome\n- A user receives one observable result.\n\n## S-1\n- behavior = records gate the slice\n- edge cases = 1\n  - empty input\n- green = `python3 -m pytest`\n- review =\n  - round 1: no findings\n  - round 2: no findings\n- verify = logic mode; before `features/steps-demo/receipts/before.json`; after `features/steps-demo/receipts/after.json`\n- outside calls = api.example.test (all faked)\n- gate families = targeted\n\n## Whole feature\n- verify = logic mode; before `features/steps-demo/receipts/before.json`; after `features/steps-demo/receipts/after.json`\n- mutation = not recorded\n- full gate = targeted"
+}

@@ -45,12 +45,17 @@
       "runtime/repository_native/wiring.py",
       "scripts/machine-scope-guard-contract.py",
       "skills/he-learn/scripts/learning_state.py",
+      "skills/he/scripts/build_report.py",
+      "skills/he/scripts/external_claims.py",
+      "skills/he/scripts/build_steps.py",
       "skills/he/scripts/execution_direct.py",
       "skills/he/scripts/execution_evidence.py",
+      "skills/he/scripts/mutation_receipt.py",
       "skills/he/scripts/plan_state.py",
       "skills/he/scripts/plan_steps.py",
       "skills/he/scripts/setup_state.py",
       "skills/he/scripts/skill_source_policy.py",
+      "skills/he/scripts/ticket_guard.py",
       "skills/he/scripts/ticket_state.py",
       "skills/he/scripts/tracker_adapter.py",
       "skills/he/scripts/tracker_http.py",
@@ -107,6 +112,21 @@
         "block",
         "scripts/enforcement_policy.pl",
         "scripts/agent-hook-contract-check.py"
+      ],
+      "build-step-records": [
+        "checkpoint check",
+        "skills/he/scripts/build_steps.py",
+        "skills/he/scripts/build_steps_regression.py"
+      ],
+      "external-claim-check": [
+        "checkpoint check",
+        "skills/he/scripts/external_claims.py",
+        "skills/he/scripts/external_claims_regression.py"
+      ],
+      "mutation-before-ship": [
+        "checkpoint check",
+        "skills/he/scripts/mutation_receipt.py",
+        "skills/he/scripts/build_steps_regression.py"
       ],
       "build-verify-loop": [
         "checkpoint check",
@@ -218,6 +238,11 @@
         "skills/he/scripts/execution_evidence.py",
         "skills/he/scripts/execution_evidence_regression.py"
       ],
+      "orchestrator-write-guard": [
+        "checkpoint check",
+        "skills/he/scripts/ticket_guard.py",
+        "skills/he/scripts/ticket_state_regression.py"
+      ],
       "parallel-ticket-state": [
         "checkpoint check",
         "skills/he/scripts/ticket_state.py",
@@ -249,7 +274,20 @@
       "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
       "scripts/release-builder.test.mjs"
     ],
-    "fallow": ["node_modules/.bin/fallow", "--fail-on-issues", "--format", "json", "--quiet"],
+    "fallow": ["node_modules/.bin/fallow", "audit", "--max-crap", "30", "--format", "json"],
+    "clones": [
+      "node_modules/.bin/jscpd",
+      "--format",
+      "python,dart",
+      "--reporters",
+      "console",
+      "--baseline",
+      ".jscpd-baseline.json",
+      "--fail-on-new-clones",
+      "--ignore",
+      "**/node_modules/**,features/**",
+      "."
+    ],
     "python-types": ["node_modules/.bin/pyright"],
     "python-format": ["ruff", "format", "--check", "--no-cache", "."],
     "python-lint": ["ruff", "check", "--no-cache", "."],
@@ -268,6 +306,7 @@
       "lint",
       "tests",
       "fallow",
+      "clones",
       "python-types",
       "python-format",
       "python-lint",
@@ -284,6 +323,7 @@
       "lint",
       "tests",
       "fallow",
+      "clones",
       "python-types",
       "python-format",
       "python-lint",

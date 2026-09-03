@@ -1,0 +1,2585 @@
+# Review packet: S-6
+
+## Slice
+S-6 = ticket board in `inspect`, dependency-aware claim, orchestrator write guard; depends_on = S-1
+
+## Outcome
+- The build stage is machine-checked end to end: every slice must leave records for its edge cases mapped to success and failure tests, its green test run, a fresh-eyes review loop with a findings ledger, and an end-to-end verification run by a separate agent with fake outside services and before/after evidence; the slice gate refuses a slice without them; new push-time checks catch copy-paste clones (baseline, new clones only) and complex under-tested TypeScript functions; mutation testing runs on changed files before ship for every feature; ticket mode has a machine-checked board; build closes with one question (walkthrough video?) and prints a ship handoff block with worktree, branch, plan, and prompt.
+
+## Material decisions
+- Slice records live in `features/<slug>/receipts/build-steps.json` via `plan_state.py record-build --slice S-n --step <step>`; steps = `edges` (list of edge cases, each with a success test and a failure test id), `green` (exact command + exit 0 + tree hash), `review` (rounds 1..3, each with reviewer findings; every finding closed as fixed|rejected-with-reason|replan; round 3 still open → stop and ask the user), `verify` (mode ui|logic, fakes used for every outside call, before and after evidence paths with hashes, edge cases exercised); records bind to the tree hash and go stale on change.
+- Slice gate `run --slice` refuses when any of the four records is missing or stale for that slice; `--full` refuses when any completed slice lacks them; existing e2e/security/review free text stays but `review` must name the review record.
+- Reviewer = fresh subagent with only the diff, the brief, the acceptance examples, and the slice edge list; never the author's chat; max three rounds; zero open findings ends the loop.
+- Verifier = fresh subagent that drives the whole feature after the last slice: UI feature → real browser through the `e2e` skill with screenshots before and after per view; logic feature → recorded inputs and outputs before and after as JSON; every outside HTTP call goes through a fake the verifier records; a real outside call during verification = FAIL.
+- TypeScript = the existing `fallow` family moves to `fallow audit` (dead code + new clones + complexity + CRAP `--max-crap 30`, changed files against the merge base, `--coverage coverage/coverage-final.json` when present, per-analysis baselines for old debt); Dart + Python = new `clones` family = jscpd 5 with `--baseline` + `--fail-on-new-clones` and the json reporter; both push + ci phases; no crap4ts.
+- Mutation = pre-ship step for every feature, scope = files changed since the approval base, runner per the existing mutation reference (Stryker / mutmut), survivors need a written disposition in the receipt; `he-ship` entry refuses without it.
+- Speed = slice gate runs independent families in parallel with one bounded timeout, changed-file scoping for clones/crap/mutation, baseline files so old debt never blocks, records reused when the tree hash is unchanged.
+- Ticket mode = `ticket_state.py board` output printed by `inspect`; a worker may claim only a ticket whose dependencies are shipped; orchestrator session never edits product files (enforcement check on claimed ticket paths); up to four workers.
+- Build closing = one question after the full gate: walkthrough video yes|no (recorded in the brief as `walkthrough = ...`); yes → `product-walkthrough-video` skill output listed in the verify record.
+- Handoff at `green` = `inspect` prints `handoff=ship` with root, branch, plan, and a paste-ready ship prompt; a generated human-readable `features/<slug>/BUILD.md` summarises every slice's records for review.
+- External claim check = every backticked tool name in the brief's Material decisions and in the code-study `external_contract` answer must match a research source row (HTTPS url + version) recorded after the plan's init time; memory files and repository notes never count; `validate`, `approve`, and the gate-manifest change check refuse with the first uncited tool; the tool list = manifest families + a fixed vendor list (fallow, jscpd, stryker, mutmut, react-doctor, dart-decimate, biome, ruff, pyright, gitleaks, tsc, playwright, jira, azure devops, gh).
+- ux_reference = n/a
+- ux_reference_sources = n/a
+
+## Acceptance examples
+- Given a slice with code changes but no `edges` record, when the slice gate runs, then it fails naming `edges` for that slice and writes no receipt.
+- Given an `edges` record where one edge case lacks a failure test id, when `record-build` runs, then it refuses naming that edge case.
+- Given a review record with an open finding after round 3, when the slice gate runs, then it fails and `inspect` prints the open finding as the next action for the user.
+- Given a verify record whose fake log shows one real outside host, when `record-build verify` runs, then it refuses naming the host.
+- Given a Dart repository with an old clone and a baseline, when a push adds a new clone, then the `clones` family fails naming the new pair; unchanged old clones pass.
+- Given a TypeScript function whose CRAP score reaches 30, when the `fallow` family runs on a change touching it, then the push fails naming the function.
+- Given a completed feature with no mutation receipt, when `he-ship` starts, then it refuses naming mutation; after a run with every survivor dispositioned it passes.
+- Given a plan at `green`, when `inspect` runs, then it prints `handoff=ship` with root, branch, plan, and prompt, and `BUILD.md` exists listing every slice record.
+- Given a brief whose decisions name `fallow` while the research record has no fallow source, when `validate` runs, then it fails naming fallow; after `record-research` with the docs url and version it passes.
+- Given a manifest change adding a `clones` family, when the gate-manifest check runs without a jscpd research row, then it fails naming jscpd.
+- Given four tickets where T-3 depends on T-1 still building, when a worker claims `--next`, then T-3 is not offered.
+
+## Edge list
+- fifth worker claims a ticket (success: ticket_state_regression.check_worker_cap_and_orchestrator_guard: four claims succeed; failure: ticket_state_regression.check_worker_cap_and_orchestrator_guard: worker cap reached)
+- orchestrator edits a claimed ticket path in the primary checkout (success: ticket_state_regression.check_worker_cap_and_orchestrator_guard: path outside every ticket is free; failure: ticket_state_regression.check_worker_cap_and_orchestrator_guard: orchestrator edit of a claimed path)
+- worker edits its own claimed path inside its worktree (success: ticket_state_regression.check_worker_cap_and_orchestrator_guard: worker edits its own claimed path freely; failure: ticket_state_regression.check_worker_cap_and_orchestrator_guard: ticket worktree is not primary)
+- unclaimed ticket path edited by the orchestrator (success: ticket_state_regression.check_worker_cap_and_orchestrator_guard: unclaimed ticket path is free; failure: ticket_guard.guard_error: claimed path refused (same case, T-1))
+- checkpoint hook wiring (success: agent-hook-contract-check: PASS after the hook change; failure: ticket_state_regression.check_worker_cap_and_orchestrator_guard: checkpoint hook must refuse the orchestrator edit)
+- dependency-aware claim and board in inspect (success: ticket_state_regression.check_dependency_gating_and_next (existing capability) + plan_state.inspect board_* lines; failure: ticket_state_regression.check_dependency_gating_and_next: claiming T-2 before T-1 ships must be refused)
+
+## Diff
+```diff
+diff --git a/hard-eng.gates.json b/hard-eng.gates.json
+index b5eccd2..2ed7a88 100644
+--- a/hard-eng.gates.json
++++ b/hard-eng.gates.json
+@@ -45,12 +45,15 @@
+       "runtime/repository_native/wiring.py",
+       "scripts/machine-scope-guard-contract.py",
+       "skills/he-learn/scripts/learning_state.py",
++      "skills/he/scripts/build_steps.py",
+       "skills/he/scripts/execution_direct.py",
+       "skills/he/scripts/execution_evidence.py",
++      "skills/he/scripts/mutation_receipt.py",
+       "skills/he/scripts/plan_state.py",
+       "skills/he/scripts/plan_steps.py",
+       "skills/he/scripts/setup_state.py",
+       "skills/he/scripts/skill_source_policy.py",
++      "skills/he/scripts/ticket_guard.py",
+       "skills/he/scripts/ticket_state.py",
+       "skills/he/scripts/tracker_adapter.py",
+       "skills/he/scripts/tracker_http.py",
+@@ -108,6 +111,16 @@
+         "scripts/enforcement_policy.pl",
+         "scripts/agent-hook-contract-check.py"
+       ],
++      "build-step-records": [
++        "checkpoint check",
++        "skills/he/scripts/build_steps.py",
++        "skills/he/scripts/build_steps_regression.py"
++      ],
++      "mutation-before-ship": [
++        "checkpoint check",
++        "skills/he/scripts/mutation_receipt.py",
++        "skills/he/scripts/build_steps_regression.py"
++      ],
+       "build-verify-loop": [
+         "checkpoint check",
+         "skills/he/scripts/plan_state.py",
+@@ -218,6 +231,11 @@
+         "skills/he/scripts/execution_evidence.py",
+         "skills/he/scripts/execution_evidence_regression.py"
+       ],
++      "orchestrator-write-guard": [
++        "checkpoint check",
++        "skills/he/scripts/ticket_guard.py",
++        "skills/he/scripts/ticket_state_regression.py"
++      ],
+       "parallel-ticket-state": [
+         "checkpoint check",
+         "skills/he/scripts/ticket_state.py",
+@@ -249,7 +267,20 @@
+       "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
+       "scripts/release-builder.test.mjs"
+     ],
+-    "fallow": ["node_modules/.bin/fallow", "--fail-on-issues", "--format", "json", "--quiet"],
++    "fallow": ["node_modules/.bin/fallow", "audit", "--max-crap", "30", "--format", "json"],
++    "clones": [
++      "node_modules/.bin/jscpd",
++      "--format",
++      "python,dart",
++      "--reporters",
++      "console",
++      "--baseline",
++      ".jscpd-baseline.json",
++      "--fail-on-new-clones",
++      "--ignore",
++      "**/node_modules/**,features/**",
++      "."
++    ],
+     "python-types": ["node_modules/.bin/pyright"],
+     "python-format": ["ruff", "format", "--check", "--no-cache", "."],
+     "python-lint": ["ruff", "check", "--no-cache", "."],
+@@ -268,6 +299,7 @@
+       "lint",
+       "tests",
+       "fallow",
++      "clones",
+       "python-types",
+       "python-format",
+       "python-lint",
+@@ -284,6 +316,7 @@
+       "lint",
+       "tests",
+       "fallow",
++      "clones",
+       "python-types",
+       "python-format",
+       "python-lint",
+diff --git a/package-lock.json b/package-lock.json
+index e46ebf0..33fb8cf 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -15,7 +15,8 @@
+         "@google/design.md": "0.4.0",
+         "@types/node": "26.4.0",
+         "@types/semver": "7.8.0",
+-        "fallow": "3.20.0",
++        "fallow": "3.22.0",
++        "jscpd": "5.1.1",
+         "mdast-util-from-markdown": "2.0.3",
+         "parse5": "8.0.1",
+         "pyright": "1.1.413",
+@@ -203,9 +204,9 @@
+       }
+     },
+     "node_modules/@fallow-cli/darwin-arm64": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/@fallow-cli/darwin-arm64/-/darwin-arm64-3.20.0.tgz",
+-      "integrity": "sha512-vGQKlYU9BgnaQlmw5yF2Oe2dgylpOAVL93Ds+MEjxF7pvhdJDmg7ZjqF5fRikk8KIhm6PWkMNNamz4BKytzJOQ==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/@fallow-cli/darwin-arm64/-/darwin-arm64-3.22.0.tgz",
++      "integrity": "sha512-X74T3osJZqFjNAM4w9OK4PWMPiubNyotDQ5OGYyvU9nNejJ8Ov9MH37H/9HE9hjdw4PxtPWlvl3LbatmuV5WMg==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -217,9 +218,9 @@
+       ]
+     },
+     "node_modules/@fallow-cli/darwin-x64": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/@fallow-cli/darwin-x64/-/darwin-x64-3.20.0.tgz",
+-      "integrity": "sha512-Yeb9ekMCHRRefyOB/EE0i68EoqsgLjsZNf1fi6lEglmKHf/eVr2N1ejR8X/UPjUe5h3/b2pJdSZxmkkKqghpdw==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/@fallow-cli/darwin-x64/-/darwin-x64-3.22.0.tgz",
++      "integrity": "sha512-a9wdJ36nUGSRhGBJj+uxtgiCcXatf+VdEdpMtW2H7tETPvC/+RS3c5CiLPKXeu8xJdzVexKcBtUOLFPpQuft8Q==",
+       "cpu": [
+         "x64"
+       ],
+@@ -231,9 +232,9 @@
+       ]
+     },
+     "node_modules/@fallow-cli/linux-arm64-gnu": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/@fallow-cli/linux-arm64-gnu/-/linux-arm64-gnu-3.20.0.tgz",
+-      "integrity": "sha512-Z4YgFTi+UMEEAl8qt5uOpFVEB8b98nwEhHzTNUM1rTb++9K+cuzeYoL9SaHaMkTEUWAKZIGSNlTu2lsSeiAw4Q==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/@fallow-cli/linux-arm64-gnu/-/linux-arm64-gnu-3.22.0.tgz",
++      "integrity": "sha512-IBL1mSjAIE6FPwBCU78GrAHk7jsWPtgWUkswBmRNp0N8mwN1ia5sTJnFxpTk6YSwHvxMjnlbt/s+yhoxAWr77Q==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -245,9 +246,9 @@
+       ]
+     },
+     "node_modules/@fallow-cli/linux-arm64-musl": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/@fallow-cli/linux-arm64-musl/-/linux-arm64-musl-3.20.0.tgz",
+-      "integrity": "sha512-gh2tmc9QDMA01jSLe53Oe/RcuDLPrrMs6m+ZCIvYNwDGPn4Daj1QZ1ZGZAWLmNuPr2rxK0DuR4Ft/wNkYcmAiw==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/@fallow-cli/linux-arm64-musl/-/linux-arm64-musl-3.22.0.tgz",
++      "integrity": "sha512-PxcaEbVub5Hd+LKR7bWbgcmbqA8SPmiiMiSl61bDMKi+i7iwrcrZs1LcSvi0OooVEBhblgpXEhJGP2Sa6jZo1w==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -259,9 +260,9 @@
+       ]
+     },
+     "node_modules/@fallow-cli/linux-x64-gnu": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/@fallow-cli/linux-x64-gnu/-/linux-x64-gnu-3.20.0.tgz",
+-      "integrity": "sha512-rCcHnw5Rq+RtSdADL6u0dQrC4Lxa3AMZxLoQjnJtMFZLKYw/nGTPx8KU7WRMMAIH5kP+WssYIHtMpMyTkP92JQ==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/@fallow-cli/linux-x64-gnu/-/linux-x64-gnu-3.22.0.tgz",
++      "integrity": "sha512-c6LR46RMYRXAZeeiWafqvhKF8DF6UmKrCDLub1+L1elfwBIh1tG0RoP6QQJrwAEncDyjNK7DVNinDjAfPUPBiA==",
+       "cpu": [
+         "x64"
+       ],
+@@ -273,9 +274,9 @@
+       ]
+     },
+     "node_modules/@fallow-cli/linux-x64-musl": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/@fallow-cli/linux-x64-musl/-/linux-x64-musl-3.20.0.tgz",
+-      "integrity": "sha512-hZlCGMQVctrr9e1K8iDQ6hz4o+eRIRNlzeo1EL2KA8dxujPQV7RTm/GAEa+m9WKXZ2C4BNq9mr9WFs1dS8t+Mg==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/@fallow-cli/linux-x64-musl/-/linux-x64-musl-3.22.0.tgz",
++      "integrity": "sha512-+Y28QQ/Pkln+yI6QFfDvpIpx/RgkpMz8eJv65J/32J73b+gAZL6g03BgxG4u3wieuau6ErrAcDatX64n8Xjhsw==",
+       "cpu": [
+         "x64"
+       ],
+@@ -287,9 +288,9 @@
+       ]
+     },
+     "node_modules/@fallow-cli/win32-arm64-msvc": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/@fallow-cli/win32-arm64-msvc/-/win32-arm64-msvc-3.20.0.tgz",
+-      "integrity": "sha512-WPqYbUJsKsoC9O3vP2hwGrc4WCI9vhDmy6V4DVW/KupH+G/knO2yM6vDdRskR0JUUEgIUAIGOysVtsyQnjBRDA==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/@fallow-cli/win32-arm64-msvc/-/win32-arm64-msvc-3.22.0.tgz",
++      "integrity": "sha512-vpUKeklphZS1jH88ifc6jImPv+Yn64E0qjUU6OJE32rfrtuRfLHGqyw1rGbostMqTC9VVzNj533cqOTVX5VVDg==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -301,9 +302,9 @@
+       ]
+     },
+     "node_modules/@fallow-cli/win32-x64-msvc": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/@fallow-cli/win32-x64-msvc/-/win32-x64-msvc-3.20.0.tgz",
+-      "integrity": "sha512-OUU2fsFcLLwFznGAFzPaCa6Mi1HCtLCVDrVifk5d0mntXf0js6vdwWYyVGBamG/qc70MLhK41twTMDVwoI9kxg==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/@fallow-cli/win32-x64-msvc/-/win32-x64-msvc-3.22.0.tgz",
++      "integrity": "sha512-UsuvlRhub13cHVnIqGlfE/czp0qxxDobUDm6jBIY9Ojw3n3WC94n6+lww6xUWsiXZLKwSM4T/xvAMWH0l48nHg==",
+       "cpu": [
+         "x64"
+       ],
+@@ -991,9 +992,9 @@
+       "license": "MIT"
+     },
+     "node_modules/fallow": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/fallow/-/fallow-3.20.0.tgz",
+-      "integrity": "sha512-yREDhz0eDvwwVD9NgmBzxRlg9DX1g6sKsHBfGKL+XcyJPmT5SgUf80m2Vu3RKE+QnzA7w1ekpcnNqUUi4avCSA==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/fallow/-/fallow-3.22.0.tgz",
++      "integrity": "sha512-9q/N8ga1Xe5AKmRxQf9oj/AVOTaJhqo4B4fSnpjOF/fNOyxw8Kyi84ZVh+nmQ9R1N06l7Q4grfrMN9S3wO4+Hg==",
+       "dev": true,
+       "license": "MIT",
+       "dependencies": {
+@@ -1008,21 +1009,21 @@
+         "node": ">=22"
+       },
+       "optionalDependencies": {
+-        "@fallow-cli/darwin-arm64": "3.20.0",
+-        "@fallow-cli/darwin-x64": "3.20.0",
+-        "@fallow-cli/linux-arm64-gnu": "3.20.0",
+-        "@fallow-cli/linux-arm64-musl": "3.20.0",
+-        "@fallow-cli/linux-x64-gnu": "3.20.0",
+-        "@fallow-cli/linux-x64-musl": "3.20.0",
+-        "@fallow-cli/win32-arm64-msvc": "3.20.0",
+-        "@fallow-cli/win32-x64-msvc": "3.20.0",
+-        "fallow-type-aware": "3.20.0"
++        "@fallow-cli/darwin-arm64": "3.22.0",
++        "@fallow-cli/darwin-x64": "3.22.0",
++        "@fallow-cli/linux-arm64-gnu": "3.22.0",
++        "@fallow-cli/linux-arm64-musl": "3.22.0",
++        "@fallow-cli/linux-x64-gnu": "3.22.0",
++        "@fallow-cli/linux-x64-musl": "3.22.0",
++        "@fallow-cli/win32-arm64-msvc": "3.22.0",
++        "@fallow-cli/win32-x64-msvc": "3.22.0",
++        "fallow-type-aware": "3.22.0"
+       }
+     },
+     "node_modules/fallow-type-aware": {
+-      "version": "3.20.0",
+-      "resolved": "https://registry.npmjs.org/fallow-type-aware/-/fallow-type-aware-3.20.0.tgz",
+-      "integrity": "sha512-pxk6CKtDeVQSKsSWhDdJDmOj73p8Vfq2P31H5GHbcXBaP2x/jR2VYtQ/0s8z288Eqtln+FtWO2xV601o/xhJHA==",
++      "version": "3.22.0",
++      "resolved": "https://registry.npmjs.org/fallow-type-aware/-/fallow-type-aware-3.22.0.tgz",
++      "integrity": "sha512-xw18u/0XJGz1DYK2atVjw8f8+TmMM0QgKEsa4Not/y2QioBcPYBScHZs4nr4wZ8V2kMCxWpeREDus6JbS4Ax2A==",
+       "dev": true,
+       "license": "MIT",
+       "optional": true,
+@@ -1135,6 +1136,135 @@
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
+     },
++    "node_modules/jscpd": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/jscpd/-/jscpd-5.1.1.tgz",
++      "integrity": "sha512-1VG3wtT1aoHNS18ELNmzhQIbzDMdDAbfEI1c1d97Rc0qdukP4n/UCPyKfYoicDyB22AwGpRv5f96QbbExwh+3g==",
++      "dev": true,
++      "license": "MIT",
++      "bin": {
++        "jscpd": "run-jscpd.js"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "optionalDependencies": {
++        "jscpd-darwin-arm64": "5.1.1",
++        "jscpd-darwin-x64": "5.1.1",
++        "jscpd-linux-arm64-gnu": "5.1.1",
++        "jscpd-linux-x64-gnu": "5.1.1",
++        "jscpd-linux-x64-musl": "5.1.1",
++        "jscpd-windows-arm64-msvc": "5.1.1",
++        "jscpd-windows-x64-msvc": "5.1.1"
++      }
++    },
++    "node_modules/jscpd-darwin-arm64": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/jscpd-darwin-arm64/-/jscpd-darwin-arm64-5.1.1.tgz",
++      "integrity": "sha512-KFJEoAI1uoS8Ae5x5ItdBXOEF1TeMCCitVlYXpPTOyfltHKczQ86kIlba993en9V0ICzjCi1pZSPQ1oWAG+A7Q==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "darwin"
++      ]
++    },
++    "node_modules/jscpd-darwin-x64": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/jscpd-darwin-x64/-/jscpd-darwin-x64-5.1.1.tgz",
++      "integrity": "sha512-D347vyGqPH3uBWj1hqT1gSfGhyKhv82m5K6yF6nnmMhVuhJYRulfzKgBmJ0iTAGTcNyIwdGn52hy5K0ySuc91w==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "darwin"
++      ]
++    },
++    "node_modules/jscpd-linux-arm64-gnu": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/jscpd-linux-arm64-gnu/-/jscpd-linux-arm64-gnu-5.1.1.tgz",
++      "integrity": "sha512-v0rCNibeRyv4uxDfCuSQBu7SroLGXLy6vf9f2VcSlszThGo37r37CECh27iKDYW+jrz+vn4nBF+IajU9szk9qg==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "libc": [
++        "glibc"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ]
++    },
++    "node_modules/jscpd-linux-x64-gnu": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/jscpd-linux-x64-gnu/-/jscpd-linux-x64-gnu-5.1.1.tgz",
++      "integrity": "sha512-gs5Bqr/n8H9H2mo+xeqzyfH/er8t0896tvhkWUwJy7+VbdfmfnjqE2nTcuWOgaXN4rs6MDx0YJwy2YtcUMAWOg==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "libc": [
++        "glibc"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ]
++    },
++    "node_modules/jscpd-linux-x64-musl": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/jscpd-linux-x64-musl/-/jscpd-linux-x64-musl-5.1.1.tgz",
++      "integrity": "sha512-kWppGlF12MJshVIja6k3LffJ75c/EGrL3kMx5dj+Tnvxxx1GE260mFhpc/E5NbdtaZIbXPfchy0ztGe2DY4+tQ==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "libc": [
++        "musl"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ]
++    },
++    "node_modules/jscpd-windows-arm64-msvc": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/jscpd-windows-arm64-msvc/-/jscpd-windows-arm64-msvc-5.1.1.tgz",
++      "integrity": "sha512-mSeeGc3bJZF2T4ItzSxouVkGwiUyVSPgLN+Gu59ZIpgRACp0eazZ15mugW9nFtPvUOiL3BN3QBhpt+9t+sCtBQ==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ]
++    },
++    "node_modules/jscpd-windows-x64-msvc": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/jscpd-windows-x64-msvc/-/jscpd-windows-x64-msvc-5.1.1.tgz",
++      "integrity": "sha512-6pNOWuJ5xdyza1JfJNymcTRAvnJ6WpnKuqG1JKaZWJPJfo1s8ZeYvaNlP3jQQjjlO6tmfcZC/FpZ24qKtv3z+Q==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ]
++    },
+     "node_modules/longest-streak": {
+       "version": "3.1.0",
+       "resolved": "https://registry.npmjs.org/longest-streak/-/longest-streak-3.1.0.tgz",
+diff --git a/package.json b/package.json
+index e9b01c9..2cd0a8e 100644
+--- a/package.json
++++ b/package.json
+@@ -22,7 +22,8 @@
+     "@google/design.md": "0.4.0",
+     "@types/node": "26.4.0",
+     "@types/semver": "7.8.0",
+-    "fallow": "3.20.0",
++    "fallow": "3.22.0",
++    "jscpd": "5.1.1",
+     "mdast-util-from-markdown": "2.0.3",
+     "parse5": "8.0.1",
+     "pyright": "1.1.413",
+diff --git a/scripts/check-skill-contracts.py b/scripts/check-skill-contracts.py
+index 6de3fc0..2e75945 100755
+--- a/scripts/check-skill-contracts.py
++++ b/scripts/check-skill-contracts.py
+@@ -321,6 +321,7 @@ def check_external_contracts() -> None:
+         ("repository learning state", (sys.executable, "skills/he-learn/scripts/learning_state_regression.py")),
+         ("feature setup state", (sys.executable, "skills/he/scripts/setup_state_regression.py")),
+         ("planning step receipts", (sys.executable, "skills/he/scripts/plan_steps_regression.py")),
++        ("build step records", (sys.executable, "skills/he/scripts/build_steps_regression.py")),
+         ("tracker hierarchy mirror", (sys.executable, "skills/he/scripts/tracker_github_regression.py")),
+         ("tracker HTTP adapters", (sys.executable, "skills/he/scripts/tracker_http_regression.py")),
+         ("parallel ticket state", (sys.executable, "skills/he/scripts/ticket_state_regression.py")),
+diff --git a/scripts/enforcement_checkpoint.pl b/scripts/enforcement_checkpoint.pl
+index 23620e8..bb42bd1 100644
+--- a/scripts/enforcement_checkpoint.pl
++++ b/scripts/enforcement_checkpoint.pl
+@@ -89,6 +89,7 @@ sub changed_source_error_impl {
+     local $/;
+     my $raw = <$status> // '';
+     close $status or return 'cannot inspect repository changes at the checkpoint';
++    my @building;
+     for my $entry (split /\0/, $raw) {
+         next if $entry eq '';
+         $entry =~ s/\A..\s//;
+@@ -99,11 +100,29 @@ sub changed_source_error_impl {
+                 unless lifecycle_target_allowed($repo, $active, $target);
+             next;
+         }
+-        next if $active;
++        if ($active) { push @building, $entry; next; }
+         return "repository path changed without a current direct-route receipt: $entry"
+             unless $direct && direct_allows_target($repo, $direct, $target);
+     }
++    return orchestrator_guard_error($repo, \@building) if $active && @building;
+     return undef;
+ }
+ 
++sub orchestrator_guard_error {
++    my ($repo, $entries) = @_;
++    my $python = trusted_python();
++    my $tool = Cwd::abs_path(__FILE__);
++    $tool =~ s{scripts/enforcement_checkpoint\.pl\z}{skills/he/scripts/ticket_guard.py};
++    return 'orchestrator write guard is missing or unsafe' unless -f $tool && !-l $tool;
++    local %ENV = %ENV;
++    $ENV{PATH} = trusted_command_path();
++    my @command = ($python, $tool, '--repo', $repo, map { ('--path', $_) } @$entries);
++    open my $guard, '-|', @command or return 'cannot run the orchestrator write guard';
++    local $/;
++    my $output = <$guard> // '';
++    return undef if close $guard;
++    $output =~ s/[\x00-\x1f\x7f]+/ /g;
++    return 'orchestrator write guard refused the checkpoint' . ($output ne '' ? ": " . substr($output, 0, 300) : '');
++}
++
+ 1;
+diff --git a/scripts/fast_feature_loop_contracts.py b/scripts/fast_feature_loop_contracts.py
+index ce2252d..6c153a8 100755
+--- a/scripts/fast_feature_loop_contracts.py
++++ b/scripts/fast_feature_loop_contracts.py
+@@ -35,11 +35,14 @@ REMOVED_DEPENDENCIES = ("planned_paths", "--candidate-patch", "candidate patch a
+ SCRIPT_OWNERS = {
+     "skills/he/scripts": {
+         "authorization_recovery.py",
++        "build_steps.py",
++        "build_steps_regression.py",
+         "evidence_lib.py",
+         "execution_direct.py",
+         "execution_evidence.py",
+         "execution_evidence_regression.py",
+         "lifecycle_excludes.py",
++        "mutation_receipt.py",
+         "lifecycle_excludes_regression.py",
+         "plan_cleanup.py",
+         "plan_cleanup_regression.py",
+@@ -53,12 +56,14 @@ SCRIPT_OWNERS = {
+         "plan_steps_regression.py",
+         "plan_template.py",
+         "protected_direct_regression.py",
++        "review_packet.py",
+         "safe_plan_io.py",
+         "setup_state.py",
+         "setup_state_regression.py",
+         "skill_source_policy.py",
+         "skill_source_policy_regression.py",
+         "ticket_decompose.py",
++        "ticket_guard.py",
+         "ticket_parser.py",
+         "ticket_state.py",
+         "ticket_state_regression.py",
+diff --git a/scripts/json-style-contract.py b/scripts/json-style-contract.py
+index 5016456..6d5acfe 100755
+--- a/scripts/json-style-contract.py
++++ b/scripts/json-style-contract.py
+@@ -20,7 +20,7 @@ GATES: dict[str, object] = {
+     "schema_version": 1,
+     "families": {
+         "targeted": ["npm", "run", "build"],
+-        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
++        "fallow": ["npx", "--yes", "fallow@latest", "audit", "--max-crap", "30", "--format", "json"],
+         "long": [f"--option-number-{index:02d}" for index in range(12)],
+     },
+     "phases": {"pre-commit": ["targeted"], "pre-push": ["targeted", "fallow", "long"]},
+diff --git a/skills/deterministic-checks/references/fallow.md b/skills/deterministic-checks/references/fallow.md
+index f353ec0..4fd3d38 100644
+--- a/skills/deterministic-checks/references/fallow.md
++++ b/skills/deterministic-checks/references/fallow.md
+@@ -1,9 +1,9 @@
+ # Fallow
+ 
+-1. Manifest argv = pinned repository `node_modules/.bin/fallow --fail-on-issues --format json --quiet` → every gate executes the manifest family through `project_gate.py`.
+-2. One full combined scan = dead code + duplication + health; cache stays enabled.
+-3. Changed/diff/file/workspace/baseline/regression/audit gate mode = forbidden.
++1. Manifest argv = pinned repository `node_modules/.bin/fallow audit --max-crap 30 --format json` (changed files against the merge base: dead code + new clones + complexity + CRAP ≥ 30; `--coverage coverage/coverage-final.json` auto-detected; per-analysis `--dead-code-baseline|--health-baseline|--dupes-baseline` allowed) → every gate executes the manifest family through `project_gate.py`; verdict `fail` = gate FAIL, `pass|warn` = PASS.
++2. Audit scope = files changed against the merge base; inherited debt never fails (`gate: new-only`); global `--baseline`/`--changed-since`/`--diff-*`/`--file`/`--workspace` scoping flags = forbidden.
++3. Non-audit combined mode (`--fail-on-issues`) = superseded; manifest command without `audit` = manifest FAIL.
+ 4. Diagnose-only, never gate proof → no concurrent gate + `npx --yes fallow@latest inspect --file <path> --format json` or same command + `--symbol <file>:<export>`.
+-5. Gate validates combined JSON issue arrays + duplicate groups/families + health/styling findings; nonzero/finding/incomplete/skipped = `FAIL`.
++5. Gate validates one audit JSON report (`kind=audit` + `verdict` + `summary` + `attribution`); `verdict=fail` names attribution counts + first introduced finding = `FAIL`; malformed/non-audit report = `FAIL`.
+ 6. Repository dependency version + lockfile = canonical runtime; package-runner download in a gate = forbidden.
+ 7. Execution = `project_gate.py` shared source lock; concurrent Fallow allowed + same-worktree React Doctor audit overlap forbidden.
+diff --git a/skills/deterministic-checks/references/slice-gate.md b/skills/deterministic-checks/references/slice-gate.md
+index bbd2a46..4e74f87 100644
+--- a/skills/deterministic-checks/references/slice-gate.md
++++ b/skills/deterministic-checks/references/slice-gate.md
+@@ -2,7 +2,7 @@
+ 
+ - Owner = slice/full-gate check receipts bound to the exact repository artifact; `plan_state.py` rejects slice completion without a current `<S-ID>` receipt + `building → green` without a current `full` receipt.
+ - Derivation = changed paths vs HEAD + untracked → Route-table stack rows; no matched stack → one `targeted` proof; cross-stack = union; receipts = lifecycle bytes under `features/<slug>/receipts/`, excluded from green artifact + delivery like `PLAN.md`.
+-- Families = `targeted | typecheck format lint tests fallow | react-doctor | dart-analyze dart-test dart-decimate | python-format python-lint python-tests python-types | boundary-contracts`; every applicable family needs one project-manifest command with exit `0`; Python families derive only when declared in the manifest; security families (`secrets` `sast` `deps-audit`) = push/ci phases only, never slice-derived.
++- Families = `targeted | typecheck format lint tests fallow | react-doctor | dart-analyze dart-test dart-decimate | python-format python-lint python-tests python-types | clones | boundary-contracts`; every applicable family needs one project-manifest command with exit `0`; Python families derive only when declared in the manifest; `clones` (jscpd, baseline + `--fail-on-new-clones`) derives for Python and Dart changes when declared; security families (`secrets` `sast` `deps-audit`) = push/ci phases only, never slice-derived.
+ - Boundary contracts = a `families.boundary-contracts` entry plus `boundary_contracts.application_roots` in `hard-eng.gates.json` marks the main application; `boundary_contracts.local_package_roots` opts in first-party local packages. Relevant JS/TS/React and contract/config changes under those roots must include that family, and missing coverage fails closed. Each scoped TypeScript/React root must declare direct `zod@4`, have a nearest recognized lockfile resolving Zod 4, and run the project-owned Zod boundary command. Unlisted packages and `node_modules` are excluded.
+ - Command owner = repository-root `hard-eng.gates.json`; schema `1` + direct argv arrays + exact `npx --package` pins; caller-supplied shell text/no-op commands = rejected.
+ - Any later tree/HEAD mutation = receipt stale → rerun on the final tree; wrong plan/slice/repo = rejected.
+diff --git a/skills/deterministic-checks/scripts/project_gate.py b/skills/deterministic-checks/scripts/project_gate.py
+index 15fd639..8dca763 100755
+--- a/skills/deterministic-checks/scripts/project_gate.py
++++ b/skills/deterministic-checks/scripts/project_gate.py
+@@ -46,6 +46,7 @@ FAMILY_PATTERNS = {
+     "lint": re.compile(r"\beslint\b|\boxlint\b|\bbiome\b.*\blint\b|\blint\b"),
+     "tests": re.compile(r"\bvitest\b|\bjest\b|\bplaywright\b|--test\b|\btests?\b"),
+     "fallow": re.compile(r"\bfallow\b"),
++    "clones": re.compile(r"\bjscpd\b|\bcpd\b"),
+     "python-types": re.compile(r"\bpyright\b"),
+     "skill-contracts": re.compile(r"check-skill-contracts\.py"),
+     "managed-skills": re.compile(r"check-managed-skills\.js"),
+@@ -174,6 +175,7 @@ def load_manifest(
+         if executable in {"npx", "npx.cmd"}:
+             _validate_npx(family, command)
+         _validate_quality_scope(family, command)
++        _validate_clones(repo, family, command)
+         _validate_python_security(family, command)
+         validated[family] = tuple(command)
+     if validate_external and any(command[0].lower() in {"npx", "npx.cmd"} for command in validated.values()):
+@@ -270,6 +272,28 @@ def _validate_npx(family: str, command: list[str]) -> None:
+             raise ProjectGateError(f"{family} npx command uses forbidden package binary: {command[index]}")
+ 
+ 
++CLONE_WRITE_FLAGS = ("--update-baseline", "--output", "-o")
++CLONE_CONSOLE_REPORTERS = frozenset({"console", "console-full"})
++
++
++def _validate_clones(repo: Path, family: str, command: list[str]) -> None:
++    if family != "clones":
++        return
++    names = {argument.split("=", 1)[0] for argument in command}
++    if names & set(CLONE_WRITE_FLAGS):
++        raise ProjectGateError("clones must be read-only: --update-baseline and file reporters are forbidden")
++    if "--fail-on-new-clones" not in names:
++        raise ProjectGateError("clones requires --fail-on-new-clones")
++    reporters = _option_value(command, "--reporters") or _option_value(command, "-r")
++    if reporters not in CLONE_CONSOLE_REPORTERS:
++        raise ProjectGateError("clones requires --reporters console so new pairs print and no report file is written")
++    baseline = _option_value(command, "--baseline")
++    if baseline is None and "--baseline-from-ref" not in names:
++        raise ProjectGateError("clones requires --baseline <file> or --baseline-from-ref <ref>")
++    if baseline is not None and not (repo / baseline).is_file():
++        raise ProjectGateError(f"clones baseline file is missing: {baseline}")
++
++
+ def _option_value(command: list[str], option: str) -> str | None:
+     for index, argument in enumerate(command):
+         if argument == option:
+@@ -294,12 +318,11 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
+         )
+     if family == "fallow":
+         if (
+-            "--fail-on-issues" not in command
+-            or "audit" in command
+-            or "--format" not in command
+-            or command[command.index("--format") + 1 : command.index("--format") + 2] != ["json"]
++            "audit" not in command
++            or _option_value(command, "--format") != "json"
++            or _option_value(command, "--max-crap") is None
+         ):
+-            raise ProjectGateError("fallow requires full combined JSON mode with --fail-on-issues")
++            raise ProjectGateError("fallow requires audit mode with --format json and --max-crap <N>")
+     elif family == "react-doctor":
+         if (
+             len(command) < 4
+@@ -426,40 +449,30 @@ def validate_quality_report(family: str, output: str) -> None:
+         report = json.loads(output)
+     except ValueError as error:
+         raise ProjectGateError("fallow did not emit one valid JSON report") from error
+-    if not isinstance(report, dict) or report.get("kind") != "combined":
+-        raise ProjectGateError("fallow report is not a full combined scan")
+-    check = report.get("check")
+-    dupes = report.get("dupes")
+-    health = report.get("health")
+-    if not isinstance(check, dict) or not isinstance(dupes, dict) or not isinstance(health, dict):
+-        raise ProjectGateError("fallow combined report is missing check/dupes/health")
+-    total_issues = check.get("total_issues")
+-    clone_groups = dupes.get("clone_groups")
+-    clone_families = dupes.get("clone_families")
+-    findings = health.get("findings")
+-    styling_findings = health.get("styling_findings", [])
+-    if (
+-        not isinstance(total_issues, int)
+-        or not isinstance(clone_groups, list)
+-        or not isinstance(clone_families, list)
+-        or not isinstance(findings, list)
+-        or not isinstance(styling_findings, list)
+-    ):
+-        raise ProjectGateError("fallow combined report has an invalid finding shape")
+-    if total_issues or clone_groups or clone_families or findings or styling_findings:
+-        first = findings[0] if findings else None
+-        first_label = ""
+-        if isinstance(first, dict):
+-            first_label = (
+-                f"; first={first.get('path', '?')}:{first.get('line', '?')}"
+-                f" {first.get('name', '?')} severity={first.get('severity', '?')}"
+-            )
+-        raise ProjectGateError(
+-            "fallow report contains findings: "
+-            f"check={total_issues} duplicate_groups={len(clone_groups)} "
+-            f"duplicate_families={len(clone_families)} health={len(findings)} "
+-            f"styling={len(styling_findings)}{first_label}"
+-        )
++    if not isinstance(report, dict) or report.get("kind") != "audit":
++        raise ProjectGateError("fallow report is not an audit report")
++    verdict = report.get("verdict")
++    summary = report.get("summary")
++    attribution = report.get("attribution")
++    if verdict not in {"pass", "warn", "fail"} or not isinstance(summary, dict) or not isinstance(attribution, dict):
++        raise ProjectGateError("fallow audit report is missing verdict/summary/attribution")
++    if verdict == "fail":
++        counts = ", ".join(f"{key}={value}" for key, value in sorted(attribution.items()) if isinstance(value, int))
++        first = _first_audit_finding(report)
++        raise ProjectGateError(f"fallow audit verdict=fail: {counts}{first}")
++
++
++def _first_audit_finding(report: dict) -> str:
++    for section in ("health", "complexity", "dead_code", "duplication"):
++        block = report.get(section)
++        findings = block.get("findings") if isinstance(block, dict) else None
++        if not isinstance(findings, list):
++            continue
++        for finding in findings:
++            if isinstance(finding, dict) and finding.get("introduced", True):
++                where = f"{finding.get('path', finding.get('file', '?'))}:{finding.get('line', '?')}"
++                return f"; first={where} {finding.get('name', finding.get('rule', '?'))}"
++    return ""
+ 
+ 
+ def _run_family(
+diff --git a/skills/deterministic-checks/scripts/project_gate_regression_check.py b/skills/deterministic-checks/scripts/project_gate_regression_check.py
+index 867514d..1641f3b 100755
+--- a/skills/deterministic-checks/scripts/project_gate_regression_check.py
++++ b/skills/deterministic-checks/scripts/project_gate_regression_check.py
+@@ -216,34 +216,69 @@ def check_react_doctor_report() -> None:
+ 
+ def check_quality_report() -> None:
+     clean = {
+-        "kind": "combined",
+-        "check": {"total_issues": 0},
+-        "dupes": {"clone_groups": [], "clone_families": []},
+-        "health": {"findings": []},
++        "kind": "audit",
++        "verdict": "pass",
++        "summary": {"dead_code_issues": 0, "complexity_findings": 0, "duplication_clone_groups": 0},
++        "attribution": {"gate": "new-only", "dead_code_introduced": 0},
+     }
+     validate_quality_report("fallow", json.dumps(clean))
++    validate_quality_report("fallow", json.dumps({**clean, "verdict": "warn"}))
+     finding = {
+         **clean,
+-        "health": {"findings": [{"path": "src/owner.ts", "line": 7, "name": "owner", "severity": "critical"}]},
++        "verdict": "fail",
++        "attribution": {"gate": "new-only", "complexity_introduced": 1},
++        "health": {"findings": [{"path": "src/owner.ts", "line": 7, "name": "owner", "introduced": True}]},
+     }
+     try:
+         validate_quality_report("fallow", json.dumps(finding))
+     except ProjectGateError as error:
+-        if "health=1" not in str(error) or "src/owner.ts:7" not in str(error):
+-            fail("Fallow finding failure lost compact evidence")
++        if "complexity_introduced=1" not in str(error) or "src/owner.ts:7" not in str(error):
++            fail(f"Fallow audit failure lost compact evidence: {error}")
+     else:
+-        fail("Fallow exit-zero findings were accepted")
+-    for malformed in ("", "{}", json.dumps({**clean, "kind": "audit"})):
++        fail("Fallow fail verdict was accepted")
++    combined = {"kind": "combined", "check": {"total_issues": 0}, "dupes": {}, "health": {}}
++    for malformed in ("", "{}", json.dumps(combined), json.dumps({**clean, "verdict": "maybe"})):
+         try:
+             validate_quality_report("fallow", malformed)
+         except ProjectGateError:
+             continue
+-        fail("malformed or scoped Fallow report was accepted")
++        fail("malformed or non-audit Fallow report was accepted")
++
++
++def check_clones_manifest(repo: Path) -> None:
++    baseline = repo / ".jscpd-baseline.json"
++    baseline.write_text('{"version": 1, "fingerprints": {}}', encoding="utf-8")
++    good = ["jscpd", "--format", "python,dart", "--reporters", "console", "--baseline", ".jscpd-baseline.json"]
++    good += ["--fail-on-new-clones", "."]
++    write_families(repo, {"clones": good})
++    load_manifest(repo)
++    write_families(
++        repo, {"clones": ["jscpd", "--baseline-from-ref", "origin/main", "-r", "console", "--fail-on-new-clones", "."]}
++    )
++    load_manifest(repo)
++    rejected = {
++        "--update-baseline": [*good, "--update-baseline"],
++        "--reporters console": [item if item != "console" else "json" for item in good],
++        "--fail-on-new-clones": [item for item in good if item != "--fail-on-new-clones"],
++        "--baseline": ["jscpd", "--reporters", "console", "--fail-on-new-clones", "."],
++        "baseline file is missing": [item if item != ".jscpd-baseline.json" else "absent.json" for item in good],
++    }
++    for expected, command in rejected.items():
++        write_families(repo, {"clones": command})
++        try:
++            load_manifest(repo)
++        except ProjectGateError as error:
++            if expected not in str(error):
++                fail(f"clones rejection lost its reason ({expected}): {error}")
++            continue
++        fail(f"clones manifest accepted a command lacking {expected}")
++    baseline.unlink()
++    write_families(repo, {})
+ 
+ 
+ def latest_commands() -> dict[str, list[str]]:
+     return {
+-        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
++        "fallow": ["npx", "--yes", "fallow@latest", "audit", "--max-crap", "30", "--format", "json"],
+         "react-doctor": list(REACT_DOCTOR_COMMAND),
+         "dart-decimate": ["npx", "--yes", "dart-decimate@latest", "json", ".", "--workspace", "functions/example"],
+     }
+@@ -407,6 +442,14 @@ def check_npx_contract(repo: Path) -> None:
+     wrapper.unlink()
+     wrapper.parent.rmdir()
+ 
++    write_families(repo, {"fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json"]})
++    try:
++        load_manifest(repo)
++    except ProjectGateError as error:
++        if "audit mode" not in str(error):
++            fail(f"non-audit fallow command rejected for the wrong reason: {error}")
++    else:
++        fail("non-audit fallow command was accepted")
+     scoped = {
+         "fallow": ["npx", "--yes", "fallow@latest", "audit", "--changed-since", "main"],
+         "react-doctor": [*latest_commands()["react-doctor"], "--changed-files-from"],
+@@ -421,6 +464,7 @@ def check_npx_contract(repo: Path) -> None:
+         fail(f"{family} accepted a changed/baseline-only quality gate")
+ 
+     check_react_doctor_manifest(repo)
++    check_clones_manifest(repo)
+ 
+ 
+ def check_execution(repo: Path) -> None:
+diff --git a/skills/deterministic-checks/scripts/slice_gate.py b/skills/deterministic-checks/scripts/slice_gate.py
+index bbeb357..e2bfd95 100755
+--- a/skills/deterministic-checks/scripts/slice_gate.py
++++ b/skills/deterministic-checks/scripts/slice_gate.py
+@@ -18,6 +18,7 @@ for _path in (SCRIPT_DIR, HE_SCRIPTS):
+         sys.path.insert(0, str(_path))
+ 
+ from bounded_run import run_captured
++from build_steps import gate_error as build_record_error
+ from execution_evidence import EvidenceError, validate_execution
+ from git_env import git_env
+ from project_gate import ProjectGateError, load_manifest, run_families
+@@ -36,7 +37,8 @@ REACT_DEP = re.compile(r'"(react|react-dom|next)"\s*:')
+ JS_FAMILIES = ("typecheck", "format", "lint", "tests", "fallow")
+ REACT_FAMILIES = ("react-doctor",)
+ DART_FAMILIES = ("dart-analyze", "dart-test", "dart-decimate")
+-PY_FAMILIES = frozenset({"python-format", "python-lint", "python-tests", "python-types"})
++PY_FAMILIES = frozenset({"python-format", "python-lint", "python-tests", "python-types", "clones"})
++CLONES_FAMILY = "clones"
+ BOUNDARY_FAMILY = "boundary-contracts"
+ BOUNDARY_SUFFIXES = JS_EXT | {".dart", ".gql", ".graphql", ".json", ".proto", ".yaml", ".yml"}
+ BOUNDARY_SCOPE_KEY = "boundary_contracts"
+@@ -372,6 +374,7 @@ def applicable_families(repo: Path, paths: tuple[str, ...]) -> tuple[str, ...]:
+                 families.update(REACT_FAMILIES)
+         if relative.name == "pubspec.yaml" or (suffix == ".dart" and _dart_package(repo, relative, dart_cache)):
+             families.update(DART_FAMILIES)
++            families.update({CLONES_FAMILY} & declared)
+         if suffix == ".py":
+             families.update(PY_FAMILIES & declared)
+         scoped = _scope_root(relative, application_roots, local_package_roots)
+@@ -544,6 +547,8 @@ def receipt_error(repo: Path, plan: Path, plan_id: str, name: str) -> str | None
+             return "receipt does not cover affected stacks: " + ", ".join(uncovered)
+         if error := boundary_contract_error(repo, current_paths, current):
+             return error
++        if error := build_record_error(repo, plan, name):
++            return error
+         for field in ("behavior", "e2e", "security", "review", "e2e_sha256"):
+             if not str(data.get(field, "")).strip():
+                 return f"receipt is missing its {field} record"
+@@ -648,6 +653,8 @@ def command_run(args: argparse.Namespace) -> None:
+         raise SliceGateError(error)
+     if error := boundary_contract_error(repo, paths, applicable):
+         raise SliceGateError(error)
++    if error := build_record_error(repo, plan, name):
++        raise SliceGateError(error)
+     artifact_before = repository_artifact(repo)
+     results = run_families(repo, checks, args.timeout)
+     failed = [entry for entry in results if entry["exit"] != 0]
+diff --git a/skills/deterministic-checks/scripts/slice_gate_regression_check.py b/skills/deterministic-checks/scripts/slice_gate_regression_check.py
+index 83b7752..bba7ac5 100755
+--- a/skills/deterministic-checks/scripts/slice_gate_regression_check.py
++++ b/skills/deterministic-checks/scripts/slice_gate_regression_check.py
+@@ -4,6 +4,7 @@
+ from __future__ import annotations
+ 
+ import base64
++import hashlib
+ import importlib.util
+ import json
+ import os
+@@ -165,9 +166,8 @@ def make_repo(
+         "value = mode.read_text().strip() if mode.is_file() else ''\n"
+         "failed = value == f'fail:{family}'\n"
+         "if family == 'fallow' and not failed:\n"
+-        "    print(json.dumps({'kind': 'combined', 'check': {'total_issues': 0}, "
+-        "'dupes': {'clone_groups': [], 'clone_families': []}, "
+-        "'health': {'findings': []}}))\n"
++        "    print(json.dumps({'kind': 'audit', 'verdict': 'pass', "
++        "'summary': {'dead_code_issues': 0}, 'attribution': {'gate': 'new-only'}}))\n"
+         "if family == 'react-doctor' and not failed:\n"
+         "    print(json.dumps({'schemaVersion': 3, 'mode': 'full', "
+         "'reactDetected': True, 'ok': True, 'error': None, 'diagnostics': [], "
+@@ -190,7 +190,7 @@ def make_repo(
+     if boundary:
+         family_args["boundary-contracts"] = ["boundary-contracts"]
+     quality_commands = {
+-        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
++        "fallow": ["npx", "--yes", "fallow@latest", "audit", "--max-crap", "30", "--format", "json"],
+         "react-doctor": list(REACT_DOCTOR_COMMAND),
+         "dart-decimate": ["npx", "--yes", "dart-decimate@latest", "json", "."],
+     }
+@@ -887,6 +887,39 @@ def lifecycle_drift_cases(state, root: Path) -> None:
+         fail(f"shipped checkpoint after the ship-commit assert-green failed: {shipped.stderr}")
+ 
+ 
++def seed_build_records(repo: Path) -> None:
++    import build_steps
++    import review_packet
++
++    plan = plan_path(repo)
++    (repo / "reviewed.txt").write_text("slice change under review\n", encoding="utf-8")
++    evidence = plan.parent / "receipts" / "verify-state.json"
++    evidence.parent.mkdir(exist_ok=True)
++    evidence.write_text('{"state": "fixture"}', encoding="utf-8")
++    proof = [{"path": str(evidence.relative_to(repo)), "sha256": hashlib.sha256(evidence.read_bytes()).hexdigest()}]
++    records = {
++        "edges": {"cases": [{"name": "fixture", "success_test": "ok", "failure_test": "refused"}]},
++        "green": {"command": ["fixture"], "exit": 0},
++        "review": {"rounds": [{"reviewer": "fixture", "findings": []}]},
++        "verify": {
++            "mode": "logic",
++            "fakes": [],
++            "outside_calls": [],
++            "before": proof,
++            "after": proof,
++            "edge_cases": [],
++        },
++    }
++    for step, payload in records.items():
++        if step == "review":
++            _, sha = review_packet.write(repo, plan, "S-1", 1, build_steps.edges_of(repo, plan, "S-1"))
++            payload["rounds"][0]["packet_sha256"] = sha
++        if step == "verify":
++            edges = build_steps.edges_of(repo, plan, "S-1")
++            _, payload["packet_sha256"] = review_packet.write_verify(repo, plan, "S-1", edges)
++        build_steps.record(repo, plan, "S-1", step, payload)
++
++
+ def stale_research_cases(state, root: Path) -> None:
+     from datetime import datetime, timedelta, timezone
+ 
+@@ -926,10 +959,14 @@ def stale_research_cases(state, root: Path) -> None:
+     )
+     if record.returncode != 0:
+         fail(f"fixture research recording failed: {record.stderr}")
++    if gate(repo, ("--slice", "S-1"), ("targeted",)).returncode == 0:
++        fail("enforced fixture without build records must refuse the gate")
++    seed_build_records(repo)
+     if gate(repo, ("--slice", "S-1"), ("targeted",)).returncode != 0:
+         fail("staleresearch gate with current research failed")
+     (repo / "advance.txt").write_text("advance\n", encoding="utf-8")
+     commit_fixture(repo, "advance")
++    seed_build_records(repo)
+     if gate(repo, ("--slice", "S-1"), ("targeted",)).returncode != 0:
+         fail("an unrelated commit must not stale the research receipt")
+     research_path = receipt_of(repo, "research")
+@@ -948,7 +985,7 @@ def doc_parity_cases() -> None:
+     gate_source = GATE_PATH.read_text(encoding="utf-8")
+     families = ["typecheck", "format", "lint", "tests", "fallow", "react-doctor", "dart-analyze", "dart-test"]
+     families += ["dart-decimate", "python-format", "python-lint", "python-tests", "python-types"]
+-    families += ["boundary-contracts", "targeted"]
++    families += ["boundary-contracts", "clones", "targeted"]
+     for family in families:
+         if f'"{family}"' not in gate_source or family not in reference:
+             fail(f"family drift between slice_gate.py and slice-gate.md: {family}")
+@@ -965,6 +1002,12 @@ def python_family_cases(_state, root: Path) -> None:
+     derived = applicable_families(repo, ("tool.py",))
+     if derived != ("python-format", "python-lint", "python-types"):
+         fail(f"declared python families were not derived for .py paths: {derived}")
++    declared["clones"] = ["gate.py"]
++    manifest.write_text(json.dumps({"schema_version": 1, "families": declared}), encoding="utf-8")
++    if applicable_families(repo, ("tool.py",)) != ("clones", "python-format", "python-lint", "python-types"):
++        fail("declared clones family was not derived for .py paths")
++    if "clones" in applicable_families(repo, ("notes.txt",)):
++        fail("clones derived for a non-Python non-Dart path")
+     manifest.write_text(json.dumps({"schema_version": 1, "families": {"targeted": ["gate.py"]}}), encoding="utf-8")
+     if applicable_families(repo, ("tool.py",)) != ("targeted",):
+         fail("undeclared python repo stopped falling back to targeted")
+diff --git a/skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py b/skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py
+index 0f05d66..417de43 100755
+--- a/skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py
++++ b/skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py
+@@ -83,7 +83,7 @@ def wait_for(path: Path, process: subprocess.Popen[str]) -> None:
+ 
+ def families() -> dict[str, list[str]]:
+     return {
+-        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
++        "fallow": ["npx", "--yes", "fallow@latest", "audit", "--max-crap", "30", "--format", "json"],
+         "react-doctor": list(REACT_DOCTOR_COMMAND),
+     }
+ 
+@@ -164,11 +164,12 @@ def install_fake_npx(path: Path) -> None:
+         "            time.sleep(0.1)\n"
+         "        transient = 'eslint_disable' in source.read_text(encoding='utf-8')\n"
+         "        print(json.dumps({\n"
+-        "            'kind': 'combined',\n"
+-        "            'check': {'total_issues': 0},\n"
+-        "            'dupes': {'clone_groups': [], 'clone_families': []},\n"
++        "            'kind': 'audit',\n"
++        "            'verdict': 'fail' if transient else 'pass',\n"
++        "            'summary': {'dead_code_issues': 0},\n"
++        "            'attribution': {'gate': 'new-only', 'complexity_introduced': 1 if transient else 0},\n"
+         "            'health': {'findings': ([{'path': 'source.tsx', 'line': 1, "
+-        "'name': 'transient rewrite', 'severity': 'critical'}] if transient else [])},\n"
++        "'name': 'transient rewrite', 'introduced': True}] if transient else [])},\n"
+         "        }))\n"
+         "    finally:\n"
+         "        if active:\n"
+diff --git a/skills/he/scripts/build_steps.py b/skills/he/scripts/build_steps.py
+new file mode 100755
+index 0000000..efde176
+--- /dev/null
++++ b/skills/he/scripts/build_steps.py
+@@ -0,0 +1,381 @@
++#!/usr/bin/env python3
++"""Machine-checked build method: edges, green, review, and verify records per slice, bound to the tree."""
++
++from __future__ import annotations
++
++import hashlib
++import json
++import re
++import sys
++from pathlib import Path
++
++SCRIPT_DIR = Path(__file__).resolve().parent
++if str(SCRIPT_DIR) not in sys.path:
++    sys.path.insert(0, str(SCRIPT_DIR))
++
++from evidence_lib import (
++    EvidenceError,
++    enforcement_configured,
++    load_receipt,
++    plan_id,
++    receipt_path,
++    safe_receipt_json,
++    utc_now,
++    utc_text,
++)
++from review_packet import digest, packet_path, verify_packet_path
++from safe_plan_io import SafePlanIOError, repository_artifact
++
++sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "e2e" / "scripts"))
++from visual_evidence import EvidenceError as MediaError
++from visual_evidence import probe_media
++
++RECEIPT_NAME = "build-steps.json"
++SCHEMA_VERSION = 1
++STEPS = ("edges", "green", "review", "verify")
++FULL = "full"
++MAX_REVIEW_ROUNDS = 3
++FINDING_STATUSES = ("open", "fixed", "rejected", "replan")
++VERIFY_MODES = ("ui", "logic")
++IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
++SLICE_ID = re.compile(r"^S-[1-9][0-9]*$")
++COMPLETED_ROW = re.compile(r"(?m)^- completed_slices = (.+)$")
++PLACEHOLDERS = frozenset({"tbd", "todo", "tba", "n/a", "?"})
++
++
++class BuildStepError(Exception):
++    """Invalid build-step receipt or payload."""
++
++
++def _text(payload: dict[str, object], key: str, *, label: str = "") -> str:
++    value = payload.get(key)
++    where = f"{label}." if label else ""
++    if not isinstance(value, str) or not value.strip():
++        raise BuildStepError(f"{where}{key} must be a nonempty string")
++    if value.strip().lower() in PLACEHOLDERS:
++        raise BuildStepError(f"{where}{key} is a placeholder, not an answer: {value.strip()}")
++    return value.strip()
++
++
++def _rows(payload: dict[str, object], key: str, *, allow_empty: bool = False) -> list[dict[str, object]]:
++    value = payload.get(key)
++    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
++        raise BuildStepError(f"{key} must be a list of objects")
++    if not value and not allow_empty:
++        raise BuildStepError(f"{key} must not be empty")
++    return list(value)
++
++
++def _unknown_keys(payload: dict[str, object], allowed: tuple[str, ...], label: str) -> None:
++    extra = sorted(key for key in payload if key not in allowed)
++    if extra:
++        raise BuildStepError(f"{label} has unknown keys: {', '.join(extra)}")
++
++
++def validate_edges(repo: Path, payload: dict[str, object]) -> dict[str, object]:
++    _unknown_keys(payload, ("cases",), "edges")
++    cases: list[dict[str, str]] = []
++    seen: set[str] = set()
++    for row in _rows(payload, "cases"):
++        _unknown_keys(row, ("name", "success_test", "failure_test"), "edge case")
++        name = _text(row, "name", label="edge case")
++        if name in seen:
++            raise BuildStepError(f"edge case listed twice: {name}")
++        seen.add(name)
++        for key in ("success_test", "failure_test"):
++            if not isinstance(row.get(key), str) or not str(row[key]).strip():
++                raise BuildStepError(f"edge case {name} lacks its {key} id")
++        cases.append(
++            {
++                "name": name,
++                "success_test": str(row["success_test"]).strip(),
++                "failure_test": str(row["failure_test"]).strip(),
++            }
++        )
++    return {"cases": cases}
++
++
++def validate_green(repo: Path, payload: dict[str, object]) -> dict[str, object]:
++    _unknown_keys(payload, ("command", "exit"), "green")
++    command = payload.get("command")
++    if isinstance(command, str):
++        command = command.split()
++    if not isinstance(command, list) or not command or any(not isinstance(item, str) or not item for item in command):
++        raise BuildStepError("green.command must be the exact command as a nonempty list of strings")
++    if payload.get("exit") != 0:
++        raise BuildStepError(f"green requires exit 0, got {payload.get('exit')!r}")
++    return {"command": list(command), "exit": 0}
++
++
++def _finding(row: dict[str, object], round_number: int) -> dict[str, str]:
++    _unknown_keys(row, ("id", "text", "status", "reason"), f"round {round_number} finding")
++    identifier = _text(row, "id", label=f"round {round_number} finding")
++    status = _text(row, "status", label=f"finding {identifier}")
++    if status not in FINDING_STATUSES:
++        raise BuildStepError(f"finding {identifier} status must be one of {', '.join(FINDING_STATUSES)}")
++    entry = {"id": identifier, "text": _text(row, "text", label=f"finding {identifier}"), "status": status}
++    if status == "rejected":
++        entry["reason"] = _text(row, "reason", label=f"rejected finding {identifier}")
++    return entry
++
++
++def validate_review(repo: Path, payload: dict[str, object], plan: Path, name: str) -> dict[str, object]:
++    _unknown_keys(payload, ("rounds",), "review")
++    rounds: list[dict[str, object]] = []
++    rows = _rows(payload, "rounds")
++    if len(rows) > MAX_REVIEW_ROUNDS:
++        raise BuildStepError(f"review allows at most {MAX_REVIEW_ROUNDS} rounds; round {len(rows)} needs the user")
++    for index, row in enumerate(rows, start=1):
++        _unknown_keys(row, ("reviewer", "packet_sha256", "findings"), f"round {index}")
++        packet = packet_path(plan, name, index)
++        expected = digest(packet)
++        if expected is None:
++            raise BuildStepError(f"round {index} has no packet; run plan_state.py review-packet --slice {name} first")
++        if row.get("packet_sha256") != expected:
++            raise BuildStepError(f"round {index} packet_sha256 does not match {packet.name}")
++        findings = [_finding(item, index) for item in _rows(row, "findings", allow_empty=True)]
++        rounds.append(
++            {
++                "round": index,
++                "reviewer": _text(row, "reviewer", label=f"round {index}"),
++                "packet_sha256": expected,
++                "findings": findings,
++            }
++        )
++    return {"rounds": rounds}
++
++
++def open_findings(entry: dict[str, object]) -> list[str]:
++    rounds = entry.get("rounds")
++    if not isinstance(rounds, list) or not rounds:
++        return []
++    last = rounds[-1]
++    findings = last.get("findings", []) if isinstance(last, dict) else []
++    return [
++        f"{item['id']}: {item['text']}" for item in findings if isinstance(item, dict) and item.get("status") == "open"
++    ]
++
++
++def _evidence_matches_mode(target: Path, relative: str, mode: str) -> None:
++    if mode == "ui":
++        if target.suffix.lower() not in IMAGE_SUFFIXES:
++            raise BuildStepError(f"ui evidence must be a screenshot image: {relative}")
++        try:
++            probe_media(target, "image")
++        except MediaError as error:
++            raise BuildStepError(f"ui evidence is not a decodable image: {relative}: {error}") from error
++        return
++    if target.suffix.lower() != ".json":
++        raise BuildStepError(f"logic evidence must be recorded input/output JSON: {relative}")
++    try:
++        json.loads(target.read_text(encoding="utf-8"))
++    except (OSError, UnicodeError, json.JSONDecodeError) as error:
++        raise BuildStepError(f"logic evidence is not valid JSON: {relative}") from error
++
++
++def _hashed_paths(repo: Path, payload: dict[str, object], key: str, mode: str) -> list[dict[str, str]]:
++    rows: list[dict[str, str]] = []
++    for row in _rows(payload, key):
++        _unknown_keys(row, ("path", "sha256"), f"{key} evidence")
++        relative = _text(row, "path", label=key)
++        target = repo / relative
++        if not target.is_file():
++            raise BuildStepError(f"{key} evidence file is missing: {relative}")
++        digest = hashlib.sha256(target.read_bytes()).hexdigest()
++        if row.get("sha256") != digest:
++            raise BuildStepError(f"{key} evidence hash does not match the file: {relative}")
++        _evidence_matches_mode(target, relative, mode)
++        rows.append({"path": relative, "sha256": digest})
++    return rows
++
++
++def validate_verify(repo: Path, payload: dict[str, object], plan: Path, name: str) -> dict[str, object]:
++    keys = ("mode", "packet_sha256", "fakes", "outside_calls", "before", "after", "edge_cases")
++    _unknown_keys(payload, keys, "verify")
++    mode = _text(payload, "mode")
++    if mode not in VERIFY_MODES:
++        raise BuildStepError(f"verify.mode must be one of {', '.join(VERIFY_MODES)}")
++    packet = verify_packet_path(plan, name)
++    expected = digest(packet)
++    if expected is None:
++        raise BuildStepError(f"verify has no packet; run plan_state.py verify-packet --slice {name} first")
++    if payload.get("packet_sha256") != expected:
++        raise BuildStepError(f"verify packet_sha256 does not match {packet.name}")
++    fakes: list[dict[str, str]] = []
++    for row in _rows(payload, "fakes", allow_empty=True):
++        _unknown_keys(row, ("host", "log"), "fake")
++        log = _text(row, "log", label="fake")
++        if not (repo / log).is_file():
++            raise BuildStepError(f"fake log is missing: {log}")
++        fakes.append({"host": _text(row, "host", label="fake"), "log": log})
++    faked = {item["host"] for item in fakes}
++    calls = payload.get("outside_calls", [])
++    if not isinstance(calls, list) or any(not isinstance(item, str) for item in calls):
++        raise BuildStepError("verify.outside_calls must be a list of host names")
++    real = sorted(host for host in calls if host not in faked)
++    if real:
++        raise BuildStepError(f"verify saw a real outside call to {real[0]}; every outside host needs a fake")
++    edge_cases = payload.get("edge_cases", [])
++    if not isinstance(edge_cases, list) or any(not isinstance(item, str) or not item.strip() for item in edge_cases):
++        raise BuildStepError("verify.edge_cases must be a list of edge case names")
++    return {
++        "mode": mode,
++        "packet_sha256": expected,
++        "fakes": fakes,
++        "outside_calls": sorted(str(item) for item in calls),
++        "before": _hashed_paths(repo, payload, "before", mode),
++        "after": _hashed_paths(repo, payload, "after", mode),
++        "edge_cases": [item.strip() for item in edge_cases],
++    }
++
++
++VALIDATORS = {"edges": validate_edges, "green": validate_green}
++BOUND_VALIDATORS = {"review": validate_review, "verify": validate_verify}
++
++
++def load(repo: Path, plan: Path) -> dict[str, object]:
++    path = receipt_path(plan, RECEIPT_NAME)
++    if not path.is_file() or path.is_symlink():
++        return {"schema_version": SCHEMA_VERSION, "plan_id": plan_id(plan), "slices": {}}
++    try:
++        value, _, _ = load_receipt(repo, plan, RECEIPT_NAME)
++    except EvidenceError as error:
++        raise BuildStepError(str(error)) from error
++    if value.get("schema_version") != SCHEMA_VERSION or value.get("plan_id") != plan_id(plan):
++        raise BuildStepError("build-steps receipt does not belong to this Feature Brief")
++    if not isinstance(value.get("slices"), dict):
++        raise BuildStepError("build-steps receipt requires a slices object")
++    return value
++
++
++def _slice_entry(receipt: dict[str, object], name: str) -> dict[str, object]:
++    slices = receipt["slices"]
++    assert isinstance(slices, dict)
++    entry = slices.get(name)
++    return dict(entry) if isinstance(entry, dict) else {}
++
++
++def _unknown_edge_cases(slice_entry: dict[str, object], payload: dict[str, object]) -> list[str]:
++    edges = slice_entry.get("edges")
++    cases = edges.get("cases") if isinstance(edges, dict) else None
++    known = {str(item.get("name")) for item in cases if isinstance(item, dict)} if isinstance(cases, list) else set()
++    requested = payload.get("edge_cases")
++    if not isinstance(requested, list):
++        return []
++    return [item for item in requested if isinstance(item, str) and item not in known]
++
++
++def record(repo: Path, plan: Path, name: str, step: str, payload: dict[str, object]) -> dict[str, object]:
++    if step not in STEPS:
++        raise BuildStepError(f"step must be one of {', '.join(STEPS)}")
++    if name != FULL and not SLICE_ID.fullmatch(name):
++        raise BuildStepError("--slice must be S-N or full")
++    if name == FULL and step != "verify":
++        raise BuildStepError("full accepts only the verify record")
++    receipt = load(repo, plan)
++    slice_entry = _slice_entry(receipt, name)
++    if step == "verify" and name != FULL and (unknown := _unknown_edge_cases(slice_entry, payload)):
++        raise BuildStepError(f"verify names an edge case missing from the edges record: {unknown[0]}")
++    entry = (
++        BOUND_VALIDATORS[step](repo, payload, plan, name)
++        if step in BOUND_VALIDATORS
++        else VALIDATORS[step](repo, payload)
++    )
++    entry["recorded_at"] = utc_text(utc_now())
++    try:
++        entry["artifact"] = repository_artifact(repo)
++    except SafePlanIOError as error:
++        raise BuildStepError(str(error)) from error
++    slice_entry[step] = entry
++    slices = receipt["slices"]
++    assert isinstance(slices, dict)
++    receipt["slices"] = {**slices, name: slice_entry}
++    path = receipt_path(plan, RECEIPT_NAME)
++    path.parent.mkdir(mode=0o700, exist_ok=True)
++    try:
++        safe_receipt_json(repo, path, receipt)
++    except EvidenceError as error:
++        raise BuildStepError(str(error)) from error
++    return entry
++
++
++def completed_slices(plan: Path) -> tuple[str, ...]:
++    match = COMPLETED_ROW.search(plan.read_text(encoding="utf-8"))
++    value = match.group(1).strip() if match else "none"
++    return () if value == "none" else tuple(item.strip() for item in value.split(","))
++
++
++def slice_error(repo: Path, receipt: dict[str, object], name: str, *, artifact: str | None) -> str | None:
++    entry = _slice_entry(receipt, name)
++    for step in STEPS:
++        record_entry = entry.get(step)
++        if not isinstance(record_entry, dict):
++            return f"slice {name} has no {step} record (plan_state.py record-build --slice {name} --step {step})"
++        if artifact is not None and record_entry.get("artifact") != artifact:
++            return f"slice {name} {step} record is stale: the tree changed after it was recorded"
++    review = entry.get("review")
++    if isinstance(review, dict) and (pending := open_findings(review)):
++        return f"slice {name} review still has an open finding: {pending[0]}"
++    return None
++
++
++def gate_error(repo: Path, plan: Path, name: str) -> str | None:
++    if not enforcement_configured(repo):
++        return None
++    try:
++        receipt = load(repo, plan)
++        artifact = repository_artifact(repo)
++    except (BuildStepError, SafePlanIOError, EvidenceError) as error:
++        return str(error).replace("\n", " ")
++    if name != FULL:
++        return slice_error(repo, receipt, name, artifact=artifact)
++    for completed in completed_slices(plan):
++        if error := slice_error(repo, receipt, completed, artifact=None):
++            return error
++    verify = _slice_entry(receipt, FULL).get("verify")
++    if not isinstance(verify, dict):
++        return "full gate has no verify record (plan_state.py record-build --slice full --step verify)"
++    if verify.get("artifact") != artifact:
++        return "full verify record is stale: the tree changed after it was recorded"
++    return None
++
++
++def edges_of(repo: Path, plan: Path, name: str) -> dict[str, object] | None:
++    entry = _slice_entry(load(repo, plan), name).get("edges")
++    return entry if isinstance(entry, dict) else None
++
++
++def next_review_round(repo: Path, plan: Path, name: str) -> int:
++    review = _slice_entry(load(repo, plan), name).get("review")
++    rounds = review.get("rounds") if isinstance(review, dict) else None
++    return (len(rounds) if isinstance(rounds, list) else 0) + 1
++
++
++def emit_lines(repo: Path, plan: Path, name: str) -> list[str]:
++    if not enforcement_configured(repo) or name == "none":
++        return []
++    try:
++        receipt = load(repo, plan)
++    except BuildStepError as error:
++        return [f"build_steps=invalid: {error}"]
++    entry = _slice_entry(receipt, name)
++    done = [step for step in STEPS if isinstance(entry.get(step), dict)]
++    lines = [f"build_steps={name}:{len(done)}/{len(STEPS)}"]
++    missing = [step for step in STEPS if step not in done]
++    if missing:
++        lines.append("build_steps_missing=" + ", ".join(missing))
++    review = entry.get("review")
++    if isinstance(review, dict) and (pending := open_findings(review)):
++        lines.append("build_steps_open_finding=" + pending[0])
++    return lines
++
++
++def read_payload(value: str) -> dict[str, object]:
++    raw = sys.stdin.read() if value == "-" else Path(value).read_text(encoding="utf-8")
++    try:
++        payload = json.loads(raw)
++    except json.JSONDecodeError as error:
++        raise BuildStepError(f"payload is not valid JSON: {error}") from error
++    if not isinstance(payload, dict):
++        raise BuildStepError("payload must be a JSON object")
++    return payload
+diff --git a/skills/he/scripts/build_steps_regression.py b/skills/he/scripts/build_steps_regression.py
+new file mode 100755
+index 0000000..b94f4f0
+--- /dev/null
++++ b/skills/he/scripts/build_steps_regression.py
+@@ -0,0 +1,323 @@
++#!/usr/bin/env python3
++"""Regression proof: build-step records gate every slice and the full pre-ship gate."""
++
++from __future__ import annotations
++
++import base64
++import hashlib
++import json
++import subprocess
++import sys
++import tempfile
++from pathlib import Path
++
++SCRIPT_DIR = Path(__file__).resolve().parent
++ROOT = SCRIPT_DIR.parents[2]
++if str(SCRIPT_DIR) not in sys.path:
++    sys.path.insert(0, str(SCRIPT_DIR))
++
++import plan_steps_regression as fixture
++from plan_steps_regression import SLUG, STATE_SCRIPT, git, record_step, require, run, values
++
++GATE_SCRIPT = ROOT / "skills/deterministic-checks/scripts/slice_gate.py"
++EDGES = {"cases": [{"name": "empty input", "success_test": "test_empty_ok", "failure_test": "test_empty_refused"}]}
++GREEN = {"command": ["python3", "-m", "pytest"], "exit": 0}
++OPEN_FINDING = {"id": "R-1", "text": "missing null check", "status": "open"}
++VALID_PNG = base64.b64decode(
++    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk/x8AAusB9Wl2nS8AAAAASUVORK5CYII="
++)
++
++
++def review_round(sha: str, *findings: dict[str, str]) -> dict[str, object]:
++    return {"reviewer": "fresh subagent", "packet_sha256": sha, "findings": list(findings)}
++
++
++def review(sha: str, *findings: dict[str, str]) -> dict[str, object]:
++    return {"rounds": [review_round(sha, *findings)]}
++
++
++def packet(repo: Path, plan: Path, name: str = "S-1") -> tuple[int, dict[str, str]]:
++    code, output = run(STATE_SCRIPT, "review-packet", "--repo", str(repo), "--plan", str(plan), "--slice", name)
++    return code, values(output)
++
++
++def record_build(repo: Path, plan: Path, name: str, step: str, payload: dict) -> tuple[int, str]:
++    arguments = ("record-build", "--repo", str(repo), "--plan", str(plan), "--slice", name, "--step", step)
++    return run(STATE_SCRIPT, *arguments, "--payload-file", "-", stdin=json.dumps(payload))
++
++
++def checkpoint(repo: Path, plan: Path, *sets: str) -> tuple[int, str]:
++    token = values(run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))[1])["token"]
++    arguments = ["checkpoint", "--repo", str(repo), "--plan", str(plan), "--expect-token", token]
++    for assignment in sets:
++        arguments += ["--set", assignment]
++    return run(STATE_SCRIPT, *arguments)
++
++
++def gate(repo: Path, plan: Path, *scope: str) -> tuple[int, str]:
++    result = subprocess.run(
++        [
++            sys.executable,
++            str(GATE_SCRIPT),
++            "run",
++            "--repo",
++            str(repo),
++            "--plan",
++            str(plan),
++            *scope,
++            "--timeout",
++            "60",
++            "--behavior",
++            "records gate the slice",
++            "--check",
++            "targeted",
++            "--e2e",
++            "not-applicable:fixture",
++            "--security",
++            "not-applicable:fixture",
++            "--review",
++            "review record round 1",
++        ],
++        check=False,
++        capture_output=True,
++        text=True,
++        env=fixture.env(),
++    )
++    return result.returncode, result.stdout + result.stderr
++
++
++def evidence(repo: Path, name: str, body: bytes | None = None) -> dict[str, str]:
++    path = repo / "features" / SLUG / "receipts" / name
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_bytes(body if body is not None else json.dumps({"state": name}).encode("utf-8"))
++    return {"path": str(path.relative_to(repo)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
++
++
++def verify_packet(repo: Path, plan: Path, name: str = "S-1") -> str:
++    code, output = run(STATE_SCRIPT, "verify-packet", "--repo", str(repo), "--plan", str(plan), "--slice", name)
++    require(code == 0, f"verify packet must build: {output}")
++    return values(output)["packet_sha256"]
++
++
++def verify_payload(repo: Path, plan: Path, name: str = "S-1", **overrides: object) -> dict[str, object]:
++    evidence(repo, "fakes.log", b"api.example.test GET /v1/items -> fake 200\n")
++    payload: dict[str, object] = {
++        "mode": "logic",
++        "packet_sha256": verify_packet(repo, plan, name),
++        "fakes": [{"host": "api.example.test", "log": f"features/{SLUG}/receipts/fakes.log"}],
++        "outside_calls": ["api.example.test"],
++        "before": [evidence(repo, "before.json")],
++        "after": [evidence(repo, "after.json")],
++        "edge_cases": ["empty input"],
++    }
++    payload.update(overrides)
++    return payload
++
++
++def building_plan(base: Path) -> tuple[Path, Path]:
++    repo, plan = fixture.make_repo(base, "build")
++    fixture.record_research(repo, plan)
++    settled = json.loads(json.dumps(fixture.GOOD_PAYLOADS))
++    settled["decisions"]["decisions"][1].update(status="settled", settled_by="user reply 2026-09-02")
++    for step, payload in settled.items():
++        code, output = record_step(repo, plan, step, payload)
++        require(code == 0, f"{step} must record: {output}")
++    code, output = record_build(repo, plan, "S-1", "edges", EDGES)
++    require(code != 0 and "building brief" in output, f"record-build before build must refuse: {output}")
++    code, output = fixture.approve(repo, plan)
++    require(code == 0, f"plan must approve: {output}")
++    code, output = checkpoint(repo, plan, "lifecycle_status=building", "active_slice=S-1")
++    require(code == 0, f"plan must start building: {output}")
++    return repo, plan
++
++
++def check_slice_records(base: Path) -> tuple[Path, Path]:
++    repo, plan = building_plan(base)
++    receipt = plan.parent / "receipts" / "S-1.json"
++    code, output = gate(repo, plan, "--slice", "S-1")
++    require(code != 0 and "no edges record" in output and "S-1" in output, f"gate must name edges: {output}")
++    require(not receipt.exists(), "refused gate must write no receipt")
++
++    broken = {"cases": [{"name": "empty input", "success_test": "test_empty_ok", "failure_test": ""}]}
++    code, output = record_build(repo, plan, "S-1", "edges", broken)
++    require(code != 0 and "empty input lacks its failure_test" in output, f"edge without failure test: {output}")
++    code, output = record_build(repo, plan, "S-1", "edges", EDGES)
++    require(code == 0 and "recorded_build=S-1:edges" in output, f"edges must record: {output}")
++    code, output = record_build(repo, plan, "S-1", "green", {"command": ["pytest"], "exit": 1})
++    require(code != 0 and "exit 0" in output, f"red green record must refuse: {output}")
++    code, output = record_build(repo, plan, "S-1", "green", GREEN)
++    require(code == 0, f"green must record: {output}")
++    code, output = record_build(repo, plan, "S-1", "review", review("0" * 64, OPEN_FINDING))
++    require(code != 0 and "no packet" in output, f"review without a packet must refuse: {output}")
++    code, parsed = packet(repo, plan)
++    require(code == 0 and parsed.get("packet_round") == "1", f"packet must build: {parsed}")
++    packet_text = (repo / "features" / SLUG / "receipts" / "S-1-review-1.txt").read_text(encoding="utf-8")
++    for needle in ("## Acceptance examples", "## Edge list", "empty input", "## Diff", "```diff"):
++        require(needle in packet_text, f"packet must carry {needle}")
++    require("## Risk" not in packet_text, "packet must not carry sections outside the reviewer contract")
++    code, output = record_build(repo, plan, "S-1", "review", review("0" * 64, OPEN_FINDING))
++    require(code != 0 and "packet_sha256 does not match" in output, f"wrong packet hash must refuse: {output}")
++    code, output = record_build(repo, plan, "S-1", "review", review(parsed["packet_sha256"], OPEN_FINDING))
++    require(code == 0, f"open review must record: {output}")
++    code, output = record_build(
++        repo, plan, "S-1", "verify", verify_payload(repo, plan, outside_calls=["real.example.com"])
++    )
++    require(code != 0 and "real.example.com" in output, f"real outside call must refuse naming host: {output}")
++    code, output = record_build(repo, plan, "S-1", "verify", verify_payload(repo, plan, edge_cases=["unknown case"]))
++    require(code != 0 and "unknown case" in output, f"unknown edge case must refuse: {output}")
++    code, output = record_build(repo, plan, "S-1", "verify", verify_payload(repo, plan, packet_sha256="0" * 64))
++    require(code != 0 and "packet_sha256 does not match" in output, f"wrong verify packet must refuse: {output}")
++    missing_log = [{"host": "api.example.test", "log": "features/lean-loop/receipts/absent.log"}]
++    code, output = record_build(repo, plan, "S-1", "verify", verify_payload(repo, plan, fakes=missing_log))
++    require(code != 0 and "fake log is missing" in output, f"missing fake log must refuse: {output}")
++    screenshot = [evidence(repo, "before.png", VALID_PNG)]
++    code, output = record_build(repo, plan, "S-1", "verify", verify_payload(repo, plan, before=screenshot))
++    require(code != 0 and "logic evidence must be" in output, f"logic mode with a screenshot must refuse: {output}")
++    code, output = record_build(repo, plan, "S-1", "verify", verify_payload(repo, plan, mode="ui"))
++    require(code != 0 and "ui evidence must be a screenshot" in output, f"ui mode with JSON must refuse: {output}")
++    broken_image = [evidence(repo, "broken.png", b"not a png")]
++    code, output = record_build(
++        repo, plan, "S-1", "verify", verify_payload(repo, plan, mode="ui", before=broken_image, after=broken_image)
++    )
++    require(code != 0 and "not a decodable image" in output, f"undecodable screenshot must refuse: {output}")
++    code, output = record_build(
++        repo, plan, "S-1", "verify", verify_payload(repo, plan, mode="ui", before=screenshot, after=screenshot)
++    )
++    require(code == 0, f"ui verify with real screenshots must record: {output}")
++    packet_text = (repo / "features" / SLUG / "receipts" / "S-1-verify.txt").read_text(encoding="utf-8")
++    for needle in (
++        "## Scope",
++        "## Acceptance examples",
++        "## Edge list",
++        "empty input",
++        "## Rules",
++        "real outside call",
++    ):
++        require(needle in packet_text, f"verifier packet must carry {needle}")
++    code, output = record_build(repo, plan, "S-1", "verify", verify_payload(repo, plan))
++    require(code == 0, f"verify must record: {output}")
++    code, output = gate(repo, plan, "--slice", "S-1")
++    require(code != 0 and "open finding: R-1" in output, f"open finding must block the gate: {output}")
++    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
++    shown = values(output)
++    require(shown.get("build_steps") == "S-1:4/4", f"inspect must count records: {output}")
++    require("R-1" in shown.get("build_steps_open_finding", ""), f"inspect must print the open finding: {output}")
++    code, output = record_build(repo, plan, "S-1", "review", review(parsed["packet_sha256"]))
++    require(code == 0, f"clean review must record: {output}")
++    code, output = gate(repo, plan, "--slice", "S-1")
++    require(code == 0 and receipt.is_file(), f"complete records must pass the gate: {output}")
++    fourth = {"rounds": [{"reviewer": "x", "packet_sha256": parsed["packet_sha256"], "findings": []}] * 4}
++    code, output = record_build(repo, plan, "S-1", "review", fourth)
++    require(code != 0 and "at most 3 rounds" in output, f"fourth round must refuse: {output}")
++
++    (repo / "owner.py").write_text("print('owner v3')\n", encoding="utf-8")
++    code, output = gate(repo, plan, "--slice", "S-1")
++    require(code != 0 and "stale" in output and "edges" in output, f"tree change must stale records: {output}")
++    git(repo, "commit", "-q", "-am", "owner v3")
++    fixture.record_research(repo, plan)
++    (repo / "notes.txt").write_text("second review round\n", encoding="utf-8")
++    first = parsed["packet_sha256"]
++    code, parsed = packet(repo, plan)
++    require(code == 0 and parsed.get("packet_round") == "2", f"second packet must be round 2: {parsed}")
++    two_rounds = {"rounds": [review_round(first), review_round(parsed["packet_sha256"])]}
++    for step, payload in (("edges", EDGES), ("green", GREEN), ("review", two_rounds)):
++        code, output = record_build(repo, plan, "S-1", step, payload)
++        require(code == 0, f"{step} must re-record: {output}")
++    code, output = record_build(repo, plan, "S-1", "verify", verify_payload(repo, plan))
++    require(code == 0, f"verify must re-record: {output}")
++    code, output = gate(repo, plan, "--slice", "S-1")
++    require(code == 0, f"fresh records must pass the gate: {output}")
++    return repo, plan
++
++
++def check_full_gate(repo: Path, plan: Path) -> None:
++    code, output = checkpoint(repo, plan, "completed_slices=S-1", "active_slice=none")
++    require(code == 0, f"slice must complete: {output}")
++    code, output = gate(repo, plan, "--full")
++    require(code != 0 and "full gate has no verify record" in output, f"full gate must name verify: {output}")
++    code, output = record_build(repo, plan, "full", "edges", EDGES)
++    require(code != 0 and "only the verify record" in output, f"full accepts verify only: {output}")
++    code, output = record_build(repo, plan, "full", "verify", verify_payload(repo, plan, "full", edge_cases=[]))
++    require(code == 0, f"full verify must record: {output}")
++    code, output = gate(repo, plan, "--full")
++    require(code == 0, f"full gate must pass with records: {output}")
++    code, output = checkpoint(repo, plan, "lifecycle_status=green")
++    require(code == 0, f"green checkpoint must pass: {output}")
++
++
++def record_mutation(repo: Path, plan: Path, payload: dict) -> tuple[int, str]:
++    arguments = ("record-mutation", "--repo", str(repo), "--plan", str(plan), "--payload-file", "-")
++    return run(STATE_SCRIPT, *arguments, stdin=json.dumps(payload))
++
++
++def assert_green(repo: Path, plan: Path) -> tuple[int, str]:
++    return run(STATE_SCRIPT, "assert-green", "--repo", str(repo), "--plan", str(plan))
++
++
++def check_mutation_before_ship(repo: Path, plan: Path) -> None:
++    code, output = assert_green(repo, plan)
++    require(code != 0 and "mutation receipt" in output, f"ship entry without mutation must refuse: {output}")
++    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
++    require(values(output).get("mutation", "").startswith("missing"), f"inspect must show mutation missing: {output}")
++    survivor = {"mutant": "owner.py:1 print -> pass", "disposition": "equivalent", "reason": "output only"}
++    good = {
++        "runner": "mutmut",
++        "version": "3.3.0",
++        "argv": ["mutmut", "run", "--paths-to-mutate", "owner.py"],
++        "scope": ["owner.py"],
++        "totals": {"killed": 4, "survived": 1, "timeout": 0, "no_coverage": 0},
++        "survivors": [survivor],
++    }
++    code, output = record_mutation(repo, plan, {**good, "scope": []})
++    require(code != 0 and "owner.py" in output and "approval base" in output, f"scope gap must refuse: {output}")
++    code, output = record_mutation(repo, plan, {**good, "survivors": []})
++    require(code != 0 and "ledger has 0 rows" in output, f"survivor count mismatch must refuse: {output}")
++    deferred = {**survivor, "disposition": "deferred"}
++    code, output = record_mutation(repo, plan, {**good, "survivors": [deferred]})
++    require(code != 0 and "consequence" in output, f"deferred without consequence must refuse: {output}")
++    code, output = record_mutation(repo, plan, {**good, "runner": "stryker"})
++    require(code != 0 and "nothing to mutate" in output and "mutmut" in output, f"wrong runner must refuse: {output}")
++    (repo / "widget.ts").write_text("export const widget = 1;\n", encoding="utf-8")
++    code, output = record_mutation(repo, plan, {**good, "scope": ["owner.py", "widget.ts"]})
++    require(code != 0 and "cannot mutate widget.ts" in output, f"mixed scope in one run must refuse: {output}")
++    (repo / "widget.ts").unlink()
++    code, output = record_mutation(repo, plan, {**good, "runner": "none", "sensitivity_proof": "x"})
++    require(code != 0 and "needs a runner" in output, f"runner none for Python must refuse: {output}")
++    code, output = record_mutation(repo, plan, good)
++    require(code == 0 and "recorded_mutation=mutmut" in output, f"mutation must record: {output}")
++    code, output = assert_green(repo, plan)
++    require(code == 0, f"ship entry with mutation must pass: {output}")
++    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
++    require(values(output).get("mutation") == "current", f"inspect must show mutation current: {output}")
++    import mutation_receipt
++
++    stale = mutation_receipt.ship_error(repo, plan, "sha256:" + "0" * 64)
++    require(stale is not None and "green tree" in stale, f"receipt for another tree must not count: {stale}")
++
++
++def check_unwired_repo(base: Path) -> None:
++    repo, plan = fixture.make_repo(base, "unwired")
++    manifest = json.loads((repo / "hard-eng.gates.json").read_text(encoding="utf-8"))
++    del manifest["enforcement"]
++    (repo / "hard-eng.gates.json").write_text(json.dumps(manifest), encoding="utf-8")
++    git(repo, "commit", "-q", "-am", "unwired")
++    fixture.record_research(repo, plan)
++    for step, payload in fixture.GOOD_PAYLOADS.items():
++        record_step(repo, plan, step, payload)
++    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
++    require(code == 0 and "build_steps=" not in output, f"unwired repo prints no build steps: {output}")
++
++
++def main() -> int:
++    with tempfile.TemporaryDirectory(prefix="build-steps-regression-") as directory:
++        base = Path(directory).resolve()
++        repo, plan = check_slice_records(base)
++        check_full_gate(repo, plan)
++        check_mutation_before_ship(repo, plan)
++        check_unwired_repo(base)
++    print("build-steps regression: PASS")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/skills/he/scripts/plan_parser.py b/skills/he/scripts/plan_parser.py
+index 15bf932..e6399ec 100755
+--- a/skills/he/scripts/plan_parser.py
++++ b/skills/he/scripts/plan_parser.py
+@@ -32,6 +32,24 @@ def build(replan_reasons: Collection[str]) -> argparse.ArgumentParser:
+     record_step.add_argument("--plan", required=True)
+     record_step.add_argument("--step", required=True)
+     record_step.add_argument("--payload-file", required=True, help="JSON object path, or - for stdin")
++    record_build = commands.add_parser("record-build")
++    record_build.add_argument("--repo", required=True)
++    record_build.add_argument("--plan", required=True)
++    record_build.add_argument("--slice", required=True, help="S-N, or full for the whole-feature verify record")
++    record_build.add_argument("--step", required=True)
++    record_build.add_argument("--payload-file", required=True, help="JSON object path, or - for stdin")
++    packet = commands.add_parser("review-packet")
++    packet.add_argument("--repo", required=True)
++    packet.add_argument("--plan", required=True)
++    packet.add_argument("--slice", required=True)
++    verify_packet = commands.add_parser("verify-packet")
++    verify_packet.add_argument("--repo", required=True)
++    verify_packet.add_argument("--plan", required=True)
++    verify_packet.add_argument("--slice", required=True, help="S-N, or full for the whole-feature verifier packet")
++    record_mutation = commands.add_parser("record-mutation")
++    record_mutation.add_argument("--repo", required=True)
++    record_mutation.add_argument("--plan", required=True)
++    record_mutation.add_argument("--payload-file", required=True, help="JSON object path, or - for stdin")
+     probe = commands.add_parser("probe-trackers")
+     probe.add_argument("--repo", required=True)
+     probe.add_argument("--plan", required=True)
+diff --git a/skills/he/scripts/plan_state.py b/skills/he/scripts/plan_state.py
+index a1447a0..1616cba 100755
+--- a/skills/he/scripts/plan_state.py
++++ b/skills/he/scripts/plan_state.py
+@@ -17,9 +17,12 @@ SCRIPT_DIR = Path(__file__).resolve().parent
+ if str(SCRIPT_DIR) not in sys.path:
+     sys.path.insert(0, str(SCRIPT_DIR))
+ 
++import build_steps
++import mutation_receipt
+ import plan_handoff
+ import plan_step_commands
+ import plan_steps
++import review_packet
+ from authorization_recovery import validate_reopen_authorization
+ from evidence_lib import EvidenceError, invalidate_direct_receipt
+ from execution_evidence import authorize_execution, validate_execution
+@@ -410,6 +413,13 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
+             print(f"slice_receipt={receipt_status(repo, path, state['plan_id'], state['active_slice'])}")
+         elif state["completed_slices"] != "none":
+             print(f"full_receipt={receipt_status(repo, path, state['plan_id'], 'full')}")
++        for line in build_steps.emit_lines(
++            repo, path, state["active_slice"] if state["active_slice"] != "none" else "full"
++        ):
++            print(line)
++    if state["lifecycle_status"] == "green":
++        for line in mutation_receipt.emit_lines(path.parents[2], path, state["green_artifact"]):
++            print(line)
+     repo = path.parents[2]
+     if state.get("execution_mode") == "tickets":
+         from ticket_state import board_summary
+@@ -619,6 +629,8 @@ def command_assert_green(args: argparse.Namespace) -> None:
+         raise PlanError("green artifact drift; return to building")
+     if not args.artifact_only and state["approval_status"] == "approved":
+         validate_execution(repo, path, state["approval_fingerprint"])
++        if message := mutation_receipt.ship_error(repo, path, state["green_artifact"]):
++            raise PlanError(message)
+     emit(path, text, state)
+     print(f"green_artifact={actual}")
+ 
+@@ -644,6 +656,10 @@ def main() -> int:
+         "assert-green": command_assert_green,
+         "cleanup": command_cleanup,
+         "record-step": lambda args: plan_step_commands.record_step(args, sys.modules[__name__]),
++        "record-build": lambda args: plan_step_commands.record_build(args, sys.modules[__name__]),
++        "review-packet": lambda args: plan_step_commands.review_packet_command(args, sys.modules[__name__]),
++        "verify-packet": lambda args: plan_step_commands.verify_packet_command(args, sys.modules[__name__]),
++        "record-mutation": lambda args: plan_step_commands.record_mutation(args, sys.modules[__name__]),
+         "probe-trackers": lambda args: plan_step_commands.probe_trackers(args, sys.modules[__name__]),
+         "draft": lambda args: run_plan_draft(args, validate_text, emit),
+     }
+@@ -658,6 +674,9 @@ def main() -> int:
+         SafePlanIOError,
+         LifecycleExcludeError,
+         plan_steps.PlanStepError,
++        build_steps.BuildStepError,
++        review_packet.ReviewPacketError,
++        mutation_receipt.MutationError,
+     ) as error:
+         print(f"result=invalid\nerror={error}", file=sys.stderr)
+         return 4
+diff --git a/skills/he/scripts/plan_step_commands.py b/skills/he/scripts/plan_step_commands.py
+index 47f53cb..5b0f21c 100755
+--- a/skills/he/scripts/plan_step_commands.py
++++ b/skills/he/scripts/plan_step_commands.py
+@@ -11,7 +11,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
+ if str(SCRIPT_DIR) not in sys.path:
+     sys.path.insert(0, str(SCRIPT_DIR))
+ 
++import build_steps
++import mutation_receipt
+ import plan_steps
++import review_packet
+ import tracker_probe
+ from plan_sections import PlanError, with_closing_rows
+ from safe_plan_io import replace_if_unchanged, repo_root
+@@ -47,3 +50,63 @@ def probe_trackers(args: argparse.Namespace, state) -> None:
+         print(line)
+     if args.write_env_example:
+         print(f"env_example={'written' if tracker_probe.write_env_example(repo) else 'current'}")
++
++
++def _locked_record(args: argparse.Namespace, state, allowed: set[str], label: str, action):
++    repo = repo_root(args.repo)
++    payload = build_steps.read_payload(args.payload_file)
++    path = state.resolve_plan(repo, args.plan)
++    with state.plan_lock(repo, path):
++        path, text, _, plan = state.read_checked(repo, str(path), validate_authorization=False)
++        if plan["lifecycle_status"] not in allowed:
++            raise PlanError(f"{label} requires a {' or '.join(sorted(allowed))} brief")
++        entry = action(repo, path, payload)
++    return path, text, plan, entry
++
++
++def record_build(args: argparse.Namespace, state) -> None:
++    path, text, plan, entry = _locked_record(
++        args, state, {"building"}, "record-build", lambda r, p, y: build_steps.record(r, p, args.slice, args.step, y)
++    )
++    state.emit(path, text, plan)
++    print(f"recorded_build={args.slice}:{args.step}")
++    print(f"recorded_at={entry['recorded_at']}")
++
++
++def review_packet_command(args: argparse.Namespace, state) -> None:
++    repo = repo_root(args.repo)
++    path, _, _, plan = state.read_checked(repo, args.plan, validate_authorization=False)
++    if plan["lifecycle_status"] != "building":
++        raise PlanError("review-packet requires a building brief")
++    round_number = build_steps.next_review_round(repo, path, args.slice)
++    if round_number > build_steps.MAX_REVIEW_ROUNDS:
++        raise PlanError(f"{args.slice} already used {build_steps.MAX_REVIEW_ROUNDS} review rounds; ask the user")
++    target, sha = review_packet.write(
++        repo, path, args.slice, round_number, build_steps.edges_of(repo, path, args.slice)
++    )
++    print(f"packet={target}")
++    print(f"packet_round={round_number}")
++    print(f"packet_sha256={sha}")
++
++
++def verify_packet_command(args: argparse.Namespace, state) -> None:
++    repo = repo_root(args.repo)
++    path, _, _, plan = state.read_checked(repo, args.plan, validate_authorization=False)
++    if plan["lifecycle_status"] != "building":
++        raise PlanError("verify-packet requires a building brief")
++    edges = None if args.slice == build_steps.FULL else build_steps.edges_of(repo, path, args.slice)
++    target, sha = review_packet.write_verify(repo, path, args.slice, edges)
++    print(f"packet={target}")
++    print(f"packet_sha256={sha}")
++
++
++def record_mutation(args: argparse.Namespace, state) -> None:
++    path, text, plan, entry = _locked_record(
++        args, state, {"building", "green"}, "record-mutation", mutation_receipt.record
++    )
++    state.emit(path, text, plan)
++    scope, survivors = entry["scope"], entry["survivors"]
++    assert isinstance(scope, list) and isinstance(survivors, list)
++    print(f"recorded_mutation={entry['runner']}")
++    print(f"mutation_scope={len(scope)}")
++    print(f"mutation_survivors={len(survivors)}")
+diff --git a/skills/he/scripts/ticket_state.py b/skills/he/scripts/ticket_state.py
+index fb25a9d..a8f3bc9 100755
+--- a/skills/he/scripts/ticket_state.py
++++ b/skills/he/scripts/ticket_state.py
+@@ -128,10 +128,22 @@ def _dependencies_shipped(repo: Path, epic_plan: Path, depends_on: tuple[str, ..
+     return unmet
+ 
+ 
++MAX_WORKERS = 4
++IN_FLIGHT_STATUSES = frozenset({"claimed", "building", "green"})
++
++
+ def _claimable(state: dict[str, str]) -> bool:
+     return state["status"] == "todo"
+ 
+ 
++def _in_flight(repo: Path, epic_plan: Path) -> int:
++    count = 0
++    for path in list_tickets(epic_plan):
++        _, _, state, _ = read_ticket(repo, path)
++        count += state["status"] in IN_FLIGHT_STATUSES
++    return count
++
++
+ def _next_claimable(repo: Path, epic_plan: Path) -> Path | None:
+     for path in list_tickets(epic_plan):
+         _, _, state, _ = read_ticket(repo, path)
+@@ -190,6 +202,8 @@ def command_claim(args: argparse.Namespace) -> None:
+ 
+         if not _claimable(state):
+             raise TicketError(f"ticket {state['ticket_id']} is not claimable (status={state['status']})")
++        if _in_flight(primary, epic_plan) >= MAX_WORKERS:
++            raise TicketError(f"worker cap reached: {MAX_WORKERS} tickets are already claimed, building, or green")
+         unmet = _dependencies_shipped(primary, epic_plan, ticket_parser.parse_list(state["depends_on"]))
+         if unmet:
+             raise TicketError(f"ticket {state['ticket_id']} depends on unshipped ticket(s): {', '.join(unmet)}")
+diff --git a/skills/he/scripts/ticket_state_regression.py b/skills/he/scripts/ticket_state_regression.py
+index 836b64c..21dfb3f 100755
+--- a/skills/he/scripts/ticket_state_regression.py
++++ b/skills/he/scripts/ticket_state_regression.py
+@@ -18,6 +18,7 @@ from pathlib import Path
+ from typing import Any, NoReturn
+ 
+ SCRIPT_DIR = Path(__file__).resolve().parent
++ROOT = SCRIPT_DIR.parents[2]
+ DET_SCRIPTS = SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"
+ REPO_ROOT = SCRIPT_DIR.parents[2]
+ for _extra in (DET_SCRIPTS, SCRIPT_DIR, REPO_ROOT):
+@@ -506,6 +507,75 @@ def check_concurrent_claim_race(base: Path) -> None:
+     require(bool(state.get("claimed_by")), "claimed_by must be recorded")
+ 
+ 
++def check_worker_cap_and_orchestrator_guard(base: Path) -> None:
++    import ticket_guard
++
++    repo, plan = setup_epic(base, "worker-cap", "workercap", behaves("S-1", "S-2", "S-3", "S-4", "S-5"))
++    tickets = [
++        ticket_entry(f"T-{n}", [f"S-{n}"], [f"A-{n}"], [f"skills/cap{n}/scripts/owner{n}.py"]) for n in range(1, 6)
++    ]
++    run_decompose(repo, plan, tickets)
++    reauthorize(repo, plan)
++    for n in range(1, 5):
++        claim(repo, plan, ticket=f"T-{n}")
++    reject_has(lambda: claim(repo, plan, ticket="T-5"), "worker cap reached")
++    require(read_ticket_state(repo, "workercap", "T-5").get("status") == "todo", "fifth ticket stays todo")
++    require(ticket_guard.is_primary_checkout(repo), "fixture repo must be the primary checkout")
++    owned = "skills/cap1/scripts/owner1.py"
++    guard = ticket_guard.guard_error(repo, [owned])
++    require(guard is not None and "T-1" in guard and owned in guard, f"orchestrator edit of a claimed path: {guard}")
++    require(ticket_guard.guard_error(repo, ["skills/cap5/scripts/owner5.py"]) is None, "unclaimed ticket path is free")
++    require(ticket_guard.guard_error(repo, ["README.md"]) is None, "path outside every ticket is free")
++    worktree = Path(read_ticket_state(repo, "workercap", "T-1")["worktree"])
++    require(worktree.is_dir() and not ticket_guard.is_primary_checkout(worktree), "ticket worktree is not primary")
++    require(ticket_guard.guard_error(worktree, [owned]) is None, "worker edits its own claimed path freely")
++    hook = ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."]
++    manifest = repo / "hard-eng.gates.json"
++    wired = json.loads(manifest.read_text(encoding="utf-8"))
++    wired["enforcement"] = {
++        "schema_version": 1,
++        "coverage": {"fixture-check": ["checkpoint check", "hard-eng.gates.json", "hard-eng.gates.json"]},
++    }
++    manifest.write_text(json.dumps(wired), encoding="utf-8")
++    research = subprocess.run(
++        [
++            sys.executable,
++            str(SCRIPT_DIR / "execution_evidence.py"),
++            "record-research",
++            "--repo",
++            str(repo),
++            "--plan",
++            str(repo.resolve() / "features" / "workercap" / "PLAN.md"),
++            "--scope",
++            "local",
++            "--question",
++            "fixture question",
++            "--decision",
++            "fixture decision",
++            "--source",
++            "hard-eng.gates.json",
++            "--verified",
++            "fixture result",
++            "--unknown",
++            "none",
++            "--fresh-until",
++            "2999-01-01",
++        ],
++        capture_output=True,
++        text=True,
++        check=False,
++    )
++    require(research.returncode == 0, f"fixture research must record: {research.stderr[-300:]}")
++    (repo / owned).parent.mkdir(parents=True, exist_ok=True)
++    (repo / owned).write_text("value = 1\n", encoding="utf-8")
++    blocked = subprocess.run(hook, cwd=repo, capture_output=True, text=True, check=False)
++    (repo / owned).unlink()
++    require(
++        blocked.returncode != 0 and "T-1" in blocked.stderr + blocked.stdout,
++        f"checkpoint hook must refuse the orchestrator edit: exit={blocked.returncode} {blocked.stderr[-400:]}",
++    )
++
++
+ def check_dependency_gating_and_next(base: Path) -> None:
+     repo, plan = setup_epic(base, "dependency-gating", "depgate", behaves("S-1", "S-2", "S-3"))
+     tickets = three_way_tickets()
+@@ -728,6 +798,7 @@ CASES = (
+     ("epic green gate", check_epic_green_gate),
+     ("concurrent claim race: exactly one winner", check_concurrent_claim_race),
+     ("dependency gating + --next ordering", check_dependency_gating_and_next),
++    ("worker cap + orchestrator write guard", check_worker_cap_and_orchestrator_guard),
+     ("ticket checkpoint contiguity + release semantics", check_ticket_checkpoint_and_release),
+     ("forged/invalid ticket states fail loud", check_invalid_and_forged_states),
+     ("shipped ticket worktree cleanup", check_release_shipped_cleanup),
+diff --git a/.jscpd-baseline.json b/.jscpd-baseline.json
+new file
+--- /dev/null
++++ b/.jscpd-baseline.json
++{
++  "version": 1,
++  "fingerprints": {
++    "0b277a436266f45f": 1,
++    "0bac6e624098b712": 1,
++    "131a074b530d9de5": 1,
++    "13a5ad1302a81e8c": 1,
++    "1a96bf67fb780ba6": 2,
++    "243703ae6393cd25": 1,
++    "2dcb81bf05441cb5": 1,
++    "2e162c089ff720f1": 1,
++    "2f244f0f28ec1745": 1,
++    "300078848fa50b96": 1,
++    "396d08279db8ae28": 1,
++    "3a6c95367b6c260f": 1,
++    "3b29b1d4f424934a": 1,
++    "3e35c21c22e3bc91": 1,
++    "4068256fde2035d3": 1,
++    "445be4badaf6b441": 1,
++    "49cfb3738ab7b226": 1,
++    "4d5607cbff108f25": 1,
++    "5b345fec6c8d14c0": 1,
++    "63412edadafc152f": 1,
++    "64f333b08965cd86": 1,
++    "677c789f37e02b97": 1,
++    "6907b1a95ee8e281": 1,
++    "6daff18fbb0debf2": 1,
++    "6e3987cf10c37f92": 1,
++    "71364ec5ddd097dd": 1,
++    "7495cb92e62eaee9": 1,
++    "77ba59f27a32e7ee": 1,
++    "77c9221fa55a4f53": 1,
++    "838b464d48e142d7": 1,
++    "86bc77d2fcecf458": 1,
++    "882b05e4c79996e5": 1,
++    "8bcfe69fe0ca9555": 1,
++    "94807c27e5b7aa9b": 1,
++    "954e644507dc6463": 1,
++    "992fb9eda2585080": 1,
++    "9e5c8c9c6802f992": 1,
++    "a1f9119a4c908a4d": 1,
++    "a410d9957ccb907f": 1,
++    "ae7a4570aad6e171": 1,
++    "aec78ef16dccbac6": 1,
++    "b39d446d566146b4": 1,
++    "b7c8731ecca76aaa": 1,
++    "bbcf1bcb85c8a63e": 1,
++    "bfe0f9924a905f0d": 1,
++    "c1097d28087ebdf2": 1,
++    "c3ae62057bfe6266": 1,
++    "c73f3a5eb457c900": 1,
++    "c959bdb690f5a7dd": 1,
++    "ca5cb14eb712ec0a": 1,
++    "cd3ccc785c631ac1": 1,
++    "ceb7c9ee467425b7": 1,
++    "cf07dd0e2c864989": 1,
++    "cfcf2f0ebba764c3": 1,
++    "d52eafa4e4e1341a": 1,
++    "d7c7f14da10b8d72": 1,
++    "da920afeae89bbdb": 1,
++    "dd17010c39c3cfec": 1,
++    "deed79144ef58b35": 1,
++    "e21c484f32d4d40b": 1,
++    "e359d546964bfd91": 1,
++    "e479cd666ae1a319": 1,
++    "e691c19f21597059": 1,
++    "efb3793669eab30b": 1,
++    "f26f2b1fcaba97de": 1,
++    "f66f0a289126978c": 1,
++    "f67c4320e6a6e4c1": 1,
++    "fea7daa65a844225": 1,
++    "fff59d0760373340": 1
++  }
++}
+diff --git a/skills/he/scripts/mutation_receipt.py b/skills/he/scripts/mutation_receipt.py
+new file
+--- /dev/null
++++ b/skills/he/scripts/mutation_receipt.py
++#!/usr/bin/env python3
++"""Pre-ship mutation receipt: runner, scope = files changed since the approval base, totals, one row per survivor."""
++
++from __future__ import annotations
++
++import os
++import re
++import sys
++from pathlib import Path
++
++SCRIPT_DIR = Path(__file__).resolve().parent
++sys.path[:0] = [str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"), str(SCRIPT_DIR)]
++
++import plan_steps
++from bounded_run import run_captured
++from evidence_lib import (
++    EvidenceError,
++    enforcement_configured,
++    load_receipt,
++    plan_id,
++    receipt_path,
++    safe_receipt_json,
++    utc_now,
++    utc_text,
++)
++from git_env import git_env
++from safe_plan_io import SafePlanIOError, lifecycle_excluded, repository_artifact
++
++RECEIPT_NAME = "mutation.json"
++SCHEMA_VERSION = 1
++RUNNERS = {"stryker": {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"}, "mutmut": {".py"}}
++NO_RUNNER_SUFFIXES = {".dart"}
++MUTABLE_SUFFIXES = set().union(*RUNNERS.values()) | NO_RUNNER_SUFFIXES
++TOTALS = ("killed", "survived", "timeout", "no_coverage")
++DISPOSITIONS = ("fixed", "equivalent", "invalid", "deferred")
++TEST_FILE = re.compile(r"(^|/)(tests?|__tests__|spec)/|(_regression|_test|\.test|\.spec|-contract-check|_contracts?)\.")
++
++
++class MutationError(Exception):
++    """Invalid mutation receipt or payload."""
++
++
++def _text(payload: dict[str, object], key: str, label: str) -> str:
++    value = payload.get(key)
++    if not isinstance(value, str) or not value.strip():
++        raise MutationError(f"{label}.{key} must be a nonempty string")
++    return value.strip()
++
++
++def approval_base(repo: Path, plan: Path) -> str:
++    try:
++        steps = plan_steps.load(repo, plan)["steps"]
++    except plan_steps.PlanStepError as error:
++        raise MutationError(str(error)) from error
++    entry = steps.get("code-study") if isinstance(steps, dict) else None
++    head = entry.get("repository_head") if isinstance(entry, dict) else None
++    if not isinstance(head, str) or head in {"", "unborn"}:
++        raise MutationError("approval base unknown: the code-study planning step recorded no repository head")
++    return head
++
++
++def changed_source_files(repo: Path, base: str) -> tuple[str, ...]:
++    result = run_captured(["git", "diff", "--name-only", "-z", base, "--"], 60, cwd=str(repo), env=git_env())
++    if result.returncode != 0:
++        raise MutationError("cannot diff against the approval base: " + result.stderr.decode(errors="replace")[:200])
++    untracked = run_captured(
++        ["git", "ls-files", "--others", "--exclude-standard", "-z"], 60, cwd=str(repo), env=git_env()
++    )
++    names = result.stdout.split(b"\0") + untracked.stdout.split(b"\0")
++    files: set[str] = set()
++    for raw in filter(None, names):
++        relative = Path(os.fsdecode(raw))
++        if lifecycle_excluded(relative) or relative.suffix not in MUTABLE_SUFFIXES:
++            continue
++        if TEST_FILE.search(relative.as_posix()) or not (repo / relative).is_file():
++            continue
++        files.add(relative.as_posix())
++    return tuple(sorted(files))
++
++
++def _survivors(payload: dict[str, object]) -> list[dict[str, str]]:
++    rows = payload.get("survivors")
++    if not isinstance(rows, list) or any(not isinstance(item, dict) for item in rows):
++        raise MutationError("survivors must be a list of objects")
++    ledger: list[dict[str, str]] = []
++    for index, row in enumerate(rows, start=1):
++        label = f"survivor {index}"
++        disposition = _text(row, "disposition", label)
++        if disposition not in DISPOSITIONS:
++            raise MutationError(f"{label} disposition must be one of {', '.join(DISPOSITIONS)}")
++        entry = {
++            "mutant": _text(row, "mutant", label),
++            "disposition": disposition,
++            "reason": _text(row, "reason", label),
++        }
++        if disposition == "deferred":
++            entry["consequence"] = _text(row, "consequence", label)
++        ledger.append(entry)
++    return ledger
++
++
++def _other_runners(paths: list[str]) -> str:
++    names = sorted({name for name, suffixes in RUNNERS.items() if any(Path(p).suffix in suffixes for p in paths)})
++    return ", ".join(names) or "no runner"
++
++
++def validate(repo: Path, plan: Path, payload: dict[str, object]) -> dict[str, object]:
++    allowed = ("runner", "version", "argv", "scope", "totals", "survivors", "sensitivity_proof")
++    extra = sorted(key for key in payload if key not in allowed)
++    if extra:
++        raise MutationError(f"mutation payload has unknown keys: {', '.join(extra)}")
++    runner = _text(payload, "runner", "mutation")
++    if runner not in RUNNERS and runner != "none":
++        raise MutationError(f"runner must be one of {', '.join(RUNNERS)} or none")
++    scope = payload.get("scope")
++    if not isinstance(scope, list) or any(not isinstance(item, str) or not item for item in scope):
++        raise MutationError("scope must be a list of repository paths")
++    required = changed_source_files(repo, approval_base(repo, plan))
++    runnable = [path for path in required if Path(path).suffix not in NO_RUNNER_SUFFIXES]
++    entry: dict[str, object] = {"runner": runner, "scope": sorted(set(scope)), "required_scope": list(required)}
++    if runner == "none":
++        if runnable:
++            raise MutationError(f"runner none is allowed only for Dart-only scope; {runnable[0]} needs a runner")
++        entry["sensitivity_proof"] = _text(payload, "sensitivity_proof", "mutation")
++        entry["totals"] = dict.fromkeys(TOTALS, 0)
++        entry["survivors"] = []
++        return entry
++    mine = [path for path in runnable if Path(path).suffix in RUNNERS[runner]]
++    if not mine:
++        raise MutationError(f"{runner} has nothing to mutate; changed files need {_other_runners(runnable)}")
++    missing = [path for path in mine if path not in scope]
++    if missing:
++        raise MutationError(f"scope omits a file changed since the approval base: {missing[0]}")
++    wrong = [path for path in scope if Path(path).suffix not in RUNNERS[runner]]
++    if wrong:
++        raise MutationError(f"{runner} cannot mutate {wrong[0]}; record one receipt per runner")
++    argv = payload.get("argv")
++    if not isinstance(argv, list) or not argv or any(not isinstance(item, str) or not item for item in argv):
++        raise MutationError("argv must be the exact runner command as a nonempty list of strings")
++    totals = payload.get("totals")
++    if not isinstance(totals, dict) or any(not isinstance(totals.get(key), int) or totals[key] < 0 for key in TOTALS):
++        raise MutationError(f"totals must carry non-negative integers for {', '.join(TOTALS)}")
++    survivors = _survivors(payload)
++    if totals["survived"] != len(survivors):
++        raise MutationError(f"totals.survived={totals['survived']} but the ledger has {len(survivors)} rows")
++    if sum(totals[key] for key in TOTALS) == 0:
++        raise MutationError("a completed run mutates at least one thing; totals are all zero")
++    entry.update(
++        {
++            "version": _text(payload, "version", "mutation"),
++            "argv": list(argv),
++            "totals": {key: totals[key] for key in TOTALS},
++            "survivors": survivors,
++        }
++    )
++    return entry
++
++
++def load(repo: Path, plan: Path) -> dict[str, object] | None:
++    path = receipt_path(plan, RECEIPT_NAME)
++    if not path.is_file() or path.is_symlink():
++        return None
++    try:
++        value, _, _ = load_receipt(repo, plan, RECEIPT_NAME)
++    except EvidenceError as error:
++        raise MutationError(str(error)) from error
++    if value.get("schema_version") != SCHEMA_VERSION or value.get("plan_id") != plan_id(plan):
++        raise MutationError("mutation receipt does not belong to this Feature Brief")
++    return value
++
++
++def record(repo: Path, plan: Path, payload: dict[str, object]) -> dict[str, object]:
++    entry = validate(repo, plan, payload)
++    existing = load(repo, plan) or {"schema_version": SCHEMA_VERSION, "plan_id": plan_id(plan), "runs": []}
++    runs = existing.get("runs")
++    runs = [run for run in runs if isinstance(run, dict)] if isinstance(runs, list) else []
++    try:
++        artifact = repository_artifact(repo)
++    except SafePlanIOError as error:
++        raise MutationError(str(error)) from error
++    entry["recorded_at"] = utc_text(utc_now())
++    entry["artifact"] = artifact
++    runs = [run for run in runs if run.get("artifact") == artifact and run.get("runner") != entry["runner"]]
++    existing["runs"] = [*runs, entry]
++    path = receipt_path(plan, RECEIPT_NAME)
++    path.parent.mkdir(mode=0o700, exist_ok=True)
++    try:
++        safe_receipt_json(repo, path, existing)
++    except EvidenceError as error:
++        raise MutationError(str(error)) from error
++    return entry
++
++
++def ship_error(repo: Path, plan: Path, artifact: str) -> str | None:
++    if not enforcement_configured(repo):
++        return None
++    try:
++        receipt = load(repo, plan)
++        required = changed_source_files(repo, approval_base(repo, plan))
++    except (MutationError, EvidenceError) as error:
++        return str(error).replace("\n", " ")
++    runs = receipt.get("runs") if isinstance(receipt, dict) else None
++    rows = [run for run in runs if isinstance(run, dict)] if isinstance(runs, list) else []
++    current = [run for run in rows if run.get("artifact") == artifact]
++    if not current:
++        return "ship requires a mutation receipt for the green tree (plan_state.py record-mutation)"
++    covered: set[str] = set()
++    for run in current:
++        scope = run.get("scope")
++        if isinstance(scope, list):
++            covered.update(str(item) for item in scope)
++    uncovered = [path for path in required if path not in covered]
++    if uncovered:
++        return f"mutation receipt does not cover {uncovered[0]}; rerun record-mutation for the green tree"
++    return None
++
++
++def emit_lines(repo: Path, plan: Path, artifact: str) -> list[str]:
++    if not enforcement_configured(repo):
++        return []
++    error = ship_error(repo, plan, artifact)
++    return ["mutation=current"] if error is None else [f"mutation=missing ({error})"]
+diff --git a/skills/he/scripts/review_packet.py b/skills/he/scripts/review_packet.py
+new file
+--- /dev/null
++++ b/skills/he/scripts/review_packet.py
++#!/usr/bin/env python3
++"""Reviewer packet: the slice row, brief outcome, decisions, acceptance examples, edge list, and the diff, nothing else."""
++
++from __future__ import annotations
++
++import hashlib
++import os
++import sys
++from pathlib import Path
++
++SCRIPT_DIR = Path(__file__).resolve().parent
++sys.path.insert(0, str(SCRIPT_DIR))
++sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
++
++from bounded_run import run_captured
++from git_env import git_env
++from plan_sections import PlanError, parse_sections
++from safe_plan_io import lifecycle_excluded
++
++PACKET_SECTIONS = ("Outcome", "Material decisions", "Acceptance examples")
++
++
++class ReviewPacketError(Exception):
++    """The packet cannot be built from the current brief and tree."""
++
++
++VERIFIER_RULES = (
++    "- You did not write this code; drive the whole feature from the outside.",
++    "- Every outside host must go through a fake you control; list every host reached in outside_calls.",
++    "- One real outside call means FAIL.",
++    "- mode ui = screenshots before and after per view (png/jpg/webp); mode logic = recorded inputs and outputs as JSON.",
++    "- Evidence files live under features/<slug>/receipts/ and are listed with their sha256.",
++    "- Edit no product file; report defects, do not patch them.",
++)
++
++
++def packet_path(plan: Path, name: str, round_number: int) -> Path:
++    return plan.parent / "receipts" / f"{name}-review-{round_number}.txt"
++
++
++def verify_packet_path(plan: Path, name: str) -> Path:
++    return plan.parent / "receipts" / f"{name}-verify.txt"
++
++
++def _git(repo: Path, *args: str) -> bytes:
++    result = run_captured(["git", *args], 60, cwd=str(repo), env=git_env())
++    if result.returncode != 0:
++        raise ReviewPacketError(result.stderr.decode(errors="replace").strip() or "git failed")
++    return result.stdout
++
++
++def _has_head(repo: Path) -> bool:
++    return run_captured(["git", "rev-parse", "--verify", "HEAD"], 60, cwd=str(repo), env=git_env()).returncode == 0
++
++
++def diff_text(repo: Path) -> str:
++    parts: list[str] = []
++    if _has_head(repo):
++        parts.append(_git(repo, "diff", "HEAD", "--").decode("utf-8", errors="replace"))
++    untracked = _git(repo, "ls-files", "--others", "--exclude-standard", "-z").split(b"\0")
++    for raw in sorted(filter(None, untracked)):
++        relative = Path(os.fsdecode(raw))
++        if lifecycle_excluded(relative):
++            continue
++        body = (repo / relative).read_text(encoding="utf-8", errors="replace")
++        parts.append(f"diff --git a/{relative} b/{relative}\nnew file\n--- /dev/null\n+++ b/{relative}\n")
++        parts.append("".join(f"+{line}\n" for line in body.splitlines()))
++    return "".join(parts)
++
++
++def slice_row(sections: dict[str, str], name: str) -> str:
++    for line in sections["Vertical slices"].splitlines():
++        if line.startswith(f"- {name} = "):
++            return line[2:]
++    raise ReviewPacketError(f"{name} has no row in Vertical slices")
++
++
++def edge_lines(edges: dict[str, object] | None) -> list[str]:
++    cases = edges.get("cases") if isinstance(edges, dict) else None
++    if not isinstance(cases, list) or not cases:
++        raise ReviewPacketError("record the edges step before building the review packet")
++    return [
++        f"- {item['name']} (success: {item['success_test']}; failure: {item['failure_test']})"
++        for item in cases
++        if isinstance(item, dict)
++    ]
++
++
++def build(repo: Path, plan: Path, name: str, edges: dict[str, object] | None) -> str:
++    try:
++        sections = parse_sections(plan.read_text(encoding="utf-8"))
++    except PlanError as error:
++        raise ReviewPacketError(str(error)) from error
++    diff = diff_text(repo)
++    if not diff.strip():
++        raise ReviewPacketError("the tree has no changes to review")
++    lines = [f"# Review packet: {name}", "", "## Slice", slice_row(sections, name), ""]
++    for heading in PACKET_SECTIONS:
++        lines += [f"## {heading}", sections[heading], ""]
++    lines += ["## Edge list", *edge_lines(edges), "", "## Diff", "```diff", diff.rstrip("\n"), "```", ""]
++    return "\n".join(lines)
++
++
++def build_verify(plan: Path, name: str, edges: dict[str, object] | None) -> str:
++    try:
++        sections = parse_sections(plan.read_text(encoding="utf-8"))
++    except PlanError as error:
++        raise ReviewPacketError(str(error)) from error
++    scope = "whole feature" if name == "full" else slice_row(sections, name)
++    edges_block = edge_lines(edges) if name != "full" else ["- every slice edge list applies"]
++    lines = [f"# Verifier packet: {name}", "", "## Scope", scope, ""]
++    for heading in PACKET_SECTIONS:
++        lines += [f"## {heading}", sections[heading], ""]
++    lines += ["## Edge list", *edges_block, "", "## Rules", *VERIFIER_RULES, ""]
++    lines += ["## Evidence directory", str(plan.parent / "receipts"), ""]
++    return "\n".join(lines)
++
++
++def write_verify(repo: Path, plan: Path, name: str, edges: dict[str, object] | None) -> tuple[Path, str]:
++    target = verify_packet_path(plan, name)
++    target.parent.mkdir(mode=0o700, exist_ok=True)
++    text = build_verify(plan, name, edges)
++    target.write_text(text, encoding="utf-8")
++    return target, hashlib.sha256(text.encode("utf-8")).hexdigest()
++
++
++def write(repo: Path, plan: Path, name: str, round_number: int, edges: dict[str, object] | None) -> tuple[Path, str]:
++    target = packet_path(plan, name, round_number)
++    target.parent.mkdir(mode=0o700, exist_ok=True)
++    text = build(repo, plan, name, edges)
++    target.write_text(text, encoding="utf-8")
++    return target, hashlib.sha256(text.encode("utf-8")).hexdigest()
++
++
++def digest(path: Path) -> str | None:
++    if not path.is_file():
++        return None
++    return hashlib.sha256(path.read_bytes()).hexdigest()
+diff --git a/skills/he/scripts/ticket_guard.py b/skills/he/scripts/ticket_guard.py
+new file
+--- /dev/null
++++ b/skills/he/scripts/ticket_guard.py
++#!/usr/bin/env python3
++"""Orchestrator write guard: the primary checkout never edits a path owned by a claimed ticket."""
++
++from __future__ import annotations
++
++import argparse
++import os
++import re
++import sys
++from collections.abc import Iterable
++from pathlib import Path
++
++SCRIPT_DIR = Path(__file__).resolve().parent
++sys.path[:0] = [str(SCRIPT_DIR), str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts")]
++
++from bounded_run import run_captured
++from git_env import git_env
++
++IN_FLIGHT = frozenset({"claimed", "building", "green"})
++STATE_ROW = re.compile(r"(?m)^- (lifecycle_status|execution_mode|status|ticket_id) = (\S+)$")
++TOUCH_ROW = re.compile(r"(?m)^-\s*`([^`]+)`")
++
++
++class TicketGuardError(Exception):
++    """The guard cannot read the repository or the epic tickets."""
++
++
++def _rows(text: str) -> dict[str, str]:
++    return {key: value for key, value in STATE_ROW.findall(text)}
++
++
++def is_primary_checkout(repo: Path) -> bool:
++    common = run_captured(["git", "rev-parse", "--git-common-dir"], 20, cwd=str(repo), env=git_env())
++    own = run_captured(["git", "rev-parse", "--git-dir"], 20, cwd=str(repo), env=git_env())
++    if common.returncode or own.returncode:
++        raise TicketGuardError("cannot resolve the checkout kind")
++    common_dir = (repo / os.fsdecode(common.stdout.strip())).resolve()
++    own_dir = (repo / os.fsdecode(own.stdout.strip())).resolve()
++    return common_dir == own_dir
++
++
++def ticket_epics(repo: Path) -> list[Path]:
++    features = repo / "features"
++    if not features.is_dir():
++        return []
++    plans = []
++    for plan in sorted(features.glob("*/PLAN.md")):
++        rows = _rows(plan.read_text(encoding="utf-8", errors="replace"))
++        if rows.get("lifecycle_status") == "building" and rows.get("execution_mode") == "tickets":
++            plans.append(plan)
++    return plans
++
++
++def claimed_paths(epic_plan: Path) -> dict[str, str]:
++    owners: dict[str, str] = {}
++    tickets = epic_plan.parent / "tickets"
++    if not tickets.is_dir():
++        return owners
++    for ticket in sorted(tickets.glob("T-*.md")):
++        text = ticket.read_text(encoding="utf-8", errors="replace")
++        rows = _rows(text)
++        if rows.get("status") not in IN_FLIGHT:
++            continue
++        touches = text.split("## Touches", 1)[1] if "## Touches" in text else ""
++        for path in TOUCH_ROW.findall(touches):
++            owners.setdefault(path.strip("/"), rows.get("ticket_id", ticket.stem))
++    return owners
++
++
++def _owned(path: str, owners: dict[str, str]) -> str | None:
++    parts = Path(path).as_posix().strip("/")
++    for owned, ticket_id in owners.items():
++        if parts == owned or parts.startswith(owned + "/"):
++            return ticket_id
++    return None
++
++
++def guard_error(repo: Path, changed: Iterable[str]) -> str | None:
++    if not is_primary_checkout(repo):
++        return None
++    for epic_plan in ticket_epics(repo):
++        owners = claimed_paths(epic_plan)
++        for entry in changed:
++            if ticket_id := _owned(entry, owners):
++                return f"orchestrator changed a path owned by claimed ticket {ticket_id}: {entry}"
++    return None
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--repo", required=True)
++    parser.add_argument("--path", action="append", default=[], help="changed path; omit to read NUL-separated stdin")
++    args = parser.parse_args()
++    repo = Path(args.repo).resolve()
++    changed = args.path or [os.fsdecode(item) for item in sys.stdin.buffer.read().split(b"\0") if item]
++    try:
++        error = guard_error(repo, changed)
++    except (TicketGuardError, OSError, UnicodeError) as failure:
++        print(f"result=invalid\nerror={failure}")
++        return 4
++    if error:
++        print(f"result=invalid\nerror={error}")
++        return 4
++    print("result=valid")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+```

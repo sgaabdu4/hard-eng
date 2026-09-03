@@ -1,0 +1,36 @@
+{
+  "fifth_claim_message": "worker cap reached: 4 tickets are already claimed, building, or green",
+  "t5_status": {
+    "state_version": "1",
+    "ticket_id": "T-5",
+    "epic_plan_id": "verifycap-test",
+    "epic_fingerprint": "sha256:f5dabb8d424568c6b27bc7f3bc1934b6f5217e56885c0fba4319f48c4751de08",
+    "status": "todo",
+    "depends_on": "none",
+    "slices": "S-5",
+    "covers": "A-5",
+    "active_slice": "none",
+    "completed_slices": "none",
+    "claimed_by": "none",
+    "claimed_at": "none",
+    "worktree": "none",
+    "branch": "none",
+    "green_artifact": "none",
+    "delivery": "none",
+    "tracker_ref": "none",
+    "next_action": "Claim this ticket to begin work."
+  },
+  "after_guard_t1": "orchestrator changed a path owned by claimed ticket T-1: skills/cap1/scripts/owner1.py",
+  "after_guard_readme": null,
+  "worktree_guard_own_claim": null,
+  "cli_owned_exit": 4,
+  "cli_owned_stdout": "result=invalid\nerror=orchestrator changed a path owned by claimed ticket T-1: skills/cap1/scripts/owner1.py",
+  "cli_free_exit": 0,
+  "cli_free_stdout": "result=valid",
+  "next_claimed": [
+    "result=claimed ticket=T-1 worktree=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmp_z6n8bor/verify-dep.worktrees/verifydep/T-1 branch=ticket/verifydep/T-1\n",
+    "result=claimed ticket=T-2 worktree=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmp_z6n8bor/verify-dep.worktrees/verifydep/T-2 branch=ticket/verifydep/T-2\n"
+  ],
+  "t3_direct_claim_message": "ticket T-3 depends on unshipped ticket(s): T-1",
+  "outside_calls": []
+}

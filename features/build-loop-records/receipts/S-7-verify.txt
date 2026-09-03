@@ -1,0 +1,54 @@
+# Verifier packet: S-7
+
+## Scope
+S-7 = build closing question, `BUILD.md` summary, and `handoff=ship` block at green; depends_on = S-2, S-3, S-5
+
+## Outcome
+- The build stage is machine-checked end to end: every slice must leave records for its edge cases mapped to success and failure tests, its green test run, a fresh-eyes review loop with a findings ledger, and an end-to-end verification run by a separate agent with fake outside services and before/after evidence; the slice gate refuses a slice without them; new push-time checks catch copy-paste clones (baseline, new clones only) and complex under-tested TypeScript functions; mutation testing runs on changed files before ship for every feature; ticket mode has a machine-checked board; build closes with one question (walkthrough video?) and prints a ship handoff block with worktree, branch, plan, and prompt.
+
+## Material decisions
+- Slice records live in `features/<slug>/receipts/build-steps.json` via `plan_state.py record-build --slice S-n --step <step>`; steps = `edges` (list of edge cases, each with a success test and a failure test id), `green` (exact command + exit 0 + tree hash), `review` (rounds 1..3, each with reviewer findings; every finding closed as fixed|rejected-with-reason|replan; round 3 still open → stop and ask the user), `verify` (mode ui|logic, fakes used for every outside call, before and after evidence paths with hashes, edge cases exercised); records bind to the tree hash and go stale on change.
+- Slice gate `run --slice` refuses when any of the four records is missing or stale for that slice; `--full` refuses when any completed slice lacks them; existing e2e/security/review free text stays but `review` must name the review record.
+- Reviewer = fresh subagent with only the diff, the brief, the acceptance examples, and the slice edge list; never the author's chat; max three rounds; zero open findings ends the loop.
+- Verifier = fresh subagent that drives the whole feature after the last slice: UI feature → real browser through the `e2e` skill with screenshots before and after per view; logic feature → recorded inputs and outputs before and after as JSON; every outside HTTP call goes through a fake the verifier records; a real outside call during verification = FAIL.
+- TypeScript = the existing `fallow` family moves to `fallow audit` (dead code + new clones + complexity + CRAP `--max-crap 30`, changed files against the merge base, `--coverage coverage/coverage-final.json` when present, per-analysis baselines for old debt); Dart + Python = new `clones` family = jscpd 5 with `--baseline` + `--fail-on-new-clones` and the json reporter; both push + ci phases; no crap4ts.
+- Mutation = pre-ship step for every feature, scope = files changed since the approval base, runner per the existing mutation reference (Stryker / mutmut), survivors need a written disposition in the receipt; `he-ship` entry refuses without it.
+- Speed = slice gate runs independent families in parallel with one bounded timeout, changed-file scoping for clones/crap/mutation, baseline files so old debt never blocks, records reused when the tree hash is unchanged.
+- Ticket mode = `ticket_state.py board` output printed by `inspect`; a worker may claim only a ticket whose dependencies are shipped; orchestrator session never edits product files (enforcement check on claimed ticket paths); up to four workers.
+- Build closing = one question after the full gate: walkthrough video yes|no (recorded in the brief as `walkthrough = ...`); yes → `product-walkthrough-video` skill output listed in the verify record.
+- Handoff at `green` = `inspect` prints `handoff=ship` with root, branch, plan, and a paste-ready ship prompt; a generated human-readable `features/<slug>/BUILD.md` summarises every slice's records for review.
+- External claim check = every backticked tool name in the brief's Material decisions and in the code-study `external_contract` answer must match a research source row (HTTPS url + version) recorded after the plan's init time; memory files and repository notes never count; `validate`, `approve`, and the gate-manifest change check refuse with the first uncited tool; the tool list = manifest families + a fixed vendor list (fallow, jscpd, stryker, mutmut, react-doctor, dart-decimate, biome, ruff, pyright, gitleaks, tsc, playwright, jira, azure devops, gh).
+- ux_reference = n/a
+- ux_reference_sources = n/a
+
+## Acceptance examples
+- Given a slice with code changes but no `edges` record, when the slice gate runs, then it fails naming `edges` for that slice and writes no receipt.
+- Given an `edges` record where one edge case lacks a failure test id, when `record-build` runs, then it refuses naming that edge case.
+- Given a review record with an open finding after round 3, when the slice gate runs, then it fails and `inspect` prints the open finding as the next action for the user.
+- Given a verify record whose fake log shows one real outside host, when `record-build verify` runs, then it refuses naming the host.
+- Given a Dart repository with an old clone and a baseline, when a push adds a new clone, then the `clones` family fails naming the new pair; unchanged old clones pass.
+- Given a TypeScript function whose CRAP score reaches 30, when the `fallow` family runs on a change touching it, then the push fails naming the function.
+- Given a completed feature with no mutation receipt, when `he-ship` starts, then it refuses naming mutation; after a run with every survivor dispositioned it passes.
+- Given a plan at `green`, when `inspect` runs, then it prints `handoff=ship` with root, branch, plan, and prompt, and `BUILD.md` exists listing every slice record.
+- Given a brief whose decisions name `fallow` while the research record has no fallow source, when `validate` runs, then it fails naming fallow; after `record-research` with the docs url and version it passes.
+- Given a manifest change adding a `clones` family, when the gate-manifest check runs without a jscpd research row, then it fails naming jscpd.
+- Given four tickets where T-3 depends on T-1 still building, when a worker claims `--next`, then T-3 is not offered.
+
+## Edge list
+- green checkpoint without the closing answer (success: build_steps_regression.check_full_gate: green passes with walkthrough=no; failure: build_steps_regression.check_full_gate: green must ask the closing question)
+- walkthrough yes without a video in the full verify record (success: build_steps._evidence_matches_mode: decodable mp4/webm/mov accepted in after list; failure: build_steps_regression.check_full_gate: walkthrough yes needs a video)
+- walkthrough value outside pending|yes|no (success: plan_state.parse_state: absent row reads as pending; failure: build_steps_regression.check_full_gate: walkthrough value must be checked)
+- BUILD.md generated only at green and tolerated by the extra-Markdown guards (success: build_steps_regression.check_full_gate: BUILD.md must list S-1 records; agent-hook-contract-check PASS; failure: build_steps_regression.check_full_gate: BUILD.md must wait for green)
+- inspect at green prints the ship handoff (success: build_steps_regression.check_full_gate: green must hand off to ship + ship prompt names the report; failure: plan_handoff.lines: non-handoff states print nothing (plan_steps_regression existing))
+- terminal cleanup excludes BUILD.md like PLAN.md (success: lifecycle_excludes_regression PASS with BUILD.md pattern; failure: lifecycle_excludes._update_owned: invalid row refused)
+
+## Rules
+- You did not write this code; drive the whole feature from the outside.
+- Every outside host must go through a fake you control; list every host reached in outside_calls.
+- One real outside call means FAIL.
+- mode ui = screenshots before and after per view (png/jpg/webp); mode logic = recorded inputs and outputs as JSON.
+- Evidence files live under features/<slug>/receipts/ and are listed with their sha256.
+- Edit no product file; report defects, do not patch them.
+
+## Evidence directory
+/Users/abid/.agents/features/build-loop-records/receipts

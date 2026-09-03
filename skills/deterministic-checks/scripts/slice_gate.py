@@ -18,7 +18,9 @@ for _path in (SCRIPT_DIR, HE_SCRIPTS):
         sys.path.insert(0, str(_path))
 
 from bounded_run import run_captured
+from build_steps import gate_error as build_record_error
 from execution_evidence import EvidenceError, validate_execution
+from external_claims import manifest_claim_error
 from git_env import git_env
 from project_gate import ProjectGateError, load_manifest, run_families
 from safe_plan_io import SafePlanIOError, lifecycle_excluded, repo_root, repository_artifact
@@ -36,7 +38,8 @@ REACT_DEP = re.compile(r'"(react|react-dom|next)"\s*:')
 JS_FAMILIES = ("typecheck", "format", "lint", "tests", "fallow")
 REACT_FAMILIES = ("react-doctor",)
 DART_FAMILIES = ("dart-analyze", "dart-test", "dart-decimate")
-PY_FAMILIES = frozenset({"python-format", "python-lint", "python-tests", "python-types"})
+PY_FAMILIES = frozenset({"python-format", "python-lint", "python-tests", "python-types", "clones"})
+CLONES_FAMILY = "clones"
 BOUNDARY_FAMILY = "boundary-contracts"
 BOUNDARY_SUFFIXES = JS_EXT | {".dart", ".gql", ".graphql", ".json", ".proto", ".yaml", ".yml"}
 BOUNDARY_SCOPE_KEY = "boundary_contracts"
@@ -372,6 +375,7 @@ def applicable_families(repo: Path, paths: tuple[str, ...]) -> tuple[str, ...]:
                 families.update(REACT_FAMILIES)
         if relative.name == "pubspec.yaml" or (suffix == ".dart" and _dart_package(repo, relative, dart_cache)):
             families.update(DART_FAMILIES)
+            families.update({CLONES_FAMILY} & declared)
         if suffix == ".py":
             families.update(PY_FAMILIES & declared)
         scoped = _scope_root(relative, application_roots, local_package_roots)
@@ -544,6 +548,8 @@ def receipt_error(repo: Path, plan: Path, plan_id: str, name: str) -> str | None
             return "receipt does not cover affected stacks: " + ", ".join(uncovered)
         if error := boundary_contract_error(repo, current_paths, current):
             return error
+        if error := build_record_error(repo, plan, name):
+            return error
         for field in ("behavior", "e2e", "security", "review", "e2e_sha256"):
             if not str(data.get(field, "")).strip():
                 return f"receipt is missing its {field} record"
@@ -647,6 +653,10 @@ def command_run(args: argparse.Namespace) -> None:
     if error := coverage_error(applicable, checks):
         raise SliceGateError(error)
     if error := boundary_contract_error(repo, paths, applicable):
+        raise SliceGateError(error)
+    if "hard-eng.gates.json" in paths and (error := manifest_claim_error(repo, plan)):
+        raise SliceGateError(error)
+    if error := build_record_error(repo, plan, name):
         raise SliceGateError(error)
     artifact_before = repository_artifact(repo)
     results = run_families(repo, checks, args.timeout)

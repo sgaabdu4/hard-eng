@@ -1,0 +1,8 @@
+{
+  "old_fallow_manifest_accepted": false,
+  "old_fallow_manifest_message": "fallow requires audit mode with --format json and --max-crap <N>",
+  "old_fallow_refused": true,
+  "combined_report_accepted": false,
+  "combined_report_message": "fallow report is not an audit report",
+  "combined_report_refused": true
+}

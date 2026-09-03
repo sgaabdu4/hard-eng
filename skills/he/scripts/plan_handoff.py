@@ -12,7 +12,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from evidence_lib import EvidenceError, git_value
 
-HANDOFF_STATES = {"build-ready", "building"}
+HANDOFF_STATES = {"build-ready", "building", "green"}
 SETUP_SCRIPT = SCRIPT_DIR / "setup_state.py"
 STATE_SCRIPT = SCRIPT_DIR / "plan_state.py"
 TICKET_SCRIPT = SCRIPT_DIR / "ticket_state.py"
@@ -35,6 +35,13 @@ def build_prompt(repo: Path, relative_plan: Path, slice_id: str) -> str:
         f"run `python3 {SETUP_SCRIPT} verify --repo {repo}` and "
         f"`python3 {STATE_SCRIPT} inspect --repo {repo} --plan {relative_plan}`, "
         f"then build slice {slice_id} from {relative_plan} with he-build, one Implement/Verify loop until green."
+    )
+
+
+def ship_prompt(repo: Path, relative_plan: Path) -> str:
+    return (
+        f"Ship Hard Eng feature {relative_plan.parent.name} in {repo}: read {relative_plan} and "
+        f"{relative_plan.parent / 'BUILD.md'}, then follow he-ship from assert-green to the shipped checkpoint."
     )
 
 
@@ -71,6 +78,15 @@ def lines(repo: Path, plan: Path, state: dict[str, str]) -> list[str]:
     if state["lifecycle_status"] not in HANDOFF_STATES:
         return []
     relative_plan = plan.relative_to(repo)
+    if state["lifecycle_status"] == "green":
+        return [
+            "handoff=ship",
+            f"handoff_root={repo}",
+            f"handoff_branch={branch_name(repo)}",
+            f"handoff_plan={relative_plan}",
+            f"handoff_report={relative_plan.parent / 'BUILD.md'}",
+            f"handoff_prompt={ship_prompt(repo, relative_plan)}",
+        ]
     output = [
         "handoff=ready",
         f"handoff_root={repo}",

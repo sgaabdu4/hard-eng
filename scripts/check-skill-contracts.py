@@ -321,6 +321,8 @@ def check_external_contracts() -> None:
         ("repository learning state", (sys.executable, "skills/he-learn/scripts/learning_state_regression.py")),
         ("feature setup state", (sys.executable, "skills/he/scripts/setup_state_regression.py")),
         ("planning step receipts", (sys.executable, "skills/he/scripts/plan_steps_regression.py")),
+        ("build step records", (sys.executable, "skills/he/scripts/build_steps_regression.py")),
+        ("external claims", (sys.executable, "skills/he/scripts/external_claims_regression.py")),
         ("tracker hierarchy mirror", (sys.executable, "skills/he/scripts/tracker_github_regression.py")),
         ("tracker HTTP adapters", (sys.executable, "skills/he/scripts/tracker_http_regression.py")),
         ("parallel ticket state", (sys.executable, "skills/he/scripts/ticket_state_regression.py")),

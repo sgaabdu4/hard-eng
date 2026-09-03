@@ -17,11 +17,15 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import build_report
+import build_steps
+import mutation_receipt
 import plan_handoff
 import plan_step_commands
 import plan_steps
+import review_packet
 from authorization_recovery import validate_reopen_authorization
-from evidence_lib import EvidenceError, invalidate_direct_receipt
+from evidence_lib import EvidenceError, enforcement_configured, invalidate_direct_receipt
 from execution_evidence import authorize_execution, validate_execution
 from lifecycle_excludes import LifecycleExcludeError, activate_lifecycle_artifacts, exclude_terminal_artifacts
 from plan_cleanup import draft as run_plan_draft
@@ -71,11 +75,13 @@ STATE_KEYS = (
     "replan_reason",
 )
 STATE_KEYS_V2 = STATE_KEYS + ("execution_mode",)
+OPTIONAL_STATE_KEYS = ("walkthrough",)
+WALKTHROUGH_VALUES = {"pending", "yes", "no"}
 ACTIVE = {"planning", "build-ready", "building", "green"}
 STATUSES = ACTIVE | {"shipped", "cancelled"}
 APPROVALS = {"pending", "approved"}
 REPLAN_REASONS = {"changed-outcome", "material-safety-contract"}
-MUTABLE_FIELDS = {"lifecycle_status", "active_slice", "completed_slices", "next_action"}
+MUTABLE_FIELDS = {"lifecycle_status", "active_slice", "completed_slices", "next_action", "walkthrough"}
 TRANSITIONS = {
     "planning": set(),
     "build-ready": {"building"},
@@ -152,9 +158,11 @@ def parse_state(text: str) -> dict[str, str]:
         rows[key] = value.strip()
     keys = STATE_KEYS_V2 if rows.get("state_version") == "2" else STATE_KEYS
     missing = [key for key in keys if key not in rows]
-    extra = sorted(set(rows) - set(keys))
+    extra = sorted(set(rows) - set(keys) - set(OPTIONAL_STATE_KEYS))
     if missing or extra:
         raise PlanError(f"State keys mismatch; missing={missing}; extra={extra}")
+    if rows.get("walkthrough", "pending") not in WALKTHROUGH_VALUES:
+        raise PlanError("walkthrough must be pending, yes, or no")
     return rows
 
 
@@ -266,6 +274,7 @@ def render_state(text: str, changes: dict[str, str]) -> str:
     state = parse_state(text)
     state.update(changes)
     keys = STATE_KEYS_V2 if state.get("state_version") == "2" else STATE_KEYS
+    keys += tuple(key for key in OPTIONAL_STATE_KEYS if key in state)
     block = "\n" + "\n".join(f"- {key} = {state[key]}" for key in keys) + "\n"
     start, end = state_bounds(text)
     return text[:start] + block + text[end:]
@@ -298,7 +307,7 @@ def template(slug: str, plan_id: str) -> str:
     return render_template(slug, plan_id, STATE_START, STATE_END)
 
 
-TICKET_MD = re.compile(r"tickets/T-(?:[1-9][0-9]*|int)\.md")
+TICKET_MD = re.compile(r"tickets/T-(?:[1-9][0-9]*|int)\.md|BUILD\.md")
 
 
 def assert_single_plan_markdown(repo: Path, plan: Path) -> None:
@@ -403,6 +412,8 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
     print(f"route_target={ROUTES[state['lifecycle_status']]}")
     print(f"active_slice={state['active_slice']}")
     print(f"completed_slices={state['completed_slices']}")
+    if "walkthrough" in state:
+        print(f"walkthrough={state['walkthrough']}")
     print(f"next_action={state['next_action']}")
     if state["lifecycle_status"] == "building":
         repo = path.parents[2]
@@ -410,6 +421,13 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
             print(f"slice_receipt={receipt_status(repo, path, state['plan_id'], state['active_slice'])}")
         elif state["completed_slices"] != "none":
             print(f"full_receipt={receipt_status(repo, path, state['plan_id'], 'full')}")
+        for line in build_steps.emit_lines(
+            repo, path, state["active_slice"] if state["active_slice"] != "none" else "full"
+        ):
+            print(line)
+    if state["lifecycle_status"] == "green":
+        for line in mutation_receipt.emit_lines(path.parents[2], path, state["green_artifact"]):
+            print(line)
     repo = path.parents[2]
     if state.get("execution_mode") == "tickets":
         from ticket_state import board_summary
@@ -462,11 +480,6 @@ def command_inspect(args: argparse.Namespace) -> None:
         print("result=none")
         raise SystemExit(2)
     path, text, _, state = read_checked(repo, str(path))
-    emit(path, text, state)
-
-
-def command_validate(args: argparse.Namespace) -> None:
-    path, text, _, state = read_checked(repo_root(args.repo), args.plan)
     emit(path, text, state)
 
 
@@ -572,6 +585,10 @@ def command_checkpoint(args: argparse.Namespace) -> None:
             if state["lifecycle_status"] == "building" and requested == "green":
                 if message := receipt_checkpoint_error(repo, path, state["plan_id"], "full"):
                     raise PlanError(message)
+                if enforcement_configured(repo) and (
+                    message := build_report.closing_error(repo, path, {**state, **changes})
+                ):
+                    raise PlanError(message)
                 changes["green_artifact"] = repository_artifact(repo)
             elif state["lifecycle_status"] == "green" and requested == "shipped":
                 delivered_head_artifact(repo, state["green_artifact"])
@@ -582,6 +599,8 @@ def command_checkpoint(args: argparse.Namespace) -> None:
         candidate = render_state(text, changes)
         updated = validate_text(candidate)
         replace_if_unchanged(repo, path.relative_to(repo), text.encode("utf-8"), mode, candidate.encode("utf-8"))
+        if updated["lifecycle_status"] == "green" and enforcement_configured(repo):
+            build_report.write(repo, path)
         if updated["lifecycle_status"] in {"shipped", "cancelled"}:
             try:
                 invalidate_direct_receipt(repo)
@@ -619,6 +638,8 @@ def command_assert_green(args: argparse.Namespace) -> None:
         raise PlanError("green artifact drift; return to building")
     if not args.artifact_only and state["approval_status"] == "approved":
         validate_execution(repo, path, state["approval_fingerprint"])
+        if message := mutation_receipt.ship_error(repo, path, state["green_artifact"]):
+            raise PlanError(message)
     emit(path, text, state)
     print(f"green_artifact={actual}")
 
@@ -636,7 +657,7 @@ def main() -> int:
     actions = {
         "init": command_init,
         "inspect": command_inspect,
-        "validate": command_validate,
+        "validate": lambda args: plan_step_commands.validate_command(args, sys.modules[__name__]),
         "approve": command_approve,
         "reopen": command_reopen,
         "checkpoint": command_checkpoint,
@@ -644,6 +665,11 @@ def main() -> int:
         "assert-green": command_assert_green,
         "cleanup": command_cleanup,
         "record-step": lambda args: plan_step_commands.record_step(args, sys.modules[__name__]),
+        "record-build": lambda args: plan_step_commands.record_build(args, sys.modules[__name__]),
+        "review-packet": lambda args: plan_step_commands.review_packet_command(args, sys.modules[__name__]),
+        "verify-packet": lambda args: plan_step_commands.verify_packet_command(args, sys.modules[__name__]),
+        "record-mutation": lambda args: plan_step_commands.record_mutation(args, sys.modules[__name__]),
+        "build-report": lambda args: plan_step_commands.build_report_command(args, sys.modules[__name__]),
         "probe-trackers": lambda args: plan_step_commands.probe_trackers(args, sys.modules[__name__]),
         "draft": lambda args: run_plan_draft(args, validate_text, emit),
     }
@@ -658,6 +684,9 @@ def main() -> int:
         SafePlanIOError,
         LifecycleExcludeError,
         plan_steps.PlanStepError,
+        build_steps.BuildStepError,
+        review_packet.ReviewPacketError,
+        mutation_receipt.MutationError,
     ) as error:
         print(f"result=invalid\nerror={error}", file=sys.stderr)
         return 4
