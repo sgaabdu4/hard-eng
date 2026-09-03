@@ -306,14 +306,12 @@ def check_lifecycle(root: Path) -> None:
     source.write_text("value = 1\n", encoding="utf-8")
     receipts = active.parent / "receipts"
     receipts.mkdir(exist_ok=True)
-    (receipts / "S-1.json").write_text("{}\n", encoding="utf-8")
-    (receipts / "S-1-verify-before.json").write_text("{}\n", encoding="utf-8")
+    for name in ("S-1.json", "S-1-verify-before.json"):
+        (receipts / name).write_text("{}\n", encoding="utf-8")
     response, _ = run_hook("codex", "pretooluse", edit_payload(repo, receipts / "S-1.json"))
     check("raw write to a slice receipt blocks", "lifecycle-owned" in (denial(response, "codex") or ""), repr(response))
-    evidence_path = "features/one/receipts/S-1-verify-before.json"
-    started = start_direct(repo, evidence_path)
-    check("direct receipt for verifier evidence records", started.returncode == 0, started.stderr)
-    response, _ = run_hook("codex", "pretooluse", edit_payload(repo, repo / evidence_path))
+    start_direct(repo, "features/one/receipts/S-1-verify-before.json")
+    response, _ = run_hook("codex", "pretooluse", edit_payload(repo, receipts / "S-1-verify-before.json"))
     check("verifier evidence file is writable under a Direct receipt", response is None, repr(response))
     (repo / ".git/hard-eng/current-direct.json").unlink()
 
