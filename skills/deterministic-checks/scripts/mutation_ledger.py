@@ -90,8 +90,15 @@ def load_ledger(repo: Path) -> dict:
     if not path.is_file():
         return {"schema_version": SCHEMA_VERSION, "functions": {}}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
+        return parse_ledger(path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise LedgerError(f"{LEDGER_FILE} is unreadable: {error}") from error
+
+
+def parse_ledger(text: str) -> dict:
+    try:
+        data = json.loads(text)
+    except ValueError as error:
         raise LedgerError(f"{LEDGER_FILE} is unreadable: {error}") from error
     functions = data.get("functions") if isinstance(data, dict) else None
     if data.get("schema_version") != SCHEMA_VERSION or not isinstance(functions, dict):
@@ -187,6 +194,25 @@ def scope_functions(repo: Path, config: dict, base: str | None) -> dict[str, str
 def unscored(ledger: dict, functions: dict[str, str]) -> dict[str, str]:
     rows = ledger["functions"]
     return {key: digest for key, digest in functions.items() if rows.get(key, {}).get("hash") != digest}
+
+
+def seed_rows(repo: Path, ref: str, functions: dict[str, str]) -> int:
+    try:
+        branch = parse_ledger(_git(repo, "show", f"{ref}:{LEDGER_FILE}"))["functions"]
+    except LedgerError:
+        return 0
+    ledger = load_ledger(repo)
+    rows = ledger["functions"]
+    copied = 0
+    for key, digest in functions.items():
+        row = branch.get(key)
+        if row is None or row["hash"] != digest or rows.get(key, {}).get("hash") == digest:
+            continue
+        rows[key] = row
+        copied += 1
+    if copied:
+        save_ledger(repo, ledger)
+    return copied
 
 
 def planned(repo: Path, base: str | None) -> dict[str, str]:
@@ -440,7 +466,9 @@ def command_run(args: argparse.Namespace) -> int:
     if config is None:
         raise LedgerError("pyproject.toml has no [tool.mutmut] table; wire the runner first (mutation.md)")
     base = resolve_base(repo, args.base) if args.base is not None or args.changed_only else None
-    targets = unscored(load_ledger(repo), scope_functions(repo, config, base))
+    functions = scope_functions(repo, config, base)
+    print(f"seeded={seed_rows(repo, args.seed_ref, functions) if args.seed_ref else 0}")
+    targets = unscored(load_ledger(repo), functions)
     print(f"planned={len(targets)}")
     if not targets:
         print("mutation-ledger: nothing to score")
@@ -488,6 +516,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_command.add_argument("--budget-minutes", type=int, required=True)
     run_command.add_argument("--mutmut", help="mutmut executable; default .venv-mutation/bin/mutmut")
     run_command.add_argument("--results", default="mutants")
+    run_command.add_argument(
+        "--seed-ref", help="ref whose mutation-ledger.json fills gaps for functions with the same hash"
+    )
     verdict = commands.add_parser("verdict")
     verdict.add_argument("--repo", required=True)
     verdict.add_argument("--function", required=True)

@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
+    inputs:
+      budget_minutes:
+        description: Minutes mutmut may run before the ledger records what finished
+        default: "300"
 
 permissions:
   contents: write
@@ -62,7 +66,10 @@ jobs:
 
       - name: Score functions with no ledger row
         if: steps.visibility.outputs.private == 'false'
-        run: python3 skills/deterministic-checks/scripts/mutation_ledger.py run --repo . --budget-minutes 300
+        run: >-
+          python3 skills/deterministic-checks/scripts/mutation_ledger.py run --repo .
+          --seed-ref "origin/$LEDGER_BRANCH"
+          --budget-minutes "${{ inputs.budget_minutes || 300 }}"
 
       - name: Open the ledger pull request
         if: steps.visibility.outputs.private == 'false'
@@ -71,7 +78,7 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- mutation-ledger.json; then
+          if git diff --quiet -- mutation-ledger.json || git diff --quiet "origin/$LEDGER_BRANCH" -- mutation-ledger.json; then
             echo "ledger unchanged"
             exit 0
           fi
