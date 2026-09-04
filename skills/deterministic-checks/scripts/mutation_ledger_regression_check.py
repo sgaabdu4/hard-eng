@@ -67,8 +67,12 @@ def git(repo: Path, *args: str) -> str:
     ).stdout
 
 
+LEDGER_ENV = ("MUTATION_LEDGER_BASE", "MUTATION_LEDGER_VISIBILITY", "MUTATION_LEDGER_GH")
+
+
 def ledger(repo: Path, *args: str, env: dict[str, str] | None = None, cwd: Path | None = None) -> ScriptResult:
-    return run_script(LEDGER_SCRIPT, args, cwd=cwd or repo, env={**os.environ, **(env or {})})
+    inherited = {key: value for key, value in os.environ.items() if key not in LEDGER_ENV}
+    return run_script(LEDGER_SCRIPT, args, cwd=cwd or repo, env={**inherited, **(env or {})})
 
 
 def values(output: str) -> dict[str, list[str]]:
