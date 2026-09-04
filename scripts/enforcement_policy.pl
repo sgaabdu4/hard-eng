@@ -303,7 +303,7 @@ sub lifecycle_target_allowed {
     return 1 if $relative eq 'hard-eng.gates.json';
     return 1 if $relative eq "features/$feature/PLAN.md";
     return 1 if $relative eq "features/$feature/BUILD.md";
-    return 1 if $relative =~ m{\Afeatures/\Q$feature\E/receipts/[A-Za-z0-9][A-Za-z0-9._-]*\.json\z};
+    return 1 if $relative =~ m{\Afeatures/\Q$feature\E/receipts/[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*\z};
     return 1 if $relative =~ m{\Afeatures/\Q$feature\E/tickets/T-(?:[1-9][0-9]*|int)\.md\z};
     return 1 if $relative =~ m{\A\.agents/learning/[a-z0-9]+(?:-[a-z0-9]+)*\.json\z};
     return 0;
