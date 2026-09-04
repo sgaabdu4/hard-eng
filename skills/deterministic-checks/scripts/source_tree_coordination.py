@@ -262,18 +262,24 @@ def _poison_payload(path: Path) -> dict[str, str]:
     return values
 
 
-def clear_react_doctor_quarantine(
-    repo: Path, lock_path: Path, *, family: str, expected: str, receipt_path: Path, receipt_token: str, deadline: float
+def _require_quarantine_owner(
+    lock_path: Path, family: str, expected: str, receipt_path: Path, receipt_token: str, what: str
 ) -> None:
-    poison = _poison_payload(_poison_path(lock_path))
-    if poison != {
+    owner = {
         "boot_id": boot_identity(),
         "family": family,
         "expected": expected,
         "receipt": receipt_path.name,
         "receipt_token": receipt_token,
-    }:
-        raise CoordinationError("React Doctor quarantine ownership changed")
+    }
+    if _poison_payload(_poison_path(lock_path)) != owner:
+        raise CoordinationError(f"React Doctor {what} ownership changed")
+
+
+def clear_react_doctor_quarantine(
+    repo: Path, lock_path: Path, *, family: str, expected: str, receipt_path: Path, receipt_token: str, deadline: float
+) -> None:
+    _require_quarantine_owner(lock_path, family, expected, receipt_path, receipt_token, "quarantine")
     if not terminal_receipt_valid(receipt_path, receipt_token):
         raise CoordinationError("React Doctor lacks terminal process-group proof")
     if tree_fingerprint(repo, deadline=deadline) != expected:
@@ -286,15 +292,7 @@ def clear_react_doctor_quarantine(
 def rollback_react_doctor_launch(
     repo: Path, lock_path: Path, *, family: str, expected: str, receipt_path: Path, receipt_token: str, deadline: float
 ) -> None:
-    poison = _poison_payload(_poison_path(lock_path))
-    if poison != {
-        "boot_id": boot_identity(),
-        "family": family,
-        "expected": expected,
-        "receipt": receipt_path.name,
-        "receipt_token": receipt_token,
-    }:
-        raise CoordinationError("React Doctor launch quarantine ownership changed")
+    _require_quarantine_owner(lock_path, family, expected, receipt_path, receipt_token, "launch quarantine")
     if receipt_path.exists() or receipt_path.is_symlink():
         raise CoordinationError("React Doctor launch produced terminal metadata unexpectedly")
     if tree_fingerprint(repo, deadline=deadline) != expected:

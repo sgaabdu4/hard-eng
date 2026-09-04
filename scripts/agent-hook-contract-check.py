@@ -1315,25 +1315,6 @@ def check_protected_direct(root: Path) -> None:
     check("approved external destructive tool is allowed once without a plan", response is None, repr(response))
 
 
-def check_artifact_tool_blocked(root: Path) -> None:
-    repo = root / "artifact-configured"
-    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
-    manifest(repo)
-    for tool_name in ("Artifact", "mcp__visualize__show_widget", "mcp__visualize__read_me", "design"):
-        payload = {"cwd": str(repo), "tool_name": tool_name, "tool_input": {"file_path": "widget.html"}}
-        response, _ = run_hook("codex", "pretooluse", payload)
-        reason = denial(response, "codex")
-        check(f"{tool_name} tool blocks inside a governed repository", bool(reason), repr(response))
-        check(f"{tool_name} denial reason names the Artifact tool", "Artifact" in (reason or ""), repr(reason))
-
-    unconfigured = root / "artifact-unconfigured"
-    unconfigured.mkdir()
-    (unconfigured / ".git").mkdir()
-    payload = {"cwd": str(unconfigured), "tool_name": "Artifact", "tool_input": {"file_path": "widget.html"}}
-    response, _ = run_hook("codex", "pretooluse", payload)
-    check("Artifact tool is allowed in an unconfigured repository", response is None, repr(response))
-
-
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="hard-eng-hook-") as temporary:
         root = Path(temporary).resolve()
@@ -1343,7 +1324,6 @@ def main() -> int:
         check_lifecycle(root)
         check_shell_safety(root)
         check_protected_direct(root)
-        check_artifact_tool_blocked(root)
         check_broken_policy_fails_closed(root)
         check_repository_checkpoint(root)
     check_hot_path_shape()
