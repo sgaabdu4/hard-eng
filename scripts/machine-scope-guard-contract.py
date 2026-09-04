@@ -118,9 +118,7 @@ def check_lifecycle_media_scope(root: Path) -> None:
     if started.returncode != 0:
         FAILURES.append(f"lifecycle-media case: direct receipt did not record: {started.stderr}")
         return
-    lifecycle_target = (
-        Path.home() / ".claude" / "lifecycle-media" / "sample-plan" / "step.visual-review.json"
-    )
+    lifecycle_target = Path.home() / ".claude" / "lifecycle-media" / "sample-plan" / "step.visual-review.json"
     reason = write_denial(repo, lifecycle_target)
     if reason:
         FAILURES.append(f"lifecycle-media write was blocked as machine scope: {reason}")

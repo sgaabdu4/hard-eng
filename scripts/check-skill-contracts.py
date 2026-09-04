@@ -357,6 +357,7 @@ def check_external_contracts() -> None:
         ("execution evidence", (sys.executable, "skills/he/scripts/execution_evidence_regression.py")),
         ("protected direct approvals", (sys.executable, "skills/he/scripts/protected_direct_regression.py")),
         ("agent guard hooks", (sys.executable, "scripts/agent-hook-contract-check.py")),
+        ("artifact tool guard", (sys.executable, "scripts/artifact-tool-contract-check.py")),
         ("machine scope guard", (sys.executable, "scripts/machine-scope-guard-contract.py")),
         ("skill source policy", (sys.executable, "skills/he/scripts/skill_source_policy_regression.py")),
         ("agent-agnostic content", (sys.executable, "scripts/check-agent-agnostic-content.py")),
