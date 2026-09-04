@@ -33,6 +33,8 @@ def exit_codes(results: Path, scope_file: str) -> dict[str, int | None]:
     except (OSError, ValueError) as error:
         raise MutationPayloadError(f"{path} is unreadable: {error}") from error
     codes = data.get("exit_code_by_key") if isinstance(data, dict) else None
+    if isinstance(codes, dict) and not codes and data.get("hash_by_function_name") == {}:
+        return {}
     if not isinstance(codes, dict) or not codes:
         raise MutationPayloadError(f"{path} carries no mutant results")
     return {str(key): value for key, value in codes.items()}

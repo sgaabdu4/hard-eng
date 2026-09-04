@@ -94,10 +94,12 @@ def build(repo: Path, plan: Path, name: str, edges: dict[str, object] | None) ->
     diff = diff_text(repo)
     if not diff.strip():
         raise ReviewPacketError("the tree has no changes to review")
-    lines = [f"# Review packet: {name}", "", "## Slice", slice_row(sections, name), ""]
+    scope = "whole feature" if name == "full" else slice_row(sections, name)
+    edges_block = edge_lines(edges) if name != "full" else ["- every slice edge list applies"]
+    lines = [f"# Review packet: {name}", "", "## Slice", scope, ""]
     for heading in PACKET_SECTIONS:
         lines += [f"## {heading}", sections[heading], ""]
-    lines += ["## Edge list", *edge_lines(edges), "", "## Diff", "```diff", diff.rstrip("\n"), "```", ""]
+    lines += ["## Edge list", *edges_block, "", "## Diff", "```diff", diff.rstrip("\n"), "```", ""]
     return "\n".join(lines)
 
 

@@ -93,6 +93,9 @@ def _lock(repo: Path):
 
 
 def _head_preimage(repo: Path, relative: Path, current: bytes) -> None:
+    tracked = _git(repo, "ls-files", "--error-unmatch", "--", relative.as_posix(), check=False, timeout=10)
+    if tracked.returncode != 0:
+        return
     result = _git(repo, "show", f"HEAD:{relative.as_posix()}", check=False, timeout=10)
     if result.returncode != 0 or result.stdout != current:
         raise PlanError(f"tracked HEAD preimage mismatch: {relative}")
