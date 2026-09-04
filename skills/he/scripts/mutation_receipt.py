@@ -11,8 +11,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path[:0] = [str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"), str(SCRIPT_DIR)]
 
-import plan_steps
-from bounded_run import run_captured
+import bounded_run
 from evidence_lib import (
     EvidenceError,
     enforcement_configured,
@@ -49,29 +48,37 @@ def _text(payload: dict[str, object], key: str, label: str) -> str:
     return value.strip()
 
 
-def approval_base(repo: Path, plan: Path) -> str:
-    try:
-        steps = plan_steps.load(repo, plan)["steps"]
-    except plan_steps.PlanStepError as error:
-        raise MutationError(str(error)) from error
-    entry = steps.get("code-study") if isinstance(steps, dict) else None
-    head = entry.get("repository_head") if isinstance(entry, dict) else None
-    if not isinstance(head, str) or head in {"", "unborn"}:
-        raise MutationError("approval base unknown: the code-study planning step recorded no repository head")
-    return head
+def _slice_receipt_paths(repo: Path, plan: Path) -> set[str]:
+    paths: set[str] = set()
+    for receipt in sorted((plan.parent / "receipts").glob("S-*.json")):
+        if not re.fullmatch(r"S-[1-9][0-9]*\.json", receipt.name):
+            continue
+        try:
+            data, _, _ = load_receipt(repo, plan, receipt.name)
+        except EvidenceError as error:
+            raise MutationError(str(error)) from error
+        recorded = data.get("changed_paths")
+        if not isinstance(recorded, list):
+            raise MutationError(f"slice receipt {receipt.name} has no changed_paths")
+        paths.update(str(item) for item in recorded)
+    return paths
 
 
-def changed_source_files(repo: Path, base: str) -> tuple[str, ...]:
-    result = run_captured(["git", "diff", "--name-only", "-z", base, "--"], 60, cwd=str(repo), env=git_env())
+def _git_names(repo: Path, *args: str) -> list[str]:
+    result = bounded_run.run_captured(["git", args[0], "-z", *args[1:]], 60, cwd=str(repo), env=git_env())
     if result.returncode != 0:
-        raise MutationError("cannot diff against the approval base: " + result.stderr.decode(errors="replace")[:200])
-    untracked = run_captured(
-        ["git", "ls-files", "--others", "--exclude-standard", "-z"], 60, cwd=str(repo), env=git_env()
-    )
-    names = result.stdout.split(b"\0") + untracked.stdout.split(b"\0")
+        raise MutationError("cannot list changed files: " + result.stderr.decode(errors="replace")[:200])
+    return [os.fsdecode(raw) for raw in result.stdout.split(b"\0") if raw]
+
+
+def changed_source_files(repo: Path, plan: Path) -> tuple[str, ...]:
+    """Files this feature changed: every slice receipt's changed paths plus the current uncommitted work."""
+    names = _slice_receipt_paths(repo, plan)
+    names.update(_git_names(repo, "diff", "--name-only", "HEAD", "--"))
+    names.update(_git_names(repo, "ls-files", "--others", "--exclude-standard"))
     files: set[str] = set()
-    for raw in filter(None, names):
-        relative = Path(os.fsdecode(raw))
+    for name in names:
+        relative = Path(name)
         if lifecycle_excluded(relative) or relative.suffix not in MUTABLE_SUFFIXES:
             continue
         if TEST_FILE.search(relative.as_posix()) or not (repo / relative).is_file():
@@ -117,12 +124,16 @@ def validate(repo: Path, plan: Path, payload: dict[str, object]) -> dict[str, ob
     scope = payload.get("scope")
     if not isinstance(scope, list) or any(not isinstance(item, str) or not item for item in scope):
         raise MutationError("scope must be a list of repository paths")
-    required = changed_source_files(repo, approval_base(repo, plan))
+    required = changed_source_files(repo, plan)
     runnable = [path for path in required if Path(path).suffix not in NO_RUNNER_SUFFIXES]
     entry: dict[str, object] = {"runner": runner, "scope": sorted(set(scope)), "required_scope": list(required)}
     if runner == "none":
-        if runnable:
-            raise MutationError(f"runner none is allowed only for Dart-only scope; {runnable[0]} needs a runner")
+        wrong = [path for path in scope if Path(path).suffix not in NO_RUNNER_SUFFIXES]
+        if wrong:
+            raise MutationError(f"runner none covers only Dart files; {wrong[0]} needs a runner")
+        missing = [path for path in required if path not in runnable and path not in scope]
+        if missing:
+            raise MutationError(f"scope omits a file this feature changed: {missing[0]}")
         entry["sensitivity_proof"] = _text(payload, "sensitivity_proof", "mutation")
         entry["totals"] = dict.fromkeys(TOTALS, 0)
         entry["survivors"] = []
@@ -132,7 +143,7 @@ def validate(repo: Path, plan: Path, payload: dict[str, object]) -> dict[str, ob
         raise MutationError(f"{runner} has nothing to mutate; changed files need {_other_runners(runnable)}")
     missing = [path for path in mine if path not in scope]
     if missing:
-        raise MutationError(f"scope omits a file changed since the approval base: {missing[0]}")
+        raise MutationError(f"scope omits a file this feature changed: {missing[0]}")
     wrong = [path for path in scope if Path(path).suffix not in RUNNERS[runner]]
     if wrong:
         raise MutationError(f"{runner} cannot mutate {wrong[0]}; record one receipt per runner")
@@ -198,7 +209,7 @@ def ship_error(repo: Path, plan: Path, artifact: str) -> str | None:
         return None
     try:
         receipt = load(repo, plan)
-        required = changed_source_files(repo, approval_base(repo, plan))
+        required = changed_source_files(repo, plan)
     except (MutationError, EvidenceError) as error:
         return str(error).replace("\n", " ")
     runs = receipt.get("runs") if isinstance(receipt, dict) else None

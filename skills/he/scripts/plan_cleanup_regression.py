@@ -92,6 +92,9 @@ def main() -> int:
             env=git_env(),
         )
         malformed_hash, terminal_hash, active_hash = digest(malformed), digest(terminal), digest(active)
+        private = repo / "features/private/PLAN.md"
+        write(private, cancelled("private"))
+        private_hash = digest(private)
         draft_token = plan_state.token_for(draft_plan.read_text(encoding="utf-8"))
         candidate = Path(temporary) / "draft-candidate.md"
         candidate_text = draft_plan.read_text(encoding="utf-8").replace(
@@ -191,6 +194,11 @@ def main() -> int:
             fail(f"apply failed: {applied.stderr}")
         if malformed.exists() or terminal.exists() or active.exists() or not receipt.exists() or not ticket.exists():
             fail("cleanup removed the wrong paths")
+        untracked = run(
+            "cleanup", *common, "--item", f"features/private/PLAN.md={private_hash}", "--apply", "--confirm-delete"
+        )
+        if untracked.returncode != 0 or "result=removed" not in untracked.stdout or private.exists():
+            fail(f"git-private terminal PLAN cleanup failed: {untracked.stderr}")
         note_rows = [
             line.removeprefix("recovery_note=")
             for line in applied.stdout.splitlines()

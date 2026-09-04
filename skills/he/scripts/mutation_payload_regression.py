@@ -88,6 +88,10 @@ def check_incomplete(base: Path) -> None:
     code, _, err = run(results)
     if code == 0 or "no mutant results" not in err:
         fail("empty meta must be refused")
+    (results / f"{SCOPE}.meta").write_text(json.dumps({"exit_code_by_key": {}, "hash_by_function_name": {}}))
+    code, out, _ = run(results)
+    if code != 0 or json.loads(out)["totals"] != {"killed": 0, "survived": 0, "timeout": 0, "no_coverage": 0}:
+        fail("a module mutmut found no functions to mutate must count as zero mutants")
     write_meta(results, {KEY + "1": 1, KEY + "2": None})
     code, _, err = run(results)
     if code == 0 or "not checked" not in err:

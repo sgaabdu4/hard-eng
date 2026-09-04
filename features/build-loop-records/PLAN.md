@@ -3,15 +3,15 @@
 <!-- hard-eng-state:v1 -->
 - state_version = 1
 - plan_id = build-loop-records-5a7f9509
-- lifecycle_status = building
-- approval_status = approved
-- approval_fingerprint = sha256:6db10bc363b5dd5d06e008f53eded81666f9ec0a9d8e5540466738940c59150b
-- approval_provenance = ready-to-build
+- lifecycle_status = planning
+- approval_status = pending
+- approval_fingerprint = none
+- approval_provenance = none
 - green_artifact = none
 - active_slice = none
 - completed_slices = S-1,S-2,S-3,S-4,S-5,S-6,S-7,S-8,S-9
-- next_action = Re-green on the tree after mutation-seam shipped (50a33bd): full verify record, mutation receipt, full gate, green, ship
-- replan_reason = none
+- next_action = Update changed frozen constraints and request Ready-to-build approval.
+- replan_reason = changed-outcome
 - walkthrough = no
 <!-- /hard-eng-state -->
 
