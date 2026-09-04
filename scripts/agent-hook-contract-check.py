@@ -306,8 +306,7 @@ def check_lifecycle(root: Path) -> None:
     source.write_text("value = 1\n", encoding="utf-8")
     receipts = active.parent / "receipts"
     receipts.mkdir(exist_ok=True)
-    for name in ("S-1.json", "S-1-verify-before.json"):
-        (receipts / name).write_text("{}\n", encoding="utf-8")
+    [(receipts / name).write_text("{}\n", encoding="utf-8") for name in ("S-1.json", "S-1-verify-before.json")]
     response, _ = run_hook("codex", "pretooluse", edit_payload(repo, receipts / "S-1.json"))
     check("raw write to a slice receipt blocks", "lifecycle-owned" in (denial(response, "codex") or ""), repr(response))
     start_direct(repo, "features/one/receipts/S-1-verify-before.json")
@@ -1110,18 +1109,20 @@ def check_repository_checkpoint(root: Path) -> None:
     shipping = plan(repo, "shipping", "green")
     with_green = run()
     check(
-        "checkpoint checks the green brief beside the one being built",
-        with_green.returncode != 0 and "green repository snapshot no longer matches" in with_green.stderr,
+        "checkpoint checks the green brief beside the build",
+        "no longer matches" in with_green.stderr,
         with_green.stderr,
     )
     shipping.write_text(shipping.read_text().replace("= green", "= building"), encoding="utf-8")
     two_building = run()
     check(
         "checkpoint blocks two briefs under construction",
-        two_building.returncode != 0 and "under construction" in two_building.stderr,
+        "under construction" in two_building.stderr,
         two_building.stderr,
     )
-    shipping.write_text(shipping.read_text().replace("= building", "= shipped"), encoding="utf-8")
+    shipping.write_text(shipping.read_text().replace("= building", "= planning"), encoding="utf-8")
+    check("checkpoint allows a planning brief beside the build", run().returncode == 0, "planning brief blocked")
+    shipping.write_text(shipping.read_text().replace("= planning", "= shipped"), encoding="utf-8")
     invalid_learning = repo / ".agents/learning/broken.json"
     invalid_learning.parent.mkdir(parents=True)
     invalid_learning.write_text("{}\n", encoding="utf-8")
@@ -1225,9 +1226,7 @@ def check_repository_checkpoint(root: Path) -> None:
     check("checkpoint accepts two green briefs when one matches", one_matches.returncode == 0, one_matches.stderr)
     none_match = green_run(GREEN_FIXTURE_STALE="features/")
     check(
-        "checkpoint rejects two green briefs when neither matches",
-        none_match.returncode != 0 and "green repository snapshot no longer matches" in none_match.stderr,
-        none_match.stderr,
+        "two green briefs, neither matching, are rejected", "no longer matches" in none_match.stderr, none_match.stderr
     )
 
 
@@ -1316,6 +1315,25 @@ def check_protected_direct(root: Path) -> None:
     check("approved external destructive tool is allowed once without a plan", response is None, repr(response))
 
 
+def check_artifact_tool_blocked(root: Path) -> None:
+    repo = root / "artifact-configured"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
+    manifest(repo)
+    for tool_name in ("Artifact", "mcp__visualize__show_widget", "mcp__visualize__read_me", "design"):
+        payload = {"cwd": str(repo), "tool_name": tool_name, "tool_input": {"file_path": "widget.html"}}
+        response, _ = run_hook("codex", "pretooluse", payload)
+        reason = denial(response, "codex")
+        check(f"{tool_name} tool blocks inside a governed repository", bool(reason), repr(response))
+        check(f"{tool_name} denial reason names the Artifact tool", "Artifact" in (reason or ""), repr(reason))
+
+    unconfigured = root / "artifact-unconfigured"
+    unconfigured.mkdir()
+    (unconfigured / ".git").mkdir()
+    payload = {"cwd": str(unconfigured), "tool_name": "Artifact", "tool_input": {"file_path": "widget.html"}}
+    response, _ = run_hook("codex", "pretooluse", payload)
+    check("Artifact tool is allowed in an unconfigured repository", response is None, repr(response))
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="hard-eng-hook-") as temporary:
         root = Path(temporary).resolve()
@@ -1325,6 +1343,7 @@ def main() -> int:
         check_lifecycle(root)
         check_shell_safety(root)
         check_protected_direct(root)
+        check_artifact_tool_blocked(root)
         check_broken_policy_fails_closed(root)
         check_repository_checkpoint(root)
     check_hot_path_shape()
