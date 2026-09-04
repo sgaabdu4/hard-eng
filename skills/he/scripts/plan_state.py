@@ -19,7 +19,6 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import build_report
 import build_steps
-import mutation_receipt
 import plan_handoff
 import plan_step_commands
 import plan_steps
@@ -38,6 +37,7 @@ from plan_sections import (
     frozen_fingerprint,
     parse_sections,
     parse_slices,
+    remaining_slice,
     risk_fields,
     token_for,
 )
@@ -285,9 +285,13 @@ def approval_candidate(text: str) -> tuple[str, dict[str, str]]:
     if state["lifecycle_status"] != "planning":
         raise PlanError("only a planning brief can receive Ready-to-build approval")
     sections = parse_sections(text)
-    completed = completed_numbers(state["completed_slices"])
+    remaining = remaining_slice(sections, state["completed_slices"])
     next_action = (
-        f"Resume the build at slice S-{len(completed) + 1}." if completed else "Build the first vertical slice."
+        "Run the full pre-ship gate."
+        if remaining == "none"
+        else f"Resume the build at slice {remaining}."
+        if state["completed_slices"] != "none"
+        else "Build the first vertical slice."
     )
     candidate = render_state(
         text,
@@ -414,9 +418,12 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
     print(f"completed_slices={state['completed_slices']}")
     if "walkthrough" in state:
         print(f"walkthrough={state['walkthrough']}")
-    print(f"next_action={state['next_action']}")
+    repo = path.parents[2]
+    scope = state["active_slice"] if state["active_slice"] != "none" else "full"
+    pending = build_steps.pending_finding(repo, path, scope) if state["lifecycle_status"] == "building" else None
+    next_action = f"Close the open review finding on {scope}: {pending}" if pending else state["next_action"]
+    print(f"next_action={next_action}")
     if state["lifecycle_status"] == "building":
-        repo = path.parents[2]
         if state["active_slice"] != "none":
             print(f"slice_receipt={receipt_status(repo, path, state['plan_id'], state['active_slice'])}")
         elif state["completed_slices"] != "none":
@@ -424,9 +431,6 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
         for line in build_steps.emit_lines(
             repo, path, state["active_slice"] if state["active_slice"] != "none" else "full"
         ):
-            print(line)
-    if state["lifecycle_status"] == "green":
-        for line in mutation_receipt.emit_lines(path.parents[2], path, state["green_artifact"]):
             print(line)
     repo = path.parents[2]
     if state.get("execution_mode") == "tickets":
@@ -638,8 +642,6 @@ def command_assert_green(args: argparse.Namespace) -> None:
         raise PlanError("green artifact drift; return to building")
     if not args.artifact_only and state["approval_status"] == "approved":
         validate_execution(repo, path, state["approval_fingerprint"])
-        if message := mutation_receipt.ship_error(repo, path, state["green_artifact"]):
-            raise PlanError(message)
     emit(path, text, state)
     print(f"green_artifact={actual}")
 
@@ -668,7 +670,6 @@ def main() -> int:
         "record-build": lambda args: plan_step_commands.record_build(args, sys.modules[__name__]),
         "review-packet": lambda args: plan_step_commands.review_packet_command(args, sys.modules[__name__]),
         "verify-packet": lambda args: plan_step_commands.verify_packet_command(args, sys.modules[__name__]),
-        "record-mutation": lambda args: plan_step_commands.record_mutation(args, sys.modules[__name__]),
         "build-report": lambda args: plan_step_commands.build_report_command(args, sys.modules[__name__]),
         "probe-trackers": lambda args: plan_step_commands.probe_trackers(args, sys.modules[__name__]),
         "draft": lambda args: run_plan_draft(args, validate_text, emit),
@@ -686,7 +687,6 @@ def main() -> int:
         plan_steps.PlanStepError,
         build_steps.BuildStepError,
         review_packet.ReviewPacketError,
-        mutation_receipt.MutationError,
     ) as error:
         print(f"result=invalid\nerror={error}", file=sys.stderr)
         return 4

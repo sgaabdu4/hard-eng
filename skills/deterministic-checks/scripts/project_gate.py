@@ -55,6 +55,7 @@ FAMILY_PATTERNS = {
     "design": re.compile(r"check-design-md\.js"),
     "file-size": re.compile(r"check-file-size\.py"),
     "enforcement": re.compile(r"enforcement_policy\.pl"),
+    "mutation-ledger": re.compile(r"mutation_ledger\.py"),
     "react-doctor": re.compile(r"\breact-doctor\b"),
     "dart-analyze": re.compile(r"\b(dart|flutter)\b.*\banalyze\b"),
     "dart-test": re.compile(r"\b(dart|flutter)\b.*\btest\b"),
@@ -519,20 +520,30 @@ def _run_family(
             )
         else:
             consume_terminal_receipt(receipt_path, receipt_token)
-    report_error: ProjectGateError | None = None
-    if completed.returncode == 0 and capture:
+    report_error, detail = family_outcome(family, completed.returncode, completed.stdout, completed.stderr, capture)
+    exit_code = completed.returncode or (4 if report_error else 0)
+    return {"family": family, "command": list(command), "exit": exit_code}, report_error, detail
+
+
+def family_outcome(
+    family: str, returncode: int, stdout: str, stderr: str, capture: bool
+) -> tuple[ProjectGateError | None, str]:
+    if capture and returncode == 0:
         try:
-            validate_quality_report(family, completed.stdout)
+            validate_quality_report(family, stdout)
         except ProjectGateError as error:
-            report_error = error
-    detail = ""
-    if completed.returncode != 0:
-        detail = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
-    return (
-        {"family": family, "command": list(command), "exit": 4 if report_error else completed.returncode},
-        report_error,
-        detail,
-    )
+            return error, ""
+        return None, ""
+    detail = "\n".join(part for part in (stdout, stderr) if part).strip()
+    if family == "fallow":
+        try:
+            if json.loads(stdout).get("kind") == "audit":
+                validate_quality_report(family, stdout)
+        except ProjectGateError as verdict:
+            return None, f"{verdict}\n{detail}"
+        except (ValueError, AttributeError):
+            pass
+    return None, detail
 
 
 def require_staged_worktree_alignment(repo: Path, timeout: float) -> None:
@@ -632,7 +643,8 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
         result = results.get(index)
         detail = details.get(index, "")
         if result is not None and result["exit"] != 0 and detail:
-            print(detail[-4000:], file=sys.stderr)
+            head, _, rest = detail.partition("\n")
+            print(head + (f"\n{rest[-4000:]}" if rest else ""), file=sys.stderr)
     if report_errors:
         raise ProjectGateError(
             "; ".join(f"{families[index]}: {report_errors[index]}" for index in sorted(report_errors))

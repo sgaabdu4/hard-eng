@@ -87,29 +87,6 @@ def _families(gate: dict[str, object]) -> str:
     return ", ".join(str(item.get("family")) for item in _list(gate.get("checks")) if isinstance(item, dict))
 
 
-def mutation_lines(plan: Path) -> list[str]:
-    receipt = _receipt(plan, "mutation")
-    runs = _list(receipt.get("runs"))
-    if not runs:
-        return ["- mutation = not recorded"]
-    lines: list[str] = []
-    for raw in runs:
-        run = _dict(raw)
-        if not run:
-            continue
-        totals, survivors = _dict(run.get("totals")), _list(run.get("survivors"))
-        lines.append(
-            f"- mutation = {run.get('runner')} {run.get('version', '')}: "
-            + ", ".join(f"{key} {value}" for key, value in totals.items())
-        )
-        lines.extend(
-            f"  - {item.get('mutant')}: {item.get('disposition')} ({item.get('reason')})"
-            for item in survivors
-            if isinstance(item, dict)
-        )
-    return lines
-
-
 def render(repo: Path, plan: Path) -> str:
     text = plan.read_text(encoding="utf-8")
     sections = parse_sections(text)
@@ -135,7 +112,6 @@ def render(repo: Path, plan: Path) -> str:
         )
     else:
         lines.append("- verify = not recorded")
-    lines += mutation_lines(plan)
     lines.append("- full gate = " + (_families(_receipt(plan, "full")) or "not run"))
     return "\n".join(lines) + "\n"
 

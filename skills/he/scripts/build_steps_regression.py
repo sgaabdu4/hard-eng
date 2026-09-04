@@ -176,6 +176,33 @@ def check_slice_records(base: Path) -> tuple[Path, Path]:
         repo, plan, "S-1", "verify", verify_payload(repo, plan, outside_calls=["real.example.com"])
     )
     require(code != 0 and "real.example.com" in output, f"real outside call must refuse naming host: {output}")
+    quiet = evidence(
+        repo,
+        "quiet.log",
+        b"API.example.test:8443 GET /v1 -> fake 200\n127.0.0.1 - - [04/Sep/2026] GET /\nv1.2.3 fake started\n",
+    )
+    code, output = record_build(
+        repo,
+        plan,
+        "S-1",
+        "verify",
+        verify_payload(repo, plan, fakes=[{"host": "api.example.test", "log": quiet["path"]}]),
+    )
+    require(code == 0, f"case, port, loopback, and version tokens are not real hosts: {output}")
+    leaky = evidence(
+        repo, "leaky.log", b"api.example.test GET /v1/items -> fake 200\nreal.example.com:443 GET /x -> 200\n"
+    )
+    code, output = record_build(
+        repo,
+        plan,
+        "S-1",
+        "verify",
+        verify_payload(repo, plan, fakes=[{"host": "api.example.test", "log": leaky["path"]}]),
+    )
+    require(
+        code != 0 and "real.example.com" in output and "leaky.log" in output,
+        f"host seen only in the fake log must refuse naming host and log: {output}",
+    )
     code, output = record_build(repo, plan, "S-1", "verify", verify_payload(repo, plan, edge_cases=["unknown case"]))
     require(code != 0 and "unknown case" in output, f"unknown edge case must refuse: {output}")
     code, output = record_build(repo, plan, "S-1", "verify", verify_payload(repo, plan, packet_sha256="0" * 64))
@@ -215,6 +242,7 @@ def check_slice_records(base: Path) -> tuple[Path, Path]:
     shown = values(output)
     require(shown.get("build_steps") == "S-1:4/4", f"inspect must count records: {output}")
     require("R-1" in shown.get("build_steps_open_finding", ""), f"inspect must print the open finding: {output}")
+    require("R-1" in shown.get("next_action", ""), f"inspect must make the open finding the next action: {output}")
     code, output = record_build(repo, plan, "S-1", "review", review(parsed["packet_sha256"]))
     require(code == 0, f"clean review must record: {output}")
     code, output = gate(repo, plan, "--slice", "S-1")
@@ -247,6 +275,14 @@ def check_full_gate(repo: Path, plan: Path) -> None:
     require(code == 0, f"slice must complete: {output}")
     code, output = gate(repo, plan, "--full")
     require(code != 0 and "full gate has no verify record" in output, f"full gate must name verify: {output}")
+    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
+    shown = values(output)
+    require(shown.get("build_steps") == "full:0/1", f"full scope counts only the verify record: {output}")
+    require(shown.get("build_steps_missing") == "verify", f"full scope misses only verify: {output}")
+    require(
+        "final pre-ship gate" in shown.get("handoff_prompt", ""),
+        f"no remaining slice means the pre-ship gate: {output}",
+    )
     code, output = record_build(repo, plan, "full", "edges", EDGES)
     require(code != 0 and "only the verify record" in output, f"full accepts verify only: {output}")
     code, output = record_build(repo, plan, "full", "verify", verify_payload(repo, plan, "full", edge_cases=[]))
@@ -291,85 +327,6 @@ def check_full_gate(repo: Path, plan: Path) -> None:
     require("BUILD.md" in rows.get("handoff_prompt", ""), f"ship prompt must name the report: {output}")
 
 
-def record_mutation(repo: Path, plan: Path, payload: dict) -> tuple[int, str]:
-    arguments = ("record-mutation", "--repo", str(repo), "--plan", str(plan), "--payload-file", "-")
-    return run(STATE_SCRIPT, *arguments, stdin=json.dumps(payload))
-
-
-def assert_green(repo: Path, plan: Path) -> tuple[int, str]:
-    return run(STATE_SCRIPT, "assert-green", "--repo", str(repo), "--plan", str(plan))
-
-
-def check_mutation_before_ship(repo: Path, plan: Path) -> None:
-    code, output = assert_green(repo, plan)
-    require(code != 0 and "mutation receipt" in output, f"ship entry without mutation must refuse: {output}")
-    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
-    require(values(output).get("mutation", "").startswith("missing"), f"inspect must show mutation missing: {output}")
-    survivor = {"mutant": "owner.py:1 print -> pass", "disposition": "equivalent", "reason": "output only"}
-    good = {
-        "runner": "mutmut",
-        "version": "3.3.0",
-        "argv": ["mutmut", "run", "--paths-to-mutate", "owner.py"],
-        "scope": ["owner.py"],
-        "totals": {"killed": 4, "survived": 1, "timeout": 0, "no_coverage": 0},
-        "survivors": [survivor],
-    }
-    code, output = record_mutation(repo, plan, {**good, "scope": []})
-    require(code != 0 and "owner.py" in output and "this feature changed" in output, f"scope gap must refuse: {output}")
-    code, output = record_mutation(repo, plan, {**good, "survivors": []})
-    require(code != 0 and "ledger has 0 rows" in output, f"survivor count mismatch must refuse: {output}")
-    deferred = {**survivor, "disposition": "deferred"}
-    code, output = record_mutation(repo, plan, {**good, "survivors": [deferred]})
-    require(code != 0 and "consequence" in output, f"deferred without consequence must refuse: {output}")
-    code, output = record_mutation(repo, plan, {**good, "runner": "stryker"})
-    require(code != 0 and "nothing to mutate" in output and "mutmut" in output, f"wrong runner must refuse: {output}")
-    (repo / "widget.ts").write_text("export const widget = 1;\n", encoding="utf-8")
-    code, output = record_mutation(repo, plan, {**good, "scope": ["owner.py", "widget.ts"]})
-    require(code != 0 and "cannot mutate widget.ts" in output, f"mixed scope in one run must refuse: {output}")
-    (repo / "widget.ts").unlink()
-    code, output = record_mutation(repo, plan, {**good, "runner": "none", "sensitivity_proof": "x"})
-    require(code != 0 and "needs a runner" in output, f"runner none for Python must refuse: {output}")
-    code, output = record_mutation(repo, plan, good)
-    require(code == 0 and "recorded_mutation=mutmut" in output, f"mutation must record: {output}")
-    code, output = assert_green(repo, plan)
-    require(code == 0, f"ship entry with mutation must pass: {output}")
-    import mutation_receipt
-
-    (repo / "app.dart").write_text("void main() {}\n", encoding="utf-8")
-    code, output = record_mutation(repo, plan, good)
-    require(code == 0, f"the runner receipt still records beside an untracked Dart file: {output}")
-    artifact = mutation_receipt.repository_artifact(repo)
-    error = mutation_receipt.ship_error(repo, plan, artifact)
-    require(error is not None and "app.dart" in error, f"the runner receipt alone leaves Dart uncovered: {error}")
-    none_run = {"runner": "none", "scope": ["owner.py", "app.dart"], "sensitivity_proof": "hand-checked"}
-    code, output = record_mutation(repo, plan, none_run)
-    require(code != 0 and "needs a runner" in output, f"runner none must not claim a Python file: {output}")
-    code, output = record_mutation(repo, plan, {**none_run, "scope": []})
-    require(code != 0 and "app.dart" in output, f"runner none must list every changed Dart file: {output}")
-    code, output = record_mutation(repo, plan, {**none_run, "scope": ["app.dart"]})
-    require(code == 0 and "recorded_mutation=none" in output, f"runner none beside mutmut must record: {output}")
-    error = mutation_receipt.ship_error(repo, plan, artifact)
-    require(error is None, f"mutmut plus none must cover a mixed tree: {error}")
-    (repo / "app.dart").unlink()
-    code, output = record_mutation(repo, plan, good)
-    require(code == 0, f"the clean tree records its own run again: {output}")
-    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
-    require(values(output).get("mutation") == "current", f"inspect must show mutation current: {output}")
-    stale = mutation_receipt.ship_error(repo, plan, "sha256:" + "0" * 64)
-    require(stale is not None and "green tree" in stale, f"receipt for another tree must not count: {stale}")
-    for name in ("scripts/state-regression.py", "skills/x/scripts/state_regression.py", "tests/conftest.py"):
-        require(mutation_receipt.TEST_FILE.search(name) is not None, f"{name} is a test file, never mutation scope")
-    require(mutation_receipt.TEST_FILE.search("skills/x/scripts/state.py") is None, "source file stays in scope")
-    (repo / "other.py").write_text("print('outside this feature')\n", encoding="utf-8")
-    git(repo, "add", "other.py")
-    git(repo, "commit", "-q", "-m", "other feature")
-    code, output = record_mutation(repo, plan, good)
-    require(code == 0, f"a committed file no slice receipt lists is outside the scope: {output}")
-    (repo / "other.py").write_text("print('now this feature edits it')\n", encoding="utf-8")
-    code, output = record_mutation(repo, plan, good)
-    require(code != 0 and "other.py" in output, f"an uncommitted edit joins the scope: {output}")
-
-
 def check_unwired_repo(base: Path) -> None:
     repo, plan = fixture.make_repo(base, "unwired")
     manifest = json.loads((repo / "hard-eng.gates.json").read_text(encoding="utf-8"))
@@ -388,7 +345,6 @@ def main() -> int:
         base = Path(directory).resolve()
         repo, plan = check_slice_records(base)
         check_full_gate(repo, plan)
-        check_mutation_before_ship(repo, plan)
         check_unwired_repo(base)
     print("build-steps regression: PASS")
     return 0

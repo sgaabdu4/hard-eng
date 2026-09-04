@@ -1,7 +1,7 @@
-# Verifier packet: full
+# Verifier packet: S-10
 
 ## Scope
-whole feature
+S-10 = mutation ledger: a run over functions with no current ledger row writes `mutation-ledger.json` rows with survivor verdicts, the nightly workflow does that on public repositories and opens a pull request, the local run does it before push on private ones, the push gate and CI `mutation-ledger` family refuse a private-repository changed function without a current row and any stale `needs-verdict` row, and the pre-ship receipt plus `he-ship` refusal are removed; depends_on = S-5
 
 ## Outcome
 - The build stage is machine-checked end to end: every slice must leave records for its edge cases mapped to success and failure tests, its green test run, a fresh-eyes review loop with a findings ledger, and an end-to-end verification run by a separate agent with fake outside services and before/after evidence; the slice gate refuses a slice without them; new push-time checks catch copy-paste clones (baseline, new clones only) and complex under-tested TypeScript functions; mutation testing scores only functions with no current ledger row, nightly in GitHub Actions on public repositories with a pull request for survivors, and on the developer machine before push on private ones, recorded in a committed ledger that the push gate and CI only read; ticket mode has a machine-checked board; build closes with one question (walkthrough video?) and prints a ship handoff block with worktree, branch, plan, and prompt.
@@ -37,7 +37,18 @@ whole feature
 - Given four tickets where T-3 depends on T-1 still building, when a worker claims `--next`, then T-3 is not offered.
 
 ## Edge list
-- every slice edge list applies
+- private repository changed function without a current row (success: mutation_ledger_regression_check.check_run: after a local run records the row the push check passes; failure: mutation_ledger_regression_check.check_check_before_rows: check exits 1 naming pkg/owner.py::add and pkg/owner.py::Box.size)
+- public repository with unscored functions (success: mutation_ledger_regression_check.check_check_before_rows: visibility public passes and prints unscored=2 for the nightly job; failure: mutation_ledger_regression_check.check_check_before_rows: visibility from MUTATION_LEDGER_VISIBILITY=private still refuses)
+- function whose mutants did not all finish (success: mutation_ledger_regression_check.check_record: the complete method row is recorded; failure: mutation_ledger_regression_check.check_record: the function with a pending mutant is skipped and stays in the plan)
+- mutant no test reaches (success: mutation_ledger_regression_check.check_record: exit code 5 lands in no_coverage totals; failure: mutation_ledger_regression_check.check_record: that mutant becomes a needs-verdict survivor with a since date)
+- needs-verdict row older than seven days (success: mutation_ledger_regression_check.check_stale_and_verdict: day seven passes; a deferred verdict clears the row; failure: mutation_ledger_regression_check.check_stale_and_verdict: day eight fails naming the mutant; an unknown mutant verdict is refused)
+- formatting-only edit versus a real change (success: mutation_ledger_regression_check.check_hash_follows_meaning: reformatting keeps both rows current; failure: mutation_ledger_regression_check.check_hash_follows_meaning: changing add re-scores only add, committed or not)
+- no usable comparison base (success: mutation_ledger_regression_check.check_hash_follows_meaning: --base HEAD narrows the scope to zero changed functions; failure: mutation_ledger_regression_check.check_check_before_rows: --base no-such-ref fails as not a commit instead of falling back)
+- repository visibility unknown (success: mutation_ledger_regression_check.check_check_before_rows: declared visibility is used as given; failure: mutation_ledger_regression_check.check_check_before_rows: a gh that cannot start is treated as private)
+- nightly run over unscored functions (success: mutation_ledger_regression_check.check_run: one mutmut run over exactly the unscored patterns, stale mutants/tests copy removed, rows carry the runner version; failure: mutation_ledger_regression_check.check_run: a second run finds nothing to score)
+- repository without a mutation runner or with a broken ledger (success: mutation_ledger_regression_check.check_no_runner: no [tool.mutmut] prints runners=none and passes; failure: mutation_ledger_regression_check.check_no_runner: a row without hash and survivors fails the check)
+- invalid verdict input (success: mutation_ledger_regression_check.check_record: a verdict file with equivalent + reason is applied to the row; failure: mutation_ledger_regression_check.check_record: needs-verdict in a verdict file is refused)
+- nightly job on a private repository (success: not automated: every scoring step in mutation-nightly.yml is guarded by steps.visibility.outputs.private == 'false'; proven at the first workflow_dispatch run; failure: not automated: gh api repos/<repo> --jq .private returning true leaves the ledger untouched; proven at the first workflow_dispatch run)
 
 ## Rules
 - You did not write this code; drive the whole feature from the outside.

@@ -729,8 +729,15 @@ def main() -> int:
 
     resumed_brief = state.render_state(brief, {"completed_slices": "S-1", "active_slice": "none"})
     _, resumed = state.approval_candidate(resumed_brief)
+    if resumed["next_action"] != "Run the full pre-ship gate.":
+        fail(f"re-approval with every slice complete must go to the pre-ship gate, got: {resumed['next_action']!r}")
+    first_row = next(line for line in brief.splitlines() if line.startswith("- S-1 = "))
+    two_slices = brief.replace(first_row, first_row + "\n- S-2 = second behaviour; depends_on = S-1")
+    _, resumed = state.approval_candidate(
+        state.render_state(two_slices, {"completed_slices": "S-1", "active_slice": "none"})
+    )
     if resumed["next_action"] != "Resume the build at slice S-2.":
-        fail(f"re-approval with completed slices must resume, got: {resumed['next_action']!r}")
+        fail(f"re-approval with a remaining slice must resume it, got: {resumed['next_action']!r}")
     _, fresh = state.approval_candidate(brief)
     if fresh["next_action"] != "Build the first vertical slice.":
         fail(f"fresh approval next_action drifted: {fresh['next_action']!r}")

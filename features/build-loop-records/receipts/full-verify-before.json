@@ -1,14 +1,43 @@
 {
-  "head_sha": "5b5f990a03af28ab18698d3c2c91b715f16067a7",
-  "tree_sha": "e35a2fadb07a8e8a4143f633151594d25056dfe6",
-  "commands": [
-    "python3 scripts/check-skill-contracts.py",
-    "python3 skills/he/scripts/build_steps_regression.py",
-    "python3 skills/deterministic-checks/scripts/slice_gate_regression_check.py",
-    "python3 skills/he/scripts/ticket_state_regression.py",
-    "python3 skills/he/scripts/plan_steps_regression.py",
-    "python3 skills/deterministic-checks/scripts/project_gate_regression_check.py",
-    "python3 skills/he/scripts/plan_state.py inspect --repo . --plan features/build-loop-records/PLAN.md",
-    "perl scripts/enforcement_policy.pl check . (run in /Users/abid/.agents itself; corrected spec, replacing the original bare-temp-repo variant)"
-  ]
+  "mode": "logic",
+  "packet": "features/build-loop-records/receipts/full-verify.txt",
+  "packet_sha256": "573be243b60ae275a117188dca6cf4a4ae86f0d7900a6a72c077217dbd40a317",
+  "recorded_at": "2026-09-04T19:37:38.337820+00:00",
+  "head": "16d48420ca8afa750eebc33f308d634398ef3c32",
+  "tree": "4f922b4f0b19c3e496d31cd0a28b89895fe7ae6e",
+  "git_status_before": [
+    "M features/build-loop-records/PLAN.md",
+    " M features/build-loop-records/receipts/authorization.json",
+    " M features/build-loop-records/receipts/full-review-1.txt",
+    " M features/build-loop-records/receipts/full-verify-after.json",
+    " M features/build-loop-records/receipts/full-verify-before.json",
+    " M features/build-loop-records/receipts/full-verify.txt",
+    " M features/build-loop-records/receipts/plan-steps.json",
+    " M skills/deterministic-checks/scripts/project_gate.py",
+    " M skills/deterministic-checks/scripts/project_gate_regression_check.py",
+    " M skills/he-build/references/workflow.md",
+    " M skills/he/scripts/build_steps.py",
+    " M skills/he/scripts/build_steps_regression.py",
+    " M skills/he/scripts/plan_handoff.py",
+    " M skills/he/scripts/plan_sections.py",
+    " M skills/he/scripts/plan_state.py",
+    " M skills/he/scripts/review_packet.py"
+  ],
+  "inspect": {
+    "exit": 0,
+    "stdout": "result=valid\nplan=/Users/abid/.agents/features/build-loop-records/PLAN.md\ntoken=sha256:6d412f27667f6038741c0a57274992dcf846dca1478598cfde21dc322b541ec7\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:da69aff7cc1b49eecf5c3cd5c317f9e39a898d0e9d0b4731b15d5e6bbb08c325\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1,S-2,S-3,S-4,S-5,S-6,S-7,S-8,S-9\nwalkthrough=no\nnext_action=Run the full pre-ship gate and the mutation run on the green tree.\nfull_receipt=stale (stale receipt: repository changed after the full checks ran)\nbuild_steps=full:1/1\nhandoff=ready\nhandoff_root=/Users/abid/.agents\nhandoff_branch=main\nhandoff_plan=features/build-loop-records/PLAN.md\nhandoff_prompt=Resume Hard Eng feature build-loop-records in /Users/abid/.agents: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /Users/abid/.agents` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /Users/abid/.agents --plan features/build-loop-records/PLAN.md`, then run the final pre-ship gate for features/build-loop-records/PLAN.md with he-build; every slice is complete.\n",
+    "stderr": ""
+  },
+  "planned_commands": [
+    "bash -c 'GIT_CONFIG_GLOBAL=/dev/null python3 skills/he/scripts/build_steps_regression.py'",
+    "bash -c 'GIT_CONFIG_GLOBAL=/dev/null python3 skills/deterministic-checks/scripts/slice_gate_regression_check.py'",
+    "bash -c 'GIT_CONFIG_GLOBAL=/dev/null python3 skills/he/scripts/ticket_state_regression.py'",
+    "bash -c 'GIT_CONFIG_GLOBAL=/dev/null python3 skills/he/scripts/plan_steps_regression.py'",
+    "bash -c 'GIT_CONFIG_GLOBAL=/dev/null python3 skills/deterministic-checks/scripts/project_gate_regression_check.py'",
+    "bash -c 'GIT_CONFIG_GLOBAL=/dev/null python3 skills/he/scripts/mutation_payload_regression.py'",
+    "bash -c 'GIT_CONFIG_GLOBAL=/dev/null python3 skills/he/scripts/external_claims_regression.py'",
+    "bash -c 'GIT_CONFIG_GLOBAL=/dev/null python3 scripts/check-skill-contracts.py'",
+    "acceptance examples 1-11 exercised in mktemp throwaway repositories with plan_state.py record-build / slice_gate / project_gate / ticket_state / he-ship entry"
+  ],
+  "outside_calls": []
 }

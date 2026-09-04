@@ -1,0 +1,2 @@
+api.github.com gh repo view --json isPrivate --jq .isPrivate
+api.github.com gh repo view --json isPrivate --jq .isPrivate

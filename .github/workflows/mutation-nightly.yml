@@ -1,0 +1,93 @@
+name: Mutation ledger nightly
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: mutation-ledger-nightly
+  cancel-in-progress: false
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LEDGER_BRANCH: mutation-ledger/nightly
+    steps:
+      - name: Stop on a private repository
+        id: visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          private="$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)"
+          printf 'private=%s\n' "$private" >> "$GITHUB_OUTPUT"
+          if [[ "$private" != "false" ]]; then
+            echo "private repository: mutation runs stay on the developer machine before push"
+          fi
+
+      - name: Check out repository
+        if: steps.visibility.outputs.private == 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        if: steps.visibility.outputs.private == 'false'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26
+
+      - name: Install the test toolchain
+        if: steps.visibility.outputs.private == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- sudo apt-get update
+          python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- sudo apt-get install -y fish zsh
+          export ROOT="$PWD"
+          . scripts/setup/common.sh
+          . scripts/setup/binaries.sh
+          install_binary ruff
+          install_binary gitleaks
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          scripts/mutation-venv.sh
+
+      - name: Score functions with no ledger row
+        if: steps.visibility.outputs.private == 'false'
+        run: python3 skills/deterministic-checks/scripts/mutation_ledger.py run --repo . --budget-minutes 300
+
+      - name: Open the ledger pull request
+        if: steps.visibility.outputs.private == 'false'
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- mutation-ledger.json; then
+            echo "ledger unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$LEDGER_BRANCH"
+          git add mutation-ledger.json
+          git commit -m "chore: record nightly mutation scores"
+          git push --force-with-lease origin "$LEDGER_BRANCH"
+          open_pr="$(gh pr list --head "$LEDGER_BRANCH" --base "$DEFAULT_BRANCH" --state open --json number --jq '.[].number')"
+          if [[ -z "$open_pr" ]]; then
+            gh pr create \
+              --base "$DEFAULT_BRANCH" \
+              --head "$LEDGER_BRANCH" \
+              --title "Nightly mutation scores" \
+              --body "Functions scored overnight. Every survivor is marked needs-verdict; give each one a verdict with mutation_ledger.py verdict within seven days or the push gate refuses."
+          else
+            echo "pull request #$open_pr already open; branch updated"
+          fi

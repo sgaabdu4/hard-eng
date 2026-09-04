@@ -1,0 +1,138 @@
+{
+  "slice": "S-10",
+  "mode": "logic",
+  "pass": "redo (no real outside calls)",
+  "fake_gh": {
+    "path": "features/build-loop-records/receipts/s10-fake-gh.py",
+    "log": "features/build-loop-records/receipts/s10-fake-gh.log",
+    "log_truncated_before_this_pass": true,
+    "log_lines": [
+      "api.github.com gh repo view --json isPrivate --jq .isPrivate -> true",
+      "api.github.com gh repo view --json isPrivate --jq .isPrivate -> false",
+      "api.github.com gh repo view --json isPrivate --jq .isPrivate -> true",
+      "api.github.com gh repo view --json isPrivate --jq .isPrivate -> true",
+      "api.github.com gh repo view --json isPrivate --jq .isPrivate -> false"
+    ],
+    "every_line_starts_with_host": true,
+    "note": "5 lines this pass: edge1 (true), edge2 (false), edge3 recheck (true), edge5 recheck (true), bonus gate-family wiring check (false, FAKE_GH_PRIVATE=false)"
+  },
+  "real_outside_calls": [],
+  "fix_confirmed": {
+    "issue": "previous pass: default --results lookup for `run` resolved relative to the shell's cwd, not --repo, giving recorded_count=0/skipped_count=2 unless --results <tmp>/mutants was passed explicitly",
+    "this_pass": "ran `mutation_ledger.py run --repo <tmp> --changed-only --budget-minutes 1 --mutmut <fake-mutmut>` WITHOUT --results, invoked from cwd=/Users/abid/.agents (not the temp repo) -> it found <tmp>/mutants/pkg/owner.py.meta on its own and recorded both rows (recorded_count=2, skipped_count=0). Fix confirmed working."
+  },
+  "final_ledger_json": {
+    "functions": {
+      "pkg/owner.py::Box.size": {
+        "hash": "sha256:fdab336a51da55591a03ffef1e399c4ada809176322819a3c72ccc30e78ff586",
+        "runner": "mutmut",
+        "scored_at": "2026-09-04T21:45:09Z",
+        "survivors": [
+          {
+            "mutant": "pkg.owner.xǁBoxǁsize__mutmut_2",
+            "reason": "same behaviour",
+            "verdict": "equivalent"
+          }
+        ],
+        "totals": {
+          "killed": 1,
+          "no_coverage": 0,
+          "skipped": 0,
+          "survived": 1,
+          "timeout": 0
+        },
+        "version": "9.9.9"
+      },
+      "pkg/owner.py::add": {
+        "hash": "sha256:a43fd9067f17cc493fad695a181f9d7b6b088a7a3eb57ab1c02ccb6bd484c70e",
+        "runner": "mutmut",
+        "scored_at": "2026-09-04T21:45:09Z",
+        "survivors": [
+          {
+            "mutant": "pkg.owner.x_add__mutmut_2",
+            "reason": "same behaviour",
+            "verdict": "equivalent"
+          }
+        ],
+        "totals": {
+          "killed": 1,
+          "no_coverage": 0,
+          "skipped": 0,
+          "survived": 1,
+          "timeout": 0
+        },
+        "version": "9.9.9"
+      }
+    },
+    "schema_version": 1,
+    "note": "both hashes stayed the same across the formatting-only commit (edge case 5); the 'since' field was dropped from a survivor once it received a verdict (edge case 4)."
+  },
+  "edge_cases": {
+    "private repository changed function without a current row": {
+      "command": "MUTATION_LEDGER_GH=<fake> FAKE_GH_PRIVATE=true mutation_ledger.py check --repo <tmp> --visibility auto",
+      "exit": 1,
+      "output": "rows=0\nstale=0\nrunners=mutmut\nvisibility=private (gh repo view)\nbase=6f0cb89bf975ac8a54b9b19401e0f63dd5e868cf\nchanged_functions=2\nunscored=2\nunscored_function=pkg/owner.py::Box.size\nunscored_function=pkg/owner.py::add\nmutation-ledger: FAIL private repository: score these changed functions locally before push (mutation_ledger.py run): pkg/owner.py::Box.size, pkg/owner.py::add",
+      "expectation": "exit 1 naming pkg/owner.py::add (and, since the tool scopes by touched file, pkg/owner.py::Box.size too)",
+      "result": "PASS"
+    },
+    "public repository with unscored functions": {
+      "command": "MUTATION_LEDGER_GH=<fake> FAKE_GH_PRIVATE=false mutation_ledger.py check --repo <tmp> --visibility auto",
+      "exit": 0,
+      "output": "rows=0\nstale=0\nrunners=mutmut\nvisibility=public (gh repo view)\nbase=6f0cb89bf975ac8a54b9b19401e0f63dd5e868cf\nchanged_functions=2\nunscored=2\nunscored_function=pkg/owner.py::Box.size\nunscored_function=pkg/owner.py::add\nmutation-ledger: PASS",
+      "expectation": "exit 0, unscored>0, mutation-ledger: PASS",
+      "result": "PASS"
+    },
+    "nightly run over unscored functions": {
+      "commands": [
+        "mutation_ledger.py run --repo <tmp> --changed-only --budget-minutes 1 --mutmut <fake-mutmut>  (NO --results, run from cwd=/Users/abid/.agents)",
+        "MUTATION_LEDGER_GH=<fake> FAKE_GH_PRIVATE=true mutation_ledger.py check --repo <tmp> --visibility auto"
+      ],
+      "run_exit": 0,
+      "run_output": "planned=2\nmutmut_exit=0\nbudget_exhausted=no\nrecorded_count=2\nskipped_count=0\nmutation-ledger: recorded",
+      "check_exit": 0,
+      "check_output": "rows=2\nstale=0\nrunners=mutmut\nvisibility=private (gh repo view)\nbase=6f0cb89bf975ac8a54b9b19401e0f63dd5e868cf\nchanged_functions=2\nunscored=0\nmutation-ledger: PASS",
+      "fix_note": "confirms the --results-defaults-to-repo fix: no --results flag was passed and the cwd (/Users/abid/.agents) was NOT the temp repo, yet the tool found <tmp>/mutants/pkg/owner.py.meta and recorded both rows.",
+      "side_effect_found": "running `run` from cwd=/Users/abid/.agents (a populated real repo) while --repo pointed at <tmp> caused mutation_ledger.py to create a 121MB untracked 'mutants/' directory directly under /Users/abid/.agents containing a full copy of the real repo's tracked tree (pyproject.toml, AGENTS.md, scripts/, etc. — confirmed identical via diff -q). 'mutants/' is gitignored so this did not touch git state, and it was deleted immediately as cleanup (rm -rf /Users/abid/.agents/mutants), but it shows the mutmut staging/mirror step some code path uses the process's real OS cwd rather than --repo, inconsistent with the now-fixed --results default. Reporting as a defect, not patched.",
+      "result": "PASS (functional contract holds, recorded_count now matches expectation of scoring both changed functions and the private check afterwards passes) with the side_effect_found defect noted above"
+    },
+    "needs-verdict row older than seven days": {
+      "commands": [
+        "mutation_ledger.py check --repo <tmp> --visibility public --today 2026-09-12",
+        "mutation_ledger.py verdict --repo <tmp> --function pkg/owner.py::add --mutant pkg.owner.x_add__mutmut_2 --verdict equivalent --reason 'same behaviour'",
+        "mutation_ledger.py check --repo <tmp> --visibility public --today 2026-09-12 (still stale: Box.size)",
+        "mutation_ledger.py verdict --repo <tmp> --function pkg/owner.py::Box.size --mutant pkg.owner.xǁBoxǁsize__mutmut_2 --verdict equivalent --reason 'same behaviour'",
+        "mutation_ledger.py check --repo <tmp> --visibility public --today 2026-09-12"
+      ],
+      "first_check_exit": 1,
+      "first_check_output": "rows=2\nstale=2\n...\nmutation-ledger: FAIL needs-verdict older than 7 days: pkg/owner.py::Box.size pkg.owner.xǁBoxǁsize__mutmut_2 (since 2026-09-04)\nmutation-ledger: FAIL needs-verdict older than 7 days: pkg/owner.py::add pkg.owner.x_add__mutmut_2 (since 2026-09-04)",
+      "final_check_exit": 0,
+      "final_check_output": "rows=2\nstale=0\n...\nmutation-ledger: PASS",
+      "note": "both rows were survivors from the same run (both functions are in scope as changed since the file was touched), so both needed a verdict before the gate passed; verdicting only one still failed naming the other",
+      "expectation": "exit 1 mentioning 'older than 7 days'; then PASS after verdict",
+      "result": "PASS"
+    },
+    "formatting-only edit versus a real change": {
+      "command": "MUTATION_LEDGER_GH=<fake> FAKE_GH_PRIVATE=true mutation_ledger.py check --repo <tmp> --visibility auto",
+      "change": "added a blank line inside add() and before Box.size's def line; no semantic change",
+      "exit": 0,
+      "output": "rows=2\nstale=0\nrunners=mutmut\nvisibility=private (gh repo view)\nbase=6f0cb89bf975ac8a54b9b19401e0f63dd5e868cf\nchanged_functions=2\nunscored=0\nmutation-ledger: PASS",
+      "expectation": "PASS with unscored=0",
+      "result": "PASS"
+    },
+    "repository without a mutation runner or with a broken ledger": {
+      "command": "mutation_ledger.py check --repo <tmp2 (no pyproject.toml)> --visibility public",
+      "exit": 0,
+      "output": "rows=0\nstale=0\nrunners=none\nmutation-ledger: PASS",
+      "expectation": "exit 0 and runners=none",
+      "result": "PASS"
+    }
+  },
+  "bonus_gate_wiring_check": {
+    "command": "MUTATION_LEDGER_GH=<fake> FAKE_GH_PRIVATE=false python3 skills/deterministic-checks/scripts/project_gate.py run --repo /Users/abid/.agents --timeout 120 --family mutation-ledger",
+    "exit": 4,
+    "family_line": "mutation-ledger: PASS",
+    "wrapper_result": "project-gate: FAIL: project gate commands mutated the repository tree; dirty_paths=[... many pre-existing paths from concurrent build-loop-records work ...]",
+    "note": "the mutation-ledger family itself printed PASS using the fake gh (visibility=public (gh repo view), confirmed by the last fake-gh log line -> false). The wrapper's own FAIL is its dirty-working-tree guard tripping on files that were already modified before this verification session started (confirmed by file mtimes predating this session) — unrelated to the mutation-ledger family or to this fix. Zero real gh calls happened during this command."
+  },
+  "cleanup": "both temp repos (s10r2-repo1.*, s10r2-repo2.*), the fake mutmut script, and the stray /Users/abid/.agents/mutants/ side-effect directory were removed after this run"
+}

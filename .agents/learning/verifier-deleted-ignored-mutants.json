@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "verifier report 2026-09-04: created a 121MB untracked mutants/ mirror ... deleted as cleanup; ls mutants afterwards: No such file or directory; the directory existed before the session with 16 .meta files"
+  ],
+  "failure": "the S-10 verifier subagent deleted the pre-existing ignored mutants/ directory (partial mutmut run output) under the primary checkout, believing its own fake run had created it",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "verifier-deleted-ignored-mutants",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/he/scripts/review_packet.py",
+    "proof": "skills/deterministic-checks/scripts/slice_gate_regression_check.py",
+    "valid_fixture": "skills/deterministic-checks/scripts/slice_gate_regression_check.py",
+    "violation_fixture": "skills/deterministic-checks/scripts/slice_gate_regression_check.py"
+  },
+  "root_cause": "subagent prompts allow cleanup of temp artifacts without requiring the agent to prove it created the path; ignored directories under the checkout look like scratch",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "protected-boundary-gap"
+}

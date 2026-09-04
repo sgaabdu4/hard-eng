@@ -24,7 +24,7 @@ description: Deliver one exact green Hard Eng snapshot through publish gates, au
 - Explicit terminal delivery outcome persists across recoverable build/CI failures, retries, and turn boundaries; one failed attempt never narrows the goal.
 - Missing project gate manifest/family = invalid green snapshot → `he-build` + `deterministic-checks` `gate-migration`; Ship never wires it.
 - Sync/content/CI change → `he-build` final loop; green evidence becomes stale.
-- `assert-green` = working artifact at Ship entry + current mutation receipt covering every source file the feature changed (slice receipts' changed paths + uncommitted work) (`mutation=missing` → `he-build` records it); Hard Eng repository receipt = `mutation.md` sequence (`mutation-venv.sh` → `mutmut run` → `mutation_payload.py` → `record-mutation`); `assert-green --delivered-head` = post-commit HEAD/index/worktree exactness before push; either failure returns to `he-build`.
+- `assert-green` = working artifact at Ship entry; `assert-green --delivered-head` = post-commit HEAD/index/worktree exactness before push; either failure returns to `he-build`; mutation strength = committed `mutation-ledger.json` read by the `publish` push gate (`deterministic-checks` `mutation.md`), never a ship-entry receipt.
 - Read `features/<slug>/BUILD.md` before delivery; it is the human summary of every slice's edge, green, review, and verify records.
 - Publish gate = `deterministic-checks` `publish` PASS on exact intended diff.
 - Delivery SHA = remote product artifact identity; later local lifecycle-state bytes are not part of that artifact.

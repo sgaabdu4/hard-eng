@@ -20,6 +20,7 @@ from project_gate import (
     AUDIT_FLAG,
     REACT_DOCTOR_COMMAND,
     ProjectGateError,
+    family_outcome,
     load_manifest,
     load_phase,
     validate_quality_report,
@@ -46,17 +47,9 @@ def write_families(repo: Path, families: dict[str, list[str]]) -> None:
 
 
 def write_phases(repo: Path, families: dict[str, list[str]], phases: dict[str, list[str]]) -> None:
-    (repo / "hard-eng.gates.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "enforcement": {"schema_version": 1, "required_paths": ["hard-eng.gates.json"]},
-                "families": families,
-                "phases": phases,
-            }
-        ),
-        encoding="utf-8",
-    )
+    enforcement = {"schema_version": 1, "required_paths": ["hard-eng.gates.json"]}
+    manifest = {"schema_version": 1, "enforcement": enforcement, "families": families, "phases": phases}
+    (repo / "hard-eng.gates.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
 def gate_command(repo: Path, family: str, timeout: str = "30") -> list[str]:
@@ -205,43 +198,48 @@ def check_react_doctor_report() -> None:
 
     absent = json.loads(react_doctor_report())
     del absent["reactDetected"]
-    for malformed in ("", "{}", "React Doctor 0.9.5\n3 issues\n", json.dumps(absent)):
+    outputs = ("", "{}", "React Doctor 0.9.5\n3 issues\n", json.dumps(absent))
+    expect_rejected("react-doctor", outputs, "malformed or unscanned React Doctor report was accepted")
+
+
+def expect_rejected(family: str, outputs: tuple[str, ...], message: str) -> None:
+    for malformed in outputs:
         try:
-            validate_quality_report("react-doctor", malformed)
+            validate_quality_report(family, malformed)
         except ProjectGateError:
             continue
-        fail("malformed or unscanned React Doctor report was accepted")
+        fail(message)
 
 
 def check_quality_report() -> None:
-    clean = {
-        "kind": "audit",
-        "verdict": "pass",
-        "summary": {"dead_code_issues": 0, "complexity_findings": 0, "duplication_clone_groups": 0},
-        "attribution": {"gate": "new-only", "dead_code_introduced": 0},
-    }
+    summary = {"dead_code_issues": 0, "complexity_findings": 0, "duplication_clone_groups": 0}
+    attribution = {"gate": "new-only", "dead_code_introduced": 0}
+    clean = {"kind": "audit", "verdict": "pass", "summary": summary, "attribution": attribution}
     validate_quality_report("fallow", json.dumps(clean))
     validate_quality_report("fallow", json.dumps({**clean, "verdict": "warn"}))
-    finding = {
-        **clean,
-        "verdict": "fail",
-        "attribution": {"gate": "new-only", "complexity_introduced": 1},
-        "health": {"findings": [{"path": "src/owner.ts", "line": 7, "name": "owner", "introduced": True}]},
-    }
+    failing = {**clean, "verdict": "fail", "attribution": {"gate": "new-only", "complexity_introduced": 1}}
+    owner = {"path": "src/owner.ts", "line": 7, "name": "owner", "introduced": True}
     try:
-        validate_quality_report("fallow", json.dumps(finding))
+        validate_quality_report("fallow", json.dumps({**failing, "health": {"findings": [owner]}}))
     except ProjectGateError as error:
         if "complexity_introduced=1" not in str(error) or "src/owner.ts:7" not in str(error):
             fail(f"Fallow audit failure lost compact evidence: {error}")
     else:
         fail("Fallow fail verdict was accepted")
+    score = {"path": "score.ts", "name": "score", "line": 1, "introduced": True}
+    audit_fail = json.dumps({**failing, "health": None, "complexity": {"findings": [score]}})
+    for stdout, stderr, expected in (
+        (audit_fail, "", ("score.ts:1 score", "verdict=fail")),
+        ("", "fallow: command not found", ("fallow: command not found",)),
+    ):
+        error, detail = family_outcome("fallow", 1, stdout, stderr, True)
+        if error is not None or any(text not in detail.split("\n", 1)[0] for text in expected):
+            fail(f"fallow failure detail must lead with {expected}: {detail[:200]}")
+    if family_outcome("tests", 1, "boom", "", True) != (None, "boom"):
+        fail("non-fallow failures keep their raw output")
     combined = {"kind": "combined", "check": {"total_issues": 0}, "dupes": {}, "health": {}}
-    for malformed in ("", "{}", json.dumps(combined), json.dumps({**clean, "verdict": "maybe"})):
-        try:
-            validate_quality_report("fallow", malformed)
-        except ProjectGateError:
-            continue
-        fail("malformed or non-audit Fallow report was accepted")
+    outputs = ("", "{}", json.dumps(combined), json.dumps({**clean, "verdict": "maybe"}))
+    expect_rejected("fallow", outputs, "malformed or non-audit Fallow report was accepted")
 
 
 def check_clones_manifest(repo: Path) -> None:

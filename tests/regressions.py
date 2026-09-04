@@ -34,5 +34,4 @@ IN_PROCESS = (
     HE / "setup_state_regression.py",
     HE / "ticket_state_regression.py",
     HE / "lifecycle_excludes_regression.py",
-    HE / "mutation_payload_regression.py",
 )

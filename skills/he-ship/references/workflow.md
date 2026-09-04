@@ -12,7 +12,7 @@
 5. Record exact target/remote/branch/path/commit/push/PR/merge + environment/resource/effect/exclusions.
 6. Recoverable delivery continues; an unrequested irreversible destructive action → checkpoint + one scoped question.
 7. `deterministic-checks` `publish` → PASS; capture HEAD + status + actual diff.
-8. PLAN `critical_overlay` slice in this delivery = current `deterministic-checks` mutation receipt; missing/incomplete → checkpoint `building` + `he-build` final loop.
+8. PLAN `critical_overlay` slice in this delivery = every function it changed has a current `mutation-ledger.json` row with every survivor given a verdict (`mutation_ledger.py check` + `plan`); missing → checkpoint `building` + `he-build` final loop.
 9. Resolve active release actors for target + environment + revision; nonterminal manual/CI actor → wait or exact cancellation approval.
 
 ## Sync ⇄ Build
