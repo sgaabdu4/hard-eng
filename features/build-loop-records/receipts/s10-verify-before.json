@@ -1,0 +1,38 @@
+{
+  "slice": "S-10",
+  "mode": "logic",
+  "pass": "redo (no real outside calls)",
+  "script": "skills/deterministic-checks/scripts/mutation_ledger.py",
+  "setup": {
+    "repo_kind": "throwaway git repo under mktemp -d (deleted after this run)",
+    "pyproject_toml": "[tool.mutmut]\nsource_paths = [\"pkg\"]\n",
+    "pkg_owner_py_initial": "def add(a, b):\n    return a + b\n\n\nclass Box:\n    def size(self):\n        return 1\n",
+    "tests_dir": "tests/test_owner.py present",
+    "initial_commit": "6f0cb89bf975ac8a54b9b19401e0f63dd5e868cf",
+    "branches_created": [
+      "main",
+      "origin/main (git branch origin/main, same commit)",
+      "feature (checked out from origin/main)"
+    ],
+    "git_config": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1, git -c user.name=v -c user.email=v@example.invalid for every commit"
+  },
+  "ledger_file_before": "absent (mutation-ledger.json does not exist in the fresh repo)",
+  "commands": [
+    {
+      "cmd": "mutation_ledger.py plan --repo <tmp>",
+      "exit": 0,
+      "output": "function=pkg/owner.py::Box.size\npattern=pkg.owner.xǁBoxǁsize__mutmut_*\nfunction=pkg/owner.py::add\npattern=pkg.owner.x_add__mutmut_*\ncount=2"
+    },
+    {
+      "cmd": "mutation_ledger.py plan --repo <tmp> --changed-only",
+      "exit": 0,
+      "output": "base=6f0cb89bf975ac8a54b9b19401e0f63dd5e868cf\ncount=0",
+      "note": "feature branch == origin/main at this point, nothing changed yet"
+    },
+    {
+      "cmd": "mutation_ledger.py check --repo <tmp> --visibility public",
+      "exit": 0,
+      "output": "rows=0\nstale=0\nrunners=mutmut\nvisibility=public (declared)\nbase=6f0cb89bf975ac8a54b9b19401e0f63dd5e868cf\nchanged_functions=0\nunscored=0\nmutation-ledger: PASS"
+    }
+  ]
+}

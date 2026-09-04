@@ -146,6 +146,8 @@ jobs:
         if: matrix.scope == 'full'
         env:
           FALLOW_AUDIT_BASE: ${{ steps.fallow-base.outputs.base }}
+          MUTATION_LEDGER_BASE: ${{ steps.fallow-base.outputs.base }}
+          MUTATION_LEDGER_VISIBILITY: ${{ github.event.repository.private && 'private' || 'public' }}
         run: python3 skills/deterministic-checks/scripts/project_gate.py phase --repo . --timeout 360 --phase ci
 
       - name: Run setup platform contracts

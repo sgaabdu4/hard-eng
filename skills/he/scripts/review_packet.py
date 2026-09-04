@@ -27,10 +27,12 @@ class ReviewPacketError(Exception):
 VERIFIER_RULES = (
     "- You did not write this code; drive the whole feature from the outside.",
     "- Every outside host must go through a fake you control; list every host reached in outside_calls.",
+    "- Every fake log line starts with the host reached; a host outside the fakes list fails the record.",
     "- One real outside call means FAIL.",
     "- mode ui = screenshots before and after per view (png/jpg/webp); mode logic = recorded inputs and outputs as JSON.",
     "- Evidence files live under features/<slug>/receipts/ and are listed with their sha256.",
     "- Edit no product file; report defects, do not patch them.",
+    "- Delete, overwrite, or truncate nothing your own run log did not prove you created; a pre-existing or ignored directory under the checkout is someone else's work.",
 )
 
 

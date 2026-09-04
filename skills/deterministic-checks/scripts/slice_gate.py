@@ -443,6 +443,20 @@ def ui_path(path: str) -> bool:
     return Path(lowered).suffix in UI_EXT and not any(marker in lowered for marker in TEST_PATH_MARKERS)
 
 
+def media_scope(repo: Path, plan: Path, name: str, paths: tuple[str, ...]) -> tuple[str, ...]:
+    if name != "full":
+        return paths
+    scoped = set(changed_paths(repo, full=False))
+    for receipt in plan.parent.glob("receipts/S-*.json"):
+        try:
+            data = json.loads(receipt.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict):
+            scoped.update(str(item) for item in data.get("changed_paths", ()))
+    return tuple(sorted(scoped))
+
+
 def media_error(paths: tuple[str, ...], e2e_value: str) -> str | None:
     if not e2e_value.startswith("not-applicable:"):
         return None
@@ -550,7 +564,8 @@ def receipt_error(repo: Path, plan: Path, plan_id: str, name: str) -> str | None
                 return f"receipt is missing its {field} record"
         if error := security_error(plan, name, str(data.get("security", ""))):
             return error
-        if error := media_error(tuple(str(item) for item in data.get("changed_paths", ())), str(data.get("e2e", ""))):
+        stored_paths = tuple(str(item) for item in data.get("changed_paths", ()))
+        if error := media_error(media_scope(repo, plan, name, stored_paths), str(data.get("e2e", ""))):
             return error
         e2e_value = str(data.get("e2e", ""))
         try:
@@ -640,7 +655,7 @@ def command_run(args: argparse.Namespace) -> None:
         "review": evidence_value("review", args.review, repo),
     }
     paths = changed_paths(repo, full=name == "full")
-    if error := media_error(paths, e2e_value):
+    if error := media_error(media_scope(repo, plan, name, paths), e2e_value):
         raise SliceGateError(error)
     applicable = applicable_families(repo, paths)
     if error := coverage_error(applicable, checks):

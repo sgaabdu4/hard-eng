@@ -332,7 +332,10 @@ def check_external_contracts() -> None:
             (sys.executable, "skills/deterministic-checks/scripts/script_runner_regression_check.py"),
         ),
         ("in-process seam guard", (sys.executable, "scripts/inprocess-seam-contract.py")),
-        ("mutation payload", (sys.executable, "skills/he/scripts/mutation_payload_regression.py")),
+        (
+            "mutation ledger",
+            (sys.executable, "skills/deterministic-checks/scripts/mutation_ledger_regression_check.py"),
+        ),
         ("tracker hierarchy mirror", (sys.executable, "skills/he/scripts/tracker_github_regression.py")),
         ("tracker HTTP adapters", (sys.executable, "skills/he/scripts/tracker_http_regression.py")),
         ("parallel ticket state", (sys.executable, "skills/he/scripts/ticket_state_regression.py")),

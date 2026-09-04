@@ -24,7 +24,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | Worktree mutation/publish | [Worktree readiness](references/worktree.md) |
 | First paid or state-changing external/native attempt or retry | [Retry readiness](references/retry-readiness.md) |
 | Lifecycle slice/full-gate proof | [Slice gate](references/slice-gate.md) |
-| Pre-ship mutation strength, every feature | [Mutation receipt](references/mutation.md) |
+| Mutation strength: scored once per function, nightly on public repositories, before push on private ones | [Mutation ledger](references/mutation.md) |
 | Copy-paste clones, Python/Dart, baseline + new-only | [Clones](references/clones.md) |
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
 | JS/TS | typecheck + tests + every configured formatter/linter gate + [Fallow](references/fallow.md) + declared boundary-contract gate; no formatter/linter owner → Biome format + lint |

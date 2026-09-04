@@ -32,4 +32,4 @@
 - Update scope = locked paths only; local paths + discovery + unlisted install = forbidden.
 - Skill add/remove/source replacement = explicit user approval.
 - Daily CI = model-free → `03:30 UTC` → direct default-branch commit when changed.
-- Scheduled exception = locked-skill update only; no model, eval, subagent, or new skill.
+- Scheduled exception = locked-skill update + nightly mutation ledger (`02:17 UTC`, public repository only, pull request for survivors); no model, eval, subagent, or new skill.

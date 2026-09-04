@@ -13,6 +13,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import plan_steps
 from evidence_lib import (
     EvidenceError,
     enforcement_configured,
@@ -37,6 +38,11 @@ FULL = "full"
 MAX_REVIEW_ROUNDS = 3
 FINDING_STATUSES = ("open", "fixed", "rejected", "replan")
 VERIFY_MODES = ("ui", "logic")
+HOST_TOKEN = re.compile(
+    r"(?:\d{1,3}(?:\.\d{1,3}){3}|[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,})"
+    r"(?::\d{1,5})?"
+)
+LOCAL_HOSTS = re.compile(r"127\.\d{1,3}\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|0\.0\.0\.0")
 IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 VIDEO_SUFFIXES = frozenset({".mp4", ".webm", ".mov"})
 SLICE_ID = re.compile(r"^S-[1-9][0-9]*$")
@@ -196,6 +202,20 @@ def _hashed_paths(repo: Path, payload: dict[str, object], key: str, mode: str) -
     return rows
 
 
+def _log_hosts(repo: Path, log: str, faked: set[str]) -> set[str]:
+    hosts: set[str] = set()
+    known = {host.lower() for host in faked} | {host.lower().rsplit(":", 1)[0] for host in faked}
+    for line in (repo / log).read_text(encoding="utf-8", errors="replace").splitlines():
+        first = line.split(maxsplit=1)[0].lower() if line.strip() else ""
+        if not HOST_TOKEN.fullmatch(first):
+            continue
+        bare = first.rsplit(":", 1)[0]
+        if first in known or bare in known or LOCAL_HOSTS.fullmatch(bare):
+            continue
+        hosts.add(bare)
+    return hosts
+
+
 def validate_verify(repo: Path, payload: dict[str, object], plan: Path, name: str) -> dict[str, object]:
     keys = ("mode", "packet_sha256", "fakes", "outside_calls", "before", "after", "edge_cases")
     _unknown_keys(payload, keys, "verify")
@@ -222,6 +242,12 @@ def validate_verify(repo: Path, payload: dict[str, object], plan: Path, name: st
     real = sorted(host for host in calls if host not in faked)
     if real:
         raise BuildStepError(f"verify saw a real outside call to {real[0]}; every outside host needs a fake")
+    for fake in fakes:
+        logged = sorted(_log_hosts(repo, fake["log"], faked))
+        if logged:
+            raise BuildStepError(
+                f"fake log {fake['log']} shows a real outside host {logged[0]}; every outside host needs a fake"
+            )
     edge_cases = payload.get("edge_cases", [])
     if not isinstance(edge_cases, list) or any(not isinstance(item, str) or not item.strip() for item in edge_cases):
         raise BuildStepError("verify.edge_cases must be a list of edge case names")
@@ -358,6 +384,17 @@ def next_review_round(repo: Path, plan: Path, name: str) -> int:
     return (len(rounds) if isinstance(rounds, list) else 0) + 1
 
 
+def pending_finding(repo: Path, plan: Path, name: str) -> str | None:
+    if not enforcement_configured(repo) or name == "none":
+        return None
+    try:
+        review = _slice_entry(load(repo, plan), name).get("review")
+    except BuildStepError:
+        return None
+    pending = open_findings(review) if isinstance(review, dict) else []
+    return pending[0] if pending else None
+
+
 def emit_lines(repo: Path, plan: Path, name: str) -> list[str]:
     if not enforcement_configured(repo) or name == "none":
         return []
@@ -366,23 +403,19 @@ def emit_lines(repo: Path, plan: Path, name: str) -> list[str]:
     except BuildStepError as error:
         return [f"build_steps=invalid: {error}"]
     entry = _slice_entry(receipt, name)
-    done = [step for step in STEPS if isinstance(entry.get(step), dict)]
-    lines = [f"build_steps={name}:{len(done)}/{len(STEPS)}"]
-    missing = [step for step in STEPS if step not in done]
+    steps = ("verify",) if name == FULL else STEPS
+    done = [step for step in steps if isinstance(entry.get(step), dict)]
+    lines = [f"build_steps={name}:{len(done)}/{len(steps)}"]
+    missing = [step for step in steps if step not in done]
     if missing:
         lines.append("build_steps_missing=" + ", ".join(missing))
-    review = entry.get("review")
-    if isinstance(review, dict) and (pending := open_findings(review)):
-        lines.append("build_steps_open_finding=" + pending[0])
+    if pending := pending_finding(repo, plan, name):
+        lines.append("build_steps_open_finding=" + pending)
     return lines
 
 
 def read_payload(value: str) -> dict[str, object]:
-    raw = sys.stdin.read() if value == "-" else Path(value).read_text(encoding="utf-8")
     try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as error:
-        raise BuildStepError(f"payload is not valid JSON: {error}") from error
-    if not isinstance(payload, dict):
-        raise BuildStepError("payload must be a JSON object")
-    return payload
+        return plan_steps.read_payload(value)
+    except plan_steps.PlanStepError as error:
+        raise BuildStepError(str(error)) from error

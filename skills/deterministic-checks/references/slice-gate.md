@@ -11,7 +11,7 @@
 - `--behavior` = one observable behavior; `+`/`;`/`→` separators = rejected → split the extra behaviors into their own slices.
 - `--e2e <path>` = canonical `e2e` receipt; validator PASS required + receipt bytes sha-bound; later change = stale.
 - `risk_level = critical` + overlay naming the slice (or naming none, or `--full`) → `--security not-applicable` rejected; record the protected-boundary review summary.
-- Changed non-test `.tsx|.jsx|.dart` path → `--e2e not-applicable` rejected whatever `ux_reference` says; actual-media receipt required; test paths (`__tests__/`, `.test.`, `.spec.`, `_test.dart`, `/test/`) never count.
+- Changed non-test `.tsx|.jsx|.dart` path (`--full` = union of every slice receipt's changed paths + uncommitted work, never the whole tree) → `--e2e not-applicable` rejected whatever `ux_reference` says; actual-media receipt required; test paths (`__tests__/`, `.test.`, `.spec.`, `_test.dart`, `/test/`) never count.
 
 ```sh
 python3 "$HOME/.agents/skills/deterministic-checks/scripts/slice_gate.py" run \

@@ -71,6 +71,14 @@ def token_for(text: str) -> str:
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def remaining_slice(sections: dict[str, str], completed: str) -> str:
+    done = {item.strip() for item in completed.split(",")} if completed != "none" else set()
+    for identifier, _body in SLICE_ROW.findall(sections[SLICES_SECTION]):
+        if identifier not in done:
+            return identifier
+    return "none"
+
+
 def parse_sections(text: str) -> dict[str, str]:
     matches = list(re.finditer(r"(?m)^## ([^\n]+)\n", text))
     headings = [
