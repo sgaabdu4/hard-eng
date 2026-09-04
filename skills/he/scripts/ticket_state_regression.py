@@ -86,6 +86,7 @@ def make_repo(base: Path, name: str, *, tracker: bool = False) -> Path:
     run_git(base, "clone", "-q", str(origin), str(repo))
     run_git(repo, "config", "user.email", "ticket-check@example.invalid")
     run_git(repo, "config", "user.name", "Ticket Check")
+    run_git(repo, "config", "core.hooksPath", "/dev/null")
     manifest: dict = {"schema_version": 1, "families": {"targeted": [sys.executable, "-c", "pass"]}}
     tracker and manifest.update(tracker={"adapter": "github", "repository": "example/ticket-fixture"})
     (repo / "hard-eng.gates.json").write_text(json.dumps(manifest), encoding="utf-8")

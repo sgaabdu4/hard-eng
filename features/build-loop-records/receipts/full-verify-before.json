@@ -1,18 +1,14 @@
 {
-  "captured_via": "plan_state.py inspect, immediately after fixture plan creation (before any record-step)",
-  "state": {
-    "result": "valid",
-    "plan": "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk/features/steps-demo/PLAN.md",
-    "token": "sha256:cda45a5adaccdae7cc939eab075759ba6a8472b24bc2dac7b31a8cb66c9953eb",
-    "lifecycle_status": "planning",
-    "approval_status": "pending",
-    "brief_fingerprint": "sha256:0f4471a6ebe76b5061748e4d3368d9d16fa6953cef6605a995cb2b9543874679",
-    "route_target": "he-plan",
-    "active_slice": "S-1",
-    "completed_slices": "none",
-    "next_action": "Complete the brief and request Ready-to-build approval.",
-    "plan_steps": "0/6",
-    "plan_steps_missing": "code-study, research, edge-scan, decisions, slices, closing",
-    "ready_for_approval": "no"
-  }
+  "head_sha": "5b5f990a03af28ab18698d3c2c91b715f16067a7",
+  "tree_sha": "e35a2fadb07a8e8a4143f633151594d25056dfe6",
+  "commands": [
+    "python3 scripts/check-skill-contracts.py",
+    "python3 skills/he/scripts/build_steps_regression.py",
+    "python3 skills/deterministic-checks/scripts/slice_gate_regression_check.py",
+    "python3 skills/he/scripts/ticket_state_regression.py",
+    "python3 skills/he/scripts/plan_steps_regression.py",
+    "python3 skills/deterministic-checks/scripts/project_gate_regression_check.py",
+    "python3 skills/he/scripts/plan_state.py inspect --repo . --plan features/build-loop-records/PLAN.md",
+    "perl scripts/enforcement_policy.pl check . (run in /Users/abid/.agents itself; corrected spec, replacing the original bare-temp-repo variant)"
+  ]
 }

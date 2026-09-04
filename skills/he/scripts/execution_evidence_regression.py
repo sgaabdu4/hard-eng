@@ -150,6 +150,7 @@ def fixture(root: Path) -> tuple[Path, Path]:
         encoding="utf-8",
     )
     subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
+    subprocess.run(["git", "-C", str(repo), "config", "core.hooksPath", "/dev/null"], check=True, env=git_env())
     return repo, plan
 
 
@@ -158,6 +159,7 @@ def approval_fixture(root: Path) -> tuple[Path, Path, str]:
     plan = repo / "features" / "approval" / "PLAN.md"
     plan.parent.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
+    subprocess.run(["git", "-C", str(repo), "config", "core.hooksPath", "/dev/null"], check=True, env=git_env())
     (repo / "hard-eng.gates.json").write_text(
         json.dumps({"schema_version": 1, "enforcement": {"schema_version": 1}}), encoding="utf-8"
     )

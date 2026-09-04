@@ -1,556 +1,72 @@
 {
-  "summary": "Outside-in walkthrough of build-loop-records: planning external-claim gate, per-slice build records (edges/green/review/verify), slice gate, full gate, green checkpoint with walkthrough question, BUILD.md generation, inspect handoff=ship, mutation receipt gate before assert-green, and ticket-mode worker cap + orchestrator write guard. All four packaged regression scripts also run standalone and pass.",
-  "outside_calls": [],
-  "fakes_used": [
+  "checks": [
     {
-      "host": "api.example.test",
-      "purpose": "verify-record fake outside call, logged in fakes.log per record-build verify",
-      "real_network_call": false
+      "n": 1,
+      "cmd": "python3 scripts/check-skill-contracts.py",
+      "exit": 0,
+      "key_line": "skill-contracts: PASS"
     },
     {
-      "host": "real.example.com",
-      "purpose": "negative case only: passed to record-build verify to prove it is refused as a real outside host; never dialed",
-      "real_network_call": false
+      "n": 2,
+      "cmd": "python3 skills/he/scripts/build_steps_regression.py",
+      "exit": 0,
+      "key_line": "build-steps regression: PASS"
+    },
+    {
+      "n": 3,
+      "cmd": "python3 skills/deterministic-checks/scripts/slice_gate_regression_check.py",
+      "exit": 0,
+      "key_line": "slice-gate-check: PASS"
+    },
+    {
+      "n": 4,
+      "cmd": "python3 skills/he/scripts/ticket_state_regression.py",
+      "exit": 0,
+      "key_line": "ticket-state regression: PASS"
+    },
+    {
+      "n": 5,
+      "cmd": "python3 skills/he/scripts/plan_steps_regression.py",
+      "exit": 0,
+      "key_line": "plan-steps regression: PASS"
+    },
+    {
+      "n": 6,
+      "cmd": "python3 skills/deterministic-checks/scripts/project_gate_regression_check.py",
+      "exit": 0,
+      "key_line": "project-gate-check: PASS"
+    },
+    {
+      "n": 7,
+      "cmd": "python3 skills/he/scripts/plan_state.py inspect --repo . --plan features/build-loop-records/PLAN.md",
+      "exit": 0,
+      "key_lines": [
+        "lifecycle_status=building",
+        "build_steps=full:1/4",
+        "full_receipt=stale (stale receipt: repository changed after the full checks ran)"
+      ],
+      "BUILD_md_exists": true,
+      "BUILD_md_slices_found": [
+        "S-1",
+        "S-2",
+        "S-3",
+        "S-4",
+        "S-5",
+        "S-6",
+        "S-7",
+        "S-8",
+        "S-9"
+      ]
+    },
+    {
+      "n": 8,
+      "cmd": "perl scripts/enforcement_policy.pl check . (run in /Users/abid/.agents itself, one brief under construction, tree otherwise clean)",
+      "exit": 0,
+      "note": "Coordinator corrected the original check 8 spec: the enforcement check requires the manifest's named owner files (scripts/enforcement_policy.pl and friends) to be present in the inspected repository, so a bare temp repo can never pass it \u2014 that was a mis-specification, not a defect. Rerun against /Users/abid/.agents itself: exit 0, printed the rules/schema_version JSON manifest with no error.",
+      "output_summary": "JSON object with keys 'rules' (39 named rule owners each mapped to block/checkpoint check/advise) and 'schema_version':1; no error text."
     }
   ],
-  "final_state_at_green": {
-    "result": "valid",
-    "plan": "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk/features/steps-demo/PLAN.md",
-    "token": "sha256:4e457fe0896e1db8b6b77753af9b5b0c7c550c0631942e46992022fb09656c86",
-    "lifecycle_status": "green",
-    "approval_status": "approved",
-    "brief_fingerprint": "sha256:0f4471a6ebe76b5061748e4d3368d9d16fa6953cef6605a995cb2b9543874679",
-    "route_target": "he-ship",
-    "active_slice": "none",
-    "completed_slices": "S-1",
-    "walkthrough": "no",
-    "next_action": "Build the first vertical slice.",
-    "mutation": "missing (ship requires a mutation receipt for the green tree (plan_state.py record-mutation))",
-    "handoff": "ship",
-    "handoff_root": "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-    "handoff_branch": "main",
-    "handoff_plan": "features/steps-demo/PLAN.md",
-    "handoff_report": "features/steps-demo/BUILD.md",
-    "handoff_prompt": "Ship Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: read features/steps-demo/PLAN.md and features/steps-demo/BUILD.md, then follow he-ship from assert-green to the shipped checkpoint."
-  },
-  "commands": [
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "inspect"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "brief_fingerprint=sha256:0f4471a6ebe76b5061748e4d3368d9d16fa6953cef6605a995cb2b9543874679",
-        "route_target=he-plan",
-        "active_slice=S-1",
-        "completed_slices=none",
-        "next_action=Complete the brief and request Ready-to-build approval.",
-        "plan_steps=0/6",
-        "plan_steps_missing=code-study, research, edge-scan, decisions, slices, closing",
-        "ready_for_approval=no"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-step",
-        "code-study"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "active_slice=S-1",
-        "completed_slices=none",
-        "next_action=Complete the brief and request Ready-to-build approval.",
-        "plan_steps=1/6",
-        "plan_steps_missing=research, edge-scan, decisions, slices, closing",
-        "ready_for_approval=no",
-        "recorded_step=code-study",
-        "recorded_at=2026-09-02T23:53:21Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-step",
-        "edge-scan"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "active_slice=S-1",
-        "completed_slices=none",
-        "next_action=Complete the brief and request Ready-to-build approval.",
-        "plan_steps=2/6",
-        "plan_steps_missing=research, decisions, slices, closing",
-        "ready_for_approval=no",
-        "recorded_step=edge-scan",
-        "recorded_at=2026-09-02T23:53:21Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-step",
-        "decisions"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "active_slice=S-1",
-        "completed_slices=none",
-        "next_action=Complete the brief and request Ready-to-build approval.",
-        "plan_steps=3/6",
-        "plan_steps_missing=research, slices, closing",
-        "ready_for_approval=no",
-        "recorded_step=decisions",
-        "recorded_at=2026-09-02T23:53:21Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-step",
-        "slices"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "active_slice=S-1",
-        "completed_slices=none",
-        "next_action=Complete the brief and request Ready-to-build approval.",
-        "plan_steps=4/6",
-        "plan_steps_missing=research, closing",
-        "ready_for_approval=no",
-        "recorded_step=slices",
-        "recorded_at=2026-09-02T23:53:21Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-step",
-        "closing"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "active_slice=S-1",
-        "completed_slices=none",
-        "next_action=Complete the brief and request Ready-to-build approval.",
-        "plan_steps=5/6",
-        "plan_steps_missing=research",
-        "ready_for_approval=no",
-        "recorded_step=closing",
-        "recorded_at=2026-09-02T23:53:21Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "validate",
-        "(uncited fallow)"
-      ],
-      "exit": 4,
-      "output_key_lines": [
-        "result=invalid",
-        "error=external claim `fallow` in Material decisions has no research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research"
-      ]
-    },
-    {
-      "argv": [
-        "execution_evidence.py",
-        "record-research",
-        "fallow"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "research-evidence: PASS plan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk/features/steps-demo/PLAN.md scope=external"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "validate",
-        "(fallow cited)"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "approval_status=pending",
-        "brief_fingerprint=sha256:0f4471a6ebe76b5061748e4d3368d9d16fa6953cef6605a995cb2b9543874679",
-        "route_target=he-plan",
-        "active_slice=S-1",
-        "completed_slices=none",
-        "next_action=Complete the brief and request Ready-to-build approval.",
-        "plan_steps=6/6",
-        "ready_for_approval=yes"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "approve"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "active_slice=S-1",
-        "completed_slices=none",
-        "next_action=Build the first vertical slice.",
-        "handoff=ready",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "checkpoint",
-        "building"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "slice_receipt=missing",
-        "build_steps=S-1:0/4",
-        "build_steps_missing=edges, green, review, verify",
-        "handoff=ready",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/deterministic-checks/scripts/slice_gate.py",
-        "run",
-        "--slice",
-        "S-1",
-        "(no records)"
-      ],
-      "exit": 4,
-      "output_key_lines": [
-        "result=fail",
-        "error=slice S-1 has no edges record (plan_state.py record-build --slice S-1 --step edges)"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-build",
-        "S-1",
-        "edges"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "build_steps_missing=green, review, verify",
-        "handoff=ready",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.",
-        "recorded_build=S-1:edges",
-        "recorded_at=2026-09-02T23:53:22Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-build",
-        "S-1",
-        "green"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "build_steps_missing=review, verify",
-        "handoff=ready",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.",
-        "recorded_build=S-1:green",
-        "recorded_at=2026-09-02T23:53:23Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "review-packet",
-        "S-1"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "{\"packet\": \"/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk/features/steps-demo/receipts/S-1-review-1.txt\", \"packet_round\": \"1\", \"packet_sha256\": \"d2147b98905f64c999cdd66487793abe6d8a2e1841085b721e311da9613a6297\"}"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-build",
-        "S-1",
-        "review",
-        "clean"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "build_steps_missing=verify",
-        "handoff=ready",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.",
-        "recorded_build=S-1:review",
-        "recorded_at=2026-09-02T23:53:23Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-build",
-        "S-1",
-        "verify"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "build_steps=S-1:4/4",
-        "handoff=ready",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.",
-        "recorded_build=S-1:verify",
-        "recorded_at=2026-09-02T23:53:23Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/deterministic-checks/scripts/slice_gate.py",
-        "run",
-        "--slice",
-        "S-1",
-        "(complete records)"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "result=pass",
-        "receipt=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk/features/steps-demo/receipts/S-1.json",
-        "artifact=sha256:9737581114ac65613cf4817306e13e3bddd5b0981ed149d8c2ce9ce0c7a4c17e",
-        "applicable=targeted",
-        "checks=1",
-        "bounded-run: receipt exe=/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14@sha256:e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b cwd=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk argv_count=3 argv_sha256=ea3a85087a7c518b7737f72090af264ed679bde1b68ecb7bc41118436a673262 exit=0"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "checkpoint",
-        "completed_slices=S-1"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "full_receipt=missing",
-        "build_steps=full:0/4",
-        "build_steps_missing=edges, green, review, verify",
-        "handoff=ready",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/deterministic-checks/scripts/slice_gate.py",
-        "run",
-        "--full",
-        "(no full verify)"
-      ],
-      "exit": 4,
-      "output_key_lines": [
-        "result=fail",
-        "error=full gate has no verify record (plan_state.py record-build --slice full --step verify)"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-build",
-        "full",
-        "verify"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "build_steps_missing=edges, green, review",
-        "handoff=ready",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: run `python3 /Users/abid/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk` and `python3 /Users/abid/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.",
-        "recorded_build=full:verify",
-        "recorded_at=2026-09-02T23:53:25Z"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/deterministic-checks/scripts/slice_gate.py",
-        "run",
-        "--full",
-        "(recorded)"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "result=pass",
-        "receipt=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk/features/steps-demo/receipts/full.json",
-        "artifact=sha256:9737581114ac65613cf4817306e13e3bddd5b0981ed149d8c2ce9ce0c7a4c17e",
-        "applicable=targeted",
-        "checks=1",
-        "bounded-run: receipt exe=/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14@sha256:e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b cwd=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk argv_count=3 argv_sha256=ea3a85087a7c518b7737f72090af264ed679bde1b68ecb7bc41118436a673262 exit=0"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "checkpoint",
-        "green",
-        "(no walkthrough)"
-      ],
-      "exit": 4,
-      "output_key_lines": [
-        "result=invalid",
-        "error=green requires the closing answer: checkpoint --set walkthrough=yes|no (walkthrough video?)"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "checkpoint",
-        "green",
-        "walkthrough=no"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "next_action=Build the first vertical slice.",
-        "mutation=missing (ship requires a mutation receipt for the green tree (plan_state.py record-mutation))",
-        "handoff=ship",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_report=features/steps-demo/BUILD.md",
-        "handoff_prompt=Ship Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: read features/steps-demo/PLAN.md and features/steps-demo/BUILD.md, then follow he-ship from assert-green to the shipped checkpoint."
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "inspect",
-        "(green)"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "next_action=Build the first vertical slice.",
-        "mutation=missing (ship requires a mutation receipt for the green tree (plan_state.py record-mutation))",
-        "handoff=ship",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_report=features/steps-demo/BUILD.md",
-        "handoff_prompt=Ship Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: read features/steps-demo/PLAN.md and features/steps-demo/BUILD.md, then follow he-ship from assert-green to the shipped checkpoint."
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "assert-green",
-        "(no mutation)"
-      ],
-      "exit": 4,
-      "output_key_lines": [
-        "result=invalid",
-        "error=ship requires a mutation receipt for the green tree (plan_state.py record-mutation)"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "record-mutation"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_report=features/steps-demo/BUILD.md",
-        "handoff_prompt=Ship Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: read features/steps-demo/PLAN.md and features/steps-demo/BUILD.md, then follow he-ship from assert-green to the shipped checkpoint.",
-        "recorded_mutation=mutmut",
-        "mutation_scope=1",
-        "mutation_survivors=0"
-      ]
-    },
-    {
-      "argv": [
-        "/Users/abid/.agents/skills/he/scripts/plan_state.py",
-        "assert-green",
-        "(with mutation)"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "mutation=current",
-        "handoff=ship",
-        "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk",
-        "handoff_branch=main",
-        "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_report=features/steps-demo/BUILD.md",
-        "handoff_prompt=Ship Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/full-verify-driver-alsbgheq/walk: read features/steps-demo/PLAN.md and features/steps-demo/BUILD.md, then follow he-ship from assert-green to the shipped checkpoint.",
-        "green_artifact=sha256:9737581114ac65613cf4817306e13e3bddd5b0981ed149d8c2ce9ce0c7a4c17e"
-      ]
-    },
-    {
-      "argv": [
-        "ticket_state_regression.check_worker_cap_and_orchestrator_guard"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "5th ticket/worker claim refused: worker cap = 4 reached",
-        "orchestrator session refused write to claimed ticket product path"
-      ]
-    },
-    {
-      "argv": [
-        "python3",
-        "plan_steps_regression.py"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "plan-steps regression: PASS"
-      ]
-    },
-    {
-      "argv": [
-        "python3",
-        "build_steps_regression.py"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "build-steps regression: PASS"
-      ]
-    },
-    {
-      "argv": [
-        "python3",
-        "ticket_state_regression.py"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "ticket-state regression: PASS"
-      ]
-    },
-    {
-      "argv": [
-        "python3",
-        "external_claims_regression.py"
-      ],
-      "exit": 0,
-      "output_key_lines": [
-        "external-claims regression: PASS"
-      ]
-    }
-  ],
-  "generated_BUILD_md": "# Build record: steps-demo\n\nGenerated from the build receipts; edit the receipts, not this file.\n\n## Outcome\n- A user receives one observable result.\n\n## S-1\n- behavior = records gate the slice\n- edge cases = 1\n  - empty input\n- green = `python3 -m pytest`\n- review =\n  - round 1: no findings\n- verify = logic mode; before `features/steps-demo/receipts/before.json`; after `features/steps-demo/receipts/after.json`\n- outside calls = api.example.test (all faked)\n- gate families = targeted\n\n## Whole feature\n- verify = logic mode; before `features/steps-demo/receipts/before.json`; after `features/steps-demo/receipts/after.json`\n- mutation = not recorded\n- full gate = targeted\n"
+  "overall_verdict": "PASS",
+  "fail_reason": null,
+  "note": "Check 8 was corrected by the coordinator mid-task and rerun in-place against /Users/abid/.agents; results 1-7 unchanged from the original run."
 }
