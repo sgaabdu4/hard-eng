@@ -263,15 +263,27 @@ def check_quarantine(
     stdout, stderr = doctor.communicate(timeout=crash_timeout + 20)
     if doctor.returncode == 0:
         fail(f"interrupted React Doctor was accepted: {stdout}{stderr}")
-    blocked = invoke(repo, "fallow", environment)
-    if blocked.returncode == 0 or "quarantined" not in blocked.stderr:
-        fail("Fallow scanned a known non-restored source tree")
+    if not poison.exists():
+        fail("crashed React Doctor left no source-tree quarantine")
     if "eslint_disable" not in source.read_text(encoding="utf-8"):
         fail("automatic recovery overwrote the interrupted source tree")
+
+    # react-doctor has no fix/write flag (proven by validate_react_doctor_flags against
+    # its own --help surface), so a proven-terminal crash must recover even though the
+    # tree no longer matches the pre-run fingerprint — without touching whatever
+    # unrelated, legitimate work landed on the tree while the marker was stuck. Restore
+    # react-doctor's own scratch file first so Fallow's content-based verdict does not
+    # entangle with the coordination proof this checks.
     source.write_text(original, encoding="utf-8")
     marker.unlink(missing_ok=True)
-    if invoke(repo, "fallow", environment).returncode or poison.exists():
-        fail("exact manual restoration did not clear quarantine")
+    peer = repo / "peer-work.txt"
+    peer.write_text("peer work landed while quarantined\n", encoding="utf-8")
+    recovered = invoke(repo, "fallow", environment)
+    if recovered.returncode != 0 or poison.exists():
+        fail(f"proven-terminal read-only quarantine did not auto-clear over peer work: {recovered.stderr}")
+    if not peer.exists() or peer.read_text(encoding="utf-8") != "peer work landed while quarantined\n":
+        fail("quarantine recovery altered concurrent peer work")
+    peer.unlink()
 
     delayed = {
         **environment,
@@ -312,6 +324,7 @@ def check_quarantine(
         poison,
         {
             "boot_id": "synthetic-previous-boot",
+            "family": "react-doctor",
             "expected": tree_fingerprint(repo),
             "receipt": "hard-eng-terminal-1-deadbeef.json",
             "receipt_token": receipt_token,
@@ -319,6 +332,35 @@ def check_quarantine(
     )
     if invoke(repo, "fallow", environment).returncode or poison.exists():
         fail("reboot-safe quarantine recovery failed on an exact tree")
+
+    # A family that can write source stays fail-closed on a fingerprint mismatch even
+    # with proven terminality, and the refusal never tells the reader to restore the
+    # worktree — root cause of react-doctor-quarantine-has-no-recovery.
+    stale_expected = tree_fingerprint(repo)
+    unexpected = repo / "unexpected-write.txt"
+    unexpected.write_text("mutated after a write-capable scanner was interrupted\n", encoding="utf-8")
+    atomic_json(
+        poison,
+        {
+            "boot_id": "synthetic-previous-boot",
+            "family": "dart-decimate",
+            "expected": stale_expected,
+            "receipt": "hard-eng-terminal-1-cafefeed.json",
+            "receipt_token": "d" * 64,
+        },
+    )
+    blocked = invoke(repo, "fallow", environment)
+    unexpected.unlink()
+    if (
+        blocked.returncode == 0
+        or "quarantined" not in blocked.stderr
+        or "can write source" not in blocked.stderr
+        or "restore the exact worktree" in blocked.stderr
+    ):
+        fail(f"write-capable scanner quarantine did not stay fail-closed with an actionable message: {blocked.stderr}")
+    if not poison.exists():
+        fail("write-capable scanner quarantine was cleared without proof")
+    poison.unlink()
 
     lock_path = git_private_path(repo, LOCK_NAME)
     dead_writer = subprocess.Popen([sys.executable, "-c", "pass"])

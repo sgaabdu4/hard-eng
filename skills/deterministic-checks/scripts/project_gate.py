@@ -18,6 +18,7 @@ from pathlib import Path
 from bounded_run import run as run_bounded_process
 from bounded_run import run_captured
 from clones_family import ClonesFamilyError, validate_clones
+from dirty_tree_note import _dirty_paths_note
 from enforcement_benchmark import benchmark
 from git_env import git_env
 from source_tree_coordination import (
@@ -475,7 +476,7 @@ def _run_family(
             raise ProjectGateError("whole-run timeout has no command and shutdown headroom")
         receipt_path, receipt_token = terminal_receipt_spec(repo)
         if family_before is not None:
-            begin_react_doctor(lock_path, family_before, receipt_path, receipt_token)
+            begin_react_doctor(lock_path, family, family_before, receipt_path, receipt_token)
         bounded_command = [
             sys.executable,
             str(BOUNDED),
@@ -499,6 +500,7 @@ def _run_family(
                 rollback_react_doctor_launch(
                     repo,
                     lock_path,
+                    family=family,
                     expected=family_before,
                     receipt_path=receipt_path,
                     receipt_token=receipt_token,
@@ -509,6 +511,7 @@ def _run_family(
             clear_react_doctor_quarantine(
                 repo,
                 lock_path,
+                family=family,
                 expected=family_before,
                 receipt_path=receipt_path,
                 receipt_token=receipt_token,
@@ -624,7 +627,7 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
     with source_tree_lock(repo, exclusive=False, deadline=deadline):
         after = tree_fingerprint(repo, deadline=deadline)
     if after != before:
-        raise ProjectGateError("project gate commands mutated the repository tree")
+        raise ProjectGateError("project gate commands mutated the repository tree" + _dirty_paths_note(repo, deadline))
     for index in range(len(families)):
         result = results.get(index)
         detail = details.get(index, "")

@@ -1,0 +1,24 @@
+{
+  "evidence": [
+    "frontline .git/hard-eng-source-tree.poison.json 2026-09-03T22:29 with terminal receipt hard-eng-terminal-6059-6b80397aa710a550.json 22:30; gates-sales.log exit=4 error=source tree is quarantined after interrupted React Doctor; react.doctor/docs/reference/cli-reference lists only report and output options for scan, no fix or write flag; marker copied to .git/hard-eng/cleared-quarantine-2026-09-03.poison.json then removed"
+  ],
+  "failure": "A React Doctor gate run ended with its terminal receipt written but the parent gate died before clearing the poison marker; every later gate refused with source tree is quarantined, restore the exact worktree, while legitimate work had already changed the tree, so the only exit offered was destroying peer work; one fixer did that, and the orchestrator later removed the marker by hand",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "react-doctor-quarantine-has-no-recovery",
+  "occurrences": 2,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/deterministic-checks/scripts/source_tree_coordination.py",
+    "proof": "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py",
+    "valid_fixture": "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py",
+    "violation_fixture": "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py"
+  },
+  "root_cause": "source_tree_coordination._reject_poisoned_tree accepted only an exact tree fingerprint match as proof that the interrupted scanner left no mutation; once any other work touched the tree the marker could never be cleared by the tool, and the message told the reader to restore the worktree, which invited discarding uncommitted work",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "recurrence"
+}
