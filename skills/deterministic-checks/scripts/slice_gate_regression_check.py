@@ -140,6 +140,7 @@ def make_repo(
     repo = root / f"fixture-{slug}"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "core.hooksPath", "/dev/null"], check=True, capture_output=True)
     tools = repo / "tools"
     tools.mkdir()
     (tools / "check.py").write_text(

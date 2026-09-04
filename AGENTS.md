@@ -14,7 +14,7 @@
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Terminal lifecycle status noise = exact terminal slug PLAN + receipts in Git common `info/exclude`; linked-worktree sharing intentional; broad feature ignores + per-worktree config forbidden.
 - Protected action = irreversible destructive loss + machine-scope write: permanent data/file/schema deletion + loss of uncommitted work + forced remote history loss + secret exposure + any write outside every Git working tree that changes settings for other repositories. Recoverable live/customer/shared updates + account/permission changes + payments/spend + deploy/release/publish + ordinary push/merge/history editing continue without a protected approval. Absent exact authorization for irreversible destruction → state target + permanent effect → user's plain yes/approved suffices.
-- Uncommitted-work discard = `git checkout <path>`/`restore`/`reset --hard`/`clean`/`stash drop|clear` → state exact paths + what is lost → plain yes; `git stash push` instead whenever keeping the work suffices; `stash pop|apply` = restore, never a discard.
+- Uncommitted-work discard = `git checkout <path>`/`restore`/`reset --hard`/`clean`/`stash drop|clear` → state exact paths + what is lost → plain yes; `git stash push` instead whenever keeping the work suffices; `stash pop|apply` = restore, never a discard; same rule for any non-git mechanism (`git show HEAD:<path> > <path>`, `rm`, direct overwrite) and for any file the current agent/session did not author, especially on a shared primary checkout where a gate's dirty-tree report is concurrent peer work, never damage to clean up.
 - Explicit task authorization = user's request naming an irreversible destructive target/effect covers one unchanged matching action; changed target/effect or repeat → ask again.
 - Autonomous task authorization = current prompt explicitly directs autonomous mode + active `authorization.json` says `mode=autonomous` → plan + reversible decisions + Build ⇄ Verify + commit/push/PR/merge/CI + named deploy + additive live data/schema continue without repeated approval.
 - Standard Ready-to-build authorization = user's plain yes to the current brief → `plan_state.py approve --approval-reply "<their words>"` once; valid for that frozen brief without code + expiry + session/request binding; commits + new sessions never re-ask; changed frozen brief → replan + fresh yes.
@@ -133,6 +133,7 @@
 - Exact text/path = `rg`; file mutation = `apply_patch`.
 - Multi-repo shell probe = selected-repo cwd OR absolute repo-root paths; caller-cwd globs + relative Git-path output forbidden.
 - Project command/gate/build/test/dev = `deterministic-checks` bounded runner + explicit whole-run timeout.
+- UX proposal = he-plan ux_reference (real current screen or production component render + reviewed screenshot + e2e receipt); Artifact/widget/design-canvas/standalone markdown or HTML mock = forbidden unless the user names that form in the current prompt.
 
 ## Proof
 - Read before claim/edit; validation breadth ≥ blast radius.

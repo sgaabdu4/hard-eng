@@ -24,6 +24,12 @@ POISON_NAME = "hard-eng-source-tree.poison.json"
 AUDIT_FLAG = "--no-respect-inline-disables"
 SCANNER_PACKAGES = {"dart-decimate", "fallow", "react-doctor"}
 SCANNER_BIN_NAMES = {name for package in SCANNER_PACKAGES for name in (package, f"{package}.cmd", f"{package}.ps1")}
+# Families whose own --help surface (proven by validate_react_doctor_flags) advertises no
+# fix/write mode: react.doctor/docs/reference/cli-reference lists only report and output
+# options. A proven-terminal interrupted run from one of these families can be trusted to
+# have left no durable source mutation, so quarantine recovery does not need an exact
+# tree-fingerprint match — only a family outside this set still does.
+READ_ONLY_SCANNER_FAMILIES = frozenset({"react-doctor"})
 
 
 class CoordinationError(ValueError):
@@ -223,11 +229,14 @@ def _poison_path(lock_path: Path) -> Path:
     return lock_path.with_name(POISON_NAME)
 
 
-def begin_react_doctor(lock_path: Path, expected: str, receipt_path: Path, receipt_token: str) -> None:
+def begin_react_doctor(lock_path: Path, family: str, expected: str, receipt_path: Path, receipt_token: str) -> None:
+    if family not in SCANNER_PACKAGES:
+        raise CoordinationError(f"cannot quarantine an unrecognized scanner family: {family}")
     atomic_json(
         _poison_path(lock_path),
         {
             "boot_id": boot_identity(),
+            "family": family,
             "expected": expected,
             "receipt": receipt_path.name,
             "receipt_token": receipt_token,
@@ -238,13 +247,14 @@ def begin_react_doctor(lock_path: Path, expected: str, receipt_path: Path, recei
 def _poison_payload(path: Path) -> dict[str, str]:
     payload = _read_json(path)
     values: dict[str, str] = {}
-    for key in ("boot_id", "expected", "receipt", "receipt_token"):
+    for key in ("boot_id", "family", "expected", "receipt", "receipt_token"):
         value = payload.get(key)
         if not isinstance(value, str):
             raise CoordinationError("source-tree quarantine is invalid")
         values[key] = value
     if (
-        not re.fullmatch(r"[0-9a-f]{64}", values["expected"])
+        not re.fullmatch(r"[a-z][a-z0-9-]*", values["family"])
+        or not re.fullmatch(r"[0-9a-f]{64}", values["expected"])
         or not re.fullmatch(r"hard-eng-terminal-[0-9]+-[0-9a-f]+\.json", values["receipt"])
         or not re.fullmatch(r"[0-9a-f]{64}", values["receipt_token"])
     ):
@@ -253,11 +263,12 @@ def _poison_payload(path: Path) -> dict[str, str]:
 
 
 def clear_react_doctor_quarantine(
-    repo: Path, lock_path: Path, *, expected: str, receipt_path: Path, receipt_token: str, deadline: float
+    repo: Path, lock_path: Path, *, family: str, expected: str, receipt_path: Path, receipt_token: str, deadline: float
 ) -> None:
     poison = _poison_payload(_poison_path(lock_path))
     if poison != {
         "boot_id": boot_identity(),
+        "family": family,
         "expected": expected,
         "receipt": receipt_path.name,
         "receipt_token": receipt_token,
@@ -273,11 +284,12 @@ def clear_react_doctor_quarantine(
 
 
 def rollback_react_doctor_launch(
-    repo: Path, lock_path: Path, *, expected: str, receipt_path: Path, receipt_token: str, deadline: float
+    repo: Path, lock_path: Path, *, family: str, expected: str, receipt_path: Path, receipt_token: str, deadline: float
 ) -> None:
     poison = _poison_payload(_poison_path(lock_path))
     if poison != {
         "boot_id": boot_identity(),
+        "family": family,
         "expected": expected,
         "receipt": receipt_path.name,
         "receipt_token": receipt_token,
@@ -297,13 +309,22 @@ def _reject_poisoned_tree(repo: Path, lock_path: Path, deadline: float) -> None:
         payload = _poison_payload(path)
     except FileNotFoundError:
         return
+    family = payload["family"]
     receipt = lock_path.parent / payload["receipt"]
     terminal = payload["boot_id"] != boot_identity() or terminal_receipt_valid(receipt, payload["receipt_token"])
     if not terminal:
-        raise CoordinationError("source tree is quarantined until React Doctor process-group terminality is proven")
-    if tree_fingerprint(repo, deadline=deadline) != payload["expected"]:
         raise CoordinationError(
-            "source tree is quarantined after interrupted React Doctor; restore the exact worktree before any gate"
+            f"{path.name} is quarantined until {family}'s process-group terminality is proven; recovery needs "
+            "bounded_run.py's terminal receipt for the interrupted run, written automatically once its process "
+            "group fully exits or its timeout kill completes"
+        )
+    provably_read_only = family in READ_ONLY_SCANNER_FAMILIES
+    if not provably_read_only and tree_fingerprint(repo, deadline=deadline) != payload["expected"]:
+        raise CoordinationError(
+            f"{path.name} is quarantined: the interrupted {family} run proved its process group ended, but "
+            f"{family} can write source and the tree no longer matches the fingerprint recorded before it ran, "
+            "so an automatic clear is unproven; a human must confirm whether the difference is that run's own "
+            "leftover mutation or unrelated work before this marker is removed"
         )
     if receipt.exists():
         if payload["boot_id"] == boot_identity():
