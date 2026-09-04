@@ -3,14 +3,14 @@
 <!-- hard-eng-state:v1 -->
 - state_version = 1
 - plan_id = build-loop-records-5a7f9509
-- lifecycle_status = green
+- lifecycle_status = shipped
 - approval_status = approved
 - approval_fingerprint = sha256:3b45e295fad68e40841cba700b957a66a8329f0ebddb9cdcf0f12311ff086c64
 - approval_provenance = ready-to-build
 - green_artifact = sha256:3f5ff3d649406db9ebc3e867725c566a65d1b248690cbf96e306257eaae8b001
 - active_slice = none
 - completed_slices = S-1,S-2,S-3,S-4,S-5,S-6,S-7,S-8,S-9,S-10
-- next_action = Ship: commit the CI fix with the gmail identity, rebase onto origin/main, push, watch CI green.
+- next_action = Shipped: main at da2dbf2 (feature 8dba688 + CI fix), https://github.com/sgaabdu4/hard-eng/actions/runs/33928179624 green; first nightly mutation run proves the pull-request setting at 02:17 UTC.
 - replan_reason = none
 - walkthrough = no
 <!-- /hard-eng-state -->
