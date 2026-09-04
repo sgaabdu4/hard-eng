@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
           npm ci --ignore-scripts
           python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- sudo apt-get update
-          python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- sudo apt-get install -y fish zsh
+          python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- sudo apt-get install -y fish zsh ffmpeg
           export ROOT="$PWD"
           . scripts/setup/common.sh
           . scripts/setup/binaries.sh
