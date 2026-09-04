@@ -267,6 +267,47 @@ def check_run(repo: Path) -> None:
     require(
         result.returncode == 0 and "mutation-ledger: PASS" in result.output, f"private push now passes: {result.output}"
     )
+    check_seed(repo, fake)
+
+
+def seeded_run(repo: Path, fake: Path, ref: str) -> dict[str, list[str]]:
+    args = (
+        "run",
+        "--repo",
+        str(repo),
+        "--changed-only",
+        "--budget-minutes",
+        "1",
+        "--mutmut",
+        str(fake),
+        "--seed-ref",
+        ref,
+    )
+    result = ledger(repo, *args)
+    require(result.returncode == 0, f"seeded run failed: {result.output}")
+    return values(result.output)
+
+
+def check_seed(repo: Path, fake: Path) -> None:
+    empty = '{"functions": {}, "schema_version": 1}\n'
+    patterns = repo / "mutants" / "patterns.json"
+    git(repo, "add", "mutation-ledger.json")
+    git(repo, "commit", "-q", "-m", "scored")
+    git(repo, "branch", "-q", "seed")
+    (repo / "mutation-ledger.json").write_text(empty, encoding="utf-8")
+    patterns.unlink()
+    rows = seeded_run(repo, fake, "seed")
+    require(rows["seeded"] == ["2"] and rows["planned"] == ["0"], f"branch rows fill every gap: {rows}")
+    require(not patterns.exists(), "seeded functions are not scored again")
+    (repo / SOURCE).write_text(CHANGED.replace("+ 0", "+ 1"), encoding="utf-8")
+    (repo / "mutation-ledger.json").write_text(empty, encoding="utf-8")
+    rows = seeded_run(repo, fake, "seed")
+    require(rows["seeded"] == ["1"] and rows["planned"] == ["1"], f"a changed function is scored again: {rows}")
+    require(
+        json.loads(patterns.read_text(encoding="utf-8")) == [f"{FUNCTION_PREFIX}*"], "only the changed function runs"
+    )
+    rows = seeded_run(repo, fake, "nope")
+    require(rows["seeded"] == ["0"] and rows["planned"] == ["0"], f"a missing ref seeds nothing: {rows}")
 
 
 def check_no_runner(base: Path) -> None:
