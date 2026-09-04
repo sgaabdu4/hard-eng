@@ -264,11 +264,11 @@ sub plan_status {
             path => normalise($plan), plan_id => $plan_id, state => $state,
         };
     }
-    my @building = grep { $_->{state} ne 'green' } @active;
+    my @building = grep { $_->{state} eq 'building' } @active;
     if (@building > 1) {
         return (\@active, 'multiple Feature Briefs under construction: ' . join(', ', map { $_->{path} } @building));
     }
-    @active = (@building, grep { $_->{state} eq 'green' } @active);
+    @active = (@building, grep { $_->{state} ne 'building' } @active);
     return (\@active, undef);
 }
 
@@ -323,6 +323,7 @@ sub machine_scope_allowed {
         return 1 if $tmpdir ne '' && index($target, "/$tmpdir/") == 0;
     }
     return 1 if $target =~ m{\A/[^/]+/[^/]+/\.claude/projects/[^/]+/memory/};
+    return 1 if $target =~ m{\A/[^/]+/[^/]+/\.claude/lifecycle-media/};
     return 1 if defined repo_root($target);
     return 0;
 }
@@ -522,6 +523,14 @@ sub hook_main {
         }
         my $cwd = $payload->{cwd} // $payload->{workingDirectory} // '.';
         my $repo = repo_root($cwd);
+        if ($repo && -f "$repo/hard-eng.gates.json"
+            && $raw_name =~ /\A(?:artifact|mcp__visualize__show_widget|mcp__visualize__read_me|design)\z/) {
+            my $status = inspect_repo($repo);
+            return deny(
+                $runtime,
+                'Hard Eng blocked the Artifact tool inside a governed repository. Deliverables are repository files and lifecycle receipts; a UX proposal goes through he-plan as ux_reference with an e2e receipt. If the user asked for an artifact by name, tell them this repository\'s policy and ask them to confirm outside Hard Eng.'
+            ) if $status->{configured};
+        }
         if ($raw_name =~ /(?:__|\.)/ && $repo && -f "$repo/hard-eng.gates.json") {
             my $status = inspect_repo($repo);
             my $active = $status->{configured} && !$status->{error} && @{$status->{active}}

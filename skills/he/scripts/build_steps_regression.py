@@ -226,7 +226,6 @@ def check_slice_records(base: Path) -> tuple[Path, Path]:
     (repo / "owner.py").write_text("print('owner v3')\n", encoding="utf-8")
     code, output = gate(repo, plan, "--slice", "S-1")
     require(code != 0 and "stale" in output and "edges" in output, f"tree change must stale records: {output}")
-    git(repo, "commit", "-q", "-am", "owner v3")
     fixture.record_research(repo, plan)
     (repo / "notes.txt").write_text("second review round\n", encoding="utf-8")
     first = parsed["packet_sha256"]
@@ -252,6 +251,15 @@ def check_full_gate(repo: Path, plan: Path) -> None:
     require(code != 0 and "only the verify record" in output, f"full accepts verify only: {output}")
     code, output = record_build(repo, plan, "full", "verify", verify_payload(repo, plan, "full", edge_cases=[]))
     require(code == 0, f"full verify must record: {output}")
+    code, values_out = packet(repo, plan, "full")
+    require(code == 0, f"full review packet must build: {values_out}")
+    full_packet_path = plan.parent / "receipts" / "full-review-1.txt"
+    packet_body = full_packet_path.read_text(encoding="utf-8")
+    require("whole feature" in packet_body, f"full review packet must scope to the whole feature: {packet_body}")
+    require(
+        "every slice edge list applies" in packet_body,
+        f"full review packet must not require a full edges record: {packet_body}",
+    )
     code, output = gate(repo, plan, "--full")
     require(code == 0, f"full gate must pass with records: {output}")
     code, output = checkpoint(repo, plan, "lifecycle_status=green")
@@ -307,7 +315,7 @@ def check_mutation_before_ship(repo: Path, plan: Path) -> None:
         "survivors": [survivor],
     }
     code, output = record_mutation(repo, plan, {**good, "scope": []})
-    require(code != 0 and "owner.py" in output and "approval base" in output, f"scope gap must refuse: {output}")
+    require(code != 0 and "owner.py" in output and "this feature changed" in output, f"scope gap must refuse: {output}")
     code, output = record_mutation(repo, plan, {**good, "survivors": []})
     require(code != 0 and "ledger has 0 rows" in output, f"survivor count mismatch must refuse: {output}")
     deferred = {**survivor, "disposition": "deferred"}
@@ -325,15 +333,41 @@ def check_mutation_before_ship(repo: Path, plan: Path) -> None:
     require(code == 0 and "recorded_mutation=mutmut" in output, f"mutation must record: {output}")
     code, output = assert_green(repo, plan)
     require(code == 0, f"ship entry with mutation must pass: {output}")
-    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
-    require(values(output).get("mutation") == "current", f"inspect must show mutation current: {output}")
     import mutation_receipt
 
+    (repo / "app.dart").write_text("void main() {}\n", encoding="utf-8")
+    code, output = record_mutation(repo, plan, good)
+    require(code == 0, f"the runner receipt still records beside an untracked Dart file: {output}")
+    artifact = mutation_receipt.repository_artifact(repo)
+    error = mutation_receipt.ship_error(repo, plan, artifact)
+    require(error is not None and "app.dart" in error, f"the runner receipt alone leaves Dart uncovered: {error}")
+    none_run = {"runner": "none", "scope": ["owner.py", "app.dart"], "sensitivity_proof": "hand-checked"}
+    code, output = record_mutation(repo, plan, none_run)
+    require(code != 0 and "needs a runner" in output, f"runner none must not claim a Python file: {output}")
+    code, output = record_mutation(repo, plan, {**none_run, "scope": []})
+    require(code != 0 and "app.dart" in output, f"runner none must list every changed Dart file: {output}")
+    code, output = record_mutation(repo, plan, {**none_run, "scope": ["app.dart"]})
+    require(code == 0 and "recorded_mutation=none" in output, f"runner none beside mutmut must record: {output}")
+    error = mutation_receipt.ship_error(repo, plan, artifact)
+    require(error is None, f"mutmut plus none must cover a mixed tree: {error}")
+    (repo / "app.dart").unlink()
+    code, output = record_mutation(repo, plan, good)
+    require(code == 0, f"the clean tree records its own run again: {output}")
+    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
+    require(values(output).get("mutation") == "current", f"inspect must show mutation current: {output}")
     stale = mutation_receipt.ship_error(repo, plan, "sha256:" + "0" * 64)
     require(stale is not None and "green tree" in stale, f"receipt for another tree must not count: {stale}")
     for name in ("scripts/state-regression.py", "skills/x/scripts/state_regression.py", "tests/conftest.py"):
         require(mutation_receipt.TEST_FILE.search(name) is not None, f"{name} is a test file, never mutation scope")
     require(mutation_receipt.TEST_FILE.search("skills/x/scripts/state.py") is None, "source file stays in scope")
+    (repo / "other.py").write_text("print('outside this feature')\n", encoding="utf-8")
+    git(repo, "add", "other.py")
+    git(repo, "commit", "-q", "-m", "other feature")
+    code, output = record_mutation(repo, plan, good)
+    require(code == 0, f"a committed file no slice receipt lists is outside the scope: {output}")
+    (repo / "other.py").write_text("print('now this feature edits it')\n", encoding="utf-8")
+    code, output = record_mutation(repo, plan, good)
+    require(code != 0 and "other.py" in output, f"an uncommitted edit joins the scope: {output}")
 
 
 def check_unwired_repo(base: Path) -> None:
