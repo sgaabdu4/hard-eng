@@ -3,7 +3,7 @@
 Generated from the build receipts; edit the receipts, not this file.
 
 ## Outcome
-- The build stage is machine-checked end to end: every slice must leave records for its edge cases mapped to success and failure tests, its green test run, a fresh-eyes review loop with a findings ledger, and an end-to-end verification run by a separate agent with fake outside services and before/after evidence; the slice gate refuses a slice without them; new push-time checks catch copy-paste clones (baseline, new clones only) and complex under-tested TypeScript functions; mutation testing runs on changed files before ship for every feature; ticket mode has a machine-checked board; build closes with one question (walkthrough video?) and prints a ship handoff block with worktree, branch, plan, and prompt.
+- The build stage is machine-checked end to end: every slice must leave records for its edge cases mapped to success and failure tests, its green test run, a fresh-eyes review loop with a findings ledger, and an end-to-end verification run by a separate agent with fake outside services and before/after evidence; the slice gate refuses a slice without them; new push-time checks catch copy-paste clones (baseline, new clones only) and complex under-tested TypeScript functions; mutation testing scores only functions with no current ledger row, nightly in GitHub Actions on public repositories with a pull request for survivors, and on the developer machine before push on private ones, recorded in a committed ledger that the push gate and CI only read; ticket mode has a machine-checked board; build closes with one question (walkthrough video?) and prints a ship handoff block with worktree, branch, plan, and prompt.
 
 ## S-1
 - behavior = slice gate refuses a slice whose build records are missing or stale
@@ -154,7 +154,30 @@ Generated from the build receipts; edit the receipts, not this file.
 - outside calls = none (all faked)
 - gate families = targeted, python-types, python-format, python-lint, clones
 
+## S-10
+- behavior = the push gate refuses a private-repository changed function that has no current mutation-ledger row
+- edge cases = 12
+  - private repository changed function without a current row
+  - public repository with unscored functions
+  - function whose mutants did not all finish
+  - mutant no test reaches
+  - needs-verdict row older than seven days
+  - formatting-only edit versus a real change
+  - no usable comparison base
+  - repository visibility unknown
+  - nightly run over unscored functions
+  - repository without a mutation runner or with a broken ledger
+  - invalid verdict input
+  - nightly job on a private repository
+- green = `python3 skills/deterministic-checks/scripts/project_gate.py phase --repo . --timeout 900 --phase push`
+- review =
+  - round 1: R-1 rejected, R-2 rejected, R-3 rejected, R-4 fixed
+  - round 2: no findings
+  - round 3: no findings
+- verify = logic mode; before `features/build-loop-records/receipts/s10-verify-before.json`; after `features/build-loop-records/receipts/s10-verify-after.json`
+- outside calls = none (all faked)
+- gate families = clones, python-format, python-lint, python-types
+
 ## Whole feature
-- verify = logic mode; before `features/build-loop-records/receipts/full-verify-before.json`; after `features/build-loop-records/receipts/full-verify-after.json`
-- mutation = not recorded
-- full gate = typecheck, format, lint, tests, fallow, clones, python-types, python-format, python-lint, skill-contracts, managed-skills, design, file-size, secrets, enforcement
+- verify = logic mode; before `features/build-loop-records/receipts/full-verify-2-before.json`; after `features/build-loop-records/receipts/full-verify-2-after.json`
+- full gate = clones, python-format, python-lint, python-types, fallow, format, lint, tests, typecheck

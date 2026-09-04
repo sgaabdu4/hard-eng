@@ -11,6 +11,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from evidence_lib import EvidenceError, git_value
+from plan_sections import parse_sections, remaining_slice
 
 HANDOFF_STATES = {"build-ready", "building", "green"}
 SETUP_SCRIPT = SCRIPT_DIR / "setup_state.py"
@@ -30,11 +31,15 @@ def branch_name(repo: Path) -> str:
 
 
 def build_prompt(repo: Path, relative_plan: Path, slice_id: str) -> str:
+    work = (
+        f"then run the final pre-ship gate for {relative_plan} with he-build; every slice is complete."
+        if slice_id == "none"
+        else f"then build slice {slice_id} from {relative_plan} with he-build, one Implement/Verify loop until green."
+    )
     return (
         f"Resume Hard Eng feature {relative_plan.parent.name} in {repo}: "
         f"run `python3 {SETUP_SCRIPT} verify --repo {repo}` and "
-        f"`python3 {STATE_SCRIPT} inspect --repo {repo} --plan {relative_plan}`, "
-        f"then build slice {slice_id} from {relative_plan} with he-build, one Implement/Verify loop until green."
+        f"`python3 {STATE_SCRIPT} inspect --repo {repo} --plan {relative_plan}`, {work}"
     )
 
 
@@ -98,5 +103,8 @@ def lines(repo: Path, plan: Path, state: dict[str, str]) -> list[str]:
             output.append(f"handoff_ticket_{index}={ticket_id}")
             output.append(f"handoff_ticket_{index}_prompt={ticket_prompt(repo, relative_plan, ticket_id)}")
         return output
-    output.append(f"handoff_prompt={build_prompt(repo, relative_plan, state['active_slice'])}")
+    slice_id = state["active_slice"]
+    if slice_id == "none":
+        slice_id = remaining_slice(parse_sections(plan.read_text(encoding="utf-8")), state["completed_slices"])
+    output.append(f"handoff_prompt={build_prompt(repo, relative_plan, slice_id)}")
     return output

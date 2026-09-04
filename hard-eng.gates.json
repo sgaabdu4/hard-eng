@@ -52,8 +52,8 @@
       "skills/he/scripts/build_steps.py",
       "skills/he/scripts/execution_direct.py",
       "skills/he/scripts/execution_evidence.py",
-      "skills/he/scripts/mutation_receipt.py",
-      "skills/he/scripts/mutation_payload.py",
+      "skills/deterministic-checks/scripts/mutation_ledger.py",
+      ".github/workflows/mutation-nightly.yml",
       "skills/he/scripts/plan_state.py",
       "skills/he/scripts/plan_steps.py",
       "skills/he/scripts/setup_state.py",
@@ -131,10 +131,10 @@
         "skills/deterministic-checks/scripts/script_runner.py",
         "skills/deterministic-checks/scripts/script_runner_regression_check.py"
       ],
-      "mutation-before-ship": [
+      "mutation-ledger": [
         "checkpoint check",
-        "skills/he/scripts/mutation_receipt.py",
-        "skills/he/scripts/build_steps_regression.py"
+        "skills/deterministic-checks/scripts/mutation_ledger.py",
+        "skills/deterministic-checks/scripts/mutation_ledger_regression_check.py"
       ],
       "build-verify-loop": [
         "checkpoint check",
@@ -304,7 +304,14 @@
     "design": ["node", "skills/deterministic-checks/scripts/check-design-md.js", "DESIGN.md"],
     "file-size": ["python3", "scripts/check-file-size.py"],
     "secrets": ["gitleaks", "dir", ".", "--no-banner", "--redact", "--exit-code", "1"],
-    "enforcement": ["perl", "scripts/enforcement_policy.pl", "check", "."]
+    "enforcement": ["perl", "scripts/enforcement_policy.pl", "check", "."],
+    "mutation-ledger": [
+      "python3",
+      "skills/deterministic-checks/scripts/mutation_ledger.py",
+      "check",
+      "--repo",
+      "."
+    ]
   },
   "phases": {
     "commit": ["staged", "enforcement"],
@@ -323,7 +330,8 @@
       "design",
       "file-size",
       "secrets",
-      "enforcement"
+      "enforcement",
+      "mutation-ledger"
     ],
     "ci": [
       "typecheck",
@@ -340,7 +348,8 @@
       "design",
       "file-size",
       "secrets",
-      "enforcement"
+      "enforcement",
+      "mutation-ledger"
     ]
   }
 }

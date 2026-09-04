@@ -14,7 +14,6 @@ if str(SCRIPT_DIR) not in sys.path:
 import build_report
 import build_steps
 import external_claims
-import mutation_receipt
 import plan_steps
 import review_packet
 import tracker_probe
@@ -121,15 +120,3 @@ def build_report_command(args: argparse.Namespace, state) -> None:
     target = build_report.write(repo, path)
     state.emit(path, text, plan)
     print(f"build_report={target.relative_to(repo)}")
-
-
-def record_mutation(args: argparse.Namespace, state) -> None:
-    path, text, plan, entry = _locked_record(
-        args, state, {"building", "green"}, "record-mutation", mutation_receipt.record
-    )
-    state.emit(path, text, plan)
-    scope, survivors = entry["scope"], entry["survivors"]
-    assert isinstance(scope, list) and isinstance(survivors, list)
-    print(f"recorded_mutation={entry['runner']}")
-    print(f"mutation_scope={len(scope)}")
-    print(f"mutation_survivors={len(survivors)}")

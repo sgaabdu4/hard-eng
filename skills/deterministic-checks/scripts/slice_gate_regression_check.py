@@ -601,6 +601,9 @@ def identity_cases(state, root: Path) -> None:
 
 def resume_and_full_gate_cases(state, root: Path) -> None:
     repo = make_repo(root, state, slug="resume")
+    (repo / "ui").mkdir()
+    (repo / "ui/widget.dart").write_text("class Widget {}\n", encoding="utf-8")
+    commit_fixture(repo, "pre-existing screen no slice touches")
     debt = inspect(repo)
     if "slice_receipt=missing" not in debt.stdout:
         fail("resume inspect did not expose missing slice proof")
@@ -624,6 +627,8 @@ def resume_and_full_gate_cases(state, root: Path) -> None:
     result = gate(repo, ("--full",), ("targeted",))
     if result.returncode != 0:
         fail(f"full gate run failed: {result.stderr}")
+    if "changes UI files" in result.stderr:
+        fail("a committed screen no slice touched demanded media proof at the full gate")
     green = checkpoint(state, repo, "lifecycle_status=green", "next_action=Request delivery approval.")
     if green.returncode != 0:
         fail(f"green transition with full receipt failed: {green.stderr}")
@@ -903,7 +908,11 @@ def seed_build_records(repo: Path) -> None:
             payload["rounds"][0]["packet_sha256"] = sha
         if step == "verify":
             edges = build_steps.edges_of(repo, plan, "S-1")
-            _, payload["packet_sha256"] = review_packet.write_verify(repo, plan, "S-1", edges)
+            packet, payload["packet_sha256"] = review_packet.write_verify(repo, plan, "S-1", edges)
+            if "your own run log did not prove you created" not in packet.read_text(encoding="utf-8"):
+                fail(
+                    "verifier packet must forbid deleting/overwriting/truncating any path its own run log did not prove it created"
+                )
         build_steps.record(repo, plan, "S-1", step, payload)
 
 

@@ -37,7 +37,7 @@
    - other scoped critical overlay → its named specialist owner.
    - scope = changed protected boundary only; unrelated slices = forbidden.
 9. UI/runtime behavior → finish every backend/persistence connection required by the active behavior → `e2e` actual environment + canonical `e2e` receipt PASS; inspect requested/produced media; reference/screenshot/receipt work never gates unfinished backend/persistence wiring.
-10. Independent verification: `plan_state.py verify-packet --slice <S-ID>` writes `receipts/<S-ID>-verify.txt` → one separate verifier subagent drives the behavior from the outside with every outside host faked, writes before/after evidence under `receipts/` (`ui` = screenshots, `logic` = JSON), and reports hosts + edge names → `record-build --step verify` with `{"mode", "packet_sha256", "fakes": [{"host", "log"}], "outside_calls", "before": [{"path", "sha256"}], "after": [...], "edge_cases"}`; an unfaked host or unknown edge name is refused.
+10. Independent verification: `plan_state.py verify-packet --slice <S-ID>` writes `receipts/<S-ID>-verify.txt` → one separate verifier subagent drives the behavior from the outside with every outside host faked, writes before/after evidence under `receipts/` (`ui` = screenshots, `logic` = JSON), and reports hosts + edge names → `record-build --step verify` with `{"mode", "packet_sha256", "fakes": [{"host", "log"}], "outside_calls", "before": [{"path", "sha256"}], "after": [...], "edge_cases"}`; an unfaked host, a fake log line starting with an unfaked host, or an unknown edge name is refused.
 11. Demonstrate acceptance example + rollback/observability when applicable → run the slice gate on the final slice tree → receipt PASS via the `deterministic-checks` slice-gate reference; checkpoint rejects missing/stale receipts; any tree change after a record stales it → re-record on the final tree.
 12. Refresh PLAN token → one atomic `he` checkpoint:
     - append current `S-ID` once to comma-separated `completed_slices`;
@@ -65,13 +65,13 @@
 4. Applicable protected boundaries → confirm every targeted independent review remains current.
 5. Full-gate finding → return to final build loop → root fix + affected proof → rerun the full gate on the corrected exact snapshot.
 6. Repeat finding → fix → affected proof → full-gate run while findings or snapshot changes remain; convergence requires one unchanged corrected snapshot with full gate PASS.
-7. Mutation receipt on the green tree: run the pinned runner (Stryker for JS/TS, mutmut for Python; Dart = `runner none` + sensitivity proof) over every source file changed since the approval base → `plan_state.py record-mutation --payload-file <json>` per runner (`runner` `version` `argv` `scope` `totals` `survivors` rows = `mutant` + `reason` + `disposition` fixed|equivalent|invalid|deferred + `consequence` when deferred; `runner none` adds `sensitivity_proof`); `inspect` prints `mutation=current|missing`.
+7. Mutation ledger: `critical_overlay` slice → `mutation_ledger.py plan --changed-only` empty + every survivor of its changed functions has a verdict; other slices → nothing here (public repository = nightly job, private repository = `mutation_ledger.py run --changed-only` before push, per `deterministic-checks` `mutation.md`).
 8. Closing question = ask the user once: walkthrough video yes|no; `yes` → `product-walkthrough-video` output listed in the `full` verify record's `after` list.
 9. Unchanged full-gate PASS + actual diff reviewed + zero open finding/unknown → refresh token → run:
 
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=green --set walkthrough=<yes|no> --set active_slice=none --set "completed_slices=<ordered-comma-list>" --set "next_action=<exact-delivery-action-or-approval-boundary>"`
 
-   The green checkpoint writes `features/<slug>/BUILD.md` (every slice's records, mutation totals, full gate) and `inspect` prints `handoff=ship` with root, branch, plan, report, and a paste-ready ship prompt; `plan_state.py build-report` regenerates it on demand.
+   The green checkpoint writes `features/<slug>/BUILD.md` (every slice's records, full gate) and `inspect` prints `handoff=ship` with root, branch, plan, report, and a paste-ready ship prompt; `plan_state.py build-report` regenerates it on demand.
 
 ## Ticket Loop
 
