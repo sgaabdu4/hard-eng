@@ -449,6 +449,12 @@ $PROTECTED_HELPER = "./$PROTECTED_HELPER" unless $PROTECTED_HELPER =~ m{\A(?:/|\
 
 sub load_protected_helper { require $PROTECTED_HELPER; }
 sub protected_approval { load_protected_helper(); return protected_approval_impl(@_); }
+sub approved_plan {
+    my ($status) = @_;
+    return undef unless $status->{configured} && !$status->{error};
+    for my $plan (@{$status->{active}}) { return $plan if $plan->{state} ne "planning"; }
+    return undef;
+}
 sub guard_shell { load_protected_helper(); return guard_shell_impl(@_); }
 sub external_protected_kind { load_protected_helper(); return external_protected_kind_impl(@_); }
 sub protected_reason { load_protected_helper(); return protected_reason_impl(@_); }
@@ -507,13 +513,8 @@ sub hook_main {
             my $repo = repo_root($cwd);
             my ($reason, $kind) = guard_shell($command, $repo);
             if ($reason) {
-                my $active;
-                if ($repo && -f "$repo/hard-eng.gates.json") {
-                    my $status = inspect_repo($repo);
-                    $active = $status->{active}[0]
-                        if $status->{configured} && !$status->{error} && @{$status->{active}};
-                }
-                next if $kind && protected_approval($repo, $active, $kind, $raw_name, $args);
+                my $approved = $repo && -f "$repo/hard-eng.gates.json" ? approved_plan(inspect_repo($repo)) : undef;
+                next if $kind && protected_approval($repo, $approved, $kind, $raw_name, $args);
                 return deny($runtime, $reason);
             }
             $advise ||= advise_pending($runtime, $payload, $repo // absolute_path('/', $cwd))
@@ -536,7 +537,7 @@ sub hook_main {
             my $active = $status->{configured} && !$status->{error} && @{$status->{active}}
                 ? $status->{active}[0] : undef;
             if (my $kind = external_protected_kind($raw_name, $name, $args)) {
-                next if protected_approval($repo, $active, $kind, $raw_name, $args);
+                next if protected_approval($repo, approved_plan($status), $kind, $raw_name, $args);
                 return deny($runtime, protected_reason($kind));
             }
             if ($status->{configured} && external_state_change($raw_name, $name)) {
