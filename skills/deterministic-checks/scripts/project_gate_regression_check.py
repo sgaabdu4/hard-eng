@@ -542,10 +542,8 @@ def check_execution(repo: Path) -> None:
     rejected = invoke(repo)
     if rejected.returncode == 0 or "mutated the repository tree" not in rejected.stderr:
         fail("mutation of a required ignored input was accepted")
-    if "dirty_paths=" not in rejected.stderr or ".secret" not in rejected.stderr:
-        fail("mutated-tree error did not list the dirty paths")
-    if "do not restore, overwrite, or delete" not in rejected.stderr:
-        fail("mutated-tree error did not warn against restoring/overwriting/deleting concurrent work")
+    if any(part not in rejected.stderr for part in ("dirty_paths=", ".secret", "do not restore, overwrite, or delete")):
+        fail("mutated-tree error did not list the dirty paths and warn against touching them")
 
 
 def check_phase_manifest(repo: Path) -> None:
