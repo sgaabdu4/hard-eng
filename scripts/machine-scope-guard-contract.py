@@ -109,6 +109,27 @@ def check_cross_repo_write(root: Path) -> None:
         FAILURES.append(f"home-directory write was not blocked as machine scope: {reason or 'allowed'}")
 
 
+def check_lifecycle_media_scope(root: Path) -> None:
+    """Lifecycle evidence (e2e visual receipts, ux references) is evidence, not a machine setting."""
+    repo = root / "lifecycle-media-write"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
+    manifest(repo)
+    started = start_direct(repo, "note.txt")
+    if started.returncode != 0:
+        FAILURES.append(f"lifecycle-media case: direct receipt did not record: {started.stderr}")
+        return
+    lifecycle_target = (
+        Path.home() / ".claude" / "lifecycle-media" / "sample-plan" / "step.visual-review.json"
+    )
+    reason = write_denial(repo, lifecycle_target)
+    if reason:
+        FAILURES.append(f"lifecycle-media write was blocked as machine scope: {reason}")
+    settings_target = Path.home() / ".claude" / "settings.json"
+    reason = write_denial(repo, settings_target)
+    if reason is not None and "outside every repository" not in reason:
+        FAILURES.append(f"settings.json write was not blocked as machine scope: {reason or 'allowed'}")
+
+
 def main() -> int:
     for command, expected in CASES:
         reason = denial(command)
@@ -118,6 +139,8 @@ def main() -> int:
             FAILURES.append(f"failed to block {command!r}: {reason or 'allowed'}")
     with tempfile.TemporaryDirectory(prefix="machine-scope-guard-") as temporary:
         check_cross_repo_write(Path(temporary).resolve())
+    with tempfile.TemporaryDirectory(prefix="machine-scope-guard-lifecycle-") as temporary:
+        check_lifecycle_media_scope(Path(temporary).resolve())
     if FAILURES:
         for failure in FAILURES:
             print(f"machine-scope-guard: FAIL: {failure}", file=sys.stderr)
