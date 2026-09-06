@@ -2,7 +2,7 @@
   "events": [
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "code-study"
@@ -29,7 +29,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "edge-scan"
@@ -56,7 +56,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "decisions"
@@ -83,7 +83,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "slices"
@@ -110,7 +110,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "closing"
@@ -136,7 +136,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "validate",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
@@ -152,7 +152,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect"
       ],
       "exit": 0,
@@ -174,7 +174,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "approve",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
@@ -194,7 +194,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect"
       ],
       "exit": 0,
@@ -216,7 +216,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "approve",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
@@ -236,7 +236,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/execution_evidence.py",
+        "<repo>/skills/he/scripts/execution_evidence.py",
         "record-research",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
@@ -267,7 +267,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "validate",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
@@ -293,7 +293,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect"
       ],
       "exit": 0,
@@ -315,7 +315,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "approve",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
@@ -343,12 +343,12 @@
         "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims",
         "handoff_branch=main",
         "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
+        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/claims --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
       ]
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "code-study"
@@ -375,7 +375,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "edge-scan"
@@ -402,7 +402,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "decisions"
@@ -429,7 +429,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "slices"
@@ -456,7 +456,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "closing"
@@ -482,7 +482,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "validate",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
@@ -498,7 +498,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect"
       ],
       "exit": 0,
@@ -520,7 +520,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "approve",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
@@ -540,7 +540,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/execution_evidence.py",
+        "<repo>/skills/he/scripts/execution_evidence.py",
         "record-research",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
@@ -571,7 +571,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "validate",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
@@ -597,7 +597,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect"
       ],
       "exit": 0,
@@ -619,7 +619,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "approve",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
@@ -647,12 +647,12 @@
         "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy",
         "handoff_branch=main",
         "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
+        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/codestudy --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
       ]
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/execution_evidence.py",
+        "<repo>/skills/he/scripts/execution_evidence.py",
         "record-research",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
@@ -683,7 +683,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "code-study"
@@ -710,7 +710,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "edge-scan"
@@ -737,7 +737,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "decisions"
@@ -764,7 +764,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "slices"
@@ -791,7 +791,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--step",
         "closing"
@@ -817,7 +817,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect"
       ],
       "exit": 0,
@@ -839,7 +839,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "approve",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
@@ -867,7 +867,7 @@
         "handoff_root=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
         "handoff_branch=main",
         "handoff_plan=features/steps-demo/PLAN.md",
-        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3 --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
+        "handoff_prompt=Resume Hard Eng feature steps-demo in /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3 --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
       ]
     },
     {
@@ -882,7 +882,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
@@ -912,7 +912,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/execution_evidence.py",
+        "<repo>/skills/he/scripts/execution_evidence.py",
         "record-research",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",
@@ -957,7 +957,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--repo",
         "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpm2isp4d9/manifest3",

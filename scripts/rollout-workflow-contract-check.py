@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Prove the GitHub Actions rollout workflow keeps its safety contract: workflow_dispatch only, the rollout
-secret and rollout identity, one repository at a time with the 40 second pause, the report artifact, and a
-launcher that runs the checked-out install.sh rather than a local machine path or npx."""
+secret and a repository-variable git identity with no literal email address, one repository at a time with
+the 40 second pause, the report artifact, and a launcher that runs the checked-out install.sh rather than a
+local machine path or npx."""
 
 from __future__ import annotations
 
@@ -56,10 +57,12 @@ def check_rollout_secret(text: str) -> None:
 
 
 def check_rollout_identity(text: str) -> None:
-    if 'user.name "sgaabdu4"' not in text:
-        fail('rollout commits must set git user.name "sgaabdu4"')
-    if 'user.email "rollout@example.invalid"' not in text:
-        fail('rollout commits must set git user.email "rollout@example.invalid"')
+    if "vars.ROLLOUT_GIT_NAME" not in text:
+        fail("rollout commits must read git user.name from vars.ROLLOUT_GIT_NAME")
+    if "vars.ROLLOUT_GIT_EMAIL" not in text:
+        fail("rollout commits must read git user.email from vars.ROLLOUT_GIT_EMAIL")
+    if re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", text):
+        fail("the workflow must not contain a literal email address")
 
 
 def check_sequential_with_pause(text: str) -> None:

@@ -190,7 +190,7 @@
       "observed": "green_ok=True; handoff=ship; root=/private/tmp/hev-mumsy2ck/repo-a; branch=main; plan=features/steps-demo/PLAN.md; prompt=Ship Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: read features/steps-demo/PLAN.md and features/steps-demo/BUILD.md, then follow he-ship from assert-green to the shipped checkpoint.; BUILD.md exists=True",
       "low_checks": {
         "build_steps_before_full_verify": "full:0/1",
-        "handoff_prompt_before": "Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.",
+        "handoff_prompt_before": "Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.",
         "next_action_before": "Build the first vertical slice.",
         "full_gate_without_verify_exit": 4,
         "full_gate_without_verify_out": "result=fail\nerror=full gate has no verify record (plan_state.py record-build --slice full --step verify)",
@@ -227,7 +227,7 @@
       "example": "E9",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "validate",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-c",
@@ -245,7 +245,7 @@
       "example": "E9",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/execution_evidence.py",
+        "<repo>/skills/he/scripts/execution_evidence.py",
         "record-research",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-c",
@@ -279,7 +279,7 @@
       "example": "E9",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "validate",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-c",
@@ -297,7 +297,7 @@
       "example": "E10",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/execution_evidence.py",
+        "<repo>/skills/he/scripts/execution_evidence.py",
         "record-research",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-d",
@@ -331,7 +331,7 @@
       "example": "E10",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-d",
@@ -349,7 +349,7 @@
       "example": "E10",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "approve",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-d",
@@ -362,7 +362,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-sx6ob889/repo-d/features/steps-demo/PLAN.md\ntoken=sha256:dccc8d39e38e3615bd5b012613ef3479e7583383ef1aba24dad704c1da835978\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:034c43641339de0f3433f440cc9eba2d2a90e1a5843b8258022634814c9a125f\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-sx6ob889/repo-d\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-sx6ob889/repo-d: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-sx6ob889/repo-d` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-sx6ob889/repo-d --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-sx6ob889/repo-d/features/steps-demo/PLAN.md\ntoken=sha256:dccc8d39e38e3615bd5b012613ef3479e7583383ef1aba24dad704c1da835978\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:034c43641339de0f3433f440cc9eba2d2a90e1a5843b8258022634814c9a125f\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-sx6ob889/repo-d\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-sx6ob889/repo-d: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-sx6ob889/repo-d` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-sx6ob889/repo-d --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.4,
       "run": 1
@@ -371,7 +371,7 @@
       "example": "E10",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-d",
@@ -380,7 +380,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-sx6ob889/repo-d/features/steps-demo/PLAN.md\ntoken=sha256:dccc8d39e38e3615bd5b012613ef3479e7583383ef1aba24dad704c1da835978\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:034c43641339de0f3433f440cc9eba2d2a90e1a5843b8258022634814c9a125f\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-sx6ob889/repo-d\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-sx6ob889/repo-d: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-sx6ob889/repo-d` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-sx6ob889/repo-d --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-sx6ob889/repo-d/features/steps-demo/PLAN.md\ntoken=sha256:dccc8d39e38e3615bd5b012613ef3479e7583383ef1aba24dad704c1da835978\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:034c43641339de0f3433f440cc9eba2d2a90e1a5843b8258022634814c9a125f\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-sx6ob889/repo-d\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-sx6ob889/repo-d: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-sx6ob889/repo-d` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-sx6ob889/repo-d --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.3,
       "run": 1
@@ -389,7 +389,7 @@
       "example": "E10",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-d",
@@ -404,7 +404,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-sx6ob889/repo-d/features/steps-demo/PLAN.md\ntoken=sha256:9c1c6486bd55a21a03cc28aecf9d9abda04e150c80801fb246174a979bb8e5ce\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:034c43641339de0f3433f440cc9eba2d2a90e1a5843b8258022634814c9a125f\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-sx6ob889/repo-d\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-sx6ob889/repo-d: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-sx6ob889/repo-d` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-sx6ob889/repo-d --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-sx6ob889/repo-d/features/steps-demo/PLAN.md\ntoken=sha256:9c1c6486bd55a21a03cc28aecf9d9abda04e150c80801fb246174a979bb8e5ce\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:034c43641339de0f3433f440cc9eba2d2a90e1a5843b8258022634814c9a125f\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-sx6ob889/repo-d\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-sx6ob889/repo-d: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-sx6ob889/repo-d` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-sx6ob889/repo-d --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.3,
       "run": 1
@@ -413,7 +413,7 @@
       "example": "E10",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-d",
@@ -445,7 +445,7 @@
       "example": "E6",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/deterministic-checks/scripts/project_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/project_gate.py",
         "phase",
         "--phase",
         "push",
@@ -486,7 +486,7 @@
       "example": "E11",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/ticket_state.py",
+        "<repo>/skills/he/scripts/ticket_state.py",
         "decompose",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-f",
@@ -509,7 +509,7 @@
       "example": "E11",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/ticket_state.py",
+        "<repo>/skills/he/scripts/ticket_state.py",
         "claim",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-f",
@@ -531,7 +531,7 @@
       "example": "E11",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/ticket_state.py",
+        "<repo>/skills/he/scripts/ticket_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-f",
@@ -557,7 +557,7 @@
       "example": "E11",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/ticket_state.py",
+        "<repo>/skills/he/scripts/ticket_state.py",
         "claim",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-f",
@@ -578,7 +578,7 @@
       "example": "E11",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/ticket_state.py",
+        "<repo>/skills/he/scripts/ticket_state.py",
         "claim",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-f",
@@ -600,7 +600,7 @@
       "example": "E11",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/ticket_state.py",
+        "<repo>/skills/he/scripts/ticket_state.py",
         "board",
         "--repo",
         "/private/tmp/hev-sx6ob889/repo-f",
@@ -618,7 +618,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -641,7 +641,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -664,7 +664,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -687,7 +687,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -710,7 +710,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -733,7 +733,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -751,7 +751,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "approve",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -764,7 +764,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:21c4291c3f7b4090ab6f3b6f5a5628a9f9fcbdc2b3d6465bc78bce0e9487166e\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:21c4291c3f7b4090ab6f3b6f5a5628a9f9fcbdc2b3d6465bc78bce0e9487166e\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.3,
       "run": 2
@@ -773,7 +773,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -782,7 +782,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:21c4291c3f7b4090ab6f3b6f5a5628a9f9fcbdc2b3d6465bc78bce0e9487166e\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:21c4291c3f7b4090ab6f3b6f5a5628a9f9fcbdc2b3d6465bc78bce0e9487166e\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.2,
       "run": 2
@@ -791,7 +791,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -806,7 +806,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.3,
       "run": 2
@@ -815,7 +815,7 @@
       "example": "E1",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -847,7 +847,7 @@
       "example": "E2",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -872,7 +872,7 @@
       "example": "E4",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -887,7 +887,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:1/4\nbuild_steps_missing=green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:46:27Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:1/4\nbuild_steps_missing=green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:46:27Z\n",
       "stderr": "",
       "secs": 0.4,
       "stdin": "{\"cases\": [{\"name\": \"empty input\", \"success_test\": \"test_empty_ok\", \"failure_test\": \"test_empty_refused\"}]}",
@@ -897,7 +897,7 @@
       "example": "E4",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -912,7 +912,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:2/4\nbuild_steps_missing=review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:46:28Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:2/4\nbuild_steps_missing=review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:46:28Z\n",
       "stderr": "",
       "secs": 0.4,
       "stdin": "{\"command\": [\"python3\", \"-m\", \"pytest\"], \"exit\": 0}",
@@ -922,7 +922,7 @@
       "example": "E4",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "review-packet",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -942,7 +942,7 @@
       "example": "E4",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -957,7 +957,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:46:29Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:46:29Z\n",
       "stderr": "",
       "secs": 0.5,
       "stdin": "{\"rounds\": [{\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"dcd377fe0b24be117aafc77b824feaf695e474b5cbd32470055df10df68bf7ca\", \"findings\": []}]}",
@@ -967,7 +967,7 @@
       "example": "E4",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "verify-packet",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -987,7 +987,7 @@
       "example": "E4",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1012,7 +1012,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "verify-packet",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1032,7 +1032,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1047,7 +1047,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:verify\nrecorded_at=2026-09-04T19:46:30Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:verify\nrecorded_at=2026-09-04T19:46:30Z\n",
       "stderr": "",
       "secs": 0.4,
       "stdin": "{\"mode\": \"logic\", \"packet_sha256\": \"75ec5a123db8c6bffce17b5f237f8b6ed75c7052c1132874cc24390107ed5f57\", \"fakes\": [{\"host\": \"api.example.test\", \"log\": \"features/steps-demo/receipts/fakes.log\"}], \"outside_calls\": [\"api.example.test\"], \"before\": [{\"path\": \"features/steps-demo/receipts/before.json\", \"sha256\": \"e7857d8bcfcfcc8e81fd09b5614365aff8f78c8e7bcff96c303455f8703c1ac1\"}], \"after\": [{\"path\": \"features/steps-demo/receipts/after.json\", \"sha256\": \"e7857d8bcfcfcc8e81fd09b5614365aff8f78c8e7bcff96c303455f8703c1ac1\"}], \"edge_cases\": [\"empty input\"]}",
@@ -1057,7 +1057,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1089,7 +1089,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1098,7 +1098,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=current\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=current\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.6,
       "run": 2
@@ -1107,7 +1107,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1122,7 +1122,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:0/1\nbuild_steps_missing=verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:0/1\nbuild_steps_missing=verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
       "stderr": "",
       "secs": 0.6,
       "run": 2
@@ -1131,7 +1131,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1140,7 +1140,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:0/1\nbuild_steps_missing=verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:0/1\nbuild_steps_missing=verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
       "stderr": "",
       "secs": 0.3,
       "run": 2
@@ -1149,7 +1149,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1180,7 +1180,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "verify-packet",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1200,7 +1200,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1215,7 +1215,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:1/1\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\nrecorded_build=full:verify\nrecorded_at=2026-09-04T19:46:33Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:1/1\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\nrecorded_build=full:verify\nrecorded_at=2026-09-04T19:46:33Z\n",
       "stderr": "",
       "secs": 0.5,
       "stdin": "{\"mode\": \"logic\", \"packet_sha256\": \"c18a600fe207b25c130c130e647ae678e5e2b313daa2efe76d108766311ffb9a\", \"fakes\": [{\"host\": \"api.example.test\", \"log\": \"features/steps-demo/receipts/fakes.log\"}], \"outside_calls\": [\"api.example.test\"], \"before\": [{\"path\": \"features/steps-demo/receipts/before.json\", \"sha256\": \"e7857d8bcfcfcc8e81fd09b5614365aff8f78c8e7bcff96c303455f8703c1ac1\"}], \"after\": [{\"path\": \"features/steps-demo/receipts/after.json\", \"sha256\": \"e7857d8bcfcfcc8e81fd09b5614365aff8f78c8e7bcff96c303455f8703c1ac1\"}], \"edge_cases\": []}",
@@ -1225,7 +1225,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "review-packet",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1245,7 +1245,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1276,7 +1276,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1285,7 +1285,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=current\nbuild_steps=full:1/1\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=current\nbuild_steps=full:1/1\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
       "stderr": "",
       "secs": 0.6,
       "run": 2
@@ -1294,7 +1294,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1303,7 +1303,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=current\nbuild_steps=full:1/1\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=current\nbuild_steps=full:1/1\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
       "stderr": "",
       "secs": 0.7,
       "run": 2
@@ -1312,7 +1312,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1334,7 +1334,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1343,7 +1343,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=current\nbuild_steps=full:1/1\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-a/features/steps-demo/PLAN.md\ntoken=sha256:002e8585cdf5a6a1c4335c2a1088a910385cafea6fc44c4adaf7c7142fa4159c\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=current\nbuild_steps=full:1/1\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-a\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-a: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-a` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-a --plan features/steps-demo/PLAN.md`, then run the final pre-ship gate for features/steps-demo/PLAN.md with he-build; every slice is complete.\n",
       "stderr": "",
       "secs": 0.8,
       "run": 2
@@ -1352,7 +1352,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1376,7 +1376,7 @@
       "example": "E8",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1394,7 +1394,7 @@
       "example": "E7",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "assert-green",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1412,7 +1412,7 @@
       "example": "E7",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1430,7 +1430,7 @@
       "example": "E7",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-mutation",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1451,7 +1451,7 @@
       "example": "E7",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-mutation",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1472,7 +1472,7 @@
       "example": "E7",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "assert-green",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-a",
@@ -1490,7 +1490,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1513,7 +1513,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1536,7 +1536,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1559,7 +1559,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1582,7 +1582,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-step",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1605,7 +1605,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1623,7 +1623,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "approve",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1636,7 +1636,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:21c4291c3f7b4090ab6f3b6f5a5628a9f9fcbdc2b3d6465bc78bce0e9487166e\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:21c4291c3f7b4090ab6f3b6f5a5628a9f9fcbdc2b3d6465bc78bce0e9487166e\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.3,
       "run": 2
@@ -1645,7 +1645,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1654,7 +1654,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:21c4291c3f7b4090ab6f3b6f5a5628a9f9fcbdc2b3d6465bc78bce0e9487166e\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:21c4291c3f7b4090ab6f3b6f5a5628a9f9fcbdc2b3d6465bc78bce0e9487166e\nlifecycle_status=build-ready\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.3,
       "run": 2
@@ -1663,7 +1663,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1678,7 +1678,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.3,
       "run": 2
@@ -1687,7 +1687,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1702,7 +1702,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:1/4\nbuild_steps_missing=green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:46:45Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:1/4\nbuild_steps_missing=green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:46:45Z\n",
       "stderr": "",
       "secs": 0.4,
       "stdin": "{\"cases\": [{\"name\": \"empty input\", \"success_test\": \"test_empty_ok\", \"failure_test\": \"test_empty_refused\"}]}",
@@ -1712,7 +1712,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1727,7 +1727,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:2/4\nbuild_steps_missing=review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:46:46Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=missing\nbuild_steps=S-1:2/4\nbuild_steps_missing=review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:46:46Z\n",
       "stderr": "",
       "secs": 0.4,
       "stdin": "{\"command\": [\"python3\", \"-m\", \"pytest\"], \"exit\": 0}",
@@ -1737,7 +1737,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "review-packet",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1757,7 +1757,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1772,7 +1772,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:46:46Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:46:46Z\n",
       "stderr": "",
       "secs": 0.4,
       "stdin": "{\"rounds\": [{\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"dcd377fe0b24be117aafc77b824feaf695e474b5cbd32470055df10df68bf7ca\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}]}",
@@ -1782,7 +1782,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1797,7 +1797,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:46:47Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:46:47Z\n",
       "stderr": "",
       "secs": 0.4,
       "stdin": "{\"cases\": [{\"name\": \"empty input\", \"success_test\": \"test_empty_ok\", \"failure_test\": \"test_empty_refused\"}]}",
@@ -1807,7 +1807,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1822,7 +1822,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:46:47Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:46:47Z\n",
       "stderr": "",
       "secs": 0.4,
       "stdin": "{\"command\": [\"python3\", \"-m\", \"pytest\"], \"exit\": 0}",
@@ -1832,7 +1832,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "review-packet",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1852,7 +1852,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1867,7 +1867,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:46:48Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:46:48Z\n",
       "stderr": "",
       "secs": 0.5,
       "stdin": "{\"rounds\": [{\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"dcd377fe0b24be117aafc77b824feaf695e474b5cbd32470055df10df68bf7ca\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}, {\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"d92dd1ca4520c5088a33529736bcbc4bd14ba7cceb966ba9b2146ed9616f0f52\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}]}",
@@ -1877,7 +1877,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1892,7 +1892,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:46:49Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:46:49Z\n",
       "stderr": "",
       "secs": 0.5,
       "stdin": "{\"cases\": [{\"name\": \"empty input\", \"success_test\": \"test_empty_ok\", \"failure_test\": \"test_empty_refused\"}]}",
@@ -1902,7 +1902,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1917,7 +1917,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:46:49Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:46:49Z\n",
       "stderr": "",
       "secs": 0.5,
       "stdin": "{\"command\": [\"python3\", \"-m\", \"pytest\"], \"exit\": 0}",
@@ -1927,7 +1927,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "review-packet",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1947,7 +1947,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1962,7 +1962,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:46:50Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:3/4\nbuild_steps_missing=verify\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:46:50Z\n",
       "stderr": "",
       "secs": 0.5,
       "stdin": "{\"rounds\": [{\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"dcd377fe0b24be117aafc77b824feaf695e474b5cbd32470055df10df68bf7ca\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}, {\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"d92dd1ca4520c5088a33529736bcbc4bd14ba7cceb966ba9b2146ed9616f0f52\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}, {\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"814205b1f68ff4bd5fb1a45168badd1f126a808455b2d6a080cc9e1650822ca1\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}]}",
@@ -1972,7 +1972,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "verify-packet",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -1992,7 +1992,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -2007,7 +2007,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:4/4\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:verify\nrecorded_at=2026-09-04T19:46:51Z\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:4/4\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:verify\nrecorded_at=2026-09-04T19:46:51Z\n",
       "stderr": "",
       "secs": 0.4,
       "stdin": "{\"mode\": \"logic\", \"packet_sha256\": \"5d4382d1ba38f9156a029d197cebb15af97c6dc0d5a139d64fbdcfa1d7de99b9\", \"fakes\": [{\"host\": \"api.example.test\", \"log\": \"features/steps-demo/receipts/fakes.log\"}], \"outside_calls\": [\"api.example.test\"], \"before\": [{\"path\": \"features/steps-demo/receipts/before.json\", \"sha256\": \"e7857d8bcfcfcc8e81fd09b5614365aff8f78c8e7bcff96c303455f8703c1ac1\"}], \"after\": [{\"path\": \"features/steps-demo/receipts/after.json\", \"sha256\": \"e7857d8bcfcfcc8e81fd09b5614365aff8f78c8e7bcff96c303455f8703c1ac1\"}], \"edge_cases\": [\"empty input\"]}",
@@ -2017,7 +2017,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -2049,7 +2049,7 @@
       "example": "E3",
       "argv": [
         "python3",
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/hev-mumsy2ck/repo-b",
@@ -2058,7 +2058,7 @@
       ],
       "cwd": null,
       "exit": 0,
-      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:4/4\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
+      "stdout": "result=valid\nplan=/private/tmp/hev-mumsy2ck/repo-b/features/steps-demo/PLAN.md\ntoken=sha256:d0d14e7b1ce0f139ac8b982eed81993c8f42b12ffcad73ef7af714a45dbb48c5\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:cd66103074a885e08b3bd048024dfa520387b0c4d5516772bf5cfee31bc68ec7\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Close the open review finding on S-1: R-1: missing null check\nslice_receipt=missing\nbuild_steps=S-1:4/4\nbuild_steps_open_finding=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hev-mumsy2ck/repo-b\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hev-mumsy2ck/repo-b: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hev-mumsy2ck/repo-b` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hev-mumsy2ck/repo-b --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n",
       "stderr": "",
       "secs": 0.3,
       "run": 2

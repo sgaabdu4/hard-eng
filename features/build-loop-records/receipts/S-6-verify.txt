@@ -51,4 +51,4 @@ S-6 = ticket board in `inspect`, dependency-aware claim, orchestrator write guar
 - Edit no product file; report defects, do not patch them.
 
 ## Evidence directory
-/home/example/.agents/features/build-loop-records/receipts
+<repo>/features/build-loop-records/receipts

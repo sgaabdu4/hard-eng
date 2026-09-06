@@ -7,7 +7,7 @@ pinned at .venv-mutation so actual mutants get generated and scored."""
 import subprocess
 import sys
 
-REAL_MUTMUT = "/home/example/.agents/.venv-mutation/bin/mutmut"
+REAL_MUTMUT = "<repo>/.venv-mutation/bin/mutmut"
 
 
 def main():

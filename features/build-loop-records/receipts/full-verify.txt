@@ -50,4 +50,4 @@ whole feature
 - Delete, overwrite, or truncate nothing your own run log did not prove you created; a pre-existing or ignored directory under the checkout is someone else's work.
 
 ## Evidence directory
-/home/example/.agents/features/build-loop-records/receipts
+<repo>/features/build-loop-records/receipts

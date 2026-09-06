@@ -52,4 +52,4 @@ S-5 = mutation before ship for every feature, changed-file scope, survivor dispo
 - Edit no product file; report defects, do not patch them.
 
 ## Evidence directory
-/home/example/.agents/features/build-loop-records/receipts
+<repo>/features/build-loop-records/receipts

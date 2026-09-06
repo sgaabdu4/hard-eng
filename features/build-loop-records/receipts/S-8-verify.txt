@@ -50,4 +50,4 @@ S-8 = he-build, he-ship, and deterministic-checks docs name every record and fam
 - Edit no product file; report defects, do not patch them.
 
 ## Evidence directory
-/home/example/.agents/features/build-loop-records/receipts
+<repo>/features/build-loop-records/receipts

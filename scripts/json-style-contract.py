@@ -126,11 +126,11 @@ def check_styles() -> None:
     case("Prettier defaults without any config", gates, repo_config=None, oracle_config=SPACES)
     case("Biome tabs by default", gates, repo_config={})
     case(
-        "client-b shape",
+        "narrow line shape",
         gates,
         repo_config={"formatter": {"indentStyle": "space", "indentWidth": 2, "lineWidth": 100}},
     )
-    case("rollout shape", gates, repo_config={"formatter": {"indentStyle": "space", "lineWidth": 120}})
+    case("wide line shape", gates, repo_config={"formatter": {"indentStyle": "space", "lineWidth": 120}})
     case(
         "json section overrides",
         gates,

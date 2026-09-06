@@ -19,7 +19,7 @@
   "real_outside_calls": [],
   "fix_confirmed": {
     "issue": "previous pass: default --results lookup for `run` resolved relative to the shell's cwd, not --repo, giving recorded_count=0/skipped_count=2 unless --results <tmp>/mutants was passed explicitly",
-    "this_pass": "ran `mutation_ledger.py run --repo <tmp> --changed-only --budget-minutes 1 --mutmut <fake-mutmut>` WITHOUT --results, invoked from cwd=/home/example/.agents (not the temp repo) -> it found <tmp>/mutants/pkg/owner.py.meta on its own and recorded both rows (recorded_count=2, skipped_count=0). Fix confirmed working."
+    "this_pass": "ran `mutation_ledger.py run --repo <tmp> --changed-only --budget-minutes 1 --mutmut <fake-mutmut>` WITHOUT --results, invoked from cwd=<repo> (not the temp repo) -> it found <tmp>/mutants/pkg/owner.py.meta on its own and recorded both rows (recorded_count=2, skipped_count=0). Fix confirmed working."
   },
   "final_ledger_json": {
     "functions": {
@@ -84,15 +84,15 @@
     },
     "nightly run over unscored functions": {
       "commands": [
-        "mutation_ledger.py run --repo <tmp> --changed-only --budget-minutes 1 --mutmut <fake-mutmut>  (NO --results, run from cwd=/home/example/.agents)",
+        "mutation_ledger.py run --repo <tmp> --changed-only --budget-minutes 1 --mutmut <fake-mutmut>  (NO --results, run from cwd=<repo>)",
         "MUTATION_LEDGER_GH=<fake> FAKE_GH_PRIVATE=true mutation_ledger.py check --repo <tmp> --visibility auto"
       ],
       "run_exit": 0,
       "run_output": "planned=2\nmutmut_exit=0\nbudget_exhausted=no\nrecorded_count=2\nskipped_count=0\nmutation-ledger: recorded",
       "check_exit": 0,
       "check_output": "rows=2\nstale=0\nrunners=mutmut\nvisibility=private (gh repo view)\nbase=6f0cb89bf975ac8a54b9b19401e0f63dd5e868cf\nchanged_functions=2\nunscored=0\nmutation-ledger: PASS",
-      "fix_note": "confirms the --results-defaults-to-repo fix: no --results flag was passed and the cwd (/home/example/.agents) was NOT the temp repo, yet the tool found <tmp>/mutants/pkg/owner.py.meta and recorded both rows.",
-      "side_effect_found": "running `run` from cwd=/home/example/.agents (a populated real repo) while --repo pointed at <tmp> caused mutation_ledger.py to create a 121MB untracked 'mutants/' directory directly under /home/example/.agents containing a full copy of the real repo's tracked tree (pyproject.toml, AGENTS.md, scripts/, etc. — confirmed identical via diff -q). 'mutants/' is gitignored so this did not touch git state, and it was deleted immediately as cleanup (rm -rf /home/example/.agents/mutants), but it shows the mutmut staging/mirror step some code path uses the process's real OS cwd rather than --repo, inconsistent with the now-fixed --results default. Reporting as a defect, not patched.",
+      "fix_note": "confirms the --results-defaults-to-repo fix: no --results flag was passed and the cwd (<repo>) was NOT the temp repo, yet the tool found <tmp>/mutants/pkg/owner.py.meta and recorded both rows.",
+      "side_effect_found": "running `run` from cwd=<repo> (a populated real repo) while --repo pointed at <tmp> caused mutation_ledger.py to create a 121MB untracked 'mutants/' directory directly under <repo> containing a full copy of the real repo's tracked tree (pyproject.toml, AGENTS.md, scripts/, etc. — confirmed identical via diff -q). 'mutants/' is gitignored so this did not touch git state, and it was deleted immediately as cleanup (rm -rf <repo>/mutants), but it shows the mutmut staging/mirror step some code path uses the process's real OS cwd rather than --repo, inconsistent with the now-fixed --results default. Reporting as a defect, not patched.",
       "result": "PASS (functional contract holds, recorded_count now matches expectation of scoring both changed functions and the private check afterwards passes) with the side_effect_found defect noted above"
     },
     "needs-verdict row older than seven days": {
@@ -128,11 +128,11 @@
     }
   },
   "bonus_gate_wiring_check": {
-    "command": "MUTATION_LEDGER_GH=<fake> FAKE_GH_PRIVATE=false python3 skills/deterministic-checks/scripts/project_gate.py run --repo /home/example/.agents --timeout 120 --family mutation-ledger",
+    "command": "MUTATION_LEDGER_GH=<fake> FAKE_GH_PRIVATE=false python3 skills/deterministic-checks/scripts/project_gate.py run --repo <repo> --timeout 120 --family mutation-ledger",
     "exit": 4,
     "family_line": "mutation-ledger: PASS",
     "wrapper_result": "project-gate: FAIL: project gate commands mutated the repository tree; dirty_paths=[... many pre-existing paths from concurrent build-loop-records work ...]",
     "note": "the mutation-ledger family itself printed PASS using the fake gh (visibility=public (gh repo view), confirmed by the last fake-gh log line -> false). The wrapper's own FAIL is its dirty-working-tree guard tripping on files that were already modified before this verification session started (confirmed by file mtimes predating this session) — unrelated to the mutation-ledger family or to this fix. Zero real gh calls happened during this command."
   },
-  "cleanup": "both temp repos (s10r2-repo1.*, s10r2-repo2.*), the fake mutmut script, and the stray /home/example/.agents/mutants/ side-effect directory were removed after this run"
+  "cleanup": "both temp repos (s10r2-repo1.*, s10r2-repo2.*), the fake mutmut script, and the stray <repo>/mutants/ side-effect directory were removed after this run"
 }
