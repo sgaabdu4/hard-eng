@@ -6,11 +6,9 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
@@ -18,6 +16,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from git_env import scrub_environ
+from regression_fixture import checker, git
 from script_runner import ScriptResult, run_script
 
 scrub_environ(ceiling=tempfile.gettempdir())
@@ -48,24 +47,7 @@ pathlib.Path("mutants/patterns.json").write_text(json.dumps(patterns))
 """
 
 
-def fail(message: str) -> NoReturn:
-    raise SystemExit(f"mutation-ledger-check: {message}")
-
-
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        fail(message)
-
-
-def git(repo: Path, *args: str) -> str:
-    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
-    return subprocess.run(
-        ["git", "-C", str(repo), "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", *args],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    ).stdout
+fail, require = checker("mutation-ledger-check")
 
 
 LEDGER_ENV = ("MUTATION_LEDGER_BASE", "MUTATION_LEDGER_VISIBILITY", "MUTATION_LEDGER_GH")

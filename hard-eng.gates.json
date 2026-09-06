@@ -62,7 +62,9 @@
       "skills/he/scripts/ticket_state.py",
       "skills/he/scripts/tracker_adapter.py",
       "skills/he/scripts/tracker_http.py",
-      "skills/he/scripts/tracker_probe.py"
+      "skills/he/scripts/tracker_probe.py",
+      "skills/deterministic-checks/scripts/privacy_scan.py",
+      "skills/deterministic-checks/scripts/privacy_scan_regression_check.py"
     ],
     "coverage": {
       "repository-native-startup": [
@@ -265,6 +267,11 @@
         "checkpoint check",
         "skills/he/scripts/skill_source_policy.py",
         "skills/he/scripts/skill_source_policy_regression.py"
+      ],
+      "privacy": [
+        "checkpoint check",
+        "skills/deterministic-checks/scripts/privacy_scan.py",
+        "skills/deterministic-checks/scripts/privacy_scan_regression_check.py"
       ]
     }
   },
@@ -311,10 +318,11 @@
       "check",
       "--repo",
       "."
-    ]
+    ],
+    "privacy": ["python3", "skills/deterministic-checks/scripts/privacy_scan.py", "--repo", "."]
   },
   "phases": {
-    "commit": ["staged", "enforcement"],
+    "commit": ["staged", "enforcement", "privacy"],
     "push": [
       "typecheck",
       "format",
@@ -331,7 +339,8 @@
       "file-size",
       "secrets",
       "enforcement",
-      "mutation-ledger"
+      "mutation-ledger",
+      "privacy"
     ],
     "ci": [
       "typecheck",
@@ -349,7 +358,8 @@
       "file-size",
       "secrets",
       "enforcement",
-      "mutation-ledger"
+      "mutation-ledger",
+      "privacy"
     ]
   }
 }

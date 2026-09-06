@@ -72,10 +72,11 @@ def check_mixed_output_rejected() -> None:
             fail(f"{label} did not reproduce first-delimiter false acceptance")
 
 
-def main() -> None:
+def main() -> int:
     check_valid_channels()
     check_mixed_output_rejected()
     print("structured-output-regressions: PASS")
+    return 0
 
 
 if __name__ == "__main__":

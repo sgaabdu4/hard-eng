@@ -323,7 +323,7 @@ def route_contract_covers_every_lifecycle() -> None:
     )
 
 
-def main() -> None:
+def main() -> int:
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         trigger_and_helper_flow(root)
@@ -338,6 +338,7 @@ def main() -> None:
         global_adapters_survive_aliased_home(root)
         route_contract_covers_every_lifecycle()
     print("learning-state regression: PASS")
+    return 0
 
 
 if __name__ == "__main__":
