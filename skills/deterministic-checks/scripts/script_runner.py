@@ -19,8 +19,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Self
 
-from bounded_run import run_captured
-
 INPROCESS_FLAG = "HARD_ENG_INPROCESS"
 PROCESS_STATE = threading.RLock()
 CHILD_TIMEOUT = 600.0
@@ -251,6 +249,8 @@ def run_script(
     if in_process():
         with PROCESS_STATE:
             return _run_inprocess(script, args, None if cwd is None else str(cwd), env, stdin)
+    from bounded_run import run_captured
+
     result = run_captured(
         [sys.executable, str(script), *args],
         timeout,

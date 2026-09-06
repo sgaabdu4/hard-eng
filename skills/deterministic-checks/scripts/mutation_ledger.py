@@ -161,7 +161,7 @@ def python_functions(repo: Path, relative: str) -> dict[str, str]:
 
 
 def _node_hash(node: ast.AST) -> str:
-    return "sha256:" + hashlib.sha256(ast.dump(node).encode("utf-8")).hexdigest()
+    return "sha256:" + hashlib.sha256(ast.unparse(node).encode("utf-8")).hexdigest()
 
 
 def mutant_prefix(key: str) -> str:
