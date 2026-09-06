@@ -56,6 +56,7 @@ FAMILY_PATTERNS = {
     "file-size": re.compile(r"check-file-size\.py"),
     "enforcement": re.compile(r"enforcement_policy\.pl"),
     "mutation-ledger": re.compile(r"mutation_ledger\.py"),
+    "privacy": re.compile(r"privacy_scan\.py"),
     "react-doctor": re.compile(r"\breact-doctor\b"),
     "dart-analyze": re.compile(r"\b(dart|flutter)\b.*\banalyze\b"),
     "dart-test": re.compile(r"\b(dart|flutter)\b.*\btest\b"),
@@ -348,11 +349,8 @@ def _validate_python_security(family: str, command: list[str]) -> None:
 
 
 def _validate_react_doctor_report(output: str) -> None:
-    """Gate on what the scan reported, because argv proves nothing about it.
-
-    A silenced analyzer exits zero with an empty diagnostic list, so completeness
-    is asserted per project rather than inferred from the exit code.
-    """
+    """Gate on the report itself: a silenced analyzer exits zero with an empty diagnostic
+    list, so completeness is asserted per project rather than read from the exit code."""
     try:
         report = json.loads(output)
     except ValueError as error:

@@ -153,6 +153,13 @@ def git_env(base: dict[str, str] | None = None, *, ceiling: str | os.PathLike[st
     return env
 
 
+def git_output(repo: Path, *args: str, timeout: float = 60, error: type[Exception] = RuntimeError) -> str:
+    result = run_captured(["git", "-C", str(repo), *args], timeout, env=git_env())
+    if result.returncode != 0:
+        raise error(f"git {' '.join(args)} failed: {result.stderr.decode('utf-8', 'replace').strip()}")
+    return result.stdout.decode("utf-8", "replace")
+
+
 def scrub_environ(*, ceiling: str | os.PathLike[str] | None = None) -> None:
     """Sanitize this process's own environment, covering every child it spawns.
 

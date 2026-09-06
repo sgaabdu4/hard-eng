@@ -23,7 +23,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from bounded_run import TIMEOUT_EXIT, run, run_captured
-from git_env import git_env
+from git_env import git_env, git_output
 
 LEDGER_FILE = "mutation-ledger.json"
 SCHEMA_VERSION = 1
@@ -51,10 +51,7 @@ class LedgerError(ValueError):
 
 
 def _git(repo: Path, *args: str, timeout: float = 60) -> str:
-    result = run_captured(["git", "-C", str(repo), *args], timeout, env=git_env())
-    if result.returncode != 0:
-        raise LedgerError(f"git {' '.join(args)} failed: {result.stderr.decode('utf-8', 'replace').strip()}")
-    return result.stdout.decode("utf-8", "replace")
+    return git_output(repo, *args, timeout=timeout, error=LedgerError)
 
 
 def _ref_exists(repo: Path, ref: str) -> bool:

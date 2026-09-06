@@ -33,6 +33,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | Flutter | package-root `dart analyze` + `flutter test` + [Dart Decimate](references/dart-decimate.md) + declared boundary-contract gate |
 | Python | manifest-declared `python-format` + `python-lint` (Ruff) + `python-tests` + `python-types` |
 | Security, any stack | push/ci `secrets` (gitleaks) full-tree scan; Python dependency manifest → `sast` (Bandit) + `deps-audit` (pip-audit) |
+| Personal/client data, any stack | commit/push/ci `privacy` (`privacy_scan.py`) full-tree scan for home-directory paths, non-allowlisted emails, and a Git-private denylist |
 
 ## Select Rules
 

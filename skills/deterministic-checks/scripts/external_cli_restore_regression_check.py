@@ -242,7 +242,7 @@ def check_fsmonitor_snapshot_idempotence() -> None:
             fail("consecutive fsmonitor snapshots were not idempotent")
 
 
-def main() -> None:
+def main() -> int:
     check_approved_output()
     check_incidental_restore()
     check_exclusive_owner_required()
@@ -251,6 +251,7 @@ def main() -> None:
     check_concurrent_index_flag_drift("--assume-unchanged", b"h ")
     check_fsmonitor_snapshot_idempotence()
     print("external-cli-restore-regressions: PASS")
+    return 0
 
 
 if __name__ == "__main__":
