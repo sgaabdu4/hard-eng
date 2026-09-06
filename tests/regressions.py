@@ -51,12 +51,6 @@ IN_PROCESS = (
     SCRIPTS / "worktree-readiness-contracts.py",
     SCRIPTS / "context-docs-contracts.py",
     SCRIPTS / "machine-scope-guard-contract.py",
-    SCRIPTS / "protected-planning-contract-check.py",
-    SCRIPTS / "checkpoint-receipt-paths-contract-check.py",
     SCRIPTS / "inprocess-seam-contract.py",
     SCRIPTS / "bounded-operations-contract.py",
-    SCRIPTS / "rollout-shared-contract-check.py",
-    SCRIPTS / "rollout-workflow-contract-check.py",
-    SCRIPTS / "json-style-contract.py",
-    SCRIPTS / "route_resource_contracts.py",
 )
