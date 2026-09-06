@@ -35,6 +35,10 @@ import json, pathlib, sys
 if sys.argv[1] == "--version":
     print("mutmut, version 9.9.9"); raise SystemExit(0)
 patterns = sys.argv[2:]
+crash_once = pathlib.Path("mutants/crash-once")
+if crash_once.exists():
+    crash_once.unlink()
+    print("failed to collect stats. runner returned 1"); raise SystemExit(1)
 meta = pathlib.Path("mutants/pkg/owner.py.meta")
 meta.parent.mkdir(parents=True, exist_ok=True)
 codes = {}
@@ -224,6 +228,7 @@ def check_run(repo: Path) -> None:
     fake.write_text(FAKE_MUTMUT, encoding="utf-8")
     fake.chmod(0o755)
     (repo / "mutants" / "tests").mkdir(parents=True, exist_ok=True)
+    (repo / "mutants" / "crash-once").write_text("", encoding="utf-8")
     result = ledger(
         repo,
         "run",
@@ -238,6 +243,10 @@ def check_run(repo: Path) -> None:
     )
     rows = values(result.output)
     require(result.returncode == 0 and rows["planned"] == ["1"] and rows["recorded_count"] == ["1"], result.output)
+    require(
+        rows.get("mutmut_retry") == ["yes"] and rows["mutmut_exit"] == ["0"], f"one crash is retried: {result.output}"
+    )
+    require(not (repo / "mutants" / "crash-once").exists(), "the fake crashed exactly once")
     patterns = json.loads((repo / "mutants" / "patterns.json").read_text(encoding="utf-8"))
     require(patterns == [f"{FUNCTION_PREFIX}*"], f"one mutmut run over exactly the unscored patterns: {patterns}")
     require(not (repo / "mutants" / "tests").exists(), "stale test copy removed before the run")
