@@ -354,6 +354,8 @@ def check_workflow() -> None:
     count = len([item for item in matrix.group(1).split(",") if item.strip()])
     require(int(divisor.group(1)) == count, f"every shard divides by the matrix size {count}")
     for needle in (
+        f"failed_shards == {count}",
+        f"$FAILED_SHARDS of {count} shards failed",
         "fail-fast: false",
         "continue-on-error: true",
         "name: ledger-${{ matrix.shard }}",

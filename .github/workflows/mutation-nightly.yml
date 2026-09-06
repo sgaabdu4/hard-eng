@@ -116,10 +116,12 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           files=(shards/ledger-*/mutation-ledger.json)
+          failed_shards="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" --jq '[.jobs[] | select(.name | startswith("score")) | select(.conclusion != "success")] | length')"
           echo "shards_kept=${#files[@]}"
-          printf 'SHARDS_KEPT=%s\n' "${#files[@]}" >> "$GITHUB_ENV"
-          if (( ${#files[@]} == 0 )); then
-            echo "no shard finished; every runner died or the toolchain is broken"
+          echo "failed_shards=$failed_shards"
+          printf 'SHARDS_KEPT=%s\nFAILED_SHARDS=%s\n' "${#files[@]}" "$failed_shards" >> "$GITHUB_ENV"
+          if (( ${#files[@]} == 0 || failed_shards == 16 )); then
+            echo "no shard scored anything; every runner died or the toolchain is broken"
             exit 1
           fi
           args=()
@@ -149,7 +151,7 @@ jobs:
               --base "$default_branch" \
               --head "$LEDGER_BRANCH" \
               --title "Nightly mutation scores" \
-              --body "Functions scored overnight by $SHARDS_KEPT of 16 shards. Every survivor is marked needs-verdict; give each one a verdict with mutation_ledger.py verdict within seven days or the push gate refuses."
+              --body "Scored overnight: $SHARDS_KEPT of 16 shard ledgers merged, $FAILED_SHARDS of 16 shards failed. Every survivor is marked needs-verdict; give each one a verdict with mutation_ledger.py verdict within seven days or the push gate refuses."
           else
             echo "pull request #$open_pr already open; branch updated"
           fi
