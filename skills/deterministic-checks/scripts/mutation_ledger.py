@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -492,7 +493,14 @@ def command_run(args: argparse.Namespace) -> int:
     results = results_dir(repo, args.results)
     shutil.rmtree(results / "tests", ignore_errors=True)
     patterns = [mutant_pattern(key) for key in sorted(targets)]
-    outcome = run([mutmut, "run", *patterns], args.budget_minutes * 60, 10, cwd=str(repo), env=git_env())
+    budget = args.budget_minutes * 60
+    started = time.monotonic()
+    outcome = run([mutmut, "run", *patterns], budget, 10, cwd=str(repo), env=git_env())
+    remaining = budget - (time.monotonic() - started)
+    retry = outcome.returncode not in (0, TIMEOUT_EXIT) and remaining > 0
+    print(f"mutmut_retry={'yes' if retry else 'no'}")
+    if retry:
+        outcome = run([mutmut, "run", *patterns], remaining, 10, cwd=str(repo), env=git_env())
     print(f"mutmut_exit={outcome.returncode}")
     print(f"budget_exhausted={'yes' if outcome.returncode == TIMEOUT_EXIT else 'no'}")
     recorded, skipped = record_rows(repo, results, version_text, targets, {}, parse_today(None))
