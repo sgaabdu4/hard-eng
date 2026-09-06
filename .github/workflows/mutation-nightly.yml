@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       budget_minutes:
-        description: Minutes mutmut may run before the ledger records what finished
-        default: "300"
+        description: Minutes each shard may run mutmut before it records what finished
+        default: "240"
 
 permissions:
   contents: write
@@ -17,17 +17,21 @@ concurrency:
   group: mutation-ledger-nightly
   cancel-in-progress: false
 
+env:
+  LEDGER_BRANCH: mutation-ledger/nightly
+
 jobs:
-  score:
+  visibility:
     runs-on: ubuntu-latest
-    timeout-minutes: 340
-    env:
-      GH_TOKEN: ${{ github.token }}
-      LEDGER_BRANCH: mutation-ledger/nightly
+    timeout-minutes: 5
+    outputs:
+      private: ${{ steps.probe.outputs.private }}
     steps:
       - name: Stop on a private repository
-        id: visibility
+        id: probe
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           private="$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)"
@@ -36,20 +40,28 @@ jobs:
             echo "private repository: mutation runs stay on the developer machine before push"
           fi
 
+  score:
+    needs: visibility
+    if: needs.visibility.outputs.private == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
       - name: Check out repository
-        if: steps.visibility.outputs.private == 'false'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Node
-        if: steps.visibility.outputs.private == 'false'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26
 
       - name: Install the test toolchain
-        if: steps.visibility.outputs.private == 'false'
         shell: bash
         run: |
           set -euo pipefail
@@ -64,37 +76,80 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           scripts/mutation-venv.sh
 
-      - name: Score functions with no ledger row
-        if: steps.visibility.outputs.private == 'false'
+      - name: Score this shard of the functions with no ledger row
         run: >-
           python3 skills/deterministic-checks/scripts/mutation_ledger.py run --repo .
           --seed-ref "origin/$LEDGER_BRANCH"
-          --budget-minutes "${{ inputs.budget_minutes || 300 }}"
+          --shard "${{ matrix.shard }}/16"
+          --budget-minutes "${{ inputs.budget_minutes || 240 }}"
+
+      - name: Keep this shard's ledger
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ledger-${{ matrix.shard }}
+          path: mutation-ledger.json
+          retention-days: 3
+
+  ledger:
+    needs: [visibility, score]
+    if: always() && needs.visibility.result == 'success' && needs.visibility.outputs.private == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Collect every shard's ledger
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ledger-*
+          path: shards
+
+      - name: Merge the shards into the ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(shards/ledger-*/mutation-ledger.json)
+          echo "shards_kept=${#files[@]}"
+          printf 'SHARDS_KEPT=%s\n' "${#files[@]}" >> "$GITHUB_ENV"
+          if (( ${#files[@]} == 0 )); then
+            echo "no shard finished; every runner died or the toolchain is broken"
+            exit 1
+          fi
+          args=()
+          for file in "${files[@]}"; do
+            args+=(--from "$file")
+          done
+          python3 skills/deterministic-checks/scripts/mutation_ledger.py merge --repo . "${args[@]}"
 
       - name: Open the ledger pull request
-        if: steps.visibility.outputs.private == 'false'
         shell: bash
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           if git diff --quiet -- mutation-ledger.json || git diff --quiet "origin/$LEDGER_BRANCH" -- mutation-ledger.json; then
             echo "ledger unchanged"
             exit 0
           fi
+          default_branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$LEDGER_BRANCH"
           git add mutation-ledger.json
           git commit -m "chore: record nightly mutation scores"
           git push --force-with-lease origin "$LEDGER_BRANCH"
-          open_pr="$(gh pr list --head "$LEDGER_BRANCH" --base "$DEFAULT_BRANCH" --state open --json number --jq '.[].number')"
+          open_pr="$(gh pr list --head "$LEDGER_BRANCH" --base "$default_branch" --state open --json number --jq '.[].number')"
           if [[ -z "$open_pr" ]]; then
             gh pr create \
-              --base "$DEFAULT_BRANCH" \
+              --base "$default_branch" \
               --head "$LEDGER_BRANCH" \
               --title "Nightly mutation scores" \
-              --body "Functions scored overnight. Every survivor is marked needs-verdict; give each one a verdict with mutation_ledger.py verdict within seven days or the push gate refuses."
+              --body "Functions scored overnight by $SHARDS_KEPT of 16 shards. Every survivor is marked needs-verdict; give each one a verdict with mutation_ledger.py verdict within seven days or the push gate refuses."
           else
             echo "pull request #$open_pr already open; branch updated"
           fi

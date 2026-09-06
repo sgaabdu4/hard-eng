@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -308,6 +309,59 @@ def check_seed(repo: Path, fake: Path) -> None:
     )
     rows = seeded_run(repo, fake, "nope")
     require(rows["seeded"] == ["0"] and rows["planned"] == ["0"], f"a missing ref seeds nothing: {rows}")
+    check_shards(repo, fake)
+
+
+def shard_run(repo: Path, fake: Path, shard: str) -> ScriptResult:
+    return ledger(repo, "run", "--repo", str(repo), "--budget-minutes", "1", "--mutmut", str(fake), "--shard", shard)
+
+
+def check_shards(repo: Path, fake: Path) -> None:
+    empty = '{"functions": {}, "schema_version": 1}\n'
+    ledger_file = repo / "mutation-ledger.json"
+    kept: list[Path] = []
+    for shard in ("0/2", "1/2"):
+        ledger_file.write_text(empty, encoding="utf-8")
+        result = shard_run(repo, fake, shard)
+        rows = values(result.output)
+        require(
+            result.returncode == 0 and rows["planned"] == ["1"], f"shard {shard} scores one function: {result.output}"
+        )
+        patterns = json.loads((repo / "mutants" / "patterns.json").read_text(encoding="utf-8"))
+        require(len(patterns) == 1, f"shard {shard} runs mutmut over its own function only: {patterns}")
+        kept.append(repo / f"shard-{shard[0]}.json")
+        kept[-1].write_text(ledger_file.read_text(encoding="utf-8"), encoding="utf-8")
+    scored = {json.loads(path.read_text(encoding="utf-8"))["functions"].popitem()[0] for path in kept}
+    require(scored == {FUNCTION, METHOD}, f"the shards split every unscored function between them: {scored}")
+    result = shard_run(repo, fake, "2/2")
+    require(result.returncode == 1 and "index below count" in result.output, f"bad shard refused: {result.output}")
+    ledger_file.write_text(empty, encoding="utf-8")
+    args = [item for path in kept for item in ("--from", str(path))]
+    result = ledger(repo, "merge", "--repo", str(repo), *args)
+    require(result.returncode == 0 and "merged=2" in result.output, f"merge unions the shard rows: {result.output}")
+    data = json.loads(ledger_file.read_text(encoding="utf-8"))
+    require(set(data["functions"]) == {FUNCTION, METHOD}, f"merged ledger holds both rows: {sorted(data['functions'])}")
+    result = ledger(repo, "merge", "--repo", str(repo), *args)
+    require("merged=0" in result.output, f"a second merge changes nothing: {result.output}")
+
+
+def check_workflow() -> None:
+    text = (ROOT / ".github/workflows/mutation-nightly.yml").read_text(encoding="utf-8")
+    matrix = re.search(r"shard: \[([^\]]*)\]", text)
+    divisor = re.search(r'--shard "\$\{\{ matrix\.shard \}\}/(\d+)"', text)
+    if matrix is None or divisor is None:
+        fail("the nightly workflow lists its shards as a matrix and divides by that size")
+    count = len([item for item in matrix.group(1).split(",") if item.strip()])
+    require(int(divisor.group(1)) == count, f"every shard divides by the matrix size {count}")
+    for needle in (
+        "fail-fast: false",
+        "continue-on-error: true",
+        "name: ledger-${{ matrix.shard }}",
+        "pattern: ledger-*",
+        "if: always() && needs.visibility.result == 'success'",
+        "mutation_ledger.py merge --repo .",
+    ):
+        require(needle in text, f"the nightly workflow keeps: {needle}")
 
 
 def check_no_runner(base: Path) -> None:
@@ -337,6 +391,7 @@ def main() -> int:
         check_hash_follows_meaning(repo)
         check_run(repo)
         check_no_runner(base)
+    check_workflow()
     print("mutation-ledger regression: PASS")
     return 0
 
