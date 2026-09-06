@@ -50,14 +50,14 @@
   "clones_ref_form_ok": true,
   "real_jscpd": {
     "command": [
-      "/home/example/.agents/node_modules/.bin/jscpd",
+      "<repo>/node_modules/.bin/jscpd",
       ".",
       "--format",
       "python",
       "--reporters",
       "console",
       "--baseline",
-      "/home/example/.agents/.jscpd-baseline.json",
+      "<repo>/.jscpd-baseline.json",
       "--fail-on-new-clones"
     ],
     "cwd": "/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/s4-verify-yj2aw5gs/real_jscpd",

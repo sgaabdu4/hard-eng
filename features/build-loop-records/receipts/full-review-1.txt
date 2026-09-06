@@ -132,7 +132,7 @@ index c97ea77..e2ee3a3 100644
 +    "sha256": "1a73a8ff3103e93c2414d44ba2801d06a281c56389fbf6c9ef68eeaf75baef0e"
 +  },
 +  "repository": {
-+    "root": "/home/example/.agents",
++    "root": "<repo>",
 +    "head": "16d48420ca8afa750eebc33f308d634398ef3c32",
 +    "tree": "4f922b4f0b19c3e496d31cd0a28b89895fe7ae6e",
 +    "head_before": "16d48420ca8afa750eebc33f308d634398ef3c32",
@@ -148,7 +148,7 @@ index c97ea77..e2ee3a3 100644
 +        "python3",
 +        "skills/he/scripts/build_steps_regression.py"
 +      ],
-+      "cwd": "/home/example/.agents",
++      "cwd": "<repo>",
        "exit": 0,
 -      "key_line": "skill-contracts: PASS"
 +      "final_line": "build-steps regression: PASS",
@@ -162,7 +162,7 @@ index c97ea77..e2ee3a3 100644
 +        "python3",
 +        "skills/deterministic-checks/scripts/slice_gate_regression_check.py"
 +      ],
-+      "cwd": "/home/example/.agents",
++      "cwd": "<repo>",
        "exit": 0,
 -      "key_line": "build-steps regression: PASS"
 +      "final_line": "slice-gate-check: PASS",
@@ -176,7 +176,7 @@ index c97ea77..e2ee3a3 100644
 +        "python3",
 +        "skills/he/scripts/ticket_state_regression.py"
 +      ],
-+      "cwd": "/home/example/.agents",
++      "cwd": "<repo>",
        "exit": 0,
 -      "key_line": "slice-gate-check: PASS"
 +      "final_line": "ticket-state regression: PASS",
@@ -190,7 +190,7 @@ index c97ea77..e2ee3a3 100644
 +        "python3",
 +        "skills/he/scripts/plan_steps_regression.py"
 +      ],
-+      "cwd": "/home/example/.agents",
++      "cwd": "<repo>",
        "exit": 0,
 -      "key_line": "ticket-state regression: PASS"
 +      "final_line": "plan-steps regression: PASS",
@@ -204,7 +204,7 @@ index c97ea77..e2ee3a3 100644
 +        "python3",
 +        "skills/deterministic-checks/scripts/project_gate_regression_check.py"
 +      ],
-+      "cwd": "/home/example/.agents",
++      "cwd": "<repo>",
        "exit": 0,
 -      "key_line": "plan-steps regression: PASS"
 +      "final_line": "project-gate-check: PASS",
@@ -218,7 +218,7 @@ index c97ea77..e2ee3a3 100644
 +        "python3",
 +        "skills/he/scripts/mutation_payload_regression.py"
 +      ],
-+      "cwd": "/home/example/.agents",
++      "cwd": "<repo>",
        "exit": 0,
 -      "key_line": "project-gate-check: PASS"
 +      "final_line": "mutation-payload regression: PASS",
@@ -232,7 +232,7 @@ index c97ea77..e2ee3a3 100644
 +        "python3",
 +        "skills/he/scripts/external_claims_regression.py"
 +      ],
-+      "cwd": "/home/example/.agents",
++      "cwd": "<repo>",
        "exit": 0,
 -      "key_lines": [
 -        "lifecycle_status=building",
@@ -256,16 +256,16 @@ index c97ea77..e2ee3a3 100644
      },
      {
 -      "n": 8,
--      "cmd": "perl scripts/enforcement_policy.pl check . (run in /home/example/.agents itself, one brief under construction, tree otherwise clean)",
+-      "cmd": "perl scripts/enforcement_policy.pl check . (run in <repo> itself, one brief under construction, tree otherwise clean)",
 +      "name": "skill_contracts",
 +      "argv": [
 +        "bash",
 +        "-c",
 +        "GIT_CONFIG_GLOBAL=/dev/null python3 scripts/check-skill-contracts.py"
 +      ],
-+      "cwd": "/home/example/.agents",
++      "cwd": "<repo>",
        "exit": 0,
--      "note": "Coordinator corrected the original check 8 spec: the enforcement check requires the manifest's named owner files (scripts/enforcement_policy.pl and friends) to be present in the inspected repository, so a bare temp repo can never pass it \u2014 that was a mis-specification, not a defect. Rerun against /home/example/.agents itself: exit 0, printed the rules/schema_version JSON manifest with no error.",
+-      "note": "Coordinator corrected the original check 8 spec: the enforcement check requires the manifest's named owner files (scripts/enforcement_policy.pl and friends) to be present in the inspected repository, so a bare temp repo can never pass it \u2014 that was a mis-specification, not a defect. Rerun against <repo> itself: exit 0, printed the rules/schema_version JSON manifest with no error.",
 -      "output_summary": "JSON object with keys 'rules' (39 named rule owners each mapped to block/checkpoint check/advise) and 'schema_version':1; no error text."
 +      "final_line": "skill-contracts: PASS",
 +      "timeout_applied": "Bash tool whole-run cap 1800s"
@@ -410,7 +410,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"cases\": [{\"name\": \"empty input\", \"success_test\": \"test_empty_ok\", \"failure_test\": \"test_empty_refused\"}]}",
-+          "output_tail": "sing=green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:01:37Z"
++          "output_tail": "sing=green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:edges\nrecorded_at=2026-09-04T19:01:37Z"
 +        }
 +      ]
 +    },
@@ -489,7 +489,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"command\": [\"python3\", \"-m\", \"pytest\"], \"exit\": 0}",
-+          "output_tail": "eps_missing=review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:01:38Z"
++          "output_tail": "eps_missing=review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:green\nrecorded_at=2026-09-04T19:01:38Z"
 +        },
 +        {
 +          "label": "review-packet round 1",
@@ -529,7 +529,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"rounds\": [{\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"970da92d0f6bc004da1f72e81e6a56e6816cc49c7a080d1108ff3f182cc6d52d\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}]}",
-+          "output_tail": "g=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:01:38Z"
++          "output_tail": "g=R-1: missing null check\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:01:38Z"
 +        },
 +        {
 +          "label": "review-packet round 2",
@@ -569,7 +569,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"rounds\": [{\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"970da92d0f6bc004da1f72e81e6a56e6816cc49c7a080d1108ff3f182cc6d52d\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}, {\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"970da92d0f6bc004da1f72e81e6a56e6816cc49c7a080d1108ff3f182cc6d52d\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"fixed\"}, {\"id\": \"R-2\", \"text\": \"off-by-one in pager\", \"status\": \"open\"}]}]}",
-+          "output_tail": "=R-2: off-by-one in pager\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:01:39Z"
++          "output_tail": "=R-2: off-by-one in pager\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:01:39Z"
 +        },
 +        {
 +          "label": "review-packet round 3",
@@ -609,7 +609,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"rounds\": [{\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"970da92d0f6bc004da1f72e81e6a56e6816cc49c7a080d1108ff3f182cc6d52d\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}, {\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"970da92d0f6bc004da1f72e81e6a56e6816cc49c7a080d1108ff3f182cc6d52d\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"fixed\"}, {\"id\": \"R-2\", \"text\": \"off-by-one in pager\", \"status\": \"open\"}]}, {\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"970da92d0f6bc004da1f72e81e6a56e6816cc49c7a080d1108ff3f182cc6d52d\", \"findings\": [{\"id\":",
-+          "output_tail": ": error path never logged\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:01:40Z"
++          "output_tail": ": error path never logged\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:01:40Z"
 +        },
 +        {
 +          "label": "slice gate with open finding after round 3",
@@ -655,7 +655,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": null,
-+          "output_tail": "pt=missing\nbuild_steps=S-1:4/4\nbuild_steps_open_finding=R-3: error path never logged\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
++          "output_tail": "pt=missing\nbuild_steps=S-1:4/4\nbuild_steps_open_finding=R-3: error path never logged\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
 +        },
 +        {
 +          "label": "review round 4 attempt",
@@ -778,7 +778,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"mode\": \"logic\", \"packet_sha256\": \"77ddcc64a4c7cf265406a12ff438e1ce458f04e64eb847d4bb691cf25d2a9367\", \"fakes\": [{\"host\": \"api.example.test\", \"log\": \"features/steps-demo/receipts/fakes.log\"}], \"outside_calls\": [\"api.example.test\"], \"before\": [{\"path\": \"features/steps-demo/receipts/S-1-before.json\", \"sha256\": \"1cf6b90efac70c5d75928be8e0c88af7938b42594ce6c78f33a0057f70b77501\"}], \"after\": [{\"path\": \"features/steps-demo/receipts/S-1-after.json\", \"sha256\": \"71b8e35df4c1e6071c52fb23f534fa1d3ce303d5ba3901e2564075d2dac831ab\"}], \"edge_cases\": [\"empty input\"]}",
-+          "output_tail": ": error path never logged\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:verify\nrecorded_at=2026-09-04T19:01:41Z"
++          "output_tail": ": error path never logged\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:verify\nrecorded_at=2026-09-04T19:01:41Z"
 +        },
 +        {
 +          "label": "verify-packet S-1",
@@ -818,7 +818,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"mode\": \"logic\", \"packet_sha256\": \"77ddcc64a4c7cf265406a12ff438e1ce458f04e64eb847d4bb691cf25d2a9367\", \"fakes\": [{\"host\": \"api.example.test\", \"log\": \"features/steps-demo/receipts/fakes.log\"}], \"outside_calls\": [\"api.example.test\"], \"before\": [{\"path\": \"features/steps-demo/receipts/S-1-before.json\", \"sha256\": \"1cf6b90efac70c5d75928be8e0c88af7938b42594ce6c78f33a0057f70b77501\"}], \"after\": [{\"path\": \"features/steps-demo/receipts/S-1-after.json\", \"sha256\": \"71b8e35df4c1e6071c52fb23f534fa1d3ce303d5ba3901e2564075d2dac831ab\"}], \"edge_cases\": [\"empty input\"]}",
-+          "output_tail": ": error path never logged\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:verify\nrecorded_at=2026-09-04T19:01:41Z"
++          "output_tail": ": error path never logged\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:verify\nrecorded_at=2026-09-04T19:01:41Z"
 +        }
 +      ]
 +    },
@@ -838,7 +838,7 @@ index c97ea77..e2ee3a3 100644
 +        },
 +        {
 +          "ok": true,
-+          "text": "unchanged old clone passes (exit=0): gsta.page\u001b[39m\n\u001b[90m\ud83d\udc96 Support jscpd project \u2192 https://opencollective.com/jscpd\u001b[39m\nproject-gate: clones PASS\nbounded-run: receipt exe=/home/example/.agents/node_modules/jscpd/run-jscpd.js@sha256:5e0067677b5c0e55506f59a74611b9fc85cccd19cc4fe98d4139e864d36799c4 cwd=/private/tmp/hardeng-verify.naLOIn/dart argv_count=11 argv_sha256=43247a8c0a59da51e2905e3254eaebc3dce35409d8262c84b9b00bc8790d74b5 exit=0"
++          "text": "unchanged old clone passes (exit=0): gsta.page\u001b[39m\n\u001b[90m\ud83d\udc96 Support jscpd project \u2192 https://opencollective.com/jscpd\u001b[39m\nproject-gate: clones PASS\nbounded-run: receipt exe=<repo>/node_modules/jscpd/run-jscpd.js@sha256:5e0067677b5c0e55506f59a74611b9fc85cccd19cc4fe98d4139e864d36799c4 cwd=/private/tmp/hardeng-verify.naLOIn/dart argv_count=11 argv_sha256=43247a8c0a59da51e2905e3254eaebc3dce35409d8262c84b9b00bc8790d74b5 exit=0"
 +        },
 +        {
 +          "ok": true,
@@ -846,7 +846,7 @@ index c97ea77..e2ee3a3 100644
 +        },
 +        {
 +          "ok": true,
-+          "text": "output names the new pair:  add https://github.com/kucherenko/jscpd --skill dry-refactoring\u001b[90m\u001b[22m\n\u001b[90m\ud83c\udfa9 New: Gangsta Agents \u2014 discipline your AI coding \u2192 gangsta.page\u001b[39m\n\u001b[90m\ud83d\udc96 Support jscpd project \u2192 https://opencollective.com/jscpd\u001b[39m\nproject-gate: clones FAIL\nERROR: jscpd found 1 new clones not in the baseline (allowed: 0)\nbounded-run: receipt exe=/home/example/.agents/node_modules/jscpd/run-jscpd.js@sha256:5e0067677b5c0e55506f59a74611b9fc85cccd19cc4fe98d4139e864d36799c4 cwd=/private/tmp/hardeng-verify.naLOIn/dart argv_count=11 argv_sha256=43247a8c0a59da51e2905e3254eaebc3dce35409d8262c84b9b00bc8790d74b5 exit=1"
++          "text": "output names the new pair:  add https://github.com/kucherenko/jscpd --skill dry-refactoring\u001b[90m\u001b[22m\n\u001b[90m\ud83c\udfa9 New: Gangsta Agents \u2014 discipline your AI coding \u2192 gangsta.page\u001b[39m\n\u001b[90m\ud83d\udc96 Support jscpd project \u2192 https://opencollective.com/jscpd\u001b[39m\nproject-gate: clones FAIL\nERROR: jscpd found 1 new clones not in the baseline (allowed: 0)\nbounded-run: receipt exe=<repo>/node_modules/jscpd/run-jscpd.js@sha256:5e0067677b5c0e55506f59a74611b9fc85cccd19cc4fe98d4139e864d36799c4 cwd=/private/tmp/hardeng-verify.naLOIn/dart argv_count=11 argv_sha256=43247a8c0a59da51e2905e3254eaebc3dce35409d8262c84b9b00bc8790d74b5 exit=1"
 +        },
 +        {
 +          "ok": true,
@@ -891,7 +891,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": null,
-+          "output_tail": "\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\u001b[39m\n\u001b[90mFound 1 clones.\u001b[39m\n\u001b[90mtime: 5.748ms\u001b[39m\n\n\u001b[90m\ud83d\udca1 Auto-refactor with AI: \u001b[1m\u001b[39mnpx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring\u001b[90m\u001b[22m\n\u001b[90m\ud83c\udfa9 New: Gangsta Agents \u2014 discipline your AI coding \u2192 gangsta.page\u001b[39m\n\u001b[90m\ud83d\udc96 Support jscpd project \u2192 https://opencollective.com/jscpd\u001b[39m\nproject-gate: clones PASS\n\nbounded-run: receipt exe=/home/example/.agents/node_modules/jscpd/run-jscpd.js@sha256:5e0067677b5c0e55506f59a74611b9fc85cccd19cc4fe98d4139e864d36799c4 cwd=/private/tmp/hardeng-verify.naLOIn/dart argv_count=11 argv_sha256=43247a8c0a59da51e2905e3254eaebc3dce35409d8262c84b9b00bc8790d74b5 exit=0"
++          "output_tail": "\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\u001b[39m\n\u001b[90mFound 1 clones.\u001b[39m\n\u001b[90mtime: 5.748ms\u001b[39m\n\n\u001b[90m\ud83d\udca1 Auto-refactor with AI: \u001b[1m\u001b[39mnpx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring\u001b[90m\u001b[22m\n\u001b[90m\ud83c\udfa9 New: Gangsta Agents \u2014 discipline your AI coding \u2192 gangsta.page\u001b[39m\n\u001b[90m\ud83d\udc96 Support jscpd project \u2192 https://opencollective.com/jscpd\u001b[39m\nproject-gate: clones PASS\n\nbounded-run: receipt exe=<repo>/node_modules/jscpd/run-jscpd.js@sha256:5e0067677b5c0e55506f59a74611b9fc85cccd19cc4fe98d4139e864d36799c4 cwd=/private/tmp/hardeng-verify.naLOIn/dart argv_count=11 argv_sha256=43247a8c0a59da51e2905e3254eaebc3dce35409d8262c84b9b00bc8790d74b5 exit=0"
 +        },
 +        {
 +          "label": "push phase after a new clone pair was added",
@@ -909,7 +909,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 4,
 +          "stdin": null,
-+          "output_tail": " 2 clones (1 new).\u001b[39m\n\u001b[90mtime: 12.664ms\u001b[39m\n\n\u001b[90m\ud83d\udca1 Auto-refactor with AI: \u001b[1m\u001b[39mnpx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring\u001b[90m\u001b[22m\n\u001b[90m\ud83c\udfa9 New: Gangsta Agents \u2014 discipline your AI coding \u2192 gangsta.page\u001b[39m\n\u001b[90m\ud83d\udc96 Support jscpd project \u2192 https://opencollective.com/jscpd\u001b[39m\nproject-gate: clones FAIL\n\nERROR: jscpd found 1 new clones not in the baseline (allowed: 0)\nbounded-run: receipt exe=/home/example/.agents/node_modules/jscpd/run-jscpd.js@sha256:5e0067677b5c0e55506f59a74611b9fc85cccd19cc4fe98d4139e864d36799c4 cwd=/private/tmp/hardeng-verify.naLOIn/dart argv_count=11 argv_sha256=43247a8c0a59da51e2905e3254eaebc3dce35409d8262c84b9b00bc8790d74b5 exit=1"
++          "output_tail": " 2 clones (1 new).\u001b[39m\n\u001b[90mtime: 12.664ms\u001b[39m\n\n\u001b[90m\ud83d\udca1 Auto-refactor with AI: \u001b[1m\u001b[39mnpx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring\u001b[90m\u001b[22m\n\u001b[90m\ud83c\udfa9 New: Gangsta Agents \u2014 discipline your AI coding \u2192 gangsta.page\u001b[39m\n\u001b[90m\ud83d\udc96 Support jscpd project \u2192 https://opencollective.com/jscpd\u001b[39m\nproject-gate: clones FAIL\n\nERROR: jscpd found 1 new clones not in the baseline (allowed: 0)\nbounded-run: receipt exe=<repo>/node_modules/jscpd/run-jscpd.js@sha256:5e0067677b5c0e55506f59a74611b9fc85cccd19cc4fe98d4139e864d36799c4 cwd=/private/tmp/hardeng-verify.naLOIn/dart argv_count=11 argv_sha256=43247a8c0a59da51e2905e3254eaebc3dce35409d8262c84b9b00bc8790d74b5 exit=1"
 +        }
 +      ],
 +      "gate_output_lines_naming_the_pair": [
@@ -926,7 +926,7 @@ index c97ea77..e2ee3a3 100644
 +      "checks": [
 +        {
 +          "ok": true,
-+          "text": "fallow version/cache: fallow 3.22.0\nverified: yes (cache hit at /home/example/.agents/node_modules/@fallow-cli/darwin-arm64/.fallow-verified); fallow 3.22.0 signed"
++          "text": "fallow version/cache: fallow 3.22.0\nverified: yes (cache hit at <repo>/node_modules/@fallow-cli/darwin-arm64/.fallow-verified); fallow 3.22.0 signed"
 +        },
 +        {
 +          "ok": true,
@@ -938,7 +938,7 @@ index c97ea77..e2ee3a3 100644
 +        },
 +        {
 +          "ok": true,
-+          "text": "failure names the function `score`: ps\":[{\"id\":\"complexity-breakdown\",\"command\":\"fallow health --complexity-breakdown\",\"reason\":\"see per-decision-point contributions for a hotspot\"}],\"_meta\":{\"telemetry\":{\"analysis_run_id\":\"run_ccb2689403fbf8bf\"}}}\n\nbounded-run: receipt exe=/home/example/.agents/node_modules/fallow/bin/fallow@sha256:871e25151b2f6e78d0e7964e4f5af7efaf4a3ee9045406e73a6188605c564942 cwd=/private/tmp/hardeng-verify.naLOIn/ts argv_count=6 argv_sha256=60e459fbc0d37020e2b284a0d98ba1f27c8a88927f5214138080d150dce81829 exit=1"
++          "text": "failure names the function `score`: ps\":[{\"id\":\"complexity-breakdown\",\"command\":\"fallow health --complexity-breakdown\",\"reason\":\"see per-decision-point contributions for a hotspot\"}],\"_meta\":{\"telemetry\":{\"analysis_run_id\":\"run_ccb2689403fbf8bf\"}}}\n\nbounded-run: receipt exe=<repo>/node_modules/fallow/bin/fallow@sha256:871e25151b2f6e78d0e7964e4f5af7efaf4a3ee9045406e73a6188605c564942 cwd=/private/tmp/hardeng-verify.naLOIn/ts argv_count=6 argv_sha256=60e459fbc0d37020e2b284a0d98ba1f27c8a88927f5214138080d150dce81829 exit=1"
 +        }
 +      ],
 +      "notes": [
@@ -954,7 +954,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": "/private/tmp/hardeng-verify.naLOIn/ts",
 +          "exit": 0,
 +          "stdin": null,
-+          "output_tail": "fallow 3.22.0\nverified: yes (cache hit at /home/example/.agents/node_modules/@fallow-cli/darwin-arm64/.fallow-verified); fallow 3.22.0 signed"
++          "output_tail": "fallow 3.22.0\nverified: yes (cache hit at <repo>/node_modules/@fallow-cli/darwin-arm64/.fallow-verified); fallow 3.22.0 signed"
 +        },
 +        {
 +          "label": "push phase on the simple function (baseline pass)",
@@ -1005,7 +1005,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 4,
 +          "stdin": null,
-+          "output_tail": "project-gate: fallow FAIL\n\n<json report tail, 3712 chars, omitted>\n\nbounded-run: receipt exe=/home/example/.agents/node_modules/fallow/bin/fallow@sha256:871e25151b2f6e78d0e7964e4f5af7efaf4a3ee9045406e73a6188605c564942 cwd=/private/tmp/hardeng-verify.naLOIn/ts argv_count=6 argv_sha256=60e459fbc0d37020e2b284a0d98ba1f27c8a88927f5214138080d150dce81829 exit=1"
++          "output_tail": "project-gate: fallow FAIL\n\n<json report tail, 3712 chars, omitted>\n\nbounded-run: receipt exe=<repo>/node_modules/fallow/bin/fallow@sha256:871e25151b2f6e78d0e7964e4f5af7efaf4a3ee9045406e73a6188605c564942 cwd=/private/tmp/hardeng-verify.naLOIn/ts argv_count=6 argv_sha256=60e459fbc0d37020e2b284a0d98ba1f27c8a88927f5214138080d150dce81829 exit=1"
 +        }
 +      ],
 +      "gate_output_fragment_naming_the_function": "\"name\":\"score\",\"line\":1,\"col\":7,\"cyclomatic\":15,\"cognitive\":15,\"line_count\":13,\"param_count\":7,\"exceeded\":\"crap\",\"severity\":\"critical\",\"crap\":240.0,\"coverage_tier\":\"none\",\"coverage_source\":\"estimated\",\"actions\":[{\"type\":\"add-tests\",\"auto_fixable\":false,\"description\":\"Add test coverage for `score` to lower its CRAP score (coverage reduces risk even without refactoring)\",\"note\":\"CRAP = CC^2 * (1 - c",
@@ -1249,7 +1249,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"rounds\": [{\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"970da92d0f6bc004da1f72e81e6a56e6816cc49c7a080d1108ff3f182cc6d52d\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"open\"}]}, {\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"970da92d0f6bc004da1f72e81e6a56e6816cc49c7a080d1108ff3f182cc6d52d\", \"findings\": [{\"id\": \"R-1\", \"text\": \"missing null check\", \"status\": \"fixed\"}, {\"id\": \"R-2\", \"text\": \"off-by-one in pager\", \"status\": \"open\"}]}, {\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"970da92d0f6bc004da1f72e81e6a56e6816cc49c7a080d1108ff3f182cc6d52d\", \"findings\": [{\"id\":",
-+          "output_tail": "ssing\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:01:42Z"
++          "output_tail": "ssing\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-1:review\nrecorded_at=2026-09-04T19:01:42Z"
 +        },
 +        {
 +          "label": "slice gate S-1 with complete records",
@@ -1301,7 +1301,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": null,
-+          "output_tail": "receipt=missing\nbuild_steps=S-2:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
++          "output_tail": "receipt=missing\nbuild_steps=S-2:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
 +        },
 +        {
 +          "label": "S-2 edges",
@@ -1323,7 +1323,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"cases\": [{\"name\": \"second path\", \"success_test\": \"test_two_ok\", \"failure_test\": \"test_two_refused\"}]}",
-+          "output_tail": "sing=green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-2:edges\nrecorded_at=2026-09-04T19:01:45Z"
++          "output_tail": "sing=green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-2:edges\nrecorded_at=2026-09-04T19:01:45Z"
 +        },
 +        {
 +          "label": "S-2 green",
@@ -1345,7 +1345,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"command\": [\"python3\", \"-m\", \"pytest\"], \"exit\": 0}",
-+          "output_tail": "eps_missing=review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-2:green\nrecorded_at=2026-09-04T19:01:45Z"
++          "output_tail": "eps_missing=review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-2:green\nrecorded_at=2026-09-04T19:01:45Z"
 +        },
 +        {
 +          "label": "S-2 review-packet",
@@ -1385,7 +1385,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"rounds\": [{\"reviewer\": \"fresh subagent\", \"packet_sha256\": \"c0cdee96d33ed9afccdfb0e18e12cd565159a4973cc25e1bce85234267d7eba1\", \"findings\": []}]}",
-+          "output_tail": "uild_steps_missing=verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-2:review\nrecorded_at=2026-09-04T19:01:46Z"
++          "output_tail": "uild_steps_missing=verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-2:review\nrecorded_at=2026-09-04T19:01:46Z"
 +        },
 +        {
 +          "label": "verify-packet S-2",
@@ -1425,7 +1425,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"mode\": \"logic\", \"packet_sha256\": \"68fff43ce57972875b333d7344223d9bbddce15dd5391a0650f225e5f6417d49\", \"fakes\": [{\"host\": \"api.example.test\", \"log\": \"features/steps-demo/receipts/fakes.log\"}], \"outside_calls\": [\"api.example.test\"], \"before\": [{\"path\": \"features/steps-demo/receipts/S-2-before.json\", \"sha256\": \"1cf6b90efac70c5d75928be8e0c88af7938b42594ce6c78f33a0057f70b77501\"}], \"after\": [{\"path\": \"features/steps-demo/receipts/S-2-after.json\", \"sha256\": \"71b8e35df4c1e6071c52fb23f534fa1d3ce303d5ba3901e2564075d2dac831ab\"}], \"edge_cases\": [\"second path\"]}",
-+          "output_tail": "ssing\nbuild_steps=S-2:4/4\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-2:verify\nrecorded_at=2026-09-04T19:01:46Z"
++          "output_tail": "ssing\nbuild_steps=S-2:4/4\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice S-2 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=S-2:verify\nrecorded_at=2026-09-04T19:01:46Z"
 +        },
 +        {
 +          "label": "slice gate S-2",
@@ -1477,7 +1477,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": null,
-+          "output_tail": "ceipt=missing\nbuild_steps=full:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
++          "output_tail": "ceipt=missing\nbuild_steps=full:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green."
 +        },
 +        {
 +          "label": "full gate without full verify record",
@@ -1546,7 +1546,7 @@ index c97ea77..e2ee3a3 100644
 +          "cwd": null,
 +          "exit": 0,
 +          "stdin": "{\"mode\": \"logic\", \"packet_sha256\": \"184fdf8cd1c8e906242eee24976adc82de1f685791caadb967d6c0ccd278ee67\", \"fakes\": [{\"host\": \"api.example.test\", \"log\": \"features/steps-demo/receipts/fakes.log\"}], \"outside_calls\": [\"api.example.test\"], \"before\": [{\"path\": \"features/steps-demo/receipts/full-before.json\", \"sha256\": \"1cf6b90efac70c5d75928be8e0c88af7938b42594ce6c78f33a0057f70b77501\"}], \"after\": [{\"path\": \"features/steps-demo/receipts/full-after.json\", \"sha256\": \"71b8e35df4c1e6071c52fb23f534fa1d3ce303d5ba3901e2564075d2dac831ab\"}], \"edge_cases\": []}",
-+          "output_tail": "ng=edges, green, review\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=full:verify\nrecorded_at=2026-09-04T19:01:50Z"
++          "output_tail": "ng=edges, green, review\nhandoff=ready\nhandoff_root=/private/tmp/hardeng-verify2.Tba6Gh/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/hardeng-verify2.Tba6Gh/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/hardeng-verify2.Tba6Gh/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/hardeng-verify2.Tba6Gh/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=full:verify\nrecorded_at=2026-09-04T19:01:50Z"
 +        },
 +        {
 +          "label": "full review-packet",
@@ -2042,7 +2042,7 @@ index c97ea77..e2ee3a3 100644
    ],
 -  "overall_verdict": "PASS",
 -  "fail_reason": null,
--  "note": "Check 8 was corrected by the coordinator mid-task and rerun in-place against /home/example/.agents; results 1-7 unchanged from the original run."
+-  "note": "Check 8 was corrected by the coordinator mid-task and rerun in-place against <repo>; results 1-7 unchanged from the original run."
 +  "outside_calls": [],
 +  "outside_calls_evidence": {
 +    "hosts_reached_by_verification": [],
@@ -2172,7 +2172,7 @@ index fd7ab2e..453a6b4 100644
 +    "sha256": "8ff6a6f809c7e73427a18ce99d10713efe62b76f055cf38f74c21863f2de6e78"
 +  },
 +  "repository": {
-+    "root": "/home/example/.agents",
++    "root": "<repo>",
 +    "head": "16d48420ca8afa750eebc33f308d634398ef3c32",
 +    "tree": "4f922b4f0b19c3e496d31cd0a28b89895fe7ae6e",
 +    "status_short": [
@@ -2195,7 +2195,7 @@ index fd7ab2e..453a6b4 100644
 +    "exit": 0,
 +    "output": [
 +      "result=valid",
-+      "plan=/home/example/.agents/features/build-loop-records/PLAN.md",
++      "plan=<repo>/features/build-loop-records/PLAN.md",
 +      "token=sha256:6d412f27667f6038741c0a57274992dcf846dca1478598cfde21dc322b541ec7",
 +      "lifecycle_status=building",
 +      "approval_status=approved",
@@ -2209,10 +2209,10 @@ index fd7ab2e..453a6b4 100644
 +      "build_steps=full:1/4",
 +      "build_steps_missing=edges, green, review",
 +      "handoff=ready",
-+      "handoff_root=/home/example/.agents",
++      "handoff_root=<repo>",
 +      "handoff_branch=main",
 +      "handoff_plan=features/build-loop-records/PLAN.md",
-+      "handoff_prompt=Resume Hard Eng feature build-loop-records in /home/example/.agents: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /home/example/.agents` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /home/example/.agents --plan features/build-loop-records/PLAN.md`, then build slice none from features/build-loop-records/PLAN.md with he-build, one Implement/Verify loop until green."
++      "handoff_prompt=Resume Hard Eng feature build-loop-records in <repo>: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo <repo>` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo <repo> --plan features/build-loop-records/PLAN.md`, then build slice none from features/build-loop-records/PLAN.md with he-build, one Implement/Verify loop until green."
 +    ]
 +  },
 +  "planned_commands": [
@@ -2222,7 +2222,7 @@ index fd7ab2e..453a6b4 100644
      "python3 skills/he/scripts/plan_steps_regression.py",
      "python3 skills/deterministic-checks/scripts/project_gate_regression_check.py",
 -    "python3 skills/he/scripts/plan_state.py inspect --repo . --plan features/build-loop-records/PLAN.md",
--    "perl scripts/enforcement_policy.pl check . (run in /home/example/.agents itself; corrected spec, replacing the original bare-temp-repo variant)"
+-    "perl scripts/enforcement_policy.pl check . (run in <repo> itself; corrected spec, replacing the original bare-temp-repo variant)"
 +    "python3 skills/he/scripts/mutation_payload_regression.py",
 +    "python3 skills/he/scripts/external_claims_regression.py",
 +    "GIT_CONFIG_GLOBAL=/dev/null python3 scripts/check-skill-contracts.py",
@@ -2235,7 +2235,7 @@ index fd7ab2e..453a6b4 100644
 +  ],
 +  "constraints": [
 +    "no product file edits",
-+    "no state-changing git commands in /home/example/.agents",
++    "no state-changing git commands in <repo>",
 +    "no network",
 +    "mutants/ and .venv-mutation/ untouched"
    ]

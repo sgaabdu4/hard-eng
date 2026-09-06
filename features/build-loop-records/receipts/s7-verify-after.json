@@ -2,7 +2,7 @@
   "commands": [
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
@@ -10,11 +10,11 @@
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md"
       ],
       "exit": 0,
-      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=current\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n"
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:1fab74e73314b3dffc146aa445c30b27b210bdd27049c0f6c83373cff9c0a063\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=S-1\ncompleted_slices=none\nnext_action=Build the first vertical slice.\nslice_receipt=current\nbuild_steps=S-1:4/4\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice S-1 from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n"
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
@@ -28,12 +28,12 @@
         "active_slice=none"
       ],
       "exit": 0,
-      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n"
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:0/4\nbuild_steps_missing=edges, green, review, verify\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\n"
     },
     {
       "argv": [
         "/opt/homebrew/opt/python@3.14/bin/python3.14",
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--full"
       ],
@@ -42,7 +42,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "record-build",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
@@ -57,12 +57,12 @@
         "<stdin-payload>"
       ],
       "exit": 0,
-      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:1/4\nbuild_steps_missing=edges, green, review\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=full:verify\nrecorded_at=2026-09-02T23:29:48Z\n"
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=missing\nbuild_steps=full:1/4\nbuild_steps_missing=edges, green, review\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nrecorded_build=full:verify\nrecorded_at=2026-09-02T23:29:48Z\n"
     },
     {
       "argv": [
         "/opt/homebrew/opt/python@3.14/bin/python3.14",
-        "/home/example/.agents/skills/deterministic-checks/scripts/slice_gate.py",
+        "<repo>/skills/deterministic-checks/scripts/slice_gate.py",
         "run",
         "--full"
       ],
@@ -71,7 +71,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "build-report",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
@@ -79,11 +79,11 @@
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md"
       ],
       "exit": 0,
-      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=current\nbuild_steps=full:1/4\nbuild_steps_missing=edges, green, review\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 /home/example/.agents/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 /home/example/.agents/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nbuild_report=features/steps-demo/BUILD.md\n"
+      "output": "result=valid\nplan=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build/features/steps-demo/PLAN.md\ntoken=sha256:8107ab4213f3b235ec9a36382d70897bbf380735284d972e88848e7e4c532297\nlifecycle_status=building\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-build\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nfull_receipt=current\nbuild_steps=full:1/4\nbuild_steps_missing=edges, green, review\nhandoff=ready\nhandoff_root=/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build\nhandoff_branch=main\nhandoff_plan=features/steps-demo/PLAN.md\nhandoff_prompt=Resume Hard Eng feature steps-demo in /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build: run `python3 <repo>/skills/he/scripts/setup_state.py verify --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build` and `python3 <repo>/skills/he/scripts/plan_state.py inspect --repo /private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build --plan features/steps-demo/PLAN.md`, then build slice none from features/steps-demo/PLAN.md with he-build, one Implement/Verify loop until green.\nbuild_report=features/steps-demo/BUILD.md\n"
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
@@ -99,7 +99,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
@@ -117,7 +117,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
@@ -133,7 +133,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "checkpoint",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
@@ -151,7 +151,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "inspect",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-lypcdlnx/build",
@@ -163,7 +163,7 @@
     },
     {
       "argv": [
-        "/home/example/.agents/skills/he/scripts/plan_state.py",
+        "<repo>/skills/he/scripts/plan_state.py",
         "build-report",
         "--repo",
         "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s7-verify/s7-scratch-plan-86ygmz25/planonly",

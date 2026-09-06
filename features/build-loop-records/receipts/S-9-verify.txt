@@ -51,4 +51,4 @@ S-9 = external claim check: tool names in the brief and code-study must cite a f
 - Edit no product file; report defects, do not patch them.
 
 ## Evidence directory
-/home/example/.agents/features/build-loop-records/receipts
+<repo>/features/build-loop-records/receipts

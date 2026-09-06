@@ -6,7 +6,7 @@ Never talks to a real network."""
 import os
 import sys
 
-LOG_PATH = os.environ.get("S10_FAKE_GH_LOG", "/home/example/.agents/features/build-loop-records/receipts/s10-fake-gh.log")
+LOG_PATH = os.environ.get("S10_FAKE_GH_LOG", "<repo>/features/build-loop-records/receipts/s10-fake-gh.log")
 
 
 def main():

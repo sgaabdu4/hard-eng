@@ -1,6 +1,6 @@
 {
   "evidence": [
-    "2026-09-03 client-repository a-feature: filter bar, row status control and toast built under ux_reference = n/a, no screen proof at any gate; slice_gate.media_error returned None whenever ux_reference was n/a",
+    "2026-09-03 a client repository, a feature that adds controls to an existing screen: filter bar, row status control and toast built under ux_reference = n/a, no screen proof at any gate; slice_gate.media_error returned None whenever ux_reference was n/a",
     "2026-09-03 af5346a: slice_gate.ui_path + media_error refuse --e2e not-applicable for any changed non-test .tsx/.jsx/.dart path"
   ],
   "failure": "a slice that changed UI files passed the slice gate with --e2e not-applicable because the brief said ux_reference = n/a",

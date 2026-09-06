@@ -1,6 +1,6 @@
 {
   "evidence": [
-    "A client plan_state.py approve returned authorization requires a runtime session id before using the supplied session; the subsequent execution_evidence.py authorize removed approval-challenge.json while authorization.json kept the prior challenge and session."
+    "plan_state.py approve in a client repository returned authorization requires a runtime session id before using the supplied session; the subsequent execution_evidence.py authorize removed approval-challenge.json while authorization.json kept the prior challenge and session."
   ],
   "failure": "Fresh Ready-to-build approval for an already-approved brief routed through the initial approval command, then a reauthorization interruption consumed the one-use challenge without replacing the stale authorization receipt.",
   "helper": {

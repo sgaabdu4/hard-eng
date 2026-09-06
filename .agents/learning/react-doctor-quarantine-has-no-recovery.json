@@ -1,6 +1,6 @@
 {
   "evidence": [
-    "client .git/hard-eng-source-tree.poison.json 2026-09-03T22:29 with terminal receipt hard-eng-terminal-6059-6b80397aa710a550.json 22:30; gates-sales.log exit=4 error=source tree is quarantined after interrupted React Doctor; react.doctor/docs/reference/cli-reference lists only report and output options for scan, no fix or write flag; marker copied to .git/hard-eng/cleared-quarantine-2026-09-03.poison.json then removed"
+    "a client repository's .git/hard-eng-source-tree.poison.json 2026-09-03T22:29 with terminal receipt hard-eng-terminal-6059-6b80397aa710a550.json 22:30; the slice gate log exit=4 error=source tree is quarantined after interrupted React Doctor; react.doctor/docs/reference/cli-reference lists only report and output options for scan, no fix or write flag; marker copied to .git/hard-eng/cleared-quarantine-2026-09-03.poison.json then removed"
   ],
   "failure": "A React Doctor gate run ended with its terminal receipt written but the parent gate died before clearing the poison marker; every later gate refused with source tree is quarantined, restore the exact worktree, while legitimate work had already changed the tree, so the only exit offered was destroying peer work; one fixer did that, and the orchestrator later removed the marker by hand",
   "helper": {

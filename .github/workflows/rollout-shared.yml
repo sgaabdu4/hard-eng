@@ -45,11 +45,20 @@ jobs:
           GH_TOKEN: ${{ secrets.HARD_ENG_ROLLOUT_TOKEN }}
         run: gh auth setup-git
 
-      - name: Configure the rollout rollout git identity
+      - name: Configure the rollout git identity
         shell: bash
+        env:
+          ROLLOUT_GIT_NAME: ${{ vars.ROLLOUT_GIT_NAME }}
+          ROLLOUT_GIT_EMAIL: ${{ vars.ROLLOUT_GIT_EMAIL }}
         run: |
-          git config --global user.name "sgaabdu4"
-          git config --global user.email "rollout@example.invalid"
+          set -euo pipefail
+          if [ -z "$ROLLOUT_GIT_NAME" ] || [ -z "$ROLLOUT_GIT_EMAIL" ]; then
+            echo "rollout-shared: set repository variables ROLLOUT_GIT_NAME and ROLLOUT_GIT_EMAIL" >&2
+            exit 1
+          fi
+          echo "::add-mask::$ROLLOUT_GIT_EMAIL"
+          git config --global user.name "$ROLLOUT_GIT_NAME"
+          git config --global user.email "$ROLLOUT_GIT_EMAIL"
 
       - name: Roll out to every repository
         shell: bash

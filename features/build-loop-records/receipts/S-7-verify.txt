@@ -51,4 +51,4 @@ S-7 = build closing question, `BUILD.md` summary, and `handoff=ship` block at gr
 - Edit no product file; report defects, do not patch them.
 
 ## Evidence directory
-/home/example/.agents/features/build-loop-records/receipts
+<repo>/features/build-loop-records/receipts

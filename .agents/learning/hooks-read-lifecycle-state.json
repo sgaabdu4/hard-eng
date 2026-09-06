@@ -1,6 +1,6 @@
 {
   "evidence": [
-    "2026-09-03 client-repository commit dfbd795c8 (origin/main 4bc520c8e): 45 product files, PLAN.md at building S-1, review and verify records missing, no slice gate receipt, no green"
+    "2026-09-03 a client repository: 45 product files, PLAN.md at building S-1, review and verify records missing, no slice gate receipt, no green"
   ],
   "failure": "a session committed and pushed six unreceipted slices of product code while its Feature Brief said building; no commit or push hook read the plan state",
   "helper": {
