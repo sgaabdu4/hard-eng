@@ -3,7 +3,7 @@
   "packet": "features/build-loop-records/receipts/full-verify.txt",
   "packet_sha256": "573be243b60ae275a117188dca6cf4a4ae86f0d7900a6a72c077217dbd40a317",
   "recorded_at": "2026-09-04T19:47:26.617108+00:00",
-  "head": "16d48420ca8afa750eebc33f308d634398ef3c32",
+  "head": "1003d040fea64d6c2f82452fd6af59961eee5641",
   "tree": "4f922b4f0b19c3e496d31cd0a28b89895fe7ae6e",
   "head_unchanged": true,
   "tree_unchanged": true,
