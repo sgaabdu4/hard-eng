@@ -1,83 +1,146 @@
 #!/usr/bin/env python3
-"""Prove shared wiring: one repository pins a release and commits the bootstrap, shim, hooks, and rules;
-every fresh clone then downloads exactly that release at session start and stays guarded until it does."""
+"""Prove the no-version shared wiring: one repository fetches the newest Hard Eng main into its own copy and
+commits the bootstrap, guard shim, and rules; every fresh clone, worktree, and machine then fetches or reuses
+that copy at session start and stays guarded until it does."""
 
 from __future__ import annotations
 
-import hashlib
+import importlib.util
 import json
 import os
 import shutil
+import stat
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
-from repository_native_contract_loader import load_contract
-
-ROOT = Path(__file__).resolve().parents[1]
+AGENTS_ROOT = Path(__file__).resolve().parents[1]
+DENY = '"permissionDecision":"deny"'
+IDENTITY = ["-c", "user.name=proof", "-c", "user.email=proof@example.invalid"]
+TOOLS = ("bash", "sh", "git", "python3", "dirname", "grep", "sed", "tr", "tail", "cat", "mkdir", "rm", "chmod")
 SHARED_FILES = (
     "AGENTS.override.md",
     ".github/instructions/hard-eng.instructions.md",
     ".hard-eng/bootstrap.sh",
     ".hard-eng/hook.sh",
     ".codex/hooks.json",
-    ".codex/config.toml",
     ".claude/settings.json",
     ".github/hooks/hard-eng.json",
+    ".codex/config.toml",
 )
-PRIVATE_FILES = (
-    "CLAUDE.local.md",
-    ".agents/hard-eng/current",
-    ".agents/hard-eng/last-check.json",
-    ".agents/hard-eng/wiring.json",
-    ".claude/skills/plain-english",
-    ".claude/output-styles/plain-english.md",
+GLOBAL_PAYLOAD_FILES = (
+    "AGENTS.md",
+    "scripts/hooks/agent-hook.sh",
+    "agents/he-learn/claude.md",
+    "agents/he-learn/codex.toml",
+    "agents/he-learn/copilot.agent.md",
+    "output-styles/plain-english.md",
+    "skills/plain-english/SKILL.md",
+    "bin/hard-eng",
 )
-DENY = '"permissionDecision":"deny"'
-RESOLVE_TOPLEVEL = "$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git rev-parse --show-toplevel)"
 OLD_PYTHON3 = '#!/bin/sh\ncase "$1" in\n  -c) exit 1 ;;\nesac\necho "Python 3.11.9"\n'
-FAKE_BOOTSTRAP_OK = r"""#!/usr/bin/env bash
-set -eu
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
-mkdir -p "$root/.agents/hard-eng/current/scripts/hooks"
-cat <<'GUARD' > "$root/.agents/hard-eng/current/scripts/hooks/agent-hook.sh"
-#!/usr/bin/env bash
-exit 0
-GUARD
-chmod +x "$root/.agents/hard-eng/current/scripts/hooks/agent-hook.sh"
-echo "fake bootstrap: healed" >&2
-"""
-FAKE_BOOTSTRAP_FAIL = r"""#!/usr/bin/env bash
-echo "fake bootstrap: contacting release host" >&2
-echo 'fake bootstrap: cannot reach "origin" \ retry later' >&2
-exit 1
-"""
+
+
+def load_contract():
+    spec = importlib.util.spec_from_file_location(
+        "contract", AGENTS_ROOT / "scripts/repository-native-contract-check.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 contract = load_contract()
-TAG = contract.TAG
-ASSET_NAMES = (f"hard-eng-{TAG}.tar.gz", f"hard-eng-{TAG}.manifest.json")
+write = contract.write
+link = contract.link
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def run(command: list[str], *, cwd: Path, env: dict[str, str], check: bool = True) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        command, cwd=cwd, env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False
+    )
+    if check and result.returncode != 0:
+        raise AssertionError(f"{command} failed ({result.returncode}):\n{result.stdout}\n{result.stderr}")
+    return result
 
 
-def downloads(assets: Path, name: str = "downloads", *, tamper: bool = False) -> str:
-    """Lay the release assets out the way GitHub serves them: <base>/<tag>/<asset>."""
-    root = assets.parent / name
-    target = root / TAG
-    if not target.exists():
-        target.mkdir(parents=True)
-        for asset in ASSET_NAMES:
-            shutil.copy2(assets / asset, target / asset)
-        if tamper:
-            with (target / ASSET_NAMES[0]).open("ab") as handle:
-                handle.write(b"tampered")
-    return root.as_uri()
+def git(cwd: Path, env: dict[str, str], *arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return run(["git", *IDENTITY, *arguments], cwd=cwd, env=env, check=check)
 
 
-def git_status(repository: Path) -> set[str]:
-    output = contract.run(["git", "status", "--short", "--untracked-files=all"], cwd=repository).stdout
+def base_env(home: Path, url: str) -> dict[str, str]:
+    home.mkdir(parents=True, exist_ok=True)
+    env = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+    env["HOME"] = str(home)
+    env["HARD_ENG_SOURCE_URL"] = url
+    env["GIT_CONFIG_GLOBAL"] = "/dev/null"
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return env
+
+
+def tools_path(root: Path, *, exclude: tuple[str, ...] = ()) -> Path:
+    tools = root / "tools"
+    tools.mkdir(parents=True, exist_ok=True)
+    for name in TOOLS:
+        if name in exclude:
+            continue
+        target = shutil.which(name)
+        if target is not None:
+            (tools / name).symlink_to(target)
+    return tools
+
+
+def make_source(root: Path, env: dict[str, str]) -> str:
+    excludes = [".git", "node_modules", ".venv-mutation", "mutants", ".a", "features", "__pycache__"]
+    run(["rsync", "-a", *(f"--exclude={name}" for name in excludes), f"{AGENTS_ROOT}/", f"{root}/"], cwd=root, env=env)
+    git(root, env, "init", "-q", "-b", "main")
+    git(root, env, "add", "-A")
+    git(root, env, "commit", "-q", "-m", "one")
+    return git(root, env, "rev-parse", "HEAD").stdout.strip()
+
+
+def make_consumer(path: Path, env: dict[str, str], marker: dict, extra: dict[str, str] | None = None) -> None:
+    path.mkdir(parents=True)
+    git(path, env, "init", "-q", "-b", "main")
+    (path / "AGENTS.md").write_text("# Repository Rules\n\n- Keep it simple.\n", encoding="utf-8")
+    (path / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
+    (path / "hard-eng.gates.json").write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
+    for relative, content in (extra or {}).items():
+        write(path / relative, content)
+    git(path, env, "add", "-A")
+    git(path, env, "commit", "-q", "-m", "init")
+
+
+def launcher(source: Path, repo: Path, env: dict[str, str], *arguments: str, check: bool = True):
+    command = [sys.executable, str(source / "bin/hard-eng"), *arguments, "--repo", str(repo), "--home", env["HOME"]]
+    return run(command, cwd=repo, env=env, check=check)
+
+
+def state(source: Path, repo: Path, env: dict[str, str], *arguments: str) -> dict:
+    return json.loads(launcher(source, repo, env, *arguments, "--json").stdout)
+
+
+def hook(repo: Path, env: dict[str, str], agent: str, event: str, *, cwd: Path | None = None) -> str:
+    return run(["bash", str(repo / ".hard-eng/hook.sh"), agent, event], cwd=cwd or repo, env=env).stdout
+
+
+def bootstrap(repo: Path, env: dict[str, str], mode: str, *, check: bool = True):
+    return run(["bash", str(repo / ".hard-eng/bootstrap.sh"), mode], cwd=repo, env=env, check=check)
+
+
+def current_commit(repo: Path) -> str:
+    link = repo / ".agents/hard-eng/current"
+    assert link.is_symlink(), link
+    target = os.readlink(link)
+    assert target.startswith("checkouts/"), target
+    return target.split("/", 1)[1]
+
+
+def git_status(repo: Path, env: dict[str, str]) -> set[str]:
+    output = git(repo, env, "status", "--short", "--untracked-files=all").stdout
     return {line[3:] for line in output.splitlines() if line.strip()}
 
 
@@ -85,403 +148,301 @@ def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def hook_commands(value: dict, event: str) -> list[str]:
-    commands: list[str] = []
-    for entry in value.get("hooks", {}).get(event, []):
-        inner = entry.get("hooks") if isinstance(entry.get("hooks"), list) else [entry]
-        for hook in inner:
-            commands.extend(str(hook[key]) for key in ("command", "bash") if key in hook)
-    return commands
+def hook_settings(command: str) -> str:
+    value = {
+        "hooks": {"PreToolUse": [{"hooks": [{"command": command, "type": "command"}]}]},
+        "outputStyle": "Plain English",
+    }
+    return json.dumps(value, indent=2) + "\n"
 
 
-def cli(repository: Path, home: Path, env: dict[str, str], *arguments: str, check: bool = True):
-    command = [str(contract.LAUNCHER), *arguments, "--repo", str(repository), "--home", str(home)]
-    return contract.run(command, cwd=repository, environment=env, check=check)
-
-
-def state(repository: Path, home: Path, env: dict[str, str], *arguments: str) -> dict:
-    return json.loads(cli(repository, home, env, *arguments, "--json").stdout)
-
-
-def shim(clone: Path, env: dict[str, str], agent: str, event: str, *, cwd: Path | None = None) -> str:
-    result = contract.run(["bash", str(clone / ".hard-eng/hook.sh"), agent, event], cwd=cwd or clone, environment=env)
-    return result.stdout
-
-
-def bootstrap(clone: Path, env: dict[str, str], mode: str, *, check: bool = True):
-    return contract.run(["bash", ".hard-eng/bootstrap.sh", mode], cwd=clone, environment=env, check=check)
-
-
-def clone_env(env: dict[str, str], home: Path, base_url: str) -> dict[str, str]:
-    home.mkdir(parents=True, exist_ok=True)
-    value = dict(env)
-    value["HOME"] = str(home)
-    value["HARD_ENG_RELEASE_BASE_URL"] = base_url
-    return value
-
-
-def assert_share(root: Path, env: dict[str, str], assets: Path) -> Path:
-    repository = root / "origin"
-    contract.init_repository(repository, marked=True)
-    home = root / "home"
-    home.mkdir()
-    shared = state(repository, home, env, "prepare", "--shared", "--agent", "claude")
-    assert shared["mode"] == "shared" and shared["version"] == TAG, shared
-    assert shared["last_check"] == "pinned-verified" and shared["wiring"] == "verified", shared
-    policy = read_json(repository / "hard-eng.gates.json")["hard_eng"]
-    assert policy["channel"] == "prerelease" and policy["wiring"] == "shared", policy
-    assert policy["pin"] == {
-        "tag": TAG,
-        "archive_sha256": sha256(assets / ASSET_NAMES[0]),
-        "manifest_sha256": sha256(assets / ASSET_NAMES[1]),
-    }, policy["pin"]
-    for relative in SHARED_FILES:
-        assert (repository / relative).is_file(), relative
-    assert (repository / ".codex/config.toml").read_text(encoding="utf-8") == (
-        "project_doc_max_bytes = 65536 # Generated by Hard Eng\n"
+def build_healthy_global(home: Path) -> None:
+    root = home / ".agents"
+    for relative in GLOBAL_PAYLOAD_FILES:
+        source = AGENTS_ROOT / relative
+        write(root / relative, source.read_bytes(), stat.S_IMODE(source.stat().st_mode))
+    for source in sorted((AGENTS_ROOT / "runtime/repository_native").glob("*.py")):
+        write(
+            root / "runtime/repository_native" / source.name, source.read_bytes(), stat.S_IMODE(source.stat().st_mode)
+        )
+    link(home / ".local/bin/hard-eng", root / "bin/hard-eng")
+    write(home / ".claude/CLAUDE.md", f"@{(root / 'AGENTS.md').resolve()}\n")
+    link(home / ".claude/skills", root / "skills")
+    link(home / ".claude/output-styles", root / "output-styles")
+    link(home / ".claude/agents/he-learn.md", root / "agents/he-learn/claude.md")
+    write(
+        home / ".claude/settings.json", hook_settings(f"bash {root / 'scripts/hooks/agent-hook.sh'} claude pretooluse")
     )
-    for relative in (".hard-eng/bootstrap.sh", ".hard-eng/hook.sh"):
-        script = repository / relative
-        assert os.access(script, os.X_OK), relative
-        text = script.read_text(encoding="utf-8")
-        assert text.startswith("#!/usr/bin/env bash\n# Generated by Hard Eng"), relative
-    override = (repository / "AGENTS.override.md").read_text(encoding="utf-8")
-    assert contract.REPOSITORY_MARKER in override and contract.HARD_ENG_MARKER in override
-    assert "--repo --shared" in override
-    instructions = (repository / ".github/instructions/hard-eng.instructions.md").read_text(encoding="utf-8")
-    assert instructions.startswith('---\napplyTo: "**"\n---\n') and contract.HARD_ENG_MARKER in instructions
-    claude = read_json(repository / ".claude/settings.json")
-    assert claude["outputStyle"] == "Plain English"
-    assert claude["hooks"]["SessionStart"][0]["matcher"] == "startup|resume|clear"
-    assert claude["hooks"]["SessionStart"][0]["hooks"][0]["timeout"] == 300
-    assert hook_commands(claude, "SessionStart") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/bootstrap.sh" claude']
-    assert hook_commands(claude, "PreToolUse") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/hook.sh" claude pretooluse']
-    codex = read_json(repository / ".codex/hooks.json")
-    assert codex["hooks"]["SessionStart"][0]["matcher"] == "startup|resume"
-    assert hook_commands(codex, "SessionStart") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/bootstrap.sh" codex']
-    assert hook_commands(codex, "PreToolUse") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/hook.sh" codex pretooluse']
-    copilot = read_json(repository / ".github/hooks/hard-eng.json")
-    assert copilot["version"] == 1 and copilot["hooks"]["sessionStart"][0]["timeoutSec"] == 300
-    assert hook_commands(copilot, "sessionStart") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/bootstrap.sh" copilot']
-    assert hook_commands(copilot, "preToolUse") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/hook.sh" copilot pretooluse']
-    for relative in PRIVATE_FILES:
-        assert (repository / relative).exists() or (repository / relative).is_symlink(), relative
-    assert not (repository / ".claude/settings.local.json").exists()
-    exclude = contract.git_exclude(repository).read_text(encoding="utf-8")
-    assert "/CLAUDE.local.md\n" in exclude and "/.agents/hard-eng/\n" in exclude
-    assert "/.claude/skills/plain-english\n" in exclude
-    assert "/AGENTS.override.md" not in exclude and "/.claude/settings.json" not in exclude
-    assert git_status(repository) == {*SHARED_FILES, "hard-eng.gates.json"}, git_status(repository)
-    digest = contract.tree_digest(repository)
-    again = state(repository, home, env, "prepare", "--agent", "codex")
-    assert again["mode"] == "shared" and again["last_check"] == "pinned-verified", again
-    repeated = state(repository, home, env, "prepare", "--shared", "--agent", "copilot")
-    assert repeated["mode"] == "shared", repeated
-    assert contract.tree_digest(repository) == digest, "repeated prepare changed the repository"
-    verified = state(repository, home, env, "status", "--agent", "claude")
-    assert verified["mode"] == "shared" and verified["wiring"] == "verified", verified
-    contract.commit_all(repository, [*SHARED_FILES, "hard-eng.gates.json"])
-    assert git_status(repository) == set()
-    return repository
+    write(home / ".claude.json", json.dumps({"mcpServers": {"codebase-memory": {}}}))
 
 
-def assert_clone(root: Path, env: dict[str, str], repository: Path, base_url: str) -> None:
+def assert_share_and_clone(root: Path, env: dict[str, str], source: Path, first: str) -> Path:
+    shared_marker = {"schema_version": 1, "hard_eng": {"schema_version": 1, "wiring": "shared"}}
+    origin = root / "origin"
+    make_consumer(origin, env, shared_marker)
+    home = root / "home"
+    shared_env = base_env(home, env["HARD_ENG_SOURCE_URL"])
+    shared = state(source, origin, shared_env, "update", "--agent", "codex")
+    assert shared["mode"] == "shared" and shared["identity"] == first and shared["wiring"] == "verified", shared
+    assert current_commit(origin) == first
+    for relative in SHARED_FILES:
+        assert (origin / relative).is_file(), relative
+    assert read_json(origin / "hard-eng.gates.json")["hard_eng"] == shared_marker["hard_eng"]
+    assert git_status(origin, env) == set(SHARED_FILES), git_status(origin, env)
+    git(origin, env, "add", "-A")
+    git(origin, env, "commit", "-q", "-m", "share hard eng")
+    print("share: PASS")
+
     clone = root / "clone"
-    contract.run(["git", "clone", "-q", str(repository), str(clone)], cwd=root)
-    home = root / "clone-home"
-    broken_env = clone_env(env, home, (root / "unreachable").as_uri())
-    env = clone_env(env, home, base_url)
-    denied = shim(clone, broken_env, "claude", "pretooluse")
-    assert denied.startswith('{"hookSpecificOutput":{"hookEventName":"PreToolUse",') and DENY in denied, denied
-    reason = json.loads(denied)["hookSpecificOutput"]["permissionDecisionReason"]
-    assert "not downloaded" in reason and "bash .hard-eng/bootstrap.sh claude" in reason, reason
-    assert "could not download" in reason, reason
-    assert shim(clone, broken_env, "claude", "posttooluse") == "" and shim(clone, broken_env, "claude", "stop") == ""
-    copilot_denied = shim(clone, broken_env, "copilot", "pretooluse")
-    assert copilot_denied.startswith('{"permissionDecision":"deny"'), copilot_denied
+    git(root, env, "clone", "-q", str(origin), str(clone))
+    clone_home = root / "clone-home"
+    dead = base_env(clone_home, "file://" + str(root / "missing"))
+    live = base_env(clone_home, env["HARD_ENG_SOURCE_URL"])
+    denied = hook(clone, dead, "claude", "pretooluse")
+    assert DENY in denied and "bash .hard-eng/bootstrap.sh claude" in denied and "could not reach" in denied, denied
+    assert hook(clone, dead, "claude", "posttooluse") == "" and hook(clone, dead, "claude", "stop") == ""
     assert not (clone / ".agents/hard-eng/current").exists()
+    command = read_json(clone / ".claude/settings.json")["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
     subdirectory = clone / "nested/deeper"
     subdirectory.mkdir(parents=True)
-    command = hook_commands(read_json(clone / ".claude/settings.json"), "PreToolUse")[0]
-    from_subdirectory = contract.run(["bash", "-c", command], cwd=subdirectory, environment=broken_env).stdout
-    assert DENY in from_subdirectory, from_subdirectory
-    inherited = {**broken_env, "GIT_DIR": str(repository / ".git"), "GIT_WORK_TREE": str(repository)}
-    from_inherited_env = contract.run(["bash", "-c", command], cwd=subdirectory, environment=inherited).stdout
-    assert DENY in from_inherited_env, from_inherited_env
-    assert git_status(clone) == set()
-    first = bootstrap(clone, env, "claude")
-    assert "downloaded and verified Hard Eng" in first.stderr, first.stderr
-    output = json.loads(first.stdout)["hookSpecificOutput"]
+    nested = run(["bash", "-c", command], cwd=subdirectory, env=dead).stdout
+    assert DENY in nested, nested
+    inherited = {**dead, "GIT_DIR": str(source / ".git"), "GIT_WORK_TREE": str(source)}
+    from_inherited = run(["bash", "-c", command], cwd=subdirectory, env=inherited).stdout
+    assert DENY in from_inherited, from_inherited
+    assert git_status(clone, env) == set(), git_status(clone, env)
+    print("fresh-clone-denied: PASS")
+
+    started = bootstrap(clone, live, "claude")
+    assert "Hard Eng is now at " + first[:12] in started.stderr, started.stderr
+    output = json.loads(started.stdout)["hookSpecificOutput"]
     assert output["hookEventName"] == "SessionStart" and output["reloadSkills"] is True
-    assert contract.HARD_ENG_MARKER in output["additionalContext"]
-    release = clone / ".agents/hard-eng/releases" / TAG
-    assert (release / ".hard-eng-release.json").is_file() and (release / "bin/hard-eng").is_file()
-    assert os.readlink(clone / ".agents/hard-eng/current") == f"releases/{TAG}"
-    last_check = read_json(clone / ".agents/hard-eng/last-check.json")
-    assert last_check["pin"] == read_json(clone / "hard-eng.gates.json")["hard_eng"]["pin"]
-    assert last_check["last_result"] == "pinned-verified" and last_check["active_version"] == TAG
-    for relative in PRIVATE_FILES:
-        assert (clone / relative).exists() or (clone / relative).is_symlink(), relative
-    assert git_status(clone) == set(), git_status(clone)
-    second = bootstrap(clone, env, "claude")
-    assert second.stdout == "" and "downloaded" not in second.stderr, (second.stdout, second.stderr)
-    assert shim(clone, env, "claude", "pretooluse") == ""
-    assert bootstrap(clone, env, "codex").stdout == ""
-    verified = state(clone, home, env, "status", "--agent", "claude")
-    assert verified["mode"] == "shared" and verified["wiring"] == "verified", verified
-    assert verified["last_check"] == "pinned-verified" and verified["version"] == TAG, verified
-    prepared = state(clone, home, env, "prepare", "--agent", "copilot")
-    assert prepared["mode"] == "shared" and prepared["last_check"] == "pinned-verified", prepared
-    with (release / "AGENTS.md").open("ab") as handle:
-        handle.write(b"\ntampered\n")
-    repaired = bootstrap(clone, env, "download")
-    assert "downloaded and verified Hard Eng" in repaired.stderr, repaired.stderr
-    assert b"tampered" not in (release / "AGENTS.md").read_bytes()
-    shutil.rmtree(release)
-    release.write_text("stale")
-    replaced = bootstrap(clone, env, "download")
-    assert "downloaded and verified Hard Eng" in replaced.stderr, replaced.stderr
-    assert (release / ".hard-eng-release.json").is_file()
-    shutil.rmtree(clone / ".agents/hard-eng")
-    via_launcher = state(clone, home, env, "prepare", "--agent", "claude")
-    assert via_launcher["mode"] == "shared" and (clone / ".agents/hard-eng/current").is_symlink(), via_launcher
-    assert git_status(clone) == set(), git_status(clone)
+    assert current_commit(clone) == first
+    assert hook(clone, live, "claude", "pretooluse") == ""
+    status = state(source, clone, live, "status", "--agent", "claude")
+    assert status["mode"] == "shared" and status["identity"] == first and status["wiring"] == "verified", status
+    assert git_status(clone, env) == set(), "clone dirty"
+    print("first-fetch: PASS")
+
+    same = bootstrap(clone, live, "download")
+    assert "Hard Eng is now at" not in same.stderr, same.stderr
+    (source / "AGENTS.md").open("a", encoding="utf-8").write("\n- Newer rule.\n")
+    git(source, env, "commit", "-qam", "two")
+    second = git(source, env, "rev-parse", "HEAD").stdout.strip()
+    refreshed = bootstrap(clone, live, "codex")
+    assert "Hard Eng is now at " + second[:12] in refreshed.stderr, refreshed.stderr
+    assert current_commit(clone) == second
+    assert not (clone / ".agents/hard-eng/checkouts" / first).exists()
+    assert "Newer rule" in (clone / ".agents/hard-eng/current/AGENTS.md").read_text()
+    print("refresh: PASS")
+
+    kept = bootstrap(clone, dead, "download")
+    assert kept.returncode == 0 and "keeping Hard Eng " + second[:12] in kept.stderr, kept.stderr
+    assert current_commit(clone) == second
+    assert hook(clone, dead, "claude", "pretooluse") == ""
+    print("offline-keep: PASS")
+
+    guard = clone / ".agents/hard-eng/global-guard"
+    guard.write_text("codex\n", encoding="utf-8")
+    assert hook(clone, dead, "codex", "pretooluse") == ""
+    assert hook(clone, dead, "claude", "pretooluse") == ""
+    guard.unlink()
+    print("global-guard-toggle: PASS")
+
+    legacy = clone / ".agents/hard-eng"
+    (legacy / "releases/v0.1.0-alpha.gabc").mkdir(parents=True)
+    (legacy / "last-check.json").write_text("{}", encoding="utf-8")
+    (legacy / "current").unlink()
+    (legacy / "current").symlink_to("releases/v0.1.0-alpha.gabc")
+    healed = bootstrap(clone, live, "download")
+    assert "Hard Eng is now at " + second[:12] in healed.stderr, healed.stderr
+    assert not (legacy / "releases").exists() and not (legacy / "last-check.json").exists()
+    assert current_commit(clone) == second
+    print("legacy-cache: PASS")
+    return origin
 
 
-def assert_worktree_self_heal(root: Path, env: dict[str, str], repository: Path) -> None:
-    """A fresh linked worktree has no session-downloaded cache: the shim must heal itself, not just deny."""
-    root.mkdir(parents=True, exist_ok=True)
-    before = contract.tree_digest(repository / ".agents")
+def assert_worktree_self_heal(
+    root: Path, env: dict[str, str], origin: Path, source: Path, live: dict[str, str]
+) -> None:
+    root.mkdir(parents=True)
     healed = root / "healed-worktree"
-    contract.run(["git", "worktree", "add", "-q", "--detach", str(healed)], cwd=repository, environment=env)
-    guard = healed / ".agents/hard-eng/current/scripts/hooks/agent-hook.sh"
+    git(origin, env, "worktree", "add", "-q", "--detach", str(healed))
     assert not (healed / ".agents").exists()
-    assert shim(healed, env, "claude", "posttooluse") == "" and shim(healed, env, "claude", "stop") == ""
-    assert not (healed / ".agents").exists(), "posttooluse/stop passthrough must not trigger a heal"
-    contract.write(healed / ".hard-eng/bootstrap.sh", FAKE_BOOTSTRAP_OK, 0o755)
-    allowed = shim(healed, env, "claude", "pretooluse")
+    assert hook(healed, live, "claude", "posttooluse") == "" and hook(healed, live, "claude", "stop") == ""
+    assert not (healed / ".agents").exists(), "posttooluse/stop passthrough must not trigger a fetch"
+    allowed = hook(healed, live, "claude", "pretooluse")
     assert allowed == "", allowed
-    assert guard.is_file() and os.access(guard, os.X_OK)
-    assert str(guard.resolve()).startswith(str(healed.resolve())), "heal must write under the worktree's own root"
-    assert shim(healed, env, "claude", "pretooluse") == ""
-    assert contract.tree_digest(repository / ".agents") == before, "healing a worktree must not touch the primary cache"
-
-    failing = root / "failing-worktree"
-    contract.run(["git", "worktree", "add", "-q", "--detach", str(failing)], cwd=repository, environment=env)
-    contract.write(failing / ".hard-eng/bootstrap.sh", FAKE_BOOTSTRAP_FAIL, 0o755)
-    denied = shim(failing, env, "claude", "pretooluse")
-    parsed = json.loads(denied)["hookSpecificOutput"]
-    assert parsed["permissionDecision"] == "deny", parsed
-    reason = parsed["permissionDecisionReason"]
-    assert "not downloaded" in reason and "bash .hard-eng/bootstrap.sh claude" in reason, reason
-    assert 'cannot reach "origin" \\ retry later' in reason, reason
-    assert not (failing / ".agents/hard-eng/current").exists()
-    assert shim(failing, env, "claude", "posttooluse") == "" and shim(failing, env, "claude", "stop") == ""
+    newest = git(source, env, "rev-parse", "HEAD").stdout.strip()
+    assert current_commit(healed) == newest
+    assert hook(healed, live, "claude", "pretooluse") == ""
+    print("worktree-self-heal: PASS")
 
 
-def assert_download_failure(root: Path, env: dict[str, str], repository: Path, tampered_url: str) -> None:
-    root.mkdir(parents=True, exist_ok=True)
-    for name, base_url, message in (
-        ("offline", (root / "nowhere").as_uri(), "could not download"),
-        ("tampered", tampered_url, "does not match the digest pinned"),
-    ):
-        clone = root / name
-        contract.run(["git", "clone", "-q", str(repository), str(clone)], cwd=root)
-        home = root / f"{name}-home"
-        failed_env = clone_env(env, home, base_url)
-        before = contract.tree_digest(clone)
-        failed = bootstrap(clone, failed_env, "claude", check=False)
-        assert failed.returncode == 1 and message in failed.stderr, (failed.returncode, failed.stderr)
-        assert failed.stdout == ""
-        assert not (clone / ".agents/hard-eng/current").exists()
-        assert contract.tree_digest(clone) == before, "a failed bootstrap changed the clone"
-        launcher = cli(clone, home, failed_env, "prepare", "--agent", "claude", check=False)
-        assert launcher.returncode == 1 and "could not be downloaded" in launcher.stderr, launcher.stderr
-        assert DENY in shim(clone, failed_env, "claude", "pretooluse")
-        assert git_status(clone) == set(), git_status(clone)
-
-
-def assert_python_version_gate(root: Path, env: dict[str, str], repository: Path, base_url: str) -> None:
-    root.mkdir(parents=True, exist_ok=True)
+def assert_python_version_gate(root: Path, env: dict[str, str], origin: Path, url: str) -> None:
+    root.mkdir(parents=True)
     clone = root / "clone"
-    contract.run(["git", "clone", "-q", str(repository), str(clone)], cwd=root)
-    home = root / "home"
+    git(root, env, "clone", "-q", str(origin), str(clone))
     old_python = root / "old-python-bin"
-    old_python.mkdir()
-    contract.write(old_python / "python3", OLD_PYTHON3, 0o755)
-    old_env = clone_env(env, home, base_url)
-    old_env["PATH"] = os.pathsep.join((str(old_python), old_env["PATH"]))
-    before = contract.tree_digest(clone)
-    failed = bootstrap(clone, old_env, "claude", check=False)
+    write(old_python / "python3", OLD_PYTHON3, 0o755)
+    gate_env = base_env(root / "home", url)
+    gate_env["PATH"] = os.pathsep.join((str(old_python), str(tools_path(root))))
+    failed = bootstrap(clone, gate_env, "claude", check=False)
     assert failed.returncode == 1 and failed.stdout == "", (failed.returncode, failed.stdout)
     assert "hard-eng bootstrap: python3 3.12 or newer is required" in failed.stderr, failed.stderr
     assert not (clone / ".agents/hard-eng/current").exists()
-    assert contract.tree_digest(clone) == before, "a version-gated bootstrap changed the clone"
-    assert git_status(clone) == set(), git_status(clone)
+    assert git_status(clone, env) == set(), git_status(clone, env)
+    print("python-version-gate: PASS")
 
 
-def assert_merge(root: Path, env: dict[str, str]) -> None:
-    repository = root / "origin"
-    contract.init_repository(repository, marked=True)
+def assert_git_missing_gate(root: Path, env: dict[str, str], origin: Path, url: str) -> None:
+    root.mkdir(parents=True)
+    clone = root / "clone"
+    git(root, env, "clone", "-q", str(origin), str(clone))
+    gate_env = base_env(root / "home", url)
+    gate_env["PATH"] = str(tools_path(root, exclude=("git",)))
+    failed = bootstrap(clone, gate_env, "claude", check=False)
+    assert failed.returncode == 1 and failed.stdout == "", (failed.returncode, failed.stdout)
+    assert "hard-eng bootstrap: git is required" in failed.stderr, failed.stderr
+    assert not (clone / ".agents/hard-eng/current").exists()
+    print("git-missing-gate: PASS")
+
+
+def assert_merge_update_uninstall(root: Path, env: dict[str, str], source: Path, url: str) -> None:
+    root.mkdir(parents=True)
+    marker = {"schema_version": 1, "hard_eng": {"schema_version": 1, "wiring": "shared"}}
+    origin = root / "origin"
     foreign_claude = {
         "permissions": {"allow": ["Bash(ls:*)"]},
         "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "echo foreign"}]}]},
     }
     foreign_codex = {"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": "echo codex-foreign"}]}]}}
-    foreign_config = "editor = 'vim'\n\n[mcp_servers.codebase-memory]\ncommand = 'memory'\n"
-    contract.write(repository / ".claude/settings.json", json.dumps(foreign_claude, indent=2) + "\n")
-    contract.write(repository / ".codex/hooks.json", json.dumps(foreign_codex) + "\n")
-    contract.write(repository / ".codex/config.toml", foreign_config)
-    contract.commit_all(repository, [".claude/settings.json", ".codex/hooks.json", ".codex/config.toml"])
+    foreign_config = "editor = 'vim'\n"
+    extra = {
+        ".claude/settings.json": json.dumps(foreign_claude) + "\n",
+        ".codex/hooks.json": json.dumps(foreign_codex) + "\n",
+        ".codex/config.toml": foreign_config,
+    }
+    make_consumer(origin, env, marker, extra)
     home = root / "home"
-    home.mkdir()
-    shared = state(repository, home, env, "prepare", "--shared", "--agent", "claude")
+    origin_env = base_env(home, url)
+    shared = state(source, origin, origin_env, "update", "--agent", "claude")
     assert shared["mode"] == "shared", shared
-    claude = read_json(repository / ".claude/settings.json")
+    claude = read_json(origin / ".claude/settings.json")
     assert claude["permissions"] == foreign_claude["permissions"]
-    assert claude["hooks"]["PreToolUse"][0] == foreign_claude["hooks"]["PreToolUse"][0]
     assert len(claude["hooks"]["PreToolUse"]) == 2 and len(claude["hooks"]["SessionStart"]) == 1
-    codex = read_json(repository / ".codex/hooks.json")
+    codex = read_json(origin / ".codex/hooks.json")
     assert codex["hooks"]["PreToolUse"][0] == foreign_codex["hooks"]["PreToolUse"][0]
     assert len(codex["hooks"]["PreToolUse"]) == 2
-    config = (repository / ".codex/config.toml").read_text(encoding="utf-8")
-    assert config.startswith("editor = 'vim'\n\nproject_doc_max_bytes = 65536"), config
-    assert "Generated by Hard Eng" in config, config
-    assert config.endswith("[mcp_servers.codebase-memory]\ncommand = 'memory'\n"), config
-    assert git_status(repository) == {*SHARED_FILES, "hard-eng.gates.json"}, git_status(repository)
-    foreign = root / "foreign"
-    contract.init_repository(foreign, marked=True)
-    contract.write(foreign / "AGENTS.override.md", "# Someone else's override\n")
-    contract.commit_all(foreign, ["AGENTS.override.md"])
-    before = contract.tree_digest(foreign)
-    failed = cli(foreign, home, env, "prepare", "--shared", "--agent", "claude", check=False)
-    assert failed.returncode == 1 and "has another owner: AGENTS.override.md" in failed.stderr, failed.stderr
-    assert contract.tree_digest(foreign) == before, "a refused share changed the repository"
-    assert git_status(foreign) == set()
-    large = root / "large-config"
-    contract.init_repository(large, marked=True)
-    contract.write(large / ".codex/config.toml", "project_doc_max_bytes = 100000\n")
-    contract.commit_all(large, [".codex/config.toml"])
-    shared_large = state(large, home, env, "prepare", "--shared", "--agent", "claude")
-    assert shared_large["mode"] == "shared", shared_large
-    assert (large / ".codex/config.toml").read_text(encoding="utf-8") == "project_doc_max_bytes = 100000\n"
-    assert ".codex/config.toml" not in git_status(large), git_status(large)
+    config = (origin / ".codex/config.toml").read_text(encoding="utf-8")
+    assert config.startswith("editor = 'vim'") and "project_doc_max_bytes = 65536" in config, config
+    assert git_status(origin, env) == set(SHARED_FILES), git_status(origin, env)
+    git(origin, env, "add", "-A")
+    git(origin, env, "commit", "-q", "-m", "share")
+    print("merge: PASS")
+
+    foreign_owner = root / "foreign-owner"
+    make_consumer(foreign_owner, env, marker, {"AGENTS.override.md": "# Someone else's override\n"})
+    foreign_env = base_env(root / "foreign-home", url)
+    refused = launcher(source, foreign_owner, foreign_env, "update", "--agent", "claude", check=False)
+    assert refused.returncode == 1 and "has another owner: AGENTS.override.md" in refused.stderr, refused.stderr
+    assert git_status(foreign_owner, env) == set()
+    assert not (foreign_owner / ".agents").exists()
+
     small = root / "small-config"
-    contract.init_repository(small, marked=True)
-    contract.write(small / ".codex/config.toml", "project_doc_max_bytes = 100\n")
-    contract.commit_all(small, [".codex/config.toml"])
-    before_small = contract.tree_digest(small)
-    failed_small = cli(small, home, env, "prepare", "--shared", "--agent", "claude", check=False)
+    make_consumer(small, env, marker, {".codex/config.toml": "project_doc_max_bytes = 100\n"})
+    small_env = base_env(root / "small-home", url)
+    failed_small = launcher(source, small, small_env, "update", "--agent", "claude", check=False)
     assert failed_small.returncode == 1 and "project_doc_max_bytes = 100" in failed_small.stderr, failed_small.stderr
-    assert contract.tree_digest(small) == before_small, "a refused share changed the repository"
-    assert git_status(small) == set()
+    assert git_status(small, env) == set()
+    print("merge-refusals: PASS")
+
+    (source / "AGENTS.md").open("a", encoding="utf-8").write("\n- Even newer.\n")
+    git(source, env, "commit", "-qam", "three")
+    newest = git(source, env, "rev-parse", "HEAD").stdout.strip()
+    updated = state(source, origin, origin_env, "update", "--agent", "claude")
+    assert updated["mode"] == "shared" and updated["identity"] == newest, updated
+    assert current_commit(origin) == newest
+    git(origin, env, "add", "-A")
+    git(origin, env, "commit", "-q", "-m", "update")
+    print("update: PASS")
+
+    uninstalled = launcher(source, origin, origin_env, "uninstall")
+    assert "removed the Hard Eng wiring" in uninstalled.stdout, uninstalled.stdout
+    assert read_json(origin / ".claude/settings.json") == foreign_claude
+    assert read_json(origin / ".codex/hooks.json") == foreign_codex
+    assert (origin / ".codex/config.toml").read_text(encoding="utf-8") == foreign_config
+    assert "hard_eng" not in read_json(origin / "hard-eng.gates.json")
+    assert not (origin / ".hard-eng").exists() and not (origin / ".agents").exists()
+    assert git_status(origin, env) == {*SHARED_FILES, "hard-eng.gates.json"}, git_status(origin, env)
+    again = launcher(source, origin, origin_env, "uninstall")
+    assert "Hard Eng is not installed in this repository" in again.stdout, again.stdout
+    print("uninstall: PASS")
 
 
-def assert_global_machine(root: Path, env: dict[str, str], repository: Path, assets: Path, base_url: str) -> None:
-    root.mkdir(parents=True, exist_ok=True)
+def assert_global_machine(root: Path, env: dict[str, str], origin: Path, source: Path, url: str) -> None:
+    root.mkdir(parents=True)
     home = root / "home"
-    contract.install_global(home, assets / "payload", agents=("claude",))
-    agents_bin = root / "agents-bin"
-    contract.fake_agents(agents_bin, ("claude",))
-    machine_env = clone_env(env, home, base_url)
-    machine_env["PATH"] = os.pathsep.join((str(agents_bin), machine_env["PATH"]))
+    build_healthy_global(home)
     clone = root / "clone"
-    contract.run(["git", "clone", "-q", str(repository), str(clone)], cwd=root)
-    prepared = state(clone, home, machine_env, "prepare", "--agent", "claude")
-    assert prepared["mode"] == "shared" and "global Hard Eng guard" in prepared["last_check"], prepared
-    assert (clone / ".agents/hard-eng/current").is_symlink()
-    assert (clone / ".agents/hard-eng/global-guard").read_text(encoding="utf-8") == "claude\n"
-    assert shim(clone, machine_env, "claude", "pretooluse") == ""
-    assert git_status(clone) == set(), git_status(clone)
-    verified = state(clone, home, machine_env, "status", "--agent", "claude")
-    assert verified["wiring"] == "verified; the global Hard Eng guard checks tool calls", verified
-    codex = state(clone, home, machine_env, "prepare", "--agent", "codex")
-    assert codex["mode"] == "shared" and "global Hard Eng is broken" in codex["last_check"], codex
-    assert (clone / ".agents/hard-eng/global-guard").read_text(encoding="utf-8") == "claude\n"
-    shutil.rmtree(home / ".agents")
-    (home / ".local/bin/hard-eng").unlink()
-    again = state(clone, home, machine_env, "prepare", "--agent", "claude")
-    assert again["mode"] == "shared" and "global" not in again["last_check"], again
-    assert not (clone / ".agents/hard-eng/global-guard").exists()
-
-
-def assert_update_and_uninstall(root: Path, assets: Path, release: dict[str, object]) -> None:
-    root.mkdir(parents=True, exist_ok=True)
-    _, newer = contract.release_assets(assets / "newer", "b" * 40)
-    newer_tag = str(newer["tag_name"])
-    fake_bin = root / "fake-bin"
-    fake_bin.mkdir()
-    contract.fake_gh(fake_bin, [release])
-    env = contract.environment(fake_bin, assets)
-    repository = root / "origin"
-    contract.init_repository(repository, marked=True)
-    foreign = {
-        "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "echo foreign"}]}]}
-    }
-    foreign_config = "[mcp_servers.codebase-memory]\ncommand = 'memory'\n"
-    contract.write(repository / ".claude/settings.json", json.dumps(foreign) + "\n")
-    contract.write(repository / ".codex/config.toml", foreign_config)
-    contract.commit_all(repository, [".claude/settings.json", ".codex/config.toml"])
-    home = root / "home"
-    home.mkdir()
-    assert state(repository, home, env, "prepare", "--shared", "--agent", "claude")["version"] == TAG
-    contract.commit_all(repository, [*SHARED_FILES, "hard-eng.gates.json"])
-    contract.fake_gh(fake_bin, [newer, release])
-    unchanged = state(repository, home, env, "prepare", "--agent", "claude")
-    assert unchanged["version"] == TAG and git_status(repository) == set(), unchanged
-    updated = state(repository, home, env, "update", "--shared", "--agent", "claude")
-    assert updated["mode"] == "shared" and updated["version"] == newer_tag, updated
-    assert read_json(repository / "hard-eng.gates.json")["hard_eng"]["pin"]["tag"] == newer_tag
-    assert git_status(repository) == {"hard-eng.gates.json"}, git_status(repository)
-    assert os.readlink(repository / ".agents/hard-eng/current") == f"releases/{newer_tag}"
-    contract.commit_all(repository, ["hard-eng.gates.json"])
-    clone = root / "clone"
-    contract.run(["git", "clone", "-q", str(repository), str(clone)], cwd=root)
-    assert cli(clone, home, env, "uninstall", "--shared").stdout.startswith("removed the shared Hard Eng wiring")
-    assert git_status(clone) == {*SHARED_FILES, "hard-eng.gates.json"}, git_status(clone)
-    assert read_json(clone / ".claude/settings.json") == foreign
-    assert "pin" not in read_json(clone / "hard-eng.gates.json")["hard_eng"]
-    refused = cli(repository, home, env, "uninstall", check=False)
-    assert refused.returncode == 1 and "uninstall --shared" in refused.stderr, refused.stderr
-    assert cli(repository, home, env, "uninstall", "--shared").stdout.startswith("removed the shared Hard Eng wiring")
-    kept_files = (".claude/settings.json", ".codex/config.toml")
-    for relative in SHARED_FILES:
-        assert (repository / relative).exists() == (relative in kept_files), relative
-    assert read_json(repository / ".claude/settings.json") == foreign
-    assert (repository / ".codex/config.toml").read_text(encoding="utf-8") == foreign_config
-    assert not (repository / ".hard-eng").exists() and not (repository / ".agents").exists()
-    assert not (repository / "CLAUDE.local.md").exists() and not (repository / ".claude/skills").exists()
-    policy = read_json(repository / "hard-eng.gates.json")["hard_eng"]
-    assert "pin" not in policy and "wiring" not in policy and policy["channel"] == "prerelease"
-    assert "# >>> hard-eng repository fallback >>>" not in contract.git_exclude(repository).read_text(encoding="utf-8")
-    assert cli(repository, home, env, "uninstall", "--shared").stdout.startswith(
-        "Hard Eng shared wiring is not installed"
+    git(root, env, "clone", "-q", str(origin), str(clone))
+    clone_env = base_env(home, url)
+    prepared = state(source, clone, clone_env, "prepare", "--agent", "claude")
+    assert prepared["mode"] == "shared" and "the global Hard Eng guard checks tool calls" in prepared["wiring"], (
+        prepared
     )
-    assert git_status(repository) == {*SHARED_FILES, "hard-eng.gates.json"}
+    assert (clone / ".agents/hard-eng/global-guard").read_text(encoding="utf-8") == "claude\n"
+    assert current_commit(clone) is not None
+    assert hook(clone, clone_env, "claude", "pretooluse") == ""
+    print("global-machine: PASS")
+
+
+def assert_old_marker_and_pass_through(root: Path, env: dict[str, str], source: Path, url: str) -> None:
+    root.mkdir(parents=True)
+    old = root / "old-marker"
+    old_marker = {
+        "schema_version": 1,
+        "hard_eng": {"schema_version": 1, "wiring": "shared", "channel": "prerelease", "pin": {"tag": "v0.1.0"}},
+    }
+    make_consumer(old, env, old_marker)
+    old_env = base_env(root / "old-home", url)
+    rejected = launcher(source, old, old_env, "prepare", "--agent", "codex", check=False)
+    assert rejected.returncode == 1 and "unsupported keys: channel, pin" in rejected.stderr, rejected.stderr
+    print("old-marker: PASS")
+
+    unmarked = root / "unmarked"
+    make_consumer(unmarked, env, {"schema_version": 1})
+    unmarked_env = base_env(root / "unmarked-home", url)
+    plain = launcher(source, unmarked, unmarked_env, "prepare", "--agent", "codex", check=False)
+    assert plain.returncode == 1 and "hard-eng install --repo" in plain.stderr, plain.stderr
+    status = state(source, unmarked, unmarked_env, "status", "--agent", "codex")
+    assert status["mode"] == "unprotected", status
+    print("unprotected: PASS")
 
 
 def main() -> int:
-    with tempfile.TemporaryDirectory(prefix="hard-eng-shared-") as temporary:
-        root = Path(temporary)
-        assets, release = contract.release_assets(root / "release")
-        fake_bin = root / "fake-bin"
-        fake_bin.mkdir()
-        contract.fake_gh(fake_bin, [release])
-        contract.fake_agents(fake_bin, ("codex",))
-        env = contract.environment(fake_bin, assets)
-        base_url = downloads(assets)
-        tampered_url = downloads(assets, "tampered", tamper=True)
-        repository = assert_share(root / "share", env, assets)
-        assert_clone(root / "share", env, repository, base_url)
-        assert_worktree_self_heal(root / "worktree-heal", env, repository)
-        assert_download_failure(root / "failure", env, repository, tampered_url)
-        assert_python_version_gate(root / "old-python", env, repository, base_url)
-        assert_merge(root / "merge", env)
-        assert_global_machine(root / "global", env, repository, assets, base_url)
-        assert_update_and_uninstall(root / "update", assets, release)
+    work = Path(tempfile.mkdtemp(prefix="hard-eng-shared-"))
+    try:
+        source = work / "source"
+        source.mkdir()
+        env = base_env(work / "rsync-home", "file://" + str(source))
+        first = make_source(source, env)
+        url = "file://" + str(source)
+
+        origin = assert_share_and_clone(work / "share", env, source, first)
+        live = base_env(work / "worktree-home", url)
+        assert_worktree_self_heal(work / "worktree-heal", env, origin, source, live)
+        assert_python_version_gate(work / "python-gate", env, origin, url)
+        assert_git_missing_gate(work / "git-gate", env, origin, url)
+        assert_merge_update_uninstall(work / "merge", env, source, url)
+        assert_global_machine(work / "global", env, origin, source, url)
+        assert_old_marker_and_pass_through(work / "markers", env, source, url)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
     print(
-        "repository-native-shared-contract: PASS share clone worktree-heal failure python-gate merge global "
-        "update uninstall"
+        "repository-native-shared-contract: PASS share fresh-clone-denied first-fetch refresh offline-keep "
+        "global-guard-toggle legacy-cache worktree-self-heal python-version-gate git-missing-gate merge "
+        "merge-refusals update uninstall global-machine old-marker unprotected"
     )
     return 0
 

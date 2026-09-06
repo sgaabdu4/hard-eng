@@ -85,7 +85,6 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Hard Eng is evolving very quickly",
         "npx -y github:sgaabdu4/hard-eng --global",
         "npx -y github:sgaabdu4/hard-eng --repo",
-        "npx -y github:sgaabdu4/hard-eng --repo --ignore",
         "`AGENTS.md` for the repository's own rules",
         "`CLAUDE.md` to load those rules",
         "`hard-eng.gates.json` to enable Hard Eng",

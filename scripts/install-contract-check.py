@@ -18,6 +18,17 @@ INSTALL = ROOT / "install.sh"
 AGENTS = ("codex", "claude", "copilot")
 LABELS = {"codex": "Codex", "claude": "Claude Code", "copilot": "Copilot CLI"}
 OWNER_FILES = ("AGENTS.md", "CLAUDE.md", "hard-eng.gates.json")
+SHARED_FILES = (
+    "AGENTS.override.md",
+    ".github/instructions/hard-eng.instructions.md",
+    ".hard-eng/bootstrap.sh",
+    ".hard-eng/hook.sh",
+    ".codex/hooks.json",
+    ".claude/settings.json",
+    ".github/hooks/hard-eng.json",
+    ".codex/config.toml",
+)
+SOURCE_EXCLUDES = (".git", "node_modules", ".venv-mutation", "mutants", ".a", "features", "__pycache__")
 FAKE_SETUP = f"""#!/usr/bin/env python3
 import importlib.util
 import os
@@ -43,20 +54,24 @@ run = contract.run
 write = contract.write
 commit_all = contract.commit_all
 init_repository = contract.init_repository
-release_assets = contract.release_assets
-fake_gh = contract.fake_gh
 fake_agents = contract.fake_agents
 environment = contract.environment
 tracked_digest = contract.tracked_digest
 tree_digest = contract.tree_digest
-assert_fallback_files = contract.assert_fallback_files
+install_global = contract.install_global
 
 
-def release(root: Path, commit: str) -> tuple[Path, dict[str, object]]:
-    source = root / "payload"
-    contract.payload(source)
-    write(source / "setup.sh", FAKE_SETUP, 0o755)
-    return release_assets(root, commit)
+def payload_with_setup(root: Path) -> Path:
+    contract.payload(root)
+    write(root / "setup.sh", FAKE_SETUP, 0o755)
+    return root
+
+
+def global_source(root: Path) -> Path:
+    payload_with_setup(root)
+    run(["git", "init", "-q", "-b", "main"], cwd=root)
+    commit_all(root, ["-A"])
+    return root
 
 
 def install(
@@ -76,8 +91,8 @@ def leftovers(home: Path) -> list[str]:
     )
 
 
-def global_version(home: Path) -> str:
-    return json.loads((home / ".agents/.hard-eng-release.json").read_text(encoding="utf-8"))["version"]
+def global_commit(home: Path) -> str:
+    return run(["git", "-C", str(home / ".agents"), "rev-parse", "HEAD"], cwd=home).stdout.strip()
 
 
 def index_names(repository: Path) -> list[str]:
@@ -92,15 +107,14 @@ def assert_arguments(root: Path, env: dict[str, str]) -> None:
     cwd = root / "arguments"
     cwd.mkdir(parents=True)
     helped = install(["--help"], cwd=cwd, env=env)
-    assert "--global" in helped.stdout and "--repo" in helped.stdout and "--ignore" in helped.stdout
-    assert "--shared" in helped.stdout
+    assert "--global" in helped.stdout and "--repo" in helped.stdout
+    assert "--ignore" not in helped.stdout and "--shared" not in helped.stdout
     for arguments, message in (
         ([], "choose --global or --repo"),
         (["--global", "--repo"], "choose one of --global or --repo"),
-        (["--global", "--ignore"], "--ignore works only with --repo"),
-        (["--global", "--shared"], "--shared works only with --repo"),
-        (["--repo", "--ignore", "--shared"], "choose one of --ignore or --shared"),
-        (["--bogus"], "unknown option"),
+        (["--repo", "--ignore"], "unknown option: --ignore"),
+        (["--repo", "--shared"], "unknown option: --shared"),
+        (["--bogus"], "unknown option: --bogus"),
     ):
         failed = install(arguments, cwd=cwd, env=env, check=False)
         assert failed.returncode == 1 and message in failed.stderr, (arguments, failed.stderr)
@@ -115,160 +129,180 @@ def assert_arguments(root: Path, env: dict[str, str]) -> None:
         assert "--global" in bootstrapped.stdout
 
 
-def assert_repository_fallback(root: Path, env: dict[str, str], tag: str) -> None:
+def source_repository(root: Path) -> str:
+    root.mkdir(parents=True)
+    excludes = tuple(f"--exclude={name}" for name in SOURCE_EXCLUDES)
+    run(["rsync", "-a", *excludes, f"{ROOT}/", f"{root}/"], cwd=root)
+    run(["git", "init", "-q", "-b", "main"], cwd=root)
+    commit_all(root, ["-A"])
+    return run(["git", "rev-parse", "HEAD"], cwd=root).stdout.strip()
+
+
+def shared_environment(home: Path, url: str, fake_bin: Path) -> dict[str, str]:
+    home.mkdir(parents=True, exist_ok=True)
+    value = {name: item for name, item in os.environ.items() if not name.startswith("GIT_")}
+    value["HOME"] = str(home)
+    value["HARD_ENG_SOURCE_URL"] = url
+    value["GIT_CONFIG_GLOBAL"] = "/dev/null"
+    value["GIT_CONFIG_NOSYSTEM"] = "1"
+    value["PYTHONDONTWRITEBYTECODE"] = "1"
+    value["PATH"] = os.pathsep.join((str(fake_bin), value["PATH"]))
+    return value
+
+
+def assert_repository_shared(root: Path, source: Path, commit: str, fake_bin: Path) -> None:
+    url = f"file://{source}"
+    all_names = sorted({*OWNER_FILES, *SHARED_FILES})
     repository = root / "repository"
-    home = root / "home"
-    init_repository(repository, marked=True)
-    write(repository / "notes.txt", "uncommitted\n")
-    before = tracked_digest(repository)
-    result = install(["--repo"], cwd=repository, env=home_env(env, home, root / "setup.log"))
-    assert f"Hard Eng repository setup: fallback ({tag}) in {repository}" in result.stdout, result.stdout
+    repository.mkdir(parents=True)
+    run(["git", "init", "-q", "-b", "main"], cwd=repository)
+    env = shared_environment(root / "home", url, fake_bin)
+    result = install(["--repo"], cwd=repository, env=env)
+    assert f"Hard Eng repository setup: shared ({commit}) in {repository}" in result.stdout, result.stdout
     for agent in AGENTS:
-        assert f"{LABELS[agent]}: ready (fallback)" in result.stdout, result.stdout
-    assert "were already tracked" in result.stdout
-    assert_fallback_files(repository, "?? notes.txt\n")
-    assert tracked_digest(repository) == before
-    again = install(["--repo"], cwd=repository, env=home_env(env, home, root / "setup.log"))
-    assert "fallback" in again.stdout and status_lines(repository) == ["?? notes.txt"]
+        assert f"{LABELS[agent]}: ready (shared)" in result.stdout, result.stdout
+    staged = f"Staged hard-eng.gates.json, {', '.join(SHARED_FILES)}; commit them so every clone fetches the newest Hard Eng."
+    assert staged in result.stdout, result.stdout
+    for name in (*OWNER_FILES, *SHARED_FILES):
+        assert (repository / name).is_file(), name
+    marker = json.loads((repository / "hard-eng.gates.json").read_text(encoding="utf-8"))
+    assert marker["hard_eng"] == {"schema_version": 1, "wiring": "shared"}, marker
+    assert (repository / "CLAUDE.md").read_text(encoding="utf-8") == "@AGENTS.md\n"
+    link = repository / ".agents/hard-eng/current"
+    assert link.is_symlink() and os.readlink(link) == f"checkouts/{commit}", os.readlink(link)
+    assert index_names(repository) == all_names
+    assert status_lines(repository) == [f"A  {name}" for name in all_names]
+    again = install(["--repo"], cwd=repository, env=env)
+    assert f"Hard Eng repository setup: shared ({commit}) in {repository}" in again.stdout, again.stdout
+    assert index_names(repository) == all_names
     nested = repository / "nested"
     nested.mkdir()
-    wrong = install(["--repo"], cwd=nested, env=home_env(env, home, root / "setup.log"), check=False)
-    assert wrong.returncode == 1 and "run this from the repository root" in wrong.stderr
+    wrong = install(["--repo"], cwd=nested, env=shared_environment(root / "nested-home", url, fake_bin), check=False)
+    assert wrong.returncode == 1 and "run this from the repository root" in wrong.stderr, wrong.stderr
     plain = root / "plain"
     plain.mkdir()
-    missing = install(["--repo"], cwd=plain, env=home_env(env, home, root / "setup.log"), check=False)
-    assert missing.returncode == 1 and "not inside a Git repository" in missing.stderr
+    missing = install(["--repo"], cwd=plain, env=shared_environment(root / "plain-home", url, fake_bin), check=False)
+    assert missing.returncode == 1 and "not inside a Git repository" in missing.stderr, missing.stderr
     assert not tuple(plain.iterdir())
 
 
-def assert_repository_fresh(root: Path, env: dict[str, str]) -> None:
-    for private in (False, True):
-        case = root / ("ignored" if private else "staged")
-        repository = case / "repository"
-        repository.mkdir(parents=True)
-        write(repository / "README.md", "fixture\n")
-        run(["git", "init", "-q", "-b", "main"], cwd=repository)
-        commit_all(repository, ["README.md"])
-        arguments = ["--repo", "--ignore"] if private else ["--repo"]
-        result = install(arguments, cwd=repository, env=home_env(env, case / "home", case / "setup.log"))
-        assert "Hard Eng repository setup: fallback" in result.stdout, result.stdout
-        for name in OWNER_FILES:
-            assert (repository / name).is_file(), name
-        marker = json.loads((repository / "hard-eng.gates.json").read_text(encoding="utf-8"))
-        assert marker["hard_eng"]["release_repository"] == "sgaabdu4/hard-eng"
-        assert (repository / "CLAUDE.md").read_text(encoding="utf-8") == "@AGENTS.md\n"
-        assert (repository / ".agents/hard-eng/current").is_symlink()
-        override = (repository / "AGENTS.override.md").read_text(encoding="utf-8")
-        assert override.index("# Repository Rules") < override.index(contract.HARD_ENG_MARKER)
-        for generated in ("CLAUDE.local.md", ".github/instructions/hard-eng.instructions.md", ".codex/hooks.json"):
-            assert (repository / generated).is_file(), generated
-        if private:
-            assert "Kept AGENTS.md, CLAUDE.md, hard-eng.gates.json private" in result.stdout, result.stdout
-            assert index_names(repository) == [] and status_lines(repository) == []
-        else:
-            assert "Staged AGENTS.md, CLAUDE.md, hard-eng.gates.json" in result.stdout, result.stdout
-            assert index_names(repository) == sorted(OWNER_FILES)
-            assert status_lines(repository) == [f"A  {name}" for name in sorted(OWNER_FILES)]
-    existing = root / "existing-rules"
-    repository = existing / "repository"
-    repository.mkdir(parents=True)
-    write(repository / "AGENTS.md", "# Existing rules\n")
-    run(["git", "init", "-q", "-b", "main"], cwd=repository)
-    commit_all(repository, ["AGENTS.md"])
-    install(["--repo"], cwd=repository, env=home_env(env, existing / "home", existing / "setup.log"))
-    assert (repository / "AGENTS.md").read_text(encoding="utf-8") == "# Existing rules\n"
-    assert index_names(repository) == ["CLAUDE.md", "hard-eng.gates.json"]
+def assert_repository_existing_marker(root: Path, source: Path, commit: str, fake_bin: Path) -> None:
+    repository = root / "repository"
+    init_repository(repository, marked=True, policy=False)
+    rules = (repository / "AGENTS.md").read_text(encoding="utf-8")
+    env = shared_environment(root / "home", f"file://{source}", fake_bin)
+    result = install(["--repo"], cwd=repository, env=env)
+    assert f"Hard Eng repository setup: shared ({commit}) in {repository}" in result.stdout, result.stdout
+    marker = json.loads((repository / "hard-eng.gates.json").read_text(encoding="utf-8"))
+    assert marker == {"schema_version": 1, "hard_eng": {"schema_version": 1, "wiring": "shared"}}, marker
+    assert (repository / "AGENTS.md").read_text(encoding="utf-8") == rules
+    assert index_names(repository) == sorted({"hard-eng.gates.json", *SHARED_FILES})
 
 
-def assert_repository_rollback(root: Path, env: dict[str, str]) -> None:
-    marked = root / "marked"
-    repository = marked / "repository"
-    init_repository(repository, marked=True)
-    write(repository / "AGENTS.override.md", "tracked\n")
-    commit_all(repository, ["AGENTS.override.md"])
-    write(repository / "scratch.txt", "keep\n")
-    before = tree_digest(repository)
-    index = index_names(repository)
-    failed = install(["--repo"], cwd=repository, env=home_env(env, marked / "home", marked / "setup.log"), check=False)
-    assert failed.returncode == 1 and "tracked repository state" in failed.stderr, failed.stderr
-    assert tree_digest(repository) == before and index_names(repository) == index
+def assert_repository_rollback(root: Path, fake_bin: Path) -> None:
+    url = f"file://{root / 'missing-source'}"
     fresh = root / "fresh"
     repository = fresh / "repository"
     repository.mkdir(parents=True)
-    write(repository / "AGENTS.override.md", "tracked\n")
     run(["git", "init", "-q", "-b", "main"], cwd=repository)
-    commit_all(repository, ["AGENTS.override.md"])
+    env = shared_environment(fresh / "home", url, fake_bin)
+    failed = install(["--repo"], cwd=repository, env=env, check=False)
+    assert failed.returncode == 1 and "could not reach" in failed.stderr, failed.stderr
+    assert sorted(path.name for path in repository.iterdir()) == [".git"]
+    assert status_lines(repository) == []
+
+    marked = root / "marked"
+    repository = marked / "repository"
+    init_repository(repository, marked=True, policy=False)
     before = tree_digest(repository)
-    exclude = run(["git", "rev-parse", "--path-format=absolute", "--git-path", "info/exclude"], cwd=repository).stdout
-    exclude_path = Path(exclude.strip())
-    exclude_before = exclude_path.read_bytes() if exclude_path.is_file() else None
-    failed = install(["--repo"], cwd=repository, env=home_env(env, fresh / "home", fresh / "setup.log"), check=False)
-    assert failed.returncode == 1, failed.stdout
-    assert tree_digest(repository) == before and index_names(repository) == [] and status_lines(repository) == []
-    assert (exclude_path.read_bytes() if exclude_path.is_file() else None) == exclude_before
+    index = index_names(repository)
+    env = shared_environment(marked / "home", url, fake_bin)
+    failed = install(["--repo"], cwd=repository, env=env, check=False)
+    assert failed.returncode == 1 and "could not reach" in failed.stderr, failed.stderr
+    assert tree_digest(repository) == before and index_names(repository) == index
+    assert not (repository / ".agents").exists()
 
 
-def assert_repository_concurrency(root: Path, env: dict[str, str]) -> None:
+def assert_repository_global_present(root: Path, source: Path, commit: str, fake_bin: Path, payload: Path) -> None:
+    home = root / "home"
+    install_global(home, payload, AGENTS)
     repository = root / "repository"
-    init_repository(repository, marked=True)
-    value = home_env(env, root / "home", root / "setup.log")
+    repository.mkdir(parents=True)
+    run(["git", "init", "-q", "-b", "main"], cwd=repository)
+    env = shared_environment(home, f"file://{source}", fake_bin)
+    result = install(["--repo"], cwd=repository, env=env)
+    assert f"Hard Eng repository setup: shared ({commit}) in {repository}" in result.stdout, result.stdout
+    guard = (repository / ".agents/hard-eng/global-guard").read_text(encoding="utf-8").split()
+    assert sorted(guard) == sorted(AGENTS), guard
+
+
+def assert_repository_concurrency(root: Path, source: Path, fake_bin: Path) -> None:
+    repository = root / "repository"
+    repository.mkdir(parents=True)
+    run(["git", "init", "-q", "-b", "main"], cwd=repository)
+    env = shared_environment(root / "home", f"file://{source}", fake_bin)
     processes = [
         subprocess.Popen(
             ["bash", str(INSTALL), "--repo"],
             cwd=repository,
-            env=value,
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
-        for _ in range(2)
+        for _ in range(3)
     ]
-    results = [process.communicate(timeout=120) + (process.returncode,) for process in processes]
+    results = [process.communicate(timeout=180) + (process.returncode,) for process in processes]
     assert all(result[2] == 0 for result in results), results
-    assert_fallback_files(repository)
+    for name in (*OWNER_FILES, *SHARED_FILES):
+        assert (repository / name).is_file(), name
+    assert (repository / ".agents/hard-eng/current").is_symlink()
 
 
-def assert_global_install(root: Path, env: dict[str, str], tag: str, fake_bin: Path) -> None:
+def assert_global_install(root: Path, env: dict[str, str], fake_bin: Path, source: Path) -> None:
     home = root / "home"
     log = root / "setup.log"
-    value = home_env(env, home, log)
+    value = {**home_env(env, home, log), "HARD_ENG_SOURCE_URL": f"file://{source}"}
     result = install(["--global"], cwd=root, env=value)
-    assert f"Hard Eng global setup: installed {tag} at {home / '.agents'}" in result.stdout, result.stdout
+    commit = global_commit(home)[:12]
+    assert f"Hard Eng global setup: installed {commit} at {home / '.agents'}" in result.stdout, result.stdout
     for agent in AGENTS:
         assert f"{LABELS[agent]}: ready" in result.stdout, result.stdout
-    assert global_version(home) == tag
     assert (home / ".local/bin/hard-eng").resolve() == (home / ".agents/bin/hard-eng").resolve()
     assert log.read_text(encoding="utf-8") == f"{home / '.agents'} install\n"
     assert leftovers(home) == []
     again = install(["--global"], cwd=root, env=value)
-    assert f"Hard Eng global setup: repaired {tag} at {home / '.agents'}" in again.stdout, again.stdout
+    assert f"Hard Eng global setup: repaired {commit} at {home / '.agents'}" in again.stdout, again.stdout
     assert len(log.read_text(encoding="utf-8").splitlines()) == 2 and leftovers(home) == []
     repository = root / "repository"
     init_repository(repository, marked=True)
     prepared = install(["--repo"], cwd=repository, env=value)
-    assert "Hard Eng repository setup: global" in prepared.stdout and "Codex: ready (global)" in prepared.stdout
-    assert not (repository / ".agents").exists() and status_lines(repository) == []
+    assert "Hard Eng repository setup: shared (" in prepared.stdout and "Codex: ready (shared)" in prepared.stdout
+    assert "codex" in (repository / ".agents/hard-eng/global-guard").read_text(encoding="utf-8").split()
+    assert ".hard-eng/bootstrap.sh" in index_names(repository)
     skipped_home = root / "skipped-home"
     for agent in AGENTS:
         (fake_bin / agent).unlink()
     try:
-        skipped = install(["--global"], cwd=root, env=home_env(env, skipped_home, root / "skipped.log"))
+        skipped_env = {**home_env(env, skipped_home, root / "skipped.log"), "HARD_ENG_SOURCE_URL": f"file://{source}"}
+        skipped = install(["--global"], cwd=root, env=skipped_env)
         for agent in AGENTS:
             assert f"{LABELS[agent]}: skipped (the {agent} command is not installed)" in skipped.stdout, skipped.stdout
-        assert global_version(skipped_home) == tag
+        assert global_commit(skipped_home)[:12] == commit
     finally:
         fake_agents(fake_bin, AGENTS)
     foreign = root / "foreign-home"
     write(foreign / ".agents/notes.txt", "mine\n")
-    rejected = install(["--global"], cwd=root, env=home_env(env, foreign, root / "foreign.log"), check=False)
+    foreign_env = {**home_env(env, foreign, root / "foreign.log"), "HARD_ENG_SOURCE_URL": f"file://{source}"}
+    rejected = install(["--global"], cwd=root, env=foreign_env, check=False)
     assert rejected.returncode == 1 and "not a Hard Eng install" in rejected.stderr
     assert (foreign / ".agents/notes.txt").read_text(encoding="utf-8") == "mine\n" and leftovers(foreign) == []
 
 
-def assert_global_concurrency(root: Path, env: dict[str, str], tag: str) -> None:
+def assert_global_concurrency(root: Path, env: dict[str, str], source: Path) -> None:
     home = root / "home"
     log = root / "setup.log"
-    value = home_env(env, home, log)
+    value = {**home_env(env, home, log), "HARD_ENG_SOURCE_URL": f"file://{source}"}
     processes = [
         subprocess.Popen(
             ["bash", str(INSTALL), "--global"],
@@ -282,62 +316,83 @@ def assert_global_concurrency(root: Path, env: dict[str, str], tag: str) -> None
     ]
     results = [process.communicate(timeout=180) + (process.returncode,) for process in processes]
     assert all(result[2] == 0 for result in results), results
+    commit = global_commit(home)[:12]
     outputs = "".join(result[0] for result in results)
-    assert outputs.count(f"installed {tag}") == 1 and outputs.count(f"repaired {tag}") == 1, outputs
-    assert global_version(home) == tag and leftovers(home) == []
+    assert outputs.count(f"installed {commit}") == 1 and outputs.count(f"repaired {commit}") == 1, outputs
+    assert leftovers(home) == []
 
 
-def assert_global_rejections(root: Path, env: dict[str, str]) -> None:
-    for name, variable in (("verify", "HARD_ENG_TEST_FAIL_VERIFY"), ("tamper", "HARD_ENG_TEST_TAMPER")):
-        home = root / f"{name}-home"
-        value = {**home_env(env, home, root / f"{name}.log"), variable: "1"}
-        failed = install(["--global"], cwd=root, env=value, check=False)
-        assert failed.returncode == 1, (name, failed.stdout)
-        assert not (home / ".agents").exists() and leftovers(home) == [], name
-        assert not (root / f"{name}.log").exists(), name
+def assert_global_replaces_release(root: Path, env: dict[str, str], source: Path, payload: Path) -> None:
+    home = root / "home"
+    checkout = home / ".agents"
+    shutil.copytree(payload, checkout)
+    write(checkout / ".hard-eng-release.json", "{}\n")
+    log = root / "setup.log"
+    value = {**home_env(env, home, log), "HARD_ENG_SOURCE_URL": f"file://{source}"}
+    result = install(["--global"], cwd=root, env=value)
+    commit = global_commit(home)[:12]
+    assert f"Hard Eng global setup: replaced the old release install with {commit} at {checkout}" in result.stdout, (
+        result.stdout
+    )
+    assert (checkout / ".git").exists()
+    assert not (checkout / ".hard-eng-release.json").exists()
+    assert leftovers(home) == []
+    kept = root / "kept-home"
+    old = kept / ".agents"
+    shutil.copytree(payload, old)
+    write(old / ".hard-eng-release.json", "{}\n")
+    before = tree_digest(old)
+    failed_env = {**home_env(value, kept, root / "kept.log"), "HARD_ENG_INSTALL_TEST_FAIL_SETUP": "1"}
+    failed = install(["--global"], cwd=root, env=failed_env, check=False)
+    assert failed.returncode == 1 and "install failed with exit code 9" in failed.stderr, failed.stderr
+    assert tree_digest(old) == before and not (old / ".git").exists() and leftovers(kept) == []
 
 
 def assert_global_update(root: Path) -> None:
-    assets_root = root / "assets"
-    first_assets, first = release(assets_root / "first", "a" * 40)
-    _, second = release(assets_root / "second", "b" * 40)
-    _, third = release(assets_root / "third", "c" * 40)
+    source = global_source(root / "source")
     fake_bin = root / "fake-bin"
     fake_bin.mkdir()
-    fake_gh(fake_bin, [first])
     fake_agents(fake_bin, AGENTS)
-    env = environment(fake_bin, assets_root)
+    env = environment(fake_bin, root)
     home = root / "home"
     log = root / "setup.log"
-    value = home_env(env, home, log)
-    first_tag = str(first["tag_name"])
-    second_tag = str(second["tag_name"])
+    value = {**home_env(env, home, log), "HARD_ENG_SOURCE_URL": f"file://{source}"}
     install(["--global"], cwd=root, env=value)
-    assert global_version(home) == first_tag
+    commit_a = global_commit(home)
+    write(source / "second.txt", "second\n")
+    commit_all(source, ["second.txt"])
+    commit_b = run(["git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
     write(home / ".agents/user-note.txt", "mine\n")
-    fake_gh(fake_bin, [second, first])
     updated = install(["--global"], cwd=root, env=value)
-    assert f"updated {first_tag} to {second_tag}" in updated.stdout, updated.stdout
-    assert global_version(home) == second_tag and leftovers(home) == []
-    assert not (home / ".agents/user-note.txt").exists()
-    assert (home / ".codex/AGENTS.md").resolve() == (home / ".agents/AGENTS.md").resolve()
-    fake_gh(fake_bin, [third, second, first])
-    before = tree_digest(home / ".agents")
-    failed = install(["--global"], cwd=root, env={**value, "HARD_ENG_INSTALL_TEST_FAIL_SETUP": "1"}, check=False)
-    assert failed.returncode == 1 and "install failed with exit code 9" in failed.stderr, failed.stderr
-    assert global_version(home) == second_tag and tree_digest(home / ".agents") == before and leftovers(home) == []
-    offline_bin = root / "offline-bin"
-    offline_bin.mkdir()
-    write(offline_bin / "gh", "#!/bin/sh\nprintf '%s\\n' 'network is unreachable' >&2\nexit 1\n", 0o755)
-    offline = {**value, "PATH": os.pathsep.join((str(offline_bin), value["PATH"]))}
+    assert f"updated {commit_a[:12]} to {commit_b[:12]}" in updated.stdout, updated.stdout
+    assert global_commit(home) == commit_b and leftovers(home) == []
+    assert (home / ".agents/user-note.txt").read_text(encoding="utf-8") == "mine\n"
+    (home / ".agents/user-note.txt").unlink()
+    assert status_lines(home / ".agents") == []
+    tracked = home / ".agents/AGENTS.md"
+    original = tracked.read_text(encoding="utf-8")
+    write(tracked, original + "dirty\n")
+    dirtied = install(["--global"], cwd=root, env=value)
+    assert "repaired the development checkout" in dirtied.stdout, dirtied.stdout
+    assert global_commit(home) == commit_b
+    run(["git", "checkout", "--", "AGENTS.md"], cwd=home / ".agents")
+    assert tracked.read_text(encoding="utf-8") == original
+    assert status_lines(home / ".agents") == []
+    offline = {**value, "HARD_ENG_SOURCE_URL": f"file://{root / 'missing-source'}"}
     repaired = install(["--global"], cwd=root, env=offline)
-    assert "WARNING: update check failed" in repaired.stdout and f"repaired {second_tag}" in repaired.stdout
-    assert global_version(home) == second_tag
+    assert "WARNING: update failed" in repaired.stdout and f"repaired {commit_b[:12]}" in repaired.stdout, (
+        repaired.stdout
+    )
+    assert global_commit(home) == commit_b
     empty_home = root / "offline-home"
     missing = install(["--global"], cwd=root, env=home_env(offline, empty_home, root / "offline.log"), check=False)
-    assert missing.returncode == 1 and "could not read the Hard Eng releases" in missing.stderr
-    assert not (empty_home / ".agents").exists()
-    assert first_assets.is_dir()
+    assert missing.returncode == 1 and "could not clone" in missing.stderr, missing.stderr
+    assert not (empty_home / ".agents").exists() and leftovers(empty_home) == []
+    fail_home = root / "fail-home"
+    fail_env = {**home_env(value, fail_home, root / "fail.log"), "HARD_ENG_INSTALL_TEST_FAIL_SETUP": "1"}
+    failed = install(["--global"], cwd=root, env=fail_env, check=False)
+    assert failed.returncode == 1 and "install failed with exit code 9" in failed.stderr, failed.stderr
+    assert not (fail_home / ".agents").exists() and leftovers(fail_home) == []
 
 
 def assert_global_checkout(root: Path, env: dict[str, str], payload: Path) -> None:
@@ -356,27 +411,33 @@ def assert_global_checkout(root: Path, env: dict[str, str], payload: Path) -> No
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="hard-eng-install-") as temporary:
         root = Path(temporary).resolve()
-        assets, current = release(root / "release", "a" * 40)
-        tag = str(current["tag_name"])
         fake_bin = root / "fake-bin"
         fake_bin.mkdir()
-        fake_gh(fake_bin, [current])
         fake_agents(fake_bin, AGENTS)
-        env = environment(fake_bin, assets)
+        env = environment(fake_bin, root)
         assert_arguments(root / "arguments", env)
-        assert_repository_fallback(root / "fallback", env, tag)
-        assert_repository_fresh(root / "fresh", env)
-        assert_repository_rollback(root / "rollback", env)
-        assert_repository_concurrency(root / "repository-concurrency", env)
-        assert_global_install(root / "global", env, tag, fake_bin)
-        assert_global_concurrency(root / "global-concurrency", env, tag)
-        assert_global_rejections(root / "global-rejections", env)
+        source = root / "source"
+        commit = source_repository(source)
+        repository_bin = root / "repository-bin"
+        repository_bin.mkdir()
+        fake_agents(repository_bin, AGENTS)
+        payload = payload_with_setup(root / "payload")
+        assert_repository_shared(root / "shared", source, commit, repository_bin)
+        assert_repository_existing_marker(root / "existing-marker", source, commit, repository_bin)
+        assert_repository_rollback(root / "rollback", repository_bin)
+        assert_repository_global_present(root / "global-present", source, commit, repository_bin, payload)
+        assert_repository_concurrency(root / "repository-concurrency", source, repository_bin)
+        install_source = global_source(root / "global-source")
+        assert_global_install(root / "global", env, fake_bin, install_source)
+        assert_global_concurrency(root / "global-concurrency", env, install_source)
+        assert_global_replaces_release(root / "release-upgrade", env, install_source, payload)
         assert_global_update(root / "update")
-        assert_global_checkout(root / "checkout", env, assets / "payload")
+        assert_global_checkout(root / "checkout", env, payload)
     digest = hashlib.sha256(INSTALL.read_bytes()).hexdigest()[:12]
     print(
-        f"install-contract: PASS install.sh={digest} arguments=PASS repository=fallback+fresh+ignore+rollback+concurrency "
-        "global=install+repair+skipped+foreign+concurrency+verify+tamper+update+setup-rollback+offline+checkout"
+        f"install-contract: PASS install.sh={digest} arguments=PASS "
+        "repository=shared+existing-marker+rollback+global-present+concurrency "
+        "global=install+repair+skipped+foreign+concurrency+release-upgrade+update+checkout"
     )
     return 0
 

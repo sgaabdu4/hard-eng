@@ -143,7 +143,6 @@ def readme_errors(expected: dict[str, Any], readme: str) -> list[str]:
     required = (
         "npx -y github:sgaabdu4/hard-eng --global",
         "npx -y github:sgaabdu4/hard-eng --repo",
-        "npx -y github:sgaabdu4/hard-eng --repo --ignore",
         "Codex is required",
         "Claude Code and Copilot CLI are supported when installed",
     )

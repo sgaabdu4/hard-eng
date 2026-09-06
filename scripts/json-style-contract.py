@@ -15,7 +15,6 @@ ROOT = Path(__file__).resolve().parents[1]
 BIOME = ROOT / "node_modules/.bin/biome"
 MODULE = ROOT / "runtime/repository_native/jsonstyle.py"
 SPACES: dict[str, object] = {"formatter": {"indentStyle": "space"}}
-PIN = {"tag": "v2026.09.02", "archive_sha256": "a" * 64, "manifest_sha256": "b" * 64}
 GATES: dict[str, object] = {
     "schema_version": 1,
     "families": {
@@ -26,7 +25,7 @@ GATES: dict[str, object] = {
     "phases": {"pre-commit": ["targeted"], "pre-push": ["targeted", "fallow", "long"]},
     "coverage": {"targeted": ["checkpoint check", "package.json"]},
     "empty": {"object": {}, "array": [], "mixed": [1, "two", None, True, 2.5]},
-    "hard_eng": {"schema_version": 1, "channel": "prerelease", "wiring": "shared", "pin": PIN},
+    "hard_eng": {"schema_version": 1, "wiring": "shared"},
 }
 HOOKS: dict[str, object] = {
     "hooks": {

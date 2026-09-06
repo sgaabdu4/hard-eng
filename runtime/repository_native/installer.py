@@ -1,4 +1,4 @@
-"""One-command Hard Eng installation: global releases and repository setup."""
+"""One-command Hard Eng installation: a global clone of main and repository setup."""
 
 from __future__ import annotations
 
@@ -9,14 +9,13 @@ import stat
 import subprocess
 from pathlib import Path
 
-from . import DEFAULT_RELEASE_REPOSITORY, SUPPORTED_AGENTS
+from . import SUPPORTED_AGENTS
 from .adapters import shared_files
-from .errors import ConfigurationError, ReleaseUnavailable
+from .errors import ConfigurationError
 from .jsonstyle import render, style_for
 from .locking import exclusive_lock
-from .models import MarkerPolicy, PreparedState
-from .prepare import prepare, remove_fallback, share
-from .release import select_release, stage_release
+from .models import PreparedState
+from .prepare import remove_copy, share
 from .repository import (
     AGENT_LABELS,
     OWNER_END,
@@ -27,8 +26,10 @@ from .repository import (
     git_path,
     inspect_global,
 )
+from .source import COMMIT_ID, SOURCE_BRANCH, source_url
 
 INSTALL_LOCK_SECONDS = 600
+GIT_TIMEOUT_SECONDS = 600
 OWNER_FILES = ("AGENTS.md", "CLAUDE.md", "hard-eng.gates.json")
 MAX_OWNER_BYTES = 1024 * 1024
 DEFAULT_AGENTS = b"""# Repository Rules
@@ -37,7 +38,7 @@ DEFAULT_AGENTS = b"""# Repository Rules
 - Use its existing build, test, lint, and formatting commands.
 - Preserve its product behavior, security requirements, and data.
 """
-DEFAULT_POLICY = {"schema_version": 1, "channel": "prerelease", "release_repository": DEFAULT_RELEASE_REPOSITORY}
+SHARED_POLICY = {"schema_version": 1, "wiring": "shared"}
 
 
 def _write_all(descriptor: int, raw: bytes) -> None:
@@ -83,25 +84,16 @@ def _owner_block_lines(current: str) -> tuple[list[str], str]:
     return lines, current
 
 
-def _owner_exclude(current: str, private: bool) -> str:
+def _owner_exclude(current: str) -> str:
     _, without_block = _owner_block_lines(current)
-    if not private:
-        return without_block
-    prefix = without_block
-    if prefix and not prefix.endswith(("\n", "\r")):
-        prefix += "\n"
-    if prefix and not prefix.endswith("\n\n"):
-        prefix += "\n"
-    block = "\n".join((OWNER_START, *(f"/{name}" for name in OWNER_FILES), OWNER_END)) + "\n"
-    return prefix + block
+    return without_block
 
 
 class OwnerJournal:
     """Creates the repository-owned files and can put every change back."""
 
-    def __init__(self, root: Path, *, private: bool) -> None:
+    def __init__(self, root: Path) -> None:
         self.root = root
-        self.private = private
         self.created: list[Path] = []
         self.replaced: dict[Path, tuple[bytes, int]] = {}
         self.exclude = git_path(root, "info/exclude")
@@ -138,15 +130,13 @@ class OwnerJournal:
                 raise ConfigurationError(f"hard-eng.gates.json is invalid: {error}") from error
             if not isinstance(value, dict) or value.get("schema_version") != 1:
                 raise ConfigurationError("hard-eng.gates.json must be a schema_version 1 object")
-            if "hard_eng" not in value:
+            if value.get("hard_eng") != SHARED_POLICY:
                 mode = stat.S_IMODE(marker.stat().st_mode)
                 self.replaced[marker] = (raw, mode)
-                value["hard_eng"] = DEFAULT_POLICY
+                value["hard_eng"] = dict(SHARED_POLICY)
                 _replace(marker, render(value, style_for(marker)).encode(), mode)
-            elif not isinstance(value["hard_eng"], dict):
-                raise ConfigurationError("hard-eng.gates.json hard_eng must be an object")
         else:
-            value = {"schema_version": 1, "hard_eng": DEFAULT_POLICY}
+            value = {"schema_version": 1, "hard_eng": dict(SHARED_POLICY)}
             self._create(marker, render(value, style_for(marker)).encode())
         if self.exclude.exists() or self.exclude.is_symlink():
             _regular_file(self.exclude, "Git private exclude")
@@ -156,7 +146,7 @@ class OwnerJournal:
         else:
             current = b""
             mode = 0o600
-        updated = _owner_exclude(current.decode("utf-8"), self.private).encode()
+        updated = _owner_exclude(current.decode("utf-8")).encode()
         if updated != current:
             self.exclude.parent.mkdir(parents=True, exist_ok=True)
             _replace(self.exclude, updated, mode)
@@ -169,7 +159,7 @@ class OwnerJournal:
                 continue
             added = git(self.root, "add", "--", name, check=False)
             if added.returncode != 0:
-                raise ConfigurationError(f"could not stage {name}; use --repo --ignore to keep it local")
+                raise ConfigurationError(f"could not stage {name}: {added.stderr.strip()}")
             self.staged.append(name)
 
     def stage_shared(self) -> list[str]:
@@ -196,7 +186,7 @@ class OwnerJournal:
             else:
                 _replace(self.exclude, *self.exclude_before)
         if not self.hard_eng_existed:
-            remove_fallback(self.root)
+            remove_copy(self.root)
             shutil.rmtree(self.root / ".agents/hard-eng", ignore_errors=True)
         if not self.agents_existed:
             try:
@@ -206,8 +196,6 @@ class OwnerJournal:
 
     def summary(self) -> str:
         names = ", ".join(OWNER_FILES)
-        if self.private:
-            return f"Kept {names} private to this checkout."
         if self.staged:
             return f"Staged {', '.join(self.staged)}; commit them to share this setup."
         return f"{names} were already tracked."
@@ -231,28 +219,40 @@ def agent_lines(home: Path, prepared: dict[str, PreparedState] | None = None) ->
     return lines
 
 
-def _release_version(target: Path) -> str | None:
-    identity = target / ".hard-eng-release.json"
-    if identity.is_symlink() or not identity.is_file():
-        return None
-    try:
-        value = json.loads(identity.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
-    version = value.get("version") if isinstance(value, dict) else None
-    return version if isinstance(version, str) and version else None
-
-
 def _global_kind(target: Path) -> str:
     if not target.exists() and not target.is_symlink():
         return "absent"
     if target.is_symlink() or not target.is_dir():
         raise ConfigurationError(f"{target} exists but is not a directory; move it aside, then rerun")
-    if _release_version(target):
-        return "release"
     if (target / ".git").exists() and (target / "setup.sh").is_file():
         return "checkout"
+    if (target / ".hard-eng-release.json").is_file():
+        return "release"
     raise ConfigurationError(f"{target} exists but is not a Hard Eng install; move it aside, then rerun")
+
+
+def _git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    environment = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    return subprocess.run(
+        ["git", "-C", str(cwd), *arguments],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        timeout=GIT_TIMEOUT_SECONDS,
+    )
+
+
+def _failure(result: subprocess.CompletedProcess[str], fallback: str) -> str:
+    lines = result.stderr.strip().splitlines()
+    return lines[-1] if lines else fallback
+
+
+def _head(target: Path) -> str:
+    head = _git(target, "rev-parse", "HEAD").stdout.strip()
+    return head[:12] if COMMIT_ID.fullmatch(head) else "unknown"
 
 
 def _run_setup(target: Path) -> None:
@@ -264,6 +264,19 @@ def _run_setup(target: Path) -> None:
     result = subprocess.run([str(setup), "install"], check=False, env=environment)
     if result.returncode != 0:
         raise ConfigurationError(f"{setup} install failed with exit code {result.returncode}")
+
+
+def _clone_global(home: Path) -> Path:
+    stage = home / f".hard-eng-install-{os.getpid()}"
+    shutil.rmtree(stage, ignore_errors=True)
+    url = source_url()
+    result = _git(
+        home, "clone", "--quiet", "--depth", "1", "--branch", SOURCE_BRANCH, "--single-branch", url, str(stage)
+    )
+    if result.returncode != 0:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise ConfigurationError(f"could not clone {url}: {_failure(result, 'git clone failed')}")
+    return stage
 
 
 def _replace_global(stage: Path, target: Path) -> None:
@@ -288,6 +301,24 @@ def _replace_global(stage: Path, target: Path) -> None:
         shutil.rmtree(previous, ignore_errors=True)
 
 
+def _update_checkout(target: Path) -> str:
+    before = _head(target)
+    branch = _git(target, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    if branch != SOURCE_BRANCH or _git(target, "status", "--porcelain", "--untracked-files=no").stdout != "":
+        _run_setup(target)
+        return "repaired the development checkout"
+    pulled = _git(target, "pull", "--ff-only", "--quiet", source_url(), SOURCE_BRANCH)
+    if pulled.returncode != 0:
+        print(
+            f"hard-eng: WARNING: update failed ({_failure(pulled, 'git pull failed')}); repairing {before}", flush=True
+        )
+        _run_setup(target)
+        return f"repaired {before}"
+    after = _head(target)
+    _run_setup(target)
+    return f"repaired {before}" if after == before else f"updated {before} to {after}"
+
+
 def install_global(home: Path) -> int:
     if home.is_symlink() or not home.is_dir():
         raise ConfigurationError(f"HOME must be an existing directory: {home}")
@@ -297,27 +328,15 @@ def install_global(home: Path) -> int:
     with exclusive_lock(asset_dir / "install.lock", timeout=INSTALL_LOCK_SECONDS, holder="another Hard Eng install"):
         kind = _global_kind(target)
         if kind == "checkout":
-            _run_setup(target)
-            action = "repaired the development checkout"
+            action = _update_checkout(target)
         else:
-            policy = MarkerPolicy("prerelease", None, DEFAULT_RELEASE_REPOSITORY)
-            installed = _release_version(target) if kind == "release" else None
+            stage = _clone_global(home)
             try:
-                candidate = select_release(policy)
-            except ReleaseUnavailable as error:
-                if installed is None:
-                    raise ConfigurationError(f"could not read the Hard Eng releases on GitHub: {error}") from error
-                print(f"hard-eng: WARNING: update check failed ({error}); repairing {installed}", flush=True)
-                candidate = None
-            if candidate is None or candidate.tag == installed:
-                _run_setup(target)
-                action = f"repaired {installed}"
-            else:
-                stage = stage_release(candidate, policy.release_repository, home, agents=SUPPORTED_AGENTS)
                 _replace_global(stage, target)
-                action = (
-                    f"installed {candidate.tag}" if installed is None else f"updated {installed} to {candidate.tag}"
-                )
+            finally:
+                shutil.rmtree(stage, ignore_errors=True)
+            commit = _head(target)
+            action = f"installed {commit}" if kind == "absent" else f"replaced the old release install with {commit}"
         lines = agent_lines(home)
     print(f"Hard Eng global setup: {action} at {target}")
     for line in lines:
@@ -325,37 +344,27 @@ def install_global(home: Path) -> int:
     return 0
 
 
-def install_repository(start: Path, home: Path, *, private: bool, shared: bool = False) -> int:
+def install_repository(start: Path, home: Path) -> int:
     root = find_repository(start)
     if Path.cwd().resolve() != root:
         raise ConfigurationError(f"run this from the repository root: {root}")
     lock = git_path(root, "hard-eng-install.lock")
     with exclusive_lock(lock, timeout=INSTALL_LOCK_SECONDS, holder="another Hard Eng repository setup"):
-        journal = OwnerJournal(root, private=private)
+        journal = OwnerJournal(root)
         journal.apply()
         try:
-            if not private:
-                journal.stage()
+            journal.stage()
             agents = [agent for agent in SUPPORTED_AGENTS if agent_installed(agent)] or ["codex"]
-            prepared = {
-                agent: share(root, home, agent, repin=True) if shared else prepare(root, home, agent)
-                for agent in agents
-            }
-            modes = {state.mode for state in prepared.values()}
-            allowed = {"shared"} if shared else {"global", "fallback"}
-            if len(modes) != 1 or not modes <= allowed:
+            prepared = {agent: share(root, home, agent) for agent in agents}
+            if {state.mode for state in prepared.values()} != {"shared"}:
                 raise ConfigurationError("Hard Eng did not prepare this repository the same way for every agent")
         except BaseException:
             journal.rollback()
             raise
-        staged_shared = journal.stage_shared() if shared else []
+        staged = journal.stage_shared()
     state = next(iter(prepared.values()))
-    identity = state.version or state.hard_eng_root
-    print(f"Hard Eng repository setup: {state.mode} ({identity}) in {root}")
+    print(f"Hard Eng repository setup: {state.mode} ({state.identity}) in {root}")
     for line in agent_lines(home, {agent: state for agent in SUPPORTED_AGENTS}):
         print(f"  {line}")
-    if staged_shared:
-        print(f"Staged {', '.join(staged_shared)}; commit them so every clone bootstraps Hard Eng {state.version}.")
-    else:
-        print(journal.summary())
+    print(f"Staged {', '.join(staged)}; commit them so every clone fetches the newest Hard Eng.")
     return 0
