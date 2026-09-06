@@ -362,6 +362,7 @@ def check_workflow() -> None:
         "pattern: ledger-*",
         "if: always() && needs.visibility.result == 'success'",
         "mutation_ledger.py merge --repo .",
+        'git diff --quiet "origin/$default_branch" "origin/$LEDGER_BRANCH" -- mutation-ledger.json',
     ):
         require(needle in text, f"the nightly workflow keeps: {needle}")
 

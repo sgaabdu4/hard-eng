@@ -134,17 +134,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          default_branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
           if git diff --quiet -- mutation-ledger.json || git diff --quiet "origin/$LEDGER_BRANCH" -- mutation-ledger.json; then
-            echo "ledger unchanged"
+            echo "ledger unchanged; branch left as it is"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git checkout -B "$LEDGER_BRANCH"
+            git add mutation-ledger.json
+            git commit -m "chore: record nightly mutation scores"
+            git push --force-with-lease origin "$LEDGER_BRANCH"
+          fi
+          if ! git rev-parse --verify --quiet "origin/$LEDGER_BRANCH" > /dev/null || git diff --quiet "origin/$default_branch" "origin/$LEDGER_BRANCH" -- mutation-ledger.json; then
+            echo "nothing to review"
             exit 0
           fi
-          default_branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "$LEDGER_BRANCH"
-          git add mutation-ledger.json
-          git commit -m "chore: record nightly mutation scores"
-          git push --force-with-lease origin "$LEDGER_BRANCH"
           open_pr="$(gh pr list --head "$LEDGER_BRANCH" --base "$default_branch" --state open --json number --jq '.[].number')"
           if [[ -z "$open_pr" ]]; then
             gh pr create \
@@ -153,5 +157,5 @@ jobs:
               --title "Nightly mutation scores" \
               --body "Scored overnight: $SHARDS_KEPT of 16 shard ledgers merged, $FAILED_SHARDS of 16 shards failed. Every survivor is marked needs-verdict; give each one a verdict with mutation_ledger.py verdict within seven days or the push gate refuses."
           else
-            echo "pull request #$open_pr already open; branch updated"
+            echo "pull request #$open_pr already open"
           fi
