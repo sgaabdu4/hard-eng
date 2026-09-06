@@ -22,8 +22,8 @@ REVISIONS = {
     "appwrite-backend": "c5d6513cd68126cd6703b484e57954dd3d0a74a9",
     "building-flutter-apps": "da683aa74e3627ca1563e0170bea8322189a5d96",
 }
-HISTORICAL_ADD = "12f52b733b688edede4add9ed75b3a6f2bdde39c"
-HISTORICAL_DELETE = "1ef715a2984ce4714c928c454328369c681f6b16"
+HISTORICAL_ADD = "27abf41a3ab43778c3196eef5b84d41c7bf2ff13"
+HISTORICAL_DELETE = "96d474c4d7d25920153c5e8e604930cb1e06eb38"
 HISTORICAL_PATHS = ("skills/tdd", "skills/prototype", "skills/improve-codebase-architecture")
 
 

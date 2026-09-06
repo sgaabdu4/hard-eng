@@ -24,4 +24,4 @@ The following MIT permission and warranty notice applies to all three managed co
 
 ## Historical attribution
 
-Hard Eng commit `12f52b733b688edede4add9ed75b3a6f2bdde39c` added adapted Matt Pocock material at `skills/tdd`, `skills/prototype`, and `skills/improve-codebase-architecture` under the MIT licence. Commit `1ef715a2984ce4714c928c454328369c681f6b16` deleted those paths. Git rename detection finds no current replacement for them, so none of the content covered by that old path-specific notice remains in this checkout. The historical source was `https://github.com/mattpocock/skills`.
+Hard Eng commit `27abf41a3ab43778c3196eef5b84d41c7bf2ff13` added adapted Matt Pocock material at `skills/tdd`, `skills/prototype`, and `skills/improve-codebase-architecture` under the MIT licence. Commit `96d474c4d7d25920153c5e8e604930cb1e06eb38` deleted those paths. Git rename detection finds no current replacement for them, so none of the content covered by that old path-specific notice remains in this checkout. The historical source was `https://github.com/mattpocock/skills`.
