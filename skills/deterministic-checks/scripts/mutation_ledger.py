@@ -22,7 +22,7 @@ SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from bounded_run import run, run_captured
+from bounded_run import TIMEOUT_EXIT, run, run_captured
 from git_env import git_env
 
 LEDGER_FILE = "mutation-ledger.json"
@@ -196,16 +196,12 @@ def unscored(ledger: dict, functions: dict[str, str]) -> dict[str, str]:
     return {key: digest for key, digest in functions.items() if rows.get(key, {}).get("hash") != digest}
 
 
-def seed_rows(repo: Path, ref: str, functions: dict[str, str]) -> int:
-    try:
-        branch = parse_ledger(_git(repo, "show", f"{ref}:{LEDGER_FILE}"))["functions"]
-    except LedgerError:
-        return 0
+def merge_rows(repo: Path, source: dict, functions: dict[str, str]) -> int:
     ledger = load_ledger(repo)
     rows = ledger["functions"]
     copied = 0
     for key, digest in functions.items():
-        row = branch.get(key)
+        row = source.get(key)
         if row is None or row["hash"] != digest or rows.get(key, {}).get("hash") == digest:
             continue
         rows[key] = row
@@ -213,6 +209,24 @@ def seed_rows(repo: Path, ref: str, functions: dict[str, str]) -> int:
     if copied:
         save_ledger(repo, ledger)
     return copied
+
+
+def seed_rows(repo: Path, ref: str, functions: dict[str, str]) -> int:
+    try:
+        branch = parse_ledger(_git(repo, "show", f"{ref}:{LEDGER_FILE}"))["functions"]
+    except LedgerError:
+        return 0
+    return merge_rows(repo, branch, functions)
+
+
+def shard_targets(targets: dict[str, str], shard: str | None) -> dict[str, str]:
+    if shard is None:
+        return targets
+    match = re.fullmatch(r"(\d+)/(\d+)", shard)
+    if match is None or int(match.group(2)) == 0 or int(match.group(1)) >= int(match.group(2)):
+        raise LedgerError(f"--shard must be <index>/<count> with index below count, got {shard!r}")
+    keys = sorted(targets)[int(match.group(1)) :: int(match.group(2))]
+    return {key: targets[key] for key in keys}
 
 
 def planned(repo: Path, base: str | None) -> dict[str, str]:
@@ -468,7 +482,7 @@ def command_run(args: argparse.Namespace) -> int:
     base = resolve_base(repo, args.base) if args.base is not None or args.changed_only else None
     functions = scope_functions(repo, config, base)
     print(f"seeded={seed_rows(repo, args.seed_ref, functions) if args.seed_ref else 0}")
-    targets = unscored(load_ledger(repo), functions)
+    targets = shard_targets(unscored(load_ledger(repo), functions), args.shard)
     print(f"planned={len(targets)}")
     if not targets:
         print("mutation-ledger: nothing to score")
@@ -483,7 +497,7 @@ def command_run(args: argparse.Namespace) -> int:
     patterns = [mutant_pattern(key) for key in sorted(targets)]
     outcome = run([mutmut, "run", *patterns], args.budget_minutes * 60, 10, cwd=str(repo), env=git_env())
     print(f"mutmut_exit={outcome.returncode}")
-    print(f"budget_exhausted={'no' if outcome.terminal else 'yes'}")
+    print(f"budget_exhausted={'yes' if outcome.returncode == TIMEOUT_EXIT else 'no'}")
     recorded, skipped = record_rows(repo, results, version_text, targets, {}, parse_today(None))
     print(f"recorded_count={len(recorded)}")
     print(f"skipped_count={len(skipped)}")
@@ -491,6 +505,23 @@ def command_run(args: argparse.Namespace) -> int:
         print("mutation-ledger: FAIL mutmut recorded nothing")
         return 1
     print("mutation-ledger: recorded")
+    return 0
+
+
+def command_merge(args: argparse.Namespace) -> int:
+    repo = Path(args.repo).resolve()
+    config = mutmut_config(repo)
+    if config is None:
+        raise LedgerError("pyproject.toml has no [tool.mutmut] table; wire the runner first (mutation.md)")
+    functions = scope_functions(repo, config, None)
+    merged = 0
+    for source in args.sources:
+        try:
+            text = Path(source).read_text(encoding="utf-8")
+        except OSError as error:
+            raise LedgerError(f"{source} is unreadable: {error}") from error
+        merged += merge_rows(repo, parse_ledger(text)["functions"], functions)
+    print(f"merged={merged}")
     return 0
 
 
@@ -519,6 +550,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_command.add_argument(
         "--seed-ref", help="ref whose mutation-ledger.json fills gaps for functions with the same hash"
     )
+    run_command.add_argument("--shard", help="<index>/<count>: score every count-th unscored function from index")
+    merge = commands.add_parser("merge")
+    merge.add_argument("--repo", required=True)
+    merge.add_argument("--from", dest="sources", action="append", default=[], help="ledger file whose rows fill gaps")
     verdict = commands.add_parser("verdict")
     verdict.add_argument("--repo", required=True)
     verdict.add_argument("--function", required=True)
@@ -541,6 +576,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "verdict": command_verdict,
         "check": command_check,
         "run": command_run,
+        "merge": command_merge,
     }
     try:
         return actions[args.command](args)
