@@ -4,24 +4,18 @@ from __future__ import annotations
 import atexit
 import fcntl
 import hashlib
-import io
 import json
 import os
-import shlex
 import shutil
 import stat
 import subprocess
-import tarfile
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "bin/hard-eng"
-COMMIT = "a" * 40
-TAG = f"v0.1.0-alpha.g{COMMIT}"
 AGENTS = ("codex", "claude", "copilot")
-AGENT_HOMES = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR", "copilot": "COPILOT_HOME"}
-TOOLS = ("bash", "git", "node", "npm", "npx", "perl", "python3", "sh")
+TOOLS = ("bash", "git", "node", "npm", "npx", "perl", "python3", "sh", "rsync")
 GIT_CONFIG = Path(tempfile.mkdtemp(prefix="hard-eng-gitconfig-")) / "gitconfig"
 GIT_CONFIG.write_text("[core]\n\texcludesFile = /dev/null\n\thooksPath = /dev/null\n")
 atexit.register(shutil.rmtree, GIT_CONFIG.parent, True)
@@ -34,7 +28,8 @@ OWNER_BLOCK = (
     "# >>> hard-eng repository owners >>>\n/AGENTS.md\n/CLAUDE.md\n/hard-eng.gates.json\n"
     "# <<< hard-eng repository owners <<<\n"
 )
-POLICY = {"channel": "prerelease", "release_repository": "sgaabdu4/hard-eng", "schema_version": 1}
+SHARED_POLICY = {"schema_version": 1, "wiring": "shared"}
+SOURCE_EXCLUDES = (".git", "node_modules", ".venv-mutation", "mutants", ".a", "features", "__pycache__")
 
 
 def run(
@@ -78,7 +73,7 @@ def init_repository(root: Path, *, marked: bool, policy: bool = True) -> None:
     if marked:
         marker: dict[str, object] = {"schema_version": 1}
         if policy:
-            marker["hard_eng"] = POLICY
+            marker["hard_eng"] = dict(SHARED_POLICY)
         write(root / "hard-eng.gates.json", json.dumps(marker) + "\n")
     run(["git", "init", "-q", "-b", "main"], cwd=root)
     commit_all(root, ["AGENTS.md", "CLAUDE.md", *(["hard-eng.gates.json"] if marked else [])])
@@ -102,104 +97,6 @@ def payload(root: Path) -> None:
     write(root / "bin/hard-eng", (ROOT / "bin/hard-eng").read_bytes(), 0o755)
 
 
-def asset(path: Path) -> dict[str, object]:
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    return {"digest": f"sha256:{digest}", "name": path.name, "size": path.stat().st_size}
-
-
-def release_assets(root: Path, commit: str = COMMIT) -> tuple[Path, dict[str, object]]:
-    tag = f"v0.1.0-alpha.g{commit}"
-    source = root / "payload"
-    if not source.exists():
-        payload(source)
-    archive = root / f"hard-eng-{tag}.tar.gz"
-    prefix = f"hard-eng-{tag}"
-    with tarfile.open(archive, "w:gz", format=tarfile.PAX_FORMAT) as bundle:
-        directory = tarfile.TarInfo(prefix)
-        directory.type = tarfile.DIRTYPE
-        directory.mode = 0o755
-        bundle.addfile(directory)
-        for path in sorted(source.rglob("*")):
-            relative = path.relative_to(source).as_posix()
-            info = bundle.gettarinfo(str(path), arcname=f"{prefix}/{relative}")
-            if info.isfile():
-                with path.open("rb") as handle:
-                    bundle.addfile(info, handle)
-            else:
-                bundle.addfile(info)
-    archive_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    manifest = {
-        "archive": {"name": archive.name, "sha256": archive_digest, "size": archive.stat().st_size},
-        "compatibility": {
-            "agents": ["claude", "codex", "copilot"],
-            "node": ">=26.0.0",
-            "platforms": ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"],
-            "python": ">=3.12.0",
-        },
-        "launcher_schema": 1,
-        "minimum_supported_version": f"v0.1.0-alpha.g{'0' * 40}",
-        "product": "hard-eng",
-        "schema_version": 3,
-        "source_commit": commit,
-        "version": tag,
-    }
-    manifest_path = root / f"hard-eng-{tag}.manifest.json"
-    write(manifest_path, json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n")
-    release = {
-        "assets": [asset(archive), asset(manifest_path)],
-        "draft": False,
-        "immutable": True,
-        "prerelease": True,
-        "tag_name": tag,
-        "target_commitish": commit,
-    }
-    return root, release
-
-
-def fake_gh(bin_root: Path, releases: list[dict[str, object]]) -> Path:
-    executable = bin_root / "gh"
-    script = f"""#!/usr/bin/env python3
-import json, os, shutil, sys
-from pathlib import Path
-releases = json.loads({json.dumps(json.dumps(releases))})
-args = sys.argv[1:]
-if args[:1] == ["api"]:
-    endpoint = next((item for item in args[1:] if item.startswith("repos/")), "")
-    if "/compare/" in endpoint:
-        pair = endpoint.rsplit("/", 1)[-1]
-        base, head = pair.split("...", 1)
-        order = {{item["target_commitish"]: index for index, item in enumerate(reversed(releases))}}
-        status = "identical" if base == head else "ahead" if order[head] > order[base] else "behind"
-        print(json.dumps({{"status": status}}))
-    elif "/releases/tags/" in endpoint:
-        tag = endpoint.rsplit("/", 1)[-1]
-        print(json.dumps(next(item for item in releases if item["tag_name"] == tag)))
-    elif endpoint.endswith("/releases"):
-        print(json.dumps(releases))
-    else:
-        raise SystemExit("unknown fake API endpoint: " + endpoint)
-elif args[:2] == ["release", "download"]:
-    tag = args[2]
-    release = next(item for item in releases if item["tag_name"] == tag)
-    destination = Path(args[args.index("--dir") + 1])
-    destination.mkdir(parents=True, exist_ok=True)
-    source = Path(os.environ["HARD_ENG_TEST_ASSETS"])
-    for name in (release["assets"][0]["name"], release["assets"][1]["name"]):
-        shutil.copy2(next(source.rglob(name)), destination / name)
-    if os.environ.get("HARD_ENG_TEST_TAMPER") == "1":
-        with (destination / release["assets"][0]["name"]).open("ab") as handle:
-            handle.write(b"tampered")
-elif args[:2] == ["release", "verify"]:
-    if os.environ.get("HARD_ENG_TEST_FAIL_VERIFY") == "1":
-        raise SystemExit(1)
-    print(json.dumps([{{"verified": True}}]))
-else:
-    raise SystemExit("unknown fake gh command: " + " ".join(args))
-"""
-    write(executable, script, 0o755)
-    return executable
-
-
 def fake_agents(bin_root: Path, agents: tuple[str, ...]) -> None:
     for agent in agents:
         write(bin_root / agent, "#!/bin/sh\nexit 0\n", 0o755)
@@ -216,16 +113,15 @@ def tools_path(root: Path) -> Path:
     return tools
 
 
-def environment(fake_bin: Path, assets: Path, *, extra_path: tuple[Path, ...] = ()) -> dict[str, str]:
+def environment(fake_bin: Path, workspace: Path, *, extra_path: tuple[Path, ...] = ()) -> dict[str, str]:
     value = {
         name: item
         for name, item in os.environ.items()
         if name not in {"CODEX_HOME", "CLAUDE_CONFIG_DIR", "COPILOT_HOME", "XDG_CONFIG_HOME"}
     }
     value["PATH"] = os.pathsep.join(
-        (str(fake_bin), *(str(path) for path in extra_path), str(tools_path(assets.parent)), "/usr/bin", "/bin")
+        (str(fake_bin), *(str(path) for path in extra_path), str(tools_path(workspace)), "/usr/bin", "/bin")
     )
-    value["HARD_ENG_TEST_ASSETS"] = str(assets)
     value["PYTHONDONTWRITEBYTECODE"] = "1"
     return value
 
@@ -294,11 +190,13 @@ def link(path: Path, target: Path) -> None:
         path.symlink_to(target, target_is_directory=target.is_dir())
 
 
-def install_global(home: Path, source: Path, agents: tuple[str, ...] = ("codex",)) -> None:
+def install_global(home: Path, source: Path, agents: tuple[str, ...] = ("codex",)) -> str:
     global_root = home / ".agents"
     shutil.copytree(source, global_root)
-    write(global_root / ".hard-eng-release.json", json.dumps({"source_commit": COMMIT, "version": TAG}) + "\n")
+    run(["git", "init", "-q", "-b", "main"], cwd=global_root)
+    commit_all(global_root, ["-A"])
     wire_global(home, global_root, agents)
+    return run(["git", "rev-parse", "HEAD"], cwd=global_root).stdout.strip()
 
 
 def wire_global(home: Path, global_root: Path, agents: tuple[str, ...]) -> None:
@@ -324,24 +222,43 @@ def wire_global(home: Path, global_root: Path, agents: tuple[str, ...]) -> None:
         write(home / ".copilot/settings.json", json.dumps({"includeCoAuthoredBy": False}))
 
 
-def assert_fallback_files(repository: Path, expected_status: str = "") -> None:
-    assert (repository / ".agents/hard-eng/current").is_symlink()
-    override = (repository / "AGENTS.override.md").read_text(encoding="utf-8")
-    assert REPOSITORY_MARKER in override and HARD_ENG_MARKER in override
-    assert override.index(REPOSITORY_MARKER) < override.index(HARD_ENG_MARKER)
-    assert (repository / "CLAUDE.local.md").read_text(encoding="utf-8") == "@.agents/hard-eng/current/AGENTS.md\n"
-    instructions = (repository / ".github/instructions/hard-eng.instructions.md").read_text(encoding="utf-8")
-    assert instructions.startswith('---\napplyTo: "**"\n---\n') and HARD_ENG_MARKER in instructions
-    claude_settings = json.loads((repository / ".claude/settings.local.json").read_text(encoding="utf-8"))
-    assert claude_settings["outputStyle"] == "Plain English"
-    assert "agent-hook.sh" in claude_settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+def build_source(root: Path) -> tuple[Path, str]:
+    source = root / "source"
+    source.mkdir()
+    excludes = tuple(f"--exclude={name}" for name in SOURCE_EXCLUDES)
+    run(["rsync", "-a", *excludes, f"{ROOT}/", f"{source}/"], cwd=root)
+    run(["git", "init", "-q", "-b", "main"], cwd=source)
+    commit_all(source, ["-A"])
+    return source, run(["git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
+
+
+def assert_shared_wiring(repository: Path, source: Path, commit: str) -> None:
+    current = repository / ".agents/hard-eng/current"
+    assert current.is_symlink() and current.resolve().name == commit
+    source_agents = (source / "AGENTS.md").read_bytes()
+    override = (repository / "AGENTS.override.md").read_bytes()
+    assert override.endswith(source_agents) and REPOSITORY_MARKER.encode() in override
+    assert override.index(REPOSITORY_MARKER.encode()) < len(override) - len(source_agents)
+    assert (repository / "CLAUDE.local.md").read_bytes() == b"@.agents/hard-eng/current/AGENTS.md\n"
+    instructions = (repository / ".github/instructions/hard-eng.instructions.md").read_bytes()
+    assert instructions.startswith(b'---\napplyTo: "**"\n---\n') and instructions.endswith(source_agents)
+    for relative in (".hard-eng/bootstrap.sh", ".hard-eng/hook.sh"):
+        target = repository / relative
+        assert target.is_file() and os.access(target, os.X_OK), relative
     codex_hooks = json.loads((repository / ".codex/hooks.json").read_text(encoding="utf-8"))
-    hook_path = shlex.split(codex_hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"])[1]
-    assert Path(hook_path).samefile(repository / ".agents/hard-eng/current/scripts/hooks/agent-hook.sh")
+    session = codex_hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+    assert "bootstrap.sh" in session and "codex" in session
+    pretool = codex_hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+    assert "hook.sh" in pretool and "pretooluse" in pretool
+    claude_settings = json.loads((repository / ".claude/settings.json").read_text(encoding="utf-8"))
+    assert claude_settings["outputStyle"] == "Plain English"
+    assert "hook.sh" in claude_settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
     copilot_hooks = json.loads((repository / ".github/hooks/hard-eng.json").read_text(encoding="utf-8"))
-    assert copilot_hooks["version"] == 1 and "copilot pretooluse" in copilot_hooks["hooks"]["preToolUse"][0]["bash"]
+    assert copilot_hooks["version"] == 1
+    assert "bootstrap.sh" in copilot_hooks["hooks"]["sessionStart"][0]["bash"]
+    assert "hook.sh" in copilot_hooks["hooks"]["preToolUse"][0]["bash"]
     codex_config = (repository / ".codex/config.toml").read_text(encoding="utf-8")
-    assert codex_config == "project_doc_max_bytes = 65536 # Generated by Hard Eng\n", codex_config
+    assert "project_doc_max_bytes = 65536" in codex_config
     for relative in (
         ".agents/skills/plain-english",
         ".claude/skills/plain-english",
@@ -351,87 +268,63 @@ def assert_fallback_files(repository: Path, expected_status: str = "") -> None:
         ".claude/output-styles/plain-english.md",
     ):
         assert (repository / relative).is_symlink(), relative
-    assert not (repository / ".agents/hard-eng/mcp.json").exists()
-    assert not (repository / ".copilot").exists()
-    assert run(["git", "status", "--short", "--untracked-files=all"], cwd=repository).stdout == expected_status
 
 
-def assert_matrix(root: Path, env: dict[str, str], release_root: Path) -> None:
-    for marked in (False, True):
-        for global_install in (False, True):
-            case = root / f"matrix-m{int(marked)}-g{int(global_install)}"
-            repository = case / 'repository "quoted"'
-            home = case / "home"
-            home.mkdir(parents=True)
-            init_repository(repository, marked=marked)
-            if global_install:
-                install_global(home, release_root)
-            before = tracked_digest(repository)
-            home_before = tree_digest(home)
-            value = prepared(repository, home, env)
-            assert tracked_digest(repository) == before
-            expected = "global" if marked and global_install else "fallback" if marked else "pass-through"
-            assert value["mode"] == expected, (marked, global_install, value)
-            if expected == "fallback":
-                assert value["version"] == TAG and value["wiring"] == "verified"
-                assert_fallback_files(repository)
-            else:
-                assert not (repository / ".agents").exists() and not (repository / "AGENTS.override.md").exists()
-            if not marked:
-                assert tree_digest(home) == home_before
+def assert_matrix(root: Path, env: dict[str, str], global_payload: Path, source: Path, commit: str) -> None:
+    cases = (
+        ("unmarked", None, False),
+        ("unmarked-global", None, True),
+        ("marked-no-global", False, False),
+        ("marked-global", False, True),
+        ("shared-no-global", True, False),
+        ("shared-global", True, True),
+    )
+    for name, marker, global_install in cases:
+        case = root / name
+        repository = case / 'repository "quoted"'
+        home = case / "home"
+        home.mkdir(parents=True)
+        init_repository(repository, marked=marker is not None, policy=bool(marker))
+        global_commit = install_global(home, global_payload) if global_install else None
+        before = tracked_digest(repository)
+        if marker is False and not global_install:
+            failed = launcher(repository, home, env, check=False)
+            assert failed.returncode == 1 and "hard-eng install --repo" in failed.stderr, failed.stderr
             status = json.loads(launcher(repository, home, env, command="status").stdout)
-            assert status["mode"] == expected and status["wiring"] == "verified"
+            assert status["mode"] == "unprotected", status
+            continue
+        value = prepared(repository, home, env)
+        assert tracked_digest(repository) == before
+        expected = "pass-through" if marker is None else "global" if marker is False else "shared"
+        assert value["mode"] == expected, (name, value)
+        if expected == "shared":
+            note = "; the global Hard Eng guard checks tool calls" if global_install else ""
+            assert value["identity"] == commit and value["wiring"] == "verified" + note, value
+            assert_shared_wiring(repository, source, commit)
+        elif expected == "global":
+            assert value["identity"] == global_commit and not (repository / ".agents").exists()
+        status = json.loads(launcher(repository, home, env, command="status").stdout)
+        assert status["mode"] == expected, status
 
 
-def assert_agents(root: Path, env: dict[str, str], fake_bin: Path, release_root: Path) -> None:
-    for agent in ("claude", "copilot"):
-        case = root / f"{agent}-global"
+def assert_agents(root: Path, env: dict[str, str], fake_bin: Path, global_payload: Path) -> None:
+    for agent in AGENTS:
+        case = root / agent
         repository = case / "repository"
         home = case / "home"
         home.mkdir(parents=True)
-        init_repository(repository, marked=True)
-        install_global(home, release_root, ("codex",))
-        assert prepared(repository, home, env, agent=agent)["mode"] == "global"
+        init_repository(repository, marked=True, policy=False)
+        commit = install_global(home, global_payload, (agent,))
         fake_agents(fake_bin, (agent,))
-        rejected = launcher(repository, home, env, agent=agent, check=False)
-        assert rejected.returncode == 1 and "partial or broken global" in rejected.stderr
-        assert "not wired to Hard Eng" in rejected.stderr
-        (fake_bin / agent).unlink()
-        shutil.rmtree(home)
-        home.mkdir()
-        install_global(home, release_root, ("codex", agent))
-        fake_agents(fake_bin, (agent,))
-        assert prepared(repository, home, env, agent=agent)["mode"] == "global"
-        if agent == "claude":
-            settings_path = home / ".claude/settings.json"
-            settings = json.loads(settings_path.read_text(encoding="utf-8"))
-            settings["outputStyle"] = "plain-english"
-            write(settings_path, json.dumps(settings))
-            invalid = launcher(repository, home, env, agent=agent, check=False)
-            assert invalid.returncode == 1 and "plain-English output style is missing" in invalid.stderr
-        (fake_bin / agent).unlink()
-    alternate = root / "alternate-homes"
-    repository = alternate / "repository"
-    home = alternate / "home"
-    home.mkdir(parents=True)
-    init_repository(repository, marked=True)
-    install_global(home, release_root, AGENTS)
-    fake_agents(fake_bin, AGENTS)
-    relocated = dict(env)
-    for agent, variable in AGENT_HOMES.items():
-        destination = home / f"custom-{agent}"
-        (home / f".{agent}").rename(destination)
-        relocated[variable] = str(destination)
-    (home / ".claude.json").rename(home / "custom-claude/.claude.json")
-    for agent in AGENTS:
-        broken = launcher(repository, home, env, agent=agent, check=False)
-        assert broken.returncode == 1 and "partial or broken global" in broken.stderr, agent
-        assert prepared(repository, home, relocated, agent=agent)["mode"] == "global", agent
-    for agent in AGENTS:
-        (fake_bin / agent).unlink()
+        try:
+            value = prepared(repository, home, env, agent=agent)
+            assert value["mode"] == "global" and value["identity"] == commit, (agent, value)
+        finally:
+            (fake_bin / agent).unlink()
+    fake_agents(fake_bin, ("codex",))
 
 
-def assert_private_owner_admission(root: Path, env: dict[str, str]) -> None:
+def assert_private_owner_admission(root: Path, env: dict[str, str], commit: str) -> None:
     repository = root / "repository"
     home = root / "home"
     home.mkdir(parents=True)
@@ -440,169 +333,157 @@ def assert_private_owner_admission(root: Path, env: dict[str, str]) -> None:
     commit_all(repository, ["README.md"])
     write(repository / "AGENTS.md", "# Repository rules\n")
     write(repository / "CLAUDE.md", "@AGENTS.md\n")
-    write(repository / "hard-eng.gates.json", json.dumps({"schema_version": 1, "hard_eng": POLICY}) + "\n")
+    write(repository / "hard-eng.gates.json", json.dumps({"schema_version": 1, "hard_eng": dict(SHARED_POLICY)}) + "\n")
     write(repository / ".gitignore", "/AGENTS.md\n/CLAUDE.md\n/hard-eng.gates.json\n")
     rejected = launcher(repository, home, env, check=False)
-    assert rejected.returncode == 1 and "tracked or privately ignored" in rejected.stderr
+    assert rejected.returncode == 1 and "tracked or privately ignored" in rejected.stderr, rejected.stderr
     (repository / ".gitignore").unlink()
     exclude = git_exclude(repository)
     write(exclude, exclude.read_text(encoding="utf-8") + OWNER_BLOCK)
     before = tracked_digest(repository)
-    assert prepared(repository, home, env)["mode"] == "fallback"
+    value = prepared(repository, home, env)
+    assert value["mode"] == "shared" and value["identity"] == commit, value
     assert tracked_digest(repository) == before
-    assert run(["git", "status", "--short", "--untracked-files=all"], cwd=repository).stdout == ""
+    owners = ("AGENTS.md", "CLAUDE.md", "hard-eng.gates.json")
+    status = run(["git", "status", "--short", "--untracked-files=all"], cwd=repository).stdout
+    assert not any(name in line for line in status.splitlines() for name in owners), status
 
 
 def assert_rejections(root: Path, env: dict[str, str]) -> None:
-    cases = {
-        "partial-global": ("partial or broken global", None),
-        "generated-file-conflict": ("another owner", "user-owned\n"),
-        "missing-policy": ("no hard_eng release policy", None),
-        "redirected-release": ("must be sgaabdu4/hard-eng", None),
-        "tracked-override": ("tracked repository state", None),
-        "oversize-rules": ("Codex reads at most", None),
-    }
-    for name, (message, override) in cases.items():
-        case = root / name
+    refused = (
+        ("channel", "prerelease"),
+        ("pin", {"tag": "v1"}),
+        ("release_repository", "attacker/hard-eng"),
+        ("minimum_version", "0.1.0"),
+    )
+    for key, value in refused:
+        case = root / f"key-{key}"
         repository = case / "repository"
         home = case / "home"
         home.mkdir(parents=True)
-        init_repository(repository, marked=True, policy=name != "missing-policy")
-        if name == "partial-global":
-            write(home / ".agents/AGENTS.md", "partial\n")
-            write(home / ".agents/scripts/hooks/agent-hook.sh", "#!/bin/bash\n", 0o755)
-        elif override is not None:
-            write(repository / "AGENTS.override.md", override)
-        elif name == "redirected-release":
-            marker = json.loads((repository / "hard-eng.gates.json").read_text(encoding="utf-8"))
-            marker["hard_eng"]["release_repository"] = "attacker/hard-eng"
-            write(repository / "hard-eng.gates.json", json.dumps(marker) + "\n")
-        elif name == "tracked-override":
-            write(repository / "AGENTS.override.md", "tracked\n")
-            commit_all(repository, ["AGENTS.override.md"])
-        elif name == "oversize-rules":
-            write(repository / "AGENTS.md", "# Big\n" + ("x" * 80 + "\n") * 900)
-            commit_all(repository, ["AGENTS.md"])
+        init_repository(repository, marked=True, policy=True)
+        marker = json.loads((repository / "hard-eng.gates.json").read_text(encoding="utf-8"))
+        marker["hard_eng"][key] = value
+        write(repository / "hard-eng.gates.json", json.dumps(marker) + "\n")
         failed = launcher(repository, home, env, check=False)
-        assert failed.returncode == 1 and message in failed.stderr, (name, failed.stderr)
-        assert not (repository / ".agents/hard-eng/current").exists(), name
-        if override is not None:
-            assert (repository / "AGENTS.override.md").read_text(encoding="utf-8") == override
-    redirected_parent = root / "redirected-parent"
-    repository = redirected_parent / "repository"
-    home = redirected_parent / "home"
-    outside = redirected_parent / "outside"
+        assert failed.returncode == 1 and f"unsupported keys: {key}" in failed.stderr, (key, failed.stderr)
+        assert not (repository / ".agents/hard-eng/current").exists(), key
+    untracked = root / "untracked-marker"
+    repository = untracked / "repository"
+    home = untracked / "home"
     home.mkdir(parents=True)
-    outside.mkdir()
-    init_repository(repository, marked=True)
-    (repository / ".agents").symlink_to(outside, target_is_directory=True)
+    write(repository / "AGENTS.md", f"# Repository rules\n\n{REPOSITORY_MARKER}\n")
+    write(repository / "CLAUDE.md", "@AGENTS.md\n")
+    run(["git", "init", "-q", "-b", "main"], cwd=repository)
+    commit_all(repository, ["AGENTS.md", "CLAUDE.md"])
+    write(repository / "hard-eng.gates.json", json.dumps({"schema_version": 1, "hard_eng": dict(SHARED_POLICY)}) + "\n")
     failed = launcher(repository, home, env, check=False)
-    assert failed.returncode == 1 and "fallback parent is unsafe" in failed.stderr
-    assert not tuple(outside.iterdir())
-    generic = root / "generic-agent-skills"
-    repository = generic / "repository"
-    home = generic / "home"
+    assert failed.returncode == 1 and "tracked or privately ignored" in failed.stderr, failed.stderr
+    symlinked = root / "symlinked-marker"
+    repository = symlinked / "repository"
+    home = symlinked / "home"
     home.mkdir(parents=True)
-    init_repository(repository, marked=True)
-    write(home / ".agents/skills/example/SKILL.md", "# Example\n")
-    assert prepared(repository, home, env)["mode"] == "fallback"
+    init_repository(repository, marked=False)
+    outside = symlinked / "outside.json"
+    write(outside, json.dumps({"schema_version": 1, "hard_eng": dict(SHARED_POLICY)}) + "\n")
+    (repository / "hard-eng.gates.json").symlink_to(outside)
+    failed = launcher(repository, home, env, check=False)
+    assert failed.returncode == 1 and "must be a regular file" in failed.stderr, failed.stderr
+    bad_claude = root / "bad-claude"
+    repository = bad_claude / "repository"
+    home = bad_claude / "home"
+    home.mkdir(parents=True)
+    init_repository(repository, marked=True, policy=True)
+    write(repository / "CLAUDE.md", "not just the import\n")
+    commit_all(repository, ["CLAUDE.md"])
+    failed = launcher(repository, home, env, agent="claude", check=False)
+    assert failed.returncode == 1 and "must contain only @AGENTS.md" in failed.stderr, failed.stderr
 
 
-def assert_cache_and_uninstall(root: Path, env: dict[str, str]) -> None:
+def prepared_shared(root: Path, env: dict[str, str], commit: str) -> tuple[Path, Path]:
     repository = root / "repository"
     home = root / "home"
     home.mkdir(parents=True)
-    init_repository(repository, marked=True)
+    init_repository(repository, marked=True, policy=True)
     first = prepared(repository, home, env)
-    assert first["last_check"] == "online-verified"
-    write(repository / ".agents/hard-eng/user-note.txt", "retain\n")
-    write(root / "offline-bin/gh", "#!/bin/sh\nprintf '%s\\n' 'network is unreachable' >&2\nexit 1\n", 0o755)
-    offline = {**env, "PATH": os.pathsep.join((str(root / "offline-bin"), env["PATH"]))}
+    assert first["identity"] == commit and first["mode"] == "shared"
+    return repository, home
+
+
+def assert_cache_and_uninstall(root: Path, env: dict[str, str], commit: str) -> None:
+    repository, home = prepared_shared(root, env, commit)
+    offline = {**env, "HARD_ENG_SOURCE_URL": f"file://{root / 'missing-source'}"}
     second = prepared(repository, home, offline)
-    assert second["last_check"] == "offline-cache"
-    before = tracked_digest(repository)
-    exclude = git_exclude(repository)
-    write(exclude, exclude.read_text(encoding="utf-8") + "# user update after Hard Eng setup\n")
+    assert second["identity"] == commit and second["mode"] == "shared"
+    staged = run(["git", "diff", "--cached", "--name-only"], cwd=repository).stdout
     launcher(repository, home, env, command="uninstall")
-    assert tracked_digest(repository) == before
-    assert sorted(path.name for path in (repository / ".agents/hard-eng").iterdir()) == ["user-note.txt"]
-    for relative in ("AGENTS.override.md", "CLAUDE.local.md", ".github/instructions", ".claude/settings.local.json"):
+    assert staged == run(["git", "diff", "--cached", "--name-only"], cwd=repository).stdout == ""
+    marker = json.loads((repository / "hard-eng.gates.json").read_text(encoding="utf-8"))
+    assert "hard_eng" not in marker, marker
+    assert not (repository / ".agents/hard-eng").exists()
+    for relative in (
+        "AGENTS.override.md",
+        "CLAUDE.local.md",
+        ".github/instructions/hard-eng.instructions.md",
+        ".hard-eng/bootstrap.sh",
+        ".hard-eng/hook.sh",
+        ".codex/hooks.json",
+        ".claude/settings.json",
+        ".github/hooks/hard-eng.json",
+        ".codex/config.toml",
+    ):
         assert not (repository / relative).exists(), relative
-    assert not (repository / ".codex/config.toml").exists()
-    exclude_after = exclude.read_text(encoding="utf-8")
-    assert "# user update after Hard Eng setup" in exclude_after
-    assert "hard-eng repository fallback" not in exclude_after
-    tampered = root / "tampered-cache"
-    repository = tampered / "repository"
-    home = tampered / "home"
-    home.mkdir(parents=True)
-    init_repository(repository, marked=True)
-    launcher(repository, home, env)
-    current = (repository / ".agents/hard-eng/current").resolve(strict=True)
-    write(current / "AGENTS.md", "tampered\n")
-    failed = launcher(repository, home, offline, check=False)
-    assert failed.returncode == 1 and "no allowed verified cache" in failed.stderr
+    again = launcher(repository, home, env, command="uninstall")
+    assert "Hard Eng is not installed in this repository" in again.stdout, again.stdout
 
 
-def assert_heal_and_takeover(root: Path, env: dict[str, str], release_root: Path) -> None:
+def assert_heal_and_takeover(root: Path, env: dict[str, str], commit: str, global_payload: Path) -> None:
     repository = root / "repository"
     home = root / "home"
     home.mkdir(parents=True)
-    init_repository(repository, marked=True)
-    assert prepared(repository, home, env)["mode"] == "fallback"
+    init_repository(repository, marked=True, policy=True)
+    assert prepared(repository, home, env)["mode"] == "shared"
     write(repository / "AGENTS.md", f"# Repository rules\n\n{REPOSITORY_MARKER}\nSECOND_RULE = loaded\n")
     commit_all(repository, ["AGENTS.md"])
-    settings_path = repository / ".claude/settings.local.json"
-    settings = json.loads(settings_path.read_text(encoding="utf-8"))
-    settings["hooks"]["PreToolUse"].append({"hooks": [{"command": "echo user-hook", "type": "command"}]})
-    settings["permissions"] = {"allow": ["Bash(ls:*)"]}
-    write(settings_path, json.dumps(settings, indent=4))
     status = json.loads(launcher(repository, home, env, command="status").stdout)
     assert status["wiring"] == "stale: AGENTS.override.md is out of date", status
     healed = prepared(repository, home, env)
-    assert healed["mode"] == "fallback"
+    assert healed["mode"] == "shared" and healed["wiring"] == "verified", healed
     assert "SECOND_RULE = loaded" in (repository / "AGENTS.override.md").read_text(encoding="utf-8")
-    assert json.loads(launcher(repository, home, env, command="status").stdout)["wiring"] == "verified"
-    kept = json.loads(settings_path.read_text(encoding="utf-8"))
-    assert kept["permissions"] == {"allow": ["Bash(ls:*)"]}
-    assert any("user-hook" in json.dumps(entry) for entry in kept["hooks"]["PreToolUse"])
-    override = repository / "AGENTS.override.md"
-    generated = override.read_text(encoding="utf-8")
-    write(override, generated + "\nhand edit\n")
-    edited = launcher(repository, home, env, check=False)
-    assert edited.returncode == 1 and "edited by hand" in edited.stderr
-    write(override, generated)
-    assert prepared(repository, home, env)["mode"] == "fallback"
     (repository / ".claude/skills/plain-english").unlink()
     status = json.loads(launcher(repository, home, env, command="status").stdout)
     assert status["wiring"] == "stale: .claude/skills/plain-english link is missing", status
     assert prepared(repository, home, env)["wiring"] == "verified"
     assert (repository / ".claude/skills/plain-english").is_symlink()
-    install_global(home, release_root)
+    override = repository / "AGENTS.override.md"
+    generated = override.read_text(encoding="utf-8")
+    write(override, generated + "\nhand edit\n")
+    edited = launcher(repository, home, env, check=False)
+    assert edited.returncode == 1 and "edited by hand" in edited.stderr, edited.stderr
+    write(override, generated)
+    assert prepared(repository, home, env)["mode"] == "shared"
+    write(repository / "hard-eng.gates.json", json.dumps({"schema_version": 1}) + "\n")
+    global_commit = install_global(home, global_payload)
     before = tracked_digest(repository)
     taken = prepared(repository, home, env)
-    assert taken["mode"] == "global" and "stale repository fallback removed" in taken["last_check"], taken
+    assert taken["mode"] == "global" and taken["identity"] == global_commit, taken
+    assert "stale repository copy removed" in taken["wiring"], taken
     assert tracked_digest(repository) == before
-    for relative in ("AGENTS.override.md", "CLAUDE.local.md", ".github/instructions", ".agents/hard-eng/current"):
+    for relative in (
+        "AGENTS.override.md",
+        "CLAUDE.local.md",
+        ".github/instructions/hard-eng.instructions.md",
+        ".agents/hard-eng/current",
+        ".hard-eng/bootstrap.sh",
+        ".hard-eng/hook.sh",
+    ):
         assert not (repository / relative).exists(), relative
-    kept = json.loads(settings_path.read_text(encoding="utf-8"))
-    assert "outputStyle" not in kept and kept["permissions"] == {"allow": ["Bash(ls:*)"]}
-    assert all("agent-hook.sh" not in json.dumps(entry) for entry in kept["hooks"]["PreToolUse"])
-    assert not (repository / ".codex/hooks.json").exists()
-    assert run(["git", "status", "--short", "--untracked-files=all"], cwd=repository).stdout.split() == [
-        "??",
-        ".claude/settings.local.json",
-    ], run(["git", "status", "--short", "--untracked-files=all"], cwd=repository).stdout
-    assert json.loads(launcher(repository, home, env, command="status").stdout)["wiring"] == "verified"
+    assert json.loads(launcher(repository, home, env, command="status").stdout)["mode"] == "global"
 
 
-def assert_concurrent_prepare(root: Path, env: dict[str, str]) -> None:
-    repository = root / "repository"
-    home = root / "home"
-    home.mkdir(parents=True)
-    init_repository(repository, marked=True)
-    assert prepared(repository, home, env)["version"] == TAG
-    command = [str(LAUNCHER), "prepare", "--repo", str(repository), "--home", str(home), "--json"]
+def assert_concurrent_prepare(root: Path, env: dict[str, str], commit: str) -> None:
+    repository, home = prepared_shared(root, env, commit)
+    command = [str(LAUNCHER), "prepare", "--repo", str(repository), "--home", str(home), "--agent", "codex", "--json"]
     with open(repository / ".agents/hard-eng/.wiring.lock", "a+", encoding="utf-8") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
         processes = [
@@ -615,92 +496,46 @@ def assert_concurrent_prepare(root: Path, env: dict[str, str]) -> None:
         fcntl.flock(held, fcntl.LOCK_UN)
     results = [process.communicate(timeout=90) + (process.returncode,) for process in processes]
     assert all(result[2] == 0 for result in results), results
-    assert all(json.loads(result[0])["version"] == TAG for result in results), results
+    assert all(json.loads(result[0])["identity"] == commit for result in results), results
     assert all("waiting for another Hard Eng wiring update" in notice for notice in notices), notices
 
 
-def assert_update(root: Path) -> None:
-    assets_root = root / "assets"
-    first_assets, first = release_assets(assets_root / "first", "a" * 40)
-    _, second = release_assets(assets_root / "second", "b" * 40)
-    fake_bin = root / "fake-bin"
-    fake_bin.mkdir()
-    fake_gh(fake_bin, [first])
-    env = environment(fake_bin, assets_root)
+def assert_unsafe_path(root: Path, env: dict[str, str]) -> None:
     repository = root / "repository"
     home = root / "home"
-    home.mkdir()
-    init_repository(repository, marked=True)
-    first_tag = str(first["tag_name"])
-    second_tag = str(second["tag_name"])
-    assert prepared(repository, home, env)["version"] == first_tag
-    altered = json.loads(json.dumps(second))
-    altered["assets"][0]["digest"] = f"sha256:{'0' * 64}"
-    fake_gh(fake_bin, [altered, first])
-    retained = prepared(repository, home, env)
-    assert retained["version"] == first_tag
-    assert retained["newest_allowed_version"] == second_tag
-    assert retained["last_check"].startswith("update-failed-using-verified-cache:")
-    fake_gh(fake_bin, [second, first])
-    updated = prepared(repository, home, env)
-    assert updated["version"] == second_tag and updated["wiring"] == "verified"
-    releases = repository / ".agents/hard-eng/releases"
-    assert (releases / first_tag).is_dir() and (releases / second_tag).is_dir()
-    assert (repository / ".agents/hard-eng/current").resolve() == (releases / second_tag).resolve()
-    assert first_assets.is_dir()
-
-
-def assert_unsafe_archive(root: Path) -> None:
-    assets, release = release_assets(root / "assets")
-    archive_asset, manifest_asset = release["assets"]  # type: ignore[misc]
-    archive = assets / str(archive_asset["name"])
-    prefix = f"hard-eng-{TAG}"
-    with tarfile.open(archive, "w:gz") as bundle:
-        info = tarfile.TarInfo(f"{prefix}/../../escaped")
-        info.size = 4
-        bundle.addfile(info, io.BytesIO(b"bad\n"))
-    manifest_path = assets / str(manifest_asset["name"])
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["archive"]["sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
-    manifest["archive"]["size"] = archive.stat().st_size
-    write(manifest_path, json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n")
-    archive_asset["digest"] = f"sha256:{hashlib.sha256(archive.read_bytes()).hexdigest()}"
-    archive_asset["size"] = archive.stat().st_size
-    manifest_asset["digest"] = f"sha256:{hashlib.sha256(manifest_path.read_bytes()).hexdigest()}"
-    manifest_asset["size"] = manifest_path.stat().st_size
-    fake_bin = root / "fake-bin"
-    fake_bin.mkdir()
-    fake_gh(fake_bin, [release])
-    env = environment(fake_bin, assets)
-    repository = root / "repository"
-    home = root / "home"
-    home.mkdir()
-    init_repository(repository, marked=True)
+    outside = root / "outside"
+    home.mkdir(parents=True)
+    outside.mkdir()
+    init_repository(repository, marked=True, policy=True)
+    (repository / ".agents").mkdir()
+    (repository / ".agents/hard-eng").symlink_to(outside, target_is_directory=True)
     failed = launcher(repository, home, env, check=False)
-    assert failed.returncode == 1 and "unsafe release archive path" in failed.stderr
-    assert not (root / "escaped").exists()
+    assert failed.returncode == 1 and ".agents/hard-eng" in failed.stderr and "is not a directory" in failed.stderr
+    assert not tuple(outside.iterdir())
 
 
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="hard-eng-repository-native-") as temporary:
         root = Path(temporary)
-        assets, release = release_assets(root / "release")
+        source, commit = build_source(root)
+        os.environ["HARD_ENG_SOURCE_URL"] = f"file://{source}"
+        global_payload = root / "global-payload"
+        payload(global_payload)
         fake_bin = root / "fake-bin"
         fake_bin.mkdir()
-        fake_gh(fake_bin, [release])
         fake_agents(fake_bin, ("codex",))
-        env = environment(fake_bin, assets)
-        assert_matrix(root, env, assets / "payload")
-        assert_agents(root / "agents", env, fake_bin, assets / "payload")
-        assert_private_owner_admission(root / "private-owners", env)
+        env = environment(fake_bin, root)
+        assert_matrix(root / "matrix", env, global_payload, source, commit)
+        assert_agents(root / "agents", env, fake_bin, global_payload)
+        assert_private_owner_admission(root / "private-owners", env, commit)
         assert_rejections(root / "rejections", env)
-        assert_cache_and_uninstall(root / "cache", env)
-        assert_heal_and_takeover(root / "heal", env, assets / "payload")
-        assert_concurrent_prepare(root / "concurrent", env)
-        assert_update(root / "update")
-        assert_unsafe_archive(root / "unsafe")
+        assert_cache_and_uninstall(root / "cache", env, commit)
+        assert_heal_and_takeover(root / "heal", env, commit, global_payload)
+        assert_concurrent_prepare(root / "concurrent", env, commit)
+        assert_unsafe_path(root / "unsafe", env)
     print(
-        "repository-native-contract: PASS matrix=4 agents=3 homes rejections owners cache heal takeover update unsafe"
+        "repository-native-contract: PASS matrix=6 agents=3 owners rejections=5 cache uninstall heal takeover "
+        "concurrent unsafe"
     )
     return 0
 

@@ -26,9 +26,9 @@ Run this from any directory:
 npx -y github:sgaabdu4/hard-eng --global
 ```
 
-This sets up Hard Eng once for this computer. Run the same command again to update to the newest release; an existing setup is repaired in place when it is already current.
+This sets up Hard Eng once for this computer. Run the same command again to pull the newest Hard Eng; a setup that is already current is repaired in place.
 
-The `npx` command runs the installer from the current `main` branch and then downloads the newest verified release. To pin the installer as well, use a release tag: `npx -y github:sgaabdu4/hard-eng#<tag> --global`.
+The `npx` command runs the installer from the current `main` branch and clones that same branch into `~/.agents`. There is nothing to pin: every run gives you the newest Hard Eng.
 
 ## Set up one repository
 
@@ -69,51 +69,21 @@ The Hard Eng safety hooks stop destructive commands, such as discarding uncommit
 - Copilot runs repository hooks only in folders you have trusted. An interactive `copilot` session asks once; `copilot -p` never asks, so trust the folder first or add it to `trustedFolders` in `~/.copilot/config.json`. The user-level hook from the global setup runs everywhere.
 - Claude Code runs the repository hooks in every mode, including `claude -p`.
 
-### Keep the repository setup local
+### Every clone gets Hard Eng
 
-Use `--ignore` if you do not want the three files above added to Git:
+`--repo` stages a small set of generated files for you to commit, so teammates, CI, and cloud agents (Claude Code on the web, the Copilot cloud agent, Codex cloud) get Hard Eng from a fresh clone with nothing installed:
 
-```bash
-npx -y github:sgaabdu4/hard-eng --repo --ignore
-```
-
-Existing tracked files stay tracked.
-
-### Share the setup with every clone
-
-Use `--shared` when teammates, CI, or cloud agents (Claude Code on the web, the Copilot cloud agent, Codex cloud) should get Hard Eng from a fresh clone with nothing installed:
-
-```bash
-npx -y github:sgaabdu4/hard-eng --repo --shared
-```
-
-This pins one Hard Eng release in `hard-eng.gates.json` (its tag and SHA-256 digests) and stages a small set of generated files for you to commit:
-
-- `.hard-eng/bootstrap.sh`, which downloads and verifies exactly the pinned release into `.agents/hard-eng/` at session start;
+- `.hard-eng/bootstrap.sh`, which fetches the newest Hard Eng `main` into `.agents/hard-eng/` at session start;
 - `.hard-eng/hook.sh`, the guard shim every tool call runs through;
 - hook entries in `.claude/settings.json`, `.codex/hooks.json`, and `.github/hooks/hard-eng.json` (existing entries in those files are kept as they are);
 - `project_doc_max_bytes = 65536` in `.codex/config.toml`, so Codex reads the full generated rules instead of silently truncating them past its default 32 KiB limit (left alone if the repository already sets it to 65536 or higher, and rejected with a clear error if the repository sets it lower); and
 - the generated rule files `AGENTS.override.md` and `.github/instructions/hard-eng.instructions.md`.
 
-Until the download has finished and been verified, the shim denies every tool call and tells the agent to run the bootstrap. The download comes from the GitHub release of `sgaabdu4/hard-eng`; set `HARD_ENG_RELEASE_BASE_URL` to serve the same assets from a mirror. Skill links, `CLAUDE.local.md`, and the downloaded copy stay privately ignored, so a clone's `git status` stays clean.
+`hard-eng.gates.json` records only `"hard_eng": {"schema_version": 1, "wiring": "shared"}`. There are no versions to pin: every session start compares the fetched copy with the newest `main` and swaps in a fresh shallow clone when it moved. Without a network the existing copy keeps working; without a network and without a copy the shim denies every tool call and tells the agent to run the bootstrap. Set `HARD_ENG_SOURCE_URL` to fetch from a mirror. Skill links, `CLAUDE.local.md`, and the fetched copy stay privately ignored, so a clone's `git status` stays clean.
 
-On a computer with a healthy global setup the shim stands aside and the global hook checks each tool call once. The pin never moves on its own: run the same `--repo --shared` command again (or `hard-eng update --shared` with a global install) to move it to the newest allowed release, review the diff, and commit. `hard-eng uninstall --shared` removes the pin and the generated files and leaves any foreign hook entries in place; without a global install, run it as `python3 .agents/hard-eng/current/bin/hard-eng uninstall --shared`.
+On a computer with a healthy global setup the shim stands aside and the global hook checks each tool call once. `hard-eng update` fetches the newest copy right away; `hard-eng uninstall` removes the marker key and the generated files and leaves any foreign hook entries in place; without a global install, run them as `python3 .agents/hard-eng/current/bin/hard-eng <command>`.
 
-Codex and Copilot still apply their own trust rules to repository hooks (see above). Claude Code on the web reads only `.claude/settings.json`, so shared wiring is the way to get Hard Eng there.
-
-To share Hard Eng with many repositories, run `scripts/rollout-shared.py --repository <clone URL>` once per repository: it clones the repository into a fresh directory, runs the shared setup, commits, and pushes the default branch. When that push is refused, it pushes the `hard-eng-shared-wiring` branch and opens a pull request instead.
-
-#### Roll out from GitHub Actions
-
-Run the same rollout from GitHub Actions instead of a laptop:
-
-```bash
-gh workflow run rollout-shared.yml --repo sgaabdu4/hard-eng -f repositories="..."
-```
-
-`repositories` takes whitespace-separated GitHub repository URLs or `owner/name` values; add `-f branch=<name>` to target a branch other than each repository's default. The workflow rolls out one repository at a time with a pause between them, then uploads a JSON report of every outcome as a workflow artifact.
-
-One-time setup: create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) scoped to the target repositories (and to `sgaabdu4/hard-eng` too, if it is ever made private) with **Contents** read and write, **Pull requests** read and write, and **Metadata** read permissions, then save it as the repository secret `HARD_ENG_ROLLOUT_TOKEN` on `sgaabdu4/hard-eng`.
+Codex and Copilot still apply their own trust rules to repository hooks (see above). Claude Code on the web reads only `.claude/settings.json`, so the committed wiring is the way to get Hard Eng there.
 
 ## Skills
 

@@ -66,7 +66,6 @@ def main() -> int:
 Node.js 26.0+, Codex is required; Claude Code and Copilot CLI are supported when installed.
 npx -y github:sgaabdu4/hard-eng --global
 npx -y github:sgaabdu4/hard-eng --repo
-npx -y github:sgaabdu4/hard-eng --repo --ignore
 """
         if module.readme_errors(value, readme):
             fail("valid README inventory was rejected")
@@ -76,7 +75,6 @@ npx -y github:sgaabdu4/hard-eng --repo --ignore
             readme.replace("Node.js 26.0+", "Node.js 22.5+"),
             readme.replace("Codex is required", "Codex is optional"),
             readme.replace(" --global", " --computer"),
-            readme.replace(" --repo --ignore", " --repo --private"),
         ):
             if not module.readme_errors(value, wrong):
                 fail("README drift mutation was accepted")

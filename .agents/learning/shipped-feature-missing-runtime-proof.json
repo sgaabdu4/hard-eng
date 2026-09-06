@@ -15,10 +15,10 @@
   "occurrences": 1,
   "prevention": {
     "kind": "deterministic",
-    "owner": "scripts/repository-native-agent-contract-check.py",
-    "proof": "scripts/repository-native-agent-contract-check.py",
-    "valid_fixture": "scripts/repository-native-agent-contract-check.py",
-    "violation_fixture": "scripts/repository-native-agent-contract-check.py"
+    "owner": "scripts/repository-native-contract-check.py",
+    "proof": "scripts/repository-native-contract-check.py",
+    "valid_fixture": "scripts/repository-native-contract-check.py",
+    "violation_fixture": "scripts/repository-native-contract-check.py"
   },
   "root_cause": "Terminal lifecycle state had no deterministic contract binding the claimed capability to its runtime owner and sandbox proof",
   "schema_version": 1,

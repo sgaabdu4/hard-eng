@@ -309,11 +309,6 @@ def check_external_contracts() -> None:
         ("context-document structure", (sys.executable, "scripts/context-docs-contracts.py")),
         ("repository manifest", (sys.executable, "scripts/repository-manifest-regression.py")),
         ("GitHub workflow contracts", ("node", "scripts/github-workflow-contracts-regression.mjs")),
-        ("release workflow contracts", ("node", "scripts/release-workflow-contracts.mjs")),
-        (
-            "release builder and workflow tests",
-            ("node", "--test", "scripts/release-builder.test.mjs", "scripts/release-workflow-contracts.test.mjs"),
-        ),
         ("Windows installer asset contracts", ("node", "scripts/windows-installer-assets-contract-regression.mjs")),
         (
             "canonical context documents",
@@ -353,8 +348,6 @@ def check_external_contracts() -> None:
         ("terminal installer contract", (sys.executable, "scripts/install-contract-check.py")),
         ("repository-native contract", (sys.executable, "scripts/repository-native-contract-check.py")),
         ("repository-native shared contract", (sys.executable, "scripts/repository-native-shared-contract-check.py")),
-        ("shared rollout contract", (sys.executable, "scripts/rollout-shared-contract-check.py")),
-        ("shared rollout workflow contract", (sys.executable, "scripts/rollout-workflow-contract-check.py")),
         ("generated JSON style", (sys.executable, "scripts/json-style-contract.py")),
         ("managed-skill update state", (sys.executable, "scripts/managed-skill-update-state-regression.py")),
         ("execution evidence", (sys.executable, "skills/he/scripts/execution_evidence_regression.py")),

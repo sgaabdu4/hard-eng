@@ -12,14 +12,13 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import DEFAULT_RELEASE_REPOSITORY, LAUNCHER_SCHEMA
+from . import LAUNCHER_SCHEMA
 from .errors import ConfigurationError
-from .models import GlobalState, MarkerPolicy, ReleasePin, RepositoryState
+from .models import GlobalState, RepositoryState
 
 MAX_MARKER_BYTES = 1024 * 1024
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
-SHA256 = re.compile(r"^[0-9a-f]{64}$")
-RELEASE_TAG = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+(?:-alpha\.g[0-9a-f]{40})?$")
+MARKER_KEYS = {"schema_version", "wiring"}
 OWNER_START = "# >>> hard-eng repository owners >>>"
 OWNER_END = "# <<< hard-eng repository owners <<<"
 AGENT_HOME_VARIABLES = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR", "copilot": "COPILOT_HOME"}
@@ -33,9 +32,9 @@ RUNTIME_FILES = (
     "locking.py",
     "models.py",
     "prepare.py",
-    "release.py",
     "repository.py",
     "shared.py",
+    "source.py",
     "wiring.py",
 )
 
@@ -109,50 +108,27 @@ def _regular_file(path: Path, label: str) -> None:
         raise ConfigurationError(f"{label} must be a regular file: {path}")
 
 
-def _release_pin(value: object) -> ReleasePin:
-    if not isinstance(value, dict) or set(value) != {"tag", "archive_sha256", "manifest_sha256"}:
-        raise ConfigurationError("hard_eng.pin must contain exactly tag, archive_sha256, and manifest_sha256")
-    tag = value["tag"]
-    if not isinstance(tag, str) or not RELEASE_TAG.fullmatch(tag):
-        raise ConfigurationError("hard_eng.pin.tag must be a Hard Eng release tag")
-    for name in ("archive_sha256", "manifest_sha256"):
-        if not isinstance(value[name], str) or not SHA256.fullmatch(value[name]):
-            raise ConfigurationError(f"hard_eng.pin.{name} must be a lowercase hex SHA-256")
-    return ReleasePin(tag, value["archive_sha256"], value["manifest_sha256"])
-
-
-def _marker_policy(value: object) -> MarkerPolicy:
+def _marker_shared(value: object) -> bool:
     if not isinstance(value, dict):
         raise ConfigurationError("hard_eng in hard-eng.gates.json must be an object")
-    allowed = {"channel", "minimum_version", "pin", "release_repository", "schema_version", "wiring"}
-    unknown = sorted(set(value) - allowed)
+    unknown = sorted(set(value) - MARKER_KEYS)
     if unknown:
-        raise ConfigurationError(f"hard_eng has unsupported keys: {', '.join(unknown)}")
+        raise ConfigurationError(
+            f"hard_eng has unsupported keys: {', '.join(unknown)}; Hard Eng is not versioned any more, "
+            'keep only {"schema_version": 1, "wiring": "shared"}'
+        )
     if value.get("schema_version", 1) != 1:
         raise ConfigurationError("hard_eng.schema_version must be 1")
-    channel = value.get("channel")
-    if channel is not None and channel not in {"stable", "prerelease"}:
-        raise ConfigurationError("hard_eng.channel must be stable or prerelease")
-    minimum = value.get("minimum_version")
-    if minimum is not None and (not isinstance(minimum, str) or not minimum.startswith("v")):
-        raise ConfigurationError("hard_eng.minimum_version must be a release tag")
-    release_repository = value.get("release_repository", DEFAULT_RELEASE_REPOSITORY)
-    if release_repository != DEFAULT_RELEASE_REPOSITORY:
-        raise ConfigurationError(f"hard_eng.release_repository must be {DEFAULT_RELEASE_REPOSITORY}")
-    wiring = value.get("wiring")
-    if wiring is not None and wiring != "shared":
-        raise ConfigurationError("hard_eng.wiring must be shared when present")
-    if (wiring == "shared") != ("pin" in value):
-        raise ConfigurationError("hard_eng.wiring = shared and hard_eng.pin must be set together")
-    pin = _release_pin(value["pin"]) if "pin" in value else None
-    return MarkerPolicy(channel, minimum, release_repository, wiring == "shared", pin)
+    if value.get("wiring") != "shared":
+        raise ConfigurationError("hard_eng.wiring must be shared")
+    return True
 
 
 def inspect_repository(start: Path) -> RepositoryState:
     root = find_repository(start)
     marker = root / "hard-eng.gates.json"
     if not marker.exists() and not marker.is_symlink():
-        return RepositoryState(root, False, None, None)
+        return RepositoryState(root, False, None, False)
     _regular_file(marker, "Hard Eng marker")
     if not _admitted(root, "hard-eng.gates.json"):
         raise ConfigurationError("hard-eng.gates.json must be tracked or privately ignored by Git")
@@ -169,8 +145,8 @@ def inspect_repository(start: Path) -> RepositoryState:
     _regular_file(agents, "repository AGENTS.md")
     if not _admitted(root, "AGENTS.md"):
         raise ConfigurationError("repository AGENTS.md must be tracked or privately ignored by Git")
-    policy = _marker_policy(value["hard_eng"]) if "hard_eng" in value else None
-    return RepositoryState(root, True, "sha256:" + hashlib.sha256(raw).hexdigest(), policy)
+    shared = _marker_shared(value["hard_eng"]) if "hard_eng" in value else False
+    return RepositoryState(root, True, "sha256:" + hashlib.sha256(raw).hexdigest(), shared)
 
 
 def require_claude_owner(repository: Path) -> None:
@@ -251,21 +227,12 @@ def _hook_points_to(path: Path, expected: Path) -> bool:
 
 
 def _global_identity(root: Path) -> str:
-    manifest = root / ".hard-eng-release.json"
-    if manifest.is_file() and not manifest.is_symlink():
-        try:
-            value = json.loads(manifest.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            value = {}
-        version = value.get("version")
-        if isinstance(version, str) and version:
-            return version
     if (root / ".git").exists():
         head = git(root, "rev-parse", "HEAD", check=False).stdout.strip()
         if COMMIT.fullmatch(head):
             dirty = git(root, "status", "--porcelain", check=False).stdout != ""
-            return f"development@{head}{'-dirty' if dirty else ''}"
-    return "development@unknown"
+            return f"{head}{'-dirty' if dirty else ''}"
+    return "unknown"
 
 
 def _shared_problems(root: Path, launcher: Path) -> list[str]:
@@ -355,12 +322,7 @@ def inspect_global(home: Path, agent: str) -> GlobalState:
     """Global health for one agent; agents whose command is absent only need the shared install."""
     root = home / ".agents"
     launcher = home / ".local/bin/hard-eng"
-    hard_eng_paths = (
-        root / ".hard-eng-release.json",
-        root / "bin/hard-eng",
-        root / "scripts/hooks/agent-hook.sh",
-        launcher,
-    )
+    hard_eng_paths = (root / "bin/hard-eng", root / "scripts/hooks/agent-hook.sh", launcher)
     if not any(path.exists() or path.is_symlink() for path in hard_eng_paths):
         return GlobalState("absent", root, None, ())
     problems = _shared_problems(root, launcher)

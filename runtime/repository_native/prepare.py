@@ -1,55 +1,45 @@
-"""Prepare one repository for one agent: a healthy global Hard Eng or one verified fallback."""
+"""Prepare one repository for one agent: the global Hard Eng, or the repository copy every clone fetches."""
 
 from __future__ import annotations
 
 import shutil
 import stat
-from dataclasses import replace
 from pathlib import Path
 
 from .adapters import EMPTY_COMPOSABLE, composable_files, shared_files, strip_composable
 from .errors import ConfigurationError, HardEngError
 from .models import GlobalState, PreparedState, RepositoryState
-from .release import installed_status, prepare_release
 from .repository import inspect_global, inspect_repository, require_claude_owner
-from .shared import (
-    BOOTSTRAP,
-    ensure_pinned_release,
-    global_guard_agents,
-    pin_release,
-    pinned_cache,
-    replace_file,
-    set_global_guard,
-    write_policy,
-)
-from .wiring import install_wiring, preflight_wiring, uninstall_wiring, verify_wiring
-
-
-def _pass_through(root: Path) -> PreparedState:
-    return PreparedState("pass-through", root, None, None, None, None, None, "not-marked")
-
+from .shared import BOOTSTRAP, ensure_checkout, global_guard_agents, replace_file, set_global_guard, write_policy
+from .source import read_checkout
+from .wiring import install_wiring, uninstall_wiring, verify_wiring
 
 OWNED_ENTRIES = (
     "current",
-    "last-check.json",
     "wiring.json",
     ".wiring.lock",
     ".update.lock",
-    "releases",
+    "checkouts",
     "global-guard",
+    "releases",
+    "last-check.json",
 )
 
 
-def remove_fallback(repository: Path) -> bool:
+def _pass_through(root: Path) -> PreparedState:
+    return PreparedState("pass-through", root, None, None, "not-marked")
+
+
+def remove_copy(repository: Path) -> bool:
     local = repository / ".agents/hard-eng"
     current = local / "current"
     if not current.is_symlink():
         return False
     uninstall_wiring(repository, current)
     if local.is_symlink() or not local.is_dir():
-        raise ConfigurationError(f"fallback root is unsafe: {local}")
+        raise ConfigurationError(f"Hard Eng copy root is unsafe: {local}")
     if not current.is_symlink():
-        raise ConfigurationError("fallback current link changed during removal")
+        raise ConfigurationError("Hard Eng current link changed during removal")
     for name in OWNED_ENTRIES:
         path = local / name
         if path.is_symlink() or path.is_file():
@@ -64,15 +54,15 @@ def remove_fallback(repository: Path) -> bool:
     return True
 
 
-def _discard_fallback(repository: Path, *, existed: bool) -> None:
+def _discard_copy(repository: Path, *, existed: bool) -> None:
     local = repository / ".agents/hard-eng"
     if local.is_symlink() or not local.is_dir():
         return
     if existed:
-        for name in ("current", "last-check.json"):
-            path = local / name
-            if path.is_symlink() or path.is_file():
-                path.unlink()
+        current = local / "current"
+        if current.is_symlink():
+            current.unlink()
+        shutil.rmtree(local / "checkouts", ignore_errors=True)
         return
     shutil.rmtree(local)
     try:
@@ -81,36 +71,30 @@ def _discard_fallback(repository: Path, *, existed: bool) -> None:
         pass
 
 
-def _prepare_shared(repository: RepositoryState, global_state: GlobalState, agent: str) -> PreparedState:
-    policy = repository.policy
-    if policy is None or policy.pin is None:
-        raise ConfigurationError("shared wiring needs hard_eng.pin in hard-eng.gates.json")
+def _guard_note(global_state: GlobalState) -> str:
+    if global_state.mode == "global":
+        return "; the global Hard Eng guard checks tool calls"
+    if global_state.mode == "broken":
+        return "; global Hard Eng is broken: " + "; ".join(global_state.problems)
+    return ""
+
+
+def _prepare_shared(
+    repository: RepositoryState, global_state: GlobalState, agent: str, *, fetch: bool
+) -> PreparedState:
     local = repository.root / ".agents/hard-eng"
     existed = local.is_dir()
     fresh = not (local / "current").is_symlink()
     try:
-        active = ensure_pinned_release(repository.root, policy, agent=agent)
+        checkout = ensure_checkout(repository.root, fetch=fetch)
         install_wiring(repository.root, local / "current", shared=True)
     except HardEngError:
         if fresh:
-            _discard_fallback(repository.root, existed=existed)
+            _discard_copy(repository.root, existed=existed)
         raise
-    deferring = global_state.mode == "global"
-    set_global_guard(repository.root, agent, deferring)
-    last_check = active.last_check
-    if deferring:
-        last_check += "; the global Hard Eng guard checks tool calls"
-    elif global_state.mode == "broken":
-        last_check += "; global Hard Eng is broken: " + "; ".join(global_state.problems)
+    set_global_guard(repository.root, agent, global_state.mode == "global")
     return PreparedState(
-        "shared",
-        repository.root,
-        active.root,
-        active.version,
-        active.source_commit,
-        policy.channel,
-        active.newest_allowed_version,
-        last_check,
+        "shared", repository.root, checkout.root, checkout.commit, "verified" + _guard_note(global_state)
     )
 
 
@@ -121,77 +105,47 @@ def prepare(start: Path, home: Path, agent: str) -> PreparedState:
     if agent == "claude":
         require_claude_owner(repository.root)
     global_state = inspect_global(home, agent)
-    if repository.policy is not None and repository.policy.shared:
-        return _prepare_shared(repository, global_state, agent)
+    if repository.shared:
+        return _prepare_shared(repository, global_state, agent, fetch=False)
     if global_state.mode == "broken":
         details = "\n  - ".join(global_state.problems)
         raise ConfigurationError(
-            "a partial or broken global Hard Eng install was found; fallback was not activated.\n"
+            "a partial or broken global Hard Eng install was found.\n"
             f"  - {details}\nRun `npx -y github:sgaabdu4/hard-eng --global` to repair it."
         )
-    channel = repository.policy.channel if repository.policy else None
     if global_state.mode == "global":
-        removed = remove_fallback(repository.root)
-        last_check = "global-health-verified" + ("; stale repository fallback removed" if removed else "")
-        return PreparedState(
-            "global", repository.root, global_state.root, global_state.identity, None, channel, None, last_check
-        )
-    if repository.policy is None:
-        raise ConfigurationError("no global Hard Eng exists and hard-eng.gates.json has no hard_eng release policy")
-    preflight_wiring(repository.root)
-    local = repository.root / ".agents/hard-eng"
-    existed = local.is_dir()
-    fresh = not (local / "current").is_symlink()
-    active = prepare_release(repository.root, repository.policy, repository.marker_digest or "", agent=agent)
-    try:
-        install_wiring(repository.root, local / "current")
-    except HardEngError:
-        if fresh:
-            _discard_fallback(repository.root, existed=existed)
-        raise
-    return PreparedState(
-        "fallback",
-        repository.root,
-        active.root,
-        active.version,
-        active.source_commit,
-        repository.policy.channel,
-        active.newest_allowed_version,
-        active.last_check,
+        removed = remove_copy(repository.root)
+        wiring = "verified" + ("; stale repository copy removed" if removed else "")
+        return PreparedState("global", repository.root, global_state.root, global_state.identity, wiring)
+    raise ConfigurationError(
+        "no global Hard Eng exists; run `hard-eng install --repo` so this repository carries its own copy"
     )
 
 
-def share(start: Path, home: Path, agent: str, *, repin: bool = False) -> PreparedState:
-    """Pin the newest allowed release into the repository so every clone bootstraps the same Hard Eng."""
+def share(start: Path, home: Path, agent: str) -> PreparedState:
+    """Fetch the newest Hard Eng into the repository and stage the wiring every clone needs to fetch it too."""
     repository = inspect_repository(start)
-    if not repository.marked or repository.policy is None:
-        raise ConfigurationError("hard-eng.gates.json needs a hard_eng policy before shared wiring")
+    if not repository.marked:
+        raise ConfigurationError(
+            "hard-eng.gates.json is missing; run `hard-eng install --repo` from the repository root"
+        )
     if agent == "claude":
         require_claude_owner(repository.root)
-    if repository.policy.shared and not repin:
-        return prepare(start, home, agent)
-    local = repository.root / ".agents/hard-eng"
-    existed = local.is_dir()
-    fresh = not (local / "current").is_symlink()
-    try:
-        _, pin = pin_release(repository.root, repository.policy, repository.marker_digest or "")
-        install_wiring(repository.root, local / "current", shared=True)
-        write_policy(repository.root, replace(repository.policy, shared=True, pin=pin))
-    except HardEngError:
-        if fresh:
-            _discard_fallback(repository.root, existed=existed)
-        raise
-    return prepare(start, home, agent)
+    global_state = inspect_global(home, agent)
+    state = _prepare_shared(repository, global_state, agent, fetch=True)
+    if not repository.shared:
+        write_policy(repository.root, shared=True)
+    return state
 
 
 def remove_shared(start: Path) -> bool:
-    """Remove the committed shared wiring: generated files, Hard Eng hook entries, the pin, and the private cache."""
+    """Remove the committed shared wiring: generated files, Hard Eng hook entries, the marker, and the copy."""
     repository = inspect_repository(start)
-    if not repository.marked or repository.policy is None or not repository.policy.shared:
+    if not repository.marked or not repository.shared:
         return False
     root = repository.root
     payload = root / ".agents/hard-eng/current"
-    remove_fallback(root)
+    remove_copy(root)
     composable = composable_files(root, shared=True)
     for path in shared_files(root):
         if path.is_symlink() or not path.exists():
@@ -206,7 +160,7 @@ def remove_shared(start: Path) -> bool:
                 replace_file(path, stripped, stat.S_IMODE(path.stat().st_mode))
         else:
             path.unlink()
-    write_policy(root, replace(repository.policy, shared=False, pin=None))
+    write_policy(root, shared=False)
     try:
         (root / ".hard-eng").rmdir()
     except OSError:
@@ -215,82 +169,29 @@ def remove_shared(start: Path) -> bool:
 
 
 def _status_shared(repository: RepositoryState, agent: str) -> PreparedState:
-    policy = repository.policy
-    if policy is None or policy.pin is None:
-        raise ConfigurationError("shared wiring needs hard_eng.pin in hard-eng.gates.json")
     local = repository.root / ".agents/hard-eng"
-    cached = pinned_cache(local, policy.pin)
-    if cached is None:
-        wiring = f"not downloaded: run bash {BOOTSTRAP} {agent}"
-        return PreparedState(
-            "shared",
-            repository.root,
-            None,
-            policy.pin.tag,
-            None,
-            policy.channel,
-            policy.pin.tag,
-            "not-prepared",
-            wiring,
-        )
+    checkout = read_checkout(local)
+    if checkout is None:
+        wiring = f"not fetched: run bash {BOOTSTRAP} {agent}"
+        return PreparedState("shared", repository.root, None, None, wiring)
     stale = verify_wiring(repository.root, local / "current")
     wiring = "verified" if not stale else "stale: " + "; ".join(stale)
     if agent in global_guard_agents(repository.root):
         wiring += "; the global Hard Eng guard checks tool calls"
-    return PreparedState(
-        "shared",
-        repository.root,
-        cached.root,
-        cached.version,
-        cached.source_commit,
-        policy.channel,
-        cached.newest_allowed_version,
-        cached.last_check,
-        wiring,
-    )
+    return PreparedState("shared", repository.root, checkout.root, checkout.commit, wiring)
 
 
 def status(start: Path, home: Path, agent: str) -> PreparedState:
     repository = inspect_repository(start)
     if not repository.marked:
         return _pass_through(repository.root)
-    if repository.policy is not None and repository.policy.shared:
+    if repository.shared:
         return _status_shared(repository, agent)
     global_state = inspect_global(home, agent)
-    channel = repository.policy.channel if repository.policy else None
     if global_state.mode == "broken":
         raise ConfigurationError("global Hard Eng is broken: " + "; ".join(global_state.problems))
     current = repository.root / ".agents/hard-eng/current"
     if global_state.mode == "global":
-        wiring = "stale repository fallback present" if current.is_symlink() else "verified"
-        return PreparedState(
-            "global",
-            repository.root,
-            global_state.root,
-            global_state.identity,
-            None,
-            channel,
-            None,
-            "global-health-verified",
-            wiring,
-        )
-    if not current.is_symlink():
-        return PreparedState("unprotected", repository.root, None, None, None, channel, None, "not-prepared")
-    if repository.policy is None or repository.marker_digest is None:
-        raise ConfigurationError("fallback release policy is missing")
-    active = installed_status(repository.root / ".agents/hard-eng", repository.policy, repository.marker_digest)
-    if active is None:
-        raise ConfigurationError("fallback release state is incomplete or changed")
-    stale = verify_wiring(repository.root, current)
-    wiring = "verified" if not stale else "stale: " + "; ".join(stale)
-    return PreparedState(
-        "fallback",
-        repository.root,
-        active.root,
-        active.version,
-        active.source_commit,
-        channel,
-        active.newest_allowed_version,
-        active.last_check,
-        wiring,
-    )
+        wiring = "stale repository copy present" if current.is_symlink() else "verified"
+        return PreparedState("global", repository.root, global_state.root, global_state.identity, wiring)
+    return PreparedState("unprotected", repository.root, None, None, "not-prepared")

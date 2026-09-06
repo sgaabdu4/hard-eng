@@ -25,7 +25,6 @@ RUNTIME_ALLOWLIST = {
     "skills/deterministic-checks/scripts/bounded_run.py",
     "skills/deterministic-checks/scripts/script_runner.py",
     "skills/he-plan/scripts/check.py",
-    "scripts/rollout-shared.py",
 }
 NETWORK_ALLOWLIST = {
     "scripts/setup/update.py",
@@ -102,10 +101,6 @@ def required_anchors(relative: str, source: str) -> None:
         for anchor in ("start_new_session", "stop_process_group", "os.killpg", "timeout_seconds"):
             if anchor not in source:
                 fail(f"adversarial reviewer lost {anchor}")
-    elif relative == "scripts/rollout-shared.py":
-        for anchor in ("start_new_session", "os.killpg", "TIMEOUT_SECONDS"):
-            if anchor not in source:
-                fail(f"shared rollout lost {anchor}")
     elif relative == "skills/he/scripts/tracker_probe.py":
         for anchor in ("PROBE_TIMEOUT", "timeout=timeout", "read(4096)"):
             if anchor not in source:

@@ -1,15 +1,9 @@
 {
   "schema_version": 1,
-  "hard_eng": {
-    "schema_version": 1,
-    "channel": "prerelease",
-    "release_repository": "sgaabdu4/hard-eng"
-  },
   "enforcement": {
     "schema_version": 1,
     "required_paths": [
       ".github/workflows/check-skill-contracts.yml",
-      ".github/workflows/rollout-shared.yml",
       "bin/hard-eng",
       "agents/he-learn/claude.md",
       "agents/he-learn/codex.toml",
@@ -21,12 +15,8 @@
       "scripts/enforcement_protected.pl",
       "scripts/git-hooks/publish-gate.sh",
       "scripts/hooks/agent-hook.sh",
-      "scripts/repository-native-agent-contract-check.py",
       "scripts/repository-native-contract-check.py",
       "scripts/repository-native-shared-contract-check.py",
-      "scripts/rollout-shared.py",
-      "scripts/rollout-shared-contract-check.py",
-      "scripts/rollout-workflow-contract-check.py",
       "scripts/json-style-contract.py",
       "scripts/install-contract-check.py",
       "scripts/setup/repository-native.sh",
@@ -39,9 +29,9 @@
       "runtime/repository_native/locking.py",
       "runtime/repository_native/models.py",
       "runtime/repository_native/prepare.py",
-      "runtime/repository_native/release.py",
       "runtime/repository_native/repository.py",
       "runtime/repository_native/shared.py",
+      "runtime/repository_native/source.py",
       "runtime/repository_native/wiring.py",
       "scripts/machine-scope-guard-contract.py",
       "skills/he-learn/scripts/learning_state.py",
@@ -76,16 +66,6 @@
         "checkpoint check",
         "runtime/repository_native/shared.py",
         "scripts/repository-native-shared-contract-check.py"
-      ],
-      "shared-rollout": [
-        "checkpoint check",
-        "scripts/rollout-shared.py",
-        "scripts/rollout-shared-contract-check.py"
-      ],
-      "shared-rollout-workflow": [
-        "checkpoint check",
-        ".github/workflows/rollout-shared.yml",
-        "scripts/rollout-workflow-contract-check.py"
       ],
       "generated-json-style": [
         "checkpoint check",
@@ -286,8 +266,7 @@
       "--test",
       "skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs",
       "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
-      "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
-      "scripts/release-builder.test.mjs"
+      "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs"
     ],
     "fallow": ["node_modules/.bin/fallow", "audit", "--max-crap", "30", "--format", "json"],
     "clones": [
