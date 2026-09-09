@@ -153,7 +153,8 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
     optional: dict[str, JsonObject] = {
         "Sentry": {"url": "https://mcp.sentry.dev/mcp"},
         "Appwrite": {"command": "uvx", "args": ["mcp-server-appwrite"]},
-        "Marionette": {"command": "marionette_mcp", "args": []},
+        "Dart": {"command": "dart", "args": ["run", "dart_mcp_server@"]},
+        "Marionette": {"command": "dart", "args": ["run", "marionette_mcp@"]},
     }
     detected = {
         service.lower(): optional[service] for service in integrated_services(root)

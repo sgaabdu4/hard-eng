@@ -45,6 +45,11 @@ def session_context(root: Path, payload: JsonObject) -> str:
         "Use the active Context Mode and Codebase Memory MCP tools for this repository; verify a real call and the repository/index before claiming readiness. If unavailable, warn and continue with available tools."
     )
     for service in integrated_services(root):
+        if service == "Dart":
+            messages.append(
+                "This repository contains Flutter. Use the configured Dart MCP: verify its project roots and perform a read-only analysis or runtime inspection for this repository. The native Dart package launcher downloads the server on demand and requires a compatible Dart SDK. If startup or the call fails, warn and continue; registration alone does not prove readiness."
+            )
+            continue
         if service == "Marionette":
             messages.append(
                 "This repository contains Flutter. Use the configured Marionette MCP: connect to the intended debug app's VM service URI, then call get_interactive_elements or take_screenshots to verify the app/device. If the server, marionette_flutter binding or running app is unavailable, warn and continue; do not claim readiness from installation alone."
@@ -88,6 +93,8 @@ def integrated_services(root: Path) -> list[str]:
             found.update(
                 name for name, pattern in patterns.items() if re.search(pattern, source)
             )
+    if "Marionette" in found:
+        found.add("Dart")
     return sorted(found)
 
 
