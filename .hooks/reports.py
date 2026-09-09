@@ -101,6 +101,17 @@ def line_coverage(
 ) -> tuple[int, int]:
     reader = python_coverage if kind == "python-tests" else lcov_coverage
     files = reader(path, directory)
+    if kind == "dart-tests":
+        # Dart LCOV omits simple export barrels: they have no executable lines.
+        expected = {
+            file
+            for file in expected
+            if file in files
+            or not re.fullmatch(
+                r"""(?:\s*export\s+(?:'[^'\r\n$]*'|"[^"\r\n$]*")\s*;\s*)+""",
+                file.read_text(),
+            )
+        }
     missing = expected - files.keys()
     if missing:
         names = ", ".join(str(file.relative_to(directory)) for file in sorted(missing))

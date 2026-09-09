@@ -75,7 +75,7 @@ def native_gate_fixture(root: Path, installer: ModuleType, language: str) -> Gat
         for language, roles in {
             "python": "format lint complexity types annotations tests performance dead-code duplicates dependencies lockfiles vulnerabilities security",
             "javascript": "format-lint focused-tests types typing-style tests performance dead-code-duplicates lockfiles vulnerabilities security",
-            "dart": "format types tests performance dead-code-duplicates lockfiles vulnerabilities security",
+            "dart": "format types tests performance dead-code-duplicates boundaries lockfiles vulnerabilities security",
         }.items()
         for role in roles.split()
     ],

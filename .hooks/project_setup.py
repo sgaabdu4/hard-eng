@@ -9,7 +9,13 @@ import tomllib
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from gate_config import GateConfig, Group, nonproduction_source, repository_files
+from gate_config import (
+    GateConfig,
+    Group,
+    nonproduction_source,
+    repository_files,
+    typescript_packages,
+)
 
 PACKAGE_MANAGERS = {"npm", "npx", "pnpm", "yarn", "yarnpkg", "bun", "bunx"}
 
@@ -170,14 +176,17 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
     owned: dict[Path, list[Path]] = {
         root / package["path"]: [] for package in config["packages"]
     }
-    for path in repository_files(root):
+    files = repository_files(root)
+    for path in files:
         owner = next((parent for parent in path.parents if parent in owned), None)
         if owner is not None:
             owned[owner].append(path)
+    typescript = typescript_packages(root, files)
     for package in config["packages"]:
         directory = root / package["path"]
         adapt_sources(root, package, owned[directory])
         adapt_package(directory, package)
+        adapt_boundaries(package, typescript)
         for gate in package["checks"]:
             if gate.get("role") == "security":
                 gate["command"] = [
@@ -187,6 +196,26 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
                     for argument in gate["command"]
                 ]
     adapt_workspaces(root, config)
+
+
+def adapt_boundaries(package: Group, typescript: set[str]) -> None:
+    required = (
+        str(Path(package["path"])) in typescript or package.get("language") == "dart"
+    )
+    if required and not any(
+        gate.get("role") == "boundaries" for gate in package["checks"]
+    ):
+        package["checks"].append(
+            {
+                "name": "lint:boundaries",
+                "role": "boundaries",
+                "command": (
+                    ["dart-decimate", "check", ".", "--boundary-violations"]
+                    if package.get("language") == "dart"
+                    else ["pnpm", "run", "lint:boundaries"]
+                ),
+            }
+        )
 
 
 def workspace_members(directory: Path, language: str) -> list[str]:
@@ -416,6 +445,7 @@ def adapt_javascript(directory: Path, package: Group, manager: str) -> None:
         ("test:integration", "integration"),
         ("test:ui", "ui"),
         ("check:generated", "generated"),
+        ("lint:boundaries", "boundaries"),
     ):
         if script in manifest.get("scripts", {}):
             package["checks"].append(
