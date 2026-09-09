@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import tomllib
 from pathlib import Path
 from types import ModuleType
 
@@ -402,6 +403,75 @@ def test_install_preserves_project_and_repeats(
     assert "pnpm/setup@c9883cc79df532ad1a7b81bf9ab944ceb090d65c" in workflow
     assert "pnpm dlx --allow-build=@jdxcode/mise" in workflow
     assert "npm exec" not in workflow
+    for name in ("appwrite-backend", "building-flutter-apps"):
+        canonical = installer.SOURCE / ".agents/skills" / name
+        installed = tmp_path / ".agents/skills" / name
+        for path in canonical.rglob("*"):
+            if path.is_file():
+                assert (
+                    installed / path.relative_to(canonical)
+                ).read_bytes() == path.read_bytes()
+        assert (tmp_path / ".claude/skills" / name).resolve() == installed
+    assert not (tmp_path / ".agents/skill-sources").exists()
+
+
+@pytest.mark.parametrize(
+    "source,expected",
+    [
+        ("", set()),
+        ("import 'dart:io';", set()),
+        ("import 'package:flutter/material.dart';", {"marionette"}),
+        ("import 'package:appwrite/appwrite.dart';", {"appwrite"}),
+        ("import 'package:sentry_flutter/sentry_flutter.dart';", {"sentry"}),
+        (
+            (
+                "import 'package:flutter/material.dart';\n"
+                "import 'package:appwrite/appwrite.dart';\n"
+                "import 'package:sentry_flutter/sentry_flutter.dart';"
+            ),
+            {"marionette", "appwrite", "sentry"},
+        ),
+    ],
+)
+def test_installer_registers_only_detected_service_mcps(
+    installer: ModuleType, tmp_path: Path, source: str, expected: set[str]
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "app.dart").write_text(source)
+    changes: dict[str, str] = {}
+    installer.configure_mcp(tmp_path, changes)
+    optional = {"sentry", "appwrite", "marionette"}
+    for name in (".mcp.json", ".github/mcp.json"):
+        servers = json.loads(changes[name])["mcpServers"]
+        assert servers.keys() & optional == expected
+    servers = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
+    assert servers.keys() & optional == expected
+    if "appwrite" in expected:
+        assert servers["appwrite"]["args"] == ["mcp-server-appwrite"]
+        assert "APPWRITE_API_KEY" in servers["appwrite"]["env_vars"]
+
+
+def test_installer_preserves_existing_service_mcp_configuration(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "app.py").write_text("import sentry_sdk\n")
+    existing = {"url": "https://mcp.sentry.dev/mcp/existing-org/existing-project"}
+    for name in (".mcp.json", ".github/mcp.json"):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"mcpServers": {"sentry": existing}}))
+    path = tmp_path / ".codex/config.toml"
+    path.parent.mkdir()
+    path.write_text(f"[mcp_servers.sentry]\nurl = {json.dumps(existing['url'])}\n")
+    changes: dict[str, str] = {}
+    installer.configure_mcp(tmp_path, changes)
+    for name in (".mcp.json", ".github/mcp.json"):
+        assert json.loads(changes[name])["mcpServers"]["sentry"] == existing
+    assert (
+        tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]["sentry"]
+        == existing
+    )
 
 
 @pytest.mark.parametrize(

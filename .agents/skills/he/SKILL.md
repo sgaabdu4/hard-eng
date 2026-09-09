@@ -1,17 +1,18 @@
 ---
 name: he
-description: Apply the repository's Hard Eng gates and ultra YAGNI flow when implementing or fixing code. Use the shared runner with any agent; retain the user's scope and existing authorization.
+description: Apply Hard Eng's project context, verification and gate-adaptation guidance when implementing or reviewing code in an installed project.
 ---
 
 # Hard Eng
 
-Read the relevant reference before acting. Keep the user's scope and settled approvals.
+Load only matching routes.
 
-| Task | Read |
-| --- | --- |
-| Start, implement, review or report engineering work | [Workflow](references/workflow.md) |
-| Install or adapt the scaffold, dependencies or CI | [Setup](references/setup.md) |
-| Configure, run or repair native checks and reports | [Gates](references/gates.md) |
-| Change a bulk, async or performance-sensitive flow | [Efficiency](references/efficiency.md) |
-
-Read only the routes needed for the task. Guidance is not evidence that a gate or integration works.
+```mermaid
+flowchart LR
+  T{Task} -->|Implement / review / deliver| W[references/workflow.md]
+  T -->|Adapt / repair checks| G[references/gates.md]
+  T -->|Bulk / async / performance| E[references/efficiency.md]
+  click W "references/workflow.md"
+  click G "references/gates.md"
+  click E "references/efficiency.md"
+```

@@ -19,7 +19,7 @@
   }],
   "shared": [
     {"name": "actionlint", "role": "workflows", "parallel": true, "command": ["actionlint", "-no-color"]},
-    {"name": "zizmor", "role": "ci-security", "parallel": true, "command": ["zizmor", "--strict-collection", "--persona=auditor", "--format=plain", "."]},
+    {"name": "zizmor", "role": "ci-security", "parallel": true, "command": ["zizmor", "--strict-collection", "--persona=auditor", "--format=plain", ".github"]},
     {"name": "shellcheck", "role": "shell", "parallel": true, "command": ["shellcheck", "--", "setup.sh"]},
     {"name": "secrets-files", "role": "secrets-files", "parallel": true, "command": ["gitleaks", "dir", ".", "--redact=100", "--no-banner", "--report-format", "sarif", "--report-path", "coverage/gitleaks-files.sarif"], "report": {"type": "gitleaks", "path": "coverage/gitleaks-files.sarif"}},
     {"name": "vulnerabilities", "role": "vulnerabilities", "parallel": true, "command": ["osv-scanner", "scan", "source", "--lockfile=uv.lock", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},

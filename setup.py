@@ -148,9 +148,19 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
 
 
 def configure_mcp(root: Path, changes: dict[str, str]) -> None:
+    from agent_hooks import integrated_services
+
+    optional: dict[str, JsonObject] = {
+        "Sentry": {"url": "https://mcp.sentry.dev/mcp"},
+        "Appwrite": {"command": "uvx", "args": ["mcp-server-appwrite"]},
+        "Marionette": {"command": "marionette_mcp", "args": []},
+    }
+    detected = {
+        service.lower(): optional[service] for service in integrated_services(root)
+    }
     for name in (".mcp.json", ".github/mcp.json"):
         target = root / name
-        current = json.loads(target.read_text()) if target.exists() else {}
+        current: JsonObject = json.loads(target.read_text()) if target.exists() else {}
         plugins = (
             ["codebase-memory-mcp"]
             if name == ".mcp.json"
@@ -160,20 +170,36 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
             plugin: {"command": "pnpm", "args": ["dlx", f"{plugin}@latest"]}
             for plugin in plugins
         }
+        existing = current.setdefault("mcpServers", {})
+        if not isinstance(existing, dict):
+            raise TypeError(f"Conflicting MCP servers in {name}; expected an object")
+        for plugin in sorted(detected.keys() - existing.keys()):
+            settings = detected[plugin]
+            servers[plugin] = (
+                {"type": "http", **settings} if "url" in settings else settings
+            )
         changes[name] = (
             json.dumps(merge(current, {"mcpServers": servers}), indent=2) + "\n"
         )
     target = root / ".codex/config.toml"
-    current = target.read_text() if target.exists() else ""
-    parsed = tomllib.loads(current)
+    codex_config = target.read_text() if target.exists() else ""
+    parsed = tomllib.loads(codex_config)
     for plugin in ("context-mode", "codebase-memory-mcp"):
         expected = {"command": "pnpm", "args": ["dlx", f"{plugin}@latest"]}
         existing_server = parsed.get("mcp_servers", {}).get(plugin)
         if existing_server is not None and existing_server != expected:
             raise ValueError(f"Conflicting Codex {plugin} settings")
         if existing_server is None:
-            current += f'\n[mcp_servers."{plugin}"]\ncommand = "pnpm"\nargs = ["dlx", "{plugin}@latest"]\n'
-    changes[".codex/config.toml"] = current
+            codex_config += f'\n[mcp_servers."{plugin}"]\ncommand = "pnpm"\nargs = ["dlx", "{plugin}@latest"]\n'
+    for plugin, settings in detected.items():
+        if plugin not in parsed.get("mcp_servers", {}):
+            codex_config += f'\n[mcp_servers."{plugin}"]\n'
+            codex_config += "".join(
+                f"{key} = {json.dumps(value)}\n" for key, value in settings.items()
+            )
+            if plugin == "appwrite":
+                codex_config += 'env_vars = ["APPWRITE_ENDPOINT", "APPWRITE_PROJECT_ID", "APPWRITE_API_KEY"]\n'
+    changes[".codex/config.toml"] = codex_config
 
 
 def configure_typing_checks(package: Group) -> None:
@@ -456,13 +482,11 @@ def configure_deployment(root: Path, config: GateConfig) -> None:
 
 
 def scaffold_changes(root: Path, previous: Path | None = None) -> dict[str, str]:
+    from update import scaffold_files
+
     changes = {
-        str(path.relative_to(SOURCE)): path.read_text()
-        for path in (SOURCE / ".hooks").glob("*.py")
+        name: (SOURCE / name).read_text() for name in sorted(scaffold_files(SOURCE))
     }
-    for path in (SOURCE / ".agents/skills").rglob("*"):
-        if path.is_file():
-            changes[str(path.relative_to(SOURCE))] = path.read_text()
     for name, content in changes.items():
         target = root / name
         if target.exists() and target.read_text() != content:
