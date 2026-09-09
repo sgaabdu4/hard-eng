@@ -24,6 +24,7 @@ disable-model-invocation: true
 | Need | Removal loses reusable, non-default behavior; omit generic agent advice. |
 | Trigger | Purpose + distinct use; relevant prompts match, unrelated prompts do not. Preserve implicit selection unless user requests explicit-only. |
 | Disclosure | `SKILL.md` = routes + essential shared rules. Conditional workflows/examples/detail → references. Each route = load condition + direct link; load only applicable routes. Keep short universal rules inline. |
+| Diagram | Branches, sequence or dependencies → Mermaid when clearer/leaner. Terse labels; one representation, no prose duplicate. Simple rule → bullet/table. |
 | Split | Same actions + proof → keep together. Split for independent use or observed failure unresolved by clearer completion. |
 | Resource | Script = repeated fragile logic; reference = conditional knowledge; asset = copied output. Each needs a current consumer; no mandatory file count. |
 | Ownership | Rule + definition + caveat = one owner. Inspect package + relevant siblings/project instructions; consolidate duplicates + remove stale rules. |
