@@ -30,7 +30,7 @@ def check_push(root: Path, text: str) -> None:
             try:
                 if (checkout / ".gitmodules").is_file():
                     git(checkout, "submodule", "update", "--init", "--recursive")
-                launcher = checkout / ".hard-eng/bin/hard-eng"
+                launcher = checkout / ".agents/hard-eng/bin/hard-eng"
                 if not launcher.is_file():
                     launcher = checkout / "bin/hard-eng"
                 if not launcher.is_file():

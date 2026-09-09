@@ -1,4 +1,6 @@
 #!/bin/sh
 set -eu
-script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-exec python3 "$script_dir/bin/hard-eng" install "$@"
+hard_eng_download=$(mktemp -d)
+trap 'rm -rf "$hard_eng_download"' 0
+git clone --quiet --filter=blob:none https://github.com/sgaabdu4/hard-eng.git "$hard_eng_download"
+python3 "$hard_eng_download/bin/hard-eng" install "$@"

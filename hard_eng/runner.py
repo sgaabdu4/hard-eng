@@ -37,7 +37,8 @@ def source_checks(config: Config) -> None:
         if (
             path.suffix not in extensions
             or reports.generated(path)
-            or any(part in {"vendor", "node_modules", ".venv", ".hard-eng"} for part in path.parts)
+            or any(part in {"vendor", "node_modules", ".venv"} for part in path.parts)
+            or path.is_relative_to(config.root / ".agents/hard-eng")
         ):
             continue
         name = path.relative_to(config.root).as_posix()

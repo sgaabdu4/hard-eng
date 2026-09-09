@@ -16,10 +16,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          submodules: recursive
           persist-credentials: false
       # Add the repository's SDK setup here; the manifest prepares locked dependencies.
       - name: Required gates
-        run: python3 .hard-eng/bin/hard-eng check
+        run: python3 .agents/hard-eng/bin/hard-eng check
         env:
           GH_TOKEN: ${{ github.token }}

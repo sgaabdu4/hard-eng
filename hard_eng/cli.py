@@ -81,9 +81,9 @@ def lifecycle(args: argparse.Namespace, root: Path) -> bool:
         mcp.readiness(root)
     elif args.command == "install":
         setup.install(root)
-        for agent in args.agent:
+        for agent in args.agent or agents.AGENTS:
             agents.configure(root, agent)
-        result = run(["python3", str(root / ".hard-eng/bin/hard-eng"), "mcp-check"], root, 240)
+        result = run(["python3", str(root / ".agents/hard-eng/bin/hard-eng"), "mcp-check"], root, 240)
         if result.returncode:
             raise GateError("Installed MCP readiness failed; run mcp-check to diagnose and repair it")
         print(result.stdout, end="")

@@ -8,11 +8,20 @@ import tomllib
 from pathlib import Path
 
 from hard_eng import integrations
-from hard_eng.common import GateError, Json, array, object_value, read_json, write_file, write_json
+from hard_eng.common import (
+    GateError,
+    Json,
+    array,
+    object_value,
+    read_json,
+    relative_path,
+    write_file,
+    write_json,
+)
 from hard_eng.mcp import SERVERS
 
 AGENTS = ("codex", "claude", "copilot")
-ENTRY = 'python3 "$(git rev-parse --show-toplevel)/.hard-eng/bin/hard-eng"'
+ENTRY = 'python3 "$(git rev-parse --show-toplevel)/.agents/hard-eng/bin/hard-eng"'
 EVENTS = ("SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop")
 
 
@@ -138,6 +147,16 @@ def configure(root: Path, agent: str) -> None:
         codex_servers(root)
     else:
         json_servers(root)
+    if agent == "claude":
+        for name in ("he", "research"):
+            target = relative_path(root, f".claude/skills/{name}")
+            shared = root / ".agents/skills" / name
+            if target.is_symlink() and target.resolve() == shared.resolve():
+                continue
+            if target.exists() or target.is_symlink():
+                raise GateError(f"Existing Claude skill has another owner: {name}; preserve and reconcile it")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.symlink_to(f"../../.agents/skills/{name}", target_is_directory=True)
     hooks(root, agent)
     print(
         f"Configured repository-local {agent} MCP servers and hooks; restart/trust this project to load them"

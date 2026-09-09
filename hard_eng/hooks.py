@@ -46,7 +46,7 @@ SOURCE_SUFFIXES = {
 def session(root: Path) -> str:
     if root != Path(__file__).resolve().parents[1]:
         message = setup.update(root)
-        result = run(["python3", str(root / ".hard-eng/bin/hard-eng"), "mcp-check"], root, 240)
+        result = run(["python3", str(root / ".agents/hard-eng/bin/hard-eng"), "mcp-check"], root, 240)
         if result.returncode:
             raise GateError("MCP readiness failed; run mcp-check to diagnose and repair it")
     else:
@@ -164,7 +164,7 @@ def repair_call(root: Path, event: Json) -> bool:
 
 def repair_path(root: Path, path: str) -> bool:
     target = (root / path).resolve()
-    return target.is_relative_to(root / ".hard-eng") or target in {
+    return target.is_relative_to(root / ".agents/hard-eng") or target in {
         root / "hard-eng.gates.json",
         root / ".mcp.json",
         root / ".codex/config.toml",
@@ -194,7 +194,7 @@ def repair_command(root: Path, command: object, *, session_only: bool = False) -
         return True
     if words[0] in {"python3", "python"} and len(words) >= 3:
         launcher = (root / words[1]).resolve()
-        allowed = {root / "bin/hard-eng", root / ".hard-eng/bin/hard-eng"}
+        allowed = {root / "bin/hard-eng", root / ".agents/hard-eng/bin/hard-eng"}
         if session_only:
             return launcher in allowed and words[2:] == ["session"]
         return launcher in allowed and words[2] in {

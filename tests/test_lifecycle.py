@@ -47,8 +47,8 @@ def test_failed_start_blocks_edits_but_allows_setup_repair(
         project, "codex", "PreToolUse", event("Write", {"file_path": str(project / "hard-eng.gates.json")})
     )
     assert allowed == {}
-    assert hooks.repair_command(project, "python3 .hard-eng/bin/hard-eng session")
-    assert not hooks.repair_command(project, "python3 .hard-eng/bin/hard-eng session; rm app.py")
+    assert hooks.repair_command(project, "python3 .agents/hard-eng/bin/hard-eng session")
+    assert not hooks.repair_command(project, "python3 .agents/hard-eng/bin/hard-eng session; rm app.py")
     blocked = hooks.handle(project, "copilot", "PreToolUse", event("mcp__appwrite__create_document", {}))
     assert blocked["permissionDecision"] == "deny"
     (project / "hard-eng.gates.json").write_text("broken JSON")
@@ -102,7 +102,7 @@ def test_repaired_startup_requires_fresh_readiness_and_active_probes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state: Json = {"ready": False, "error": "MCP unavailable"}
-    repair = event("exec_command", {"cmd": "python3 .hard-eng/bin/hard-eng session"})
+    repair = event("exec_command", {"cmd": "python3 .agents/hard-eng/bin/hard-eng session"})
 
     def unavailable(_root: Path) -> str:
         raise GateError("still unavailable")
@@ -119,7 +119,7 @@ def test_repaired_startup_requires_fresh_readiness_and_active_probes(
     assert state == {"ready": True, "changed": False, "pending": dict.fromkeys(mcp.SERVERS, True)}
     assert hooks.dispatch(project, state, "PreToolUse", event("Edit", {"path": "app.py"}))[1]
     assert not hooks.repair_command(
-        project, "python3 .hard-eng/bin/hard-eng session --help", session_only=True
+        project, "python3 .agents/hard-eng/bin/hard-eng session --help", session_only=True
     )
 
 

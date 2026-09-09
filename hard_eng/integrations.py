@@ -30,12 +30,7 @@ def dependency_names(path: Path) -> list[str]:
 
 
 def detected(root: Path) -> set[str]:
-    names = [
-        name.lower()
-        for path in source_files(root)
-        if ".hard-eng" not in path.relative_to(root).parts
-        for name in dependency_names(path)
-    ]
+    names = [name.lower() for path in source_files(root) for name in dependency_names(path)]
     services: set[str] = set()
     if any(re.match(r"(?:@sentry/|sentry(?:[-_\[<>=;!~]|$))", name) for name in names):
         services.add("sentry")

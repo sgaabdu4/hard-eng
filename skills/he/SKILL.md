@@ -5,7 +5,8 @@ description: Apply the repository's Hard Eng gates and ultra YAGNI flow when imp
 
 # Hard Eng
 
-- Entry = `.hard-eng/bin/hard-eng` in installed projects, `bin/hard-eng` in Hard Eng itself; invoke with `python3` when needed.
+- Entry = `.agents/hard-eng/bin/hard-eng` in installed projects, `bin/hard-eng` in Hard Eng itself; invoke with `python3` when needed.
+- Install = from the target project root, run `curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh`. The installer copies shared files into the project; it adds no Git submodule. Codex and Copilot read `.agents/skills` directly. Only Claude receives links in `.claude/skills`. Preserve existing project instructions, skills and configuration.
 - Scope = understand the requested behavior, relevant code and callers before editing. Use `research` when current contracts or a substantive choice are unresolved.
 - YAGNI = ultra by default: skip speculation; reuse existing code, then stdlib/native features/existing dependencies, then the minimum new code. No future scaffolding or abstraction without current need.
 - Implementation = direct gate commands and necessary failure checks; no custom hashes, result-cache framework, legacy compatibility or historical exception machinery. Add tests only for required behavior and meaningful failure cases.
@@ -23,7 +24,7 @@ description: Apply the repository's Hard Eng gates and ultra YAGNI flow when imp
 - Start = run `hard-eng session`; resolve update/MCP failures before normal project changes. Diagnosis and scoped setup repair remain available.
 - MCP = use the active agent's Context Mode and Codebase Memory tools; confirm the intended repository/index. For detected Sentry/Appwrite integrations, prove the configured organization/project or endpoint/project with a read-only tool call. Never claim readiness from installation alone.
 - Work = fix the cause at its owner, preserve unrelated work, and reuse relevant tests. Use narrowly scoped native scanner exceptions only for proven false positives or intentional supported patterns, with the reason and evidence beside the exception; keep the rule active elsewhere. Do not create a separate exception system or historical baseline.
-- Finish = apply the Additions, Tests and Acceptance rules in AGENTS.md to the actual diff. Remove unjustified additions before claiming completion; verify expected outcomes, relevant failures and the original regression. Coverage measures execution, not assertion quality.
+- Finish = review the actual diff against the user's scope. Remove unjustified additions before claiming completion; verify independently expected outcomes, relevant failures and the original regression. Coverage measures execution, not assertion quality.
 - Gates = run `hard-eng check`; full applicable checks also run before push and independently in CI. Missing, stale, empty or incomplete proof is a failure.
 - Mutation = optional; present the complete changed-function scope, relevant covering tests and estimated runtime, then obtain the user's acceptance before running it.
 - Delivery = report what changed, actual proof and remaining gaps. An honest blocked report or question must remain possible; do not enter a repeating completion-hook loop.

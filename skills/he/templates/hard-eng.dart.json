@@ -14,6 +14,6 @@
     {"name": "secrets-files", "role": "secrets-files", "tool": "gitleaks", "command": ["dir", ".", "--redact=100", "--no-banner"]},
     {"name": "secrets-history", "role": "secrets-history", "tool": "gitleaks", "command": ["git", ".", "--redact=100", "--no-banner", "--log-opts=--all"]},
     {"name": "vulnerabilities", "role": "vulnerabilities", "tool": "osv-scanner", "command": ["scan", "source", "--lockfile=pubspec.lock", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},
-    {"name": "security", "role": "security", "tool": "semgrep", "command": ["scan", "--config", ".hard-eng/security", "--error", "--strict", "--json", "--output", "coverage/semgrep.json", "lib"], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}
+    {"name": "security", "role": "security", "tool": "semgrep", "command": ["scan", "--config", ".agents/hard-eng/security", "--error", "--strict", "--json", "--output", "coverage/semgrep.json", "lib"], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}
   ]
 }
