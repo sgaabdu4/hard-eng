@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 from gate_config import JsonObject, nonproduction_source, repository_files
+from project_setup import dependency_command
 
 
 def session_state(root: Path, payload: JsonObject) -> Path | None:
@@ -44,6 +45,11 @@ def session_context(root: Path, payload: JsonObject) -> str:
         "Use the active Context Mode and Codebase Memory MCP tools for this repository; verify a real call and the repository/index before claiming readiness. If unavailable, warn and continue with available tools."
     )
     for service in integrated_services(root):
+        if service == "Marionette":
+            messages.append(
+                "This repository contains Flutter. Use the configured Marionette MCP: connect to the intended debug app's VM service URI, then call get_interactive_elements or take_screenshots to verify the app/device. If the server, marionette_flutter binding or running app is unavailable, warn and continue; do not claim readiness from installation alone."
+            )
+            continue
         messages.append(
             f"This repository imports {service}. Use its configured MCP for a read-only call to verify the intended project and endpoint/organization. If configuration or access is missing, warn and continue; do not invent credentials or claim readiness."
         )
@@ -54,11 +60,20 @@ def integrated_services(root: Path) -> list[str]:
     patterns = {
         "Sentry": r"(?:from\s+['\"]@sentry/|require\(['\"]@sentry/|import\s+sentry_sdk|from\s+sentry_sdk\b|package:sentry(?:_flutter)?/)",
         "Appwrite": r"(?:from\s+['\"](?:node-)?appwrite['\"]|require\(['\"](?:node-)?appwrite['\"]|from\s+appwrite\b|import\s+appwrite\b|package:(?:dart_)?appwrite/)",
+        "Marionette": r"\b(?:import|export)\s+['\"]package:flutter/",
     }
     found = set()
     for path in repository_files(root):
-        if nonproduction_source(path.relative_to(root)):
+        relative = path.relative_to(root)
+        if nonproduction_source(relative) or {".agents", ".claude", ".hooks"} & set(
+            relative.parts
+        ):
             continue
+        if (
+            path.name == "pubspec.yaml"
+            and dependency_command(path.parent, "dart")[0] == "flutter"
+        ):
+            found.add("Marionette")
         if path.suffix in {
             ".py",
             ".js",

@@ -96,15 +96,28 @@ def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, 
         check=True,
         timeout=60,
     )
+    for tree in (source, old):
+        subprocess.run(
+            ["git", "submodule", "update", "--init", "--recursive"],
+            cwd=tree,
+            check=True,
+            timeout=120,
+        )
     return source, old
 
 
 def scaffold_files(source: Path) -> set[str]:
+    skills = list((source / ".agents/skills").iterdir())
+    if any(skill.is_symlink() and not skill.is_dir() for skill in skills):
+        raise ValueError(
+            "Unresolved skill link; run git submodule update --init --recursive"
+        )
     return {
         str(path.relative_to(source)) for path in (source / ".hooks").glob("*.py")
     } | {
         str(path.relative_to(source))
-        for path in (source / ".agents/skills").rglob("*")
+        for skill in skills
+        for path in skill.rglob("*")
         if path.is_file()
     }
 

@@ -138,3 +138,44 @@ def test_service_readiness_follows_sdk_imports(repository: Path) -> None:
         "import 'package:appwrite/appwrite.dart';\n"
     )
     assert agent_hooks.integrated_services(repository) == ["Appwrite", "Sentry"]
+
+
+def test_skill_sdk_examples_do_not_register_project_services(repository: Path) -> None:
+    skill = repository / ".agents/skills/example"
+    skill.mkdir(parents=True)
+    (skill / "example.dart").write_text(
+        "import 'package:appwrite/appwrite.dart';\n"
+        "import 'package:flutter/material.dart';\n"
+        "import 'package:sentry_flutter/sentry_flutter.dart';\n"
+    )
+    (skill / "pubspec.yaml").write_text("dependencies:\n  flutter:\n    sdk: flutter\n")
+    assert agent_hooks.integrated_services(repository) == []
+
+
+@pytest.mark.parametrize("directory", [".", "apps/mobile"])
+@pytest.mark.parametrize("sdk,expected", [("flutter", ["Marionette"]), ("dart", [])])
+def test_flutter_readiness_detects_sdk_without_marionette_installed(
+    repository: Path, directory: str, sdk: str, expected: list[str]
+) -> None:
+    package = repository / directory
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "pubspec.yaml").write_text(
+        f"name: app\ndependencies:\n  framework:\n    sdk: {sdk}\n"
+    )
+    assert agent_hooks.integrated_services(repository) == expected
+
+
+def test_flutter_readiness_requires_live_app_inspection(repository: Path) -> None:
+    (repository / "README.md").write_text("Flutter and Marionette are possible tools.")
+    (repository / "test").mkdir()
+    (repository / "test/widget_test.dart").write_text(
+        "import 'package:flutter/material.dart';\n"
+    )
+    assert agent_hooks.integrated_services(repository) == []
+    (repository / "main.dart").write_text("import 'package:flutter/material.dart';\n")
+    message = agent_hooks.session_context(repository, {})
+    assert "Marionette MCP" in message
+    assert "VM service URI" in message
+    assert "get_interactive_elements or take_screenshots" in message
+    assert "warn and continue" in message
+    assert "do not claim readiness from installation alone" in message
