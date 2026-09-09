@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Probes S3 and S6 2026-08-25: post-commit inspect and assert-green lockout reproduced; batch-2 makes inspect drift-tolerant and assert-green refresh on PASS"
+  ],
+  "failure": "After any commit, plan inspect and assert-green refused with repository drift, locking sessions out of their own resumed epics even though the tree change was the sanctioned build output",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "authorization-drift-lockout",
+  "next_action": "Inspect reads drift-tolerant; assert-green refreshes execution state on PASS; slice_gate run stays the pre-epic-green heal point; regression pins both paths",
+  "occurrences": 2,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/he/scripts/plan_state.py",
+    "proof": "skills/deterministic-checks/scripts/slice_gate_regression_check.py",
+    "valid_fixture": "skills/deterministic-checks/scripts/slice_gate_regression_check.py",
+    "violation_fixture": "skills/deterministic-checks/scripts/slice_gate_regression_check.py"
+  },
+  "root_cause": "Strict context equality treated every commit as foreign drift; the only healing point was slice_gate run, which resumed reads never reach",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "engineering-correction"
+}

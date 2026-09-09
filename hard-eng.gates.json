@@ -1,31 +1,344 @@
 {
-  "version": 1,
-  "scan_git_history": false,
-  "packages": [
-    {
-      "name": "hard-eng",
-      "path": ".",
-      "language": "python",
-      "sources": ["hard_eng"],
-      "checks": [
-        {"name": "format", "role": "format", "tool": "ruff", "command": ["format", "--check", "."]},
-        {"name": "lint", "role": "lint", "tool": "ruff", "command": ["check", "."]},
-        {"name": "types", "role": "types", "tool": "pyrefly", "command": ["check", "--min-severity", "info"]},
-        {"name": "tests", "role": "tests", "tool": "pytest", "command": ["--cov=hard_eng", "--cov-report=json:coverage/coverage.json", "--junitxml=coverage/junit.xml"], "report": {"type": "python-tests", "tests": "coverage/junit.xml", "coverage": "coverage/coverage.json", "minimum_tests": 1}},
-        {"name": "dead-code", "role": "dead-code", "tool": "vulture", "command": ["hard_eng", "tests", "--min-confidence", "60"]},
-        {"name": "duplicates", "role": "duplicates", "tool": "jscpd", "command": ["hard_eng", "tests", "--format", "python", "--threshold", "0", "--max-size", "100mb", "--max-lines", "1000000", "--reporters", "json", "--output", "coverage/jscpd"], "report": {"type": "jscpd", "path": "coverage/jscpd/jscpd-report.json"}},
-        {"name": "dependencies", "role": "dependencies", "tool": "deptry", "command": ["."]},
-        {"name": "imports", "role": "imports", "tool": "lint-imports", "command": []}
+  "schema_version": 1,
+  "enforcement": {
+    "schema_version": 1,
+    "required_paths": [
+      ".github/workflows/check-skill-contracts.yml",
+      "bin/hard-eng",
+      "agents/he-learn/claude.md",
+      "agents/he-learn/codex.toml",
+      "agents/he-learn/copilot.agent.md",
+      "install.sh",
+      "scripts/enforcement_checkpoint.pl",
+      "scripts/enforcement_direct.pl",
+      "scripts/enforcement_policy.pl",
+      "scripts/enforcement_protected.pl",
+      "scripts/git-hooks/publish-gate.sh",
+      "scripts/hooks/agent-hook.sh",
+      "scripts/repository-native-contract-check.py",
+      "scripts/repository-native-shared-contract-check.py",
+      "scripts/json-style-contract.py",
+      "scripts/install-contract-check.py",
+      "scripts/setup/repository-native.sh",
+      "runtime/repository_native/__init__.py",
+      "runtime/repository_native/adapters.py",
+      "runtime/repository_native/cli.py",
+      "runtime/repository_native/errors.py",
+      "runtime/repository_native/installer.py",
+      "runtime/repository_native/jsonstyle.py",
+      "runtime/repository_native/locking.py",
+      "runtime/repository_native/models.py",
+      "runtime/repository_native/prepare.py",
+      "runtime/repository_native/repository.py",
+      "runtime/repository_native/shared.py",
+      "runtime/repository_native/source.py",
+      "runtime/repository_native/wiring.py",
+      "scripts/machine-scope-guard-contract.py",
+      "skills/he-learn/scripts/learning_state.py",
+      "skills/he/scripts/build_report.py",
+      "skills/deterministic-checks/scripts/script_runner.py",
+      "scripts/inprocess-seam-contract.py",
+      "skills/he/scripts/external_claims.py",
+      "skills/he/scripts/build_steps.py",
+      "skills/he/scripts/execution_direct.py",
+      "skills/he/scripts/execution_evidence.py",
+      "skills/deterministic-checks/scripts/mutation_ledger.py",
+      ".github/workflows/mutation-nightly.yml",
+      "skills/he/scripts/plan_state.py",
+      "skills/he/scripts/plan_steps.py",
+      "skills/he/scripts/setup_state.py",
+      "skills/he/scripts/skill_source_policy.py",
+      "skills/he/scripts/ticket_guard.py",
+      "skills/he/scripts/ticket_state.py",
+      "skills/he/scripts/tracker_adapter.py",
+      "skills/he/scripts/tracker_http.py",
+      "skills/he/scripts/tracker_probe.py",
+      "skills/deterministic-checks/scripts/privacy_scan.py",
+      "skills/deterministic-checks/scripts/privacy_scan_regression_check.py"
+    ],
+    "coverage": {
+      "repository-native-startup": [
+        "checkpoint check",
+        "runtime/repository_native/cli.py",
+        "scripts/repository-native-contract-check.py"
+      ],
+      "shared-clone-bootstrap": [
+        "checkpoint check",
+        "runtime/repository_native/shared.py",
+        "scripts/repository-native-shared-contract-check.py"
+      ],
+      "generated-json-style": [
+        "checkpoint check",
+        "runtime/repository_native/jsonstyle.py",
+        "scripts/json-style-contract.py"
+      ],
+      "terminal-install": ["checkpoint check", "install.sh", "scripts/install-contract-check.py"],
+      "active-plan-delete": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "active-plan-extra-markdown": [
+        "checkpoint check",
+        "scripts/enforcement_checkpoint.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "autonomous-explicit-activation": [
+        "checkpoint check",
+        "skills/he/scripts/execution_evidence.py",
+        "skills/he/scripts/execution_evidence_regression.py"
+      ],
+      "irreversible-stop-boundaries": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "protected-direct-approval": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "build-step-records": [
+        "checkpoint check",
+        "skills/he/scripts/build_steps.py",
+        "skills/he/scripts/build_steps_regression.py"
+      ],
+      "external-claim-check": [
+        "checkpoint check",
+        "skills/he/scripts/external_claims.py",
+        "skills/he/scripts/external_claims_regression.py"
+      ],
+      "in-process-seam": [
+        "checkpoint check",
+        "skills/deterministic-checks/scripts/script_runner.py",
+        "skills/deterministic-checks/scripts/script_runner_regression_check.py"
+      ],
+      "mutation-ledger": [
+        "checkpoint check",
+        "skills/deterministic-checks/scripts/mutation_ledger.py",
+        "skills/deterministic-checks/scripts/mutation_ledger_regression_check.py"
+      ],
+      "build-verify-loop": [
+        "checkpoint check",
+        "skills/he/scripts/plan_state.py",
+        "skills/deterministic-checks/scripts/slice_gate_regression_check.py"
+      ],
+      "direct-route-receipt": [
+        "checkpoint check",
+        "scripts/enforcement_checkpoint.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "direct-receipt-scope": [
+        "checkpoint check",
+        "skills/he/scripts/execution_direct.py",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "direct-live-action-scope": [
+        "block",
+        "scripts/enforcement_direct.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "exact-green-delivery": [
+        "checkpoint check",
+        "skills/he/scripts/plan_state.py",
+        "skills/he-ship/scripts/check.py"
+      ],
+      "gui-and-unsupported-writers": [
+        "checkpoint check",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "invalid-active-plan": [
+        "checkpoint check",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "planning-step-receipts": [
+        "checkpoint check",
+        "skills/he/scripts/plan_steps.py",
+        "skills/he/scripts/plan_steps_regression.py"
+      ],
+      "tracker-hierarchy-mirror": [
+        "checkpoint check",
+        "skills/he/scripts/tracker_adapter.py",
+        "skills/he/scripts/tracker_github_regression.py"
+      ],
+      "tracker-http-adapters": [
+        "checkpoint check",
+        "skills/he/scripts/tracker_http.py",
+        "skills/he/scripts/tracker_http_regression.py"
+      ],
+      "tracker-live-probe": [
+        "checkpoint check",
+        "skills/he/scripts/tracker_probe.py",
+        "skills/he/scripts/plan_steps_regression.py"
+      ],
+      "feature-setup-before-planning": [
+        "checkpoint check",
+        "skills/he/scripts/setup_state.py",
+        "skills/he/scripts/setup_state_regression.py"
+      ],
+      "repository-learning-state": [
+        "checkpoint check",
+        "skills/he-learn/scripts/learning_state.py",
+        "skills/he-learn/scripts/learning_state_regression.py"
+      ],
+      "runtime-learning-adapters": [
+        "checkpoint check",
+        "setup.sh",
+        "skills/he-learn/scripts/learning_state_regression.py"
+      ],
+      "planning-product-write": [
+        "checkpoint check",
+        "scripts/enforcement_checkpoint.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "required-enforcement-wiring": [
+        "checkpoint check",
+        "hard-eng.gates.json",
+        "scripts/setup-contract-check.py"
+      ],
+      "research-evidence": [
+        "checkpoint check",
+        "skills/he/scripts/execution_evidence.py",
+        "skills/he/scripts/execution_evidence_regression.py"
+      ],
+      "route-choice": [
+        "checkpoint check",
+        "skills/he/scripts/execution_evidence.py",
+        "skills/he/scripts/execution_evidence_regression.py"
+      ],
+      "unknown-or-delayed-writer": [
+        "checkpoint check",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "unsafe-git-discard": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "unwired-repo-advice": [
+        "advise",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "user-intent-provenance": [
+        "checkpoint check",
+        "skills/he/scripts/execution_evidence.py",
+        "skills/he/scripts/execution_evidence_regression.py"
+      ],
+      "orchestrator-write-guard": [
+        "checkpoint check",
+        "skills/he/scripts/ticket_guard.py",
+        "skills/he/scripts/ticket_state_regression.py"
+      ],
+      "parallel-ticket-state": [
+        "checkpoint check",
+        "skills/he/scripts/ticket_state.py",
+        "skills/he/scripts/ticket_state_regression.py"
+      ],
+      "machine-scope-write": [
+        "block",
+        "scripts/enforcement_protected.pl",
+        "scripts/machine-scope-guard-contract.py"
+      ],
+      "skill-content-primary-source": [
+        "checkpoint check",
+        "skills/he/scripts/skill_source_policy.py",
+        "skills/he/scripts/skill_source_policy_regression.py"
+      ],
+      "privacy": [
+        "checkpoint check",
+        "skills/deterministic-checks/scripts/privacy_scan.py",
+        "skills/deterministic-checks/scripts/privacy_scan_regression_check.py"
       ]
     }
-  ],
-  "shared": [
-    {"name": "shell", "role": "shell", "tool": "shellcheck", "command": ["setup.sh"]},
-    {"name": "workflows", "role": "workflows", "tool": "actionlint", "command": []},
-    {"name": "workflow-security", "role": "workflow-security", "tool": "zizmor", "command": ["--no-progress", "--strict-collection", "--persona", "auditor", ".github/workflows"]},
-    {"name": "lockfile", "role": "lockfiles", "command": ["uv", "sync", "--locked"]},
-    {"name": "secrets-files", "role": "secrets-files", "tool": "gitleaks", "command": ["dir", ".", "--redact=100", "--no-banner"]},
-    {"name": "vulnerabilities", "role": "vulnerabilities", "tool": "osv-scanner", "command": ["scan", "source", "--lockfile=uv.lock", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},
-    {"name": "security", "role": "security", "tool": "semgrep", "command": ["scan", "--config", "security", "--error", "--strict", "--json", "--output", "coverage/semgrep.json", "hard_eng"], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}
-  ]
+  },
+  "families": {
+    "targeted": ["python3", "scripts/check-skill-contracts.py"],
+    "typecheck": ["node_modules/.bin/tsc", "--project", "jsconfig.json", "--noEmit"],
+    "staged": ["node_modules/.bin/biome", "check", "--staged", "--no-errors-on-unmatched"],
+    "format": ["node_modules/.bin/biome", "format", "."],
+    "lint": ["node_modules/.bin/biome", "lint", "."],
+    "tests": [
+      "node",
+      "--test",
+      "skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs",
+      "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
+      "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs"
+    ],
+    "fallow": ["node_modules/.bin/fallow", "audit", "--max-crap", "30", "--format", "json"],
+    "clones": [
+      "node_modules/.bin/jscpd",
+      "--format",
+      "python,dart",
+      "--reporters",
+      "console",
+      "--baseline",
+      ".jscpd-baseline.json",
+      "--fail-on-new-clones",
+      "--ignore",
+      "**/node_modules/**,features/**",
+      "."
+    ],
+    "python-types": ["node_modules/.bin/pyright"],
+    "python-format": ["ruff", "format", "--check", "--no-cache", "."],
+    "python-lint": ["ruff", "check", "--no-cache", "."],
+    "skill-contracts": ["python3", "scripts/check-skill-contracts.py"],
+    "managed-skills": ["node", "scripts/check-managed-skills.js"],
+    "design": ["node", "skills/deterministic-checks/scripts/check-design-md.js", "DESIGN.md"],
+    "file-size": ["python3", "scripts/check-file-size.py"],
+    "secrets": ["gitleaks", "dir", ".", "--no-banner", "--redact", "--exit-code", "1"],
+    "enforcement": ["perl", "scripts/enforcement_policy.pl", "check", "."],
+    "mutation-ledger": [
+      "python3",
+      "skills/deterministic-checks/scripts/mutation_ledger.py",
+      "check",
+      "--repo",
+      "."
+    ],
+    "privacy": ["python3", "skills/deterministic-checks/scripts/privacy_scan.py", "--repo", "."]
+  },
+  "phases": {
+    "commit": ["staged", "enforcement", "privacy"],
+    "push": [
+      "typecheck",
+      "format",
+      "lint",
+      "tests",
+      "fallow",
+      "clones",
+      "python-types",
+      "python-format",
+      "python-lint",
+      "skill-contracts",
+      "managed-skills",
+      "design",
+      "file-size",
+      "secrets",
+      "enforcement",
+      "mutation-ledger",
+      "privacy"
+    ],
+    "ci": [
+      "typecheck",
+      "format",
+      "lint",
+      "tests",
+      "fallow",
+      "clones",
+      "python-types",
+      "python-format",
+      "python-lint",
+      "skill-contracts",
+      "managed-skills",
+      "design",
+      "file-size",
+      "secrets",
+      "enforcement",
+      "mutation-ledger",
+      "privacy"
+    ]
+  }
 }

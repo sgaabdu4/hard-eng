@@ -1,0 +1,11 @@
+line-length = 120
+
+[lint]
+ignore = ["BLE001"]
+
+[lint.isort]
+split-on-trailing-comma = false
+
+[format]
+skip-magic-trailing-comma = true
+exclude = ["*.md"]

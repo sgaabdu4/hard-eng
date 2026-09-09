@@ -1,0 +1,27 @@
+{
+  "evidence": [
+    "GitHub Actions run 31943849780 failed source-tree-coordination-regressions after React Doctor returned nonzero with whole-run timeout exhausted while fingerprinting; all dependency tool gates and four other jobs passed.",
+    "Focused source-tree-coordination regression passed under the bounded runner, and focused Pyright reported 0 errors after the interruption fixture accepted either safe nonzero diagnostic."
+  ],
+  "failure": "Local gates passed while macOS ARM64 CI rejected a safe React Doctor interruption result because the regression fixture required one exact diagnostic.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "launched"
+  },
+  "learning_id": "react-doctor-interruption-diagnostics",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py",
+    "deterministic_limit": "",
+    "violation_fixture": "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py",
+    "valid_fixture": "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py",
+    "proof": "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py"
+  },
+  "root_cause": "The regression coupled fail-closed behavior to the exact did not restore sentence. Under macOS ARM64 load, post-interruption fingerprinting exhausted the whole-run deadline first, which is also a safe rejection, but the fixture mislabeled it as acceptance.",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "false-passing-check"
+}
