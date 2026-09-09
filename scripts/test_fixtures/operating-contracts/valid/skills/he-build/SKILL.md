@@ -1,3 +1,0 @@
-- Working instruction ledger = accepted brief.
-- Before each mutation/resume = reconcile ledger.
-- Every instruction-ledger item = proven.
