@@ -420,7 +420,7 @@ def test_install_preserves_project_and_repeats(
     [
         ("", set()),
         ("import 'dart:io';", set()),
-        ("import 'package:flutter/material.dart';", {"marionette"}),
+        ("import 'package:flutter/material.dart';", {"dart", "marionette"}),
         ("import 'package:appwrite/appwrite.dart';", {"appwrite"}),
         ("import 'package:sentry_flutter/sentry_flutter.dart';", {"sentry"}),
         (
@@ -429,7 +429,7 @@ def test_install_preserves_project_and_repeats(
                 "import 'package:appwrite/appwrite.dart';\n"
                 "import 'package:sentry_flutter/sentry_flutter.dart';"
             ),
-            {"marionette", "appwrite", "sentry"},
+            {"dart", "marionette", "appwrite", "sentry"},
         ),
     ],
 )
@@ -440,37 +440,51 @@ def test_installer_registers_only_detected_service_mcps(
     (tmp_path / "app.dart").write_text(source)
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
-    optional = {"sentry", "appwrite", "marionette"}
+    optional = {"sentry", "appwrite", "dart", "marionette"}
     for name in (".mcp.json", ".github/mcp.json"):
         servers = json.loads(changes[name])["mcpServers"]
         assert servers.keys() & optional == expected
+        if "dart" in expected:
+            assert servers["dart"] == {
+                "command": "dart",
+                "args": ["run", "dart_mcp_server@"],
+            }
+            assert servers["marionette"] == {
+                "command": "dart",
+                "args": ["run", "marionette_mcp@"],
+            }
     servers = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
     assert servers.keys() & optional == expected
+    for service in expected & {"dart", "marionette"}:
+        assert (
+            servers[service] == json.loads(changes[".mcp.json"])["mcpServers"][service]
+        )
     if "appwrite" in expected:
         assert servers["appwrite"]["args"] == ["mcp-server-appwrite"]
         assert "APPWRITE_API_KEY" in servers["appwrite"]["env_vars"]
 
 
+@pytest.mark.parametrize("service", ["sentry", "dart", "marionette"])
 def test_installer_preserves_existing_service_mcp_configuration(
-    installer: ModuleType, tmp_path: Path
+    installer: ModuleType, tmp_path: Path, service: str
 ) -> None:
     repository(tmp_path)
     (tmp_path / "app.py").write_text("import sentry_sdk\n")
+    (tmp_path / "app.dart").write_text("import 'package:flutter/material.dart';\n")
     existing = {"url": "https://mcp.sentry.dev/mcp/existing-org/existing-project"}
     for name in (".mcp.json", ".github/mcp.json"):
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"mcpServers": {"sentry": existing}}))
+        path.write_text(json.dumps({"mcpServers": {service: existing}}))
     path = tmp_path / ".codex/config.toml"
     path.parent.mkdir()
-    path.write_text(f"[mcp_servers.sentry]\nurl = {json.dumps(existing['url'])}\n")
+    path.write_text(f"[mcp_servers.{service}]\nurl = {json.dumps(existing['url'])}\n")
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
     for name in (".mcp.json", ".github/mcp.json"):
-        assert json.loads(changes[name])["mcpServers"]["sentry"] == existing
+        assert json.loads(changes[name])["mcpServers"][service] == existing
     assert (
-        tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]["sentry"]
-        == existing
+        tomllib.loads(changes[".codex/config.toml"])["mcp_servers"][service] == existing
     )
 
 

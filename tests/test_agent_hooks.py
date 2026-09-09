@@ -153,7 +153,9 @@ def test_skill_sdk_examples_do_not_register_project_services(repository: Path) -
 
 
 @pytest.mark.parametrize("directory", [".", "apps/mobile"])
-@pytest.mark.parametrize("sdk,expected", [("flutter", ["Marionette"]), ("dart", [])])
+@pytest.mark.parametrize(
+    "sdk,expected", [("flutter", ["Dart", "Marionette"]), ("dart", [])]
+)
 def test_flutter_readiness_detects_sdk_without_marionette_installed(
     repository: Path, directory: str, sdk: str, expected: list[str]
 ) -> None:
@@ -174,6 +176,9 @@ def test_flutter_readiness_requires_live_app_inspection(repository: Path) -> Non
     assert agent_hooks.integrated_services(repository) == []
     (repository / "main.dart").write_text("import 'package:flutter/material.dart';\n")
     message = agent_hooks.session_context(repository, {})
+    assert "Dart MCP" in message
+    assert "verify its project roots" in message
+    assert "read-only analysis or runtime inspection" in message
     assert "Marionette MCP" in message
     assert "VM service URI" in message
     assert "get_interactive_elements or take_screenshots" in message
