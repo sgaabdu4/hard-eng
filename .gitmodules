@@ -1,0 +1,6 @@
+[submodule ".agents/skill-sources/appwrite-backend"]
+	path = .agents/skill-sources/appwrite-backend
+	url = https://github.com/sgaabdu4/appwrite-backend.git
+[submodule ".agents/skill-sources/building-flutter-apps"]
+	path = .agents/skill-sources/building-flutter-apps
+	url = https://github.com/sgaabdu4/building-flutter-apps.git
