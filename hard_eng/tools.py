@@ -11,7 +11,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from hard_eng.common import GateError, array, object_value, parse_json, state_dir
+from hard_eng.common import GateError, array, checked, object_value, parse_json, state_dir
 
 PYTHON = {
     "ruff": "ruff",
@@ -158,21 +158,21 @@ def resolve(root: Path, name: str) -> Tool:
     if name in NODE:
         package = NODE[name]
         version = package_version(package, "node")
-        return Tool(
+        command = (
+            "npm",
+            "exec",
+            "--cache",
+            str(state_dir(root) / "npm"),
+            "--yes",
+            "--package",
+            f"{package}@{version}",
+            "--",
             name,
-            version,
-            (
-                "npm",
-                "exec",
-                "--cache",
-                str(state_dir(root) / "npm"),
-                "--yes",
-                "--package",
-                f"{package}@{version}",
-                "--",
-                name,
-            ),
         )
+        if name == "codebase-memory-mcp":
+            # Complete the npm bootstrap before its download messages can enter MCP stdout.
+            checked([*command, "--version"], root, 180)
+        return Tool(name, version, command)
     if name in NATIVE:
         version, data = release(name)
         return Tool(name, version, (binary(root, name, version, data),))

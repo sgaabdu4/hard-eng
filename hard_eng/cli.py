@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
 from hard_eng import agents, config, git_hooks, hooks, mcp, runner, setup, tools
-from hard_eng.common import GateError, parse_json, repository, run
+from hard_eng.common import GateError, checked, parse_json, repository, run
 
 
 def parser() -> argparse.ArgumentParser:
@@ -80,13 +81,7 @@ def lifecycle(args: argparse.Namespace, root: Path) -> bool:
     elif args.command == "mcp-check":
         mcp.readiness(root)
     elif args.command == "install":
-        setup.install(root)
-        for agent in args.agent or agents.AGENTS:
-            agents.configure(root, agent)
-        result = run(["python3", str(root / ".agents/hard-eng/bin/hard-eng"), "mcp-check"], root, 240)
-        if result.returncode:
-            raise GateError("Installed MCP readiness failed; run mcp-check to diagnose and repair it")
-        print(result.stdout, end="")
+        install(root, args.agent)
     elif args.command == "configure":
         agents.configure(root, args.agent)
     elif args.command == "update":
@@ -94,3 +89,19 @@ def lifecycle(args: argparse.Namespace, root: Path) -> bool:
     else:
         return False
     return True
+
+
+def install(root: Path, selected: list[str]) -> None:
+    setup.install(root)
+    for agent in selected or agents.AGENTS:
+        agents.configure(root, agent)
+        if agent == "claude" and shutil.which("claude"):
+            checked(
+                ["claude", "plugin", "install", "context-mode@context-mode", "--scope", "project"],
+                root,
+                180,
+            )
+    result = run(["python3", str(root / ".agents/hard-eng/bin/hard-eng"), "mcp-check"], root, 240)
+    if result.returncode:
+        raise GateError("Installed MCP readiness failed; run mcp-check to diagnose and repair it")
+    print(result.stdout, end="")
