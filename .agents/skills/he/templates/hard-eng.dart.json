@@ -3,17 +3,17 @@
   "packages": [{
     "name": "app", "path": ".", "language": "dart", "sources": ["lib"],
     "checks": [
-      {"name": "format", "role": "format", "command": ["dart", "format", "--output=none", "--set-exit-if-changed", "."]},
-      {"name": "lint", "role": "lint", "command": ["dart", "analyze", "--fatal-infos", "."]},
+      {"name": "format", "role": "format", "parallel": true, "command": ["dart", "format", "--output=none", "--set-exit-if-changed", "."]},
+      {"name": "types-lint", "role": "types", "parallel": true, "command": ["dart", "analyze", "--fatal-infos", "."]},
       {"name": "tests", "role": "tests", "command": ["flutter", "test", "--no-pub", "--machine", "--coverage", "--coverage-path=coverage/lcov.info"], "report": {"type": "dart-tests", "tests": "coverage/tests.jsonl", "coverage": "coverage/lcov.info"}},
-      {"name": "dead-code-duplicates", "role": "dead-code-duplicates", "tool": "dart-decimate", "command": ["check", ".", "--threshold", "0", "--format", "json"], "report": {"type": "dart-decimate", "path": "coverage/dart-decimate.json", "stdout": true}}
+      {"name": "dead-code-duplicates", "role": "dead-code-duplicates", "command": ["dart-decimate", "check", ".", "--threshold", "0", "--format", "json"], "report": {"type": "dart-decimate", "path": "coverage/dart-decimate.json", "stdout": true}}
     ]
   }],
   "shared": [
     {"name": "lockfile", "role": "lockfiles", "command": ["flutter", "pub", "get", "--enforce-lockfile"]},
-    {"name": "secrets-files", "role": "secrets-files", "tool": "gitleaks", "command": ["dir", ".", "--redact=100", "--no-banner"]},
-    {"name": "secrets-history", "role": "secrets-history", "tool": "gitleaks", "command": ["git", ".", "--redact=100", "--no-banner", "--log-opts=--all"]},
-    {"name": "vulnerabilities", "role": "vulnerabilities", "tool": "osv-scanner", "command": ["scan", "source", "--lockfile=pubspec.lock", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},
-    {"name": "security", "role": "security", "tool": "semgrep", "command": ["scan", "--config", ".agents/hard-eng/security", "--error", "--strict", "--json", "--output", "coverage/semgrep.json", "lib"], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}
+    {"name":"secrets-files","role":"secrets-files","parallel":true,"command":["gitleaks","dir",".","--redact=100","--no-banner","--report-format","sarif","--report-path","coverage/gitleaks-files.sarif"],"report":{"type":"gitleaks","path":"coverage/gitleaks-files.sarif"}},
+    {"name":"secrets-history","role":"secrets-history","parallel":true,"command":["gitleaks","git",".","--redact=100","--no-banner","--log-opts=--all","--report-format","sarif","--report-path","coverage/gitleaks-history.sarif"],"report":{"type":"gitleaks","path":"coverage/gitleaks-history.sarif"}},
+    {"name": "vulnerabilities", "role": "vulnerabilities", "command": ["osv-scanner", "scan", "source", "--lockfile=pubspec.lock", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},
+    {"name": "security", "role": "security", "command": ["semgrep", "scan", "--config", ".agents/skills/he/security", "--error", "--strict", "--time", "--json", "--output", "coverage/semgrep.json", "lib"], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}
   ]
 }

@@ -1,4 +1,5 @@
 __pycache__/
+.git/
 *.py[cod]
 .venv/
 .pytest_cache/
@@ -7,6 +8,8 @@ __pycache__/
 .coverage*
 coverage/
 .codebase-memory/
+.hard-eng/
+.context-mode/
 node_modules/
 dist/
 build/

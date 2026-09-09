@@ -10,4 +10,4 @@
 - Acceptance = before completion, review the actual diff against the latest request, remove unsupported additions and report any remaining expansion. Passing tools does not excuse unnecessary code; automated metrics cannot prove necessity or test quality.
 - Authorization = reuse settled approvals; ask only when missing information changes the result or an unapproved consequential action is necessary.
 - Communication = concise plain English; report actual changes, proof and remaining gaps.
-- Hard Eng = follow `skills/he/SKILL.md` when working on this repository; use `python3 bin/hard-eng --help` for commands.
+- Hard Eng = follow `.agents/skills/he/SKILL.md` when working on this repository; use `python3 .hooks/hard-eng.py --help` for commands.

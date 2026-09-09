@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "scan_git_history": false,
+  "packages": [{
+    "name": "hard-eng", "path": ".", "language": "python", "sources": ["setup.py", ".hooks"],
+    "checks": [
+      {"name": "dependencies-locked", "role": "lockfiles", "command": ["uv", "sync", "--locked"]},
+      {"name": "format", "role": "format", "parallel": true, "command": ["uvx", "ruff@latest", "format", "--check", "setup.py", ".hooks", "tests"]},
+      {"name": "lint", "role": "lint", "parallel": true, "command": ["uvx", "ruff@latest", "check", "setup.py", ".hooks", "tests", "--extend-select", "C901,PLR0912,PLR0915"]},
+      {"name": "complexity", "role": "complexity", "parallel": true, "command": ["uvx", "ruff@latest", "check", "setup.py", ".hooks", "tests", "--select", "C901,PLR0912,PLR0915", "--config", "lint.mccabe.max-complexity = 10", "--config", "lint.pylint.max-branches = 12", "--config", "lint.pylint.max-statements = 50"]},
+      {"name": "annotations", "role": "annotations", "parallel": true, "command": ["uvx", "ruff@latest", "check", "setup.py", ".hooks", "tests", "--select", "ANN,TID251,RUF017,ASYNC210", "--config", "lint.flake8-tidy-imports.banned-api.\"typing.Any\".msg = \"Use precise types\"", "--config", "lint.flake8-tidy-imports.banned-api.\"typing_extensions.Any\".msg = \"Use precise types\""]},
+      {"name": "types", "role": "types", "parallel": true, "command": ["uvx", "pyrefly@latest", "check", "--check-unannotated-defs=true", "--min-severity", "info"]},
+      {"name": "tests", "role": "tests", "command": ["uv", "run", "--no-sync", "pytest", "--cov", "--cov-report=json:coverage/coverage.json", "--junitxml=coverage/junit.xml"], "report": {"type": "python-tests", "tests": "coverage/junit.xml", "coverage": "coverage/coverage.json"}},
+      {"name": "dead-code", "role": "dead-code", "parallel": true, "command": ["uvx", "vulture@latest", "setup.py", ".hooks", "tests", "--min-confidence", "60"]},
+      {"name": "duplicates", "role": "duplicates", "command": ["npx", "--yes", "jscpd@latest", "setup.py", ".hooks", "tests", "--format", "python", "--threshold", "0", "--max-size", "100mb", "--max-lines", "1000000", "--reporters", "json", "--output", "coverage/jscpd"], "report": {"type": "jscpd", "path": "coverage/jscpd/jscpd-report.json"}},
+      {"name": "declarations", "role": "dependencies", "parallel": true, "command": ["uv", "run", "--no-sync", "--with", "deptry", "--refresh-package", "deptry", "deptry", ".", "--no-ansi", "--json-output", "coverage/deptry.json"], "report": {"type": "deptry", "path": "coverage/deptry.json"}}
+    ]
+  }],
+  "shared": [
+    {"name": "actionlint", "role": "workflows", "parallel": true, "command": ["actionlint", "-no-color"]},
+    {"name": "zizmor", "role": "ci-security", "parallel": true, "command": ["zizmor", "--strict-collection", "--persona=auditor", "--format=plain", "."]},
+    {"name": "shellcheck", "role": "shell", "parallel": true, "command": ["shellcheck", "--", "setup.sh"]},
+    {"name": "secrets-files", "role": "secrets-files", "parallel": true, "command": ["gitleaks", "dir", ".", "--redact=100", "--no-banner", "--report-format", "sarif", "--report-path", "coverage/gitleaks-files.sarif"], "report": {"type": "gitleaks", "path": "coverage/gitleaks-files.sarif"}},
+    {"name": "vulnerabilities", "role": "vulnerabilities", "command": ["osv-scanner", "scan", "source", "--lockfile=uv.lock", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},
+    {"name": "security", "role": "security", "command": ["uvx", "semgrep@latest", "scan", "--config", "p/python", "--error", "--strict", "--time", "--json", "--output", "coverage/semgrep.json", "setup.py", ".hooks", "tests"], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}
+  ]
+}

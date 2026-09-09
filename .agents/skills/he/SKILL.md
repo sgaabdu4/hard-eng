@@ -1,30 +1,17 @@
 ---
 name: he
-description: Apply the repository's Hard Eng gates and ultra YAGNI flow when implementing or fixing code. Use the shared CLI with any agent; retain the user's scope and existing authorization.
+description: Apply the repository's Hard Eng gates and ultra YAGNI flow when implementing or fixing code. Use the shared runner with any agent; retain the user's scope and existing authorization.
 ---
 
 # Hard Eng
 
-- Entry = `.agents/hard-eng/bin/hard-eng` in installed projects, `bin/hard-eng` in Hard Eng itself; invoke with `python3` when needed.
-- Install = from the target project root, run `curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh`. The installer copies shared files into the project; it adds no Git submodule. Codex and Copilot read `.agents/skills` directly. Only Claude receives links in `.claude/skills`. Preserve existing project instructions, skills and configuration.
-- Scope = understand the requested behavior, relevant code and callers before editing. Use `research` when current contracts or a substantive choice are unresolved.
-- YAGNI = ultra by default: skip speculation; reuse existing code, then stdlib/native features/existing dependencies, then the minimum new code. No future scaffolding or abstraction without current need.
-- Implementation = direct gate commands and necessary failure checks; no custom hashes, result-cache framework, legacy compatibility or historical exception machinery. Add tests only for required behavior and meaningful failure cases.
-- Product/design context = read root PRODUCT.md and DESIGN.md before implementation. If missing or empty, study the repository, existing documentation and relevant running interface, then create them from evidence. Preserve existing content and distinguish observed facts from unknowns; ask only for material product/design decisions the evidence cannot settle.
-- Missing-document templates = start from [PRODUCT.md](templates/PRODUCT.md) and [DESIGN.md](templates/DESIGN.md), filling them from that research. Replace all `[TODO: ...]` prompts and remove irrelevant sections. Copying a template alone does not satisfy the gate; never overwrite an existing document with a template.
-- Installation templates = adapt [Python](templates/hard-eng.python.json), [JavaScript/TypeScript](templates/hard-eng.javascript.json) or [Dart/Flutter](templates/hard-eng.dart.json) into root hard-eng.gates.json; retain the actual package manager, test runner, source boundaries and stricter settings. Configure full production coverage, Python strict typing/import contracts and relevant React/build checks. Combine package entries for monorepos with explicit dependencies. Templates are starting points, not proof of working gates.
-- CI template = adapt [hard-eng-gates.yml](templates/hard-eng-gates.yml) with the repository's SDK and locked dependency setup. Add Actionlint and Zizmor to shared checks. Run the same gate command without skipped jobs or swallowed failures; require the `hard-eng` job in branch protection when authorized.
-- Applicable checks = reuse the repository's build, integration-test and generator commands in the manifest. A committed generator must provide a check that regenerates affected outputs and fails on drift; use the generator's native check mode or the project's existing consistency command. Lockfile checks use the existing package manager and locked CI setup; do not reinstall dependencies after every edit.
-- Fresh checkouts = `lockfiles` checks run first and must prepare locked dependencies with the existing package manager, such as `uv sync --locked`, `npm ci` or `flutter pub get --enforce-lockfile`. CI installs SDKs; the shared runner owns this dependency step so pre-push and CI use the same setup.
-- Deployment = when Docker/infrastructure configuration exists, add shared role `deployment`, tool `trivy`, command `config --exit-code 1 --format json .`, and report `{ "type": "trivy", "path": "coverage/trivy.json", "stdout": true }`. For produced images, declare `container_images` and add role `container-vulnerabilities` using `osv-scanner scan image IMAGE --all-packages --format=json --output-file=coverage/image-osv.json` with report `{ "type": "osv", "path": "coverage/image-osv.json" }` for each produced image; build it before scanning.
-- UI checks = mark visual application packages with `ui: true` and provide a `ui` check for a small affected browser/device journey, including applicable accessibility assertions. Reuse the existing tests; JUnit reports can validate nonempty integration/UI runs without imposing unit-test coverage on that separate journey.
-- React = add a `react` check using managed `react-doctor` with `--blocking warning --json --json-out coverage/react-doctor.json` and report `{ "type": "react-doctor", "path": "coverage/react-doctor.json" }`; it must scan the full applicable package. Keep Fallow's complete dead-code/duplication report and unlimited handwritten file size; exit status alone misses some duplication findings.
-- PRODUCT.md = follow [product.md](https://product.md/): explain the actual users, problem, purpose and boundaries concisely; link existing sources rather than duplicating them. Do not invent pricing, personas or product claims.
-- DESIGN.md = follow [Google's format](https://github.com/google-labs-code/design.md/blob/main/docs/spec.md): derive tokens and guidance from the existing interface and code. Under Components, describe existing UI through [Atomic Design](https://atomicdesign.bradfrost.com/chapter-2/): atoms, molecules, organisms, templates and pages. Do not force a folder restructure or invent missing components. For repositories without a visual UI, state that and document the actual interface; omit irrelevant visual sections.
-- Start = run `hard-eng session`; resolve update/MCP failures before normal project changes. Diagnosis and scoped setup repair remain available.
-- MCP = use the active agent's Context Mode and Codebase Memory tools; confirm the intended repository/index. For detected Sentry/Appwrite integrations, prove the configured organization/project or endpoint/project with a read-only tool call. Never claim readiness from installation alone.
-- Work = fix the cause at its owner, preserve unrelated work, and reuse relevant tests. Use narrowly scoped native scanner exceptions only for proven false positives or intentional supported patterns, with the reason and evidence beside the exception; keep the rule active elsewhere. Do not create a separate exception system or historical baseline.
-- Finish = review the actual diff against the user's scope. Remove unjustified additions before claiming completion; verify independently expected outcomes, relevant failures and the original regression. Coverage measures execution, not assertion quality.
-- Gates = run `hard-eng check`; full applicable checks also run before push and independently in CI. Missing, stale, empty or incomplete proof is a failure.
-- Mutation = optional; present the complete changed-function scope, relevant covering tests and estimated runtime, then obtain the user's acceptance before running it.
-- Delivery = report what changed, actual proof and remaining gaps. An honest blocked report or question must remain possible; do not enter a repeating completion-hook loop.
+Read the relevant reference before acting. Keep the user's scope and settled approvals.
+
+| Task | Read |
+| --- | --- |
+| Start, implement, review or report engineering work | [Workflow](references/workflow.md) |
+| Install or adapt the scaffold, dependencies or CI | [Setup](references/setup.md) |
+| Configure, run or repair native checks and reports | [Gates](references/gates.md) |
+| Change a bulk, async or performance-sensitive flow | [Efficiency](references/efficiency.md) |
+
+Read only the routes needed for the task. Guidance is not evidence that a gate or integration works.
