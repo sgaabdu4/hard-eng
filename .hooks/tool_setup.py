@@ -28,6 +28,8 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         "fallow": "npm:fallow",
         "react-doctor": "npm:react-doctor",
         "jscpd": "npm:jscpd",
+        "lhci": "npm:@lhci/cli",
+        "k6": "aqua:grafana/k6",
     }
     executables = {gate["command"][0] for group in groups for gate in group["checks"]}
     selected = sorted(
