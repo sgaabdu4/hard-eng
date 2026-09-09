@@ -25,6 +25,8 @@ READ_ONLY = {
     "ask_user",
     "request_user_input",
     "request_user_input_async",
+    "toolsearch",
+    "skill",
 }
 SOURCE_SUFFIXES = {
     ".py",
@@ -167,6 +169,7 @@ def repair_path(root: Path, path: str) -> bool:
     return target.is_relative_to(root / ".agents/hard-eng") or target in {
         root / "hard-eng.gates.json",
         root / ".mcp.json",
+        root / ".github/mcp.json",
         root / ".codex/config.toml",
         root / ".codex/hooks.json",
         root / ".claude/settings.json",
