@@ -1,5 +1,6 @@
 # Agent Rules
 
+- Before editing, state the single change being implemented, which files it will touch, and how it will be verified. Prefer a native command or existing file. Every new file, dependency, wrapper or abstraction must be necessary for that change.
 - Scope = the user's request + accepted constraints; preserve unrelated work.
 - YAGNI = ultra always unless the user changes it. Understand the real flow first; reuse existing code, stdlib, native features and installed dependencies before adding code.
 - Additions = before adding a file, dependency, abstraction, configuration or stored state, identify the current agreed requirement it serves and why the existing code or a direct command cannot satisfy it. Without both answers, leave it out. Keep this reasoning in normal updates; create no justification files.
