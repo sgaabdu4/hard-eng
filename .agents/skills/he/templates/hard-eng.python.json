@@ -3,6 +3,7 @@
   "packages": [{
     "name": "app", "path": ".", "language": "python", "sources": ["src"],
     "checks": [
+      {"name": "performance", "role": "performance", "command": ["pytest", "tests/performance", "--junitxml=coverage/performance.xml"], "report": {"type": "performance-junit", "path": "coverage/performance.xml"}},
       {"name": "format", "role": "format", "parallel": true, "command": ["ruff", "format", "--check", "."]},
       {"name": "lint", "role": "lint", "parallel": true, "command": ["ruff", "check", ".", "--extend-select", "C901,PLR0912,PLR0915"]},
       {"name": "complexity", "role": "complexity", "parallel": true, "command": ["ruff", "check", ".", "--select", "C901,PLR0912,PLR0915", "--config", "lint.mccabe.max-complexity = 10", "--config", "lint.pylint.max-branches = 12", "--config", "lint.pylint.max-statements = 50"]},

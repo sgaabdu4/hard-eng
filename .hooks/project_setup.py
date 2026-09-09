@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import tomllib
@@ -11,6 +12,21 @@ from pathlib import Path
 from gate_config import GateConfig, Group, nonproduction_source, repository_files
 
 PACKAGE_MANAGERS = {"npm", "npx", "pnpm", "yarn", "yarnpkg", "bun", "bunx"}
+
+
+def is_shell_script(path: Path) -> bool:
+    if path.suffix in {".sh", ".bash"}:
+        return True
+    if path.suffix:
+        return False
+    with path.open("rb") as source:
+        return bool(re.match(rb"^#![^\n]*\b(?:bash|sh)(?:\s|$)", source.readline(4096)))
+
+
+def is_deployment_file(path: Path) -> bool:
+    return path.name in {"Dockerfile", "Containerfile", "Chart.yaml", "tfplan"} or str(
+        path
+    ).endswith((".tf", ".tf.json", ".tfvars", ".tfplan"))
 
 
 def package_script_arguments(
@@ -43,6 +59,10 @@ def package_script_arguments(
 
 def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
     manifest = json.loads((directory / "package.json").read_text())
+    if manifest.get("workspaces") and not (directory / "pnpm-workspace.yaml").is_file():
+        raise ValueError(
+            "pnpm workspaces require pnpm-workspace.yaml; migrate the workspace declaration"
+        )
     declared = manifest.get("packageManager")
     if declared is not None and (
         not isinstance(declared, str) or not declared.startswith("pnpm@")
@@ -177,11 +197,8 @@ def workspace_members(directory: Path, language: str) -> list[str]:
             *workspace.get("members", []),
             *("!" + value for value in workspace.get("exclude", [])),
         ]
-    if language == "javascript":
-        manifest = json.loads((directory / "package.json").read_text())
-        if not (directory / "pnpm-workspace.yaml").exists():
-            members = manifest.get("workspaces", [])
-            return members.get("packages", []) if isinstance(members, dict) else members
+    if language == "javascript" and not (directory / "pnpm-workspace.yaml").exists():
+        return []
     import yaml
 
     name = "pubspec.yaml" if language == "dart" else "pnpm-workspace.yaml"
@@ -280,6 +297,43 @@ def adapt_package(directory: Path, package: Group) -> None:
         package["checks"] = [
             gate for gate in package["checks"] if gate.get("role") != "imports"
         ]
+    adapt_performance(directory, package)
+
+
+def adapt_performance(directory: Path, package: Group) -> None:
+    if any(
+        (directory / name).is_file()
+        for name in (
+            "lighthouserc.js",
+            "lighthouserc.cjs",
+            "lighthouserc.json",
+            "lighthouserc.yml",
+            "lighthouserc.yaml",
+            ".lighthouserc.js",
+            ".lighthouserc.cjs",
+            ".lighthouserc.json",
+            ".lighthouserc.yml",
+            ".lighthouserc.yaml",
+        )
+    ):
+        for gate in package["checks"]:
+            if gate.get("role") == "performance":
+                gate["command"] = [
+                    "lhci",
+                    "autorun",
+                    "--assert.includePassedAssertions",
+                    "--upload.target=filesystem",
+                    "--upload.outputDir=coverage/lighthouse",
+                ]
+                gate["report"] = {
+                    "type": "lighthouse-ci",
+                    "path": ".lighthouseci/assertion-results.json",
+                }
+    # Production builds and generators must finish before measurement begins.
+    checks = package["checks"]
+    package["checks"] = [
+        gate for gate in checks if gate.get("role") != "performance"
+    ] + [gate for gate in checks if gate.get("role") == "performance"]
 
 
 def python_gate_command(command: list[str], manager: str) -> list[str]:

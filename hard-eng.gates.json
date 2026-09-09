@@ -4,6 +4,7 @@
   "packages": [{
     "name": "hard-eng", "path": ".", "language": "python", "sources": ["setup.py", ".hooks"],
     "checks": [
+      {"name": "performance", "role": "performance", "command": ["uv", "run", "--no-sync", "--with", "pytest", "--upgrade-package", "pytest", "pytest", "tests/performance", "--junitxml=coverage/performance.xml"], "report": {"type": "performance-junit", "path": "coverage/performance.xml"}},
       {"name": "dependencies-locked", "role": "lockfiles", "command": ["uv", "sync", "--locked"]},
       {"name": "format", "role": "format", "parallel": true, "command": ["uvx", "ruff@latest", "format", "--check", "setup.py", ".hooks", "tests"]},
       {"name": "lint", "role": "lint", "parallel": true, "command": ["uvx", "ruff@latest", "check", "setup.py", ".hooks", "tests", "--extend-select", "C901,PLR0912,PLR0915"]},

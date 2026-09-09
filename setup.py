@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import runpy
 import subprocess
 import sys
@@ -19,11 +18,6 @@ if TYPE_CHECKING:
 SOURCE = Path(__file__).resolve().parent
 sys.path.insert(0, str(SOURCE / ".hooks"))
 START, END = "<!-- hard-eng:start -->", "<!-- hard-eng:end -->"
-LANGUAGES = {
-    "pyproject.toml": "python",
-    "package.json": "javascript",
-    "pubspec.yaml": "dart",
-}
 
 
 def merge(
@@ -58,30 +52,19 @@ def merge(
 
 
 def gate_config(root: Path) -> GateConfig:
+    from gate_config import package_manifests, repository_files
     from project_setup import adapt_packages
 
-    result = subprocess.run(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
     packages: list[Group] = []
     shared: list[Gate] = []
-    for name in sorted(set(result.stdout.split("\0")) - {""}):
-        path = Path(name)
-        if path.name not in LANGUAGES or ".agents" in path.parts:
-            continue
+    for path, language in sorted(package_manifests(root, repository_files(root))):
         template = json.loads(
             (
-                SOURCE
-                / ".agents/skills/he/templates"
-                / f"hard-eng.{LANGUAGES[path.name]}.json"
+                SOURCE / ".agents/skills/he/templates" / f"hard-eng.{language}.json"
             ).read_text()
         )
         package = template["packages"][0]
-        package["name"] = package["path"] = str(path.parent)
+        package["name"] = package["path"] = path
         packages.append(package)
         for gate in template["shared"]:
             if gate["role"] in {"secrets-files", "secrets-history"}:
@@ -408,29 +391,20 @@ def add_workflow_checks(config: GateConfig) -> None:
 
 
 def configure_shellcheck(root: Path, config: GateConfig) -> None:
+    from gate_config import repository_files
+    from project_setup import is_shell_script
+
     if any(
         gate.get("role") == "shell"
         or (gate.get("command") and Path(gate["command"][0]).name == "shellcheck")
         for gate in config["shared"]
     ):
         return
-    names = subprocess.check_output(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-        cwd=root,
-        text=True,
-    )
-    scripts = []
-    for name in sorted(set(names.split("\0")) - {""}):
-        path = root / name
-        if not path.is_file() or path.is_symlink():
-            continue
-        if path.suffix in {".sh", ".bash"}:
-            scripts.append(name)
-        elif not path.suffix:
-            with path.open("rb") as source:
-                first_line = source.readline(4096)
-            if re.match(rb"^#![^\n]*\b(?:bash|sh)(?:\s|$)", first_line):
-                scripts.append(name)
+    scripts = [
+        str(path.relative_to(root))
+        for path in repository_files(root)
+        if is_shell_script(path)
+    ]
     if scripts:
         config["shared"].append(
             {
@@ -443,6 +417,9 @@ def configure_shellcheck(root: Path, config: GateConfig) -> None:
 
 
 def configure_deployment(root: Path, config: GateConfig) -> None:
+    from gate_config import repository_files
+    from project_setup import is_deployment_file
+
     if any(
         gate.get("role") == "deployment"
         or (
@@ -453,21 +430,8 @@ def configure_deployment(root: Path, config: GateConfig) -> None:
         for gate in config["shared"]
     ):
         return
-    names = subprocess.check_output(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-        cwd=root,
-        text=True,
-    )
-    for name in names.split("\0"):
-        path = root / name
-        if not path.is_file() or path.is_symlink():
-            continue
-        if path.name in {
-            "Dockerfile",
-            "Containerfile",
-            "Chart.yaml",
-            "tfplan",
-        } or name.endswith((".tf", ".tf.json", ".tfvars", ".tfplan")):
+    for path in repository_files(root):
+        if is_deployment_file(path):
             config["shared"].append(
                 {
                     "name": "trivy-config",

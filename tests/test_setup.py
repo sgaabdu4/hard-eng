@@ -6,8 +6,44 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from gate_config import GateConfig
-from project_setup import import_configuration, javascript_files, javascript_manager
+from gate_config import GateConfig, Group, validate_required_checks
+from project_setup import (
+    adapt_performance,
+    import_configuration,
+    javascript_files,
+    javascript_manager,
+)
+
+
+def test_existing_lighthouse_config_runs_after_build(tmp_path: Path) -> None:
+    package: Group = {
+        "path": ".",
+        "checks": [
+            {
+                "name": "performance",
+                "role": "performance",
+                "command": ["pnpm", "run", "test:performance"],
+            },
+            {"name": "build", "role": "build", "command": ["pnpm", "run", "build"]},
+        ],
+    }
+    adapt_performance(tmp_path, package)
+    assert package["checks"][-1]["command"] == ["pnpm", "run", "test:performance"]
+    (tmp_path / "lighthouserc.json").write_text('{"ci":{}}')
+    adapt_performance(tmp_path, package)
+    assert [gate["role"] for gate in package["checks"]] == ["build", "performance"]
+    performance = package["checks"][-1]
+    assert performance["command"] == [
+        "lhci",
+        "autorun",
+        "--assert.includePassedAssertions",
+        "--upload.target=filesystem",
+        "--upload.outputDir=coverage/lighthouse",
+    ]
+    assert performance["report"] == {
+        "type": "lighthouse-ci",
+        "path": ".lighthouseci/assertion-results.json",
+    }
 
 
 def test_pnpm_package_manager_is_required(tmp_path: Path) -> None:
@@ -163,8 +199,12 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
         '{"name":"app","packageManager":"pnpm@11.18.0"}'
     )
     (child / "src/main.ts").write_text("export const value = 1;\n")
+    with pytest.raises(ValueError, match="pnpm-workspace.yaml"):
+        installer.gate_config(tmp_path)
+    (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n  - packages/*\n")
     config = installer.gate_config(tmp_path)
     root, app = config["packages"]
+    validate_required_checks(tmp_path, config)
     assert "language" not in root
     assert app["sources"] == ["src"]
     assert (

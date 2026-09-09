@@ -50,6 +50,20 @@ GateConfig = TypedDict(
     },
 )
 
+LANGUAGES = {
+    "pyproject.toml": "python",
+    "package.json": "javascript",
+    "pubspec.yaml": "dart",
+}
+
+
+def package_manifests(root: Path, files: list[Path]) -> set[tuple[str, str]]:
+    return {
+        (str(path.parent.relative_to(root)), LANGUAGES[path.name])
+        for path in files
+        if path.name in LANGUAGES and ".agents" not in path.relative_to(root).parts
+    }
+
 
 def repository_files(root: Path) -> list[Path]:
     names = subprocess.check_output(
@@ -279,6 +293,19 @@ def affected_groups(root: Path, groups: list[Group], base: str | None) -> list[G
     return [group for group in packages if group["path"] in selected] + [groups[-1]]
 
 
+def validate_performance_gate(gate: Gate) -> None:
+    if gate.get("role") != "performance":
+        return
+    if gate.get("parallel", False):
+        raise ValueError("Performance suites must run serially")
+    if gate.get("report", {}).get("type") not in {
+        "performance-junit",
+        "performance-dart",
+        "lighthouse-ci",
+    }:
+        raise ValueError("Performance suite requires a supported native report")
+
+
 def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
     if (
         not isinstance(group, dict)
@@ -291,18 +318,42 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         raise ValueError(
             f"Gate directory must exist inside the project: {group['path']}"
         )
+    if group.get("language") not in {None, *LANGUAGES.values()}:
+        raise ValueError(f"Unsupported package language: {group.get('language')}")
     required = {
-        "python": {"types", "annotations"},
-        "javascript": {"types", "typing-style"},
-        "dart": {"types"},
+        "python": {
+            "format",
+            "lint",
+            "complexity",
+            "types",
+            "annotations",
+            "tests",
+            "dead-code",
+            "duplicates",
+            "dependencies",
+        },
+        "javascript": {
+            "format-lint",
+            "focused-tests",
+            "types",
+            "typing-style",
+            "tests",
+            "dead-code-duplicates",
+        },
+        "dart": {"format", "types", "tests", "dead-code-duplicates"},
     }.get(group.get("language", ""), set())
     roles = {gate.get("role") for gate in group["checks"] if isinstance(gate, dict)}
     if required - roles:
         raise ValueError(
-            f"Missing mandatory typing checks: {', '.join(sorted(required - roles))}"
+            f"{group['path']}: missing mandatory checks: {', '.join(sorted(required - roles))}"
+        )
+    if group.get("language") and "performance" not in roles:
+        raise ValueError(
+            "Missing mandatory performance suite; configure a workload and budget"
         )
     for gate in group["checks"]:
         validate_gate(gate, directory, report_paths)
+        validate_performance_gate(gate)
     if group.get("language") == "javascript":
         from project_setup import javascript_manager, package_script_arguments
 
@@ -310,6 +361,129 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         for gate in group["checks"]:
             package_script_arguments(gate["command"], directory, pnpm_only=True)
     return len(group["checks"])
+
+
+def require_roles(directory: str, required: set[str], roles: set[str]) -> None:
+    if missing := required - roles:
+        raise ValueError(
+            f"{directory}: missing mandatory checks: {', '.join(sorted(missing))}"
+        )
+
+
+def validate_manifest_groups(
+    root: Path, config: GateConfig, manifests: set[tuple[str, str]]
+) -> None:
+    from project_setup import workspace_members
+
+    declared = {
+        (str(Path(group["path"])), group.get("language")): group
+        for group in config["packages"]
+    }
+    if len(declared) != len(config["packages"]):
+        raise ValueError("Package path/language pairs must be unique")
+    for path, language in manifests:
+        if (path, language) in declared:
+            continue
+        group = declared.get((path, None))
+        if group is None:
+            raise ValueError(
+                f"Supported {language} package is missing from gate configuration: {path}"
+            )
+        if group.get("sources") or not workspace_members(root / path, language):
+            raise ValueError(f"{path}: package language must be {language}")
+
+
+def validate_required_checks(root: Path, config: GateConfig) -> None:
+    from project_setup import is_deployment_file, is_shell_script
+
+    files = repository_files(root)
+    manifests = package_manifests(root, files)
+    validate_manifest_groups(root, config, manifests)
+    if not config["packages"] and not manifests:
+        return  # Ad-hoc command groups without a supported application manifest.
+    shared_roles = {gate.get("role", "") for gate in config["shared"]}
+    required = {"secrets-files"}
+    if config.get("scan_git_history", True):
+        required.add("secrets-history")
+    if any(
+        path.parent == root / ".github/workflows" and path.suffix in {".yml", ".yaml"}
+        for path in files
+    ):
+        required.update({"workflows", "ci-security"})
+    if any(is_shell_script(path) for path in files):
+        required.add("shell")
+    if any(is_deployment_file(path) for path in files):
+        required.add("deployment")
+    for gate in config["shared"]:
+        command = gate["command"]
+        shared_roles.update(
+            {
+                "actionlint": {"workflows"},
+                "zizmor": {"ci-security"},
+                "shellcheck": {"shell"},
+            }.get(Path(command[0]).name, set())
+        )
+        if Path(command[0]).name == "trivy" and "config" in command[1:]:
+            shared_roles.add("deployment")
+    require_roles("shared", required, shared_roles)
+    workspace_languages = dict(manifests)
+    for group in config["packages"]:
+        validate_package_services(
+            root, group, config, workspace_languages, shared_roles
+        )
+
+
+def validate_package_services(
+    root: Path,
+    group: Group,
+    config: GateConfig,
+    manifests: dict[str, str],
+    shared_roles: set[str],
+) -> None:
+    from project_setup import python_roots, workspace_matches, workspace_members
+
+    directory = (root / group["path"]).resolve()
+    language = group.get("language") or manifests.get(str(Path(group["path"])), "")
+    roles = {gate.get("role", "") for gate in group["checks"]}
+    inherited = set(shared_roles)
+    for parent in config["packages"]:
+        owner = (root / parent["path"]).resolve()
+        owner_language = parent.get("language") or manifests.get(
+            str(Path(parent["path"])), ""
+        )
+        if (
+            owner != directory
+            and owner_language == language
+            and directory.is_relative_to(owner)
+            and workspace_matches(
+                str(directory.relative_to(owner)), workspace_members(owner, language)
+            )
+        ):
+            inherited.update(gate.get("role", "") for gate in parent["checks"])
+    require_roles(group["path"], {"lockfiles", "vulnerabilities"}, roles | inherited)
+    if not group.get("language"):
+        return
+    require_roles(group["path"], {"security"}, roles | shared_roles)
+    if language == "python" and python_roots(directory, group):
+        require_roles(group["path"], {"imports"}, roles)
+    if language == "javascript":
+        manifest = json.loads((directory / "package.json").read_text())
+        dependencies = {
+            **manifest.get("dependencies", {}),
+            **manifest.get("devDependencies", {}),
+        }
+        required = {"react"} if "react" in dependencies else set()
+        required.update(
+            role
+            for script, role in {
+                "build": "build",
+                "test:integration": "integration",
+                "test:ui": "ui",
+                "check:generated": "generated",
+            }.items()
+            if script in manifest.get("scripts", {})
+        )
+        require_roles(group["path"], required, roles)
 
 
 def load_groups(root: Path, base: str | None = None) -> list[Group]:
@@ -336,4 +510,5 @@ def load_groups(root: Path, base: str | None = None) -> list[Group]:
     count = sum(validate_group(root, group, report_paths) for group in groups)
     if not count:
         raise ValueError("No checks configured; verification cannot pass")
+    validate_required_checks(root, config)
     return affected_groups(root, groups, base)
