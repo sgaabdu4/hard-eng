@@ -1,0 +1,6 @@
+interface:
+  display_name: "Product Walkthrough Video"
+  short_description: "Record and review polished product walkthrough videos"
+  default_prompt: "Use product-walkthrough-video to record, review, and convert a polished walkthrough video of the product journey."
+policy:
+  allow_implicit_invocation: false
