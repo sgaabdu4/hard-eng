@@ -11,11 +11,15 @@ disable-model-invocation: true
 
 ## Routes
 
-| Task | Load |
-| --- | --- |
-| Author/review structure, triggers or boundaries | Core below |
-| Create/migrate a package; review metadata, invocation or dependencies | [Package](references/package.md) |
-| Repair observed misrouting, missed detail or premature completion | [Repair](references/repair.md) |
+Load matching routes only; Core always applies.
+
+```mermaid
+flowchart LR
+  C[Core] -->|Package / metadata / invocation| P[references/package.md]
+  C -->|Observed skill failure| R[references/repair.md]
+  click P "references/package.md"
+  click R "references/repair.md"
+```
 
 ## Core
 
@@ -24,7 +28,7 @@ disable-model-invocation: true
 | Need | Removal loses reusable, non-default behavior; omit generic agent advice. |
 | Trigger | Purpose + distinct use; relevant prompts match, unrelated prompts do not. Preserve implicit selection unless user requests explicit-only. |
 | Disclosure | `SKILL.md` = routes + essential shared rules. Conditional workflows/examples/detail → references. Each route = load condition + direct link; load only applicable routes. Keep short universal rules inline. |
-| Diagram | Branches, sequence or dependencies → Mermaid when clearer/leaner. Terse labels; one representation, no prose duplicate. Simple rule → bullet/table. |
+| Diagram | Flow, decision, state or dependency → Mermaid by default. Terse labels; one representation, no prose duplicate. Non-relational rule → bullet/table. |
 | Split | Same actions + proof → keep together. Split for independent use or observed failure unresolved by clearer completion. |
 | Resource | Script = repeated fragile logic; reference = conditional knowledge; asset = copied output. Each needs a current consumer; no mandatory file count. |
 | Ownership | Rule + definition + caveat = one owner. Inspect package + relevant siblings/project instructions; consolidate duplicates + remove stale rules. |
