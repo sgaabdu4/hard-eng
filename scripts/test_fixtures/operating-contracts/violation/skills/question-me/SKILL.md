@@ -1,1 +1,0 @@
-- Ask every question separately.
