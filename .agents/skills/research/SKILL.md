@@ -19,15 +19,19 @@ description: Investigate a codebase, compare tools or approaches, verify current
 
 Read each reference whose question is part of the task; skip unrelated routes.
 
-| Question | Reference |
-|---|---|
-| What does this repository do, and what would a change affect? | [Codebase](references/codebase.md) |
-| Which tools or approaches fit, overlap or leave gaps? Is the current set sufficient? | [Comparison](references/comparison.md) |
-| Is a claim current, and what do external sources establish? | [External evidence](references/external.md) |
-| How does a particular library, API or platform contract work? | [Library and API](references/library-api.md) |
-| Why did something fail, and which remedy addresses the cause? | [Troubleshooting](references/troubleshooting.md) |
-
-Examples: a scanner comparison uses Comparison + External evidence; a failed SDK call uses Troubleshooting + Library and API, with Codebase when caller behavior matters.
+```mermaid
+flowchart LR
+  Q{Question} -->|Repository behavior / impact| C[Codebase]
+  Q -->|Options / overlap / sufficiency| O[Comparison]
+  Q -->|Current external claim| E[External evidence]
+  Q -->|Library / API contract| L[Library and API]
+  Q -->|Failure / remedy| F[Troubleshooting]
+  click C "references/codebase.md"
+  click O "references/comparison.md"
+  click E "references/external.md"
+  click L "references/library-api.md"
+  click F "references/troubleshooting.md"
+```
 
 ## Completion
 
