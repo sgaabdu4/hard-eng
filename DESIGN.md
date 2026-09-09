@@ -1,129 +1,27 @@
----
-version: alpha
-name: Hard Eng
-description: Professional warm-neutral Fast Feature Loop identity with teal planning/build and green delivery accents.
-colors:
-  ink: "#151A20"
-  canvas: "#FBF8F3"
-  panel: "#F3E8DA"
-  primary: "#0E777C"
-  verify: "#58B8C1"
-  ship: "#5C963F"
-  on-dark: "#FFFFFF"
-typography:
-  display:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: 64px
-    fontWeight: 700
-    lineHeight: 1
-    letterSpacing: -0.03em
-  heading:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: 28px
-    fontWeight: 700
-    lineHeight: 1.15
-  body:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: 16px
-    fontWeight: 400
-    lineHeight: 1.5
-rounded:
-  control: 8px
-  card: 16px
-  pill: 999px
-spacing:
-  xs: 4px
-  sm: 8px
-  md: 16px
-  lg: 24px
-  xl: 40px
-components:
-  lifecycle-plan:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-dark}"
-    rounded: "{rounded.card}"
-    padding: 24px
-  lifecycle-build:
-    backgroundColor: "{colors.verify}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.card}"
-    padding: 24px
-  lifecycle-ship:
-    backgroundColor: "{colors.ship}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.card}"
-    padding: 24px
-  learning-signal:
-    backgroundColor: "{colors.panel}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.card}"
-    padding: 24px
-  lifecycle-canvas:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.card}"
-    padding: 24px
----
-
-# Hard Eng Design
+# Hard Eng
 
 ## Overview
 
-- Visual identity = professional + calm + rigorous + human.
-- Canonical reference = `assets/readme/hard-eng-hero.png` SHA-256 `8a34dffd7dfa754de486f26152b0659dca385836425e6d26f124e7f508652a10`.
-- Hierarchy = bold wordmark → concise promise → explicit lifecycle cards.
-- People = inclusive anime-style collaborators; retain approved characters when lifecycle art changes.
-- Lifecycle = Plan (one Feature Brief) → Build (vertical Implement ⇄ Verify slices) → Ship.
-- Critical overlay = risk marker on affected slice only; never whole-workflow alarm state.
+Hard Eng currently exposes a text CLI and Markdown instructions. There is no visual application or brand-token system in this repository. The interface should make required actions, failures and implementation status easy to understand.
 
-## Colors
-
-- Ink = near-black authority for wordmark, headings, and primary text.
-- Canvas = warm off-white; pure clinical white is not the dominant surface.
-- Plan/build = restrained teal; use for state, arrows, and verification loop.
-- Ship = natural green; learning signal = warm panel + restrained dashed return path.
-- Border/panel = warm neutrals; preserve calm separation without heavy chrome.
-
-## Typography
-
-- Wordmark/display = heavy system sans + tight tracking + lowercase product name.
-- Stage heading = bold system sans + compact line height.
-- Body = readable system sans; clarity outranks decorative character.
-
-## Layout
-
-- Lifecycle visual = horizontal on wide surfaces + readable stacked adaptation on narrow surfaces.
-- Build = one grouped owner containing Implement ⇄ Verify; never render them as independent lifecycle stages.
-- Slice = smallest user-visible vertical unit + one compact proof/checkpoint marker.
-- Feature Brief = one compact alignment card; avoid multi-stage planning diagrams.
-- Spacing = generous outer canvas + consistent card gaps + clear arrow lanes.
-
-## Elevation & Depth
-
-- Depth = warm border + subtle tonal panel separation.
-- Heavy shadows + glossy effects + neon glow = forbidden.
-
-## Shapes
-
-- Cards = softly rounded rectangles.
-- Status = compact pills.
-- Flow = simple arrows; verify loop remains visibly bidirectional.
+This document follows the applicable prose sections of [Google's DESIGN.md specification](https://github.com/google-labs-code/design.md/blob/main/docs/spec.md). Visual token sections are omitted because the current product does not define them.
 
 ## Components
 
-- Wordmark = `hard-eng`; no alternate logo text.
-- Lifecycle card = stage name + approved character/art + state accent.
-- Plan card = Feature Brief + Ready-to-build decision represented once.
-- Build group = Implement card + Verify card + loop arrows inside one boundary.
-- Critical marker = contained badge on risky slice; do not recolor safe slices.
-- Learning signal = proven process-gap marker + dashed return to owning owner; never a lifecycle stage.
+- Command help comes from Python's argument parser in [hard_eng/cli.py](hard_eng/cli.py).
+- Check output in [hard_eng/runner.py](hard_eng/runner.py) uses `PASS` or `FAIL`, the check name and a short result or failure reason.
+- CLI errors identify the failure and return a nonzero exit status.
+- Decision checkboxes put implemented items first and pending or partial items below.
+
+### Atomic Design
+
+Atoms, molecules, organisms, templates and pages describe visual UI composition. They do not currently apply to this CLI; no UI components or hierarchy are invented here.
+
+When Hard Eng studies a repository with a UI, its DESIGN.md should map the actual reusable components and screens to those five levels, preserving the existing code organization.
 
 ## Do's and Don'ts
 
-- Do = preserve Plan → Build → Ship order + character continuity + warm professional palette.
-- Do = keep arrows aligned, unobstructed, and semantically correct.
-- Do = verify contrast + reflow + readable labels.
-- Do not = depict repeated approvals + whole-project critical state + extra lifecycle stages.
-- Do not = introduce plugins/harness logos + decorative complexity.
-- Do not = replace the approved hijabi planner or other approved people without explicit approval.
-- Do not = treat Imagegen output as exact layout/token proof; use code/vector owners for geometry.
+- Use readable text and explicit status words; do not rely on color alone.
+- Keep diagnostics useful and secret values redacted.
+- Show actual results and unresolved failures.
+- Use existing commands and conventions; add no decorative output or speculative interface layers.

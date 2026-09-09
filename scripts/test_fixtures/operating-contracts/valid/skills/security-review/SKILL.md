@@ -1,4 +1,0 @@
-- Control admission = concrete asset + plausible threat actor/path.
-- simplest sufficient maintainable control.
-- preference/speculative hardening stays out of required scope.
-- Risk response = eliminate / mitigate / transfer / accept.
