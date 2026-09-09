@@ -576,6 +576,11 @@ def plan_install(
         changes.get("hard-eng.gates.json") or (root / "hard-eng.gates.json").read_text()
     )
     for package in config.get("packages", []):
+        ignore = Path(package["path"]) / ".semgrepignore"
+        if not (root / ignore).exists():
+            changes[str(ignore)] = (
+                "# Include production and tests; replace Semgrep's default test exclusions.\n"
+            )
         configure_typing_checks(package)
         configure = {
             "python": configure_python,

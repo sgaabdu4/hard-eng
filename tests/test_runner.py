@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -9,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import tool_setup
 from gate_config import validate_file_sizes
 
 
@@ -231,6 +233,48 @@ def test_source_files_include_unexecuted_modules(
         tmp_path, {"language": "javascript", "sources": ["src"]}, include_tests=True
     )
     assert {path.name for path in typed} == {"used.ts", "unused.ts", "used.test.ts"}
+
+
+def test_coverage_excludes_native_generated_and_vendor_attributes(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitattributes").write_text(
+        "generated.py linguist-generated=true\nexternal.py linguist-vendored=true\n"
+    )
+    for name in ("app.py", "generated.py", "external.py"):
+        (tmp_path / name).write_text("value = 1\n")
+    group = {"language": "python", "sources": ["."]}
+    assert {p.name for p in runner.production_files(tmp_path, group)} == {"app.py"}
+    assert len(runner.production_files(tmp_path, group, include_tests=True)) == 3
+
+
+def test_native_tool_path_preserves_ci_sdk_executables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sdk, scanner = tmp_path / "sdk", tmp_path / "scanner"
+    for directory, executable in ((sdk, "uv"), (scanner, "gitleaks")):
+        directory.mkdir()
+        path = directory / executable
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o755)
+    monkeypatch.setenv("PATH", str(sdk))
+
+    def native_environment(
+        *_args: object, **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            [], 0, json.dumps({"PATH": str(scanner)}), ""
+        )
+
+    monkeypatch.setattr(subprocess, "run", native_environment)
+    tool_setup.provision_tools(
+        tmp_path,
+        [{"path": ".", "checks": [{"name": "secrets", "command": ["gitleaks"]}]}],
+        30,
+    )
+    assert shutil.which("uv") == str(sdk / "uv")
+    assert shutil.which("gitleaks") == str(scanner / "gitleaks")
 
 
 @pytest.mark.parametrize("covered,expected", [(7, False), (6, True)])

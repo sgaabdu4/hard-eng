@@ -73,6 +73,38 @@ def nonproduction_source(relative: Path) -> bool:
     )
 
 
+def generated_sources(root: Path, names: list[str]) -> set[str]:
+    if not names:
+        return set()
+    repository = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if repository.returncode:
+        return set()  # Standalone source directories have no Git attributes.
+    attributes = subprocess.check_output(
+        [
+            "git",
+            "check-attr",
+            "-z",
+            "--stdin",
+            "linguist-generated",
+            "linguist-vendored",
+        ],
+        cwd=root,
+        text=True,
+        input="\0".join(names) + "\0",
+    ).split("\0")
+    return {
+        name
+        for name, _, value in zip(attributes[::3], attributes[1::3], attributes[2::3])
+        if value in {"set", "true"}
+    }
+
+
 def validate_file_sizes(root: Path, exceptions: dict[str, dict[str, str]]) -> None:
     if not isinstance(exceptions, dict):
         raise TypeError("File-size exceptions must be an object")
@@ -104,17 +136,7 @@ def validate_file_sizes(root: Path, exceptions: dict[str, dict[str, str]]) -> No
             raise ValueError(
                 "File-size exceptions require an exact existing file, reason and evidence"
             )
-    attributes = subprocess.check_output(
-        ["git", "check-attr", "-z", "--stdin", "linguist-generated"],
-        cwd=root,
-        text=True,
-        input="\0".join(names) + ("\0" if names else ""),
-    ).split("\0")
-    generated = {
-        name
-        for name, _, value in zip(attributes[::3], attributes[1::3], attributes[2::3])
-        if value in {"set", "true"}
-    }
+    generated = generated_sources(root, names)
     failures = []
     for path, name in zip(files, names):
         if name in generated or name in exceptions:

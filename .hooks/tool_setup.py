@@ -11,7 +11,7 @@ from gate_config import Group
 
 
 def managed_command(command: list[str]) -> list[str]:
-    if command[0] in {"ruff", "pyrefly", "vulture", "semgrep", "zizmor"}:
+    if command[0] in {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "poetry"}:
         return ["uvx", command[0] + "@latest", *command[1:]]
     return command
 
@@ -65,9 +65,10 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
             text=True,
             timeout=timeout,
             capture_output=True,
-            check=True,
+            check=False,
         )
         print(result.stderr, file=sys.stderr, end="")
+        result.check_returncode()
         if "Failed to resolve tool version" in result.stderr:
             raise ValueError(
                 "Latest tool versions could not be resolved; retry provisioning"
@@ -77,7 +78,7 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
             environment.get("PATH"), str
         ):
             raise TypeError("Native tool setup did not return an executable PATH")
-        os.environ["PATH"] = environment["PATH"]
+        os.environ["PATH"] = environment["PATH"] + os.pathsep + os.environ["PATH"]
     if "dart-decimate" in executables:
         subprocess.run(
             [

@@ -1,6 +1,7 @@
 """Adapt native template commands to the target project's existing stack."""
 
 import json
+import os
 import tomllib
 from fnmatch import fnmatchcase
 from pathlib import Path
@@ -127,6 +128,14 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
         directory = root / package["path"]
         adapt_sources(root, package, owned[directory])
         adapt_package(directory, package)
+        for gate in package["checks"]:
+            if gate.get("role") == "security":
+                gate["command"] = [
+                    os.path.relpath(root / argument, directory)
+                    if argument == ".agents/skills/he/security"
+                    else argument
+                    for argument in gate["command"]
+                ]
     adapt_workspaces(root, config)
 
 
@@ -226,7 +235,7 @@ def adapt_package(directory: Path, package: Group) -> None:
             "deptry",
             "lint-imports",
         }:
-            gate["command"] = [manager, "run", *gate["command"]]
+            gate["command"] = python_gate_command(gate["command"], manager)
         elif language == "dart" and manager == "dart" and gate.get("role") == "tests":
             gate["command"] = [
                 "dart",
@@ -243,6 +252,20 @@ def adapt_package(directory: Path, package: Group) -> None:
         package["checks"] = [
             gate for gate in package["checks"] if gate.get("role") != "imports"
         ]
+
+
+def python_gate_command(command: list[str], manager: str) -> list[str]:
+    packages = {
+        "pytest": ["pytest", "pytest-cov"],
+        "deptry": ["deptry"],
+        "lint-imports": ["import-linter"],
+    }[command[0]]
+    prefix = ["uv", "run", "--no-sync"]
+    if manager == "poetry":
+        prefix = ["poetry", "run", "uv", "run", "--no-project", "--active"]
+    for package in packages:
+        prefix.extend(["--with", package, "--upgrade-package", package])
+    return [*prefix, *command]
 
 
 def adapt_javascript(directory: Path, package: Group, manager: str) -> None:
@@ -343,6 +366,8 @@ def configure_ci(
                 tools.append(specification)
     if "flutter@latest" in tools and "dart@latest" in tools:
         tools.remove("dart@latest")
+    if any(package.get("language") == "dart" for package in config["packages"]):
+        tools.append("rust@latest")
     changes[name] = (
         (source / name)
         .read_text()

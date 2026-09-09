@@ -147,6 +147,32 @@ def test_coverage_requires_unexecuted_files_and_merges_lcov(tmp_path: Path) -> N
         reports.lcov_coverage(path, tmp_path)
 
 
+def test_branch_coverage_is_reported_separately_from_lines(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "coverage.json"
+    path.write_text(
+        json.dumps(
+            {
+                "files": {
+                    "app.py": {
+                        "summary": {
+                            "covered_lines": 7,
+                            "num_statements": 10,
+                            "covered_branches": 1,
+                            "num_branches": 4,
+                        }
+                    }
+                }
+            }
+        )
+    )
+    assert reports.line_coverage(
+        path, "python-tests", tmp_path, {tmp_path / "app.py"}
+    ) == (7, 10)
+    assert "Branch coverage: 1/4 (25.00%; informational)" in capsys.readouterr().out
+
+
 def test_junit_rejects_entities(tmp_path: Path) -> None:
     path = tmp_path / "tests.xml"
     secret = tmp_path / "private.txt"

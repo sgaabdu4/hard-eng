@@ -17,7 +17,14 @@ from pathlib import Path
 from typing import TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
-from gate_config import Gate, Group, JsonObject, Report, nonproduction_source
+from gate_config import (
+    Gate,
+    Group,
+    JsonObject,
+    Report,
+    generated_sources,
+    nonproduction_source,
+)
 from tool_setup import managed_command, provision_tools
 
 DartAnalyzer = TypedDict(
@@ -276,6 +283,11 @@ def production_files(
                         f"Production source points outside its package: {file}"
                     )
                 files.add(resolved)
+    excluded = generated_sources(
+        directory,
+        [] if include_tests else [str(file.relative_to(directory)) for file in files],
+    )
+    files -= {directory / name for name in excluded}
     if not files:
         raise ValueError("Production sources contain no supported source files")
     return files
