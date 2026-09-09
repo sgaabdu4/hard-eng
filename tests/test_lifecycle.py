@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tomllib
@@ -10,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from hard_eng import agents, common, hooks, integrations, mcp
+from hard_eng import agents, common, hooks, integrations, mcp, tools
 from hard_eng.common import GateError, Json
 
 
@@ -147,6 +148,22 @@ def test_agent_configuration_preserves_existing_settings_and_is_repeatable(proje
     assert all(
         len(common.array(value, "event hooks")) == (2 if agent == "copilot" else 1) for value in data.values()
     )
+    if agent == "claude":
+        settings = common.read_json(project / paths[agent])
+        assert settings["enabledPlugins"] == {"context-mode@context-mode": True}
+        assert "context-mode" not in common.object_value(
+            common.read_json(project / ".mcp.json")["mcpServers"], "servers"
+        )
+        assert all(
+            len(
+                common.array(common.object_value(common.array(value, "entries")[0], "hook")["hooks"], "hooks")
+            )
+            == 1
+            for value in data.values()
+        )
+    if agent == "copilot":
+        servers = common.object_value(common.read_json(project / ".github/mcp.json")["mcpServers"], "servers")
+        assert set(mcp.SERVERS) <= servers.keys()
 
 
 def test_service_detection_uses_dependencies_and_requires_project_identity(project: Path) -> None:
@@ -226,3 +243,38 @@ def test_mcp_timeout_does_not_approve_readiness(project: Path) -> None:
         ),
     ):
         pytest.fail("An unresponsive server must never initialize successfully")
+
+
+def test_first_run_download_finishes_before_mcp_protocol(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    npm = project / "npm"
+    npm.write_text(
+        f"#!{sys.executable}\n"
+        "import json, pathlib, sys\n"
+        "ready = pathlib.Path('downloaded')\n"
+        "if not ready.exists():\n"
+        "    print('Downloading native MCP executable...', flush=True)\n"
+        "    ready.touch()\n"
+        "if '--version' in sys.argv:\n"
+        "    sys.exit(0)\n"
+        "for line in sys.stdin:\n"
+        "    request = json.loads(line)\n"
+        "    if 'id' in request:\n"
+        "        print(json.dumps({'id': request['id'], 'result': {'ok': True}}), flush=True)\n"
+    )
+    npm.chmod(0o755)
+    monkeypatch.setenv("PATH", str(project) + os.pathsep + os.environ["PATH"])
+
+    def version(_package: str, _ecosystem: str) -> str:
+        return "1.0.0"
+
+    monkeypatch.setattr(tools, "package_version", version)
+    tool = tools.resolve(project, "codebase-memory-mcp")
+    with mcp.Client(tool.command, project, timeout=2) as client:
+        assert client.call("probe", {}) == {"ok": True}
+
+
+@pytest.mark.parametrize("name", ["ToolSearch", "Skill"])
+def test_startup_allows_native_tool_and_skill_discovery(project: Path, name: str) -> None:
+    assert hooks.dispatch(project, {}, "PreToolUse", event(name, {})) == ("", False)

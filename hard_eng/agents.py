@@ -32,11 +32,17 @@ def servers(root: Path) -> Json:
     return values
 
 
-def json_servers(root: Path) -> None:
-    path = root / ".mcp.json"
+def json_servers(root: Path, agent: str) -> None:
+    path = root / (".github/mcp.json" if agent == "copilot" else ".mcp.json")
     data: Json = read_json(path) if path.exists() else {}
     current = object_value(data.get("mcpServers", {}), "MCP servers")
     for name, definition in servers(root).items():
+        if agent == "claude" and name == "context-mode":
+            if name in current:
+                if current[name] != definition:
+                    raise GateError("Existing Context Mode MCP configuration differs; preserve it first")
+                current.pop(name)
+            continue  # The project-scoped native plugin supplies this server and its hooks.
         definition = object_value(definition, "MCP definition").copy()
         definition.pop("env_vars", None)
         if "url" in definition:
@@ -45,6 +51,22 @@ def json_servers(root: Path) -> None:
             raise GateError(f"Existing {name} MCP configuration differs; preserve and reconcile it first")
         current[name] = definition
     data["mcpServers"] = current
+    write_json(path, data)
+
+
+def claude_plugin(root: Path) -> None:
+    path = root / ".claude/settings.json"
+    data: Json = read_json(path) if path.exists() else {}
+    marketplaces = object_value(data.get("extraKnownMarketplaces", {}), "Claude marketplaces")
+    source: Json = {"source": {"source": "github", "repo": "mksglu/context-mode"}}
+    if "context-mode" in marketplaces and marketplaces["context-mode"] != source:
+        raise GateError("Existing Context Mode marketplace differs; preserve and reconcile it first")
+    marketplaces["context-mode"] = source
+    enabled = object_value(data.get("enabledPlugins", {}), "Claude plugins")
+    if enabled.get("context-mode@context-mode") is False:
+        raise GateError("Context Mode is disabled in this project; enable it for required routing")
+    enabled["context-mode@context-mode"] = True
+    data.update({"extraKnownMarketplaces": marketplaces, "enabledPlugins": enabled})
     write_json(path, data)
 
 
@@ -92,6 +114,18 @@ def codex_server(name: str, definition: Json) -> str:
     return text
 
 
+def hook_commands(agent: str, event: str) -> tuple[Json, str]:
+    command = f"{ENTRY} hook {agent} {event}"
+    platform = {"codex": "codex", "claude": "claude-code", "copilot": "copilot-cli"}[agent]
+    context_command = f"{ENTRY} tool context-mode hook {platform} {event.lower()}"
+    if event == "PreToolUse":
+        failure = " || { echo 'Hard Eng hook failed' >&2; exit 2; }"
+        command += failure
+        context_command += failure
+    native: Json = {"type": "command", "command": command, "timeout": 3600 if event == "Stop" else 300}
+    return native, context_command
+
+
 def hooks(root: Path, agent: str) -> None:
     paths = {
         "codex": ".codex/hooks.json",
@@ -104,19 +138,12 @@ def hooks(root: Path, agent: str) -> None:
         raise GateError(f"{agent} hooks are disabled; enable them for enforcement")
     current = object_value(data.get("hooks", {}), "agent hooks")
     for event in EVENTS:
-        command = f"{ENTRY} hook {agent} {event}"
-        native: Json = {"type": "command", "command": command, "timeout": 3600 if event == "Stop" else 300}
+        native, context_command = hook_commands(agent, event)
         key = event
-        platform = {"codex": "codex", "claude": "claude-code", "copilot": "copilot-cli"}[agent]
-        context_command = f"{ENTRY} tool context-mode hook {platform} {event.lower()}"
-        if event == "PreToolUse":
-            failure = " || { echo 'Hard Eng hook failed' >&2; exit 2; }"
-            command += failure
-            native["command"] = command
-            context_command += failure
-        registration: Json = {
-            "hooks": [native, {"type": "command", "command": context_command, "timeout": 60}]
-        }
+        native_hooks: list[Json] = [native]
+        if agent != "claude":
+            native_hooks.append({"type": "command", "command": context_command, "timeout": 60})
+        registration: Json = {"hooks": native_hooks}
         if event in {"PreToolUse", "PostToolUse"}:
             registration["matcher"] = ".*"
         if agent == "copilot":
@@ -127,14 +154,16 @@ def hooks(root: Path, agent: str) -> None:
                 "UserPromptSubmit": "userPromptSubmitted",
                 "Stop": "agentStop",
             }[event]
-            registration = {"type": "command", "bash": command, "timeoutSec": native["timeout"]}
+            registration = {"type": "command", "bash": native["command"], "timeoutSec": native["timeout"]}
         entries = array(current.get(key, []), f"{key} hooks")
-        if registration not in entries:
-            entries.append(registration)
+        if agent == "claude":
+            previous = dict(registration)
+            previous["hooks"] = [native, {"type": "command", "command": context_command, "timeout": 60}]
+            entries = [entry for entry in entries if entry != previous]
+        additions = [registration]
         if agent == "copilot":
-            context_hook: Json = {"type": "command", "bash": context_command, "timeoutSec": 60}
-            if context_hook not in entries:
-                entries.append(context_hook)
+            additions.append({"type": "command", "bash": context_command, "timeoutSec": 60})
+        entries.extend(item for item in additions if item not in entries)
         current[key] = entries
     data["hooks"] = current
     if agent == "copilot":
@@ -146,8 +175,9 @@ def configure(root: Path, agent: str) -> None:
     if agent == "codex":
         codex_servers(root)
     else:
-        json_servers(root)
+        json_servers(root, agent)
     if agent == "claude":
+        claude_plugin(root)
         for name in ("he", "research"):
             target = relative_path(root, f".claude/skills/{name}")
             shared = root / ".agents/skills" / name

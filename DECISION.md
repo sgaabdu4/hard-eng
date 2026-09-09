@@ -12,6 +12,7 @@ Ticks record locally implemented and verified work. Native agent enforcement, se
 - [x] Runtime validation = no separate Zod/schema-library gate or mandatory dependency; test relevant valid/invalid external inputs through the existing test gate using the project's validation code.
 - [x] Scanner policy = all findings must be resolved, including pre-existing findings; no existing-debt baseline exemption.
 - [x] Git pre-push = enforce full applicable gates against the actual commits being pushed; an uncommitted fix must not make committed code appear to pass.
+- [x] Remote enforcement = CI independently runs the shared gates; protected `main` requires the `hard-eng` GitHub Actions check, including for administrators, with force-push and deletion disabled. Missing/skipped expected checks fail the aggregate gate. Published main run: [34312282272](https://github.com/sgaabdu4/hard-eng/actions/runs/34312282272).
 - [x] Simplicity = no custom hash checks, fingerprint inventories or gate-result caching framework; use normal Git operations and the tools' native behavior.
 - [x] Tool versions = latest on every gate run; tool updates occur independently of Hard Eng updates.
 - [x] Check scope = full checks for affected packages + dependents + shared checks; uncertain impact → all supported packages.
@@ -27,6 +28,7 @@ Ticks record locally implemented and verified work. Native agent enforcement, se
 - [x] Fresh implementation = no legacy adapters, migration machinery, historical exception lists or compatibility scaffolding. Keep only tests proving required behavior and meaningful failure cases.
 - [x] Product/design context = require root PRODUCT.md and DESIGN.md; if missing, study the repository and fill the bundled templates from evidence using product.md and Google's design.md convention, with Atomic Design for UI components. Missing/empty files and unfilled template prompts fail the gate; preserve existing documents.
 - [x] Installation = from the target project's root, run `curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh`; copy shared rules, skills and required gate code directly into that project. Canonical skills live in `.agents/skills`; Codex and Copilot discover them directly, only Claude needs links in `.claude/skills`. Preserve existing project files; no submodule, nested Git repository or global installation. The agent adapts missing gate configuration from repository evidence.
+- [x] Plugin scope = affect only the repository where setup runs. Claude uses its project-scoped Context Mode plugin; Codex uses project-local MCP and hook configuration because its plugin installer enables plugins user-wide. Codebase Memory uses each client's native MCP configuration. Native plugin caches are managed by the client; no user-wide plugin activation is added.
 - [x] Agent independence = Hard Eng is agent-agnostic; shared repository configuration, gate commands and results must not depend on a particular AI agent, provider or model; gates also run directly through the CLI and CI.
 - [x] YAGNI = ultra by default throughout Hard Eng; establish the requested behavior, reuse existing code, then prefer stdlib/native platform/existing dependencies before new code; no speculative features, abstractions, configuration or scaffolding; preserve explicit requirements, root-cause correctness and necessary verification.
 - [x] Languages = Dart/Flutter + Python + TypeScript/JavaScript/React only.
@@ -69,12 +71,11 @@ Ticks record locally implemented and verified work. Native agent enforcement, se
 - [ ] Service MCP readiness = verify intended Sentry organization/project or Appwrite endpoint/project with a read-only call; apply only to integrations the project uses.
 - [ ] Full checks = task completion + pre-push + CI; run required checks directly each time.
 - [ ] Hook capability = verify supported events and blocking semantics for each agent/version; test findings, crashes, timeouts and invalid responses; explicitly report unsupported enforcement and never treat a notification-only or failed hook as a working blocker.
-- [ ] Remote enforcement = local Git/AI hooks can be bypassed; CI independently runs the shared gates, with required checks on protected branches and deliberate bypass settings; missing/skipped expected checks must not produce a successful aggregate gate result.
 - [ ] Container dependencies = extend OSV-Scanner to produced container images when the project builds them; scan image packages in addition to source dependency files; existing scope/version/exception and result-reuse policies apply.
 
 ## Remaining proof
 
 - MCP servers completed real tool calls, and native agent configuration plus lifecycle adapters pass local tests. Loading those configurations and proving enforcement in fresh Codex, Claude and Copilot sessions is still pending. Copilot hook timeouts fail open; Git and CI gates are required.
 - Sentry/Appwrite detection and intended-project response checks are tested. This repository uses neither service, so authenticated service readiness needs an applicable project.
-- The shared CI workflow is implemented locally. Publish it, obtain a successful main run and configure the required `hard-eng` branch check before claiming remote enforcement or making this rebuild available to the updater. The deleted predecessor workflow is never accepted as proof for this rebuild.
+- The shared CI workflow passed on published main and the required `hard-eng` branch check is active. The deleted predecessor workflow is never accepted as proof for this rebuild.
 - Produced-container scanning uses OSV's native image command and report validation; a real produced-image scan remains unverified because this repository produces no image. Trivy deployment scanning has passed safe/unsafe Dockerfile probes.
