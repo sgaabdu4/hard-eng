@@ -1,0 +1,134 @@
+name: Public install proof
+
+on:
+  push:
+    branches: [feature/cloud-install-proof]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-install:
+    name: Public installation and gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: pnpm/setup@c9883cc79df532ad1a7b81bf9ab944ceb090d65c # v2.0.0
+        with:
+          version: latest
+          runtime: node@latest
+          install: false
+      - name: Install publicly and verify gates without account credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset GH_TOKEN GITHUB_TOKEN
+          python3 -m venv "$RUNNER_TEMP/bootstrap"
+          "$RUNNER_TEMP/bootstrap/bin/pip" install --quiet uv
+          export PATH="$RUNNER_TEMP/bootstrap/bin:$PATH"
+          mkdir "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          git init -q
+          mkdir tests
+          cat > pyproject.toml <<'EOF'
+          [project]
+          name = "hard-eng-cloud-proof"
+          version = "0.1.0"
+          requires-python = ">=3.12"
+          dependencies = []
+          [dependency-groups]
+          dev = ["pytest", "pytest-cov"]
+          [tool.pytest.ini_options]
+          pythonpath = ["."]
+          EOF
+          cat > .gitignore <<'EOF'
+          .venv/
+          __pycache__/
+          .pytest_cache/
+          coverage/
+          EOF
+          cat > converter.py <<'EOF'
+          """Summarize integer measurements."""
+
+
+          def summarize(values: list[int]) -> dict[str, int]:
+              """Return summary values for a nonempty series."""
+              if not values:
+                  raise ValueError("At least one measurement is required")
+              total = sum(values)
+              smallest = min(values)
+              largest = max(values)
+              count = len(values)
+              return {
+                  "total": total,
+                  "smallest": smallest,
+                  "largest": largest,
+                  "count": count,
+              }
+          EOF
+          cat > tests/test_converter.py <<'EOF'
+          import pytest
+
+          from converter import summarize
+
+
+          def test_summary() -> None:
+              assert summarize([3, -1, 8]) == {
+                  "total": 10,
+                  "smallest": -1,
+                  "largest": 8,
+                  "count": 3,
+              }
+
+
+          def test_empty_input() -> None:
+              with pytest.raises(ValueError, match="At least one measurement"):
+                  summarize([])
+          EOF
+          cat > PRODUCT.md <<'EOF'
+          # Cloud verification project
+
+          ## Register
+          Developer utility.
+          ## Users
+          Fixture developers.
+          ## Problem
+          Verify predictable data conversion.
+          ## Product Purpose
+          Exercise installed repository checks.
+          ## Brand Personality / Tone
+          Plain CLI output.
+          ## Boundaries
+          Temporary verification only.
+          EOF
+          cat > DESIGN.md <<'EOF'
+          # Cloud verification design
+
+          ## Overview
+          A command-line utility without a visual UI.
+          ## Components
+          Exported conversion functions and their tests.
+          ## Do's and Don'ts
+          Keep results deterministic.
+          EOF
+          uv lock
+          git add .
+          git -c user.name='Hard Eng verification' -c user.email='verification@example.invalid' commit -qm 'Create consumer fixture'
+          curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh
+          test -x .git/hooks/pre-push
+          test -f .codex/hooks.json
+          test -f .claude/settings.json
+          test -f .github/hooks/hard-eng.json
+          git status --short
+          python3 .hooks/hard-eng.py check
+          sed -i 's/total = sum(values)/total = sum(values) + 1/' converter.py
+          if python3 .hooks/hard-eng.py check > "$RUNNER_TEMP/rejected-check.log" 2>&1; then
+            echo 'ERROR: broken code was accepted'
+            exit 1
+          fi
+          python3 -c 'import pathlib,sys; text=pathlib.Path(sys.argv[1]).read_text(); assert "FAIL tests (exit 1)" in text, text; print("PASS: deliberate failing test rejected")' "$RUNNER_TEMP/rejected-check.log"
+          echo 'PASS: public installation, full gates and failure rejection without GitHub credentials'
