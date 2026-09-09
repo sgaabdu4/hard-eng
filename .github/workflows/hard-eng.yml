@@ -1,0 +1,48 @@
+name: Hard Eng
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+  checks: read # Verify the upstream release for scaffold-only updates.
+
+concurrency:
+  group: hard-eng-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hard-eng:
+    name: hard-eng
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/setup@c9883cc79df532ad1a7b81bf9ab944ceb090d65c # v2.0.0
+        with:
+          version: latest
+          runtime: node@latest
+          install: false
+      - name: Run required checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          MISE_DATA_DIR: ${{ runner.temp }}/hard-eng-tools/mise/data
+          MISE_CACHE_DIR: ${{ runner.temp }}/hard-eng-tools/mise/cache
+          MISE_STATE_DIR: ${{ runner.temp }}/hard-eng-tools/mise/state
+          PNPM_CONFIG_STORE_DIR: ${{ runner.temp }}/hard-eng-tools/pnpm/store
+          PNPM_CONFIG_CACHE_DIR: ${{ runner.temp }}/hard-eng-tools/pnpm/cache
+          MISE_FETCH_REMOTE_VERSIONS_CACHE: 0s
+          MISE_PREFER_OFFLINE: 'false'
+          MISE_USE_VERSIONS_HOST: 'false'
+          MISE_MINIMUM_RELEASE_AGE: 0s
+        run: >-
+          pnpm dlx --allow-build=@jdxcode/mise
+          --package=@jdxcode/mise@latest mise --no-config exec
+          uv@latest python@3.12 node@latest
+          -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"

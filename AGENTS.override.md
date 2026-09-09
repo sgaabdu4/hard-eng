@@ -1,35 +1,10 @@
-# Hard Eng Repository
+# Building Hard Eng
 
-## Instruction ownership
+These instructions apply only to work on this source repository. Do not install this file into target projects. Read `AGENTS.md` for the shared engineering rules; the rules below govern this rebuild.
 
-- `AGENTS.md` = cross-repository behavior only.
-- `AGENTS.override.md` = Hard Eng repository facts + maintenance + delivery rules.
-- Global admission = applies unchanged to unrelated repositories; otherwise keep it here.
-- Hard Eng owner replacement = one canonical path + superseded alias/compatibility/dual-path deletion.
-
-## Repository
-
-- Product = Hard Eng.
-- Canonical source = this repository.
-- Skill owner = `skills/`.
-- Runtime targets = OpenAI Codex + Claude Code + GitHub Copilot CLI.
-- Delivery = native per-agent wiring (symlink/import) from this canonical repository; plugin packaging = none.
-- Duplicated per-agent instruction/skill copies forbidden; canonical file + symlink/import only.
-- checkout_policy = primary-only
-- Primary-only = agent/Git worktree creation + use forbidden.
-
-## Skill ownership
-
-- Canonical path = `skills/<name>/`.
-- Ownership = lock key → managed vendor; absent from lock → local authored.
-- Managed skill folders + lock metadata = immutable vendor copies; agent/manual edits = forbidden.
-- Managed vendor aggregate file (e.g. `skills/vercel-react-best-practices/AGENTS.md`) = global file-size rule exempt; exemption reason = vendor-generated + lock-verified immutable.
-- Local skill folders = repository-owned; normal edits allowed.
-- Only pinned `npx skills@1.5.22` add/update may write them; routine updates use `scripts/update-managed-skills.sh`.
-- Before commit/push = `scripts/git-hooks/publish-gate.sh commit|push` respectively; failure = stop.
-- Gate enforcement = global dispatcher + same-Git-common-dir checkout gate; pre-tool = irreversible destructive-loss block only; planning records research + authorization receipts without blocking recoverable tool access; pre-commit = worktree + one staged format/lint scan + complete named enforcement owner/proof coverage; pre-push = typecheck + format + lint + tests + Fallow + Python types + Python format/lint + full contracts + managed-skills + design + secrets scan + enforcement coverage; `--no-verify` = explicit user approval only.
-- Content change → upstream source → `scripts/update-managed-skills.sh`.
-- Update scope = locked paths only; local paths + discovery + unlisted install = forbidden.
-- Skill add/remove/source replacement = explicit user approval.
-- Daily CI = model-free → `03:30 UTC` → direct default-branch commit when changed.
-- Scheduled exception = locked-skill update + nightly mutation ledger (`02:17 UTC`, public repository only, pull request for survivors); no model, eval, subagent, or new skill.
+- Complete the remaining `DECISION.md` requirements continuously under the user's 2026-09-09 authorization. Explain each concrete change and its verification; do not stop for per-item approval.
+- Before adding files, dependencies or machinery, state the current requirement and why the existing code or a direct command is insufficient. Keep each implementation minimal.
+- Tick a box only after its behavior is implemented and meaningfully verified. Keep external or unsupported acceptance gaps explicit.
+- Review the diff for unnecessary additions and report all changes, actual tests and remaining gaps at the end.
+- Keep source-repository instructions separate from the scaffold distributed to target projects.
+- Do not commit, push, install globally or change other projects without explicit approval.

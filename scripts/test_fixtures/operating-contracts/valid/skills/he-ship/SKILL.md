@@ -1,3 +1,0 @@
-- Explicit terminal delivery outcome persists across recoverable build/CI failures.
-- one failed attempt never narrows the goal.
-- Commit/push/PR/merge/publish + named deploy + recoverable live data/schema work = continue.

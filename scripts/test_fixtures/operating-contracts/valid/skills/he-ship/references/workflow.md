@@ -1,2 +1,0 @@
-- New deterministic failure/root → new `diagnosing-bugs` + `he-build` loop.
-- Explicit terminal artifact goal remains open.

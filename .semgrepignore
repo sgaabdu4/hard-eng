@@ -1,0 +1,1 @@
+# Keep production and test inputs in scope; do not use Semgrep's default test exclusions.

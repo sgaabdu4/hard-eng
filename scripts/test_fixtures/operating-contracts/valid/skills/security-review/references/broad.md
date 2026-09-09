@@ -1,2 +1,0 @@
-- Distributable binary/container/archive → preflight source defaults.
-- generated/extracted artifact.

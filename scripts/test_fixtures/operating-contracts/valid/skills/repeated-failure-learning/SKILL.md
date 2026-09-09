@@ -1,3 +1,0 @@
-- Failed candidate + original violation remains.
-- same theory/variant mutation, retry, push, or publish = forbidden.
-- Comparable candidate fails twice → no third candidate.
