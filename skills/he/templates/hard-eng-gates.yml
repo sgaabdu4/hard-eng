@@ -1,0 +1,25 @@
+name: Hard Eng gates
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  hard-eng:
+    name: hard-eng
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+      # Add the repository's SDK and locked dependency setup here.
+      - name: Required gates
+        run: python3 .hard-eng/bin/hard-eng check
+        env:
+          GH_TOKEN: ${{ github.token }}
