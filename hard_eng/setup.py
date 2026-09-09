@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
-from hard_eng import config, git_hooks
+from hard_eng import git_hooks
 from hard_eng.common import GateError, array, checked, git, object_value, write_file
 
 UPSTREAM = "https://github.com/sgaabdu4/hard-eng.git"
@@ -49,7 +48,8 @@ def update(root: Path) -> str:
     runtime = root / ".hard-eng"
     if not (runtime / ".git").is_file():
         raise GateError("Run the repository-local installation before session startup")
-    if git(runtime, "status", "--porcelain") or git(root, "status", "--porcelain", "--", ".hard-eng"):
+    pending = git(root, "status", "--porcelain", "--", ".hard-eng")
+    if git(runtime, "status", "--porcelain") or (pending and pending.strip() != "A  .hard-eng"):
         raise GateError(
             "Local Hard Eng changes conflict with automatic update; preserve and resolve them first"
         )
@@ -57,6 +57,10 @@ def update(root: Path) -> str:
     previous = git(runtime, "rev-parse", "HEAD").strip()
     if previous == revision:
         return "Hard Eng is current"
+    if pending:
+        raise GateError(
+            "A newer runtime is available; rerun setup before committing the initial installation"
+        )
     git(runtime, "checkout", "--detach", revision)
     try:
         git(root, "commit", "--only", "-m", f"Update Hard Eng to {revision[:12]}", "--", ".hard-eng")
@@ -85,19 +89,22 @@ def instructions(root: Path) -> None:
 
 
 def install(root: Path) -> None:
-    config.load(root)
     runtime = root / ".hard-eng"
-    if runtime.exists():
-        raise GateError(".hard-eng already exists; use session to update an installed runtime")
-    if git(root, "status", "--porcelain", "--", ".gitmodules"):
-        raise GateError(".gitmodules has local changes; resolve them before installation")
-    with tempfile.TemporaryDirectory(prefix="hard-eng-install-") as temporary:
-        candidate = Path(temporary) / "source"
-        git(root, "clone", "--no-checkout", "--filter=blob:none", "--", UPSTREAM, str(candidate))
-        revision = latest_green(candidate)
-    git(root, "submodule", "add", "--", UPSTREAM, ".hard-eng")
+    if not (runtime / ".git").is_file() or not git(root, "ls-files", "--stage", "--", ".hard-eng").startswith(
+        "160000 "
+    ):
+        raise GateError(f"From the project root, run: git submodule add {UPSTREAM} .hard-eng")
+    if git(runtime, "remote", "get-url", "origin").strip() != UPSTREAM:
+        raise GateError(".hard-eng points to a different repository; preserve it and resolve the target")
+    if git(runtime, "status", "--porcelain"):
+        raise GateError("Local Hard Eng changes conflict with setup; preserve and resolve them first")
+    revision = latest_green(runtime)
     git(runtime, "checkout", "--detach", revision)
     git(root, "add", "--", ".hard-eng")
     instructions(root)
     git_hooks.install(root, ".hard-eng/bin/hard-eng")
     print("Installed repository-local Hard Eng. Commit the installation with the project.")
+    if not (root / "hard-eng.gates.json").is_file():
+        print(
+            "Next: ask your agent to study this project and adapt .hard-eng/skills/he/templates into hard-eng.gates.json before implementation."
+        )

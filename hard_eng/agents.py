@@ -18,7 +18,8 @@ EVENTS = ("SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop
 
 def servers(root: Path) -> Json:
     values: Json = {name: {"command": "sh", "args": ["-c", f"exec {ENTRY} mcp {name}"]} for name in SERVERS}
-    values.update(integrations.servers(root))
+    if (root / "hard-eng.gates.json").is_file():
+        values.update(integrations.servers(root))
     return values
 
 

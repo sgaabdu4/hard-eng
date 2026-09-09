@@ -197,7 +197,14 @@ def repair_command(root: Path, command: object, *, session_only: bool = False) -
         allowed = {root / "bin/hard-eng", root / ".hard-eng/bin/hard-eng"}
         if session_only:
             return launcher in allowed and words[2:] == ["session"]
-        return launcher in allowed and words[2] in {"session", "update", "mcp-check", "configure", "validate"}
+        return launcher in allowed and words[2] in {
+            "session",
+            "update",
+            "mcp-check",
+            "configure",
+            "validate",
+            "install",
+        }
     return False
 
 

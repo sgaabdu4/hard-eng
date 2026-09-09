@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -141,6 +142,21 @@ def test_command_success_and_failure_are_observable(repo: Path) -> None:
     assert (repo / "out.txt").read_text() == "42"
     with pytest.raises(GateError, match="exit 7"):
         runner.execute(command(repo, "raise SystemExit(7)"), None, None)
+
+
+def test_locked_dependencies_are_available_before_package_checks(repo: Path) -> None:
+    consumer = command(repo, "from prepared_dependency import answer; assert answer == 42")
+    with pytest.raises(GateError, match="exit 1"):
+        runner.execute(consumer, None, None)
+    preparation = replace(
+        command(
+            repo, "from pathlib import Path; Path('prepared_dependency.py').write_text('answer = 42\\n')"
+        ),
+        name="locked-dependencies",
+        role="lockfiles",
+    )
+    project = Config(repo, (package(repo, (consumer,)),), (preparation,), {})
+    assert runner.check_all(project)["passed"] is True
 
 
 def test_missing_executable_and_timeout_fail(repo: Path) -> None:

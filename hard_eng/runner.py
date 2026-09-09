@@ -100,6 +100,9 @@ def check_all(config: Config, *, changed: list[Path] | None = None) -> Json:
     required_documents(config.root)
     packages = affected(config, changed)
     checks = [check for package in packages for check in package.checks] + list(config.shared)
+    checks = [check for check in checks if check.role == "lockfiles"] + [
+        check for check in checks if check.role != "lockfiles"
+    ]
     source_checks(config)
     versions = {
         name: tools.resolve(config.root, name)

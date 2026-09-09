@@ -24,8 +24,6 @@ jobs:
         with:
           node-version: '24'
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-      - name: Install locked development dependencies
-        run: uv sync --locked
       - name: Required gates
         run: python3 bin/hard-eng check
         env:

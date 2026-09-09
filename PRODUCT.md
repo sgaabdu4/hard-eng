@@ -40,6 +40,12 @@ Plain, concise and factual. State the failed check and useful evidence. Never pr
 
 ## Commands
 
-After adapting the [language templates](skills/he/templates/) to a target repository, run `./setup.sh /path/to/repository --agent codex` from this checkout. Choose `claude` or `copilot` instead, or repeat `--agent` for multiple adapters. Installation requires a published successful main workflow; this rebuild is not published yet.
+From the root of the project that needs Hard Eng, run:
+
+```sh
+git submodule add https://github.com/sgaabdu4/hard-eng.git .hard-eng && ./.hard-eng/setup.sh --agent codex
+```
+
+Choose `claude` or `copilot` instead, or repeat `--agent` for multiple adapters. This adds the wrapper inside that project. Setup does not require a prewritten gate configuration: the agent then studies the project and adapts the bundled language templates to its actual commands. Normal implementation remains blocked until setup and readiness pass. Installation requires a published successful main workflow; this rebuild is not published yet.
 
 Installed projects use `python3 .hard-eng/bin/hard-eng session` for updates/readiness and `python3 .hard-eng/bin/hard-eng check` for gates. This source checkout uses `python3 bin/hard-eng check`.

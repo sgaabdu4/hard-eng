@@ -23,7 +23,7 @@
     {"name": "shell", "role": "shell", "tool": "shellcheck", "command": ["setup.sh"]},
     {"name": "workflows", "role": "workflows", "tool": "actionlint", "command": []},
     {"name": "workflow-security", "role": "workflow-security", "tool": "zizmor", "command": ["--no-progress", "--strict-collection", "--persona", "auditor", ".github/workflows"]},
-    {"name": "lockfile", "role": "lockfiles", "command": ["uv", "lock", "--check"]},
+    {"name": "lockfile", "role": "lockfiles", "command": ["uv", "sync", "--locked"]},
     {"name": "secrets-files", "role": "secrets-files", "tool": "gitleaks", "command": ["dir", ".", "--redact=100", "--no-banner"]},
     {"name": "vulnerabilities", "role": "vulnerabilities", "tool": "osv-scanner", "command": ["scan", "source", "--lockfile=uv.lock", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},
     {"name": "security", "role": "security", "tool": "semgrep", "command": ["scan", "--config", "security", "--error", "--strict", "--json", "--output", "coverage/semgrep.json", "hard_eng"], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}

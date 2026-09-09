@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
           persist-credentials: false
-      # Add the repository's SDK and locked dependency setup here.
+      # Add the repository's SDK setup here; the manifest prepares locked dependencies.
       - name: Required gates
         run: python3 .hard-eng/bin/hard-eng check
         env:

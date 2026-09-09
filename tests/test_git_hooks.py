@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from hard_eng import common, git_hooks, setup
+from hard_eng import agents, common, git_hooks, setup
 from hard_eng.common import GateError
 
 
@@ -61,9 +61,11 @@ def test_hook_install_preserves_another_owner(tmp_path: Path) -> None:
         git_hooks.install(tmp_path, ".hard-eng/bin/hard-eng")
 
 
+@pytest.mark.parametrize("configured", [False, True])
 def test_install_produces_a_working_local_cli_and_preserves_project_instructions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    configured: bool,
 ) -> None:
     upstream, project = tmp_path / "upstream", tmp_path / "project"
     source = Path(__file__).resolve().parents[1]
@@ -75,22 +77,26 @@ def test_install_produces_a_working_local_cli_and_preserves_project_instructions
     revision = commit(upstream, "Runtime")
     (project / "src").mkdir()
     (project / "src/app.py").write_text("value = 1\n")
-    shutil.copyfile(source / "skills/he/templates/hard-eng.python.json", project / "hard-eng.gates.json")
+    if configured:
+        shutil.copyfile(source / "skills/he/templates/hard-eng.python.json", project / "hard-eng.gates.json")
     (project / "AGENTS.md").write_text("# Existing project rules\nKeep this instruction.\n")
-
-    def local_git(root: Path, *args: str) -> str:
-        return common.git(root, "-c", "protocol.file.allow=always", *args)
 
     def green(_root: Path) -> str:
         return revision
 
-    monkeypatch.setattr(setup, "git", local_git)
     monkeypatch.setattr(setup, "UPSTREAM", str(upstream))
     monkeypatch.setattr(setup, "latest_green", green)
+    common.git(project, "-c", "protocol.file.allow=always", "submodule", "add", str(upstream), ".hard-eng")
     setup.install(project)
+    assert setup.update(project) == "Hard Eng is current"
+    agents.configure(project, "codex")
     result = common.run(["python3", str(project / ".hard-eng/bin/hard-eng"), "validate"], project)
-    assert result.returncode == 0, result.stderr
-    assert "1 supported packages" in result.stdout
+    assert result.returncode == (0 if configured else 1), result.stderr
+    if configured:
+        assert "1 supported packages" in result.stdout
+    else:
+        assert not (project / "hard-eng.gates.json").exists()
+        assert (project / ".codex/hooks.json").is_file()
     assert "Keep this instruction." in (project / "AGENTS.md").read_text()
     assert (project / "CLAUDE.md").read_text() == "@AGENTS.md\n"
     assert (project / ".git/hooks/pre-push").stat().st_mode & 0o111
