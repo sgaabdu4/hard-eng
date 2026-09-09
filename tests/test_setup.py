@@ -6,7 +6,12 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from gate_config import GateConfig, Group, validate_required_checks
+from gate_config import (
+    GateConfig,
+    Group,
+    validate_dart_boundaries,
+    validate_required_checks,
+)
 from project_setup import (
     adapt_performance,
     import_configuration,
@@ -96,6 +101,7 @@ def test_react_and_existing_project_scripts_are_gated(
                     "build": "project-build",
                     "test:integration": "project-integration",
                     "check:generated": "project-generator-check",
+                    "lint:boundaries": "project-boundary-check",
                 },
             }
         )
@@ -108,8 +114,108 @@ def test_react_and_existing_project_scripts_are_gated(
     assert checks["build"]["command"] == ["pnpm", "run", "build"]
     assert checks["integration"]["command"] == ["pnpm", "run", "test:integration"]
     assert checks["generated"]["command"] == ["pnpm", "run", "check:generated"]
+    assert checks["boundaries"]["command"] == ["pnpm", "run", "lint:boundaries"]
     assert checks["react"]["report"]["type"] == "react-doctor"
     assert checks["tests"]["command"][0] == "pnpm"
+
+
+@pytest.mark.parametrize(
+    ("source", "required"),
+    [
+        ("src/app.ts", True),
+        ("src/app.tsx", True),
+        ("src/app.mts", True),
+        ("src/app.cts", True),
+        ("src/app.js", False),
+        ("tests/app.test.ts", False),
+        ("src/types.d.ts", False),
+    ],
+)
+def test_typescript_packages_require_boundary_gate(
+    installer: ModuleType, tmp_path: Path, source: str, required: bool
+) -> None:
+    repository(tmp_path)
+    target = tmp_path / source
+    target.parent.mkdir()
+    target.write_text("export const value = 1;\n")
+    config = installer.gate_config(tmp_path)
+    package = config["packages"][0]
+    boundary = [gate for gate in package["checks"] if gate.get("role") == "boundaries"]
+    assert bool(boundary) == required
+    validate_required_checks(tmp_path, config)
+    if required:
+        package["checks"].remove(boundary[0])
+        for path in (".", "./"):
+            package["path"] = path
+            with pytest.raises(ValueError, match="boundaries"):
+                validate_required_checks(tmp_path, config)
+
+
+@pytest.mark.parametrize("language", ["typescript", "dart"])
+def test_existing_gate_config_gets_boundary_gate_once(
+    installer: ModuleType, tmp_path: Path, language: str
+) -> None:
+    repository(tmp_path)
+    if language == "dart":
+        (tmp_path / "package.json").unlink()
+        (tmp_path / "pubspec.yaml").write_text(
+            'name: fixture\nenvironment:\n  sdk: ">=3.10.0 <4.0.0"\n'
+        )
+        (tmp_path / "app.dart").write_text("const value = 1;\n")
+        command = ["dart-decimate", "check", ".", "--boundary-violations"]
+    else:
+        (tmp_path / "app.ts").write_text("export const value = 1;\n")
+        command = ["pnpm", "run", "lint:boundaries"]
+    config = installer.gate_config(tmp_path)
+    package = config["packages"][0]
+    package["checks"] = [
+        gate for gate in package["checks"] if gate.get("role") != "boundaries"
+    ]
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    installer.install(tmp_path)
+    installed = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    boundary = next(
+        gate
+        for gate in installed["packages"][0]["checks"]
+        if gate.get("role") == "boundaries"
+    )
+    assert boundary["command"] == command
+    boundary["command"] = [command[0], "run", "project-architecture"]
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(installed))
+    installer.install(tmp_path)
+    assert json.loads((tmp_path / "hard-eng.gates.json").read_text()) == installed
+
+
+@pytest.mark.parametrize(
+    ("rules", "valid"),
+    [
+        (
+            [{"from": "test", "disallow": "lib/src"}],
+            True,
+        ),
+        ([{"from": "test/**", "disallow": "lib/src/**"}], False),
+        ({}, False),
+        ([], False),
+        ([{"from": "", "disallow": "lib/src"}], False),
+    ],
+)
+def test_dart_boundary_gate_requires_blocking_project_rules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rules: object, valid: bool
+) -> None:
+    def native_config(*_args: object, **_kwargs: object) -> str:
+        return json.dumps({"config": {"boundaries": rules}})
+
+    monkeypatch.setattr(
+        subprocess,
+        "check_output",
+        native_config,
+    )
+    command = ["dart-decimate", "check", ".", "--boundary-violations"]
+    if valid:
+        validate_dart_boundaries(command, tmp_path, 5)
+    else:
+        with pytest.raises(ValueError, match="nonempty project from/disallow prefixes"):
+            validate_dart_boundaries(command, tmp_path, 5)
 
 
 def test_python_packages_receive_recursive_import_contract(
@@ -132,6 +238,16 @@ def test_python_packages_receive_recursive_import_contract(
         )
         == content
     )
+    content += (
+        '\n[[tool.importlinter.contracts]]\nname = "Private implementation"\n'
+        'type = "protected"\nprotected_modules = ["example.internal"]\n'
+        'allowed_importers = ["example.api"]\n'
+    )
+    (package / "internal.py").write_text("value = 1\n")
+    (package / "api.py").write_text("from example.internal import value\n")
+    (tmp_path / "pyproject.toml").write_text(content)
+    installer.install(tmp_path)
+    assert (tmp_path / "pyproject.toml").read_text() == content
 
 
 def test_standalone_python_does_not_invent_import_architecture(
@@ -206,6 +322,8 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
     root, app = config["packages"]
     validate_required_checks(tmp_path, config)
     assert "language" not in root
+    assert not any(gate.get("role") == "boundaries" for gate in root["checks"])
+    assert any(gate.get("role") == "boundaries" for gate in app["checks"])
     assert app["sources"] == ["src"]
     assert (
         sum(
@@ -429,14 +547,35 @@ def test_missing_project_manifest_fails(installer: ModuleType, tmp_path: Path) -
         installer.install(tmp_path)
 
 
-def test_hook_registrations_only_use_session_and_stop(
+def test_hook_registrations_invoke_shared_runner(
     installer: ModuleType, tmp_path: Path
 ) -> None:
-    repository(tmp_path)
-    installer.install(tmp_path)
-    for path, events in (
-        (".claude/settings.json", {"SessionStart", "Stop"}),
-        (".codex/hooks.json", {"SessionStart", "Stop"}),
-        (".github/hooks/hard-eng.json", {"sessionStart", "agentStop"}),
+    root = tmp_path / "project with spaces"
+    root.mkdir()
+    repository(root)
+    installer.install(root)
+    (root / ".hooks/hard-eng.py").write_text(
+        "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"
+    )
+    for agent, path, events in (
+        ("claude", ".claude/settings.json", ("SessionStart", "Stop")),
+        ("codex", ".codex/hooks.json", ("SessionStart", "Stop")),
+        ("copilot", ".github/hooks/hard-eng.json", ("sessionStart", "agentStop")),
     ):
-        assert set(json.loads((tmp_path / path).read_text())["hooks"]) == events
+        hooks = json.loads((root / path).read_text())["hooks"]
+        assert set(hooks) == set(events)
+        for event, native in zip(("session", "stop"), events, strict=True):
+            (registration,) = hooks[native]
+            if agent == "copilot":
+                command = registration["bash"]
+            else:
+                (handler,) = registration["hooks"]
+                command = handler["command"]
+            result = subprocess.run(
+                ["sh", "-c", command],
+                cwd=root / ".hooks",
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            assert json.loads(result.stdout) == [event, agent]

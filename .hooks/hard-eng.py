@@ -25,6 +25,7 @@ from gate_config import (
     Report,
     generated_sources,
     nonproduction_source,
+    validate_dart_boundaries,
 )
 from tool_setup import managed_command, provision_tools
 
@@ -334,6 +335,7 @@ def production_files(
 
 def prepare_command(group: Group, gate: Gate, timeout: float) -> list[str]:
     command = gate["command"]
+    validate_dart_boundaries(command, ROOT / group["path"], timeout)
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 

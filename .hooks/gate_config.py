@@ -87,6 +87,23 @@ def nonproduction_source(relative: Path) -> bool:
     )
 
 
+def typescript_packages(root: Path, files: list[Path]) -> set[str]:
+    manifests = {path.parent for path in files if path.name == "package.json"}
+    packages = set()
+    for path in files:
+        relative = path.relative_to(root)
+        if (
+            path.suffix not in {".ts", ".tsx", ".mts", ".cts"}
+            or nonproduction_source(relative)
+            or {".hooks", ".agents"} & set(relative.parts)
+        ):
+            continue
+        owner = next((parent for parent in path.parents if parent in manifests), None)
+        if owner is not None:
+            packages.add(str(owner.relative_to(root)))
+    return packages
+
+
 def generated_sources(root: Path, names: list[str]) -> set[str]:
     if not names:
         return set()
@@ -230,6 +247,41 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
         )
 
 
+def validate_dart_boundaries(
+    command: list[str], directory: Path, timeout: float
+) -> None:
+    if command != ["dart-decimate", "check", ".", "--boundary-violations"]:
+        return
+    from tool_setup import managed_command
+
+    settings = json.loads(
+        subprocess.check_output(
+            managed_command(["dart-decimate", "config", ".", "--format", "json"]),
+            cwd=directory,
+            text=True,
+            timeout=timeout,
+        )
+    )["config"]
+    boundaries = settings.get("boundaries")
+    if (
+        not isinstance(boundaries, list)
+        or not boundaries
+        or any(
+            not isinstance(rule, dict)
+            or not all(
+                isinstance(rule.get(key), str)
+                and rule[key].strip()
+                and not any(mark in rule[key] for mark in "*?")
+                for key in ("from", "disallow")
+            )
+            for rule in boundaries
+        )
+    ):
+        raise ValueError(
+            "Dart boundaries require nonempty project from/disallow prefixes, not globs"
+        )
+
+
 def changed_packages(
     root: Path, by_path: dict[str, Group], base: str
 ) -> set[str] | None:
@@ -340,7 +392,7 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
             "tests",
             "dead-code-duplicates",
         },
-        "dart": {"format", "types", "tests", "dead-code-duplicates"},
+        "dart": {"format", "types", "tests", "dead-code-duplicates", "boundaries"},
     }.get(group.get("language", ""), set())
     roles = {gate.get("role") for gate in group["checks"] if isinstance(gate, dict)}
     if required - roles:
@@ -435,7 +487,14 @@ def validate_required_checks(root: Path, config: GateConfig) -> None:
         ): group
         for group in config["packages"]
     }
+    typescript = typescript_packages(root, files)
     for group in config["packages"]:
+        if str(Path(group["path"])) in typescript:
+            require_roles(
+                group["path"],
+                {"boundaries"},
+                {gate.get("role", "") for gate in group["checks"]},
+            )
         validate_package_services(
             root, group, by_directory, workspace_languages, shared_roles
         )
@@ -480,6 +539,7 @@ def validate_package_services(
                 "test:integration": "integration",
                 "test:ui": "ui",
                 "check:generated": "generated",
+                "lint:boundaries": "boundaries",
             }.items()
             if script in manifest.get("scripts", {})
         )

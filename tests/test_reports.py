@@ -189,6 +189,20 @@ def test_coverage_requires_unexecuted_files_and_merges_lcov(tmp_path: Path) -> N
         reports.lcov_coverage(path, tmp_path)
 
 
+def test_dart_coverage_allows_export_barrels_but_requires_executable_files(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "lcov.info"
+    path.write_text("SF:total.dart\nDA:1,1\nend_of_record\n")
+    barrel = tmp_path / "api.dart"
+    barrel.write_text("export 'total.dart';\n")
+    expected = {tmp_path / "total.dart", barrel}
+    assert reports.line_coverage(path, "dart-tests", tmp_path, expected) == (1, 1)
+    barrel.write_text("export 'total.dart';\nint unused() => 1;\n")
+    with pytest.raises(ValueError, match="omits production files: api.dart"):
+        reports.line_coverage(path, "dart-tests", tmp_path, expected)
+
+
 def test_branch_coverage_is_reported_separately_from_lines(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
