@@ -1,39 +1,55 @@
 ---
 name: research
-description: Investigate a codebase, compare tools or approaches, verify current external or library facts, and research failures before making a substantive technical recommendation. Use for sufficiency and gap reviews; ordinary edits with settled requirements do not need a research stage.
+description: Verify current repository, vendor API, or library facts before a decision.
 ---
 
 # Research
 
-## Approach
+## Contract
 
-- Start = decision to answer + relevant scope + settled constraints + required freshness. Reuse answers already available.
-- Coverage = derive relevant questions from the problem and authoritative sources before evaluating options. User-named tools and questions are the minimum, not the whole investigation.
-- Evidence = repository source for local behavior; official docs/source/changelogs for external contracts; issues, Reddit and other community reports for discovery and practical counterexamples.
-- Independence = search by the problem as well as named solutions; inspect credible alternatives and evidence against the preferred answer where they could change the decision.
-- Claims = distinguish documented capability, locally observed behavior, inference and unknown. Missing evidence does not establish that a capability is absent.
-- Proportion = investigate what can change the answer; no fixed search quota, mandatory report or unrelated audit.
-- Scope = reuse existing task authorization; research alone adds no permission for installation, implementation or external writes. Continue useful independent investigation when one source is unavailable.
+- Start = exact research question + decision it must unblock + freshness requirement.
+- User-supplied source/claim/checklist = minimum coverage ledger; inspect each item or return explicit `N/A | Unknown`.
+- Evidence order = local authoritative source → primary external source → secondary context.
+- External-contract-dependent plan/code/review/claim → matching primary-source route `PASS` first.
+- External/runtime/platform-dependent solution selection or implementation = current primary-source `PASS` before edit + local integration binding.
+- External/runtime/dependency remedy = current primary contract + bounded public analogous-incident/remedy search before edit; peer workaround = discovery, never authority.
+- First paid or state-changing external/native attempt = current primary-source receipt + local syntax/contract proof + resolved version/tool/path.
+- Contract-surprise failure = pause retry → current official docs/changelog/runner manifest + adjacent-assumption audit → smallest correction.
+- Official source proves contract + compatible parser/compiler/runner probe proves local semantics; neither substitutes for the other.
+- Separate `Verified` + `Inferred` + `Unknown`; every material claim → path or URL + revision/date/version.
+- Existing code = current state, not approval; negative claim = bounded coverage + limitation.
+- No production mutation; reusable Markdown notes only when future work will consume them.
 
-## Routes
+## Route
 
-Read each reference whose question is part of the task; skip unrelated routes.
+| Need | Load | Skip proof |
+|---|---|---|
+| Repository topology/behavior/impact | [codebase.md](references/codebase.md) | No repository question |
+| Current facts/standards/changelogs/papers/URLs | [external.md](references/external.md) | Local evidence fully answers decision |
+| Current dependency/library API | [library-docs.md](references/library-docs.md) | No library/version question |
 
-| Question | Reference |
-|---|---|
-| What does this repository do, and what would a change affect? | [Codebase](references/codebase.md) |
-| Which tools or approaches fit, overlap or leave gaps? Is the current set sufficient? | [Comparison](references/comparison.md) |
-| Is a claim current, and what do external sources establish? | [External evidence](references/external.md) |
-| How does a particular library, API or platform contract work? | [Library and API](references/library-api.md) |
-| Why did something fail, and which remedy addresses the cause? | [Troubleshooting](references/troubleshooting.md) |
-
-Examples: a scanner comparison uses Comparison + External evidence; a failed SDK call uses Troubleshooting + Library and API, with Codebase when caller behavior matters.
+- Multiple needs → load every matching reference; do not make one source impersonate another.
 
 ## Completion
 
-- Before concluding, revisit the original question and derived coverage: each material item has evidence, a reason it does not apply, or an explicit unknown and its consequence.
-- Resolve material contradictions by source authority, version and applicability; keep unresolved disagreements visible.
-- Claim sufficiency only for the stated scope. Name meaningful remaining gaps and explain why they are acceptable or prevent a recommendation.
-- Stop when remaining investigation is unlikely to change the decision, or the missing evidence and next useful check are clear. Do not promise exhaustive certainty.
-- Answer first, cite decisive sources beside claims, and explain tradeoffs and limits. Use a compact comparison table when it helps; do not force fixed report sections.
-- Record accepted decisions in the existing decision file when requested. Keep proposals and unknowns separate; create reusable notes only when requested or needed by subsequent work.
+- Coverage owner = matching route reference.
+- Active configured Feature Brief = record local/external evidence through `skills/he/scripts/execution_evidence.py record-research` before approval; receipt path = `features/<slug>/receipts/research.json`.
+- Receipt freshness = `--fresh-until YYYY-MM-DD`; local source SHA-256 = automatic + rechecked; external source = one matching `--source-version` each.
+- Configured Direct mutation = `execution_evidence.py start-direct` + exact intended paths + matching research fields before the first write.
+- Each relevant surface = inspected + evidence, `N/A` + reason, or unknown + next proof.
+- Narrative summary cannot collapse or silently omit a coverage-ledger item.
+- Contradiction → preserve both claims; resolve by authority/freshness or return decision blocker.
+- Reusable note → repository convention; absent convention → user-approved path.
+
+## Output
+
+| Section | Content |
+|---|---|
+| Decision answer | Answer first |
+| Verified | Claim + source + revision/date/version |
+| Inferred | Inference + supporting evidence + confidence |
+| Unknown | Gap + impact + next proof |
+| Coverage | Inspected / `N/A` / inaccessible |
+| Sources | Primary first; secondary labeled |
+
+- Missing decision-grade evidence → `CONCERNS` or `FAIL`; never manufacture certainty.

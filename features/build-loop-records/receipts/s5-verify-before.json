@@ -1,0 +1,8 @@
+{
+  "before": {
+    "assert_green_exit": 4,
+    "assert_green_output": "result=invalid\nerror=ship requires a mutation receipt for the green tree (plan_state.py record-mutation)\n",
+    "inspect_output": "result=valid\nplan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/s5verify_2x73l3yo/build/features/steps-demo/PLAN.md\ntoken=sha256:ce5757eabc14f2df8bdbe65b580c995b421c7cc73bdd6c31ed67ab0c385c1c3b\nlifecycle_status=green\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-ship\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nmutation=missing (ship requires a mutation receipt for the green tree (plan_state.py record-mutation))\n",
+    "inspect_mutation_line": "mutation=missing (ship requires a mutation receipt for the green tree (plan_state.py record-mutation))"
+  }
+}

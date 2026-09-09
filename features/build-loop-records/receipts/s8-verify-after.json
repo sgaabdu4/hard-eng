@@ -1,0 +1,151 @@
+{
+  "outside_calls": [],
+  "commands": [
+    {
+      "argv": ["python3", "skills/he/scripts/plan_state.py", "record-build", "--help"],
+      "exit": 0,
+      "flags_found": ["--repo", "--plan", "--slice", "--step", "--payload-file"],
+      "docs_flags_used": ["--repo", "--plan", "--slice", "--step", "--payload-file"],
+      "match": true
+    },
+    {
+      "argv": ["python3", "skills/he/scripts/plan_state.py", "review-packet", "--help"],
+      "exit": 0,
+      "flags_found": ["--repo", "--plan", "--slice"],
+      "docs_flags_used": ["--slice"],
+      "match": true
+    },
+    {
+      "argv": ["python3", "skills/he/scripts/plan_state.py", "verify-packet", "--help"],
+      "exit": 0,
+      "flags_found": ["--repo", "--plan", "--slice"],
+      "docs_flags_used": ["--slice"],
+      "match": true
+    },
+    {
+      "argv": ["python3", "skills/he/scripts/plan_state.py", "record-mutation", "--help"],
+      "exit": 0,
+      "flags_found": ["--repo", "--plan", "--payload-file"],
+      "docs_flags_used": ["--payload-file"],
+      "match": true
+    },
+    {
+      "argv": ["python3", "skills/he/scripts/plan_state.py", "build-report", "--help"],
+      "exit": 0,
+      "flags_found": ["--repo", "--plan"],
+      "docs_flags_used": ["--repo", "--plan"],
+      "match": true
+    },
+    {
+      "argv": ["python3", "skills/he/scripts/plan_state.py", "checkpoint", "--help"],
+      "exit": 0,
+      "flags_found": ["--repo", "--plan", "--expect-token", "--set", "--confirm-cancel"],
+      "docs_flags_used": ["--repo", "--plan", "--expect-token", "--set"],
+      "match": true
+    },
+    {
+      "argv": ["python3", "skills/deterministic-checks/scripts/slice_gate.py", "run", "--help"],
+      "exit": 0,
+      "flags_found": ["--repo", "--plan", "--slice", "--full", "--timeout", "--behavior", "--check", "--e2e", "--security", "--review"],
+      "docs_flags_used": ["--repo", "--plan", "--slice", "--full", "--timeout", "--behavior", "--check", "--e2e", "--security", "--review"],
+      "match": true
+    },
+    {
+      "argv": ["python3", "skills/deterministic-checks/scripts/slice_gate.py", "status", "--help"],
+      "exit": 0,
+      "flags_found": ["--repo", "--plan", "--slice", "--full"],
+      "docs_flags_used": [],
+      "match": true
+    },
+    {
+      "argv": ["python3", "skills/deterministic-checks/scripts/project_gate_regression_check.py"],
+      "exit": 0,
+      "final_line": "project-gate-check: PASS",
+      "log": "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s8-verify/project_gate_regression.log"
+    },
+    {
+      "argv": ["python3", "skills/deterministic-checks/scripts/slice_gate_regression_check.py"],
+      "exit": 0,
+      "final_line": "slice-gate-check: PASS",
+      "log": "/private/tmp/claude-501/-Users-abid--agents/de40aea2-bf64-45cf-b475-0a455571d112/scratchpad/s8-verify/slice_gate_regression.log"
+    }
+  ],
+  "clones_flag_parity": {
+    "clones_md_permits": ["--fail-on-new-clones", "--baseline <file>", "--baseline-from-ref <ref>", "--reporters console|console-full"],
+    "clones_md_rejects": ["--update-baseline", "--output", "-o", "file reporters"],
+    "project_gate_validate_clones_source": "skills/deterministic-checks/scripts/project_gate.py:279-294",
+    "CLONE_WRITE_FLAGS": ["--update-baseline", "--output", "-o"],
+    "CLONE_CONSOLE_REPORTERS": ["console", "console-full"],
+    "requires_fail_on_new_clones": true,
+    "requires_baseline_or_baseline_from_ref": true,
+    "defect": "none - exact parity"
+  },
+  "payload_key_comparison": [
+    {
+      "step": "edges",
+      "docs_source": "workflow.md line 23",
+      "docs_keys": {"payload": ["cases"], "case_row": ["name", "success_test", "failure_test"]},
+      "code_source": "skills/he/scripts/build_steps.py validate_edges (line 76)",
+      "code_allowed_keys": {"payload": ["cases"], "case_row": ["name", "success_test", "failure_test"]},
+      "mismatch": "none"
+    },
+    {
+      "step": "green",
+      "docs_source": "workflow.md line 26",
+      "docs_keys": {"payload": ["command", "exit"]},
+      "code_source": "skills/he/scripts/build_steps.py validate_green (line 99)",
+      "code_allowed_keys": {"payload": ["command", "exit"]},
+      "mismatch": "none"
+    },
+    {
+      "step": "review",
+      "docs_source": "workflow.md line 28",
+      "docs_keys": {
+        "payload": ["rounds"],
+        "round_row": ["reviewer", "packet_sha256", "findings"],
+        "finding_row": ["id", "text", "status(open|fixed|rejected)"]
+      },
+      "code_source": "skills/he/scripts/build_steps.py validate_review + _finding (lines 111-146)",
+      "code_allowed_keys": {
+        "payload": ["rounds"],
+        "round_row": ["reviewer", "packet_sha256", "findings"],
+        "finding_row": ["id", "text", "status", "reason"]
+      },
+      "mismatch": "code requires finding_row.reason when status=='rejected' (build_steps.py line 118); docs (workflow.md line 28) name only id/text/status and never mention reason"
+    },
+    {
+      "step": "verify",
+      "docs_source": "workflow.md line 40",
+      "docs_keys": {
+        "payload": ["mode", "packet_sha256", "fakes", "outside_calls", "before", "after", "edge_cases"],
+        "fake_row": ["host", "log"],
+        "hashed_row": ["path", "sha256"]
+      },
+      "code_source": "skills/he/scripts/build_steps.py validate_verify (line 199)",
+      "code_allowed_keys": {
+        "payload": ["mode", "packet_sha256", "fakes", "outside_calls", "before", "after", "edge_cases"],
+        "fake_row": ["host", "log"],
+        "hashed_row": ["path", "sha256"]
+      },
+      "mismatch": "none"
+    },
+    {
+      "step": "mutation",
+      "docs_source": "workflow.md line 68, mutation.md lines 1-7",
+      "docs_keys": {
+        "payload": ["runner", "version", "argv", "scope", "totals", "survivors"],
+        "survivor_row": ["disposition(fixed|equivalent|invalid|deferred)", "consequence(deferred only)"]
+      },
+      "code_source": "skills/he/scripts/mutation_receipt.py validate + _survivors (lines 81-152)",
+      "code_allowed_keys": {
+        "payload": ["runner", "version", "argv", "scope", "totals", "survivors", "sensitivity_proof"],
+        "survivor_row": ["mutant", "disposition", "reason", "consequence(deferred only)"]
+      },
+      "mismatch": [
+        "code allows/requires payload.sensitivity_proof when runner=='none' (Dart-only scope, mutation_receipt.py line 122); docs describe the Dart 'sensitivity proof' concept in prose (mutation.md line 2) but never name the sensitivity_proof payload key",
+        "code requires survivor_row.reason on every survivor row regardless of disposition (mutation_receipt.py line 95); docs (workflow.md line 68) name only disposition+consequence and never mention reason",
+        "code requires survivor_row.mutant (mutation_receipt.py line 94); docs do not name this key explicitly, though it is implied by 'per survivor'"
+      ]
+    }
+  ]
+}

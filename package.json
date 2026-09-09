@@ -1,0 +1,34 @@
+{
+  "name": "hard-eng-repository-checks",
+  "private": true,
+  "version": "1.0.1",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "bin": {
+    "hard-eng": "install.sh"
+  },
+  "scripts": {
+    "typecheck": "tsc --project jsconfig.json --noEmit",
+    "pyright": "pyright",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "test": "node --test skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
+    "fallow": "python3 skills/deterministic-checks/scripts/project_gate.py run --repo . --timeout 240 --family fallow"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.12",
+    "@google/design.md": "0.4.0",
+    "@types/node": "26.4.1",
+    "@types/semver": "7.8.0",
+    "fallow": "3.22.0",
+    "jscpd": "5.1.2",
+    "mdast-util-from-markdown": "2.0.3",
+    "parse5": "8.0.1",
+    "pyright": "1.1.413",
+    "semver": "7.8.5",
+    "typescript": "7.0.2",
+    "yaml": "2.9.0"
+  }
+}

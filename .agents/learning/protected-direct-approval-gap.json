@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Live 2026-08-25: approved stash cleanup denied in this session; red probe showed CLI rejecting plan=direct and hook denying with no plan; fixtures had always injected session and request digests the live payload never carries"
+  ],
+  "failure": "A session on the direct route could never satisfy the protected-action guard: the receipt flow required an approved active PLAN, so a user-approved irreversible action stayed permanently blocked and invited out-of-band workarounds",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "protected-direct-approval-gap",
+  "next_action": "Single-step authorize-protected --plan direct minting a one-use Git-private receipt; hook consumes without a PLAN via payload, environment, and command-text transports; live-proven consume-once plus regression suites pin every path",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/he/scripts/execution_direct.py",
+    "proof": "skills/he/scripts/protected_direct_regression.py",
+    "valid_fixture": "skills/he/scripts/protected_direct_regression.py",
+    "violation_fixture": "skills/he/scripts/protected_direct_regression.py"
+  },
+  "root_cause": "challenge, authorize, and consume were PLAN-bound by construction, the hook only attempted consumption with an active PLAN, and the request digest had no live transport into the hook payload",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "protected-boundary-gap"
+}

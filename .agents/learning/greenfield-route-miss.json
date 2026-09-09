@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "2026-08-25 Sonnet probe: 14 tool calls, zero Skill invocations, no setup or plan, direct write-to-commit in an unwired repository"
+  ],
+  "failure": "Greenfield product probe built and committed a durable product without entering the he lifecycle",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "greenfield-route-miss",
+  "next_action": "Ship route rules, he description, unwired-repo advisory hook, and green validator fix with contract proof in one commit",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/enforcement_policy.pl",
+    "proof": "scripts/agent-hook-contract-check.py",
+    "valid_fixture": "scripts/test_fixtures/agent-hooks/init-argument-silent.json",
+    "violation_fixture": "scripts/test_fixtures/agent-hooks/unwired-git-init-advised.json"
+  },
+  "root_cause": "he routing text let greenfield read as direct work and unwired repositories carry zero deterministic enforcement",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "engineering-correction"
+}

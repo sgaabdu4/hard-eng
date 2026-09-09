@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "requirements": {
+    "node_min": "26.0.0"
+  },
+  "codex": {
+    "context_mode": {
+      "marketplace_repo": "mksglu/context-mode",
+      "marketplace_name": "context-mode",
+      "marketplace_source": "https://github.com/mksglu/context-mode.git",
+      "marketplace_ref": "v1.0.169",
+      "marketplace_commit": "589d8214d56740a28b5f7bf63167743d586b0b40",
+      "plugin_id": "context-mode@context-mode",
+      "version": "1.0.169"
+    }
+  },
+  "copilot": {
+    "context_mode": {
+      "plugin_name": "context-mode",
+      "plugin_source_subdir": "configs/copilot-cli"
+    }
+  },
+  "npm_runtime": {
+    "packages": [
+      {
+        "name": "codebase-memory-mcp",
+        "version": "0.9.0",
+        "sha512": "66fd6a997fefd8b0ce26e73e04a9a0c75d57ecfd86300666785b8e29d957a85c51c22fdd506aa2b261c83dd8efdb18ce66927a07683b683e46396dfe78bf8260",
+        "tree_exclusions": [
+          "node_modules",
+          "bin"
+        ]
+      },
+      {
+        "name": "context-mode",
+        "version": "1.0.169",
+        "sha512": "f78248685b8b8c5f523b606c193adb1adc93e382bde7ef4e0bc05d6da2ff513efac4e91a9c92df511e42ce6370f8610b5d942a1f89c1aca83dc230674859159d",
+        "tree_exclusions": [
+          "node_modules",
+          "ensure-deps.mjs"
+        ]
+      },
+      {
+        "name": "ctx7",
+        "version": "0.5.7",
+        "sha512": "975607264ec08a0ff9ff749edd87109b9fd5b224bbf7c45ace87b9dcd0ecdbaac07df33ec223281c6bb6f24a7cf2858992f0a7f17cafcb4d78c81396ab9b36ab",
+        "tree_exclusions": [
+          "node_modules"
+        ]
+      }
+    ],
+    "remove_paths": [
+      "node_modules/better-sqlite3"
+    ]
+  },
+  "binaries": {
+    "codebase-memory-mcp": {
+      "version": "0.9.0",
+      "assets": {
+        "macos-arm64": {
+          "file": "codebase-memory-mcp-darwin-arm64.tar.gz",
+          "sha256": "faa02f0404230c451a9812230394481948f80183801fa5bf67044b41c2f25ed4",
+          "url": "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.9.0/codebase-memory-mcp-darwin-arm64.tar.gz",
+          "kind": "tar.gz"
+        },
+        "macos-amd64": {
+          "file": "codebase-memory-mcp-darwin-amd64.tar.gz",
+          "sha256": "6af3d02a27f589901fa763d3971089337bc8c9838bbed5d0cf543ca9f1a9e543",
+          "url": "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.9.0/codebase-memory-mcp-darwin-amd64.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-arm64": {
+          "file": "codebase-memory-mcp-linux-arm64-portable.tar.gz",
+          "sha256": "b0a43fdaf534073c16707d72726b73b149d4c1212034b281ee8b7b2dac755107",
+          "url": "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.9.0/codebase-memory-mcp-linux-arm64-portable.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-amd64": {
+          "file": "codebase-memory-mcp-linux-amd64-portable.tar.gz",
+          "sha256": "8459d5c9d1457f2c82de3de307ffc7641ecbba2dde893427be1e62eca8ef9b25",
+          "url": "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.9.0/codebase-memory-mcp-linux-amd64-portable.tar.gz",
+          "kind": "tar.gz"
+        }
+      }
+    },
+    "gitleaks": {
+      "version": "8.30.1",
+      "assets": {
+        "macos-arm64": {
+          "file": "gitleaks_8.30.1_darwin_arm64.tar.gz",
+          "sha256": "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz",
+          "kind": "tar.gz"
+        },
+        "macos-amd64": {
+          "file": "gitleaks_8.30.1_darwin_x64.tar.gz",
+          "sha256": "dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709",
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_x64.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-arm64": {
+          "file": "gitleaks_8.30.1_linux_arm64.tar.gz",
+          "sha256": "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080",
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-amd64": {
+          "file": "gitleaks_8.30.1_linux_x64.tar.gz",
+          "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
+          "kind": "tar.gz"
+        }
+      }
+    },
+    "jq": {
+      "version": "1.8.2",
+      "assets": {
+        "macos-arm64": {
+          "file": "jq-macos-arm64",
+          "sha256": "2d75340ba57a4b4b4c8708a21c2dc8e958a48aaa8bba13b27f77f6e4c0eca07e",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-arm64",
+          "kind": "file"
+        },
+        "macos-amd64": {
+          "file": "jq-macos-amd64",
+          "sha256": "e94b266e3c26690550006abe63152b782280f4e14374accdf04cbde844f00bc0",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-amd64",
+          "kind": "file"
+        },
+        "linux-arm64": {
+          "file": "jq-linux-arm64",
+          "sha256": "8b85c817833814ddca00a144c33705546355afccf0cf39b188f3cdb48b852309",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-arm64",
+          "kind": "file"
+        },
+        "linux-amd64": {
+          "file": "jq-linux-amd64",
+          "sha256": "b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64",
+          "kind": "file"
+        }
+      }
+    },
+    "rtk": {
+      "version": "0.44.2",
+      "assets": {
+        "macos-arm64": {
+          "file": "rtk-aarch64-apple-darwin.tar.gz",
+          "sha256": "b7c2218eca538b54e63fa594a8ce58bd3716851b01b3b0dc026515323baf6393",
+          "url": "https://github.com/rtk-ai/rtk/releases/download/v0.44.2/rtk-aarch64-apple-darwin.tar.gz",
+          "kind": "tar.gz"
+        },
+        "macos-amd64": {
+          "file": "rtk-x86_64-apple-darwin.tar.gz",
+          "sha256": "636f808db86b2cefab7db7dd9393da8b6e4721bb2ffaa0644e3ffa52d3420d81",
+          "url": "https://github.com/rtk-ai/rtk/releases/download/v0.44.2/rtk-x86_64-apple-darwin.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-arm64": {
+          "file": "rtk-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "5cd3f7fa2697faf9e5b77a10ce4e699006e02d4752d792f06550697eb4b8e8a9",
+          "url": "https://github.com/rtk-ai/rtk/releases/download/v0.44.2/rtk-aarch64-unknown-linux-gnu.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-amd64": {
+          "file": "rtk-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "d94cc2a3e57fa534892b5235a726e7eeb7523f205a5f8f48f853bfcae7be7e33",
+          "url": "https://github.com/rtk-ai/rtk/releases/download/v0.44.2/rtk-x86_64-unknown-linux-musl.tar.gz",
+          "kind": "tar.gz"
+        }
+      }
+    },
+    "ruff": {
+      "version": "0.16.4",
+      "assets": {
+        "macos-arm64": {
+          "file": "ruff-aarch64-apple-darwin.tar.gz",
+          "sha256": "b4ad832b7734592aa1c6710dbc15277ed9d3d54c8bd44bb25bb7b14ae9098b88",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-aarch64-apple-darwin.tar.gz",
+          "kind": "tar.gz",
+          "member": "ruff-aarch64-apple-darwin/ruff"
+        },
+        "macos-amd64": {
+          "file": "ruff-x86_64-apple-darwin.tar.gz",
+          "sha256": "233b7368e00b25064abd0db19f7cb1b43117fef41d7106170e6ffec50a0201ca",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-x86_64-apple-darwin.tar.gz",
+          "kind": "tar.gz",
+          "member": "ruff-x86_64-apple-darwin/ruff"
+        },
+        "linux-arm64": {
+          "file": "ruff-aarch64-unknown-linux-musl.tar.gz",
+          "sha256": "2b828176fed3fa23361accb749e305f804bb050395a05ed96c769a8fd4c8e440",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-aarch64-unknown-linux-musl.tar.gz",
+          "kind": "tar.gz",
+          "member": "ruff-aarch64-unknown-linux-musl/ruff"
+        },
+        "linux-amd64": {
+          "file": "ruff-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "0c2a1616b0782dbf7ee04239576887c4c894277189e04ba94ff3160eba9c1863",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-x86_64-unknown-linux-musl.tar.gz",
+          "kind": "tar.gz",
+          "member": "ruff-x86_64-unknown-linux-musl/ruff"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "evidence": [
+    "GitHub Actions run 31946947030 job 95164372117 reported bounded-run BACKGROUND descendant terminated after command exit at git commit -qm updater fixture; the exact commit passed macOS ARM64 and all dependency checks.",
+    "Fixture Git commands now use an isolated HOME, ignore system and global Git configuration, disable optional locks, and disable automatic maintenance.",
+    "A hostile global Git configuration makes the unhermetic commit probe fail while the hermetic fixture commit succeeds; the bounded focused regression passes and Pyright reports 0 errors."
+  ],
+  "failure": "Ubuntu x64 CI stopped the managed-skill update regression because a temporary fixture git commit left a background process in its command group.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "launched"
+  },
+  "learning_id": "hermetic-git-fixture-processes",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/managed-skill-update-state-regression.py",
+    "deterministic_limit": "",
+    "violation_fixture": "scripts/managed-skill-update-state-regression.py",
+    "valid_fixture": "scripts/managed-skill-update-state-regression.py",
+    "proof": "scripts/managed-skill-update-state-regression.py"
+  },
+  "root_cause": "The temporary Git fixture inherited host system Git behavior and left automatic maintenance enabled, so Git was allowed to detach work that the bounded runner correctly rejects.",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "protected-boundary-gap"
+}

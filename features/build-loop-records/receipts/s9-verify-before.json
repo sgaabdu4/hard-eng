@@ -1,0 +1,34 @@
+{
+  "plan_steps_state_block": {
+    "plan_id": "steps-demo-test",
+    "schema_version": 2,
+    "steps_keys": [
+      "closing",
+      "code-study",
+      "decisions",
+      "edge-scan",
+      "slices"
+    ]
+  },
+  "research_state_block": {
+    "checked_at": "2026-09-02",
+    "decision": "Use owner.py.",
+    "fresh_until": "2099-12-31",
+    "inferred": [],
+    "plan_id": "steps-demo-test",
+    "question": "Which owner?",
+    "repository_head": "09de3584fc83b23733bb93b0e34908e54bf845a4",
+    "schema_version": 1,
+    "scope": "local",
+    "source_versions": [
+      "sha256:5c2257b689db5cc4b7bd3fe7171ee1f23609804176c27abe18991145f07a8436"
+    ],
+    "sources": [
+      "owner.py"
+    ],
+    "unknown": [],
+    "verified": [
+      "owner.py prints owner"
+    ]
+  }
+}

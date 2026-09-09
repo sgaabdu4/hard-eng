@@ -1,0 +1,148 @@
+{
+  "example 1": {
+    "commands": [
+      "python3 skills/deterministic-checks/scripts/slice_gate.py run --repo <fv2-plan wt> --plan features/fv2-plan/PLAN.md --slice S-1 --timeout 60 --behavior \"scripts/check.py exits 0\" --check targeted --e2e not-applicable:no-UI --security not-applicable:no-security-surface --review \"review record S-1\""
+    ],
+    "exit": 4,
+    "output": "result=fail / error=slice S-1 has no edges record (plan_state.py record-build --slice S-1 --step edges)",
+    "receipts_dir_unchanged": "ls features/fv2-plan/receipts/ before and after: authorization.json, plan-steps.json, research.json (identical; no build-steps.json or S-1.json written)",
+    "verdict": "PASS"
+  },
+  "example 2": {
+    "commands": [
+      "python3 skills/he/scripts/plan_state.py record-build --repo <wt> --plan features/fv2-plan/PLAN.md --slice S-1 --step edges --payload-file edges.json (one case missing failure_test)"
+    ],
+    "exit": 4,
+    "output": "result=invalid / error=edge case edge without failure test lacks its failure_test id",
+    "verdict": "PASS"
+  },
+  "example 3": {
+    "commands": [
+      "plan_state.py review-packet --slice S-1 (x3, one per round)",
+      "plan_state.py record-build --slice S-1 --step review --payload-file review3.json (round3 finding R-3 status=open)",
+      "plan_state.py inspect --repo <wt> --plan features/fv2-plan/PLAN.md",
+      "slice_gate.py run ... --slice S-1 (same flags as example 1, edges/green/verify already recorded)"
+    ],
+    "exit_inspect": 0,
+    "exit_slice_gate": 4,
+    "output": "inspect: next_action=Close the open review finding on S-1: R-3: check.py should validate its argv / build_steps_open_finding=R-3: check.py should validate its argv; slice_gate: result=fail error=slice S-1 review still has an open finding: R-3: check.py should validate its argv",
+    "verdict": "PASS"
+  },
+  "example 4": {
+    "commands": [
+      "printf 'api.github.com gh repo view\\nevil.example.com GET /secret\\n' > features/fv2-plan/receipts/fakelog.txt",
+      "plan_state.py verify-packet --slice S-1",
+      "plan_state.py record-build --slice S-1 --step verify --payload-file verify_bad.json (fakes=[{host:api.github.com, log:features/fv2-plan/receipts/fakelog.txt}])"
+    ],
+    "exit": 4,
+    "output": "result=invalid / error=fake log features/fv2-plan/receipts/fakelog.txt shows a real outside host evil.example.com; every outside host needs a fake",
+    "existing_valid_verify_record_untouched": "plan_state.py inspect after the refused call still showed build_steps=S-1:4/4 (the earlier valid verify record was not overwritten)",
+    "verdict": "PASS"
+  },
+  "example 5": {
+    "commands": [
+      "git commit new lib/c.dart + lib/d.dart (near-duplicate of a new function, not in .jscpd-baseline.json)",
+      "python3 skills/deterministic-checks/scripts/project_gate.py --repo <dartrepo> --timeout 60 --family clones run"
+    ],
+    "exit": 1,
+    "output": "jscpd console: 'Clone found (dart) [NEW] lib/c.dart ... lib/d.dart ...'; old pair lib/a.dart/lib/b.dart printed without [NEW]; ERROR: jscpd found 1 new clones not in the baseline (allowed: 0); project-gate: clones FAIL",
+    "prior_pass_on_old_clone_only": "same command on the tree before c.dart/d.dart existed printed 'Found 1 clones' (the old pair, no [NEW] tag) and project-gate: clones PASS, exit 0",
+    "verdict": "PASS"
+  },
+  "example 6": {
+    "commands": [
+      "git checkout -b feature-complex; add src/complex.ts (5-arg nested-if function, cyclomatic=10, zero coverage)",
+      "python3 skills/deterministic-checks/scripts/project_gate.py --repo <tsrepo> --timeout 60 --family fallow run"
+    ],
+    "exit": 1,
+    "output": "fallow audit verdict=fail; complexity finding name=complexClassify crap=110.0 (max_crap_threshold=30.0) exceeded=cognitive_crap severity=critical; project-gate: fallow FAIL naming complexClassify (src/complex.ts:1)",
+    "verdict": "PASS"
+  },
+  "example 7": {
+    "commands": [
+      "PATH=<tmp>/bin:$PATH GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 MUTATION_LEDGER_GH=<tmp>/bin/gh FAKE_GH_LOG=<tmp>/fakes-pass2.log FAKE_GH_PRIVATE=true python3 skills/deterministic-checks/scripts/mutation_ledger.py check --repo <pyrepo7> --base main --visibility auto",
+      "PATH=<tmp>/bin:$PATH GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 MUTATION_LEDGER_GH=<tmp>/bin/gh FAKE_GH_LOG=<tmp>/fakes-pass2.log FAKE_GH_PRIVATE=true python3 skills/deterministic-checks/scripts/mutation_ledger.py run --repo <pyrepo7> --changed-only --budget-minutes 1 --mutmut <tmp>/bin/mutmut",
+      "python3 skills/deterministic-checks/scripts/mutation_ledger.py verdict --repo <pyrepo7> --function pkg/calc.py::greet --mutant pkg.calc.x_greet__mutmut_{3,4,5,6} --verdict deferred --reason 'weak assertion test; tracked for follow-up' (x4)",
+      "PATH=<tmp>/bin:$PATH GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 MUTATION_LEDGER_GH=<tmp>/bin/gh FAKE_GH_LOG=<tmp>/fakes-pass2.log FAKE_GH_PRIVATE=true python3 skills/deterministic-checks/scripts/mutation_ledger.py check --repo <pyrepo7> --base main --visibility auto (re-run)"
+    ],
+    "exit_check_before": 1,
+    "output_before": "visibility=private (gh repo view) / changed_functions=3 / unscored=3 / unscored_function=pkg/calc.py::add,greet,multiply / mutation-ledger: FAIL private repository: score these changed functions locally before push (mutation_ledger.py run): pkg/calc.py::add, pkg/calc.py::greet, pkg/calc.py::multiply",
+    "exit_run": 0,
+    "output_run": "planned=3 / mutant results: add killed, multiply killed, greet 2 killed + 4 survived (x_greet__mutmut_3..6) / mutmut_exit=0 / budget_exhausted=no / recorded_count=3 / skipped_count=0 / mutation-ledger: recorded",
+    "ledger_proof": "mutation-ledger.json rows for add/multiply/greet all carry version='9.9.9' (the fake mutmut's --version string), proving the run path used the injected fake for the version probe while real mutmut (forwarded by the fake) generated and scored the actual mutants",
+    "exit_check_after": 0,
+    "output_after": "rows=3 / unscored=0 / mutation-ledger: PASS",
+    "fakes_log_proof": "full-verify-2-fakes.log contains exactly 2 lines, both 'api.github.com gh repo view --json isPrivate --jq .isPrivate', one from each `check` call; no other host line and no real gh invocation (MUTATION_LEDGER_GH was set explicitly on every command, so resolve_visibility never fell back to shutil.which(\"gh\"))",
+    "defect_status": "the previously filed mutmut-version-probe defect is confirmed fixed: `run` now calls `<mutmut> --version` and completes end to end without the earlier crash",
+    "verdict": "PASS (real `run` path driven end to end with no real outside call)"
+  },
+  "example 8": {
+    "commands": [],
+    "exit": null,
+    "output": "not attempted",
+    "verdict": "not checked: the nightly scoring + gh pr create sequence is defined only inside .github/workflows/mutation-nightly.yml, which runs on GitHub Actions' schedule/workflow_dispatch trigger; this verifier has no way to execute a GitHub Actions runner offline. The 'scores only functions with no current ledger row' half of the scope logic (plan/scope_functions) and the private-vs-public gh-visibility branch were verified directly in examples 7 and 9."
+  },
+  "example 9": {
+    "commands": [
+      "printf '\\n\\n' >> pkg/calc.py; git commit -m 'trailing whitespace only, no function change'",
+      "python3 skills/deterministic-checks/scripts/mutation_ledger.py plan --repo <pyrepo> --base main",
+      "python3 skills/deterministic-checks/scripts/mutation_ledger.py record --repo <pyrepo> --base main --version 3.7.0 --function pkg/calc.py::add"
+    ],
+    "exit_plan": 0,
+    "output_plan": "count=0 (add/multiply/greet all excluded from scope: their AST source hash is unchanged even though the file's git diff shows a change)",
+    "exit_record": 1,
+    "output_record": "mutation-ledger: FAIL not an unscored function in scope: pkg/calc.py::add",
+    "row_kept_proof": "mutation-ledger.json functions['pkg/calc.py::add'].scored_at stayed 2026-09-04T22:29:35Z (identical to before the whitespace commit)",
+    "verdict": "PASS"
+  },
+  "example 10": {
+    "commands": [
+      "plan_state.py checkpoint --set completed_slices=S-1 --set active_slice=none",
+      "plan_state.py verify-packet --slice full; plan_state.py record-build --slice full --step verify",
+      "slice_gate.py run --full --check targeted --check clones ...  (result=pass, receipt=features/fv2-plan/receipts/full.json)",
+      "plan_state.py checkpoint --set lifecycle_status=green --set walkthrough=no",
+      "ls features/fv2-plan/BUILD.md; cat features/fv2-plan/BUILD.md"
+    ],
+    "exit": 0,
+    "output": "checkpoint output: lifecycle_status=green / handoff=ship / handoff_root=<fv2-plan wt> / handoff_branch=feature/fv2-plan / handoff_plan=features/fv2-plan/PLAN.md / handoff_report=features/fv2-plan/BUILD.md / handoff_prompt='Ship Hard Eng feature fv2-plan in ...: read features/fv2-plan/PLAN.md and features/fv2-plan/BUILD.md, then follow he-ship ...'; BUILD.md exists and lists S-1 (behavior, edge cases, green, all 3 review rounds, verify) plus the Whole feature verify + full gate families",
+    "verdict": "PASS"
+  },
+  "example 11": {
+    "commands": [
+      "plan_state.py validate --repo <wt> --plan features/fv2-plan/PLAN.md   (decisions already name `fallow`, research.json absent)",
+      "execution_evidence.py record-research --repo <wt> --plan features/fv2-plan/PLAN.md --scope external --source https://fallow.invalid/docs/audit --source-version 1.0.0 ...",
+      "plan_state.py validate --repo <wt> --plan features/fv2-plan/PLAN.md   (re-run)"
+    ],
+    "exit_before": 4,
+    "output_before": "result=invalid / error=external claim `fallow` in Material decisions has no research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research",
+    "exit_record_research": 0,
+    "output_record_research": "research-evidence: PASS plan=... scope=external (no network fetch performed -- record-research only stores the caller's self-reported source/verified/unknown text, confirmed by using a deliberately fake https://fallow.invalid/... url with zero delay/error)",
+    "exit_after": 0,
+    "output_after": "result=valid / plan_steps=6/6",
+    "verdict": "PASS"
+  },
+  "example 12": {
+    "commands": [
+      "edit hard-eng.gates.json: add families.clones = [node_modules/.bin/jscpd, --format, dart, --reporters, console, --baseline, .jscpd-baseline.json, --fail-on-new-clones, --ignore, **/node_modules/**, .]; echo '{\"duplicates\":[]}' > .jscpd-baseline.json (then a real jscpd --update-baseline run once shape was accepted)",
+      "python3 skills/deterministic-checks/scripts/slice_gate.py run --repo <wt> --plan features/fv2-plan/PLAN.md --slice S-1 ... (gate-manifest scan runs before the build-record checks)"
+    ],
+    "exit": 4,
+    "output": "result=fail / error=hard-eng.gates.json introduces `jscpd` without a research source row (https url + version in this plan's research.json); record it with execution_evidence.py record-research",
+    "after_research": "execution_evidence.py record-research ... --source https://jscpd.invalid/docs/cli --source-version 4.0.0 ...; the SAME slice_gate.py run call then proceeded past the jscpd-citation check (next failure was the unrelated, expected 'no edges record' from example 1, proving jscpd's citation gate had cleared)",
+    "verdict": "PASS"
+  },
+  "example 13": {
+    "commands": [
+      "ticket_state.py decompose --repo <planrepo primary> --expect-token <fv2-tix build-ready token> --epic-plan features/fv2-tix/PLAN.md  (stdin: 4 tickets T-1..T-4, T-3 depends_on=[T-1])",
+      "ticket_state.py claim --ticket T-1 --session-id worker-1   (status: todo -> claimed)",
+      "ticket_state.py checkpoint --ticket features/fv2-tix/tickets/T-1.md --session-id worker-1 --set status=building",
+      "ticket_state.py claim --next --session-id worker-2",
+      "ticket_state.py claim --next --session-id worker-3",
+      "ticket_state.py claim --next --session-id worker-4",
+      "ticket_state.py board --repo <planrepo primary> --epic-plan features/fv2-tix/PLAN.md"
+    ],
+    "exit": 0,
+    "output": "decompose: result=decomposed tickets=5 parallel_safe=3; claim T-1 -> claimed; checkpoint T-1 -> status=building; claim --next (worker-2) -> result=claimed ticket=T-2 (T-3 skipped, its only remaining lower-numbered rival); claim --next (worker-3) -> result=claimed ticket=T-4 (T-3 skipped again); claim --next (worker-4) -> result=none (only T-3 and T-int remain todo, both blocked -- T-3 by T-1 still building, T-int by all four work tickets); board confirms T-3 status=todo depends_on=T-1 throughout all three claim --next calls",
+    "verdict": "PASS"
+  }
+}

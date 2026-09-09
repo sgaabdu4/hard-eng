@@ -1,0 +1,13 @@
+{
+  "after": {
+    "stage": "after",
+    "exit": 0,
+    "output": "result=pass\nreceipt=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpn0uhj102/build/features/steps-demo/receipts/S-1.json\nartifact=sha256:8307e2da2070173ca24aeb3e4c35793adc97ad2a2ffab2d454cb536a9de6faef\napplicable=targeted\nchecks=1\nbounded-run: receipt exe=/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14@sha256:e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b cwd=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/tmpn0uhj102/build argv_count=3 argv_sha256=ea3a85087a7c518b7737f72090af264ed679bde1b68ecb7bc41118436a673262 exit=0\n",
+    "receipt_exists": true
+  },
+  "after_tree_change": {
+    "stage": "after-tree-change",
+    "exit": 4,
+    "output": "result=fail\nerror=slice S-1 edges record is stale: the tree changed after it was recorded\n"
+  }
+}

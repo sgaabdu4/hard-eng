@@ -1,0 +1,27 @@
+{
+  "evidence": [
+    "GitHub Actions run 31954698997 job 95183427564 failed setup-contract with BACKGROUND descendant terminated after command exit while check_end_to_end_pin_change created its Git fixture.",
+    "The prior resolved record .agents/learning/hermetic-git-fixture-processes.json established the reusable hermetic Git settings; the setup update contract now routes fixture Git calls through those settings and adds a hostile global-config control probe.",
+    "The bounded setup update regression passes, focused Pyright reports 0 errors for the update owner and regression, and the bounded setup contract check passes."
+  ],
+  "failure": "Ubuntu ARM CI stopped the setup update contract because its temporary fixture git commit left a background process in the bounded command group.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "hermetic-git-fixture-coverage",
+  "next_action": "none",
+  "occurrences": 2,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/setup-update-contract-check.py",
+    "violation_fixture": "scripts/setup-update-contract-check.py",
+    "valid_fixture": "scripts/setup-update-contract-check.py",
+    "proof": "scripts/setup-update-contract-check.py"
+  },
+  "root_cause": "The setup update Git fixture repeated the earlier managed-skill fixture defect: commands inherited host Git behavior and did not explicitly disable automatic maintenance.",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "recurrence"
+}

@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "PLAN.md was approved and building, while .git/hard-eng/current-direct.json still limited writes to five earlier paths; scripts/check-skill-contracts.py was denied until the stale receipt was invalidated."
+  ],
+  "failure": "An old Direct receipt remained active after the same work moved into an approved Feature plan and blocked a required CI wiring file.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "feature-plan-invalidates-direct-receipt",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/he/scripts/plan_state.py",
+    "proof": "skills/he-plan/scripts/check.py",
+    "valid_fixture": "skills/he-plan/scripts/check.py",
+    "violation_fixture": "skills/he-plan/scripts/check.py"
+  },
+  "root_cause": "Feature approval does not invalidate the older Direct receipt, and write enforcement applies any present Direct receipt before allowing the active Feature plan.",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "engineering-correction"
+}
