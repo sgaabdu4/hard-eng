@@ -14,6 +14,6 @@ Scope = frontmatter + `SKILL.md` + linked references + scripts/assets + `agents/
 | Dependencies | Referenced skills/tools/files exist in target environment; no unavailable or machine-specific prerequisites disguised as portable guidance. |
 | Migration | Review the whole package; classify keep/combine/discard by behavior, not file count. Preserve intent; remove stale commands + obsolete integration machinery. |
 
-Validation = native validator when available + metadata/link checks + relevant script/behavior proof. Generic validators may reject supported client extensions: verify host docs/runtime + report the limitation; do not strip requested fields or weaken validation. Substantial trigger change → matching + nearby nonmatching requests. Report untested behavior; structural success ≠ effective invocation.
+Validation = native validator + metadata/link checks + relevant script/behavior proof. Supported client field rejected → narrow schema/type fix at validator owner; retain unknown-field rejection. Substantial trigger change → matching + nearby nonmatching requests. Report untested behavior; structural success ≠ effective invocation.
 
 Policy sources: [Codex](https://developers.openai.com/codex/skills/) · [Claude](https://code.claude.com/docs/en/skills) · [Copilot](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference).
