@@ -1,6 +1,0 @@
-- | First paid or state-changing external/native attempt or retry | [Retry readiness](references/retry-readiness.md) |.
-- Gate efficiency = one execution per exact tree + actor + required seam.
-- rerun only after tree/environment/mechanism change or invalid receipt.
-- duplicate equivalent setup/build/gate = `FAIL`.
-- Compatible real-tool proof = interpreter/compiler/runner behavior.
-- Paid/native retry = [Retry readiness](references/retry-readiness.md) PASS first.

@@ -1,5 +1,29 @@
-[tool.mutmut]
-source_paths = ["skills/he/scripts", "skills/deterministic-checks/scripts"]
-pytest_add_cli_args_test_selection = ["tests/"]
-also_copy = ["AGENTS.md", "package.json", "hard-eng.gates.json", "setup.sh", ".github/workflows/", "agents/he-learn/", "scripts/", "skills/atomic-ui/references/", "skills/he-learn/", "skills/adversarial-review/", "skills/e2e/scripts/", "skills/he/references/", "skills/deterministic-checks/references/", "skills/he-build/", "skills/he-plan/", "skills/he-ship/", "skills/he/SKILL.md", "skills/deterministic-checks/SKILL.md"]
-do_not_mutate = ["skills/he/scripts/*_regression.py", "skills/deterministic-checks/scripts/*_regression_check.py", "skills/deterministic-checks/scripts/regression_fixture.py"]
+[project]
+name = "hard-eng"
+version = "0.1.0"
+description = "Repository-local engineering gates and agent integration"
+requires-python = ">=3.12"
+dependencies = ["pyyaml>=6.0.3"]
+
+[dependency-groups]
+dev = ["pytest>=9", "pytest-cov>=7", "types-pyyaml>=6.0.12"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = [".", ".hooks"]
+omit = ["tests/*"]
+branch = true
+
+[tool.pyrefly]
+preset = "strict"
+check-unannotated-defs = true
+search-path = [".hooks"]
+
+[tool.deptry]
+# These modules are installed together in .hooks and imported by the runner.
+known_first_party = ["gate_config", "reports", "project_setup", "agent_hooks", "update", "tool_setup"]
