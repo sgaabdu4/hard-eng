@@ -454,6 +454,8 @@ def prepare_reports(
         argument.split("=", 1)[0] == "--contract" for argument in command
     ):
         raise ValueError("Import Linter must run all configured contracts")
+    if scanner in {"performance-junit", "performance-dart"}:
+        reject_test_filters(command, directory, group.get("language"))
     for path in paths:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.unlink(missing_ok=True)

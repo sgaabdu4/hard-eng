@@ -9,6 +9,7 @@ import pytest
 import reports
 
 REPORTS = {
+    "lighthouse-ci": '[{"url":"http://localhost/","auditId":"largest-contentful-paint","name":"maxNumericValue","level":"error","expected":2500,"actual":1200,"passed":true}]',
     "deptry": "[]",
     "osv": '{"results":[{"source":{"path":"uv.lock","type":"lockfile"},"packages":[{"package":{"name":"example","version":"1","ecosystem":"PyPI"}}]}]}',
     "semgrep": '{"results":[],"errors":[],"skipped_rules":[],"paths":{"scanned":["src/a.py"]},"time":{"rules":["rule"],"targets":[{"path":"src/a.py","num_bytes":20}]}}',
@@ -20,6 +21,44 @@ REPORTS = {
     "jscpd": '{"duplicates":[],"statistics":{"formats":{"python":{"clones":0,"duplicatedLines":0,"duplicatedTokens":0,"newClones":0,"newDuplicatedLines":0,"percentage":0,"percentageTokens":0,"sources":1,"lines":10,"tokens":40}},"total":{"clones":0,"duplicatedLines":0,"duplicatedTokens":0,"newClones":0,"newDuplicatedLines":0,"percentage":0,"percentageTokens":0,"sources":1,"lines":10,"tokens":40}}}',
     "import-linter": "Analyzed 3 files, 2 dependencies.\nNo cycles KEPT\nContracts: 1 kept, 0 broken.\n",
 }
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        {"level": "warn"},
+        {"passed": False},
+        {"actual": None},
+        {"auditId": "color-contrast"},
+        {"url": ""},
+    ],
+)
+def test_lighthouse_requires_passing_performance_budget(
+    tmp_path: Path, replacement: dict[str, object]
+) -> None:
+    result = json.loads(REPORTS["lighthouse-ci"])
+    result[0].update(replacement)
+    path = tmp_path / "assertions.json"
+    path.write_text(json.dumps(result))
+    with pytest.raises(ValueError):
+        reports.validate_lighthouse(path)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "<testsuite/>",
+        "<testsuite><testcase><skipped/></testcase></testsuite>",
+        "<testsuite><testcase><failure/></testcase></testsuite>",
+    ],
+)
+def test_performance_junit_rejects_missing_or_failed_tests(
+    tmp_path: Path, content: str
+) -> None:
+    path = tmp_path / "performance.xml"
+    path.write_text(content)
+    with pytest.raises(ValueError):
+        reports.validate_performance_junit(path)
 
 
 @pytest.mark.parametrize("kind", list(REPORTS))

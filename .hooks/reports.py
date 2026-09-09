@@ -1,6 +1,7 @@
 """Validate native test, coverage and scanner reports."""
 
 import json
+import math
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -540,7 +541,61 @@ def validate_gitleaks(path: Path) -> None:
         raise ValueError("Gitleaks report is incomplete or malformed") from error
 
 
+def validate_performance_junit(path: Path) -> None:
+    if not completed_tests(path, "junit"):
+        raise ValueError("No performance tests ran")
+
+
+def validate_performance_dart(path: Path) -> None:
+    if not completed_tests(path, "dart-tests"):
+        raise ValueError("No performance tests ran")
+
+
+def validate_lighthouse(path: Path) -> None:
+    results = json.loads(path.read_text())
+    if not isinstance(results, list) or not results:
+        raise ValueError("Lighthouse requires nonempty assertions")
+    urls = set()
+    budgeted = set()
+    for result in results:
+        if not isinstance(result, dict) or not result.get("url"):
+            raise ValueError("Lighthouse assertion is missing its URL")
+        urls.add(result["url"])
+        if result.get("passed") is not True:
+            raise ValueError("Lighthouse assertion failed")
+        if (
+            result.get("level") == "error"
+            and result.get("name") in {"minScore", "maxNumericValue"}
+            and result.get("auditId")
+            in {
+                "categories",
+                "largest-contentful-paint",
+                "total-blocking-time",
+                "cumulative-layout-shift",
+                "first-contentful-paint",
+                "speed-index",
+                "resource-summary",
+            }
+            and (
+                result.get("auditId") != "categories"
+                or result.get("auditProperty") == "performance"
+            )
+            and all(
+                type(result.get(key)) in {int, float} and math.isfinite(result[key])
+                for key in ("actual", "expected")
+            )
+        ):
+            budgeted.add(result["url"])
+    if urls != budgeted:
+        raise ValueError(
+            "Every Lighthouse URL requires an error-level performance budget"
+        )
+
+
 SCANNERS = {
+    "lighthouse-ci": validate_lighthouse,
+    "performance-junit": validate_performance_junit,
+    "performance-dart": validate_performance_dart,
     "import-linter": validate_import_linter,
     "deptry": validate_deptry,
     "dart-decimate": validate_dart_decimate,

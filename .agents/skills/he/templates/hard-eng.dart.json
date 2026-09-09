@@ -3,6 +3,7 @@
   "packages": [{
     "name": "app", "path": ".", "language": "dart", "sources": ["lib"],
     "checks": [
+      {"name": "performance", "role": "performance", "command": ["dart", "test", "test/performance", "--reporter=json"], "report": {"type": "performance-dart", "path": "coverage/performance.jsonl", "stdout": true}},
       {"name": "format", "role": "format", "parallel": true, "command": ["dart", "format", "--output=none", "--set-exit-if-changed", "."]},
       {"name": "types-lint", "role": "types", "parallel": true, "command": ["dart", "analyze", "--fatal-infos", "."]},
       {"name": "tests", "role": "tests", "command": ["flutter", "test", "--no-pub", "--machine", "--coverage", "--coverage-path=coverage/lcov.info"], "report": {"type": "dart-tests", "tests": "coverage/tests.jsonl", "coverage": "coverage/lcov.info"}},
