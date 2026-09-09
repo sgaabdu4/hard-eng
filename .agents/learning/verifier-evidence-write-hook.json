@@ -1,0 +1,26 @@
+{
+  "evidence": [
+    "whole-feature verifier report for mutation-seam on 2026-09-03: enforcement_policy.pl write_decision refused Write on full-verify-before.json; evidence written via Bash instead; same workaround used by every S-2 and S-3 verifier run this session",
+    "2026-09-03: write_decision now lets features/<slug>/receipts/(full|S-n)-verify-(before|after).json through to the Direct receipt path; two cases in scripts/agent-hook-contract-check.py check_lifecycle"
+  ],
+  "failure": "the Write and Edit tools are blocked for features/<slug>/receipts/*.json, so every outside verifier had to write its before/after evidence through shell redirection",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "verifier-evidence-write-hook",
+  "next_action": "none",
+  "occurrences": 6,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/enforcement_policy.pl",
+    "violation_fixture": "scripts/agent-hook-contract-check.py",
+    "valid_fixture": "scripts/agent-hook-contract-check.py",
+    "proof": "scripts/agent-hook-contract-check.py"
+  },
+  "root_cause": "the policy has no lifecycle owner for verifier evidence files, while the verifier packet Rules require them at exactly that path",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "repeated-manual-waste"
+}

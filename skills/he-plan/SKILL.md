@@ -1,0 +1,102 @@
+---
+name: he-plan
+description: Produce and approve one lean living Feature Brief after he selects lifecycle work.
+---
+
+# Hard Eng Plan
+
+## Contract
+
+- Input = `he`-selected valid `PLAN.md` with `lifecycle_status=planning` + current feature-setup receipt.
+- Output = one Ready-to-build brief OR one material decision question.
+- Owner = accepted current state in `PLAN.md`; planning history + rejected alternatives stay out.
+- Production code/config mutation = forbidden.
+- Feature setup = planning prerequisite owned by `he` setup (checkout decision + worktree `write` + gate manifest + memory index → receipt PASS); full-gate runs = build-entry concerns → finish the brief + approval while recording exact build-entry debt.
+- Planning-time repair = setup-scoped only (worktree `repair` → rerun `write`, gate-migration); failed setup probe blocks `he-plan` until repaired; unrelated full-gate debt never blocks the brief.
+- Load [feature-brief.md](references/feature-brief.md) for workflow + template + field meaning.
+- Method = fixed numbered steps below; each leaves a machine-checked receipt via `plan_state.py record-step`; `approve` refuses until every step receipt exists, is current, and no decision is still `user-decision`.
+
+## Method
+
+| # | Step | Receipt (`record-step --step`) | Content |
+|---|---|---|---|
+| 1 | Code study | `code-study` | `owners` = repository files that own the change + `callers` + `answers` = `could_break` + `owner` + `existing_capability` (or `none`) + `external_contract` (or `none`); bound to HEAD, re-record after any commit |
+| 2 | Outside research | `research` (= `execution_evidence.py record-research`) | current primary sources for every external fact + verified/unknown lists |
+| 3 | Edge-case scan | `edge-scan` | one entry per axis: `actors`, `empty-error-retry`, `data-lifecycle`, `delivery-form`, `external-concurrency`, `accessibility`, `rollout-rollback`; `none` when the axis has no material hit |
+| 4 | Decision inventory + questions | `decisions` | every material decision `D-n` with `status` = `settled|user-decision|deferred|out-of-scope|blocked-external` + `settled_by` (evidence, research, or the user's reply) + `rejected` = alternatives considered + why not (open decision = the options offered); `question-me` runs until no `user-decision` remains |
+| 5 | Slice graph | `slices` | every vertical slice `S-n` with `depends_on`; numbered without gaps; no loop; `answers` = `thinnest_path` (why S-1 alone proves value) + `parallel` (slices that can run at once, or `none`) |
+| 6 | Closing question | `closing` | `plan_state.py probe-trackers` first (live `gh auth status`, Jira `myself`, Azure project GET; credentials from env or `.env`); offer only `available=yes` trackers + name the missing variable for the rest; `tickets` = `none|local|github|jira|azdo` + the user's `reply` + `answers` = `unknowns` (still unknown going into build, or `none`); asked in the same message as the Ready-to-build ask |
+
+```sh
+python3 <he-dir>/scripts/plan_state.py record-step --repo <repo> --plan <PLAN.md> --step <step> --payload-file <json|->
+python3 <he-dir>/scripts/plan_state.py probe-trackers --repo <repo> --plan <PLAN.md> [--write-env-example]
+```
+
+- Answer rule = every listed key required + nonempty + unknown keys refused + placeholder text (`tbd`, `todo`, `tba`, `?`) refused + bare `none`/`n/a` refused (`none: <why>` accepted); a receipt proves the step said something, never that it was right.
+- `validate`/`inspect` print `plan_steps=<done>/6` + `plan_steps_missing` + `plan_steps_open_decisions`; `ready_for_approval=yes` only when the brief and every step are complete.
+- After approval `inspect` prints the handoff block: `handoff_root`, `handoff_branch`, `handoff_plan`, `handoff_prompt` (single mode) or one `handoff_ticket_N` + prompt per claimable ticket; show it verbatim to the user as the last planning message.
+- Missing/stale root `PRODUCT.md` + product-truth change → load [product-md.md](references/product-md.md).
+
+- No serial planning stages, trace graph, exact path manifest, semantic-completeness prediction, or repeated plan challenge.
+- Research + `codebase-design` + `test-quality` = evidence specialists only when the brief needs them.
+- Every author-written `none`/`n/a` in the brief or a step receipt = `none: <few-word why>`; bare value → `ready_for_approval=no` + `approve` refuses naming the row.
+- Non-`n/a` `ux_reference` → design-forensics evidence first + `atomic-ui` PASS before reference creation/selection.
+- Generated/reference media = local lifecycle evidence + show in chat before Ready-to-build approval; product commit requires explicit product-asset acceptance.
+- External contract/current vendor fact → `research` PASS before acceptance.
+- Configured enforcement → `research.json` + `authorization.json` receipts required by `execution_evidence.py`; receipts = JSON, never another Feature Brief Markdown file.
+- Desired-state uncertainty → reference workflow `question-me` branch.
+
+## Brief Gate
+
+| Section | Ready evidence |
+|---|---|
+| Outcome | one observable user/system result |
+| Non-goals | explicit boundary |
+| Material decisions | accepted constraints + material delivery form/lifetime when applicable + grounded `ux_reference`/sources or `n/a: <why>` + unresolved material choice = none |
+| Acceptance examples | concrete Given/When/Then or equivalent examples |
+| Affected canonical areas | known owner surfaces; path precision optional |
+| Risk and rollback | `risk_level`, scoped `critical_overlay`, recovery route, living `deferred`/`blocked_on` rows |
+| Vertical slices | every slice `S-n = <behavior>; depends_on = none: <why>|S-a, S-b` + proof; numbered without gaps; no loop; S-1 = smallest end-to-end behavior |
+
+- Unknown implementation owner/file/test = discover during build + update brief if useful; non-`n/a` visual sources excluded.
+- Such discoveries never trigger replan/reapproval.
+- Decision visible but not yet phrasable → `deferred` row; decision waiting on user action → `blocked_on` row + `he` Continuity rule.
+- Neither row delays Ready-to-build unless it changes a frozen constraint.
+- New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted proposed-state design recorded in `ux_reference` + displayed in chat before Ready-to-build; unsettled → `question-me`.
+- Non-`n/a` reference = root `DESIGN.md` + actual production token/theme/component/layout owners verified through `atomic-ui` → record `ux_reference_sources = DESIGN.md + <repo-relative-owner>...`; contradiction/missing owner → `question-me`.
+- Before creating or showing any non-`n/a` proposed-state visual → inspect or reuse a valid design-forensics receipt for the relevant current product screen + affected user flow + verified production owners; genuinely new surface → inspect the nearest existing flow + record the gap; unavailable product/flow → `question-me` + no generic mock.
+- Design-forensics pass = route + current screen + affected flow + states + production owners; when delegation is user-authorized, one depth-1 sub-agent performs it read-only, otherwise the main agent performs the same pass; output = evidence only; main agent owns reference creation, UX decision + proof.
+- Valid receipt = sibling `<ux_reference>.visual-review.json` + canonical `e2e` receipt PASS + exact route/baseline/delivery/source hashes; unchanged bytes may be reused; memory/path/image existence alone = invalid.
+- Existing changed surface → exact running app route OR production component render + real before screenshot; planning-only static data may be placed on that exact app screen and must be labelled `static preview on current app screen`.
+- Existing surface → standalone HTML, invented combined screen, ImageGen page, unrelated route, or copied style imitation = forbidden.
+- Genuinely new surface only → standalone HTML/ImageGen concept allowed after nearest-flow inspection + explicit new-surface reason; hand-rolled style invention remains forbidden.
+- Each affected screen/state → one reviewed delivery screenshot; every delivery image appears in chat.
+- User requests visual change → update same preview + refresh browser + capture/display matching image; superseded visual cannot receive Ready-to-build approval.
+- Path-only, `file://`, or unopened localhost HTML = not delivered for design review.
+- `validate` emits `ux_reference_markdown` only for reviewed local image bytes ≥320x200 + matching production source hashes; bare URL or missing/failed sidecar = invalid.
+- New/changed surface → first vertical slice = smallest end-to-end accepted behavior through every required persistence/API/backend/UI owner + actual-media proof; a visual skeleton alone is invalid when the outcome is durable.
+- `risk_level=critical` only for payment/auth/security/privacy/destructive-data/irreversibility or a material unresolved safety uncertainty.
+- Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof; it does not expand the whole lifecycle.
+- Validator checks shape/state/fingerprint + canonical visual receipt + exact source/delivery digests + render Markdown.
+
+## Change Route
+
+| Finding | Route |
+|---|---|
+| owner/file/test/internal approach changes | living brief update → current owner continues |
+| accepted outcome/non-goal/material decision/acceptance changes | `he reopen --reason changed-outcome` |
+| material security/privacy/data-loss/irreversible contract changes | `he reopen --reason material-safety-contract` |
+| implementation contradicts accepted brief | implementation defect → fix + focused proof |
+
+- Reopen only the brief; unchanged accepted constraints need no repeated review.
+- Ready-to-build approval freezes outcome/material constraints, not implementation detail.
+- Protected actions follow `AGENTS.md`; exact task authorization continues without another approval.
+
+## Completion
+
+- `validate` PASS + `plan_steps=6/6` + no open `user-decision` + user's plain yes recorded via `plan_state.py approve --approval-reply` = standard approval; missing step = `approve` names it, record it, retry.
+- Selectable checkout + every slice enumerated at planning time → `ticket_state.py decompose --dry-run`; verdict printed in the Ready-to-build summary; default `next_action` = decompose only when ≥3 parallel-safe tickets AND real parallel capacity (fan-out request or multiple sessions); else sequential v1.
+- Explicit current-prompt autonomous directive = validate complete brief → use that directive as approval evidence → approve without another question.
+- Decision answer to an open question + pre-brief reply = remain planning.
+- Approval failure = remain planning + report exact validator issue.
+- Approval PASS = show the handoff block verbatim (root + branch + plan + prompt) + commentary checkpoint + same-turn route to `he-build`, unless user requested plan-only.

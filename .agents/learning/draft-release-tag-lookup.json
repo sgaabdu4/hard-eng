@@ -1,0 +1,22 @@
+{
+  "disposition_reason": "Hard Eng no longer publishes GitHub releases; the release workflow, draft lookup, and its contract test were deleted, so this failure cannot recur.",
+  "evidence": [
+    "Run 33440641291 job 99648652218 failed at the first releases/tags request; release 380059708 remained a valid draft; gh release view resolved its numeric ID and the by-ID response passed validate-tag and verify-draft."
+  ],
+  "failure": "GitHub Actions created an exact draft prerelease and uploaded both assets, then failed before publication because the workflow fetched the draft through the release-by-tag REST endpoint and received HTTP 404.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "draft-release-tag-lookup",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "none"
+  },
+  "root_cause": "The release workflow treated the published-release tag endpoint as draft-aware in both retry classification and prepublication verification. GitHub CLI can resolve drafts by tag and expose the numeric databaseId, while the exact live draft was readable through the release-by-ID endpoint.",
+  "schema_version": 1,
+  "status": "non-candidate",
+  "trigger": "engineering-correction"
+}

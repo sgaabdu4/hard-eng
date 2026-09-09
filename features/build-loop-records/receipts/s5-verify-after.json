@@ -1,0 +1,40 @@
+{
+  "cases": {
+    "scope_empty": {
+      "exit": 4,
+      "output": "result=invalid\nerror=scope omits a file changed since the approval base: owner.py\n"
+    },
+    "survivors_empty": {
+      "exit": 4,
+      "output": "result=invalid\nerror=totals.survived=1 but the ledger has 0 rows\n"
+    },
+    "deferred_no_consequence": {
+      "exit": 4,
+      "output": "result=invalid\nerror=survivor 1.consequence must be a nonempty string\n"
+    },
+    "runner_stryker": {
+      "exit": 4,
+      "output": "result=invalid\nerror=stryker cannot mutate owner.py; record one receipt per runner\n"
+    },
+    "totals_all_zero": {
+      "exit": 4,
+      "output": "result=invalid\nerror=a completed run mutates at least one thing; totals are all zero\n"
+    },
+    "base_payload": {
+      "exit": 0,
+      "output": "result=valid\nplan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/s5verify_2x73l3yo/build/features/steps-demo/PLAN.md\ntoken=sha256:ce5757eabc14f2df8bdbe65b580c995b421c7cc73bdd6c31ed67ab0c385c1c3b\nlifecycle_status=green\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-ship\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nmutation=current\nrecorded_mutation=mutmut\nmutation_scope=1\nmutation_survivors=1\n"
+    }
+  },
+  "record_mutation_exit": 0,
+  "after": {
+    "assert_green_exit": 0,
+    "assert_green_output": "result=valid\nplan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/s5verify_2x73l3yo/build/features/steps-demo/PLAN.md\ntoken=sha256:ce5757eabc14f2df8bdbe65b580c995b421c7cc73bdd6c31ed67ab0c385c1c3b\nlifecycle_status=green\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-ship\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nmutation=current\ngreen_artifact=sha256:1d2e1cdd49eae58a1b467f75163a456b3f5888a976e48d84f9538d068511c4d5\n",
+    "inspect_output": "result=valid\nplan=/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/s5verify_2x73l3yo/build/features/steps-demo/PLAN.md\ntoken=sha256:ce5757eabc14f2df8bdbe65b580c995b421c7cc73bdd6c31ed67ab0c385c1c3b\nlifecycle_status=green\napproval_status=approved\nbrief_fingerprint=sha256:35d1d40650cdb29f454cebaac26cacf6914b014f9fdfeec0c929a3343cb1b7d5\nroute_target=he-ship\nactive_slice=none\ncompleted_slices=S-1\nnext_action=Build the first vertical slice.\nmutation=current\n",
+    "inspect_mutation_line": "mutation=current"
+  },
+  "stale": {
+    "exit": 4,
+    "output": "result=invalid\nerror=green artifact drift; return to building\n",
+    "owner_path": "/private/var/folders/29/812phcdj2c16wcqytn7dttcc0000gn/T/s5verify_2x73l3yo/build/owner.py"
+  }
+}

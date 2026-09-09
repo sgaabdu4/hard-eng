@@ -1,0 +1,60 @@
+{
+  "fixtures": {
+    "planrepo": "throwaway git repo + bare origin under mktemp, wired with hard-eng.gates.json (families: targeted=python3 scripts/check.py, clones=jscpd), .githooks/pre-commit invoking project_gate.py phase commit, feature worktrees created by setup_state.py run for slugs fv2-plan and fv2-tix",
+    "dartrepo": "throwaway git repo with lib/a.dart + lib/b.dart (an old duplicate pair), jscpd baselined via --update-baseline before any push-gate run",
+    "tsrepo": "throwaway git repo with a trivial src/simple.ts on main; complex function added on branch feature-complex",
+    "pyrepo": "throwaway git repo with pkg/calc.py (add) + tests, pyproject.toml [tool.mutmut] source_paths=[\"pkg\"]; feature-mult branch adds multiply and later greet with a weak test"
+  },
+  "example 1": {
+    "state_before": "slice S-1 approved and lifecycle_status=building on fv2-plan; features/fv2-plan/receipts/ contains only authorization.json, plan-steps.json, research.json -- no build-steps.json, no S-1.json receipt",
+    "command_about_to_run": "slice_gate.py run --repo <fv2-plan worktree> --plan features/fv2-plan/PLAN.md --slice S-1 ... (edges record never written)"
+  },
+  "example 2": {
+    "state_before": "slice S-1 building, no edges record yet",
+    "payload_about_to_submit": {
+      "cases": [
+        {
+          "name": "edge without failure test",
+          "success_test": "check.py returns 0"
+        }
+      ]
+    }
+  },
+  "example 3": {
+    "state_before": "S-1 has edges+green recorded (build_steps=2/4); about to record 3 review rounds where round 3 still has an open finding R-3"
+  },
+  "example 4": {
+    "state_before": "S-1 has edges+green+review (all findings fixed) recorded, verify record already valid once; about to submit a second verify record whose fakes[].log points at features/fv2-plan/receipts/fakelog.txt containing an undeclared host line 'evil.example.com GET /secret'"
+  },
+  "example 5": {
+    "state_before": "dartrepo main has lib/a.dart + lib/b.dart baselined as an old clone pair in .jscpd-baseline.json (1 fingerprint); project_gate.py --family clones already ran once and PASSED on this state",
+    "about_to_add": "lib/c.dart + lib/d.dart, a second near-identical pair not in the baseline"
+  },
+  "example 6": {
+    "state_before": "tsrepo main has only src/simple.ts (trivial, low complexity); feature-complex branch about to add src/complex.ts with a 5-parameter, cyclomatic-complexity-10 nested-if function with zero test coverage"
+  },
+  "example 7": {
+    "state_before": "fresh throwaway pyrepo7: main has pkg/calc.py::add only; feature-mult branch changed pkg/calc.py adding multiply() and greet() (greet has a weak test that does not check its return value). mutation-ledger.json does not exist yet (no rows for add/multiply/greet). mutation_ledger.py's version-probe defect (calling the nonexistent `mutmut version` subcommand) has been fixed upstream to call `mutmut --version`.",
+    "fake_mutmut": "features/build-loop-records/receipts/full-verify-2-fake-mutmut.py -- answers --version with the distinctive string 'mutmut, version 9.9.9' (proves this executable, not the real one, was probed) and forwards every other argv (run <patterns...>) to the real .venv-mutation/bin/mutmut so actual mutants are generated and scored",
+    "visibility_fake": "MUTATION_LEDGER_GH=<tmp>/bin/gh (symlink to full-verify-2-fake-gh.py) + FAKE_GH_PRIVATE=true, set in the same command as every mutation_ledger.py invocation; PATH also had <tmp>/bin prepended"
+  },
+  "example 8": {
+    "state_before": "not driven; nightly scoring + gh pr create only run inside the .github/workflows/mutation-nightly.yml GitHub Actions job, which this offline verifier cannot execute"
+  },
+  "example 9": {
+    "state_before": "pyrepo mutation-ledger.json has current rows for pkg/calc.py::add, ::multiply, ::greet (hash matches current source); about to append a whitespace-only trailing-newline change to pkg/calc.py that does not touch any function body"
+  },
+  "example 10": {
+    "state_before": "fv2-plan slice S-1 slice-gate PASS, full slice-gate PASS, lifecycle_status still 'building' (not yet checkpointed to green); BUILD.md does not exist yet"
+  },
+  "example 11": {
+    "state_before": "fv2-plan Material decisions already draft-committed with the line \"TypeScript debt checked with `fallow` audit\"; features/fv2-plan/receipts/research.json does not exist (0 research rows) -- confirmed via plan_state.py validate before any record-research call"
+  },
+  "example 12": {
+    "state_before": "fv2-plan hard-eng.gates.json has only the 'targeted' family; jscpd is not yet named anywhere in families or research.json",
+    "about_to_add": "a 'clones' family entry (node_modules/.bin/jscpd ... --baseline .jscpd-baseline.json --fail-on-new-clones ...) plus a .jscpd-baseline.json file, with no prior research row for jscpd"
+  },
+  "example 13": {
+    "state_before": "fv2-tix epic decomposed into T-1..T-4 + T-int, board shows all five tickets status=todo, T-3 depends_on=T-1"
+  }
+}

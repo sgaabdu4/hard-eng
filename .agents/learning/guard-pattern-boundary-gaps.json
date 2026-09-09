@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Round 6, 8, and 10 checker reports; commits b25eb6b and 933b66b closed 20 findings across five pattern families"
+  ],
+  "failure": "Shell guard patterns repeatedly missed realistic deletion command shapes and wrongly blocked legitimate ones",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "guard-pattern-boundary-gaps",
+  "next_action": "Keep the discipline now in place: red probe case before every pattern edit, suite pin per closed shape, differential plus mutation verification after every guard change",
+  "occurrences": 3,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/agent-hook-contract-check.py",
+    "proof": "scripts/agent-hook-contract-check.py",
+    "valid_fixture": "scripts/agent-hook-contract-check.py",
+    "violation_fixture": "scripts/agent-hook-contract-check.py"
+  },
+  "root_cause": "Bounded regex list was edited with example-based checks only; no differential old-vs-new battery, no mutation testing of pins, no red-first probe corpus",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "protected-boundary-gap"
+}

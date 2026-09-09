@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Full-lifecycle probe 2026-08-25: challenge DBC6CE bound sha256:355eb89e... while approve computed sha256:2326a696...; user round-trip burned and ~20 diagnostic tool calls"
+  ],
+  "failure": "Ready-to-build code shown to the user could never authorize: the challenge was bound to a caller-supplied plan fingerprint that no longer matched the brief",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "approval-challenge-stale-fingerprint",
+  "next_action": "Fail fast at issue time, print brief_fingerprint from inspect, name failed consume checks; regression covers stale issue and post-issue drift",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/he/scripts/execution_evidence.py",
+    "proof": "skills/he/scripts/execution_evidence_regression.py",
+    "valid_fixture": "skills/he/scripts/execution_evidence_regression.py",
+    "violation_fixture": "skills/he/scripts/execution_evidence_regression.py"
+  },
+  "root_cause": "challenge-ready trusted the caller fingerprint with no issue-time check, inspect offered no sanctioned fingerprint source, and the consume error did not name the failed binding",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "engineering-correction"
+}

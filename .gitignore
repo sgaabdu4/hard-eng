@@ -1,12 +1,7 @@
 __pycache__/
 *.py[cod]
-.venv/
-.pytest_cache/
-.ruff_cache/
-.import_linter_cache/
-.coverage*
-coverage/
-.codebase-memory/
 node_modules/
-dist/
-build/
+.fallow/
+mutants/
+.venv-mutation/
+.pytest_cache/
