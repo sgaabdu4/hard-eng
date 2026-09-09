@@ -78,7 +78,12 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
             environment.get("PATH"), str
         ):
             raise TypeError("Native tool setup did not return an executable PATH")
-        os.environ["PATH"] = environment["PATH"] + os.pathsep + os.environ["PATH"]
+        tool_paths = [
+            path
+            for path in environment["PATH"].split(os.pathsep)
+            if Path(path).resolve().is_relative_to(storage.resolve())
+        ]
+        os.environ["PATH"] = os.pathsep.join([*tool_paths, os.environ["PATH"]])
     if "dart-decimate" in executables:
         subprocess.run(
             [

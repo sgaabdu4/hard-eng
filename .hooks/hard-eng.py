@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run native gate commands and handle the three agreed hook events."""
 
+import configparser
 import json
 import os
 import shlex
@@ -186,7 +187,7 @@ def test_arguments(command: list[str], directory: Path) -> list[str]:
     arguments = list(command)
     scripts_seen = set()
     while (
-        Path(arguments[0]).name == "npm"
+        Path(arguments[0]).name in {"npm", "pnpm", "yarn", "bun"}
         and len(arguments) > 2
         and arguments[1] in {"run", "run-script"}
     ):
@@ -213,6 +214,7 @@ def reject_test_filters(
             if Path(argument).name in {"pytest", "py.test"}:
                 arguments = arguments[index + 1 :]
                 arguments += shlex.split(os.environ.get("PYTEST_ADDOPTS", ""))
+                arguments += pytest_options(directory)
                 short_flags = ("-k", "-m")
                 break
         long_flags = {"--lf", "--last-failed", "--deselect", "--stepwise", "--sw"}
@@ -246,6 +248,58 @@ def reject_test_filters(
             raise ValueError(
                 f"Focused test selection is not allowed in the full-suite gate: {argument}"
             )
+
+
+def pytest_options(directory: Path) -> list[str]:
+    for root in (directory, *directory.parents):
+        for name in (
+            "pytest.toml",
+            ".pytest.toml",
+            "pytest.ini",
+            ".pytest.ini",
+            "pyproject.toml",
+            "tox.ini",
+            "setup.cfg",
+        ):
+            path = root / name
+            if path.is_file():
+                options = pytest_config(path)
+                if options is not None:
+                    return shlex.split(options) if isinstance(options, str) else options
+        if (root / ".git").exists():
+            break
+    return []
+
+
+def pytest_config(path: Path) -> str | list[str] | None:
+    if path.suffix == ".toml":
+        config = tomllib.loads(path.read_text())
+        if path.name == "pyproject.toml" and "pytest" not in config.get("tool", {}):
+            return None
+        section = (
+            config.get("tool", {}).get("pytest", {})
+            if path.name == "pyproject.toml"
+            else config.get("pytest", {})
+        )
+        section = section.get("ini_options", section)
+        value = section.get("addopts", [])
+    else:
+        parser = configparser.ConfigParser(interpolation=None)
+        parser.read(path)
+        section = "tool:pytest" if path.name == "setup.cfg" else "pytest"
+        if not parser.has_section(section) and path.name not in {
+            "pytest.ini",
+            ".pytest.ini",
+        }:
+            return None
+        value = parser.get(section, "addopts", fallback="")
+    if value is not None and not (
+        isinstance(value, str)
+        or isinstance(value, list)
+        and all(isinstance(arg, str) for arg in value)
+    ):
+        raise TypeError("pytest addopts must be text or a list of arguments")
+    return value
 
 
 def production_files(

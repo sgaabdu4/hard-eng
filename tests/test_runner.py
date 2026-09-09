@@ -252,13 +252,14 @@ def test_coverage_excludes_native_generated_and_vendor_attributes(
 def test_native_tool_path_preserves_ci_sdk_executables(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    sdk, scanner = tmp_path / "sdk", tmp_path / "scanner"
+    sdk, scanner = tmp_path / "sdk", tmp_path / "hard-eng-tools/scanner"
     for directory, executable in ((sdk, "uv"), (scanner, "gitleaks")):
-        directory.mkdir()
+        directory.mkdir(parents=True)
         path = directory / executable
         path.write_text("#!/bin/sh\nexit 0\n")
         path.chmod(0o755)
     monkeypatch.setenv("PATH", str(sdk))
+    monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
 
     def native_environment(
         *_args: object, **_kwargs: object
@@ -275,6 +276,23 @@ def test_native_tool_path_preserves_ci_sdk_executables(
     )
     assert shutil.which("uv") == str(sdk / "uv")
     assert shutil.which("gitleaks") == str(scanner / "gitleaks")
+
+
+@pytest.mark.parametrize(
+    "name,content",
+    [
+        ("pytest.ini", "[pytest]\naddopts = -k selected\n"),
+        ("pyproject.toml", '[tool.pytest.ini_options]\naddopts = "-m selected"\n'),
+        ("pytest.toml", '[pytest]\naddopts = ["--last-failed"]\n'),
+        ("setup.cfg", "[tool:pytest]\naddopts = --deselect=tests/test_app.py\n"),
+    ],
+)
+def test_pytest_configuration_cannot_filter_the_required_suite(
+    runner: ModuleType, tmp_path: Path, name: str, content: str
+) -> None:
+    (tmp_path / name).write_text(content)
+    with pytest.raises(ValueError, match="Focused test selection"):
+        runner.reject_test_filters(["pytest"], tmp_path, "python")
 
 
 @pytest.mark.parametrize("covered,expected", [(7, False), (6, True)])
