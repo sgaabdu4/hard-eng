@@ -303,6 +303,12 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         )
     for gate in group["checks"]:
         validate_gate(gate, directory, report_paths)
+    if group.get("language") == "javascript":
+        from project_setup import javascript_manager, package_script_arguments
+
+        javascript_manager(directory)
+        for gate in group["checks"]:
+            package_script_arguments(gate["command"], directory, pnpm_only=True)
     return len(group["checks"])
 
 

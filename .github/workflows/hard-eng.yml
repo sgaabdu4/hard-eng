@@ -22,6 +22,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: pnpm/setup@c9883cc79df532ad1a7b81bf9ab944ceb090d65c # v2.0.0
+        with:
+          version: latest
+          runtime: node@latest
+          install: false
       - name: Run required checks
         env:
           GH_TOKEN: ${{ github.token }}
@@ -30,13 +35,14 @@ jobs:
           MISE_DATA_DIR: ${{ runner.temp }}/hard-eng-tools/mise/data
           MISE_CACHE_DIR: ${{ runner.temp }}/hard-eng-tools/mise/cache
           MISE_STATE_DIR: ${{ runner.temp }}/hard-eng-tools/mise/state
+          PNPM_CONFIG_STORE_DIR: ${{ runner.temp }}/hard-eng-tools/pnpm/store
+          PNPM_CONFIG_CACHE_DIR: ${{ runner.temp }}/hard-eng-tools/pnpm/cache
           MISE_FETCH_REMOTE_VERSIONS_CACHE: 0s
           MISE_PREFER_OFFLINE: 'false'
           MISE_USE_VERSIONS_HOST: 'false'
           MISE_MINIMUM_RELEASE_AGE: 0s
         run: >-
-          npm exec --yes --ignore-scripts=false
-          --cache "$RUNNER_TEMP/hard-eng-tools/npm"
-          --package=@jdxcode/mise@latest -- mise --no-config exec
+          pnpm dlx --allow-build=@jdxcode/mise
+          --package=@jdxcode/mise@latest mise --no-config exec
           uv@latest python@3.12 node@latest
           -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"

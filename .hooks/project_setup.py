@@ -2,34 +2,72 @@
 
 import json
 import os
+import shlex
+import subprocess
 import tomllib
 from fnmatch import fnmatchcase
 from pathlib import Path
 
 from gate_config import GateConfig, Group, nonproduction_source, repository_files
 
+PACKAGE_MANAGERS = {"npm", "npx", "pnpm", "yarn", "yarnpkg", "bun", "bunx"}
+
+
+def package_script_arguments(
+    command: list[str], directory: Path, pnpm_only: bool = False
+) -> list[str]:
+    arguments = list(command)
+    scripts_seen = set()
+    while arguments:
+        executable = Path(arguments[0]).name
+        if pnpm_only and executable in PACKAGE_MANAGERS - {"pnpm"}:
+            raise ValueError(f"JavaScript checks must use pnpm, not: {executable}")
+        if (
+            executable not in {"npm", "pnpm", "yarn", "bun"}
+            or len(arguments) <= 2
+            or arguments[1] not in {"run", "run-script"}
+        ):
+            break
+        if arguments[2] in scripts_seen:
+            raise ValueError("Recursive package test script")
+        scripts_seen.add(arguments[2])
+        package = json.loads((directory / "package.json").read_text())
+        script = package.get("scripts", {}).get(arguments[2])
+        if not isinstance(script, str):
+            raise TypeError("Configured package test script is missing")
+        arguments = shlex.split(script) + arguments[3:]
+        if not arguments:
+            raise ValueError("Configured package test script is empty")
+    return arguments
+
 
 def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
     manifest = json.loads((directory / "package.json").read_text())
-    declared = manifest.get("packageManager", "").split("@", 1)[0]
-    locks = {
-        "npm": "package-lock.json",
-        "pnpm": "pnpm-lock.yaml",
-        "yarn": "yarn.lock",
-        "bun": "bun.lock",
-    }
-    found = [manager for manager, lock in locks.items() if (directory / lock).exists()]
-    if (directory / "bun.lockb").exists():
-        locks["bun"] = "bun.lockb"
-        if "bun" not in found:
-            found.append("bun")
-    if declared and declared not in locks:
-        raise ValueError(f"Unsupported package manager: {declared}")
-    if not declared and len(found) > 1:
+    declared = manifest.get("packageManager")
+    if declared is not None and (
+        not isinstance(declared, str) or not declared.startswith("pnpm@")
+    ):
         raise ValueError(
-            f"Ambiguous package manager in {directory}; preserve lockfiles and resolve the choice"
+            f"{directory}: pnpm is required; migrate packageManager to pnpm@VERSION"
         )
-    if not declared and not found and not (directory / ".git").exists():
+    legacy = [
+        name
+        for name in (
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "yarn.lock",
+            "bun.lock",
+            "bun.lockb",
+        )
+        if (directory / name).exists()
+    ]
+    if legacy:
+        raise ValueError(
+            f"{directory}: pnpm is required; migrate and remove legacy lockfiles: "
+            + ", ".join(legacy)
+        )
+    lockfile = "pnpm-lock.yaml"
+    if not (directory / lockfile).exists() and not (directory / ".git").exists():
         for parent in directory.parents:
             if (parent / "package.json").exists() and workspace_matches(
                 str(directory.relative_to(parent)),
@@ -38,22 +76,11 @@ def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
                 return javascript_manager(parent)
             if (parent / ".git").exists():
                 break
-    manager = declared or (found[0] if found else "npm")
-    install = {
-        "npm": ["npm", "ci", "--no-audit", "--no-fund"],
-        "pnpm": ["pnpm", "install", "--frozen-lockfile"],
-        "yarn": ["yarn", "install", "--immutable"],
-        "bun": ["bun", "install", "--frozen-lockfile"],
-    }[manager]
-    if manager == "yarn" and (
-        manifest.get("packageManager", "").startswith("yarn@1.")
-        or (
-            (directory / "yarn.lock").exists()
-            and "yarn lockfile v1" in (directory / "yarn.lock").read_text()[:100]
+    if not (directory / lockfile).exists():
+        raise ValueError(
+            f"{directory}: pnpm-lock.yaml is required; run pnpm install and review the migration"
         )
-    ):
-        install[-1] = "--frozen-lockfile"
-    return manager, install, locks[manager]
+    return "pnpm", ["pnpm", "install", "--frozen-lockfile"], lockfile
 
 
 def adapt_sources(root: Path, package: Group, files: list[Path]) -> None:
@@ -85,7 +112,10 @@ def adapt_sources(root: Path, package: Group, files: list[Path]) -> None:
                 if argument in previous:
                     command.extend(package["sources"])
                 elif argument.startswith("--cov="):
-                    command.extend(f"--cov={source}" for source in package["sources"])
+                    command.extend(
+                        f"--cov={Path(source).stem if source.endswith('.py') else source}"
+                        for source in package["sources"]
+                    )
                 else:
                     command.append(argument)
             gate["command"] = command
@@ -228,8 +258,6 @@ def adapt_package(directory: Path, package: Group) -> None:
                 f"--lockfile={lockfile}" if arg.startswith("--lockfile=") else arg
                 for arg in gate["command"]
             ]
-        elif language == "javascript" and gate["command"][:2] == ["npm", "run"]:
-            gate["command"][0] = manager
         elif language == "python" and gate["command"][0] in {
             "pytest",
             "deptry",
@@ -266,6 +294,40 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
     for package in packages:
         prefix.extend(["--with", package, "--upgrade-package", package])
     return [*prefix, *command]
+
+
+def python_interpreter(directory: Path, timeout: float) -> str:
+    from tool_setup import managed_command
+
+    manager, _, _ = dependency_command(directory, "python")
+    command = (
+        ["uv", "run", "--no-sync", "python", "-c", "import sys; print(sys.executable)"]
+        if manager == "uv"
+        else ["poetry", "env", "info", "--executable"]
+    )
+    environment = dict(os.environ)
+    environment.pop("VIRTUAL_ENV", None)
+    return subprocess.check_output(
+        managed_command(command),
+        cwd=directory,
+        text=True,
+        timeout=timeout,
+        env=environment,
+    ).strip()
+
+
+def javascript_files(directory: Path) -> list[str]:
+    extensions = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"}
+    files = [
+        str(path.relative_to(directory))
+        for path in repository_files(directory)
+        if path.suffix in extensions
+        and not {"node_modules", "vendor", ".hooks", ".agents"}
+        & set(path.relative_to(directory).parts)
+    ]
+    if not files:
+        raise ValueError("No JavaScript or TypeScript source files found")
+    return files
 
 
 def adapt_javascript(directory: Path, package: Group, manager: str) -> None:

@@ -188,7 +188,7 @@ def validate_osv_package(
             raise ValueError("OSV image package lacks layer origin details")
         index = origin["index"]
         if (
-            source["type"] not in {"artifact", "os"}
+            source["type"] not in {"artifact", "os", "lockfile"}
             or type(index) is not int
             or not 0 <= index < len(layers)
             or layers[index]["is_empty"]
@@ -245,7 +245,7 @@ def validate_osv(path: Path, *, image: bool = False) -> None:
                 count += 1
         if not count:
             raise ValueError("OSV report contains no scanned packages")
-        print(f"OSV scanned {count} packages; no reported vulnerabilities")
+        print(f"OSV validated {count} package records; no reported vulnerabilities")
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError("OSV report is incomplete or malformed") from error
 

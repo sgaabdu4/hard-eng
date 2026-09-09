@@ -8,7 +8,7 @@ from pathlib import Path
 
 import agent_hooks
 import pytest
-from gate_config import Group, affected_groups
+from gate_config import Group, JsonObject, affected_groups
 
 
 @pytest.fixture
@@ -33,7 +33,15 @@ def repository(tmp_path: Path) -> Path:
 
 
 def test_unchanged_session_does_not_claim_checks_passed(repository: Path) -> None:
-    assert "no code checks were run" in str(agent_hooks.completion(repository, {}))
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    payload: JsonObject = {"session_id": "known"}
+    agent_hooks.session_context(repository, payload)
+    assert "no code checks were run" in str(agent_hooks.completion(repository, payload))
+
+
+def test_missing_session_baseline_cannot_skip_verification(repository: Path) -> None:
+    result = agent_hooks.completion(repository, {"session_id": "missing"})
+    assert result["decision"] == "block"
 
 
 @pytest.mark.parametrize("status", [0, 1])

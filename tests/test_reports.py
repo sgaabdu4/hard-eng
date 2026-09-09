@@ -76,10 +76,13 @@ def test_findings_and_empty_analysis_fail(
         reports.SCANNERS[kind](path)
 
 
-def test_image_report_requires_valid_layer_origin(tmp_path: Path) -> None:
+@pytest.mark.parametrize("source_type", ["artifact", "lockfile"])
+def test_image_report_requires_valid_layer_origin(
+    tmp_path: Path, source_type: str
+) -> None:
     path = tmp_path / "report"
     report = json.loads(REPORTS["osv"])
-    report["results"][0]["source"]["type"] = "artifact"
+    report["results"][0]["source"]["type"] = source_type
     report["results"][0]["packages"][0]["package"]["image_origin_details"] = {
         "index": 0
     }

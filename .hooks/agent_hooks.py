@@ -92,7 +92,7 @@ def completion(root: Path, payload: JsonObject) -> JsonObject:
         changed += subprocess.check_output(
             ["git", "ls-files", "--others", "--exclude-standard"], cwd=root, text=True
         )
-        if not changed.strip():
+        if not changed.strip() and state is not None and state.exists():
             return {
                 "systemMessage": "No repository changes since this session's Git base; no code checks were run."
             }

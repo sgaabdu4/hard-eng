@@ -174,7 +174,7 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
             else ["context-mode", "codebase-memory-mcp"]
         )
         servers: JsonObject = {
-            plugin: {"command": "npx", "args": ["--yes", f"{plugin}@latest"]}
+            plugin: {"command": "pnpm", "args": ["dlx", f"{plugin}@latest"]}
             for plugin in plugins
         }
         changes[name] = (
@@ -184,12 +184,12 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
     current = target.read_text() if target.exists() else ""
     parsed = tomllib.loads(current)
     for plugin in ("context-mode", "codebase-memory-mcp"):
-        expected = {"command": "npx", "args": ["--yes", f"{plugin}@latest"]}
+        expected = {"command": "pnpm", "args": ["dlx", f"{plugin}@latest"]}
         existing_server = parsed.get("mcp_servers", {}).get(plugin)
         if existing_server is not None and existing_server != expected:
             raise ValueError(f"Conflicting Codex {plugin} settings")
         if existing_server is None:
-            current += f'\n[mcp_servers."{plugin}"]\ncommand = "npx"\nargs = ["--yes", "{plugin}@latest"]\n'
+            current += f'\n[mcp_servers."{plugin}"]\ncommand = "pnpm"\nargs = ["dlx", "{plugin}@latest"]\n'
     changes[".codex/config.toml"] = current
 
 
@@ -203,6 +203,13 @@ def configure_typing_checks(package: Group) -> None:
         for required in json.loads(template.read_text())["packages"][0]["checks"]:
             if required["role"] not in {"types", "annotations", "typing-style"}:
                 continue
+            required["command"] = [
+                value
+                for argument in required["command"]
+                for value in (
+                    package.get("sources", ["src"]) if argument == "src" else [argument]
+                )
+            ]
             matching = next(
                 (
                     gate
@@ -537,6 +544,8 @@ def configure_ignores(root: Path, changes: dict[str, str]) -> None:
         ".codebase-memory/",
         ".context-mode/",
         "coverage/",
+        ".coverage",
+        ".coverage.*",
     ):
         if pattern not in ignores.splitlines():
             ignores += (

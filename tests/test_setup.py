@@ -7,35 +7,43 @@ from types import ModuleType
 
 import pytest
 from gate_config import GateConfig
-from project_setup import import_configuration, javascript_manager
+from project_setup import import_configuration, javascript_files, javascript_manager
 
 
-@pytest.mark.parametrize(
-    "manager,lock,flag",
-    [
-        ("npm", "package-lock.json", "ci"),
-        ("pnpm", "pnpm-lock.yaml", "--frozen-lockfile"),
-        ("yarn", "yarn.lock", "--immutable"),
-        ("bun", "bun.lock", "--frozen-lockfile"),
-    ],
-)
-def test_existing_package_manager_is_selected(
-    tmp_path: Path, manager: str, lock: str, flag: str
-) -> None:
+def test_pnpm_package_manager_is_required(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        json.dumps({"packageManager": "pnpm@11.18.0"})
+    )
+    (tmp_path / "pnpm-lock.yaml").write_text("fixture\n")
+    selected, command, selected_lock = javascript_manager(tmp_path)
+    assert selected == "pnpm" and selected_lock == "pnpm-lock.yaml"
+    assert command == ["pnpm", "install", "--frozen-lockfile"]
+
+
+@pytest.mark.parametrize("manager", ["npm", "yarn", "bun"])
+def test_non_pnpm_declaration_requires_migration(tmp_path: Path, manager: str) -> None:
     (tmp_path / "package.json").write_text(
         json.dumps({"packageManager": manager + "@2.0.0"})
     )
-    (tmp_path / lock).write_text("fixture\n")
-    selected, command, selected_lock = javascript_manager(tmp_path)
-    assert selected == manager and selected_lock == lock
-    assert flag in command
+    with pytest.raises(ValueError, match="migrate packageManager"):
+        javascript_manager(tmp_path)
 
 
-def test_ambiguous_lockfiles_are_not_guessed(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "lockfile",
+    ["package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "bun.lock", "bun.lockb"],
+)
+def test_legacy_lockfile_requires_migration(tmp_path: Path, lockfile: str) -> None:
+    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@11.18.0"}')
+    (tmp_path / "pnpm-lock.yaml").touch()
+    (tmp_path / lockfile).touch()
+    with pytest.raises(ValueError, match=lockfile):
+        javascript_manager(tmp_path)
+
+
+def test_missing_pnpm_lockfile_requires_migration(tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text("{}")
-    for name in ("package-lock.json", "yarn.lock"):
-        (tmp_path / name).touch()
-    with pytest.raises(ValueError, match="Ambiguous"):
+    with pytest.raises(ValueError, match="pnpm-lock.yaml is required"):
         javascript_manager(tmp_path)
 
 
@@ -100,6 +108,14 @@ def test_standalone_python_does_not_invent_import_architecture(
     package = installer.gate_config(tmp_path)["packages"][0]
     assert package["sources"] == ["main.py"]
     assert "imports" not in {gate["role"] for gate in package["checks"]}
+    tests = next(gate for gate in package["checks"] if gate["role"] == "tests")
+    assert "--cov=main" in tests["command"]
+    installer.configure_typing_checks(package)
+    installer.configure_typing_checks(package)
+    annotations = [gate for gate in package["checks"] if gate["role"] == "annotations"]
+    assert len(annotations) == 1
+    assert "main.py" in annotations[0]["command"]
+    assert "src" not in annotations[0]["command"]
 
 
 def test_plain_dart_uses_native_coverage_tool(
@@ -143,7 +159,9 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
     (tmp_path / "pnpm-lock.yaml").touch()
     child = tmp_path / "packages/app"
     (child / "src").mkdir(parents=True)
-    (child / "package.json").write_text('{"name":"app"}')
+    (child / "package.json").write_text(
+        '{"name":"app","packageManager":"pnpm@11.18.0"}'
+    )
     (child / "src/main.ts").write_text("export const value = 1;\n")
     config = installer.gate_config(tmp_path)
     root, app = config["packages"]
@@ -161,9 +179,35 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
     assert tests["command"] == ["pnpm", "run", "test:coverage"]
 
 
+def test_javascript_file_scope_keeps_application_tests_and_declarations(
+    tmp_path: Path,
+) -> None:
+    repository(tmp_path)
+    (tmp_path / ".gitignore").write_text("coverage/\n")
+    for name in (
+        "src/app.ts",
+        "tests/app.test.ts",
+        "types/app.d.ts",
+        "coverage/generated.js",
+        "vendor/copied.js",
+        ".hooks/helper.js",
+        ".agents/generated.js",
+    ):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("export const value = 1;\n")
+    subprocess.run(["git", "add", "src/app.ts"], cwd=tmp_path, check=True)
+    assert javascript_files(tmp_path) == [
+        "src/app.ts",
+        "tests/app.test.ts",
+        "types/app.d.ts",
+    ]
+
+
 def repository(root: Path) -> None:
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     (root / "package.json").write_text('{"private":true}')
+    (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
 
 
 def snapshot(root: Path) -> dict[str, bytes]:
@@ -190,6 +234,16 @@ def test_install_preserves_project_and_repeats(
     assert not (tmp_path / "AGENTS.override.md").exists()
     assert (tmp_path / ".git/hooks/pre-push").stat().st_mode & 0o111
     assert (tmp_path / ".hooks/reports.py").is_file()
+    assert json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"][
+        "codebase-memory-mcp"
+    ] == {"command": "pnpm", "args": ["dlx", "codebase-memory-mcp@latest"]}
+    codex_mcp = (tmp_path / ".codex/config.toml").read_text()
+    assert 'command = "pnpm"' in codex_mcp
+    assert 'args = ["dlx", "context-mode@latest"]' in codex_mcp
+    workflow = (tmp_path / ".github/workflows/hard-eng.yml").read_text()
+    assert "pnpm/setup@c9883cc79df532ad1a7b81bf9ab944ceb090d65c" in workflow
+    assert "pnpm dlx --allow-build=@jdxcode/mise" in workflow
+    assert "npm exec" not in workflow
 
 
 @pytest.mark.parametrize(

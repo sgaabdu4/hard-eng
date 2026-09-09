@@ -69,6 +69,7 @@ def release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path
     old = commit(source, "source baseline")
     init(target)
     (target / "package.json").write_text('{"private":true}')
+    (target / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
     subprocess.run(
         ["python3", str(source / "setup.py"), str(target)],
         check=True,

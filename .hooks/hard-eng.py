@@ -184,24 +184,9 @@ def validate_dart_typing(
 
 
 def test_arguments(command: list[str], directory: Path) -> list[str]:
-    arguments = list(command)
-    scripts_seen = set()
-    while (
-        Path(arguments[0]).name in {"npm", "pnpm", "yarn", "bun"}
-        and len(arguments) > 2
-        and arguments[1] in {"run", "run-script"}
-    ):
-        if arguments[2] in scripts_seen:
-            raise ValueError("Recursive npm test script")
-        scripts_seen.add(arguments[2])
-        package = json.loads((directory / "package.json").read_text())
-        script = package.get("scripts", {}).get(arguments[2])
-        if not isinstance(script, str):
-            raise TypeError("Configured npm test script is missing")
-        arguments = shlex.split(script) + arguments[3:]
-        if not arguments:
-            raise ValueError("Configured npm test script is empty")
-    return arguments
+    from project_setup import package_script_arguments
+
+    return package_script_arguments(command, directory)
 
 
 def reject_test_filters(
@@ -349,11 +334,25 @@ def production_files(
 
 def prepare_command(group: Group, gate: Gate, timeout: float) -> list[str]:
     command = gate["command"]
+    if command[0] == "biome" and "." in command:
+        from project_setup import javascript_files
+
+        command = [
+            value
+            for argument in command
+            for value in (
+                javascript_files(ROOT / group["path"])
+                if argument == "."
+                else [argument]
+            )
+        ]
     if gate.get("role") == "types":
         directory = ROOT / group["path"]
         language = group.get("language")
         validate_typing(directory, language, group.get("sources", []))
         if language == "python":
+            from project_setup import python_interpreter
+
             native = (
                 "pyrefly.toml"
                 if (directory / "pyrefly.toml").exists()
@@ -374,6 +373,8 @@ def prepare_command(group: Group, gate: Gate, timeout: float) -> list[str]:
                 *command,
                 "--config",
                 native,
+                "--python-interpreter-path",
+                python_interpreter(directory, timeout),
                 *map(
                     str, sorted(production_files(directory, scope, include_tests=True))
                 ),

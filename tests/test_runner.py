@@ -11,7 +11,7 @@ from types import ModuleType
 
 import pytest
 import tool_setup
-from gate_config import validate_file_sizes
+from gate_config import Group, validate_file_sizes, validate_group
 
 
 def test_file_size_boundary_and_narrow_exceptions(
@@ -87,7 +87,7 @@ def test_missing_command_and_timeout_fail(runner: ModuleType) -> None:
 def test_tool_setup_failure_prevents_gate_execution(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, response: str
 ) -> None:
-    executable = tmp_path / "bin/npm"
+    executable = tmp_path / "bin/pnpm"
     executable.parent.mkdir()
     executable.write_text(f"#!{sys.executable}\n{response}\n")
     executable.chmod(0o755)
@@ -202,12 +202,14 @@ def test_suite_filters_are_rejected(
         runner.reject_test_filters(command, tmp_path, language)
 
 
-def test_nested_npm_filter_rejected(runner: ModuleType, tmp_path: Path) -> None:
+def test_nested_package_script_filter_rejected(
+    runner: ModuleType, tmp_path: Path
+) -> None:
     (tmp_path / "package.json").write_text(
         json.dumps(
             {
                 "scripts": {
-                    "test:coverage": "npm run unit",
+                    "test:coverage": "pnpm run unit",
                     "unit": "vitest --testNamePattern=x",
                 }
             }
@@ -215,8 +217,43 @@ def test_nested_npm_filter_rejected(runner: ModuleType, tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="Focused"):
         runner.reject_test_filters(
-            ["npm", "run", "test:coverage"], tmp_path, "javascript"
+            ["pnpm", "run", "test:coverage"], tmp_path, "javascript"
         )
+
+
+def test_gate_validation_rejects_javascript_package_manager_drift(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@11.18.0"}')
+    (tmp_path / "pnpm-lock.yaml").touch()
+    group: Group = {
+        "path": ".",
+        "language": "javascript",
+        "sources": ["src"],
+        "checks": [
+            {"name": "types", "role": "types", "command": ["tsc"]},
+            {"name": "typing", "role": "typing-style", "command": ["biome"]},
+        ],
+    }
+    assert validate_group(tmp_path, group, set()) == 2
+    (tmp_path / "package-lock.json").touch()
+    with pytest.raises(ValueError, match="legacy lockfiles"):
+        validate_group(tmp_path, group, set())
+    (tmp_path / "package-lock.json").unlink()
+    group["checks"][0]["command"] = ["npm", "run", "typecheck"]
+    with pytest.raises(ValueError, match="must use pnpm"):
+        validate_group(tmp_path, group, set())
+    (tmp_path / "package.json").write_text(
+        json.dumps(
+            {
+                "packageManager": "pnpm@11.18.0",
+                "scripts": {"typecheck": "pnpm run unit", "unit": "npx c8 test"},
+            }
+        )
+    )
+    group["checks"][0]["command"] = ["pnpm", "run", "typecheck"]
+    with pytest.raises(ValueError, match="must use pnpm, not: npx"):
+        validate_group(tmp_path, group, set())
 
 
 def test_source_files_include_unexecuted_modules(
@@ -249,7 +286,7 @@ def test_coverage_excludes_native_generated_and_vendor_attributes(
     assert len(runner.production_files(tmp_path, group, include_tests=True)) == 3
 
 
-def test_native_tool_path_preserves_ci_sdk_executables(
+def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sdk, scanner = tmp_path / "sdk", tmp_path / "hard-eng-tools/scanner"
@@ -260,12 +297,14 @@ def test_native_tool_path_preserves_ci_sdk_executables(
         path.chmod(0o755)
     monkeypatch.setenv("PATH", str(sdk))
     monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
+    captured: list[str] = []
 
     def native_environment(
-        *_args: object, **_kwargs: object
+        command: list[str], **_kwargs: object
     ) -> subprocess.CompletedProcess[str]:
+        captured.extend(command)
         return subprocess.CompletedProcess(
-            [], 0, json.dumps({"PATH": str(scanner)}), ""
+            command, 0, json.dumps({"PATH": str(scanner)}), ""
         )
 
     monkeypatch.setattr(subprocess, "run", native_environment)
@@ -276,6 +315,20 @@ def test_native_tool_path_preserves_ci_sdk_executables(
     )
     assert shutil.which("uv") == str(sdk / "uv")
     assert shutil.which("gitleaks") == str(scanner / "gitleaks")
+    assert captured[:2] == ["env", f"MISE_DATA_DIR={tmp_path}/hard-eng-tools/mise/data"]
+    assert f"PNPM_CONFIG_STORE_DIR={tmp_path}/hard-eng-tools/pnpm/store" in captured
+    assert f"PNPM_CONFIG_CACHE_DIR={tmp_path}/hard-eng-tools/pnpm/cache" in captured
+    assert captured[captured.index("pnpm") :] == [
+        "pnpm",
+        "dlx",
+        "--allow-build=@jdxcode/mise",
+        "--package=@jdxcode/mise@latest",
+        "mise",
+        "--no-config",
+        "env",
+        "--json",
+        "aqua:gitleaks/gitleaks@latest",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -293,6 +346,16 @@ def test_pytest_configuration_cannot_filter_the_required_suite(
     (tmp_path / name).write_text(content)
     with pytest.raises(ValueError, match="Focused test selection"):
         runner.reject_test_filters(["pytest"], tmp_path, "python")
+
+
+def test_pytest_empty_priority_config_does_not_inherit_unused_filters(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "pytest.ini").write_text("")
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.pytest.ini_options]\naddopts="-k selected"\n'
+    )
+    runner.reject_test_filters(["pytest"], tmp_path, "python")
 
 
 @pytest.mark.parametrize("covered,expected", [(7, False), (6, True)])
@@ -339,6 +402,7 @@ def test_pre_push_tests_committed_code(installer: ModuleType, tmp_path: Path) ->
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     subprocess.run(["git", "init", "--bare", "-q", str(receiver)], check=True)
     (root / "package.json").write_text('{"private":true}')
+    (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
     installer.install(root)
     for name in ("PRODUCT.md", "DESIGN.md"):
         (root / name).write_text((Path(installer.SOURCE) / name).read_text())
