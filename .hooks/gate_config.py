@@ -427,16 +427,24 @@ def validate_required_checks(root: Path, config: GateConfig) -> None:
             shared_roles.add("deployment")
     require_roles("shared", required, shared_roles)
     workspace_languages = dict(manifests)
+    by_directory = {
+        (
+            (root / group["path"]).resolve(),
+            group.get("language")
+            or workspace_languages.get(str(Path(group["path"])), ""),
+        ): group
+        for group in config["packages"]
+    }
     for group in config["packages"]:
         validate_package_services(
-            root, group, config, workspace_languages, shared_roles
+            root, group, by_directory, workspace_languages, shared_roles
         )
 
 
 def validate_package_services(
     root: Path,
     group: Group,
-    config: GateConfig,
+    by_directory: dict[tuple[Path, str], Group],
     manifests: dict[str, str],
     shared_roles: set[str],
 ) -> None:
@@ -446,18 +454,10 @@ def validate_package_services(
     language = group.get("language") or manifests.get(str(Path(group["path"])), "")
     roles = {gate.get("role", "") for gate in group["checks"]}
     inherited = set(shared_roles)
-    for parent in config["packages"]:
-        owner = (root / parent["path"]).resolve()
-        owner_language = parent.get("language") or manifests.get(
-            str(Path(parent["path"])), ""
-        )
-        if (
-            owner != directory
-            and owner_language == language
-            and directory.is_relative_to(owner)
-            and workspace_matches(
-                str(directory.relative_to(owner)), workspace_members(owner, language)
-            )
+    for owner in directory.parents:
+        parent = by_directory.get((owner, language))
+        if parent is not None and workspace_matches(
+            str(directory.relative_to(owner)), workspace_members(owner, language)
         ):
             inherited.update(gate.get("role", "") for gate in parent["checks"])
     require_roles(group["path"], {"lockfiles", "vulnerabilities"}, roles | inherited)
