@@ -1,38 +1,11 @@
 # Playwright walkthrough skill
 
-A strict recording, review, and delivery pipeline for polished product walkthroughs. Version 2.8 binds pointer actions to their target box, shows focused keyboard cues without an unrelated pointer, records input timing and geometry, starts recording only after the real page is ready, keeps one Playwright-owned pointer across drag gestures and navigations, rejects single-frame blanks and no-op scrolls, captures every journey checkpoint, scans every video frame, and blocks approval until the exact file completes an uninterrupted, no-seek 1x Chromium playback.
-
-## What version 2.8 fixes
-
-| Previous failure | Enforced fix |
-| --- | --- |
-| Blank or flashing opening frames | `page.screencast.start()` begins only after navigation, the product ready marker, fonts, visible images, and layout stability |
-| Pointer disappears or resets on a new document | The exact v17 ring is rendered through Playwright's persistent screencast overlay plane, not inside application DOM |
-| Pointer jumps too quickly to see | Real Playwright mouse events are paced over 900ms by default; `steps` adds intermediate events but does not control elapsed time |
-| Scroll jumps, “dances,” or does nothing | Wheel input is split across timed, eased increments; the reviewer rejects both non-smooth motion and a locator-targeted no-op |
-| Canvas or drag-and-drop journeys require custom Playwright code | A strict `drag` action uses locator-relative start/end points, paced real mouse input, a pressed persistent pointer, and a frame-level gesture audit |
-| Canvas clicks depend on stale screen coordinates | `click` and `hover` accept positions relative to a stable target box, never unexplained viewport coordinates |
-| Keyboard-driven canvas text requires one held step per character | `typeKeys` sends one paced string to the focused editor and produces one action sheet/checkpoint |
-| Playwright reapplies overlays one frame after a new document commits | `preserveVisualDuringReload` prewarms the exact checkpoint in Playwright's overlay plane and installs a one-shot, recorder-owned closed-shadow snapshot at document start, then removes both only after readiness |
-| A run passes despite a bad journey | Strict preflight requires a real ready selector, readable holds, smooth scroll timing, and a final assertion |
-| Contact sheets miss fast defects | The reviewer scans every frame, creates 2fps contact sheets, and creates a separate 10fps opening sheet |
-| Fast actions are hard to inspect | The reviewer creates a 10fps action sequence for every journey step |
-| A one-frame flash slips below the old duration threshold | Every near-white or near-black frame is rejected, and guarded navigation review includes the compositor handoff immediately before the recorded reload interval |
-| Pointer review is subjective | The run records its pointer trajectory; the reviewer checks the expected ring around that position in every frame |
-| A page changes while the pointer remains on another control | Pointer actions settle inside their target box; keyboard actions confirm focus, hide the pointer, display the key cue, and record the activation interval |
-| Input metadata can expose product details | Input evidence stores only geometry, timing, input type, cue state, and the key chord; it does not copy target text, selectors, field values, or URLs |
-| A visible moving pointer fails when overlay timing drifts under load | Moving-frame detection validates the ring along its recorded path corridor; stationary checks remain position-exact |
-| An agent can claim playback it did not perform | Every approval command plays the exact hash-matched file from zero through `ended` at 1x and records wall-clock, media-time, interruption, seek, rate-change, and browser evidence |
-| Playback proof can be copied to another file or journey | Every proof is bound to the video hash, dimensions, duration, and SHA-256 of the complete run report |
-| A report cannot prove which runner produced it | The run report records the skill package name/version; source review, derived review, and conversion manifest preserve that hash-bound provenance |
-| Intentional failed-auth/API flows look like unexplained HTTP warnings | `allowedHttpResponses` requires an exact status and URL substring, records the event as informational evidence, and leaves every unmatched 4xx/5xx visible |
-| An unreviewed file is converted | MP4 conversion requires a passed review whose SHA-256 matches the source WebM |
-| Conversion is treated as final | The generated MP4 must pass the same complete review again |
+Workflow owner for the bundled recorder, review and MP4 delivery scripts. Run commands from this package directory. Use the existing runtime when available; install missing dependencies only within task authorization.
 
 ## Setup
 
 ```bash
-cd skills/product-walkthrough-video
+cd /absolute/path/to/product-walkthrough-video
 npm ci --ignore-scripts
 npx playwright install chromium
 brew install ffmpeg
@@ -42,97 +15,119 @@ On Linux, install FFmpeg with `sudo apt-get install -y ffmpeg` instead of Homebr
 
 The skill is pinned to Playwright 1.62.1, which provides `page.screencast`, persistent user overlays, and exact recording start/stop control.
 
-## Complete workflow
+## Workflow
 
-### 1. Scaffold the repository journey
+## Non-negotiable recording method
+
+- Use Playwright 1.62+ `page.screencast.start()` after the opening state is fully ready.
+- Do not use browser-context `recordVideo` for the delivery recording. It starts during page creation and can capture blank or loading frames.
+- Use one pointer only: the exact 20px red v17 ring in Playwright's `page.screencast.showOverlay()` plane.
+- Do not put the persistent pointer in application DOM. Keep it in Playwright's user-overlay plane. The same-state reload guard may use the prior checkpoint as a transient document-start bitmap in a recorder-owned closed shadow root; it is not an interactive pointer and must be removed after readiness.
+- Move Playwright's real mouse with timed intermediate events. `mouse.move({ steps })` alone is not pacing.
+- Express canvas and drag-and-drop input with the strict locator-relative `drag` action. Do not replace the runner with custom Playwright code or use unexplained viewport coordinates.
+- Use `typeKeys` for one paced text string after a visible action focuses a canvas or keyboard-driven editor. Do not create one held step per character.
+- For a same-state full-document reload with an unavoidable bootstrap paint, `preserveVisualDuringReload` may bridge Playwright's post-commit overlay reattachment with the exact prior checkpoint from document start through readiness. Never use it for route changes or to conceal a meaningful product state; the zero-blank navigation audit includes the handoff immediately before navigation.
+- Use timed smooth wheel increments. Never use one large wheel event for a product walkthrough.
+- Use locators for final actions. Never click stale absolute coordinates.
+- Pointer activation = stable target box + pointer inside it + at least 150ms settled + visible click cue + activation timestamp.
+- `press` = stable target or explicit global scope + confirmed focus + visible key cue. Hide the pointer from cue start through activation so it cannot imply a click on another control.
+- Input evidence = type + target/focus boxes + pointer position + settle time + activation time + cue interval. Do not add raw target text, selectors, typed values, URLs, or account data to this evidence.
+- Use fixed waits only as presentation holds after a deterministic product-state wait or assertion.
+
+The scripts in this directory implement these rules. Do not replace them with an improvised recorder.
+
+## Required inputs
+
+Determine these by inspecting the repository and the user's request:
+
+- repository path;
+- existing command that starts the application;
+- local base URL;
+- product-specific selector that proves the opening page is ready;
+- intended start state;
+- complete user journey;
+- final state and assertion that proves success;
+- stable accessible locator for every interaction;
+- explicitly allowed API origins;
+- safe seeded fixture, storage state, or test account if authentication is required.
+
+Never record credentials, tokens, real customer data, private payloads, or an uncontrolled production session.
+
+## Phase 1: inspect the repository
+
+Read the package manifest, existing test and preview scripts, routes, application entry points, relevant feature code, existing Playwright tests, fixtures, and seed data.
+
+Build the journey from the real product:
+
+1. Start state.
+2. Meaningful user action.
+3. Visible product response.
+4. Gate or decision.
+5. Next action.
+6. Final assertion.
+
+Do not invent text, selectors, routes, or product behavior. Prefer role, label, placeholder, test-id, and exact text locators. Use stable CSS only for state markers that have no accessible locator.
+
+## Phase 2: scaffold and configure
 
 ```bash
 node scripts/scaffold.mjs \
   --repo /absolute/path/to/repository \
   --out /absolute/path/to/repository/.walkthrough \
   --base-url http://127.0.0.1:3000/ \
-  --name checkout-walkthrough
+  --name feature-walkthrough
 ```
 
-Keep `.walkthrough` ignored or uncommitted.
+Replace the generated examples. Keep:
 
-### 2. Author the real end-to-end flow
+- `strictE2E: true`;
+- a first `goto` step;
+- a product-specific `readySelector`;
+- `reducedMotion: "reduce"`;
+- `captureStepScreenshots: true`;
+- `blockExternalRequests: true`;
+- the Playwright screencast pointer;
+- `pointer.moveDurationMs` around 700–1000ms;
+- `scrollDurationMs` at or above 600ms;
+- `dragDurationMs` at or above 600ms for gesture journeys;
+- holds at or above `minReadableHoldMs`;
+- a final assertion within the final four steps;
+- a final pause.
 
-Replace the scaffold examples. A strict journey must have:
+Strict preflight must remain enabled. Do not weaken the gate to make a broken config run.
 
-1. A first `goto` step that defines the start state.
-2. A product-specific `readySelector`; `body`, `html`, and `*` are rejected.
-3. Stable accessible targets.
-4. Holds at or above `minReadableHoldMs`.
-5. Scroll durations of at least 600ms.
-6. A final assertion within the last four steps.
-7. A final pause that lets the viewer read the proven end state.
-8. `blockExternalRequests: true`; use a local fixture or proxy for unrelated third-party assets.
+## Phase 3: establish safety boundaries
 
-Example:
+Set:
 
-```json
-{
-  "action": "click",
-  "label": "Approve the product brief",
-  "target": {
-    "role": "button",
-    "name": "Approve brief",
-    "exact": true
-  },
-  "readySelector": "[data-stage='research'][data-status='ready']",
-  "holdMs": 1500
-}
-```
+- `allowedOrigins` to the local app and only the APIs needed by the journey;
+- `allowedHttpResponses` only for deliberate negative-path responses, matched by exact status and narrow URL substring;
+- `blockExternalRequests: true`;
+- `blockEventStreams: true` unless an event stream is part of the feature;
+- `acceptDownloads: false`;
+- an uncommitted `storageState` only when needed.
 
-Prefer role, label, placeholder, test-id, and exact text targets. CSS selectors are acceptable for stable product states. Never use generated class chains or coordinates as the target.
+Use a local safe proxy when an open-source demo references analytics, remote fonts, avatars, or other unrelated third-party assets. Replace those assets locally rather than allowlisting the internet.
 
-Supported actions:
+An expected failed-auth or validation request must remain visible in evidence. Configure its exact status and a narrow URL substring in `allowedHttpResponses`; the runner records it as `expected-http-response`. If Chromium emits a matching generic console error, allowlist that exact message separately. Never use broad status-only suppression.
 
-| Action | Purpose |
-| --- | --- |
-| `goto` | Open a path or URL |
-| `click` | Move visibly, check actionability, then click a locator |
-| `drag` | Drag between stable locator-relative points with paced real mouse input |
-| `type` | Focus, clear, and type with `pressSequentially` |
-| `typeKeys` | Type paced text into the currently focused keyboard-driven surface |
-| `select` | Select a native option |
-| `press` | Focus a stable target, hide the pointer, show the key cue, then press; use explicit global scope only for a real global shortcut |
-| `hover` | Move the real pointer over a locator |
-| `scroll` | Perform a timed smooth wheel scroll or reveal a target smoothly |
-| `waitForSelector` / `waitForText` / `waitForUrl` | Wait for explicit application readiness |
-| `assertVisible` / `assertText` / `assertUrl` | Prove journey outcomes |
-| `pause` | Presentation hold only |
-| `screenshot` | Capture an extra named state |
-| `reload` / `back` / `forward` | Exercise browser navigation |
+Use `textFromEnv` only for a browser-masked password field. A visible field must reject environment text unless `allowVisibleEnvText: true` explicitly marks known non-sensitive fixture copy. Never expose credentials, tokens, customer data, or private payloads in a visible field.
 
-Use `textFromEnv` for sensitive input only when the target is a browser-masked password field. Visible fields reject environment text unless `allowVisibleEnvText: true` explicitly marks known non-sensitive fixture copy. Never place credentials, tokens, customer data, or private payloads in the JSON file or a visible field.
+## Phase 4: start and verify the application
 
-Use `typeKeys` only when a canvas or keyboard-driven editor has already established focus through a visible preceding action. It sends paced real keyboard events as one reviewable step. Do not split a word into separate `press` steps, and do not use environment text unless `allowVisibleEnvText` marks known non-sensitive fixture copy.
+Use an existing repository command. Do not modify product code merely to make the recorder pass.
 
-Canvas clicks and drags must remain anchored to a stable locator. Use ratios when the surface scales:
+Confirm:
 
-```json
-{
-  "action": "drag",
-  "label": "Draw the selected shape",
-  "target": { "selector": "[data-testid='canvas']" },
-  "from": { "xRatio": 0.2, "yRatio": 0.35 },
-  "to": { "xRatio": 0.65, "yRatio": 0.7 },
-  "durationMs": 900,
-  "holdMs": 1400
-}
-```
+- the base URL returns successfully;
+- the configured ready selector becomes visible;
+- required local APIs respond;
+- the safe fixture is reset;
+- no unrelated process owns the expected port.
 
-`from`, `to`, and optional click `position` values may use `xRatio`/`yRatio` between 0 and 1 or non-negative `x`/`y` pixel offsets within the target. A drag may instead provide `toTarget` and omit `to` to use that target's center. Strict mode rejects drags shorter than 600ms, destinations outside stable target bounds, and motion that does not survive the frame-level gesture audit.
+## Phase 5: record a numbered attempt
 
-For a full-document reload that is expected to return to the same visual state, set `"preserveVisualDuringReload": true` on that reload step. The runner reuses the previous required checkpoint, prewarms it in Playwright's user-overlay plane, and installs the same bitmap through a one-shot document-start host with a closed shadow root. This narrow bridge exists because Playwright 1.62 reapplies user overlays only after the new document commits. It is recorder-owned, pointer-events-free, outside the application's component tree, and removed after the new document passes the complete readiness contract. The normal zero-blank, zero-pointer-loss audit includes the compositor handoff and real `page.reload()` interval. Never use this on a route change or to hide a meaningful loading state.
-
-### 3. Start the application
-
-Use the repository's existing development or preview command. Confirm the configured local URL and required API origins are available.
-
-### 4. Record
+Never overwrite a prior attempt.
 
 ```bash
 node scripts/run-walkthrough.mjs \
@@ -140,112 +135,153 @@ node scripts/run-walkthrough.mjs \
   --output-dir /absolute/path/to/repository/.walkthrough/artifacts-attempt-01
 ```
 
-The runner:
+The recorder must produce:
 
-- validates the complete journey before opening Chromium;
-- blocks unexpected origins, event streams, downloads, popups, dialogs, and file choosers;
-- waits for the real product readiness contract, fonts, visible image decoding, and stable layout;
-- installs the exact 20px red v17 ring in Playwright's screencast overlay plane;
-- starts `page.screencast` only after the opening page is fully rendered;
-- moves Playwright's real mouse on a readable timed path;
-- performs smooth wheel input rather than one abrupt scroll event;
-- performs locator-bound, visibly paced mouse drags without custom recorder code;
-- checks target actionability and position immediately before clicking;
-- records target boxes, pointer positions, focus state, settle time, cue interval, and activation time;
-- hides the pointer and shows a focus outline plus key cue for keyboard activation;
-- captures one PNG checkpoint after every step;
-- records step times and the pointer trajectory;
-- writes a WebM, run report, timeline, opening frame, and checkpoint directory.
-- records the exact skill package name and version in the hash-bound run report.
+- `<name>.webm`;
+- `<name>-run-report.json`;
+- `<name>-timeline.json`;
+- `<name>-opening.png`;
+- one PNG under `step-checkpoints/` for every step.
 
-Readiness waits are based on product state. Fixed waits are used only for viewer pacing.
+The complete run report must include the current skill package name and version. Source review, conversion, and derived MP4 review must preserve that provenance through the run-report hash.
 
-### 5. Run the independent review
+Reject the attempt immediately if the run report is not `passed`, contains an error finding, contains a sensitive finding, or lacks a checkpoint.
+
+## Phase 6: run the unapproved mechanical review
 
 ```bash
 node scripts/review-video.mjs \
-  --video /path/to/artifacts-attempt-01/checkout-walkthrough.webm \
-  --timeline /path/to/artifacts-attempt-01/checkout-walkthrough-run-report.json \
+  --video /path/to/artifacts-attempt-01/feature-walkthrough.webm \
+  --timeline /path/to/artifacts-attempt-01/feature-walkthrough-run-report.json \
   --output-dir /path/to/artifacts-attempt-01/video-review \
   --report /path/to/artifacts-attempt-01/video-review.json
 ```
 
-An otherwise clean first review exits with code `2` and `status: "review-required"`. It does not approve itself.
+Exit code `2` with `status: "review-required"` is expected only when all automated checks pass. Any `failed` status requires another attempt.
 
-Automated checks cover:
+The reviewer enforces:
 
-- full decode and frame count;
-- monotonic presentation timestamps;
-- dimensions, duration, and SHA-256, with codec and pixel format reported for inspection;
-- near-white and near-black frame runs;
-- flashing or layout changes during the opening hold;
-- long runs without page or pointer motion;
-- abrupt transitions;
-- the expected pointer around its recorded position in every frame;
-- each pointer activation inside its target box and each keyboard activation with matching focus and cue evidence;
-- full-navigation windows with no reload flash, intermediate paint, or pointer loss;
-- smooth scroll duration and motion across multiple frames, with no no-op scroll accepted as a gesture;
-- smooth drag duration, distance, active-frame motion, and pointer continuity;
-- failed steps and unreadable holds;
-- one existing checkpoint for every journey step;
-- a 10fps action sequence for every journey step.
+- complete decode;
+- monotonic frame timestamps;
+- no blank opening and no single near-white or near-black frame;
+- stable opening hold;
+- persistent pointer around its expected recorded trajectory;
+- pointer activation inside the recorded target box and focused keyboard activation with a complete key cue;
+- no visible pointer during keyboard activation and no page change with conflicting input evidence;
+- no blank, partially styled, or pointerless frame around reloads and full navigations;
+- gradual motion across each scroll window, with locator-targeted no-op scrolls rejected;
+- gradual locator-bound motion and pointer continuity across each drag window;
+- no failed journey step;
+- readable holds;
+- all checkpoints present;
+- a 10fps action sequence for every journey step;
+- source-video SHA-256.
 
-### 6. Inspect, reject, and rerun
+## Phase 7: inspect the complete attempt
 
-Watch the complete WebM at 1x from the first frame through the end. Inspect:
+Do all of the following:
 
-- `opening-review-10fps.jpg`;
-- every `contact-sheet-*.jpg`;
-- every image under `action-review-10fps/`;
-- every image under `step-checkpoints/`;
-- every state-changing action at full speed.
+1. Play the WebM from frame one to the end at 1x.
+2. Inspect `opening-review-10fps.jpg`.
+3. Inspect every `contact-sheet-*.jpg`.
+4. Inspect every image under `action-review-10fps/`.
+5. Inspect every image under `step-checkpoints/`.
+6. Compare every state-changing action with the visible response.
+7. Compare the visible journey with the requested start and end states.
 
-Reject the attempt if anything flashes, jumps, refreshes, resets, disappears, changes without cause, moves too quickly, pauses too briefly, or fails to prove the final outcome. Fix the config, timing, fixture, or application state and record to a new attempt directory. Do not overwrite or approve a flawed attempt.
+Specifically reject:
 
-### 7. Approve the clean WebM
+- any first-frame flash, refresh, blank paint, font swap, layout jump, or duplicated opening;
+- pointer disappearance, reset, style change, teleport, duplicate pointer, or inconsistent click cue;
+- abrupt, bouncing, reversed, repeated, or unexplained scrolling;
+- a click without a visible result;
+- a state change without an action or expected response;
+- a page change while the pointer remains on another control and the claimed keyboard focus or cue is missing;
+- a hidden future stage appearing before its gate;
+- a loader that vanishes too quickly to explain waiting;
+- a state that is held too briefly to read;
+- an unexplained overlay, popup, download, dialog, external page, or broken asset;
+- a final frame that does not prove the requested outcome.
 
-After the full review:
+Contact sheets do not replace sequential playback. A clean report does not override a visible defect.
+
+## Phase 8: repair and rerun
+
+When anything fails:
+
+1. Identify whether the cause is readiness, locator choice, pointer pacing, scroll timing, fixture state, application state, or journey design.
+2. Fix the root cause.
+3. Record to `artifacts-attempt-02` or the next unused number.
+4. Run the complete mechanical review again.
+5. Repeat the full visual review.
+
+Do not approve an attempt and then patch the video. The accepted video must come from a clean real journey.
+
+Continue until both the automated report and complete visual review are clean.
+
+## Phase 9: approve the accepted WebM
 
 ```bash
 node scripts/review-video.mjs \
-  --video /path/to/artifacts-attempt-02/checkout-walkthrough.webm \
-  --timeline /path/to/artifacts-attempt-02/checkout-walkthrough-run-report.json \
-  --output-dir /path/to/artifacts-attempt-02/video-review \
-  --report /path/to/artifacts-attempt-02/video-review.json \
+  --video /path/to/accepted/feature-walkthrough.webm \
+  --timeline /path/to/accepted/feature-walkthrough-run-report.json \
+  --output-dir /path/to/accepted/video-review \
+  --report /path/to/accepted/video-review.json \
   --approve \
   --reviewer "Copilot" \
-  --notes "Watched the complete video at 1x and inspected the opening sheet, all contact sheets, checkpoints, navigations, pointer continuity, and smooth scrolls."
+  --notes "Watched the complete video at 1x and inspected the opening sheet, all contact sheets, every checkpoint, all navigations, pointer continuity, and smooth scrolls."
 ```
 
-Approval fails without a reviewer and descriptive review notes.
+Approval must name the reviewer and state what was inspected. Never copy approval from another attempt.
 
-`--approve` also runs a mandatory local Chromium playback of that exact video. It starts at zero, locks playback to 1x, rejects pauses, buffering stalls, seeking, rate changes, non-monotonic media time, sampling gaps, and wall-clock drift, then requires the `ended` event with no media error. The report binds `playbackEvidence` to the video hash, dimensions, duration, and complete run-report hash. Expect the command to take approximately as long as the video.
+The approval command must itself play the exact current file from zero through `ended` in Chromium at 1x. It rejects pauses, buffering stalls, seeking, playback-rate changes, non-monotonic media time, sampling gaps, wall-clock drift, early completion, and media errors. It binds schema-v2 `playbackEvidence` to the video hash, dimensions, duration, and complete run-report SHA-256. The command therefore takes approximately the video's full duration; approval notes alone can never satisfy this gate.
 
-### 8. Convert only the approved source
+## Phase 10: convert through the hash gate
 
 ```bash
 node scripts/convert-mp4.mjs \
-  --input /path/to/artifacts-attempt-02/checkout-walkthrough.webm \
-  --review /path/to/artifacts-attempt-02/video-review.json \
-  --output ~/Downloads/checkout-walkthrough.mp4
+  --input /path/to/accepted/feature-walkthrough.webm \
+  --review /path/to/accepted/video-review.json \
+  --output /absolute/path/to/Downloads/feature-walkthrough.mp4
 ```
 
-The converter requires schema-v2 playback evidence bound to the approved WebM, rehashes the referenced complete run report, rejects any recorded error finding, verifies the source hash and metadata again, creates H.264/yuv420p with CRF 18, the slow preset, and `+faststart`, fully decodes the result, checks dimensions and duration, and writes a delivery manifest.
+Conversion must fail when the WebM hash differs from the approved report, the report lacks passed schema-v2 playback evidence, the proof does not match the video metadata, or the review is not bound to a complete run-report hash. The converter must produce a delivery manifest and validate H.264, yuv420p, dimensions, duration, full decode, and fast-start delivery settings.
 
-### 9. Review the final MP4
+## Phase 11: review the final MP4
 
-Use a distinct output directory and report. `--derived-from` binds the MP4 review to the approved source-WebM review:
+Run the reviewer against the MP4 with a distinct output directory and report. Bind it to the accepted source review:
 
 ```bash
 node scripts/review-video.mjs \
-  --video ~/Downloads/checkout-walkthrough.mp4 \
-  --timeline /path/to/artifacts-attempt-02/checkout-walkthrough-run-report.json \
-  --derived-from /path/to/artifacts-attempt-02/video-review.json \
-  --output-dir ~/Downloads/checkout-walkthrough-mp4-review \
-  --report ~/Downloads/checkout-walkthrough-mp4-review.json
+  --video /absolute/path/to/Downloads/feature-walkthrough.mp4 \
+  --timeline /path/to/accepted/feature-walkthrough-run-report.json \
+  --derived-from /path/to/accepted/video-review.json \
+  --output-dir /absolute/path/to/Downloads/feature-walkthrough-mp4-review \
+  --report /absolute/path/to/Downloads/feature-walkthrough-mp4-review.json
 ```
 
-Watch the MP4 itself at 1x, inspect its generated sheets, and rerun this command with `--approve`, `--reviewer`, and descriptive `--notes`. The MP4 approval performs a separate exact-file real-time playback; source evidence cannot be reused. The derived review also rejects a source approval created from a different run report. Open the delivered file through a fresh preview URL or cache-busting query so an older browser cache cannot masquerade as the current artifact.
+Repeat the complete 1x playback and visual inspection, inspect the MP4's generated sheets, then rerun with `--approve`, `--reviewer`, and descriptive `--notes`. This produces a separate MP4 playback proof; source evidence cannot be reused. The derived review must use the same complete run report as the source approval. Never reuse the WebM report path for the MP4.
+
+Open the delivered MP4 through a fresh preview URL with a new cache-busting query or a new browser panel. Verify the displayed duration and first frame match the current file.
+
+Do not rely on a previously opened preview.
+
+## Completion gate
+
+Do not report completion until all conditions are true:
+
+1. The accepted run report is `passed`.
+2. No runtime, safety, network, or sensitive-data error exists.
+3. Recording began after the real opening state was ready.
+4. Every frame decoded with monotonic timestamps.
+5. Opening stability, input evidence, pointer continuity, smooth-scroll, pacing, blank-frame, and journey checks passed.
+6. Every step checkpoint exists and was inspected.
+7. The complete WebM was watched and approved with passed, hash-bound real-time playback evidence.
+8. The MP4 was generated from the exact approved WebM hash.
+9. The complete MP4 was watched and approved separately with its own passed playback evidence.
+10. A fresh preview displays that exact MP4.
+
+If the user finds a defect, the prior approval is invalid. Reopen the task, reproduce the issue, improve the enforcement that missed it, and create a new attempt.
 
 ## Important configuration
 
@@ -284,32 +320,22 @@ Set `"pointer": false` to record undecorated evidence media with every other str
 
 `reducedMotion: "reduce"` asks the application to honor `prefers-reduced-motion`; it does not rewrite application behavior. Keep meaningful product loaders and state changes. Remove decorative motion in the application or a safe recording fixture rather than masking real behavior in post-production.
 
-## Delivery gate
 
-A walkthrough is complete only when:
+Supported actions:
 
-1. The run report is passed with no safety, runtime, or sensitive-data findings.
-2. Recording started after the real opening state became ready.
-3. Every frame decoded and timestamps are monotonic.
-4. The opening stability, pointer continuity, smooth-scroll, smooth-gesture, blank-frame, pacing, and scenario checks pass.
-5. Every step checkpoint exists and matches the intended journey.
-6. The full WebM was watched at 1x and its approval contains passed, hash-bound real-time playback evidence.
-7. The MP4 was generated from the exact approved WebM hash.
-8. The full MP4 was reviewed and separately approved with its own passed playback evidence.
-9. A fresh preview shows the current MP4, not a cached predecessor.
-
-If any condition fails, create another attempt. The skill must not describe a flawed video as complete.
-
-## Why this architecture
-
-- Playwright [`Screencast`](https://playwright.dev/docs/api/class-screencast) gives exact start/stop control and supports persistent non-intercepting overlays.
-- Playwright's own [video recording guidance](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/tools/skills/playwright-cli/references/video-recording.md) recommends a scripted hero journey, reasonable pauses, `pressSequentially`, chapters, and overlays.
-- [`mouse.move({ steps })`](https://playwright.dev/docs/api/class-mouse#mouse-move) sends intermediate events but does not add elapsed time, so the runner adds deliberate pacing.
-- [Actionability](https://playwright.dev/docs/actionability) supplies visibility, stability, event-reception, and enabled checks; the runner uses locator trial clicks rather than stale coordinates.
-- Playwright discourages [`networkidle`](https://playwright.dev/docs/api/class-page#page-goto-option-wait-until) as a readiness signal. The skill requires explicit product state instead.
-- [`reducedMotion`](https://playwright.dev/docs/api/class-browser#browser-new-context-option-reduced-motion), [`document.fonts.ready`](https://developer.mozilla.org/en-US/docs/Web/API/FontFaceSet/ready), and [`HTMLImageElement.decode()`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/decode) reduce avoidable layout changes before recording.
-- FFmpeg's [H.264 guidance](https://trac.ffmpeg.org/wiki/Encode/H.264) and [`+faststart`](https://ffmpeg.org/ffmpeg-formats.html) provide crisp, broadly playable delivery files.
-
-## Safety
-
-Use seeded fixtures and test accounts. Keep authentication state uncommitted. Traces are optional because they can contain DOM, headers, request bodies, response bodies, and other sensitive data. Never record a real customer session.
+| Action | Purpose |
+| --- | --- |
+| `goto` | Open a path or URL |
+| `click` | Move visibly, check actionability, then click a locator |
+| `drag` | Drag between stable locator-relative points with paced real mouse input |
+| `type` | Focus, clear, and type with `pressSequentially` |
+| `typeKeys` | Type paced text into the currently focused keyboard-driven surface |
+| `select` | Select a native option |
+| `press` | Focus a stable target, hide the pointer, show the key cue, then press; use explicit global scope only for a real global shortcut |
+| `hover` | Move the real pointer over a locator |
+| `scroll` | Perform a timed smooth wheel scroll or reveal a target smoothly |
+| `waitForSelector` / `waitForText` / `waitForUrl` | Wait for explicit application readiness |
+| `assertVisible` / `assertText` / `assertUrl` | Prove journey outcomes |
+| `pause` | Presentation hold only |
+| `screenshot` | Capture an extra named state |
+| `reload` / `back` / `forward` | Exercise browser navigation |
