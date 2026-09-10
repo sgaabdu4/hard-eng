@@ -28,4 +28,4 @@ search-path = [".hooks"]
 # Canonical skill submodules have their own dependency manifests and validation.
 extend_exclude = ['^\.agents/skill-sources/']
 # These modules are installed together in .hooks and imported by the runner.
-known_first_party = ["gate_config", "reports", "project_setup", "agent_hooks", "update", "tool_setup"]
+known_first_party = ["gate_config", "reports", "project_setup", "agent_hooks", "update", "tool_setup", "plans"]

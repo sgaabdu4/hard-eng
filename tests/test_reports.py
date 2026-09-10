@@ -87,6 +87,11 @@ def test_incomplete_report_fails(kind: str, content: str, tmp_path: Path) -> Non
         ("semgrep", '"skipped_rules":[]', '"skipped_rules":["rule"]'),
         ("semgrep", '"num_bytes":20', '"num_bytes":0'),
         ("semgrep", '"rules":["rule"]', '"rules":[]'),
+        (
+            "semgrep",
+            '"rules":["rule"]',
+            '"rules":["rule"],"fixpoint_timeouts":[{"error_type":"Fixpoint timeout"}]',
+        ),
         ("gitleaks", '"results":[]', '"results":[{"secret":"redacted"}]'),
         ("gitleaks", '"rules":[{"id":"rule"}]', '"rules":[]'),
         ("trivy", '"Failures":0', '"Failures":1'),

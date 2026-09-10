@@ -282,10 +282,26 @@ def validate_dart_boundaries(
         )
 
 
-def changed_packages(
-    root: Path, by_path: dict[str, Group], base: str
-) -> set[str] | None:
+def changed_files(root: Path, base: str) -> set[str] | None:
     try:
+        initial = (len(base) in {40, 64} and set(base) == {"0"}) or (
+            base == "HEAD"
+            and subprocess.run(
+                ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
+                cwd=root,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            ).returncode
+            == 1
+        )
+        if initial:
+            base = subprocess.check_output(
+                ["git", "hash-object", "-w", "-t", "tree", "--stdin"],
+                input="",
+                cwd=root,
+                text=True,
+            ).strip()
         changed = subprocess.check_output(
             ["git", "diff", "--name-only", "--no-renames", "-z", base, "--"],
             cwd=root,
@@ -299,7 +315,13 @@ def changed_packages(
     except subprocess.CalledProcessError:
         print("Impact base unavailable; checking all packages.")
         return None
-    names = set(changed.split("\0")) - {""}
+    return set(changed.split("\0")) - {""}
+
+
+def changed_packages(
+    root: Path, by_path: dict[str, Group], base: str
+) -> set[str] | None:
+    names = changed_files(root, base)
     if not names:
         return None
     selected: set[str] = set()
