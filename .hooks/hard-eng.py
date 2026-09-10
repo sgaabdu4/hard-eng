@@ -568,7 +568,9 @@ def run_gate(
     return failed
 
 
-def check(timeout: float = 600, base: str | None = None) -> int:
+def check(
+    timeout: float = 600, base: str | None = None, plan_stage: str | None = None
+) -> int:
     from gate_config import load_groups
     from update import check_scaffold_update
 
@@ -576,6 +578,9 @@ def check(timeout: float = 600, base: str | None = None) -> int:
         return 0
 
     groups = load_groups(ROOT, base)
+    from plans import validate_plans
+
+    validate_plans(ROOT, base, plan_stage)
     provision_tools(ROOT, groups, timeout)
     output_lock = threading.Lock()
 
@@ -661,13 +666,14 @@ def main() -> int:
     checks.add_argument(
         "--base", help="Git comparison base; unknown impact runs all checks"
     )
+    checks.add_argument("--plan-stage", choices=("Draft", "Ready", "Complete"))
     commands.add_parser("pre-push", help="Verify the actual commits being pushed")
     for event in ("session", "stop"):
         hook = commands.add_parser(event, help=f"Handle a native {event} hook")
         hook.add_argument("agent", choices=("claude", "codex", "copilot"))
     args = parser.parse_args()
     if args.command == "check":
-        return check(base=args.base)
+        return check(base=args.base, plan_stage=args.plan_stage)
     if args.command == "pre-push":
         return pre_push()
     return agent_hook(args.command, args.agent)

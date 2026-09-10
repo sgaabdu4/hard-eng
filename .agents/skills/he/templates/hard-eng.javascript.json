@@ -17,6 +17,6 @@
     {"name":"secrets-files","role":"secrets-files","parallel":true,"command":["gitleaks","dir",".","--redact=100","--no-banner","--report-format","sarif","--report-path","coverage/gitleaks-files.sarif"],"report":{"type":"gitleaks","path":"coverage/gitleaks-files.sarif"}},
     {"name":"secrets-history","role":"secrets-history","parallel":true,"command":["gitleaks","git",".","--redact=100","--no-banner","--log-opts=--all","--report-format","sarif","--report-path","coverage/gitleaks-history.sarif"],"report":{"type":"gitleaks","path":"coverage/gitleaks-history.sarif"}},
     {"name": "vulnerabilities", "role": "vulnerabilities", "parallel": true, "command": ["osv-scanner", "scan", "source", "--lockfile=pnpm-lock.yaml", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},
-    {"name": "security", "role": "security", "parallel": true, "command": ["semgrep", "scan", "--config", "p/javascript", "--config", "p/typescript", "--error", "--strict", "--time", "--json", "--output", "coverage/semgrep.json", "."], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}
+    {"name": "security", "role": "security", "parallel": true, "command": ["semgrep", "scan", "--config", "p/javascript", "--config", "p/typescript", "--jobs", "2", "--error", "--strict", "--time", "--json", "--output", "coverage/semgrep.json", "."], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}
   ]
 }

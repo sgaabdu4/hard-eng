@@ -390,9 +390,11 @@ def test_install_preserves_project_and_repeats(
     assert instructions.count("<!-- hard-eng:start -->") == 1
     assert instructions.endswith("# Project rules\n\nKeep this.\n")
     assert not (tmp_path / "DECISION.md").exists()
+    assert not (tmp_path / "PLAN.md").exists()
     assert not (tmp_path / "AGENTS.override.md").exists()
     assert (tmp_path / ".git/hooks/pre-push").stat().st_mode & 0o111
     assert (tmp_path / ".hooks/reports.py").is_file()
+    assert (tmp_path / ".hooks/plans.py").is_file()
     assert json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"][
         "codebase-memory-mcp"
     ] == {"command": "pnpm", "args": ["dlx", "codebase-memory-mcp@latest"]}

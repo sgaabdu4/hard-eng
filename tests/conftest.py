@@ -26,10 +26,38 @@ def installer() -> ModuleType:
 
 
 @pytest.fixture
-def runner(tmp_path: Path) -> ModuleType:
+def completed_plan() -> str:
+    return """# Fixture command behavior
+Status: Complete
+## Outcome + scope
+Verify fixture command exits; no product release.
+## Repository context
+The test creates commands in a temporary Git repository.
+## Decisions + authorization
+Blockers: None
+Authorized test fixture; no external actions.
+## Acceptance + steps
+- [x] Observe the configured command exit.
+## Baseline + execution
+Result: Passed
+Evidence: Controlled fixture baseline; not production acceptance.
+One test actor.
+## Risks + recovery
+N/A — temporary fixture is removed by pytest.
+## ux_reference
+N/A — fixture commands have no visual interface.
+## Verification
+Result: Passed
+Evidence: The test asserts the observed command exit; this is fixture data.
+"""
+
+
+@pytest.fixture
+def runner(tmp_path: Path, completed_plan: str) -> ModuleType:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     module = load_module("runner", SOURCE / ".hooks/hard-eng.py")
     module.__dict__["ROOT"] = tmp_path
+    (tmp_path / "PLAN.md").write_text(completed_plan)
     for name in ("PRODUCT.md", "DESIGN.md"):
         (tmp_path / name).write_text((SOURCE / name).read_text())
     return module

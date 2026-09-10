@@ -1,0 +1,12 @@
+# Repository-grounded UX reference
+
+Apply to visible changes, including small ones; scale the preview to the change.
+
+- Before creating a proposal = inspect the current screen + affected flow/states and actual token/theme/component/layout owners. Use `DESIGN.md` + production code; contradictions or unavailable relevant UI → expose the gap and resolve it before presenting a design as grounded. Genuinely new surface → inspect the nearest existing flow and explain the gap.
+- Existing surface = real before screenshot + proposed state rendered in the exact app route or production component. Preserve actual typography, tokens, spacing, layout and components outside the accepted change. Standalone style imitation, invented combined screens and ImageGen pages cannot substitute for an existing screen.
+- Preview = isolated prototype/worktree or existing preview facility; no production implementation while planning. Static fixture data is allowed on the actual screen when labelled `static preview on current app screen`. Use a screenshot for the smallest affected state; no mandatory video.
+- New surface = repository components/tokens first. A generated image or standalone concept is allowed after nearest-flow inspection and an explicit new-surface reason. Generated bitmap assets may be explored for existing surfaces, but judge them inside the real screen. Use the available image-generation capability when that is the needed artifact; do not invent a design system.
+- Review = use [E2E](../../e2e/SKILL.md) to inspect the rendered proposal on affected screens/devices and relevant loading, empty, error, disabled, focus and accessibility states. Display each proposed delivery image in the conversation; a file path, unopened URL or uninspected image is insufficient.
+- `ux_reference` = current route/component + before capture + proposed media + affected states/devices + `DESIGN.md` and repository owner paths + accepted direction. Link existing evidence; no sidecar receipts or hashes.
+- User changes direction → update the same preview, refresh, inspect and show the matching capture. Superseded media cannot establish readiness. Reuse previously inspected evidence only while it still represents the current UI and proposed change.
+- Build verification = compare the actual implementation against the accepted reference on the affected surface; repair unexplained visual differences. A planning preview does not prove the implemented journey works.

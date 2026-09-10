@@ -601,7 +601,9 @@ def test_stale_report_cannot_pass(
     assert runner.run_gate({"path": "."}, check, 5, threading.Lock()) is True
 
 
-def test_pre_push_tests_committed_code(installer: ModuleType, tmp_path: Path) -> None:
+def test_pre_push_tests_committed_code(
+    installer: ModuleType, tmp_path: Path, completed_plan: str
+) -> None:
     root, receiver = tmp_path / "project", tmp_path / "receiver"
     root.mkdir()
     subprocess.run(["git", "init", "-q", str(root)], check=True)
@@ -609,6 +611,7 @@ def test_pre_push_tests_committed_code(installer: ModuleType, tmp_path: Path) ->
     (root / "package.json").write_text('{"private":true}')
     (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
     installer.install(root)
+    (root / "PLAN.md").write_text(completed_plan)
     # This fixture tests the Git boundary with an ad-hoc command, not an app suite.
     (root / "package.json").unlink()
     for name in ("PRODUCT.md", "DESIGN.md"):
