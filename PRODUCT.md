@@ -16,7 +16,7 @@ Projects need consistent engineering instructions and checks that report real fa
 
 ## Product Purpose
 
-The current rebuild installs shared instructions, skills and configuration and runs declared checks. The implemented behavior and remaining requirements are tracked in [DECISION.md](DECISION.md). Automatic updates, complete scanner validation and native agent/CI enforcement remain unfinished.
+Install project-specific guidance and native checks, then validate evidence before work is treated as complete. [README](README.md) lists capabilities; [DECISION](DECISION.md#current-status) separates implemented behavior, observed proof and remaining acceptance.
 
 ## Brand Personality / Tone
 
@@ -24,7 +24,7 @@ Concise, plain-English output that distinguishes passing checks, failures and un
 
 ## Boundaries
 
-The required behavior and implementation status are recorded in [DECISION.md](DECISION.md). Installation preserves project-owned content. Updates affect the installed scaffold; checks must report real failures rather than claim unverified work is complete.
+Installation preserves project-owned content. Updates affect the installed scaffold; checks must report real failures rather than claim unverified work is complete. Skills guide judgment; automated checks do not certify product correctness, test quality or complete scanner coverage.
 
 The source repository is not a global agent directory. Installation, hook configuration and generated files belong to the target repository. Remote branch protection requires separate approval.
 
