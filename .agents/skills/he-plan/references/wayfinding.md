@@ -19,7 +19,7 @@ flowchart TD
 
 - Destination = observable spec, decision or change this map makes reachable; fixes ticket scope. Resolve material human choices through live answers, never an invented human response.
 - Map completion = direction clear. Implementation handoff → link map from [PLAN.md](../templates/PLAN.md), summarize scope + acceptance, apply HE Plan readiness + existing authorization.
-- Charting resolves no decision itself. Research tickets may run in parallel through authorized, available subagents using [Research](../../research/SKILL.md); otherwise work them directly within the session boundary. No mandatory branch, tracker installation or companion package.
+- Charting resolves no decision itself. Research tickets may run in parallel through authorized, available subagents using [Research](../../research/SKILL.md); otherwise leave them on the frontier for a work session. No mandatory branch, tracker installation or companion package.
 - Working a map = at most one decision ticket per session, except research. Load the map first, zoom into related tickets only as needed, and read applicable local skills named in Notes.
 - Select the user-named ticket or first frontier ticket in stable tracker/filename order. Claim before work; a blocked or already claimed ticket requires its blocker/claim resolved first.
 
@@ -58,6 +58,7 @@ Use the project's documented tracker when configured + authorized; native child 
 No authorized tracker → local Markdown:
 
 - Map = `features/<slug>/wayfinder/MAP.md` with the sections above; tickets = descriptively named sibling Markdown files. Directory supplies parentage, filename supplies identity.
+- Local discovery edits need an applicable Draft [PLAN.md](../templates/PLAN.md) under [plan checks](../../he/references/gates.md#plan-checks). Link the map; keep decision detail in tickets. If the user forbids that plan, report the gate blocker.
 - Claim = write worker identity in Assignee before work; never overwrite another claim. Serialize shared-file claims: Markdown has no atomic assignment guarantee.
 - Resolution = append `## Resolution` + mark closed. `Blocked by` is a body convention, without native dependency rendering or concurrency guarantees.
 
