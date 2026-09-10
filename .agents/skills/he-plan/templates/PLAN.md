@@ -18,18 +18,18 @@ Blockers: [TODO: None or concrete unresolved decisions]
 
 ## Acceptance + steps
 
-[TODO: Concrete success examples and steps; use checkboxes for unfinished requirements.]
+[TODO: Each material behavior and preserved constraint → intended check + expected result; explicit exclusions/blockers. Steps, dependencies and integration check where needed; use checkboxes for unfinished requirements.]
 
 ## Baseline + execution
 
 Result: Pending
 Evidence: [TODO: Starting check command and actual result, or existing log link]
 
-[TODO: Smallest builder/verifier arrangement. For Result: Exception, add Authorization: with the user's explicit exception and Impact: with the failed check's consequence.]
+[TODO: Smallest builder/verifier arrangement and first observable slice. For Result: Exception, add Authorization: with the user's explicit exception and Impact: with the failed check's consequence.]
 
 ## Risks + recovery
 
-[TODO: Material risks and recovery, or N/A — a change-specific reason.]
+[TODO: Material risks/recovery; consequential technical assumptions with evidence, discriminating check and consequence if false. Or N/A — a change-specific reason.]
 
 ## ux_reference
 
