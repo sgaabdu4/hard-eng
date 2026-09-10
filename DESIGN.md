@@ -6,12 +6,14 @@ Hard Eng has a command-line interface and no visual application.
 
 ## Components
 
-Visual Atomic Design does not apply. The interface consists of the installer, check runner and Git hook entry point.
+Visual Atomic Design does not apply. The interface consists of the installer, skills, check runner and native agent/Git/CI integrations.
 
 - `python3 /path/to/hard-eng/setup.py` installs into the current target Git repository. Replace the path with the scaffold checkout's location.
 - `python3 .hooks/hard-eng.py check` runs the installed project's configured checks.
 - `hard-eng.gates.json` holds native check commands and report locations.
+- `.agents/skills` owns conditional guidance; Code Review reuses Hard Eng's test-quality reference.
 - `.hooks/hard-eng.py` is the shared hook entry point; client files only register calls.
+- Session hooks request updates and MCP readiness; completion hooks invoke checks. Git pre-push verifies the pushed commits; CI runs its checks independently. Native host limitations are tracked in [DECISION](DECISION.md#current-status).
 - Output identifies passing checks, failures and incomplete verification in plain text. Failures retain a nonzero exit status.
 
 ## Do's and Don'ts

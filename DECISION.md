@@ -4,9 +4,17 @@
 
 - This repository is the Hard Eng scaffold, added to existing projects so they can follow Hard Eng principles. Setup affects only the target repository.
 - The scaffold checks for Hard Eng changes at agent session start and updates its installed setup under the update rules below.
-- The scaffold adds gates for the entire project based on its actual tech stack. Other flows will be defined later.
-- The scaffold sets up codebase-memory-mcp and the Context Mode plugin for Claude, Codex and Copilot using each client's supported project-local configuration.
+- The scaffold adds gates for the entire project based on its actual tech stack.
+- The scaffold configures Codebase Memory and Context Mode locally: Claude uses the Context Mode plugin; Codex and Copilot use MCP configuration.
 - The scaffold prepends its `AGENTS.md` instructions to the project's `AGENTS.md`. Updates replace the previously added Hard Eng section, keeping it once at the top and preserving the project's own content below.
+
+## Current status
+
+Latest local verification (2026-09-10): 17 source gates and 286 tests passed; a fresh Python consumer passed 18 gates. A native Codex session discovered the installed review/testing guidance and made real Context Mode and Codebase Memory calls matching that consumer through user-level servers. Project-local MCP loading and completion-hook behavior in this latest fixture remain unverified pending native trust approval; earlier host probes below are separate evidence.
+
+The Python formatter default now excludes bundled skill examples while retaining application checks. Native checks passed with that exclusion, rejected malformed application code and passed restored code. A fresh install received the corrected command; remote delivery of this change was not verified.
+
+Remaining acceptance: remote branch protection, broken-hook enforcement limits, scanner completeness, and consuming-project UI/device, service, container, update-lifecycle, test-selection and performance proof. Optional mutation runs require acceptance. Unchecked requirements below remain open; skill guidance and passing gates do not certify every behavior.
 
 ## Implementation checklist
 
@@ -16,7 +24,7 @@ Performance and required-check verification (2026-09-09): all 17 local gates pas
 
 - [x] Required baseline validation = fail before provisioning/execution when a language package loses an agreed baseline check, a supported manifest is omitted, or applicable shared security/workflow/shell/deployment checks are missing. Retain the explicit history-scan exception, legitimate native workspace dependency inheritance and project-owned commands. Importable Python packages, React dependencies and existing JavaScript build/integration/UI/generator scripts require matching gates. Removal regressions cover all three language baselines, shared secrets, conditional inputs and workspace boundaries. pnpm 11.18.0 confirmed that a package.json-only workspace installed only the root; adding pnpm-workspace.yaml included the child importer. Incomplete pnpm workspace declarations now fail instead of incorrectly removing child dependency checks.
 
-Current verification status (2026-09-09): the rebuild is published on `main` through [PR #45](https://github.com/sgaabdu4/hard-eng/pull/45), release commit `083643edcbfdea51f54dc425d6b50eeb7086cdd6`. Its [hosted gate run](https://github.com/sgaabdu4/hard-eng/actions/runs/34380162589) passed all 16 configured commands and 188 tests, with 78.83% line coverage (70% required) and 70.00% informational branch coverage; the job took 47 seconds. The local release checkout passed all gates in 20.13 seconds. The sandbox matrix below includes 564 passing gate commands across 60 packages. These results supersede historical pending statements below where the corresponding checkbox is now checked; they do not guarantee that scanners discover every defect.
+Published verification (2026-09-09): the rebuild was published on `main` through [PR #45](https://github.com/sgaabdu4/hard-eng/pull/45), release commit `083643edcbfdea51f54dc425d6b50eeb7086cdd6`. Its [hosted gate run](https://github.com/sgaabdu4/hard-eng/actions/runs/34380162589) passed all 16 configured commands and 188 tests, with 78.83% line coverage (70% required) and 70.00% informational branch coverage; the job took 47 seconds. The local release checkout passed all gates in 20.13 seconds. The sandbox matrix below includes 564 passing gate commands across 60 packages. These results establish that release, not every later local change or complete scanner coverage.
 
 The exact public `curl .../main/setup.sh | sh` command passed on a [fresh Ubuntu GitHub runner](https://github.com/sgaabdu4/hard-eng/actions/runs/34380214712) with no Hard Eng checkout and no GitHub account credentials supplied to installation or checks. The job supplied the documented tool prerequisites, created a separate Python consumer, installed the published scaffold, verified agent/pre-push hook files, and passed all 16 native gate commands. It then introduced an off-by-one error and asserted that the runner rejected the failing test. The complete job took 38 seconds. This one-off verification workflow ran from a temporary test branch, removed after success; it is not part of the installed scaffold.
 
@@ -30,7 +38,7 @@ Semgrep's native `python.boto3.security.hardcoded-token.hardcoded-token` rule in
 
 Unchecked boxes are agreed requirements awaiting implementation and meaningful verification. Tick a box only after its required behavior is implemented and verified in the applicable environment. Previous implementation claims and CI runs do not prove this rebuild works.
 
-The checklist is not 100% signed off. Remaining acceptance includes approved branch protection; reliable agent completion when a client ignores a broken hook; scanner completeness and the intermittent Semgrep timeout; and consuming-project evidence for Flutter/build/UI/generator/service integrations, custom test wrappers, optional mutation work and application-specific performance contracts. Existing configuration, instructions and unit tests for these areas do not substitute for those runtime proofs. No unrelated application was changed to manufacture that evidence, and optional mutation runs were not performed without acceptance. The checked manual-review items record this diff review, not automated certification of future work.
+The checked manual-review items record the reviewed diff, not automated certification of future work. Configuration and unit tests do not replace the runtime evidence listed under [Current status](#current-status).
 
 ### Temporary-project acceptance (2026-09-09)
 
