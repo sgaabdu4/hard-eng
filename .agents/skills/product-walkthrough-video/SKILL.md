@@ -1,23 +1,25 @@
 ---
 name: product-walkthrough-video
-description: Record polished Playwright walkthrough videos of a real web product, then review, approve, and convert them through a hash-bound pipeline. Use when the user asks for a product walkthrough video or e2e video proof of a UI journey.
+description: Record and check real web journeys for E2E proof or polished walkthrough delivery. Reuse one recorder and mechanical/visual review pipeline; add MP4 conversion and final review for video delivery.
 disable-model-invocation: true
 ---
 
 # Product Walkthrough Video
 
-Use the bundled recorder + review/conversion scripts; no replacement recorder. Polished recording changes pointer/pacing: raw rendering or timing claims need separate evidence.
+Use the bundled recorder + review scripts for both routes; conversion belongs to video delivery. Recording changes pacing and may bridge reload paint: raw rendering or timing claims need separate evidence. [E2E](../e2e/SKILL.md#prove-the-journey) owns product assertions, durable-state proof + defect reopening.
 
 Load matching README sections; commands run from this skill's directory.
 
 ```mermaid
 flowchart LR
   T{Task} -->|Missing runtime dependencies| S[README: Setup]
-  T -->|Record / repair / review / deliver| W[README: Workflow]
+  T -->|E2E recorded web proof| E[README: Recorded E2E]
+  T -->|Polished video requested| V[README: Video delivery]
   T -->|Configure actions / fixtures| C[README: Configuration]
   click S "README.md#setup"
-  click W "README.md#workflow"
+  click E "README.md#recorded-e2e"
+  click V "README.md#video-delivery"
   click C "README.md#important-configuration"
 ```
 
-Completion = README's completion gate on the exact delivered MP4. A user-reported defect reopens the journey + enforcement that missed it.
+Completion = selected route's [completion gate](README.md#completion-gate) on the exact reviewed artifact. Mechanical success without actual visual review remains incomplete.

@@ -1,6 +1,14 @@
 {
   "version": 1,
   "scan_git_history": false,
+  "shipping": {
+    "base": "main",
+    "checks": ["hard-eng"],
+    "ui_paths": [],
+    "ci_seconds": 180,
+    "pre_push_seconds": 180,
+    "delivery": []
+  },
   "packages": [{
     "name": "hard-eng", "path": ".", "language": "python", "sources": ["setup.py", ".hooks"],
     "checks": [

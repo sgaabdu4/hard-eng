@@ -530,7 +530,17 @@ def run_gate(
             if scanner in SCANNER_LOGS:
                 SCANNER_LOGS[scanner](log)
         if result.returncode == 0 and scanner and report_path is not None:
-            SCANNERS[scanner](report_path)
+            if (
+                scanner == "osv"
+                and "--allow-no-lockfiles" in command
+                and [arg for arg in command if arg.startswith("--lockfile")]
+                == ["--lockfile=pnpm-lock.yaml"]
+            ):
+                from reports import validate_osv
+
+                validate_osv(report_path, empty_pnpm=directory)
+            else:
+                SCANNERS[scanner](report_path)
         from reports import completed_tests, line_coverage
 
         if (
@@ -612,41 +622,9 @@ def check(
 
 
 def pre_push() -> int:
-    for line in sys.stdin:
-        fields = line.split()
-        if len(fields) != 4:
-            raise ValueError("Invalid pre-push input")
-        revision = fields[1]
-        if set(revision) == {"0"}:
-            continue
-        with tempfile.TemporaryDirectory(prefix="hard-eng-push-") as temporary:
-            checkout = Path(temporary) / "project"
-            subprocess.run(
-                ["git", "worktree", "add", "--detach", str(checkout), revision],
-                cwd=ROOT,
-                check=True,
-            )
-            try:
-                result = subprocess.run(
-                    [
-                        sys.executable,
-                        str(checkout / ".hooks/hard-eng.py"),
-                        "check",
-                        "--base",
-                        fields[3],
-                    ],
-                    cwd=checkout,
-                    check=False,
-                )
-                if result.returncode:
-                    return result.returncode
-            finally:
-                subprocess.run(
-                    ["git", "worktree", "remove", "--force", str(checkout)],
-                    cwd=ROOT,
-                    check=True,
-                )
-    return 0
+    from ship_actions import pre_push as verify_push
+
+    return verify_push(ROOT)
 
 
 def agent_hook(event: str, agent: str) -> int:
@@ -668,7 +646,17 @@ def main() -> int:
     )
     checks.add_argument("--plan-stage", choices=("Draft", "Ready", "Complete"))
     commands.add_parser("pre-push", help="Verify the actual commits being pushed")
-    for event in ("session", "stop"):
+    shipping = commands.add_parser(
+        "ship", help="Verify PR delivery or perform guarded shipping actions"
+    )
+    shipping.add_argument("--plan", required=True)
+    shipping.add_argument("--pr", required=True)
+    shipping.add_argument(
+        "--stage", choices=("ready", "merge", "delivered", "cleanup"), default="ready"
+    )
+    shipping.add_argument("--worktree", help="Task worktree in the same repository")
+    shipping.add_argument("--merge-method", choices=("merge", "squash", "rebase"))
+    for event in ("session", "prompt", "tool", "failure", "stop"):
         hook = commands.add_parser(event, help=f"Handle a native {event} hook")
         hook.add_argument("agent", choices=("claude", "codex", "copilot"))
     args = parser.parse_args()
@@ -676,6 +664,12 @@ def main() -> int:
         return check(base=args.base, plan_stage=args.plan_stage)
     if args.command == "pre-push":
         return pre_push()
+    if args.command == "ship":
+        from ship_actions import run
+
+        return run(
+            ROOT, args.plan, args.pr, args.stage, args.worktree, args.merge_method
+        )
     return agent_hook(args.command, args.agent)
 
 
