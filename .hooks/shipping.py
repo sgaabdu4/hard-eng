@@ -16,10 +16,7 @@ from urllib.parse import urlparse
 
 from gate_config import JsonValue
 
-
-class Delivery(TypedDict):
-    name: str
-    command: list[str]
+Delivery = TypedDict("Delivery", {"name": str, "command": list[str]})
 
 
 ShippingPolicy = TypedDict(
@@ -37,13 +34,12 @@ ShippingPolicy = TypedDict(
 
 @dataclass(frozen=True)
 class Shipment:
-    """The identity proven by :func:`verify`, for later merge and cleanup."""
-
     root: Path
     plan: Path
     pr_url: str
     repository: str
     remote: str
+    remote_url: str
     branch: str
     head_sha: str
     base: str
@@ -52,7 +48,7 @@ class Shipment:
 
 
 class ShippingError(ValueError):
-    """A shipping prerequisite or provider response failed closed."""
+    pass
 
 
 _CONFIG_KEYS = {
@@ -98,25 +94,14 @@ class _PullRequest:
     merged_at: str | None
     merge_commit_sha: str | None
 
-    def fingerprint(self) -> tuple[str, ...]:
-        return (
-            self.state,
-            str(self.draft),
-            self.head_ref,
-            self.head_sha,
-            self.head_repository,
-            self.base_ref,
-            self.base_repository,
-            self.body,
-            str(self.mergeable),
-            self.mergeable_state or "",
-            str(self.merged),
-            self.merged_at or "",
-            self.merge_commit_sha or "",
-        )
 
-
-def _run(root: Path, executable: str, args: tuple[str, ...], timeout: float) -> str:
+def _run(
+    root: Path,
+    executable: str,
+    args: tuple[str, ...],
+    timeout: float,
+    env: dict[str, str] | None = None,
+) -> str:
     try:
         result = subprocess.run(
             [executable, *args],
@@ -124,6 +109,7 @@ def _run(root: Path, executable: str, args: tuple[str, ...], timeout: float) -> 
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
@@ -134,14 +120,11 @@ def _run(root: Path, executable: str, args: tuple[str, ...], timeout: float) -> 
 
 
 def git(root: Path, *args: str) -> str:
-    """Run a bounded native Git read and return stdout."""
-
-    return _run(root, "git", args, _GIT_TIMEOUT)
+    env = os.environ | {"PYTHONDONTWRITEBYTECODE": "1"}
+    return _run(root, "git", args, _GIT_TIMEOUT, env=env)
 
 
 def gh(root: Path, *args: str) -> str:
-    """Run a bounded native GitHub CLI read and return stdout."""
-
     return _run(root, "gh", args, _GH_TIMEOUT)
 
 
@@ -222,38 +205,30 @@ def _branch(value: str, description: str) -> str:
 def _number(value: JsonValue, description: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ShippingError(f"{description} must be a positive number")
-    number = float(value)
+    try:
+        number = float(value)
+    except OverflowError as error:
+        raise ShippingError(f"{description} must be a positive number") from error
     if not math.isfinite(number) or number <= 0:
         raise ShippingError(f"{description} must be a positive number")
     return number
 
 
-def _body(data: dict[str, JsonValue]) -> str:
-    value = data.get("body")
-    if value is None:
-        return ""
-    if not isinstance(value, str):
-        raise ShippingError("PR body is invalid")
-    return value
+def _strings(value: JsonValue, description: str, required: bool = False) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or (required and not value)
+        or any(not isinstance(item, str) or not item.strip() for item in value)
+    ):
+        raise ShippingError(f"{description} must be strings")
+    return cast(list[str], value)
 
 
 def _check_names(value: JsonValue) -> list[str]:
-    if (
-        not isinstance(value, list)
-        or not value
-        or any(not isinstance(item, str) or not item.strip() for item in value)
-        or len(set(value)) != len(value)
-    ):
-        raise ShippingError("shipping checks must be nonempty unique strings")
-    return cast(list[str], value)
-
-
-def _ui_paths(value: JsonValue) -> list[str]:
-    if not isinstance(value, list) or any(
-        not isinstance(item, str) or not item.strip() for item in value
-    ):
-        raise ShippingError("shipping ui_paths must be strings")
-    return cast(list[str], value)
+    names = _strings(value, "shipping checks", required=True)
+    if len(set(names)) != len(names):
+        raise ShippingError("shipping checks must be unique")
+    return names
 
 
 def _delivery_entries(value: JsonValue) -> list[Delivery]:
@@ -283,9 +258,7 @@ def _delivery_entries(value: JsonValue) -> list[Delivery]:
 
 
 def _policy(raw: dict[str, JsonValue]) -> ShippingPolicy:
-    unknown = set(raw) - _CONFIG_KEYS
-    missing = _CONFIG_KEYS - set(raw)
-    if unknown or missing:
+    if set(raw) != _CONFIG_KEYS:
         raise ShippingError("shipping policy has unknown or missing keys")
     base = raw["base"]
     if not isinstance(base, str):
@@ -294,7 +267,7 @@ def _policy(raw: dict[str, JsonValue]) -> ShippingPolicy:
     return {
         "base": base,
         "checks": _check_names(raw["checks"]),
-        "ui_paths": _ui_paths(raw["ui_paths"]),
+        "ui_paths": _strings(raw["ui_paths"], "shipping ui_paths"),
         "ci_seconds": _number(raw["ci_seconds"], "shipping ci_seconds"),
         "pre_push_seconds": _number(
             raw["pre_push_seconds"], "shipping pre_push_seconds"
@@ -317,11 +290,11 @@ def load_policy(root: Path, required: bool = True) -> ShippingPolicy | None:
         raise ShippingError("hard-eng.gates.json is invalid") from error
     if not isinstance(payload, dict):
         raise ShippingError("hard-eng.gates.json must be an object")
-    raw = payload.get("shipping")
-    if raw is None:
+    if "shipping" not in payload:
         if required:
             raise ShippingError("shipping policy is required")
         return None
+    raw = payload["shipping"]
     if not isinstance(raw, dict):
         raise ShippingError("shipping policy must be an object")
     return _policy(cast(dict[str, JsonValue], raw))
@@ -342,6 +315,11 @@ def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:
     merged = data.get("merged")
     if not isinstance(merged, bool):
         raise ShippingError("PR merged state is invalid")
+    body = data.get("body")
+    if body is None:
+        body = ""
+    if not isinstance(body, str):
+        raise ShippingError("PR body is invalid")
     return _PullRequest(
         state=_text(data, "state", "PR"),
         draft=draft,
@@ -356,7 +334,7 @@ def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:
             _object(base.get("repo"), "PR base repository").get("full_name"),
             "PR base repository",
         ),
-        body=_body(data),
+        body=body,
         mergeable=mergeable,
         mergeable_state=_optional_text(data, "mergeable_state", "PR"),
         merged=merged,
@@ -431,30 +409,23 @@ def _timestamp(value: JsonValue, description: str) -> float:
     return parsed.timestamp()
 
 
-def _run_sort_key(run: dict[str, JsonValue]) -> tuple[float, int]:
-    times = [
-        _timestamp(run[key], "check run")
-        for key in ("started_at", "completed_at")
-        if run.get(key) is not None
-    ]
+def _run_sort_key(run: dict[str, JsonValue]) -> int:
     run_id = run.get("id")
-    return (max(times, default=0.0), run_id if isinstance(run_id, int) else 0)
+    if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id <= 0:
+        raise ShippingError("required check has no valid run identity")
+    return run_id
 
 
 def _check_revision(run: dict[str, JsonValue], revision: str) -> None:
-    values = [run.get("head_sha"), run.get("sha")]
-    suite = run.get("check_suite")
-    if isinstance(suite, dict):
-        values.append(suite.get("head_sha"))
-    for value in values:
-        if value is not None and (
-            not isinstance(value, str) or value.lower() != revision
-        ):
-            raise ShippingError("required check is stale")
+    value = run.get("head_sha")
+    if not isinstance(value, str) or value.lower() != revision:
+        raise ShippingError("required check is stale")
 
 
 def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) -> None:
-    endpoint = f"repos/{repository}/commits/{revision}/check-runs?per_page=100"
+    endpoint = (
+        f"repos/{repository}/commits/{revision}/check-runs?per_page=100&filter=all"
+    )
     items = _api_items(root, endpoint, "check_runs", "check-runs query")
     by_name: dict[str, list[dict[str, JsonValue]]] = {
         name: [] for name in policy["checks"]
@@ -478,7 +449,7 @@ def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) 
         started = _timestamp(run.get("started_at"), f"check {name}")
         completed = _timestamp(run.get("completed_at"), f"check {name}")
         duration = completed - started
-        if duration <= 0 or duration > policy["ci_seconds"]:
+        if duration < 0 or duration > policy["ci_seconds"]:
             raise ShippingError(f"required check is outside the CI budget: {name}")
 
 
@@ -510,25 +481,17 @@ def _head_attachment(root: Path, url: str) -> None:
     ):
         raise ShippingError("UI evidence URL is not an allowed GitHub attachment")
     response = gh(root, "api", "--method", "HEAD", "--include", url)
-    statuses: list[int] = []
-    headers: dict[str, str] = {}
-    for line in response.splitlines():
-        status = re.match(r"^HTTP/\S+\s+(\d{3})\b", line.strip(), re.IGNORECASE)
-        if status:
-            statuses.append(int(status.group(1)))
-            continue
-        if ":" in line:
-            key, value = line.split(":", 1)
-            headers[key.strip().lower()] = value.strip()
-    if not statuses or not 200 <= statuses[-1] < 300:
+    statuses = re.findall(r"(?im)^HTTP/\S+\s+(\d{3})\b", response)
+    if not statuses or not 200 <= int(statuses[-1]) < 300:
         raise ShippingError("UI evidence attachment is unavailable")
-    content_type = headers.get("content-type", "").lower()
+    content_types = re.findall(r"(?im)^content-type:\s*([^\r\n]+)", response)
+    content_type = content_types[-1].lower() if content_types else ""
     if not content_type.startswith(("image/", "video/")):
         raise ShippingError("UI evidence attachment is not image or video")
-    length = headers.get("content-length")
-    if length is not None:
+    lengths = re.findall(r"(?im)^content-length:\s*([^\r\n]+)", response)
+    if lengths:
         try:
-            if int(length) <= 0:
+            if int(lengths[-1]) <= 0:
                 raise ValueError
         except ValueError as error:
             raise ShippingError("UI evidence attachment has invalid length") from error
@@ -555,15 +518,20 @@ def _root_and_branch(root: Path, require_branch: bool) -> tuple[Path, str, str]:
     actual = Path(git(root, "rev-parse", "--show-toplevel").strip()).resolve()
     if actual != resolved:
         raise ShippingError("shipping root is not the repository checkout")
-    branch = git(root, "symbolic-ref", "--quiet", "--short", "HEAD").strip()
+    try:
+        branch = git(root, "symbolic-ref", "--quiet", "--short", "HEAD").strip()
+    except ShippingError:
+        if require_branch:
+            raise
+        branch = ""
     if require_branch and not branch:
         raise ShippingError("shipping requires a named task branch")
     head = _sha(git(root, "rev-parse", "HEAD").strip(), "local checkout")
     return resolved, branch, head
 
 
-def _origin_repository(root: Path) -> str:
-    value = git(root, "remote", "get-url", "origin").strip()
+def origin_repository(remote_url: str) -> str:
+    value = remote_url
     if value.startswith("git@github.com:"):
         location = value.removeprefix("git@github.com:")
     else:
@@ -576,7 +544,7 @@ def _origin_repository(root: Path) -> str:
 
 
 def _clean(root: Path) -> None:
-    if git(root, "status", "--porcelain", "--untracked-files=all").strip():
+    if git(root, "status", "--porcelain", "-uall", "--ignore-submodules=none").strip():
         raise ShippingError("shipping requires a clean task checkout")
 
 
@@ -608,29 +576,31 @@ def _plan_target(root: Path, plan: Path) -> tuple[Path, str]:
     return resolved_plan, targets[0]
 
 
-def _common_identity(
-    pull: _PullRequest, repository: str, policy: ShippingPolicy
-) -> None:
-    if pull.base_ref != policy["base"]:
-        raise ShippingError("PR base branch does not match shipping policy")
-    if pull.base_repository != repository or pull.head_repository != repository:
-        raise ShippingError("PR repository or head repository does not match origin")
-
-
-def _remote_base(root: Path, base: str) -> str:
-    output = git(root, "ls-remote", "--heads", "origin", f"refs/heads/{base}").strip()
+def _remote_sha(root: Path, base: str, remote_url: str) -> str:
+    ref = f"refs/heads/{base}"
+    output = git(root, "ls-remote", "--heads", remote_url, ref).strip()
     rows = [line.split() for line in output.splitlines() if line.strip()]
-    if len(rows) != 1 or len(rows[0]) < 2 or rows[0][1] != f"refs/heads/{base}":
+    if len(rows) != 1 or len(rows[0]) < 2 or rows[0][1] != ref:
         raise ShippingError("current remote base is unavailable")
     return _sha(rows[0][0], "current remote base")
 
 
-def _delivered(root: Path, pull: _PullRequest, policy: ShippingPolicy) -> str:
+def _remote_base(root: Path, base: str, remote_url: str) -> str:
+    expected = _remote_sha(root, base, remote_url)
+    ref = f"refs/heads/{base}:refs/remotes/origin/{base}"
+    git(root, "fetch", "--no-tags", remote_url, ref)
+    current = _remote_sha(root, base, remote_url)
+    if current != expected:
+        raise ShippingError("remote base changed during verification")
+    return current
+
+
+def _delivered(root: Path, pull: _PullRequest, base: str, remote_url: str) -> str:
     if pull.state != "closed" or not pull.merged or pull.merged_at is None:
         raise ShippingError("PR is not confirmed merged")
     if pull.merge_commit_sha is None:
         raise ShippingError("merged PR has no merge commit")
-    remote_base = _remote_base(root, policy["base"])
+    remote_base = _remote_base(root, base, remote_url)
     try:
         git(root, "merge-base", "--is-ancestor", pull.merge_commit_sha, remote_base)
     except ShippingError as error:
@@ -653,47 +623,22 @@ def _ready_state(
         raise ShippingError("local task branch or HEAD does not match PR")
     if branch == policy["base"]:
         raise ShippingError("shipping requires a task branch distinct from base")
-    if not (pull.mergeable is True or pull.mergeable_state == "clean"):
+    if pull.mergeable is not True or pull.mergeable_state != "clean":
         raise ShippingError("PR mergeability is not clean")
     _clean(root)
     return pull.head_sha, None
-
-
-def _state(
-    root: Path,
-    pull: _PullRequest,
-    policy: ShippingPolicy,
-    stage: str,
-    branch: str,
-    local_head: str,
-) -> tuple[str, str | None]:
-    if stage == "ready":
-        return _ready_state(root, pull, policy, branch, local_head)
-    revision = _delivered(root, pull, policy)
-    return revision, revision
 
 
 def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) -> None:
     for item in policy["delivery"]:
         env = os.environ.copy()
         env.update({"HE_SHIP_REVISION": revision, "HE_SHIP_PR_URL": pr_url})
+        command = item["command"]
         try:
-            result = subprocess.run(
-                item["command"],
-                cwd=root,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=_DELIVERY_TIMEOUT,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as error:
-            raise ShippingError(
-                f"delivery check unavailable: {item['name']}"
-            ) from error
-        if result.returncode != 0:
-            raise ShippingError(f"delivery check failed: {item['name']}")
-        value = _json(result.stdout, f"delivery check {item['name']}")
+            stdout = _run(root, command[0], tuple(command[1:]), _DELIVERY_TIMEOUT, env)
+        except ShippingError as error:
+            raise ShippingError(f"delivery check failed: {item['name']}") from error
+        value = _json(stdout, f"delivery check {item['name']}")
         data = _object(value, f"delivery check {item['name']}")
         if data.get("status") != "passed" or data.get("revision") != revision:
             raise ShippingError(
@@ -702,25 +647,30 @@ def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) ->
 
 
 def verify(root: Path, plan: Path, pr_url: str, stage: str) -> Shipment:
-    """Verify a current PR (``ready``) or its landed delivery (``delivered``)."""
-
     if stage not in {"ready", "delivered"}:
         raise ShippingError("shipping stage must be ready or delivered")
-    policy = load_policy(root)
-    if policy is None:
-        raise ShippingError("shipping policy is required")
+    policy = cast(ShippingPolicy, load_policy(root, required=True))
     owner, name, number = _pr_url(pr_url)
     resolved_root, branch, local_head = _root_and_branch(root, stage == "ready")
-    repository = _origin_repository(root)
+    origin_url = git(root, "remote", "get-url", "origin").strip()
+    repository = origin_repository(origin_url)
     url = f"https://github.com/{owner}/{name}/pull/{number}"
     if repository != f"{owner}/{name}".lower():
         raise ShippingError("PR URL repository does not match origin")
     resolved_plan, target = _plan_target(resolved_root, plan)
     pull = _pull(resolved_root, owner, name, number)
-    _common_identity(pull, repository, policy)
-    revision, merged_sha = _state(
-        resolved_root, pull, policy, stage, branch, local_head
-    )
+    if pull.base_ref != policy["base"]:
+        raise ShippingError("PR base branch does not match shipping policy")
+    if pull.base_repository != repository or pull.head_repository != repository:
+        raise ShippingError("PR repository or head repository does not match origin")
+    if stage == "ready":
+        revision, merged_sha = _ready_state(
+            resolved_root, pull, policy, branch, local_head
+        )
+    else:
+        _clean(resolved_root)
+        revision = _delivered(resolved_root, pull, policy["base"], origin_url)
+        merged_sha = revision
     if policy["ui_paths"]:
         paths = _changed_paths(resolved_root, owner, name, number)
         _ui_evidence(resolved_root, pull, paths, policy)
@@ -730,7 +680,7 @@ def verify(root: Path, plan: Path, pr_url: str, stage: str) -> Shipment:
             raise ShippingError("Deploy target requires configured delivery checks")
         _delivery(resolved_root, policy, revision, url)
     current = _pull(resolved_root, owner, name, number)
-    if current.fingerprint() != pull.fingerprint():
+    if current != pull:
         raise ShippingError("PR changed during shipping verification")
     return Shipment(
         root=resolved_root,
@@ -738,7 +688,8 @@ def verify(root: Path, plan: Path, pr_url: str, stage: str) -> Shipment:
         pr_url=url,
         repository=f"{owner}/{name}",
         remote="origin",
-        branch=branch or pull.head_ref,
+        remote_url=origin_url,
+        branch=pull.head_ref,
         head_sha=pull.head_sha,
         base=policy["base"],
         merged_sha=merged_sha,

@@ -13,6 +13,7 @@ Visual Atomic Design does not apply. The interface consists of the installer, sk
 - `hard-eng.gates.json` holds native check commands and report locations.
 - `.agents/skills` owns conditional guidance; Code Review reuses Hard Eng's test-quality reference.
 - `.hooks/hard-eng.py` is the shared hook entry point; client files only register calls.
+- `python3 .hooks/hard-eng.py ship --plan PLAN.md --pr <actual-PR-URL>` verifies delivery readiness using the project's `shipping` settings in the existing gate file. Merge/cleanup are explicit guarded stages; local plan Complete remains build completion, not publication.
 - Session hooks request updates and MCP readiness; completion hooks invoke checks. Git pre-push verifies the pushed commits; CI runs its checks independently. Native host limitations are tracked in [DECISION](DECISION.md#current-status).
 - Output identifies passing checks, failures and incomplete verification in plain text. Failures retain a nonzero exit status.
 

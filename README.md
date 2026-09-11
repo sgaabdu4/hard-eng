@@ -10,6 +10,7 @@ Repository-local engineering instructions, skills, checks, hooks and CI for Pyth
 - Run full checks for affected packages, dependents and shared concerns; uncertain impact expands scope. Independent checks may run in parallel.
 - Validate native exits and reports; reject findings and missing, stale or malformed evidence. Handwritten source/test files over 700 lines need a justified exception.
 - Install pre-push checks for the actual pushed commits, GitHub Actions checks and agent session/completion hooks. Remote branch protection requires separate approval.
+- With a configured [shipping contract](.agents/skills/he-ship/references/checks.md), verify GitHub PR/check identity, required UI attachments and deployment proof; guard merge and task-worktree cleanup. Direct base pushes and over-budget pre-push checks fail. Visual relevance and external authority still require judgment.
 - Configure Context Mode and Codebase Memory; add Appwrite, Sentry, Dart and Marionette MCPs when applicable. Registration alone does not prove readiness.
 - Provide CI-verified scaffold updates with conflict preservation and a separate local update commit; never automatically push. Scaffold-only updates avoid unrelated application checks.
 
@@ -26,7 +27,7 @@ Existing build, integration, UI and generator scripts participate where applicab
 
 ## Skills
 
-- Work: [Hard Eng](.agents/skills/he/SKILL.md), [HE Plan](.agents/skills/he-plan/SKILL.md) (scaled planning, Wayfinder and repository-grounded UX references), [Research](.agents/skills/research/SKILL.md), [Code Review](.agents/skills/code-review/SKILL.md), [Codebase Design](.agents/skills/codebase-design/SKILL.md).
+- Work: [Hard Eng](.agents/skills/he/SKILL.md), [HE Plan](.agents/skills/he-plan/SKILL.md) (scaled planning, Wayfinder and repository-grounded UX references), [HE Build](.agents/skills/he-build/SKILL.md), [HE Ship](.agents/skills/he-ship/SKILL.md), [Research](.agents/skills/research/SKILL.md), [Code Review](.agents/skills/code-review/SKILL.md), [Codebase Design](.agents/skills/codebase-design/SKILL.md).
 - Verification: [E2E](.agents/skills/e2e/SKILL.md), [Security Review](.agents/skills/security-review/SKILL.md), [Product Walkthrough Video](.agents/skills/product-walkthrough-video/SKILL.md).
 - Stack guidance: [Appwrite Backend](.agents/skills/appwrite-backend/SKILL.md), [Building Flutter Apps](.agents/skills/building-flutter-apps/SKILL.md).
 - Authoring: [Writing Great Skills](.agents/skills/writing-great-skills/SKILL.md). [Test quality](.agents/skills/he/references/testing.md) is shared by Hard Eng and Code Review.

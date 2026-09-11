@@ -10,7 +10,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 import tomllib
 import xml.etree.ElementTree as ET
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
@@ -613,54 +612,9 @@ def check(
 
 
 def pre_push() -> int:
-    from shipping import load_policy
+    from ship_actions import pre_push as verify_push
 
-    policy = load_policy(ROOT, required=False)
-    started = time.monotonic()
-    for line in sys.stdin:
-        fields = line.split()
-        if len(fields) != 4:
-            raise ValueError("Invalid pre-push input")
-        revision = fields[1]
-        if policy and fields[2] == f"refs/heads/{policy['base']}":
-            raise ValueError(
-                "Push a task branch and use a PR; direct base updates are blocked"
-            )
-        if set(revision) == {"0"}:
-            continue
-        with tempfile.TemporaryDirectory(prefix="hard-eng-push-") as temporary:
-            checkout = Path(temporary) / "project"
-            subprocess.run(
-                ["git", "worktree", "add", "--detach", str(checkout), revision],
-                cwd=ROOT,
-                check=True,
-            )
-            try:
-                result = subprocess.run(
-                    [
-                        sys.executable,
-                        str(checkout / ".hooks/hard-eng.py"),
-                        "check",
-                        "--base",
-                        fields[3],
-                    ],
-                    cwd=checkout,
-                    check=False,
-                )
-                if result.returncode:
-                    return result.returncode
-            finally:
-                subprocess.run(
-                    ["git", "worktree", "remove", "--force", str(checkout)],
-                    cwd=ROOT,
-                    check=True,
-                )
-        if policy and time.monotonic() - started > policy["pre_push_seconds"]:
-            raise ValueError(
-                "Pre-push verification exceeded its configured time budget"
-            )
-    print(f"Pre-push verification: {time.monotonic() - started:.2f}s")
-    return 0
+    return verify_push(ROOT)
 
 
 def agent_hook(event: str, agent: str) -> int:

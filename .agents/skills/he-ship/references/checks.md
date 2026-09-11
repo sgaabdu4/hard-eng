@@ -1,6 +1,6 @@
 # Native shipping checks
 
-Load for configuring or running HE Ship. GitHub is the first supported provider; missing `gh`, authentication or configuration is a blocker. The checks use real Git/`gh` responses and trusted project commands. Fixture responses are only test evidence, not hosted delivery proof.
+Load for configuring or running HE Ship. The initial verifier supports GitHub PRs whose head and base belong to `origin`; fork PRs and other providers are unsupported. Missing `gh`, authentication or configuration is a blocker. The checks use real Git/`gh` responses and trusted project commands. Fixture responses are only test evidence, not hosted delivery proof.
 
 ## Project contract
 
@@ -53,6 +53,8 @@ python3 .hooks/hard-eng.py ship --plan PLAN.md --pr https://github.com/owner/rep
 
 `ready` verifies current PR identity, branch/build evidence, required checks and applicable UI attachments. It is read-only. `merge` runs the same gate before a head-matched merge; select the repository's merge method and invoke it only with existing merge authorization. A queued or pending merge is unfinished.
 
-`delivered` requires actual merge/remote proof and, for Deploy, the configured runtime verification. Before cleanup, retain evidence and make sure no other task uses the checkout. Deliberately remove only known generated build/test artifacts; unknown ignored files are retained. Run `cleanup` from the repository's persistent checkout with `--worktree` naming the completed linked worktree. Native guards must pass; a changed/dirty/locked/current checkout is retained. Cleanup does not manufacture delivery proof. Use `python3 -B` for the cleanup invocation so Python does not create new bytecode artifacts.
+`delivered` requires actual merge/remote proof and, for Deploy, the configured runtime verification. Before cleanup, retain evidence and make sure no other task uses the checkout. Deliberately remove only known generated build/test artifacts; unknown ignored files are retained. Run `cleanup` from the repository's persistent checkout with `--worktree` naming the completed linked worktree. Native guards must pass; a changed/dirty/locked/current checkout or active Git index lock is retained. Cleanup does not manufacture delivery proof. Use `python3 -B` for the cleanup invocation so Python does not create new bytecode artifacts.
 
-Record returned results in the same plan. Source changes invalidate affected build proof; external outages do not erase valid local checks. Remote branch protection remains project-owned; this implementation does not change server rules or claim to control unrelated clients.
+Cleanup requires the captured origin URL to remain the fetch and sole push endpoint. Multiple or differing push URLs and initialized submodules are retained for a repository-owned cleanup procedure; the generic command never force-removes them. Dirty submodule checks override Git's ignore settings.
+
+Record returned results at the same relative plan path in the persistent checkout, recovering the plan from the verified merged revision before removal if needed. Preserve unrelated edits there. Source changes invalidate affected build proof; external outages do not erase valid local checks. Remote branch protection remains project-owned; this implementation does not change server rules or claim to control unrelated clients.

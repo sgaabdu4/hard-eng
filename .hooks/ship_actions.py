@@ -1,8 +1,61 @@
 """Guard the mutations following verified PR delivery."""
 
+import subprocess
+import sys
+import tempfile
+import time
 from pathlib import Path
 
-from shipping import Shipment, gh, git, verify
+from shipping import Shipment, gh, git, load_policy, verify
+
+
+def pre_push(root: Path) -> int:
+    policy = load_policy(root, required=False)
+    started = time.monotonic()
+    for line in sys.stdin:
+        fields = line.split()
+        if len(fields) != 4:
+            raise ValueError("Invalid pre-push input")
+        revision = fields[1]
+        if policy and fields[2] == f"refs/heads/{policy['base']}":
+            raise ValueError(
+                "Push a task branch and use a PR; direct base updates are blocked"
+            )
+        if set(revision) == {"0"}:
+            continue
+        with tempfile.TemporaryDirectory(prefix="hard-eng-push-") as temporary:
+            checkout = Path(temporary) / "project"
+            subprocess.run(
+                ["git", "worktree", "add", "--detach", str(checkout), revision],
+                cwd=root,
+                check=True,
+            )
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(checkout / ".hooks/hard-eng.py"),
+                        "check",
+                        "--base",
+                        fields[3],
+                    ],
+                    cwd=checkout,
+                    check=False,
+                )
+                if result.returncode:
+                    return result.returncode
+            finally:
+                subprocess.run(
+                    ["git", "worktree", "remove", "--force", str(checkout)],
+                    cwd=root,
+                    check=True,
+                )
+        if policy and time.monotonic() - started > policy["pre_push_seconds"]:
+            raise ValueError(
+                "Pre-push verification exceeded its configured time budget"
+            )
+    print(f"Pre-push verification: {time.monotonic() - started:.2f}s")
+    return 0
 
 
 def worktrees(root: Path) -> list[dict[str, str]]:
@@ -18,6 +71,24 @@ def common_directory(root: Path) -> Path:
     return Path(
         git(root, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
     ).resolve()
+
+
+def unchanged_checkout(shipment: Shipment) -> None:
+    target = shipment.root.resolve()
+    index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
+    if (target / index_lock).exists():
+        raise ValueError("Cleanup preserves a task with an active Git index lock")
+    if git(
+        target,
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+        "--ignored=matching",
+        "--ignore-submodules=none",
+    ).strip():
+        raise ValueError("Cleanup preserves modified, untracked or ignored work")
+    if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:
+        raise ValueError("Cleanup preserves commits added after the verified PR")
 
 
 def cleanup_guard(coordinator: Path, shipment: Shipment) -> None:
@@ -39,12 +110,14 @@ def cleanup_guard(coordinator: Path, shipment: Shipment) -> None:
         raise ValueError("Cleanup target no longer owns the verified task branch")
     if sum(record.get("branch") == branch for record in records) != 1:
         raise ValueError("Another worktree uses the task branch")
-    if git(
-        target, "status", "--porcelain", "--untracked-files=all", "--ignored=matching"
-    ).strip():
-        raise ValueError("Cleanup preserves modified, untracked or ignored work")
-    if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:
-        raise ValueError("Cleanup preserves commits added after the verified PR")
+    unchanged_checkout(shipment)
+    if any(
+        not line.startswith("-")
+        for line in git(target, "submodule", "status", "--recursive").splitlines()
+    ):
+        raise ValueError(
+            "Cleanup preserves initialized submodules; use the repository's procedure"
+        )
     if shipment.branch == shipment.base or not shipment.merged_sha:
         raise ValueError("Cleanup requires a merged task branch, never the base")
 
@@ -54,14 +127,26 @@ def remote_branch(root: Path, remote: str, branch: str) -> str | None:
     rows = [line.split() for line in lines.splitlines() if line.strip()]
     if not rows:
         return None
-    if len(rows) != 1 or rows[0][1] != f"refs/heads/{branch}":
+    if len(rows) != 1 or len(rows[0]) != 2 or rows[0][1] != f"refs/heads/{branch}":
         raise ValueError("Task remote branch is ambiguous")
     return rows[0][0]
 
 
 def cleanup(coordinator: Path, shipment: Shipment) -> None:
     cleanup_guard(coordinator, shipment)
-    remote_head = remote_branch(shipment.root, shipment.remote, shipment.branch)
+    if (
+        git(shipment.root, "remote", "get-url", shipment.remote).strip()
+        != shipment.remote_url
+    ):
+        raise ValueError(
+            "Cleanup preserves a task whose remote changed after verification"
+        )
+    push_urls = git(
+        shipment.root, "remote", "get-url", "--push", "--all", shipment.remote
+    ).splitlines()
+    if push_urls != [shipment.remote_url]:
+        raise ValueError("Cleanup preserves a task with a different push endpoint")
+    remote_head = remote_branch(shipment.root, shipment.remote_url, shipment.branch)
     if remote_head not in (None, shipment.head_sha):
         raise ValueError("Cleanup preserves a remote branch with additional work")
     if remote_head is not None:
@@ -70,12 +155,19 @@ def cleanup(coordinator: Path, shipment: Shipment) -> None:
             shipment.root,
             "push",
             f"--force-with-lease={reference}:{shipment.head_sha}",
-            shipment.remote,
+            shipment.remote_url,
             f":{reference}",
         )
-        if remote_branch(shipment.root, shipment.remote, shipment.branch) is not None:
+        if (
+            remote_branch(shipment.root, shipment.remote_url, shipment.branch)
+            is not None
+        ):
             raise ValueError("Remote branch still exists; local worktree retained")
         print(f"Removed remote task branch {shipment.branch}", flush=True)
+    tracking = f"refs/remotes/{shipment.remote}/{shipment.branch}"
+    references = git(coordinator, "for-each-ref", "--format=%(refname)", tracking)
+    if tracking in references.splitlines():
+        git(coordinator, "update-ref", "-d", tracking, shipment.head_sha)
     cleanup_guard(coordinator, shipment)
     git(coordinator, "worktree", "remove", str(shipment.root))
     print(f"Removed task worktree {shipment.root}", flush=True)
@@ -103,7 +195,9 @@ def run(
     plan_path = (target / plan).resolve()
     if not plan_path.is_relative_to(target):
         raise ValueError("Use the selected task's plan inside its worktree")
-    if stage == "merge" and merge_method is None:
+    if stage not in {"ready", "merge", "delivered", "cleanup"}:
+        raise ValueError("Unknown shipping stage")
+    if stage == "merge" and merge_method not in {"merge", "squash", "rebase"}:
         raise ValueError("Select the repository's merge method with --merge-method")
     proof_stage = "ready" if stage in {"ready", "merge"} else "delivered"
     shipment = verify(target, plan_path, pr_url, proof_stage)
