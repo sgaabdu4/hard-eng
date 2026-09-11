@@ -530,7 +530,17 @@ def run_gate(
             if scanner in SCANNER_LOGS:
                 SCANNER_LOGS[scanner](log)
         if result.returncode == 0 and scanner and report_path is not None:
-            SCANNERS[scanner](report_path)
+            if (
+                scanner == "osv"
+                and "--allow-no-lockfiles" in command
+                and [arg for arg in command if arg.startswith("--lockfile")]
+                == ["--lockfile=pnpm-lock.yaml"]
+            ):
+                from reports import validate_osv
+
+                validate_osv(report_path, empty_pnpm=directory)
+            else:
+                SCANNERS[scanner](report_path)
         from reports import completed_tests, line_coverage
 
         if (
