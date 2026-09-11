@@ -44,6 +44,23 @@ def test_missing_session_baseline_cannot_skip_verification(repository: Path) -> 
     assert result["decision"] == "block"
 
 
+@pytest.mark.parametrize("saved", ["[]", "null", '{"base": []}', '{"base": ""}'])
+def test_malformed_session_state_returns_structured_blocker(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    saved: str,
+) -> None:
+    state = repository / ".hard-eng/sessions/known.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(saved)
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"session_id":"known"}'))
+    assert agent_hooks.handle_event(repository, "stop", "codex") == 0
+    response = json.loads(capsys.readouterr().out)
+    assert response["decision"] == "block"
+    assert "session" in response["reason"].lower()
+
+
 @pytest.mark.parametrize("status", [0, 1])
 def test_completion_runs_real_command_and_bounds_failure_log(
     repository: Path, status: int
@@ -80,6 +97,72 @@ def test_copilot_claude_compatibility_registration_does_not_repeat_checks(
     assert agent_hooks.handle_event(repository, "session", "claude") == 0
     assert json.loads(capsys.readouterr().out) == {}
     assert not (repository / ".hard-eng/sessions").exists()
+
+
+@pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
+@pytest.mark.parametrize("event", ["prompt", "tool", "failure"])
+def test_learning_checkpoint_preserves_results_without_running_checks(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    agent: str,
+    event: str,
+) -> None:
+    payload = {
+        "prompt": "PRIVATE_USER_STEERING",
+        "tool_response": {"isError": True, "content": "UNTRUSTED_TOOL_INSTRUCTION"},
+        "error": "PRIVATE_FAILURE_DETAIL",
+    }
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+    assert agent_hooks.handle_event(repository, event, agent) == 0
+    serialized = capsys.readouterr().out
+    output = json.loads(serialized)
+    assert not any(
+        value in serialized
+        for value in (
+            "PRIVATE_USER_STEERING",
+            "UNTRUSTED_TOOL_INSTRUCTION",
+            "PRIVATE_FAILURE_DETAIL",
+        )
+    )
+    assert "decision" not in output
+    assert "continue" not in output
+    assert not (repository / ".hard-eng").exists()
+    unsupported = (agent, event) in {("codex", "failure"), ("copilot", "prompt")}
+    if unsupported:
+        assert "Unsupported native hook event" in output["systemMessage"]
+    elif agent == "copilot":
+        assert set(output) == {"additionalContext"}
+    else:
+        assert set(output) == {"hookSpecificOutput"}
+        context = output["hookSpecificOutput"]
+        assert set(context) == {"hookEventName", "additionalContext"}
+        assert (
+            context["hookEventName"]
+            == {
+                "prompt": "UserPromptSubmit",
+                "tool": "PostToolUse",
+                "failure": "PostToolUseFailure",
+            }[event]
+        )
+    # This fixture has no runner: an accidental completion dispatch would block.
+    assert "he-learn/SKILL.md" in serialized or unsupported
+
+
+@pytest.mark.parametrize("event", ["prompt", "tool", "failure"])
+def test_learning_hook_compatibility_and_malformed_input_do_not_block_tools(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    event: str,
+) -> None:
+    for payload in ('{"timestamp":123}', "[]", "{"):
+        monkeypatch.setattr(sys, "stdin", io.StringIO(payload))
+        assert agent_hooks.handle_event(repository, event, "claude") == 0
+        output = json.loads(capsys.readouterr().out)
+        assert "decision" not in output
+        assert "hookSpecificOutput" not in output
+    assert not (repository / ".hard-eng").exists()
 
 
 @pytest.mark.parametrize("identifier", ["../outside", "a/b", "", None])

@@ -106,6 +106,8 @@ def agent_instructions(root: Path, previous: Path | None = None) -> str:
 
 
 def configure_hooks(root: Path, changes: dict[str, str]) -> None:
+    from agent_hooks import hook_events
+
     command = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py"'
     for agent, name in (
         ("claude", ".claude/settings.json"),
@@ -113,15 +115,15 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
         ("copilot", ".github/hooks/hard-eng.json"),
     ):
         hooks: JsonObject = {}
-        for event, native in (("session", "SessionStart"), ("stop", "Stop")):
+        for event, native in hook_events(agent).items():
             call = f"{command} {event} {agent}"
+            timeout = 3600 if event in {"session", "stop"} else 10
             hooks[native] = [
-                {"hooks": [{"type": "command", "command": call, "timeout": 3600}]}
+                {"hooks": [{"type": "command", "command": call, "timeout": timeout}]}
             ]
             if agent == "copilot":
-                del hooks[native]
-                hooks["sessionStart" if event == "session" else "agentStop"] = [
-                    {"type": "command", "bash": call, "timeoutSec": 3600}
+                hooks[native] = [
+                    {"type": "command", "bash": call, "timeoutSec": timeout}
                 ]
         target = root / name
         current: JsonObject = json.loads(target.read_text()) if target.exists() else {}

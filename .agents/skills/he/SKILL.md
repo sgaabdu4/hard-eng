@@ -12,6 +12,7 @@ flowchart LR
   T{Task} -->|Plan new work / changed scope| P[../he-plan/SKILL.md]
   T -->|Implement / fix / resume build| B[../he-build/SKILL.md]
   T -->|Ship / PR / merge / deploy| S[../he-ship/SKILL.md]
+  T -->|Repeated failures / lasting decisions| L[../he-learn/SKILL.md]
   T -->|Task context / review| W[references/workflow.md]
   T -->|Adapt / repair checks| G[references/gates.md]
   T -->|Bulk / async / performance| E[references/efficiency.md]
@@ -20,6 +21,7 @@ flowchart LR
   click P "../he-plan/SKILL.md"
   click B "../he-build/SKILL.md"
   click S "../he-ship/SKILL.md"
+  click L "../he-learn/SKILL.md"
   click G "references/gates.md"
   click E "references/efficiency.md"
   click Q "references/testing.md"

@@ -1,4 +1,4 @@
-"""Native session/completion responses; Git records scope, never gate results."""
+"""Native context/completion responses; Git records scope, never gate results."""
 
 import json
 import re
@@ -9,6 +9,47 @@ from pathlib import Path
 
 from gate_config import JsonObject, nonproduction_source, repository_files
 from project_setup import dependency_command
+
+
+def hook_events(agent: str) -> dict[str, str]:
+    events = {
+        "session": "SessionStart",
+        "prompt": "UserPromptSubmit",
+        "tool": "PostToolUse",
+        "failure": "PostToolUseFailure",
+        "stop": "Stop",
+    }
+    if agent == "codex":
+        del events["failure"]
+    if agent == "copilot":
+        events.update(
+            session="sessionStart",
+            tool="postToolUse",
+            failure="postToolUseFailure",
+            stop="agentStop",
+        )
+        # Config-file prompt hook output is dropped by Copilot.
+        del events["prompt"]
+    return events
+
+
+def learning_context(event: str) -> str:
+    return (
+        f"HE Learn checkpoint ({event}): inspect current evidence for repeated failures or lasting decisions/steering. "
+        "Use .agents/skills/he-learn/SKILL.md: deterministic prevention first, skills last; accepted decisions -> docs/adr/. "
+        "No qualifying evidence -> continue without new files."
+    )
+
+
+def context_output(agent: str, native: str, message: str) -> JsonObject:
+    if agent == "copilot":
+        return {"additionalContext": message}
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": native,
+            "additionalContext": message,
+        }
+    }
 
 
 def session_state(root: Path, payload: JsonObject) -> Path | None:
@@ -58,6 +99,7 @@ def session_context(root: Path, payload: JsonObject) -> str:
         messages.append(
             f"This repository imports {service}. Use its configured MCP for a read-only call to verify the intended project and endpoint/organization. If configuration or access is missing, warn and continue; do not invent credentials or claim readiness."
         )
+    messages.append(learning_context("start/resume"))
     return " ".join(messages)
 
 
@@ -106,7 +148,12 @@ def completion(root: Path, payload: JsonObject) -> JsonObject:
     state = session_state(root, payload)
     base = "HEAD"
     if state is not None and state.exists():
-        base = json.loads(state.read_text()).get("base", "HEAD")
+        saved = json.loads(state.read_text())
+        if not isinstance(saved, dict):
+            raise ValueError("Invalid session state: expected an object")
+        base = saved.get("base")
+        if not isinstance(base, str) or not base.strip():
+            raise ValueError("Invalid session state: expected a nonempty Git base")
     try:
         changed = subprocess.check_output(
             ["git", "diff", "--name-only", base, "--"], cwd=root, text=True
@@ -143,7 +190,9 @@ def completion(root: Path, payload: JsonObject) -> JsonObject:
     if result.returncode:
         return {
             "decision": "block",
-            "reason": "Repair the failed checks before claiming completion. Questions and honest blocked reports remain possible.\n"
+            "reason": "Repair the failed checks before claiming completion. Questions and honest blocked reports remain possible. "
+            + learning_context("failed verification")
+            + "\n"
             + output,
         }
     return {}
@@ -160,25 +209,23 @@ def handle_event(root: Path, event: str, agent: str) -> int:
         if agent == "claude" and "timestamp" in payload:
             print("{}")
             return 0
-        if event == "session":
-            message = session_context(root, payload)
-            output = (
-                {"additionalContext": message}
-                if agent == "copilot"
-                else {
-                    "hookSpecificOutput": {
-                        "hookEventName": "SessionStart",
-                        "additionalContext": message,
-                    }
-                }
-            )
-        else:
+        native = hook_events(agent).get(event)
+        if native is None:
+            raise ValueError("Unsupported native hook event")
+        if event == "stop":
             output = completion(root, payload)
+        else:
+            message = (
+                session_context(root, payload)
+                if event == "session"
+                else learning_context(event)
+            )
+            output = context_output(agent, native, message)
     except (OSError, ValueError, TypeError) as error:
         message = f"Hard Eng hook input/setup failed: {error}. Continue with available tools; do not claim verification passed."
         output = (
             {"systemMessage": message}
-            if event == "session"
+            if event != "stop"
             else {"decision": "block", "reason": message}
         )
     print(json.dumps(output))

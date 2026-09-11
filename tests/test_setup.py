@@ -644,13 +644,30 @@ def test_hook_registrations_invoke_shared_runner(
         "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"
     )
     for agent, path, events in (
-        ("claude", ".claude/settings.json", ("SessionStart", "Stop")),
-        ("codex", ".codex/hooks.json", ("SessionStart", "Stop")),
-        ("copilot", ".github/hooks/hard-eng.json", ("sessionStart", "agentStop")),
+        (
+            "claude",
+            ".claude/settings.json",
+            "SessionStart UserPromptSubmit PostToolUse PostToolUseFailure Stop",
+        ),
+        (
+            "codex",
+            ".codex/hooks.json",
+            "SessionStart UserPromptSubmit PostToolUse Stop",
+        ),
+        (
+            "copilot",
+            ".github/hooks/hard-eng.json",
+            "sessionStart postToolUse postToolUseFailure agentStop",
+        ),
     ):
         hooks = json.loads((root / path).read_text())["hooks"]
-        assert set(hooks) == set(events)
-        for event, native in zip(("session", "stop"), events, strict=True):
+        assert set(hooks) == set(events.split())
+        calls = {
+            "codex": ("session", "prompt", "tool", "stop"),
+            "claude": ("session", "prompt", "tool", "failure", "stop"),
+            "copilot": ("session", "tool", "failure", "stop"),
+        }[agent]
+        for event, native in zip(calls, events.split(), strict=True):
             (registration,) = hooks[native]
             if agent == "copilot":
                 command = registration["bash"]
