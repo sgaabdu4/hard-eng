@@ -141,7 +141,7 @@ def integrated_services(root: Path) -> list[str]:
 
 
 def completion(root: Path, payload: JsonObject) -> JsonObject:
-    if payload.get("stop_hook_active"):
+    if payload.get("stop_hook_active") is True:
         return {
             "systemMessage": "Report remaining verification blockers honestly. Do not claim a pass; no repeated stop-hook loop."
         }
@@ -155,6 +155,11 @@ def completion(root: Path, payload: JsonObject) -> JsonObject:
         if not isinstance(base, str) or not base.strip():
             raise ValueError("Invalid session state: expected a nonempty Git base")
     try:
+        base = subprocess.check_output(
+            ["git", "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}"],
+            cwd=root,
+            text=True,
+        ).strip()
         changed = subprocess.check_output(
             ["git", "diff", "--name-only", base, "--"], cwd=root, text=True
         )

@@ -44,6 +44,17 @@ def test_missing_session_baseline_cannot_skip_verification(repository: Path) -> 
     assert result["decision"] == "block"
 
 
+def test_saved_git_option_cannot_hide_staged_changes(repository: Path) -> None:
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    (repository / "change.txt").write_text("staged change")
+    subprocess.run(["git", "add", "change.txt"], cwd=repository, check=True)
+    state = repository / ".hard-eng/sessions/known.json"
+    state.parent.mkdir(parents=True)
+    state.write_text('{"base":"--stat"}')
+    result = agent_hooks.completion(repository, {"session_id": "known"})
+    assert result.get("decision") == "block"
+
+
 @pytest.mark.parametrize("saved", ["[]", "null", '{"base": []}', '{"base": ""}'])
 def test_malformed_session_state_returns_structured_blocker(
     repository: Path,
@@ -84,6 +95,11 @@ def test_stop_retry_allows_honest_blocker_without_rerunning(repository: Path) ->
     response = agent_hooks.completion(repository, {"stop_hook_active": True})
     assert "decision" not in response
     assert "Do not claim a pass" in str(response)
+
+
+def test_string_false_cannot_activate_stop_retry_guard(repository: Path) -> None:
+    response = agent_hooks.completion(repository, {"stop_hook_active": "false"})
+    assert response.get("decision") == "block"
 
 
 def test_copilot_claude_compatibility_registration_does_not_repeat_checks(
