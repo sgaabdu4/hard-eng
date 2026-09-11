@@ -106,6 +106,8 @@ def agent_instructions(root: Path, previous: Path | None = None) -> str:
 
 
 def configure_hooks(root: Path, changes: dict[str, str]) -> None:
+    from agent_hooks import hook_events
+
     command = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py"'
     for agent, name in (
         ("claude", ".claude/settings.json"),
@@ -113,15 +115,15 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
         ("copilot", ".github/hooks/hard-eng.json"),
     ):
         hooks: JsonObject = {}
-        for event, native in (("session", "SessionStart"), ("stop", "Stop")):
+        for event, native in hook_events(agent).items():
             call = f"{command} {event} {agent}"
+            timeout = 3600 if event in {"session", "stop"} else 10
             hooks[native] = [
-                {"hooks": [{"type": "command", "command": call, "timeout": 3600}]}
+                {"hooks": [{"type": "command", "command": call, "timeout": timeout}]}
             ]
             if agent == "copilot":
-                del hooks[native]
-                hooks["sessionStart" if event == "session" else "agentStop"] = [
-                    {"type": "command", "bash": call, "timeoutSec": 3600}
+                hooks[native] = [
+                    {"type": "command", "bash": call, "timeoutSec": timeout}
                 ]
         target = root / name
         current: JsonObject = json.loads(target.read_text()) if target.exists() else {}
@@ -174,6 +176,11 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
         existing = current.setdefault("mcpServers", {})
         if not isinstance(existing, dict):
             raise TypeError(f"Conflicting MCP servers in {name}; expected an object")
+        servers = {
+            plugin: settings
+            for plugin, settings in servers.items()
+            if plugin not in existing
+        }
         for plugin in sorted(detected.keys() - existing.keys()):
             settings = detected[plugin]
             servers[plugin] = (
@@ -186,10 +193,7 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
     codex_config = target.read_text() if target.exists() else ""
     parsed = tomllib.loads(codex_config)
     for plugin in ("context-mode", "codebase-memory-mcp"):
-        expected = {"command": "pnpm", "args": ["dlx", f"{plugin}@latest"]}
         existing_server = parsed.get("mcp_servers", {}).get(plugin)
-        if existing_server is not None and existing_server != expected:
-            raise ValueError(f"Conflicting Codex {plugin} settings")
         if existing_server is None:
             codex_config += f'\n[mcp_servers."{plugin}"]\ncommand = "pnpm"\nargs = ["dlx", "{plugin}@latest"]\n'
     for plugin, settings in detected.items():
@@ -263,6 +267,29 @@ def configure_dart(
             else:
                 section_options[group] = settings
     changes[str(target.relative_to(root))] = json.dumps(options, indent=2) + "\n"
+    if any(
+        "coverage:test_with_coverage" in gate["command"] for gate in package["checks"]
+    ):
+        # Dart Decimate recognizes native tooling declarations here, preserving
+        # unlisted/dev-only production-import checks unlike ignore_dependencies.
+        changes[str(target.relative_to(root))] = (
+            "# Hard Eng test coverage uses dart run coverage:test_with_coverage.\n"
+            + changes[str(target.relative_to(root))]
+        )
+    scanner_names = (
+        ".dart-decimaterc",
+        ".dart-decimaterc.json",
+        ".dart-decimaterc.jsonc",
+        "dart-decimate.toml",
+        ".dart-decimate.toml",
+    )
+    if not any((directory / name).exists() for name in scanner_names):
+        # Installed skill examples are not application code.
+        scanner: dict[str, list[str]] = {
+            "ignore_patterns": [".agents/**"],
+        }
+        path = directory / ".dart-decimaterc.json"
+        changes[str(path.relative_to(root))] = json.dumps(scanner, indent=2) + "\n"
 
 
 def configure_javascript(

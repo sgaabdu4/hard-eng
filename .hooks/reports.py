@@ -3,6 +3,7 @@
 import json
 import math
 import re
+import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import TextIO, cast
@@ -165,12 +166,23 @@ def validate_fallow(path: Path) -> None:
         clean = all(type(n) in (int, float) and n == 0 for n in counts)
         if report["kind"] != "combined" or not clean:
             raise ValueError("Fallow reports findings or skipped analysis")
+        optional = {"boundaries-not-configured", "rule-packs-not-configured"}
+        diagnostics = report.get("workspace_diagnostics", [])
+        if not isinstance(diagnostics, list):
+            raise TypeError("Fallow diagnostics must be a list")
         if (
             any(isinstance(value, list) and value for value in check.values())
             or dupes["clone_groups"] != []
-            or report.get("workspace_diagnostics", []) != []
+            or any(
+                not isinstance(item, dict) or item.get("kind") not in optional
+                for item in diagnostics
+            )
         ):
             raise ValueError("Fallow reports findings or analysis diagnostics")
+        if diagnostics:
+            print(
+                "Fallow: optional boundary/policy detectors unconfigured; not verified"
+            )
         scopes = [(check["entry_points"]["total"], 1)]
         scopes += [(stats[key], 0) for key in corpus]
         for value, minimum in scopes:
@@ -229,18 +241,74 @@ def osv_layers(report: JsonObject) -> list[JsonObject]:
     return cast(list[JsonObject], layers)
 
 
-def validate_osv(path: Path, *, image: bool = False) -> None:
+def dependency_free_pnpm(directory: Path) -> bool:
+    try:
+        manifest = json.loads((directory / "package.json").read_text())
+        # PyYAML is already a scaffold dependency; uv supplies its isolated
+        # runtime here because a JavaScript consumer's Python may lack it.
+        lock = json.loads(
+            subprocess.check_output(
+                [
+                    "uv",
+                    "run",
+                    "--no-project",
+                    "--with",
+                    "pyyaml",
+                    "python",
+                    "-c",
+                    "import json,sys,yaml; json.dump(yaml.safe_load(sys.stdin),sys.stdout)",
+                ],
+                input=(directory / "pnpm-lock.yaml").read_text(),
+                text=True,
+                stderr=subprocess.PIPE,
+                timeout=30,
+            )
+        )
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
+    return (
+        isinstance(manifest, dict)
+        and isinstance(lock, dict)
+        and all(
+            manifest.get(key, {}) == {}
+            for key in (
+                "dependencies",
+                "devDependencies",
+                "optionalDependencies",
+                "peerDependencies",
+            )
+        )
+        and not manifest.get("workspaces")
+        and not (directory / "pnpm-workspace.yaml").exists()
+        and str(lock.get("lockfileVersion")) == "9.0"
+        and lock.get("importers") == {".": {}}
+        and lock.get("packages", {}) == {}
+        and lock.get("snapshots", {}) == {}
+    )
+
+
+def validate_osv(
+    path: Path, *, image: bool = False, empty_pnpm: Path | None = None
+) -> None:
     try:
         report = json.loads(path.read_text())
         results = report["results"]
-        if not isinstance(results, list):
-            raise TypeError("OSV results must be a list")
         if (
             report.get("errors")
             or report.get("error")
             or report.get("experimental_generic_findings")
         ):
             raise ValueError("OSV reports scan errors or findings")
+        if (
+            results in (None, [])
+            and not image
+            and empty_pnpm is not None
+            and dependency_free_pnpm(empty_pnpm)
+        ):
+            print("OSV: standalone pnpm manifest and lockfile confirm no dependencies")
+            return
+        if not isinstance(results, list):
+            raise TypeError("OSV results must be a list")
         layers = osv_layers(report) if image else []
         count = 0
         for result in results:

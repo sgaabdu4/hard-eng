@@ -3,13 +3,52 @@
 import json
 import shutil
 import subprocess
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import update
 
 SOURCE = Path(__file__).resolve().parents[1]
+
+
+def test_installer_preserves_native_mcp_settings_on_rerun(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    git(tmp_path, "init", "-q")
+    settings = {
+        "command": "codebase-memory-mcp",
+        "args": ["--project", "fitness"],
+        "env": {"PROJECT_MODE": "local"},
+        "enabled": False,
+    }
+    (tmp_path / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"codebase-memory-mcp": settings}})
+    )
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex/config.toml").write_text(
+        '[mcp_servers.codebase-memory-mcp]\ncommand = "codebase-memory-mcp"\n'
+        'args = ["--project", "fitness"]\nenabled = false\n'
+        '[mcp_servers.codebase-memory-mcp.env]\nPROJECT_MODE = "local"\n'
+    )
+    changes: dict[str, str] = {}
+    installer.configure_mcp(tmp_path, changes)
+    assert (
+        json.loads(changes[".mcp.json"])["mcpServers"]["codebase-memory-mcp"]
+        == settings
+    )
+    servers = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
+    assert servers["codebase-memory-mcp"] == settings
+    assert servers["context-mode"]["command"] == "pnpm"
+    for name, content in changes.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    repeated: dict[str, str] = {}
+    installer.configure_mcp(tmp_path, repeated)
+    assert repeated == changes
 
 
 def test_uninitialized_skill_submodule_cannot_be_silently_omitted(

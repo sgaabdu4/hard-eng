@@ -2,6 +2,8 @@
 
 import io
 import json
+import subprocess
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -21,6 +23,110 @@ REPORTS = {
     "jscpd": '{"duplicates":[],"statistics":{"formats":{"python":{"clones":0,"duplicatedLines":0,"duplicatedTokens":0,"newClones":0,"newDuplicatedLines":0,"percentage":0,"percentageTokens":0,"sources":1,"lines":10,"tokens":40}},"total":{"clones":0,"duplicatedLines":0,"duplicatedTokens":0,"newClones":0,"newDuplicatedLines":0,"percentage":0,"percentageTokens":0,"sources":1,"lines":10,"tokens":40}}}',
     "import-linter": "Analyzed 3 files, 2 dependencies.\nNo cycles KEPT\nContracts: 1 kept, 0 broken.\n",
 }
+
+
+@pytest.fixture
+def empty_pnpm(tmp_path: Path) -> Path:
+    (tmp_path / "package.json").write_text('{"private":true}')
+    (tmp_path / "pnpm-lock.yaml").write_text(
+        "lockfileVersion: '9.0'\nimporters:\n  .: {}\n"
+    )
+    return tmp_path
+
+
+def test_fallow_optional_unconfigured_detectors_do_not_require_invented_policy(
+    tmp_path: Path,
+) -> None:
+    data = json.loads(REPORTS["fallow"])
+    data["workspace_diagnostics"] = [
+        {"path": ".", "kind": "boundaries-not-configured"},
+        {"path": ".", "kind": "rule-packs-not-configured"},
+    ]
+    path = tmp_path / "report.json"
+    path.write_text(json.dumps(data))
+    reports.validate_fallow(path)
+    data["check"]["total_issues"] = 1
+    data["check"]["policy_violations"] = [{"rule": "required-policy"}]
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        reports.validate_fallow(path)
+
+
+@pytest.mark.parametrize(
+    "diagnostics", [[{"kind": "parse-error"}], ["invalid"], None, {}, ""]
+)
+def test_fallow_unknown_or_malformed_diagnostics_still_fail(
+    tmp_path: Path, diagnostics: object
+) -> None:
+    data = json.loads(REPORTS["fallow"])
+    data["workspace_diagnostics"] = diagnostics
+    path = tmp_path / "report.json"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        reports.validate_fallow(path)
+
+
+def test_osv_accepts_native_empty_only_with_dependency_free_pnpm(
+    empty_pnpm: Path,
+) -> None:
+    path = empty_pnpm / "report.json"
+    path.write_text('{"results":null}')
+    with pytest.raises(ValueError):
+        reports.validate_osv(path)
+    reports.validate_osv(path, empty_pnpm=empty_pnpm)
+    subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            "-c",
+            (
+                "import importlib.util,sys; from pathlib import Path; "
+                "assert importlib.util.find_spec('yaml') is None; "
+                f"sys.path.insert(0, {str(Path(reports.__file__).parent)!r}); "
+                "import reports; "
+                f"reports.validate_osv(Path({str(path)!r}), empty_pnpm=Path({str(empty_pnpm)!r}))"
+            ),
+        ],
+        check=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "content"),
+    [
+        ("package.json", '{"dependencies":{"missing":"1"}}'),
+        ("package.json", '{"devDependencies":{"test":"1"}}'),
+        ("package.json", '{"peerDependencies":{"peer":"1"}}'),
+        ("package.json", '{"optionalDependencies":{"optional":"1"}}'),
+        ("package.json", "[]"),
+        (
+            "pnpm-lock.yaml",
+            "lockfileVersion: '9.0'\npackages: {hidden: {}}\nimporters: {.: {}}",
+        ),
+        ("pnpm-lock.yaml", "lockfileVersion: '9.0'\nimporters: {.: {}, child: {}}"),
+        (
+            "pnpm-lock.yaml",
+            "lockfileVersion: '9.0'\nimporters: {.: {dependencies: {hidden: '1'}}}",
+        ),
+        ("pnpm-lock.yaml", "broken: ["),
+        ("pnpm-lock.yaml", "[]"),
+        ("pnpm-lock.yaml", None),
+        ("pnpm-workspace.yaml", "packages: ['packages/*']"),
+        ("report.json", '{"results":null,"errors":["scan failed"]}'),
+        ("report.json", "{}"),
+    ],
+)
+def test_osv_empty_cannot_hide_dependency_or_scan_gaps(
+    empty_pnpm: Path, name: str, content: str | None
+) -> None:
+    path = empty_pnpm / "report.json"
+    path.write_text('{"results":null}')
+    if content is None:
+        (empty_pnpm / name).unlink()
+    else:
+        (empty_pnpm / name).write_text(content)
+    with pytest.raises(ValueError):
+        reports.validate_osv(path, empty_pnpm=empty_pnpm)
 
 
 @pytest.mark.parametrize(

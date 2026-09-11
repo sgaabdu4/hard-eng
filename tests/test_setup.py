@@ -300,6 +300,20 @@ def test_plain_dart_uses_native_coverage_tool(
         "coverage:test_with_coverage",
     ]
     assert checks["tests"]["report"]["stdout"] is False
+    scanner = tmp_path / ".dart-decimaterc.json"
+    assert json.loads(scanner.read_text()) == {
+        "ignore_patterns": [".agents/**"],
+    }
+    assert (
+        "dart run coverage:test_with_coverage"
+        in (tmp_path / "analysis_options.yaml").read_text()
+    )
+    scanner.unlink()
+    (tmp_path / "dart-decimate.toml").write_text('ignore_patterns = ["vendor/**"]\n')
+    preserved = (tmp_path / "dart-decimate.toml").read_bytes()
+    installer.install(tmp_path)
+    assert not scanner.exists()
+    assert (tmp_path / "dart-decimate.toml").read_bytes() == preserved
 
 
 def test_workspace_installs_once_and_keeps_child_source_scope(
@@ -405,7 +419,7 @@ def test_install_preserves_project_and_repeats(
     assert "pnpm/setup@c9883cc79df532ad1a7b81bf9ab944ceb090d65c" in workflow
     assert "pnpm dlx --allow-build=@jdxcode/mise" in workflow
     assert "npm exec" not in workflow
-    for name in ("appwrite-backend", "building-flutter-apps"):
+    for name in ("appwrite-backend", "building-flutter-apps", "he-build", "he-ship"):
         canonical = installer.SOURCE / ".agents/skills" / name
         installed = tmp_path / ".agents/skills" / name
         for path in canonical.rglob("*"):
@@ -466,21 +480,23 @@ def test_installer_registers_only_detected_service_mcps(
         assert "APPWRITE_API_KEY" in servers["appwrite"]["env_vars"]
 
 
-@pytest.mark.parametrize("service", ["sentry", "dart", "marionette"])
+@pytest.mark.parametrize(
+    "service", ["sentry", "dart", "marionette", "context-mode", "codebase-memory-mcp"]
+)
 def test_installer_preserves_existing_service_mcp_configuration(
     installer: ModuleType, tmp_path: Path, service: str
 ) -> None:
     repository(tmp_path)
     (tmp_path / "app.py").write_text("import sentry_sdk\n")
     (tmp_path / "app.dart").write_text("import 'package:flutter/material.dart';\n")
-    existing = {"url": "https://mcp.sentry.dev/mcp/existing-org/existing-project"}
+    existing = {"command": service}
     for name in (".mcp.json", ".github/mcp.json"):
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"mcpServers": {service: existing}}))
     path = tmp_path / ".codex/config.toml"
     path.parent.mkdir()
-    path.write_text(f"[mcp_servers.{service}]\nurl = {json.dumps(existing['url'])}\n")
+    path.write_text(f"[mcp_servers.{service}]\ncommand = {json.dumps(service)}\n")
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
     for name in (".mcp.json", ".github/mcp.json"):
@@ -644,13 +660,30 @@ def test_hook_registrations_invoke_shared_runner(
         "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"
     )
     for agent, path, events in (
-        ("claude", ".claude/settings.json", ("SessionStart", "Stop")),
-        ("codex", ".codex/hooks.json", ("SessionStart", "Stop")),
-        ("copilot", ".github/hooks/hard-eng.json", ("sessionStart", "agentStop")),
+        (
+            "claude",
+            ".claude/settings.json",
+            "SessionStart UserPromptSubmit PostToolUse PostToolUseFailure Stop",
+        ),
+        (
+            "codex",
+            ".codex/hooks.json",
+            "SessionStart UserPromptSubmit PostToolUse Stop",
+        ),
+        (
+            "copilot",
+            ".github/hooks/hard-eng.json",
+            "sessionStart postToolUse postToolUseFailure agentStop",
+        ),
     ):
         hooks = json.loads((root / path).read_text())["hooks"]
-        assert set(hooks) == set(events)
-        for event, native in zip(("session", "stop"), events, strict=True):
+        assert set(hooks) == set(events.split())
+        calls = {
+            "codex": ("session", "prompt", "tool", "stop"),
+            "claude": ("session", "prompt", "tool", "failure", "stop"),
+            "copilot": ("session", "tool", "failure", "stop"),
+        }[agent]
+        for event, native in zip(calls, events.split(), strict=True):
             (registration,) = hooks[native]
             if agent == "copilot":
                 command = registration["bash"]

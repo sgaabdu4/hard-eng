@@ -17,11 +17,21 @@ The skill is pinned to Playwright 1.62.1, which provides `page.screencast`, pers
 
 ## Workflow
 
+### Recorded E2E
+
+For E2E-owned recorded web proof, run Phases 1–9 below: inspect/configure the real journey, record, mechanically check, visually inspect, repair and approve the exact WebM. Return the accepted WebM + run/review reports to [E2E](../e2e/SKILL.md#prove-the-journey) for product assertions and durable-state proof. MP4 conversion is unnecessary for this route.
+
+Use the existing `pointer: false` configuration when no presentation pointer is needed; pointer visibility/continuity and click-ripple checks then do not apply. Target geometry, focus, keyboard cues, strict journey checks, checkpoints, readable holds and the remaining mechanical/visual review still apply. This is still a paced recording, not raw rendering or latency proof. Arbitrary browser/device videos lack this recorder's required run report; use native verification for those surfaces.
+
+### Video delivery
+
+For a polished walkthrough, run Phases 1–11 below with the presentation pointer enabled. Reuse the same WebM verification, then convert the accepted source and separately review the exact delivered MP4. No second recorder or verification implementation.
+
 ## Non-negotiable recording method
 
 - Use Playwright 1.62+ `page.screencast.start()` after the opening state is fully ready.
 - Do not use browser-context `recordVideo` for the delivery recording. It starts during page creation and can capture blank or loading frames.
-- Use one pointer only: the exact 20px red v17 ring in Playwright's `page.screencast.showOverlay()` plane.
+- When the pointer is enabled, use one only: the exact 20px red v17 ring in Playwright's `page.screencast.showOverlay()` plane. Recorded E2E may use `pointer: false`; pointer visibility/continuity and click-ripple requirements below apply when enabled. Target/focus evidence and keyboard cues remain required.
 - Do not put the persistent pointer in application DOM. Keep it in Playwright's user-overlay plane. The same-state reload guard may use the prior checkpoint as a transient document-start bitmap in a recorder-owned closed shadow root; it is not an interactive pointer and must be removed after readiness.
 - Move Playwright's real mouse with timed intermediate events. `mouse.move({ steps })` alone is not pacing.
 - Express canvas and drag-and-drop input with the strict locator-relative `drag` action. Do not replace the runner with custom Playwright code or use unexplained viewport coordinates.
@@ -157,9 +167,9 @@ node scripts/review-video.mjs \
   --report /path/to/artifacts-attempt-01/video-review.json
 ```
 
-Exit code `2` with `status: "review-required"` is expected only when all automated checks pass. Any `failed` status requires another attempt.
+Exit code `2` with `status: "review-required"` means automated checks passed but visual review + approval remain; it is not completion. Any `failed` status requires root-cause repair and another attempt.
 
-The reviewer enforces:
+The reviewer enforces (pointer-specific checks apply when enabled):
 
 - complete decode;
 - monotonic frame timestamps;
@@ -210,14 +220,14 @@ Contact sheets do not replace sequential playback. A clean report does not overr
 When anything fails:
 
 1. Identify whether the cause is readiness, locator choice, pointer pacing, scroll timing, fixture state, application state, or journey design.
-2. Fix the root cause.
+2. Fix the root cause within task authorization. If the fix requires unavailable access or an unresolved decision, report the exact blocker; do not approve the attempt.
 3. Record to `artifacts-attempt-02` or the next unused number.
 4. Run the complete mechanical review again.
 5. Repeat the full visual review.
 
 Do not approve an attempt and then patch the video. The accepted video must come from a clean real journey.
 
-Continue until both the automated report and complete visual review are clean.
+Continue until both the automated report and complete visual review are clean. Product defects also require E2E's original-case + affected-case regression proof; a cleaner recording alone does not close them.
 
 ## Phase 9: approve the accepted WebM
 
@@ -268,20 +278,20 @@ Do not rely on a previously opened preview.
 
 ## Completion gate
 
-Do not report completion until all conditions are true:
+Recorded E2E requires conditions 1–7 on the accepted WebM, plus E2E's product assertions and durable-state proof. Video delivery requires all ten conditions on the source and exact delivered MP4. Do not report completion with a failed or review-required report.
 
 1. The accepted run report is `passed`.
 2. No runtime, safety, network, or sensitive-data error exists.
 3. Recording began after the real opening state was ready.
 4. Every frame decoded with monotonic timestamps.
-5. Opening stability, input evidence, pointer continuity, smooth-scroll, pacing, blank-frame, and journey checks passed.
+5. Opening stability, input evidence, smooth-scroll, pacing, blank-frame and journey checks passed, plus pointer continuity when enabled.
 6. Every step checkpoint exists and was inspected.
 7. The complete WebM was watched and approved with passed, hash-bound real-time playback evidence.
 8. The MP4 was generated from the exact approved WebM hash.
 9. The complete MP4 was watched and approved separately with its own passed playback evidence.
 10. A fresh preview displays that exact MP4.
 
-If the user finds a defect, the prior approval is invalid. Reopen the task, reproduce the issue, improve the enforcement that missed it, and create a new attempt.
+User-reported defects follow [E2E's reopening rule](../e2e/SKILL.md#prove-the-journey); the affected media approval is invalid and the corrected journey needs a new attempt.
 
 ## Important configuration
 

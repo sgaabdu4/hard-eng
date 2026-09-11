@@ -42,3 +42,5 @@ Evidence: [TODO: Current route/component, before capture, rendered proposed medi
 
 Result: Pending
 Evidence: [TODO: Before completion: actual commands/results, runtime proof and remaining limits. Planning evidence does not prove implementation.]
+
+[TODO: If shipping is requested, retain Delivery target: PR, Merge or Deploy plus the required remote proof and pending state here as prose. Complete describes local build acceptance; shipping remains unfinished until HE Ship verifies it. Preserve UI baseline/final evidence for the PR.]
