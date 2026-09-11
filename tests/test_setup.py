@@ -405,7 +405,7 @@ def test_install_preserves_project_and_repeats(
     assert "pnpm/setup@c9883cc79df532ad1a7b81bf9ab944ceb090d65c" in workflow
     assert "pnpm dlx --allow-build=@jdxcode/mise" in workflow
     assert "npm exec" not in workflow
-    for name in ("appwrite-backend", "building-flutter-apps"):
+    for name in ("appwrite-backend", "building-flutter-apps", "he-build", "he-ship"):
         canonical = installer.SOURCE / ".agents/skills" / name
         installed = tmp_path / ".agents/skills" / name
         for path in canonical.rglob("*"):

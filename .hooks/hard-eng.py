@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import tomllib
 import xml.etree.ElementTree as ET
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
@@ -612,11 +613,19 @@ def check(
 
 
 def pre_push() -> int:
+    from shipping import load_policy
+
+    policy = load_policy(ROOT, required=False)
+    started = time.monotonic()
     for line in sys.stdin:
         fields = line.split()
         if len(fields) != 4:
             raise ValueError("Invalid pre-push input")
         revision = fields[1]
+        if policy and fields[2] == f"refs/heads/{policy['base']}":
+            raise ValueError(
+                "Push a task branch and use a PR; direct base updates are blocked"
+            )
         if set(revision) == {"0"}:
             continue
         with tempfile.TemporaryDirectory(prefix="hard-eng-push-") as temporary:
@@ -646,6 +655,11 @@ def pre_push() -> int:
                     cwd=ROOT,
                     check=True,
                 )
+        if policy and time.monotonic() - started > policy["pre_push_seconds"]:
+            raise ValueError(
+                "Pre-push verification exceeded its configured time budget"
+            )
+    print(f"Pre-push verification: {time.monotonic() - started:.2f}s")
     return 0
 
 
@@ -668,6 +682,16 @@ def main() -> int:
     )
     checks.add_argument("--plan-stage", choices=("Draft", "Ready", "Complete"))
     commands.add_parser("pre-push", help="Verify the actual commits being pushed")
+    shipping = commands.add_parser(
+        "ship", help="Verify PR delivery or perform guarded shipping actions"
+    )
+    shipping.add_argument("--plan", required=True)
+    shipping.add_argument("--pr", required=True)
+    shipping.add_argument(
+        "--stage", choices=("ready", "merge", "delivered", "cleanup"), default="ready"
+    )
+    shipping.add_argument("--worktree", help="Task worktree in the same repository")
+    shipping.add_argument("--merge-method", choices=("merge", "squash", "rebase"))
     for event in ("session", "stop"):
         hook = commands.add_parser(event, help=f"Handle a native {event} hook")
         hook.add_argument("agent", choices=("claude", "codex", "copilot"))
@@ -676,6 +700,12 @@ def main() -> int:
         return check(base=args.base, plan_stage=args.plan_stage)
     if args.command == "pre-push":
         return pre_push()
+    if args.command == "ship":
+        from ship_actions import run
+
+        return run(
+            ROOT, args.plan, args.pr, args.stage, args.worktree, args.merge_method
+        )
     return agent_hook(args.command, args.agent)
 
 

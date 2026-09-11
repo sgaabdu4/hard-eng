@@ -5,8 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from shipping import ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE / ".hooks"))
@@ -61,3 +65,15 @@ def runner(tmp_path: Path, completed_plan: str) -> ModuleType:
     for name in ("PRODUCT.md", "DESIGN.md"):
         (tmp_path / name).write_text((SOURCE / name).read_text())
     return module
+
+
+@pytest.fixture
+def shipping_policy() -> "ShippingPolicy":
+    return {
+        "base": "main",
+        "checks": ["hard-eng"],
+        "ui_paths": [],
+        "ci_seconds": 180.0,
+        "pre_push_seconds": 180.0,
+        "delivery": [],
+    }

@@ -46,6 +46,7 @@ GateConfig = TypedDict(
         "shared": list[Gate],
         "version": NotRequired[int],
         "scan_git_history": NotRequired[bool],
+        "shipping": NotRequired[JsonObject],
         "file_size_exceptions": NotRequired[dict[str, dict[str, str]]],
     },
 )
@@ -579,6 +580,10 @@ def load_groups(root: Path, base: str | None = None) -> list[Group]:
         raise TypeError("Gate configuration must contain packages and shared lists")
     if type(config.get("scan_git_history", True)) is not bool:
         raise TypeError("scan_git_history must be true or false")
+    if "shipping" in config:
+        from shipping import load_policy
+
+        load_policy(root)
     validate_file_sizes(root, config.get("file_size_exceptions", {}))
     if config.get("scan_git_history", True) is False:
         config["shared"] = [
