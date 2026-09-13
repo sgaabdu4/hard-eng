@@ -47,6 +47,8 @@ No GitHub account or existing Hard Eng checkout needed. Requires Git, curl and P
 
 Classifying omitted type-only TypeScript coverage uses Node 22.13+ [native type stripping](https://nodejs.org/api/module.html#modulestriptypescripttypescode-options). Executable or unsupported sources still require coverage records.
 
+Omitted Dart declaration-only coverage uses the analyzer from the package's existing `.dart_tool/package_config.json`. The parser reads source as data; it does not execute it. Only proven directive/constant/type declarations are exempt. Missing or incompatible analyzer support leaves coverage required, as do runtime methods, getters, constructors and initializers.
+
 ## Check
 
 ```sh

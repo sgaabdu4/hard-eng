@@ -47,5 +47,5 @@ jobs:
         run: >-
           pnpm dlx --allow-build=@jdxcode/mise
           --package=@jdxcode/mise@latest mise --no-config exec
-          uv@latest python@3.12 node@latest
+          uv@latest python@3.12 node@latest dart@latest
           -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
