@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current pilot repair: provision known native executables passed explicitly to gate adapters, including Actionlint, while retaining direct-command and separate Dart scanner provisioning. Reuse `.hooks/tool_setup.py` and existing runner tests; no new configuration or wrapper machinery. User authorizes confirmed Hard Eng source fixes from the pilot through verified main delivery.
+
 Current requirement: enforce prerequisite repair before feature work. Reject baseline waivers; repair all actual enforced failures in a separate authorized plan, pass native checks, deliver those repairs to main with verified CI, then begin the feature from the repaired main. Reuse the existing plan validator and HE Plan/Build/Ship owners; no new tracking system or gate. Native checks enforce their declared contracts; review still determines scope, evidence truth and whether a change belongs to baseline repair.
 
 Earlier acceptance follow-up exercised tiny Python, JavaScript and Dart consuming repositories with independent workers and repaired confirmed flow defects. The native Dart consumer exposed scaffold skill templates being scanned as application code; the existing scanner owner was corrected without replacing target-owned settings. Its original local-only authorization was subsequently extended to source publication below.
@@ -23,6 +25,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Explicit adapter tool arguments are provisioned; direct native commands and Dart scanner provisioning remain functional.
+- [x] Reproduce the wrapper failure and pass regression and full gates. Published consumer verification remains a separate delivery requirement.
 
 - [x] Ready and Complete reject a baseline Exception even with claimed authorization and impact.
 - [x] Planning/build/shipping guidance separates prerequisite repair from feature implementation and requires verified main delivery before the feature starts.
@@ -70,6 +75,8 @@ N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has n
 ## Verification
 
 Result: Passed
+
+Adapter repair: the fresh starting Draft gate passed (`/tmp/he-adapter-baseline.log`). The wrapped-tool test failed with a missing executable before the fix, then direct and wrapped bootstrap tests passed; a mixed Actionlint/Dart case also passed. The integrated run passed 415 tests and four performance tests; a new test annotation failed types, was corrected, and the native type check passed. Final Complete-stage verification follows. Earlier receipts below cover previous changes only. Adapter delivery is pending and must include verified main and the consuming project's original adapter path.
 
 Current sequencing evidence (13 September 2026): the Ready/Complete waiver regression failed twice before the fix; all 84 plan/shipping/action tests passed after it. The full Draft-stage run passed all 17 gates, 413 regression tests and four performance tests at `/tmp/he-baseline-sequence-green.log`. One formatting failure in the initial run was corrected, not waived. Four native Codex scenario decisions correctly kept failed/unshipped baseline work blocked, permitted authorized Draft repair, resumed a ready feature after verified main, and kept new build regressions in their own effort (`/tmp/he-baseline-routing-proof.md`). This is routing evidence, not a hosted application end-to-end run. All four skill packages passed native metadata validation; 45 relative links resolved. Full diff review found no additional machinery or unresolved defect. Native plan checks reject waiver declarations; scope, chronology and evidence truth still require agent review. Complete-stage final verification follows before shipping.
 

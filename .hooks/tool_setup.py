@@ -32,6 +32,13 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         "k6": "aqua:grafana/k6",
     }
     executables = {gate["command"][0] for group in groups for gate in group["checks"]}
+    executables.update(
+        argument
+        for group in groups
+        for gate in group["checks"]
+        for argument in gate["command"][1:]
+        if argument in packages
+    )
     selected = sorted(
         packages[name] + "@latest" for name in executables & packages.keys()
     )
