@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TextIO, cast
 
 from coverage_sources import erased_typescript
+from dart_coverage import erased_dart
 from gate_config import JsonObject
 
 
@@ -107,6 +108,7 @@ def line_coverage(
         expected = expected - erased_typescript(expected - files.keys())
     if kind == "dart-tests":
         # Dart LCOV omits simple export barrels: they have no executable lines.
+        expected = expected - erased_dart(expected - files.keys(), directory)
         expected = {
             file
             for file in expected

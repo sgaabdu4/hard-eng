@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current Dart coverage repair: native analyzer AST proof may remove omitted directive/compile-time-only libraries from completeness; runtime functions, getters, methods and initializers remain mandatory. Use the consumer's existing analyzer package and a focused Python hook containing the Dart parser source; the existing report owner is near its size ceiling. Native regression requires adding Dart to the existing CI runtime command, not an application dependency. Reuse the matching PR #55 source baseline; preserve the independently reproduced native fixture at /tmp/hard-eng-dart-coverage.lqNpSw.
+
 Current discovery repair: honor existing generated/vendor Git attributes for package manifests, so synchronized deployment copies do not become independent gate owners. Keep canonical and unmarked packages mandatory. Reuse `generated_sources`; a focused regression module is necessary because runner tests are at 687 lines. Prior published source gates at PR #54 provide the unchanged code/config baseline.
 
 Current coverage repair: exempt omitted TypeScript sources only when native type stripping proves no runtime content remains. Preserve missing executable-file rejection and real coverage totals; never execute inspected source. `.hooks/reports.py` is near 700 lines, so a focused coverage-source helper holds the native parsing operation without a new dependency or configuration field.
@@ -33,6 +35,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Native parser accepts demonstrated erased declarations and rejects runtime or malformed source without executing it.
+- [x] Actual fixture coverage retains its runtime totals and missing runtime rejection; full source gates and diff review pass.
 
 - [x] Generated/vendor manifests are excluded consistently from setup and gate ownership; unmarked and explicitly false attributes retain package enforcement.
 - [x] Verify native Git attributes, the reported consumer discovery, full source gates and the final diff.
@@ -92,6 +97,8 @@ N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has n
 
 Result: Passed
 
+Dart declaration repair: original HEAD coverage validation rejects the native fixture's barrel and declarations; repaired validation accepts it at unchanged 5/6 runtime lines, including the uncalled function's zero-hit record. The native parser independently recognizes the three reported consumer constants libraries. Tests cover nested comments, type aliases, simple enums, constant namespaces, omitted runtime controls, malformed input and missing analyzer support. The Ready gate passed all 17 gates, 441 tests and four performance tests (`/tmp/he-dart-classifier-gates.log`). Final Complete gate follows. Diff review retains a focused parser hook, existing report integration, native tests, required source-CI Dart runtime, first-party module declaration and documentation; no application dependency or threshold changes. Ready for ship — local implementation and verification complete; Dart repair PR/main/native delivery remains pending.
+
 Discovery repair: six real-Git regressions failed before the fix and passed afterward across all three supported manifest types and both native attributes. Process-local attributes against the actual Frontline checkout excluded exactly eight synchronized deployment mirrors and retained all 12 real owners including packages/ff_shared; no consumer files were changed by this probe. The Ready-stage full gate passed (`/tmp/he-discovery-gates.log`); final Complete-stage gate follows. Diff review retained one existing-owner change, its focused tests and this plan; no new dependency or exclusion configuration. Ready for ship — local implementation and verification complete; delivery not performed. Discovery repair delivery remains pending PR, main CI and native delivery proof.
 
 Both pilots independently adopted source revision 6a272f9776b7ed8a9cec161fb189b4d3507c672c through supported updates. StaffToDo's real Dart include resolution passed; Frontline's installed source files match and full LCOV completeness passed at the unchanged measured 37521/53542 lines (70.08%). Their application baseline and main delivery remain unfinished.
@@ -109,6 +116,8 @@ Current sequencing evidence (13 September 2026): the Ready/Complete waiver regre
 Final sequencing gate: `uv run python .hooks/hard-eng.py check --plan-stage Complete` exited 0; `/tmp/he-baseline-sequence-complete.log`. Local implementation and verification completed before delivery.
 
 Delivery target: Merge
+
+Dart declaration release: final Complete-stage gate passed all 17 gates, 441 regressions and four performance tests (`/tmp/he-dart-classifier-complete.log`). Source publication and verified main delivery remain pending; earlier receipts below do not claim this repair delivered.
 
 Current discovery release: final Complete-stage check passed all 17 gates, 439 regression tests and four performance tests (`/tmp/he-discovery-complete.log`). PR publication, main CI and native delivery remain pending; the delivery receipts below describe earlier repairs.
 
