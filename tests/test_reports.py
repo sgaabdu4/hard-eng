@@ -300,6 +300,55 @@ def test_coverage_requires_unexecuted_files_and_merges_lcov(tmp_path: Path) -> N
         reports.lcov_coverage(path, tmp_path)
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import type { Foo } from './foo';\nexport type State = ReturnType<Foo>;",
+        "/* contract */ export interface State { id: string; }\n// no runtime",
+        "export type { Foo } from './foo';\nexport {};",
+    ],
+)
+def test_lcov_allows_erased_typescript_without_inventing_coverage(
+    tmp_path: Path, source: str
+) -> None:
+    path = tmp_path / "lcov.info"
+    path.write_text("SF:used.js\nDA:1,1\nDA:2,0\nend_of_record\n")
+    types = tmp_path / "types.ts"
+    types.write_text(source)
+    assert reports.line_coverage(
+        path, "lcov-tests", tmp_path, {tmp_path / "used.js", types}
+    ) == (1, 2)
+    with pytest.raises(ValueError, match="no executable lines"):
+        reports.line_coverage(path, "lcov-tests", tmp_path, {types})
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "export type Id = string; export const value = 1;",
+        "import './side-effect'; export interface Id {}",
+        "import { Id } from './side-effect'; export type Value = Id;",
+        "export enum Value { One }",
+        "export const value = <div />;",
+        "export type Broken = ;",
+        "console.log('/* not a comment */');",
+        "/* before */ console.log('runtime'); /* after */",
+        "// comment\u2028console.log('runtime');",
+        "// comment\u2029console.log('runtime');",
+        "throw Error('inspected source must never execute');",
+    ],
+)
+def test_lcov_keeps_unproven_typescript_in_required_coverage(
+    tmp_path: Path, source: str
+) -> None:
+    path = tmp_path / "lcov.info"
+    path.write_text("SF:used.js\nDA:1,1\nend_of_record\n")
+    omitted = tmp_path / "omitted.ts"
+    omitted.write_text(source)
+    with pytest.raises(ValueError, match="omits production files: omitted.ts"):
+        reports.line_coverage(path, "lcov-tests", tmp_path, {omitted})
+
+
 def test_dart_coverage_allows_export_barrels_but_requires_executable_files(
     tmp_path: Path,
 ) -> None:

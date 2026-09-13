@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import TextIO, cast
 
+from coverage_sources import erased_typescript
 from gate_config import JsonObject
 
 
@@ -102,6 +103,8 @@ def line_coverage(
 ) -> tuple[int, int]:
     reader = python_coverage if kind == "python-tests" else lcov_coverage
     files = reader(path, directory)
+    if kind == "lcov-tests":
+        expected = expected - erased_typescript(expected - files.keys())
     if kind == "dart-tests":
         # Dart LCOV omits simple export barrels: they have no executable lines.
         expected = {
