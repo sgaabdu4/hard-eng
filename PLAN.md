@@ -4,6 +4,12 @@ Status: Complete
 
 ## Outcome + scope
 
+Current coverage repair: exempt omitted TypeScript sources only when native type stripping proves no runtime content remains. Preserve missing executable-file rejection and real coverage totals; never execute inspected source. `.hooks/reports.py` is near 700 lines, so a focused coverage-source helper holds the native parsing operation without a new dependency or configuration field.
+
+Additional confirmed pilot input: Dart package configuration root URIs denote directories even without a trailing slash. Correct the existing include resolver and prove nested strict-analysis validation remains active. The runner test file is near its size ceiling, so focused Dart include regressions use their own test module.
+
+Additional reproduced pre-push defect: Git-local environment variables leak into the verifier's temporary checkout and redirect its Git commands. Clear Git's reported local variables in the environment passed by `.hooks/ship_actions.py` to worktree creation, checking and removal; preserve unrelated environment and return handling. Keeping this at the native verifier fixes existing launchers without changing generated-hook formats or custom-hook conflict protection.
+
 Current pilot repair: provision known native executables passed explicitly to gate adapters, including Actionlint, while retaining direct-command and separate Dart scanner provisioning. Reuse `.hooks/tool_setup.py` and existing runner tests; no new configuration or wrapper machinery. User authorizes confirmed Hard Eng source fixes from the pilot through verified main delivery.
 
 Current requirement: enforce prerequisite repair before feature work. Reject baseline waivers; repair all actual enforced failures in a separate authorized plan, pass native checks, deliver those repairs to main with verified CI, then begin the feature from the repaired main. Reuse the existing plan validator and HE Plan/Build/Ship owners; no new tracking system or gate. Native checks enforce their declared contracts; review still determines scope, evidence truth and whether a change belongs to baseline repair.
@@ -25,6 +31,11 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] The consumer's type-only omission passes; omitted runtime, side-effect, malformed and unsupported sources still fail; type-only files cannot fabricate executable coverage.
+- [x] Run native regressions, actual consumer report proof and the full gate; keep delivery and adoption evidence separate.
+- [x] Dart package includes resolve absolute, relative and escaped directory URIs with or without trailing slashes; included diagnostic suppression is still rejected.
+- [x] The actual pre-push verifier checks its temporary repository under an inherited Git environment and preserves unrelated variables, cleanup and existing push guards.
 
 - [x] Explicit adapter tool arguments are provisioned; direct native commands and Dart scanner provisioning remain functional.
 - [x] Reproduce the wrapper failure and pass regression and full gates. Published consumer verification remains a separate delivery requirement.
@@ -76,6 +87,12 @@ N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has n
 
 Result: Passed
 
+Coverage repair baseline reuses the matching Complete-stage pass at `/tmp/he-adapter-complete.log`, whose source tree exactly matched main before this change. The actual consumer `dashboardTypes.ts` has no LCOV record and the current validator reports it omitted; this failure was reproduced directly against its report before editing coverage code.
+
+Current source verification: three type-only cases and two directory-URI cases failed before their fixes. The actual native pre-push snapshot regression also failed before its fix and now passes with all shipping-action tests. Review moved environment cleanup from an attempted launcher change into the existing native verifier so already installed launchers benefit; that earlier run is superseded by the final integrated check. The new helper is declared in the existing first-party module list. Actual consumer LCOV verification now accepts its erased module while retaining the measured executable file's unchanged 0/57 result. Full Complete-stage verification follows; these fixes' publication and consumer adoption remain pending. Node's built-in type stripping parses source as data, never executes it, and unsupported syntax stays required rather than being waived.
+
+Provisioning source delivery: PR #52 merged at `a48560abb086d9f084ce3bd808e43ceaff9caba6`; PR and main CI plus native delivered passed. The completed branch was removed locally/remotely. Consumer was notified to reconcile the equivalent local patch, update through the documented path and verify Actionlint plus Dart provisioning. Consumer adoption proof remains pending.
+
 Adapter repair: the fresh starting Draft gate passed (`/tmp/he-adapter-baseline.log`). The wrapped-tool test failed with a missing executable before the fix, then direct and wrapped bootstrap tests passed; a mixed Actionlint/Dart case also passed. The integrated run passed 415 tests and four performance tests; a new test annotation failed types, was corrected, and the native type check passed. Final Complete-stage verification follows. Earlier receipts below cover previous changes only. Adapter delivery is pending and must include verified main and the consuming project's original adapter path.
 
 Current sequencing evidence (13 September 2026): the Ready/Complete waiver regression failed twice before the fix; all 84 plan/shipping/action tests passed after it. The full Draft-stage run passed all 17 gates, 413 regression tests and four performance tests at `/tmp/he-baseline-sequence-green.log`. One formatting failure in the initial run was corrected, not waived. Four native Codex scenario decisions correctly kept failed/unshipped baseline work blocked, permitted authorized Draft repair, resumed a ready feature after verified main, and kept new build regressions in their own effort (`/tmp/he-baseline-routing-proof.md`). This is routing evidence, not a hosted application end-to-end run. All four skill packages passed native metadata validation; 45 relative links resolved. Full diff review found no additional machinery or unresolved defect. Native plan checks reject waiver declarations; scope, chronology and evidence truth still require agent review. Complete-stage final verification follows before shipping.
@@ -83,6 +100,8 @@ Current sequencing evidence (13 September 2026): the Ready/Complete waiver regre
 Final sequencing gate: `uv run python .hooks/hard-eng.py check --plan-stage Complete` exited 0; `/tmp/he-baseline-sequence-complete.log`. Local implementation and verification completed before delivery.
 
 Delivery target: Merge
+
+Pilot repair release evidence: the final Complete-stage run passed all 17 gates, 433 regression tests and four performance tests (`/tmp/he-pilot-repairs-release.log`). Negative coverage cases include executable code between block comments and after both JavaScript Unicode line separators; neither can be mistaken for an empty module. Final diff review retained only the source defects, native regressions, runtime requirement and plan evidence. Ready for ship; current repair delivery and consumer adoption are still pending.
 Delivery: Passed — [PR #50](https://github.com/sgaabdu4/hard-eng/pull/50) merged the baseline-before-feature change at `c9604a5b7613abc54a887416f79726e18a057772`. [PR CI](https://github.com/sgaabdu4/hard-eng/actions/runs/34778247311) passed in 67 seconds; [main CI](https://github.com/sgaabdu4/hard-eng/actions/runs/34778334052) passed in 56 seconds. Native `ship --stage delivered` passed. Main exactly matched the verified task tree, the persistent checkout was fast-forwarded, and the completed local and remote implementation branches were removed. Frontline Fitness remains a separate ongoing pilot; no application booking-fix completion is claimed here.
 Earlier delivery: Passed — [PR #48](https://github.com/sgaabdu4/hard-eng/pull/48) published the verified implementation at `0928c5d26d0d974b14ef2dd682a84acd82d787f8`. The PR gate passed in 74 seconds and the [merged-revision gate](https://github.com/sgaabdu4/hard-eng/actions/runs/34576943605) passed in 65 seconds. Native `ship delivered` passed for that revision. Repository policy rejected merge commits, so the permitted squash method was used; the merged file tree exactly matched the verified consolidation. Superseded branch histories were preserved in a verified local Git bundle before branch cleanup, without restoring removed runtime/npm or mutation-ledger machinery. The fresh Frontline Fitness pilot uses the documented public installation command and receives no earlier task diagnosis or implementation guidance.
 

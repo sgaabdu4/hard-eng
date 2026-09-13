@@ -107,7 +107,7 @@ def validate_dart_includes(
             if package is None:
                 raise ValueError(f"Unresolved Dart analysis include: {include}")
             uri = urljoin(
-                urljoin(registry.as_uri(), package["rootUri"]),
+                urljoin(registry.as_uri(), package["rootUri"]).rstrip("/") + "/",
                 package.get("packageUri", "lib/"),
             )
             uri = urlparse(urljoin(uri, relative))

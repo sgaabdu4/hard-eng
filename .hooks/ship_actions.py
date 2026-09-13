@@ -1,5 +1,6 @@
 """Guard the mutations following verified PR delivery."""
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -23,11 +24,15 @@ def pre_push(root: Path) -> int:
             )
         if set(revision) == {"0"}:
             continue
+        environment = os.environ.copy()
+        for name in git(root, "rev-parse", "--local-env-vars").splitlines():
+            environment.pop(name, None)
         with tempfile.TemporaryDirectory(prefix="hard-eng-push-") as temporary:
             checkout = Path(temporary) / "project"
             subprocess.run(
                 ["git", "worktree", "add", "--detach", str(checkout), revision],
                 cwd=root,
+                env=environment,
                 check=True,
             )
             try:
@@ -40,6 +45,7 @@ def pre_push(root: Path) -> int:
                         fields[3],
                     ],
                     cwd=checkout,
+                    env=environment,
                     check=False,
                 )
                 if result.returncode:
@@ -48,6 +54,7 @@ def pre_push(root: Path) -> int:
                 subprocess.run(
                     ["git", "worktree", "remove", "--force", str(checkout)],
                     cwd=root,
+                    env=environment,
                     check=True,
                 )
         if policy and time.monotonic() - started > policy["pre_push_seconds"]:
