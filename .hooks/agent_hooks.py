@@ -11,6 +11,20 @@ from gate_config import JsonObject, nonproduction_source, repository_files
 from project_setup import dependency_command
 
 
+def project_pre_push(root: Path, hook: Path) -> Path:
+    """Recognize Husky's generated forwarding shim without replacing it."""
+    shim = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"'
+    if (
+        hook == root / ".husky/_/pre-push"
+        and not hook.is_symlink()
+        and hook.is_file()
+        and hook.read_text().rstrip("\n") == shim
+        and (hook.parent / "h").is_file()
+    ):
+        return root / ".husky/pre-push"
+    return hook
+
+
 def hook_events(agent: str) -> dict[str, str]:
     events = {
         "session": "SessionStart",

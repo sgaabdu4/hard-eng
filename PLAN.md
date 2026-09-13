@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current Husky repair: recognize the standard `.husky/_/pre-push` forwarding shim, preserve it and core.hooksPath, and install/update the actual `.husky/pre-push` with a shell-compatible launcher because Husky invokes it through `sh -e`. Preserve custom-hook conflicts and accept only canonical existing launcher migration. Reuse the hook owner and setup function; setup is near 700 lines. Add focused installer tests because test_setup.py is already 700 lines. Matching PR #56 gates provide the unchanged baseline; verify native shell dispatch, nonzero propagation, reruns and conflict rejection before full gates and source delivery.
+
 Current Dart coverage repair: native analyzer AST proof may remove omitted directive/compile-time-only libraries from completeness; runtime functions, getters, methods and initializers remain mandatory. Use the consumer's existing analyzer package and a focused Python hook containing the Dart parser source; the existing report owner is near its size ceiling. Native regression requires adding Dart to the existing CI runtime command, not an application dependency. Reuse the matching PR #55 source baseline; preserve the independently reproduced native fixture at /tmp/hard-eng-dart-coverage.lqNpSw.
 
 Current discovery repair: honor existing generated/vendor Git attributes for package manifests, so synchronized deployment copies do not become independent gate owners. Keep canonical and unmarked packages mandatory. Reuse `generated_sources`; a focused regression module is necessary because runner tests are at 687 lines. Prior published source gates at PR #54 provide the unchanged code/config baseline.
@@ -35,6 +37,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Standard Husky forwarding targets the real launcher without shim/config edits; actual shell dispatch preserves nonzero gate exits.
+- [x] Canonical migration/rerun succeeds; custom shims/hooks and unsafe destinations remain protected. Full checks and diff review pass.
 
 - [x] Native parser accepts demonstrated erased declarations and rejects runtime or malformed source without executing it.
 - [x] Actual fixture coverage retains its runtime totals and missing runtime rejection; full source gates and diff review pass.
@@ -97,6 +102,8 @@ N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has n
 
 Result: Passed
 
+Husky repair: old source rejects the real Frontline shim; new selection returns its project launcher without modifying consumer files. A disposable repository using the actual consumer shim/dispatcher and a path with spaces preserved stdin and returned verifier exit 17; shim bytes remained unchanged. The first manual probe used an unresolved macOS temporary path and was corrected to the caller's resolved-root contract. Native regression covers canonical migration/rerun, config/shim preservation and custom conflicts. Ready-stage full gates passed (`/tmp/he-husky-gates.log`); final Complete follows. Diff review retains existing hook/setup owners, one necessary focused regression and plan/docs; no dependency or Git configuration change. Ready for ship — local implementation and verification complete; Husky repair delivery remains pending PR/main/native proof.
+
 Dart declaration repair: original HEAD coverage validation rejects the native fixture's barrel and declarations; repaired validation accepts it at unchanged 5/6 runtime lines, including the uncalled function's zero-hit record. The native parser independently recognizes the three reported consumer constants libraries. Tests cover nested comments, type aliases, simple enums, constant namespaces, omitted runtime controls, malformed input and missing analyzer support. The Ready gate passed all 17 gates, 441 tests and four performance tests (`/tmp/he-dart-classifier-gates.log`). Final Complete gate follows. Diff review retains a focused parser hook, existing report integration, native tests, required source-CI Dart runtime, first-party module declaration and documentation; no application dependency or threshold changes. Ready for ship — local implementation and verification complete; Dart repair PR/main/native delivery remains pending.
 
 Discovery repair: six real-Git regressions failed before the fix and passed afterward across all three supported manifest types and both native attributes. Process-local attributes against the actual Frontline checkout excluded exactly eight synchronized deployment mirrors and retained all 12 real owners including packages/ff_shared; no consumer files were changed by this probe. The Ready-stage full gate passed (`/tmp/he-discovery-gates.log`); final Complete-stage gate follows. Diff review retained one existing-owner change, its focused tests and this plan; no new dependency or exclusion configuration. Ready for ship — local implementation and verification complete; delivery not performed. Discovery repair delivery remains pending PR, main CI and native delivery proof.
@@ -116,6 +123,8 @@ Current sequencing evidence (13 September 2026): the Ready/Complete waiver regre
 Final sequencing gate: `uv run python .hooks/hard-eng.py check --plan-stage Complete` exited 0; `/tmp/he-baseline-sequence-complete.log`. Local implementation and verification completed before delivery.
 
 Delivery target: Merge
+
+Husky release: final Complete-stage gate passed all 17 gates, 442 regressions and four performance tests (`/tmp/he-husky-complete.log`). Publication and required main/native delivery remain pending; earlier receipts below describe previous repairs.
 
 Dart declaration release: final Complete-stage gate passed all 17 gates, 441 regressions and four performance tests (`/tmp/he-dart-classifier-complete.log`). Source publication and verified main delivery remain pending; earlier receipts below do not claim this repair delivered.
 

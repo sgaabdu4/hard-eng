@@ -361,6 +361,8 @@ def configure_python(
 
 
 def prepare_hook(root: Path) -> tuple[Path, str]:
+    from agent_hooks import project_pre_push
+
     hook = Path(
         subprocess.check_output(
             ["git", "rev-parse", "--git-path", "hooks/pre-push"], cwd=root, text=True
@@ -369,6 +371,7 @@ def prepare_hook(root: Path) -> tuple[Path, str]:
     hook = hook if hook.is_absolute() else root / hook
     if not hook.parent.resolve().is_relative_to(root):
         raise ValueError("Git hooks point outside this repository")
+    target = project_pre_push(root, hook)
     launcher = """#!/usr/bin/env python3
 import subprocess
 import sys
@@ -376,9 +379,17 @@ import sys
 root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
 sys.exit(subprocess.call([sys.executable, root + "/.hooks/hard-eng.py", "pre-push"]))
 """
+    previous = launcher
+    if target != hook:
+        launcher = '#!/usr/bin/env sh\nexec python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py" pre-push\n'
+    hook = target
     if (hook.exists() or hook.is_symlink()) and not (
         (hook.is_symlink() and hook.resolve() == root / ".hooks/hard-eng.py")
-        or (not hook.is_symlink() and hook.is_file() and hook.read_text() == launcher)
+        or (
+            not hook.is_symlink()
+            and hook.is_file()
+            and hook.read_text() in {launcher, previous}
+        )
     ):
         raise ValueError(
             "Existing pre-push hook must be preserved; ask before changing it"
