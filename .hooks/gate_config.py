@@ -59,10 +59,15 @@ LANGUAGES = {
 
 
 def package_manifests(root: Path, files: list[Path]) -> set[tuple[str, str]]:
+    candidates = [path for path in files if path.name in LANGUAGES]
+    generated = generated_sources(
+        root, [str(path.relative_to(root)) for path in candidates]
+    )
     return {
         (str(path.parent.relative_to(root)), LANGUAGES[path.name])
-        for path in files
-        if path.name in LANGUAGES and ".agents" not in path.relative_to(root).parts
+        for path in candidates
+        if ".agents" not in path.relative_to(root).parts
+        and str(path.relative_to(root)) not in generated
     }
 
 
