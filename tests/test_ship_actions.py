@@ -313,6 +313,33 @@ def test_ship_merge_matches_verified_head_and_checks_result(
     remote.assert_not_called()
 
 
+def test_pre_push_snapshot_has_its_own_git_environment(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git(tmp_path, "config", "user.name", "Hook Fixture")
+    git(tmp_path, "config", "user.email", "hook@example.invalid")
+    (tmp_path / ".hooks").mkdir()
+    (tmp_path / ".hooks/hard-eng.py").write_text(
+        "import os, subprocess\nfrom pathlib import Path\n"
+        "actual = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip()\n"
+        "assert Path(actual) == Path.cwd()\n"
+        "assert os.environ['HE_HOOK_TEST'] == 'preserved'\n"
+    )
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-qm", "snapshot fixture")
+    revision = git(tmp_path, "rev-parse", "HEAD").strip()
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(tmp_path))
+    monkeypatch.setenv("HE_HOOK_TEST", "preserved")
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(f"refs/heads/task {revision} refs/heads/task {'0' * 40}\n"),
+    )
+    assert runner.pre_push() == 0
+    assert len(ship_actions.worktrees(tmp_path)) == 1
+
+
 def test_pre_push_blocks_base_before_running_commands(
     runner: ModuleType, shipping_policy: ShippingPolicy, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -343,6 +370,7 @@ def test_pre_push_budget_fails_even_when_commands_pass(
     )
     clock = iter([0.0, 2.0])
     monkeypatch.setattr(ship_actions.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(ship_actions, "git", Mock(return_value=""))
     monkeypatch.setattr(
         runner.subprocess, "run", Mock(return_value=subprocess.CompletedProcess([], 0))
     )
