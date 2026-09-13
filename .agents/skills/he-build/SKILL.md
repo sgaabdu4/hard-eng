@@ -5,7 +5,7 @@ description: Implement and verify a ready, authorized plan through focused fixes
 
 # Hard Eng Build
 
-- Input = existing Ready + authorized plan from [HE Plan](../he-plan/SKILL.md); inspect its readiness evidence (baseline/Exception, applicable UX, blockers), not Status alone. Missing, pending or contradictory readiness → that owner before production edits. Material scope change → same owner; preserve accepted decisions + completed work. Participation and project context → [HE workflow](../he/references/workflow.md).
+- Input = existing Ready + authorized plan from [HE Plan](../he-plan/SKILL.md); inspect its readiness evidence (passing baseline, applicable UX, blockers), not Status alone. Failed-baseline repairs alone may use its [authorized Draft repair route](../he-plan/SKILL.md#baseline-repair); feature work remains blocked until repair delivery. Other missing, pending or contradictory readiness → that owner before production edits. Material scope change → same owner; preserve accepted decisions + completed work. Participation and project context → [HE workflow](../he/references/workflow.md).
 - Output = locally implemented + verified behavior, Complete plan and explicit Ready for ship handoff. Build adds no authority to commit, push, publish, merge or deploy; delivery is a separate stage.
 
 ## Implement + verify
@@ -30,7 +30,7 @@ flowchart TD
 
 - Behavior = required connected callers, persistence, API and interface work; a skeleton or file checklist is not an accepted outcome. Keep changes at existing owners; apply relevant stack/design/security guidance only for the changed boundary.
 - Proof = [test quality](../he/references/testing.md) + [actual-diff review](../code-review/SKILL.md); required runtime journeys, visual evidence and applicable accessibility states → [E2E](../e2e/SKILL.md). Retain and inspect matching UI before/after evidence for the PR. Reuse these owners for regression, defect reopening and review findings; no duplicate checker or mandatory test/agent count.
-- Progress = same plan + remaining work. Retain the actual starting-baseline outcome/Exception + evidence; record later build results in Verification. Keep Status Ready and Verification Pending during an unblocked build. A material decision or unavailable prerequisite → Draft + exact blocker/resume condition; preserve completed steps and continue independent authorized work. Never replace missing proof with a pass or N/A.
+- Progress = same plan + remaining work. Retain the actual starting-baseline outcome + evidence; record later build results in Verification. Keep Status Ready and Verification Pending during an unblocked feature build; baseline repair follows HE Plan's Draft route above. A material decision or unavailable prerequisite → Draft + exact blocker/resume condition; preserve completed steps and continue independent authorized work. Never replace missing proof with a pass or N/A.
 
 ## Parallel work + integration
 
