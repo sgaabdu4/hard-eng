@@ -39,9 +39,28 @@ flowchart TD
 
 ## Before handoff
 
-- Baseline (Start Gate B) = run the [Draft check](../he/references/gates.md#plan-checks) on the starting implementation after planning/UX, before approval or implementation; previews must not contaminate it. Reuse only matching code/configuration/environment evidence. Record command + actual result in the plan. Failure → Draft + Blocked; request only the missing prerequisite or explicit scoped baseline exception + impact, never implementation approval. Unrelated repairs require scope authorization.
+- Baseline (Start Gate B) = run the [Draft check](../he/references/gates.md#plan-checks) on the starting implementation after planning/UX, before approval or implementation; previews must not contaminate it. Reuse only matching code/configuration/environment evidence. Record command + actual result in the plan. Failure → [baseline repair](#baseline-repair); no baseline waiver.
 - Sequencing = each substantial slice delivers observable behavior; choose an early thin slice that exercises consequential uncertainty when present. Parallel work needs agreed dependency interfaces + a named integration check; avoid a nominal slice that leaves the risk untouched.
 - Execution recommendation = smallest suitable arrangement for this plan: one builder for contained work; independent work may run in parallel; substantial work benefits from a fresh verifier. Name responsibilities, dependencies and actually available model/tool capabilities; do not invent model availability, force four agents or dispatch while planning. Respect existing delegation limits.
+
+## Baseline repair
+
+```mermaid
+flowchart TD
+  F[Failed baseline: feature stays Draft + blocked] --> A{Repair + main delivery authorized?}
+  A -->|No| Q[Resolve only missing scope or prerequisite]
+  A -->|Yes| R[Separate repair plan + task branch]
+  R --> B[HE Build: baseline repairs only from truthful Draft]
+  B --> C[All native checks pass + repair plan Complete]
+  C --> S[HE Ship: merge repairs + verify main CI and delivery]
+  S --> N[Fresh feature branch from verified main + new baseline]
+  click B "../he-build/SKILL.md"
+  click S "../he-ship/SKILL.md"
+```
+
+- Repair scope = all actual enforced baseline failures, including pre-existing debt; age or effort is not an exemption. Correct proven false positives only under the existing [native exception rule](../he/references/gates.md). Reuse valid user authorization; otherwise ask for the missing repair/delivery scope.
+- Repair is the sole failed-baseline implementation route: record failures, bounded repair steps + intended proof before edits. Preserve the original failed evidence; after repair, record the passing rerun as current baseline and complete normal build checks. Never declare Ready while checks fail.
+- Feature resumes only after the repair revision is on the intended main branch and required CI/delivery checks pass. An open PR or local pass is insufficient. Keep repair and feature plans/diffs separate; apply the feature's original authorization and readiness rules after updating its baseline.
 
 ## Participation
 
@@ -56,7 +75,7 @@ Use the task mode from [Hard Eng](../he/references/workflow.md); mode selection 
 
 ## Readiness + authorization
 
-- Ready = outcome + boundaries understood; material blocking choices resolved; applicable `ux_reference` shown and its direction settled within the task's participation mode; baseline outcome addressed; planned acceptance checks + actionable first step + execution recommendation. Deferred uncertainty stays explicit and must not contradict the authorized scope.
+- Ready = outcome + boundaries understood; material blocking choices resolved; applicable `ux_reference` shown and its direction settled within the task's participation mode; baseline passed and any prerequisite repairs delivered; planned acceptance checks + actionable first step + execution recommendation. Deferred uncertainty stays explicit and must not contradict the authorized scope.
 - Authority = user's conversation instructions under the participation rule above; plan records their scope, not a self-issued permission. Reuse valid proposal approval or autonomous authorization. Otherwise show the completed plan and ask once to proceed; plan-only requests end with the plan.
 - Approval covers outcome + boundaries. File/step/test/internal approach changes → update the same plan and continue. Changed outcome, material scope/risk or an unauthorized consequential action → resolve that boundary only. Plan edits do not expire approval; no hashes, receipts or approval commands.
 - Plan checks = pass the [Ready check](../he/references/gates.md#plan-checks) before combined approval or authorized implementation; missing previews keep the plan Draft. Review evidence + N/A reasons against actual work: a structural pass proves neither truth, scope relevance, authority nor chronology. Host-native read-only controls remain separate.

@@ -78,24 +78,20 @@ def test_ready_requires_baseline_and_rendered_evidence(
         validate_plan(path)
 
 
-def test_exception_requires_authorization_and_impact(
-    tmp_path: Path, completed_plan: str
+@pytest.mark.parametrize("status", ["Ready", "Complete"])
+def test_baseline_waiver_cannot_authorize_feature_work(
+    tmp_path: Path, completed_plan: str, status: str
 ) -> None:
     path = tmp_path / "PLAN.md"
-    text = completed_plan.replace("Result: Passed", "Result: Exception", 1)
-    path.write_text(text)
-    with pytest.raises(ValueError, match="Authorization"):
-        validate_plan(path)
-    text = text.replace("One test actor.", "Authorization: Explicit fixture exception.")
-    path.write_text(text)
-    with pytest.raises(ValueError, match="Impact"):
-        validate_plan(path)
     path.write_text(
-        text.replace("Authorization:", "Impact: Fixture limitation.\nAuthorization:")
+        completed_plan.replace("Status: Complete", f"Status: {status}")
+        .replace("Result: Passed", "Result: Exception", 1)
+        .replace(
+            "One test actor.",
+            "Authorization: Explicit fixture waiver.\nImpact: Known failing baseline.",
+        )
     )
-    assert validate_plan(path) == "Complete"
-    path.write_text(path.read_text().replace("Explicit fixture exception.", "Pending"))
-    with pytest.raises(ValueError, match="Authorization"):
+    with pytest.raises(ValueError, match="Result"):
         validate_plan(path)
 
 

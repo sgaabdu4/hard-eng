@@ -29,16 +29,10 @@ def proof(content: str, allowed: set[str]) -> None:
     result = field(content, "Result")
     if result not in allowed:
         raise ValueError(f"plan Result {result!r} must be one of {sorted(allowed)}")
-    required = (
-        ("Evidence", "Authorization", "Impact")
-        if result == "Exception"
-        else ("Evidence",)
-    )
-    for name in required:
-        if re.match(r"(?i)^(?:pending|none|blocked|n/a)\b", field(content, name)):
-            raise ValueError(
-                f"plan {name} must describe actual proof, not a pending result"
-            )
+    if re.match(r"(?i)^(?:pending|none|blocked|n/a)\b", field(content, "Evidence")):
+        raise ValueError(
+            "plan Evidence must describe actual proof, not a pending result"
+        )
 
 
 def plan_sections(content: str) -> dict[str, str]:
@@ -75,7 +69,7 @@ def validate_plan(path: Path) -> str:
         return status
     if field(sections["Decisions + authorization"], "Blockers") != "None":
         raise ValueError("ready/complete plan has unresolved Blockers")
-    proof(baseline, {"Passed", "Exception"})
+    proof(baseline, {"Passed"})
     if not re.fullmatch(r"N/A — [^\n]+", ux.strip()):
         proof(ux, {"Passed"})
     if status == "Complete":

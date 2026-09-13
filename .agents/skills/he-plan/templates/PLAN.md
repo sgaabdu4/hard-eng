@@ -25,7 +25,7 @@ Blockers: [TODO: None or concrete unresolved decisions]
 Result: Pending
 Evidence: [TODO: Starting check command and actual result, or existing log link]
 
-[TODO: Smallest builder/verifier arrangement and first observable slice. For Result: Exception, add Authorization: with the user's explicit exception and Impact: with the failed check's consequence.]
+[TODO: Smallest builder/verifier arrangement and first observable slice. Failed baseline keeps feature work blocked; use HE Plan's separate authorized baseline-repair route and retain original failure plus passing repair/delivery evidence.]
 
 ## Risks + recovery
 
