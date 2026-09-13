@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current discovery repair: honor existing generated/vendor Git attributes for package manifests, so synchronized deployment copies do not become independent gate owners. Keep canonical and unmarked packages mandatory. Reuse `generated_sources`; a focused regression module is necessary because runner tests are at 687 lines. Prior published source gates at PR #54 provide the unchanged code/config baseline.
+
 Current coverage repair: exempt omitted TypeScript sources only when native type stripping proves no runtime content remains. Preserve missing executable-file rejection and real coverage totals; never execute inspected source. `.hooks/reports.py` is near 700 lines, so a focused coverage-source helper holds the native parsing operation without a new dependency or configuration field.
 
 Additional confirmed pilot input: Dart package configuration root URIs denote directories even without a trailing slash. Correct the existing include resolver and prove nested strict-analysis validation remains active. The runner test file is near its size ceiling, so focused Dart include regressions use their own test module.
@@ -31,6 +33,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Generated/vendor manifests are excluded consistently from setup and gate ownership; unmarked and explicitly false attributes retain package enforcement.
+- [x] Verify native Git attributes, the reported consumer discovery, full source gates and the final diff.
 
 - [x] The consumer's type-only omission passes; omitted runtime, side-effect, malformed and unsupported sources still fail; type-only files cannot fabricate executable coverage.
 - [x] Run native regressions, actual consumer report proof and the full gate; keep delivery and adoption evidence separate.
@@ -87,6 +92,10 @@ N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has n
 
 Result: Passed
 
+Discovery repair: six real-Git regressions failed before the fix and passed afterward across all three supported manifest types and both native attributes. Process-local attributes against the actual Frontline checkout excluded exactly eight synchronized deployment mirrors and retained all 12 real owners including packages/ff_shared; no consumer files were changed by this probe. The Ready-stage full gate passed (`/tmp/he-discovery-gates.log`); final Complete-stage gate follows. Diff review retained one existing-owner change, its focused tests and this plan; no new dependency or exclusion configuration. Ready for ship — local implementation and verification complete; delivery not performed. Discovery repair delivery remains pending PR, main CI and native delivery proof.
+
+Both pilots independently adopted source revision 6a272f9776b7ed8a9cec161fb189b4d3507c672c through supported updates. StaffToDo's real Dart include resolution passed; Frontline's installed source files match and full LCOV completeness passed at the unchanged measured 37521/53542 lines (70.08%). Their application baseline and main delivery remain unfinished.
+
 Coverage repair baseline reuses the matching Complete-stage pass at `/tmp/he-adapter-complete.log`, whose source tree exactly matched main before this change. The actual consumer `dashboardTypes.ts` has no LCOV record and the current validator reports it omitted; this failure was reproduced directly against its report before editing coverage code.
 
 Current source verification: three type-only cases and two directory-URI cases failed before their fixes. The actual native pre-push snapshot regression also failed before its fix and now passes with all shipping-action tests. Review moved environment cleanup from an attempted launcher change into the existing native verifier so already installed launchers benefit; that earlier run is superseded by the final integrated check. The new helper is declared in the existing first-party module list. Actual consumer LCOV verification now accepts its erased module while retaining the measured executable file's unchanged 0/57 result. Full Complete-stage verification follows; these fixes' publication and consumer adoption remain pending. Node's built-in type stripping parses source as data, never executes it, and unsupported syntax stays required rather than being waived.
@@ -100,6 +109,8 @@ Current sequencing evidence (13 September 2026): the Ready/Complete waiver regre
 Final sequencing gate: `uv run python .hooks/hard-eng.py check --plan-stage Complete` exited 0; `/tmp/he-baseline-sequence-complete.log`. Local implementation and verification completed before delivery.
 
 Delivery target: Merge
+
+Current discovery release: final Complete-stage check passed all 17 gates, 439 regression tests and four performance tests (`/tmp/he-discovery-complete.log`). PR publication, main CI and native delivery remain pending; the delivery receipts below describe earlier repairs.
 
 Pilot repair release evidence: the final Complete-stage run passed all 17 gates, 433 regression tests and four performance tests (`/tmp/he-pilot-repairs-release.log`). Negative coverage cases include executable code between block comments and after both JavaScript Unicode line separators; neither can be mistaken for an empty module. Final diff review retained only the source defects, native regressions, runtime requirement and plan evidence.
 
