@@ -486,8 +486,35 @@ def test_coverage_excludes_native_generated_and_vendor_attributes(
     assert len(runner.production_files(tmp_path, group, include_tests=True)) == 3
 
 
-def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
+def test_wrapped_actionlint_keeps_separate_dart_provisioning(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, json.dumps({"PATH": ""}), "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setenv("PATH", "")
+    group: Group = {
+        "path": ".",
+        "checks": [
+            {"name": "workflows", "command": ["node", "adapter.mjs", "actionlint"]},
+            {"name": "dart", "command": ["dart-decimate", "."]},
+        ],
+    }
+    tool_setup.provision_tools(tmp_path, [group], 30)
+    assert "aqua:rhysd/actionlint@latest" in commands[0]
+    assert commands[1][:2] == ["cargo", "install"]
+    assert commands[1][-1] == "dart-decimate"
+    assert os.environ["PATH"].startswith(str(tmp_path / "hard-eng-tools/decimate/bin"))
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wrapped: bool
 ) -> None:
     sdk, scanner = tmp_path / "sdk", tmp_path / "hard-eng-tools/scanner"
     for directory, executable in ((sdk, "uv"), (scanner, "gitleaks")):
@@ -508,9 +535,10 @@ def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
         )
 
     monkeypatch.setattr(subprocess, "run", native_environment)
+    command = ["node", "scan.mjs", "gitleaks"] if wrapped else ["gitleaks"]
     tool_setup.provision_tools(
         tmp_path,
-        [{"path": ".", "checks": [{"name": "secrets", "command": ["gitleaks"]}]}],
+        [{"path": ".", "checks": [{"name": "secrets", "command": command}]}],
         30,
     )
     assert shutil.which("uv") == str(sdk / "uv")
