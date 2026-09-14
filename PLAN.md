@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current attachment repair: validate authentic GitHub image/video attachments using a one-byte GET with silent body output instead of HEAD. Both approved StaffToDo PR59 attachments independently return 403 to HEAD and 206 image/png to the ranged GET; suppressing the binary body preserves the existing text-only gh reader. Keep URL, status, media and length checks. Reuse shipping.py and its existing tests; no new helper, dependency or upload. The separate overbroad UI-path evidence requirement remains unresolved by this transport repair.
+
 Current Trivy report repair: accept Trivy's documented repository artifact type for directory configuration scans with Git metadata, alongside filesystem. Native same-Dockerfile before/after Git probe emits 27 successful checks and zero failures in both reports; current validator incorrectly rejects only repository. Reuse the report validator and its existing tests; no new files, dependencies or waiver. Keep schema, target/class, successful-check and finding validation unchanged. PR63 supplies matching source baseline proof. This consumer blocker is separate from the broader efficiency audit requested after both Decimate adoptions.
 
 Current Decimate installation repair: install the latest published dart-decimate npm package through the existing tool provisioner, like Fallow/React Doctor, instead of compiling Git source with Cargo. Native isolated pnpm-backed mise installation succeeds; its default embedded installer rejected this package. Select pnpm for managed npm installs with only Decimate's reviewed lifecycle script allowed, preserve live latest-version resolution and scanner failure behavior, and remove the now-unneeded Rust runtime from newly generated Dart workflows. Reuse tool_setup/project_setup and existing tests; no new package dependency or cache mechanism. PR62 supplies the verified source baseline. Measure fresh install and actual scanner behavior, not just command mocks.
@@ -51,6 +53,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Authentic GitHub attachments pass the existing shipping verifier using the native ranged request; unsupported URLs, unavailable and non-media responses still fail.
+- [x] Existing shipping regressions pass, with the real two-URL failure and repaired success independently verified; final full gate follows.
 
 - [x] Native filesystem and Git-repository config reports pass with the same clean results; invalid artifact types and actual failures remain rejected.
 - [x] Focused regressions, source gates and diff review pass; final release gate follows before source delivery and consumer retry.
@@ -119,6 +124,8 @@ The user selected Frontline Fitness's Main board for the temporary tracker test 
 
 ## Baseline + execution
 
+Attachment repair baseline: unchanged source bd42ac12ec3a19f2c6aed77c09b539772c9e2844 passed all 17 gates, 466 regression tests and four performance tests, followed by required main CI 34804245012 and native delivered for PR64. Reuse matching source/environment evidence; one builder owns this contained fix.
+
 Result: Passed
 Current acceptance baseline: `uv run python .hooks/hard-eng.py check --plan-stage Draft` exited 0 on the current source before scanner setup changes; `/tmp/he-full-flow-source-baseline.log`. Two workers own independent disposable Python and JavaScript fixtures; the coordinator owns Dart and source fixes.
 Evidence: Fresh `uv run python .hooks/hard-eng.py check --plan-stage Draft` exited 0 before the coverage-loop guidance changes: all 17 gates passed. Output: `/tmp/hard-eng-planning-coverage-20260910/source-baseline.log`. The previous refinement baseline remains at `/tmp/hard-eng-planning-refinement-20260910/baseline.log`.
@@ -134,6 +141,10 @@ A structural check cannot prove truthful evidence, actual approval or that a pla
 N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has no visual application.
 
 ## Verification
+
+Attachment release gate: final Complete check passed all 17 gates, 466 regression tests and four performance tests (`/tmp/he-attachment-complete.log`). Ready for ship — local implementation and verification complete; delivery not performed. Source PR, required main CI and native delivery are pending, followed by supported consumer adoption. The separate evidence-policy correction remains open.
+
+Attachment repair: the pre-implementation Ready gate passed all 17 checks (`/tmp/he-attachment-ready.log`). Independent native HEAD probes fail with 403 for both approved PR59 URLs; ranged GET returns 206, image/png, one-byte length and total image length 85098. The shipping regression failed against HEAD for the reproduced reason (`/tmp/he-attachment-red.log`); all 64 shipping/action tests pass after repair (`/tmp/he-attachment-tests.log`). The real repaired verifier accepts both approved attachments without binary decoding errors (`/tmp/he-attachment-native.log`). Diff review retains existing URL/status/media/length rejection and only changes the probe transport and its existing regression. Final Complete gate and authorized PR/main CI/native delivery remain pending.
 
 Trivy repository release: final Complete-stage gate passed all 17 checks, 466 regressions and four performance tests (`/tmp/he-trivy-repository-complete.log`). Source PR/main/native delivery and consumer CI retry remain pending.
 

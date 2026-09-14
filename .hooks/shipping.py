@@ -470,7 +470,7 @@ def _changed_paths(root: Path, owner: str, name: str, number: int) -> list[str]:
     return sorted(set(paths))
 
 
-def _head_attachment(root: Path, url: str) -> None:
+def _check_attachment(root: Path, url: str) -> None:
     parsed = urlparse(url)
     if (
         parsed.scheme != "https"
@@ -480,7 +480,9 @@ def _head_attachment(root: Path, url: str) -> None:
         or not parsed.path.startswith("/user-attachments/assets/")
     ):
         raise ShippingError("UI evidence URL is not an allowed GitHub attachment")
-    response = gh(root, "api", "--method", "HEAD", "--include", url)
+    # Signed attachment redirects can reject HEAD; keep binary data out of stdout.
+    request = ("api", "--method", "GET", "--include", "--silent")
+    response = gh(root, *request, "-H", "Range: bytes=0-0", url)
     statuses = re.findall(r"(?im)^HTTP/\S+\s+(\d{3})\b", response)
     if not statuses or not 200 <= int(statuses[-1]) < 300:
         raise ShippingError("UI evidence attachment is unavailable")
@@ -509,8 +511,8 @@ def _ui_evidence(
     after = _AFTER_ATTACHMENT.findall(pull.body)
     if len(before) != 1 or len(after) != 1 or before[0] == after[0]:
         raise ShippingError("UI changes require distinct Before and After attachments")
-    _head_attachment(root, before[0])
-    _head_attachment(root, after[0])
+    _check_attachment(root, before[0])
+    _check_attachment(root, after[0])
 
 
 def _root_and_branch(root: Path, require_branch: bool) -> tuple[Path, str, str]:
