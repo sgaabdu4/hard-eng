@@ -1,23 +1,22 @@
-import { spawn } from "node:child_process";
-import { mkdir, readdir, rm } from "node:fs/promises";
-import path from "node:path";
+import { spawn } from 'node:child_process';
+import { mkdir, readdir, rm } from 'node:fs/promises';
+import path from 'node:path';
 
 function command(commandName, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(commandName, args, { stdio: ["ignore", "pipe", "pipe"], ...options });
+    const child = spawn(commandName, args, { stdio: ['ignore', 'pipe', 'pipe'], ...options });
     const stdout = [];
     const stderr = [];
-    child.stdout.on("data", (chunk) => stdout.push(chunk));
-    child.stderr.on("data", (chunk) => stderr.push(chunk));
-    child.on("error", reject);
-    child.on("close", (code) => {
+    child.stdout.on('data', (chunk) => stdout.push(chunk));
+    child.stderr.on('data', (chunk) => stderr.push(chunk));
+    child.on('error', reject);
+    child.on('close', (code) => {
       const result = {
         code,
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
+        stdout: Buffer.concat(stdout).toString('utf8'),
+        stderr: Buffer.concat(stderr).toString('utf8'),
       };
-      if (code !== 0)
-        reject(new Error(result.stderr.trim() || `${commandName} exited with ${code}`));
+      if (code !== 0) reject(new Error(result.stderr.trim() || `${commandName} exited with ${code}`));
       else resolve(result);
     });
   });
@@ -33,7 +32,7 @@ function runDuration(startFrame, endFrame, fps) {
 }
 
 function parseHexColor(value) {
-  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(value || ""));
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(value || ''));
   if (!match) return null;
   return {
     r: Number.parseInt(match[1], 16),
@@ -45,9 +44,7 @@ function parseHexColor(value) {
 function cubicBezier(progress, x1, y1, x2, y2) {
   const sample = (time, first, second) => {
     const inverse = 1 - time;
-    return (
-      3 * inverse * inverse * time * first + 3 * inverse * time * time * second + time * time * time
-    );
+    return 3 * inverse * inverse * time * first + 3 * inverse * time * time * second + time * time * time;
   };
   let lower = 0;
   let upper = 1;
@@ -66,17 +63,17 @@ function expectedPointerPosition(pointerAudit, timeMs) {
   };
   let visible = true;
   for (const event of pointerAudit.track) {
-    if (event.kind === "visibility") {
+    if (event.kind === 'visibility') {
       if (event.atMs > timeMs) break;
       visible = event.visible !== false;
       continue;
     }
-    if (event.kind === "static") {
+    if (event.kind === 'static') {
       if (event.atMs > timeMs) break;
       position = { x: event.x, y: event.y };
       continue;
     }
-    if (event.kind !== "move") continue;
+    if (event.kind !== 'move') continue;
     if (timeMs < event.startMs) break;
     if (timeMs <= event.endMs) {
       const duration = Math.max(1, event.endMs - event.startMs);
@@ -106,32 +103,16 @@ function distanceToSegment(x, y, segment) {
   const deltaY = segment.toY - segment.fromY;
   const lengthSquared = deltaX * deltaX + deltaY * deltaY;
   if (lengthSquared === 0) return Math.hypot(x - segment.fromX, y - segment.fromY);
-  const progress = Math.max(
-    0,
-    Math.min(1, ((x - segment.fromX) * deltaX + (y - segment.fromY) * deltaY) / lengthSquared),
-  );
-  return Math.hypot(
-    x - (segment.fromX + deltaX * progress),
-    y - (segment.fromY + deltaY * progress),
-  );
+  const progress = Math.max(0, Math.min(1, ((x - segment.fromX) * deltaX + (y - segment.fromY) * deltaY) / lengthSquared));
+  return Math.hypot(x - (segment.fromX + deltaX * progress), y - (segment.fromY + deltaY * progress));
 }
 
-function findRingCandidate(
-  frame,
-  scanWidth,
-  scanHeight,
-  target,
-  expectedX,
-  expectedY,
-  renderedSize,
-  movementSegment,
-) {
+function findRingCandidate(frame, scanWidth, scanHeight, target, expectedX, expectedY, renderedSize, movementSegment) {
   const pixelCount = scanWidth * scanHeight;
   const mask = new Uint8Array(pixelCount);
   for (let index = 0; index < pixelCount; index += 1) {
     const offset = index * 3;
-    if (pointerColorMatches(frame[offset], frame[offset + 1], frame[offset + 2], target))
-      mask[index] = 1;
+    if (pointerColorMatches(frame[offset], frame[offset + 1], frame[offset + 2], target)) mask[index] = 1;
   }
   const visited = new Uint8Array(pixelCount);
   const minimumDiameter = Math.max(4, renderedSize * 0.65);
@@ -174,8 +155,7 @@ function findRingCandidate(
     const width = maxX - minX + 1;
     const height = maxY - minY + 1;
     if (count < 6 || width < minimumDiameter || height < minimumDiameter) continue;
-    if (width > maximumDiameter || height > maximumDiameter || Math.abs(width - height) > 4)
-      continue;
+    if (width > maximumDiameter || height > maximumDiameter || Math.abs(width - height) > 4) continue;
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
     const quadrants = [0, 0, 0, 0];
@@ -187,9 +167,7 @@ function findRingCandidate(
     }
     if (quadrants.some((value) => value === 0) || centerPixels > 2) continue;
     const distance = Math.hypot(centerX - expectedX, centerY - expectedY);
-    const pathDistance = movementSegment
-      ? distanceToSegment(centerX, centerY, movementSegment)
-      : distance;
+    const pathDistance = movementSegment ? distanceToSegment(centerX, centerY, movementSegment) : distance;
     const allowedPathDistance = movementSegment ? Math.max(18, renderedSize * 4) : maximumDistance;
     if (pathDistance > allowedPathDistance) continue;
     const score = movementSegment ? pathDistance * 4 + distance * 0.05 : distance;
@@ -228,8 +206,7 @@ function inspectFrame(frame, previous, pointerAudit, frameTimeMs, scanWidth, sca
     if (luminance >= 248) lightPixels += 1;
     if (luminance <= 7) darkPixels += 1;
     if (previous) {
-      const prior =
-        (previous[offset] * 77 + previous[offset + 1] * 150 + previous[offset + 2] * 29) >> 8;
+      const prior = (previous[offset] * 77 + previous[offset + 1] * 150 + previous[offset + 2] * 29) >> 8;
       difference += Math.abs(luminance - prior);
     }
   }
@@ -262,53 +239,24 @@ function inspectFrame(frame, previous, pointerAudit, frameTimeMs, scanWidth, sca
     for (let y = top; y <= bottom; y += 1) {
       for (let x = left; x <= right; x += 1) {
         const offset = (y * scanWidth + x) * 3;
-        if (
-          pointerColorMatches(
-            frame[offset],
-            frame[offset + 1],
-            frame[offset + 2],
-            pointerAudit.color,
-          )
-        ) {
+        if (pointerColorMatches(frame[offset], frame[offset + 1], frame[offset + 2], pointerAudit.color)) {
           matchingPixels += 1;
         }
       }
     }
-    const minimumMatchingPixels = Math.max(
-      4,
-      Math.round(pointerAudit.size * Math.max(scaleX, scaleY) * 0.75),
-    );
+    const minimumMatchingPixels = Math.max(4, Math.round(pointerAudit.size * Math.max(scaleX, scaleY) * 0.75));
     let corridorMatchingPixels = 0;
     if (movementSegment) {
       const corridorRadius = baseRadius * 2;
-      const corridorLeft = Math.max(
-        0,
-        Math.floor(Math.min(movementSegment.fromX, movementSegment.toX) - corridorRadius),
-      );
-      const corridorRight = Math.min(
-        scanWidth - 1,
-        Math.ceil(Math.max(movementSegment.fromX, movementSegment.toX) + corridorRadius),
-      );
-      const corridorTop = Math.max(
-        0,
-        Math.floor(Math.min(movementSegment.fromY, movementSegment.toY) - corridorRadius),
-      );
-      const corridorBottom = Math.min(
-        scanHeight - 1,
-        Math.ceil(Math.max(movementSegment.fromY, movementSegment.toY) + corridorRadius),
-      );
+      const corridorLeft = Math.max(0, Math.floor(Math.min(movementSegment.fromX, movementSegment.toX) - corridorRadius));
+      const corridorRight = Math.min(scanWidth - 1, Math.ceil(Math.max(movementSegment.fromX, movementSegment.toX) + corridorRadius));
+      const corridorTop = Math.max(0, Math.floor(Math.min(movementSegment.fromY, movementSegment.toY) - corridorRadius));
+      const corridorBottom = Math.min(scanHeight - 1, Math.ceil(Math.max(movementSegment.fromY, movementSegment.toY) + corridorRadius));
       for (let y = corridorTop; y <= corridorBottom; y += 1) {
         for (let x = corridorLeft; x <= corridorRight; x += 1) {
           if (distanceToSegment(x, y, movementSegment) > corridorRadius) continue;
           const offset = (y * scanWidth + x) * 3;
-          if (
-            pointerColorMatches(
-              frame[offset],
-              frame[offset + 1],
-              frame[offset + 2],
-              pointerAudit.color,
-            )
-          ) {
+          if (pointerColorMatches(frame[offset], frame[offset + 1], frame[offset + 2], pointerAudit.color)) {
             corridorMatchingPixels += 1;
           }
         }
@@ -335,10 +283,7 @@ function inspectFrame(frame, previous, pointerAudit, frameTimeMs, scanWidth, sca
       corridorMatchingPixels,
       minimumMatchingPixels,
       ringCandidate,
-      present:
-        matchingPixels >= minimumMatchingPixels ||
-        corridorMatchingPixels >= minimumMatchingPixels ||
-        Boolean(ringCandidate),
+      present: matchingPixels >= minimumMatchingPixels || corridorMatchingPixels >= minimumMatchingPixels || Boolean(ringCandidate),
     };
   }
   return {
@@ -346,7 +291,7 @@ function inspectFrame(frame, previous, pointerAudit, frameTimeMs, scanWidth, sca
     range: max - min,
     lightRatio,
     darkRatio,
-    blank: lightRatio >= 0.997 ? "near-white" : darkRatio >= 0.997 ? "near-black" : null,
+    blank: lightRatio >= 0.997 ? 'near-white' : darkRatio >= 0.997 ? 'near-black' : null,
     diff: previous ? difference / pixelCount : null,
     pointer,
   };
@@ -359,21 +304,21 @@ async function scanFrames(videoPath, probe, pointerAudit) {
   const scanHeight = Math.max(1, Math.round((sourceHeight / sourceWidth) * scanWidth));
   const frameSize = scanWidth * scanHeight * 3;
   const fps = Number(probe.fps);
-  const ffmpeg = spawn("ffmpeg", [
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-i",
+  const ffmpeg = spawn('ffmpeg', [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-i',
     videoPath,
-    "-vf",
+    '-vf',
     `scale=${scanWidth}:${scanHeight}:flags=fast_bilinear`,
-    "-pix_fmt",
-    "rgb24",
-    "-f",
-    "rawvideo",
-    "-fps_mode",
-    "passthrough",
-    "-",
+    '-pix_fmt',
+    'rgb24',
+    '-f',
+    'rawvideo',
+    '-fps_mode',
+    'passthrough',
+    '-',
   ]);
   const blankRuns = [];
   const staticRuns = [];
@@ -409,16 +354,14 @@ async function scanFrames(videoPath, probe, pointerAudit) {
         darkRatio: metrics.darkRatio,
         blank: metrics.blank,
         pointerPresent: metrics.pointer?.expectedVisible ? metrics.pointer.present : null,
-        unexpectedPointer:
-          metrics.pointer?.expectedVisible === false ? metrics.pointer.present : false,
+        unexpectedPointer: metrics.pointer?.expectedVisible === false ? metrics.pointer.present : false,
       });
       maxDiff = Math.max(maxDiff, diff);
     }
     if (metrics.blank && blankKind === metrics.blank) {
       // Continue the current blank run.
     } else if (metrics.blank) {
-      if (blankKind)
-        blankRuns.push({ kind: blankKind, startFrame: blankStart, endFrame: frameIndex - 1 });
+      if (blankKind) blankRuns.push({ kind: blankKind, startFrame: blankStart, endFrame: frameIndex - 1 });
       blankKind = metrics.blank;
       blankStart = frameIndex;
     } else if (blankKind) {
@@ -463,7 +406,7 @@ async function scanFrames(videoPath, probe, pointerAudit) {
     previous = frame;
   };
 
-  ffmpeg.stdout.on("data", (chunk) => {
+  ffmpeg.stdout.on('data', (chunk) => {
     pending = Buffer.concat([pending, chunk]);
     while (pending.length >= frameSize) {
       const frame = pending.subarray(0, frameSize);
@@ -472,21 +415,17 @@ async function scanFrames(videoPath, probe, pointerAudit) {
     }
   });
   const stderr = [];
-  ffmpeg.stderr.on("data", (chunk) => stderr.push(chunk));
+  ffmpeg.stderr.on('data', (chunk) => stderr.push(chunk));
   const exitCode = await new Promise((resolve, reject) => {
-    ffmpeg.on("error", reject);
-    ffmpeg.on("close", resolve);
+    ffmpeg.on('error', reject);
+    ffmpeg.on('close', resolve);
   });
-  if (exitCode !== 0)
-    throw new Error(Buffer.concat(stderr).toString("utf8") || "FFmpeg could not decode the video");
-  if (pending.length !== 0)
-    throw new Error(`Video ended with an incomplete frame (${pending.length} bytes)`);
+  if (exitCode !== 0) throw new Error(Buffer.concat(stderr).toString('utf8') || 'FFmpeg could not decode the video');
+  if (pending.length !== 0) throw new Error(`Video ended with an incomplete frame (${pending.length} bytes)`);
   if (blankKind) blankRuns.push({ kind: blankKind, startFrame: blankStart, endFrame: frameIndex });
   if (staticActive) staticRuns.push({ startFrame: staticStart, endFrame: frameIndex });
-  if (pointerMissingActive)
-    pointerMissingRuns.push({ startFrame: pointerMissingStart, endFrame: frameIndex });
-  if (unexpectedPointerActive)
-    unexpectedPointerRuns.push({ startFrame: unexpectedPointerStart, endFrame: frameIndex });
+  if (pointerMissingActive) pointerMissingRuns.push({ startFrame: pointerMissingStart, endFrame: frameIndex });
+  if (unexpectedPointerActive) unexpectedPointerRuns.push({ startFrame: unexpectedPointerStart, endFrame: frameIndex });
   return {
     summary: {
       scannedEveryFrame: true,
@@ -517,51 +456,49 @@ async function scanFrames(videoPath, probe, pointerAudit) {
 async function createContactSheets(videoPath, outputDir, contactFps) {
   const existingFiles = await readdir(outputDir);
   await Promise.all(
-    existingFiles
-      .filter((name) => /^contact-sheet-\d+\.jpg$/.test(name))
-      .map((name) => rm(path.join(outputDir, name), { force: true })),
+    existingFiles.filter((name) => /^contact-sheet-\d+\.jpg$/.test(name)).map((name) => rm(path.join(outputDir, name), { force: true })),
   );
-  const pattern = path.join(outputDir, "contact-sheet-%03d.jpg");
-  await command("ffmpeg", [
-    "-y",
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-i",
+  const pattern = path.join(outputDir, 'contact-sheet-%03d.jpg');
+  await command('ffmpeg', [
+    '-y',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-i',
     videoPath,
-    "-vf",
+    '-vf',
     `fps=${contactFps},scale=360:-1:flags=lanczos,tile=4x5`,
-    "-q:v",
-    "3",
-    "-f",
-    "image2",
+    '-q:v',
+    '3',
+    '-f',
+    'image2',
     pattern,
   ]);
   return pattern;
 }
 
 async function createOpeningSheet(videoPath, outputDir, durationMs) {
-  const output = path.join(outputDir, "opening-review-10fps.jpg");
-  await command("ffmpeg", [
-    "-y",
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-t",
+  const output = path.join(outputDir, 'opening-review-10fps.jpg');
+  await command('ffmpeg', [
+    '-y',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-t',
     String(Math.max(1, durationMs / 1000)),
-    "-i",
+    '-i',
     videoPath,
-    "-vf",
-    "fps=10,scale=432:-1:flags=lanczos,tile=5x6",
-    "-frames:v",
-    "1",
+    '-vf',
+    'fps=10,scale=432:-1:flags=lanczos,tile=5x6',
+    '-frames:v',
+    '1',
     output,
   ]);
   return output;
 }
 
 async function createActionSheets(videoPath, outputDir, timeline) {
-  const actionDir = path.join(outputDir, "action-review-10fps");
+  const actionDir = path.join(outputDir, 'action-review-10fps');
   await rm(actionDir, { recursive: true, force: true });
   await mkdir(actionDir, { recursive: true });
   const sheets = [];
@@ -574,25 +511,25 @@ async function createActionSheets(videoPath, outputDir, timeline) {
     const expectedFrames = Math.max(1, Math.ceil(durationMs / 100));
     const columns = Math.min(5, expectedFrames);
     const rows = expectedFrames <= 30 ? Math.ceil(expectedFrames / columns) : 6;
-    const prefix = `step-${String(step.index).padStart(3, "0")}`;
+    const prefix = `step-${String(step.index).padStart(3, '0')}`;
     const pattern = path.join(actionDir, `${prefix}-%03d.jpg`);
-    await command("ffmpeg", [
-      "-y",
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-ss",
+    await command('ffmpeg', [
+      '-y',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-ss',
       String(startMs / 1000),
-      "-t",
+      '-t',
       String(durationMs / 1000),
-      "-i",
+      '-i',
       videoPath,
-      "-vf",
+      '-vf',
       `fps=10,scale=432:-1:flags=lanczos,tile=${columns}x${rows}:padding=4:margin=4:color=white`,
-      "-q:v",
-      "3",
-      "-f",
-      "image2",
+      '-q:v',
+      '3',
+      '-f',
+      'image2',
       pattern,
     ]);
     sheets.push({
@@ -611,15 +548,15 @@ async function createActionSheets(videoPath, outputDir, timeline) {
 }
 
 async function probeTimestamps(videoPath) {
-  const result = await command("ffprobe", [
-    "-v",
-    "error",
-    "-select_streams",
-    "v:0",
-    "-show_entries",
-    "frame=best_effort_timestamp_time",
-    "-of",
-    "csv=p=0",
+  const result = await command('ffprobe', [
+    '-v',
+    'error',
+    '-select_streams',
+    'v:0',
+    '-show_entries',
+    'frame=best_effort_timestamp_time',
+    '-of',
+    'csv=p=0',
     videoPath,
   ]);
   const timestamps = result.stdout

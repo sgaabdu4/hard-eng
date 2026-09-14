@@ -1,17 +1,15 @@
-import { performance } from "node:perf_hooks";
-import { finiteNumber } from "./walkthrough-config.mjs";
+import { performance } from 'node:perf_hooks';
+import { finiteNumber } from './walkthrough-config.mjs';
 
-const navigationBridgeStorageKey = "__prd_walkthrough_reload_bridge_v1";
-const navigationBridgeHostId = "__prd-walkthrough-reload-bridge";
-const viewTransitionOverlayName = "prd-walkthrough-overlay";
-const viewTransitionStyleId = "__prd-walkthrough-view-transition-style";
+const navigationBridgeStorageKey = '__prd_walkthrough_reload_bridge_v1';
+const navigationBridgeHostId = '__prd-walkthrough-reload-bridge';
+const viewTransitionOverlayName = 'prd-walkthrough-overlay';
+const viewTransitionStyleId = '__prd-walkthrough-view-transition-style';
 
 function cubicBezier(progress, x1, y1, x2, y2) {
   const sample = (time, first, second) => {
     const inverse = 1 - time;
-    return (
-      3 * inverse * inverse * time * first + 3 * inverse * time * time * second + time * time * time
-    );
+    return 3 * inverse * inverse * time * first + 3 * inverse * time * time * second + time * time * time;
   };
   let lower = 0;
   let upper = 1;
@@ -43,10 +41,7 @@ async function moveMouseWithDuration(page, from, to, durationMs) {
 }
 
 function pointerHtml(options, from, to, durationMs, pressed = false) {
-  const animation =
-    durationMs > 0
-      ? `animation: walkthrough-pointer-move ${durationMs}ms cubic-bezier(.4,0,.2,1) forwards;`
-      : "";
+  const animation = durationMs > 0 ? `animation: walkthrough-pointer-move ${durationMs}ms cubic-bezier(.4,0,.2,1) forwards;` : '';
   return `
         <style>
             @keyframes walkthrough-pointer-move {
@@ -65,7 +60,7 @@ function pointerHtml(options, from, to, durationMs, pressed = false) {
                 box-sizing: content-box;
                 pointer-events: none;
                 transform: translate(-50%, -50%) scale(${pressed ? 0.72 : 1});
-                background: ${pressed ? "rgba(255,59,48,.28)" : "transparent"};
+                background: ${pressed ? 'rgba(255,59,48,.28)' : 'transparent'};
                 box-shadow: 0 0 0 3px rgba(255,255,255,.85);
                 ${animation}
             }
@@ -101,17 +96,11 @@ function rippleHtml(options, position) {
 }
 
 function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 }
 
 function keyboardCueHtml(targetBox, keyChord) {
-  const focus = targetBox
-    ? `<div class="walkthrough-keyboard-focus" aria-hidden="true"></div>`
-    : "";
+  const focus = targetBox ? `<div class="walkthrough-keyboard-focus" aria-hidden="true"></div>` : '';
   const focusStyle = targetBox
     ? `
             .walkthrough-keyboard-focus {
@@ -128,9 +117,9 @@ function keyboardCueHtml(targetBox, keyChord) {
                 box-shadow: 0 0 0 3px rgba(255,255,255,.92), 0 8px 24px rgba(0,0,0,.18);
             }
         `
-    : "";
+    : '';
   const keys = escapeHtml(String(keyChord).slice(0, 48))
-    .split("+")
+    .split('+')
     .map((key) => `<kbd>${key.trim()}</kbd>`)
     .join('<span aria-hidden="true">+</span>');
   return `
@@ -220,53 +209,53 @@ function installNavigationBridge({ storageKey, hostId }) {
   if (
     payload?.version !== 1 ||
     payload.url !== window.location.href ||
-    typeof payload.imageDataUrl !== "string" ||
-    !payload.imageDataUrl.startsWith("data:image/png;base64,")
+    typeof payload.imageDataUrl !== 'string' ||
+    !payload.imageDataUrl.startsWith('data:image/png;base64,')
   ) {
     return;
   }
   const mount = () => {
     if (!document.documentElement || document.getElementById(hostId)) return;
-    const host = document.createElement("x-prd-walkthrough-reload-bridge");
+    const host = document.createElement('x-prd-walkthrough-reload-bridge');
     host.id = hostId;
-    host.setAttribute("aria-hidden", "true");
-    host.setAttribute("data-recorder-owned", "true");
+    host.setAttribute('aria-hidden', 'true');
+    host.setAttribute('data-recorder-owned', 'true');
     for (const [property, value] of Object.entries({
-      position: "fixed",
-      inset: "0",
-      width: "100vw",
-      height: "100vh",
-      margin: "0",
-      padding: "0",
-      border: "0",
-      overflow: "hidden",
-      "pointer-events": "none",
-      "user-select": "none",
-      contain: "strict",
-      isolation: "isolate",
-      "z-index": "2147483647",
+      position: 'fixed',
+      inset: '0',
+      width: '100vw',
+      height: '100vh',
+      margin: '0',
+      padding: '0',
+      border: '0',
+      overflow: 'hidden',
+      'pointer-events': 'none',
+      'user-select': 'none',
+      contain: 'strict',
+      isolation: 'isolate',
+      'z-index': '2147483647',
     })) {
-      host.style.setProperty(property, value, "important");
+      host.style.setProperty(property, value, 'important');
     }
-    const root = host.attachShadow({ mode: "closed" });
-    const image = document.createElement("img");
-    image.alt = "";
-    image.decoding = "sync";
-    image.loading = "eager";
-    image.fetchPriority = "high";
+    const root = host.attachShadow({ mode: 'closed' });
+    const image = document.createElement('img');
+    image.alt = '';
+    image.decoding = 'sync';
+    image.loading = 'eager';
+    image.fetchPriority = 'high';
     image.src = payload.imageDataUrl;
     for (const [property, value] of Object.entries({
-      display: "block",
-      width: "100%",
-      height: "100%",
-      margin: "0",
-      padding: "0",
-      border: "0",
-      "object-fit": "fill",
-      "pointer-events": "none",
-      "user-select": "none",
+      display: 'block',
+      width: '100%',
+      height: '100%',
+      margin: '0',
+      padding: '0',
+      border: '0',
+      'object-fit': 'fill',
+      'pointer-events': 'none',
+      'user-select': 'none',
     })) {
-      image.style.setProperty(property, value, "important");
+      image.style.setProperty(property, value, 'important');
     }
     root.append(image);
     document.documentElement.append(host);
@@ -287,24 +276,20 @@ async function showOverlayAboveTopLayer(page, html) {
   const overlay = await page.screencast.showOverlay(html);
   await page.evaluate(
     ({ overlayName, styleId }) => {
-      const glass = document.querySelector("x-pw-glass[popover]");
-      if (
-        !(glass instanceof HTMLElement) ||
-        typeof glass.hidePopover !== "function" ||
-        typeof glass.showPopover !== "function"
-      ) {
-        throw new Error("Playwright overlay popover is unavailable");
+      const glass = document.querySelector('x-pw-glass[popover]');
+      if (!(glass instanceof HTMLElement) || typeof glass.hidePopover !== 'function' || typeof glass.showPopover !== 'function') {
+        throw new Error('Playwright overlay popover is unavailable');
       }
-      glass.style.setProperty("view-transition-name", overlayName, "important");
+      glass.style.setProperty('view-transition-name', overlayName, 'important');
       let style = document.getElementById(styleId);
       if (!style) {
-        style = document.createElement("style");
+        style = document.createElement('style');
         style.id = styleId;
-        style.setAttribute("data-recorder-owned", "true");
+        style.setAttribute('data-recorder-owned', 'true');
         (document.head ?? document.documentElement).append(style);
       }
       if (!(style instanceof HTMLStyleElement)) {
-        throw new Error("Walkthrough view transition style is unavailable");
+        throw new Error('Walkthrough view transition style is unavailable');
       }
       style.textContent = `
         ::view-transition-group(${overlayName}) {
@@ -317,7 +302,7 @@ async function showOverlayAboveTopLayer(page, html) {
           mix-blend-mode: normal;
         }
       `;
-      if (glass.matches(":popover-open")) glass.hidePopover();
+      if (glass.matches(':popover-open')) glass.hidePopover();
       glass.showPopover();
     },
     {
@@ -340,15 +325,12 @@ class WalkthroughPointer {
 
   setClock(clock) {
     this.clock = clock;
-    this.track.push({ kind: "static", atMs: this.clock(), x: this.position.x, y: this.position.y });
+    this.track.push({ kind: 'static', atMs: this.clock(), x: this.position.x, y: this.position.y });
   }
 
   async start() {
     if (!this.options.enabled) return;
-    this.overlay = await showOverlayAboveTopLayer(
-      this.page,
-      pointerHtml(this.options, this.position, this.position, 0),
-    );
+    this.overlay = await showOverlayAboveTopLayer(this.page, pointerHtml(this.options, this.position, this.position, 0));
     await this.page.mouse.move(this.position.x, this.position.y);
   }
 
@@ -379,29 +361,20 @@ class WalkthroughPointer {
       };
     }
     const from = { ...this.position };
-    const movingOverlay = await showOverlayAboveTopLayer(
-      this.page,
-      pointerHtml(this.options, from, to, durationMs, pressed),
-    );
+    const movingOverlay = await showOverlayAboveTopLayer(this.page, pointerHtml(this.options, from, to, durationMs, pressed));
     const previous = this.overlay;
     this.overlay = movingOverlay;
     const animationStartMs = this.clock();
-    await Promise.all([
-      moveMouseWithDuration(this.page, from, to, durationMs),
-      previous ? previous.dispose() : Promise.resolve(),
-    ]);
+    await Promise.all([moveMouseWithDuration(this.page, from, to, durationMs), previous ? previous.dispose() : Promise.resolve()]);
     const expectedAnimationEndMs = animationStartMs + durationMs;
     const remainingAnimationMs = expectedAnimationEndMs - this.clock();
     if (remainingAnimationMs > 0) await this.page.waitForTimeout(remainingAnimationMs);
-    const staticOverlay = await showOverlayAboveTopLayer(
-      this.page,
-      pointerHtml(this.options, to, to, 0, pressed),
-    );
+    const staticOverlay = await showOverlayAboveTopLayer(this.page, pointerHtml(this.options, to, to, 0, pressed));
     this.overlay = staticOverlay;
     await movingOverlay.dispose();
     this.position = to;
     this.track.push({
-      kind: "move",
+      kind: 'move',
       startMs: animationStartMs,
       endMs: expectedAnimationEndMs,
       from,
@@ -423,7 +396,7 @@ class WalkthroughPointer {
     if (!this.options.enabled) return;
     await this.swap(pointerHtml(this.options, this.position, this.position, 0, pressed));
     this.track.push({
-      kind: pressed ? "press" : "release",
+      kind: pressed ? 'press' : 'release',
       atMs: this.clock(),
       x: this.position.x,
       y: this.position.y,
@@ -450,12 +423,9 @@ class WalkthroughPointer {
     await this.swap(pointerHtml(this.options, this.position, this.position, 0, true));
     await this.page.waitForTimeout(80);
     await this.swap(pointerHtml(this.options, this.position, this.position, 0));
-    const ripple = await showOverlayAboveTopLayer(
-      this.page,
-      rippleHtml(this.options, this.position),
-    );
+    const ripple = await showOverlayAboveTopLayer(this.page, rippleHtml(this.options, this.position));
     const shownAtMs = this.clock();
-    this.track.push({ kind: "click", atMs: shownAtMs, x: this.position.x, y: this.position.y });
+    this.track.push({ kind: 'click', atMs: shownAtMs, x: this.position.x, y: this.position.y });
     const clickCue = {
       ripple,
       startedAt: performance.now(),
@@ -469,13 +439,13 @@ class WalkthroughPointer {
       clickCue.disposed = true;
       clickCue.disposePromise = clickCue.ripple.dispose();
     };
-    this.page.on("framenavigated", clickCue.navigationHandler);
+    this.page.on('framenavigated', clickCue.navigationHandler);
     return clickCue;
   }
 
   async finishClick(clickCue) {
     if (!clickCue) return;
-    this.page.off("framenavigated", clickCue.navigationHandler);
+    this.page.off('framenavigated', clickCue.navigationHandler);
     if (clickCue.disposePromise) {
       await clickCue.disposePromise;
     } else if (!clickCue.disposed) {
@@ -485,7 +455,7 @@ class WalkthroughPointer {
       await clickCue.ripple.dispose();
     }
     return {
-      kind: "click-ripple",
+      kind: 'click-ripple',
       shownAtMs: clickCue.shownAtMs,
       hiddenAtMs: this.clock(),
     };
@@ -495,10 +465,10 @@ class WalkthroughPointer {
     await this.swap(keyboardCueHtml(targetBox, keyChord));
     const shownAtMs = this.clock();
     if (this.options.enabled) {
-      this.track.push({ kind: "visibility", atMs: shownAtMs, visible: false });
+      this.track.push({ kind: 'visibility', atMs: shownAtMs, visible: false });
     }
     const trackEvent = {
-      kind: "keyboard-cue",
+      kind: 'keyboard-cue',
       startMs: shownAtMs,
       activationAtMs: null,
       endMs: null,
@@ -535,10 +505,10 @@ class WalkthroughPointer {
     const hiddenAtMs = this.clock();
     cue.trackEvent.endMs = hiddenAtMs;
     if (this.options.enabled) {
-      this.track.push({ kind: "visibility", atMs: hiddenAtMs, visible: true });
+      this.track.push({ kind: 'visibility', atMs: hiddenAtMs, visible: true });
     }
     return {
-      kind: "keyboard",
+      kind: 'keyboard',
       shownAtMs: cue.shownAtMs,
       activationAtMs: cue.activationAtMs,
       hiddenAtMs,
