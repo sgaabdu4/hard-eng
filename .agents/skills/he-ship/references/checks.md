@@ -34,14 +34,22 @@ Allowed targets: `PR`, `Merge`, `Deploy`. Local build acceptance stays in the ex
 
 ## UI evidence in the PR
 
-For changes matching `ui_paths`, use distinct, inspected GitHub attachments:
+For changes matching `ui_paths`, compare the actual baseline and final appearance at the same route, state and viewport. Publish a before/after pair only when appearance differs, using distinct, inspected GitHub attachments:
 
 ```markdown
 Before: ![Before](https://github.com/user-attachments/assets/actual-before-id)
 After: ![After](https://github.com/user-attachments/assets/actual-after-id)
 ```
 
-The verifier checks availability and image/video type, not whether the screenshots show the right behavior. E2E owns that inspection. Keep the actual baseline and final capture context in the PR; do not upload sensitive content or fabricate a missing baseline.
+When appearance is unchanged, omit the duplicate attachments and record one comparison note instead:
+
+```text
+UI appearance: unchanged — inspected the baseline and final dashboard at the same state and viewport; no visible difference.
+```
+
+Describe the actual comparison, not an assumed result. Missing proof is not unchanged appearance. This declaration cannot accompany labeled Before/After attachments and does not waive behavior tests. Distinct URLs or different file bytes alone do not establish a visible difference.
+
+The verifier checks the declaration or attachment availability/media type; E2E owns inspection of the actual comparison and behavior. Keep baseline/final context in the PR; do not upload sensitive content or fabricate a missing baseline.
 
 ## Commands + proof boundaries
 
@@ -51,7 +59,7 @@ From the task checkout, with its actual PR URL and plan:
 python3 .hooks/hard-eng.py ship --plan PLAN.md --pr https://github.com/owner/repo/pull/123 --stage ready
 ```
 
-`ready` verifies current PR identity, branch/build evidence, required checks and applicable UI attachments. It is read-only. `merge` runs the same gate before a head-matched merge; select the repository's merge method and invoke it only with existing merge authorization. A queued or pending merge is unfinished.
+`ready` verifies current PR identity, branch/build evidence, required checks and applicable UI evidence. It is read-only. `merge` runs the same gate before a head-matched merge; select the repository's merge method and invoke it only with existing merge authorization. A queued or pending merge is unfinished.
 
 `delivered` requires actual merge/remote proof and, for Deploy, the configured runtime verification. Before cleanup, retain evidence and make sure no other task uses the checkout. Deliberately remove only known generated build/test artifacts; unknown ignored files are retained. Run `cleanup` from the repository's persistent checkout with `--worktree` naming the completed linked worktree. Native guards must pass; a changed/dirty/locked/current checkout or active Git index lock is retained. Cleanup does not manufacture delivery proof. Use `python3 -B` for the cleanup invocation so Python does not create new bytecode artifacts.
 
