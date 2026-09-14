@@ -51,13 +51,13 @@ DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
     "analyzer": {
         "exclude": [],
         "language": {
-            "strict-casts": True,
             "strict-inference": True,
-            "strict-raw-types": True,
         },
     },
     "linter": {
         "rules": {
+            "no_dynamic_casts": True,
+            "no_raw_types": True,
             "avoid_annotating_with_dynamic": True,
             "avoid_dynamic_calls": True,
             "strict_top_level_inference": True,

@@ -53,11 +53,14 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
         "**/*.arb",
     ]
     options = json.loads(json.dumps(runner.DART_TYPING))
+    options["analyzer"]["language"] = {"strict-inference": True}
+    options["linter"]["rules"].update({"no_dynamic_casts": True, "no_raw_types": True})
     options["analyzer"]["exclude"] = excludes
     options["linter"]["rules"] = ["avoid_print", *options["linter"]["rules"]]
     options["plugins"] = {"riverpod_lint": "3.1.8", "flutter_skill_lints": "^0.9.1"}
     path = tmp_path / "analysis_options.yaml"
     path.write_text(yaml.safe_dump(options, sort_keys=False))
+    runner.validate_typing(tmp_path, "dart", ["lib"])
     generated = tmp_path / "lib/generated.g.dart"
     generated.parent.mkdir()
     generated.write_text(
@@ -78,6 +81,13 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     repeated: dict[str, str] = {}
     installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, repeated)
     assert repeated == changes
+    for rule in ("no_dynamic_casts", "no_raw_types"):
+        weakened = json.loads(json.dumps(result))
+        weakened["linter"]["rules"].remove(rule)
+        path.write_text(yaml.safe_dump(weakened))
+        with pytest.raises(ValueError, match="strict linter.rules"):
+            runner.validate_typing(tmp_path, "dart", ["lib"])
+    path.write_text(changes["analysis_options.yaml"])
     nested = generated.parent / "analysis_options.yaml"
     options["analyzer"]["exclude"] = ["lib/**"]
     nested.write_text(yaml.safe_dump(options))
