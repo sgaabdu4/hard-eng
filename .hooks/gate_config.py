@@ -388,9 +388,12 @@ def changed_files(root: Path, base: str) -> set[str] | None:
 def changed_packages(
     root: Path, by_path: dict[str, Group], base: str
 ) -> set[str] | None:
+    from plans import is_plan_path
+
     names = changed_files(root, base)
     if not names:
         return None
+    names = {name for name in names if not is_plan_path(Path(name))}
     selected: set[str] = set()
     for name in names:
         matches = [path for path in by_path if Path(name).is_relative_to(path)]
@@ -401,7 +404,7 @@ def changed_packages(
         ):
             return None
         selected.add(max(matches, key=len))
-    return selected
+    return selected or None
 
 
 def affected_groups(root: Path, groups: list[Group], base: str | None) -> list[Group]:
@@ -431,7 +434,29 @@ def affected_groups(root: Path, groups: list[Group], base: str | None) -> list[G
                 selected.add(dependent)
                 pending.append(dependent)
     print("Affected packages and dependents: " + ", ".join(sorted(selected)))
-    return [group for group in packages if group["path"] in selected] + [groups[-1]]
+    return selected_services(root, packages, selected) + [groups[-1]]
+
+
+def selected_services(
+    root: Path, packages: list[Group], selected: set[str]
+) -> list[Group]:
+    """Retain ancestor-owned dependency checks without unrelated test suites."""
+    affected = []
+    for group in packages:
+        if group["path"] in selected:
+            affected.append(group)
+        elif any(
+            (root / path).resolve().is_relative_to((root / group["path"]).resolve())
+            for path in selected
+        ):
+            services = [
+                gate
+                for gate in group["checks"]
+                if gate.get("role") in {"lockfiles", "vulnerabilities"}
+            ]
+            if services:
+                affected.append({**group, "checks": services})
+    return affected
 
 
 def validate_performance_gate(gate: Gate) -> None:

@@ -1,10 +1,13 @@
 """Install a CI-verified upstream revision with an isolated local Git commit."""
 
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from operator import itemgetter
 from pathlib import Path
 
@@ -13,8 +16,25 @@ SOURCE_FILE = ".hooks/hard-eng-source.json"
 
 
 def github_json(endpoint: str) -> object:
-    result = subprocess.check_output(["gh", "api", endpoint], text=True, timeout=30)
-    return json.loads(result)
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if not token and shutil.which("gh"):
+        auth = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if auth.returncode == 0:
+            token = auth.stdout.strip()
+    headers = {"Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(
+        f"https://api.github.com/{endpoint}", headers=headers
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.load(response)
 
 
 def verified_revision(revision: str) -> bool:
@@ -144,9 +164,43 @@ def scaffold_files(source: Path) -> set[str]:
     }
 
 
+def pre_push_missing(root: Path) -> bool:
+    from agent_hooks import project_pre_push
+
+    hook = Path(
+        subprocess.check_output(
+            ["git", "rev-parse", "--git-path", "hooks/pre-push"],
+            cwd=root,
+            text=True,
+        ).strip()
+    )
+    hook = hook if hook.is_absolute() else root / hook
+    target = project_pre_push(root, hook)
+    return not target.exists() and not target.is_symlink()
+
+
+def planned_hook(root: Path, plan: object) -> tuple[str, str]:
+    if not isinstance(plan, dict):
+        raise TypeError("Setup plan must be an object")
+    hook = plan.get("hook")
+    if not isinstance(hook, dict):
+        raise TypeError("Setup plan is missing the pre-push hook")
+    hook_path, hook_content = hook.get("path"), hook.get("content")
+    if not isinstance(hook_path, str) or not isinstance(hook_content, str):
+        raise TypeError("Setup plan has an invalid pre-push hook")
+    if hook_path == ".husky/pre-push":
+        if (root / hook_path).is_symlink():
+            raise ValueError("Preserve the existing hook symlink before updating")
+        files = plan.get("files")
+        if not isinstance(files, dict):
+            raise TypeError("Setup plan must include file changes")
+        files[hook_path] = hook_content
+    return hook_path, hook_content
+
+
 def update_plan(
     root: Path, source: Path, previous: Path
-) -> tuple[dict[str, str | None], dict[str, str | None]]:
+) -> tuple[dict[str, str | None], dict[str, str | None], tuple[str, str]]:
     output = subprocess.check_output(
         [
             "uv",
@@ -169,11 +223,7 @@ def update_plan(
         timeout=60,
     )
     plan = json.loads(output)
-    hook = plan.get("hook", {})
-    if hook.get("path") == ".husky/pre-push":
-        if (root / hook["path"]).is_symlink():
-            raise ValueError("Preserve the existing hook symlink before updating")
-        plan["files"][hook["path"]] = hook["content"]
+    hook = planned_hook(root, plan)
     changes: dict[str, str | None] = {
         name: content
         for name, content in plan["files"].items()
@@ -205,7 +255,7 @@ def update_plan(
             links[name] = None
         elif link.exists() or link.is_symlink():
             raise ValueError(f"Local skill link differs: {name}")
-    return changes, links
+    return changes, links, hook
 
 
 def write_changes(root: Path, changes: dict[str, str | None]) -> None:
@@ -226,6 +276,24 @@ def write_links(root: Path, links: dict[str, str | None]) -> None:
         else:
             link.parent.mkdir(parents=True, exist_ok=True)
             link.symlink_to(target, target_is_directory=True)
+
+
+def install_planned_hook(root: Path, hook: tuple[str, str]) -> bool:
+    name, content = hook
+    target = root / name
+    if (
+        target.is_file()
+        and not target.is_symlink()
+        and target.read_text() == content
+        and target.stat().st_mode & 0o111
+    ):
+        return False
+    if target.is_symlink():
+        target.unlink()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content)
+    target.chmod(0o755)
+    return True
 
 
 def verify_candidate(
@@ -252,7 +320,13 @@ def verify_candidate(
         )
         only_scaffold = set(changes) <= scaffold_files(source) | scaffold_files(
             root
-        ) | {"AGENTS.md", SOURCE_FILE, ".husky/pre-push"}
+        ) | {
+            "AGENTS.md",
+            "CLAUDE.md",
+            "AGENTS.override.md",
+            SOURCE_FILE,
+            ".husky/pre-push",
+        }
         command = (
             [sys.executable, "-m", "compileall", "-q", str(candidate / ".hooks")]
             if only_scaffold
@@ -282,7 +356,17 @@ def verify_candidate(
 
             policy = load_policy(candidate, required=False)
             # An update candidate is verification input, not a completed task.
-            command.append(remote_base(candidate, policy["base"] if policy else None))
+            if (
+                "origin"
+                in subprocess.check_output(
+                    ["git", "remote"], cwd=candidate, text=True
+                ).splitlines()
+            ):
+                command.append(
+                    remote_base(candidate, policy["base"] if policy else None)
+                )
+            else:
+                command.append("HEAD")
         subprocess.run(
             command, cwd=candidate, stdout=sys.stderr, check=True, timeout=3500
         )
@@ -345,6 +429,16 @@ def commit_update(
         raise
 
 
+def repair_current_hook(root: Path, previous: str) -> str:
+    if not pre_push_missing(root):
+        return "No newer CI-verified Hard Eng revision is available."
+    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
+        source, old = fetch_sources(Path(temporary), previous, previous)
+        _, _, hook = update_plan(root, source, old)
+        install_planned_hook(root, hook)
+    return "No newer CI-verified Hard Eng revision is available; installed the missing pre-push hook."
+
+
 def update(root: Path) -> str:
     marker = root / SOURCE_FILE
     if not marker.exists():
@@ -357,11 +451,12 @@ def update(root: Path) -> str:
         return "Installed from an uncommitted working copy; publish a verified source revision before automatic updates."
     revision = latest_verified(previous)
     if revision is None:
-        return "No newer CI-verified Hard Eng revision is available."
+        return repair_current_hook(root, previous)
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
-        changes, links = update_plan(root, source, old)
+        changes, links, hook = update_plan(root, source, old)
         if not changes and not links:
+            install_planned_hook(root, hook)
             return "Hard Eng already matches the verified source."
         names = sorted({*changes, *links})
         if subprocess.check_output(
@@ -393,6 +488,8 @@ def update(root: Path) -> str:
                 "The update paths changed during verification; nothing was applied"
             )
         commit_update(root, changes, links, revision)
+        if hook[0] not in changes:
+            install_planned_hook(root, hook)
     return f"Updated Hard Eng to {revision}; created an isolated local commit without pushing."
 
 
@@ -443,7 +540,13 @@ def check_scaffold_update(root: Path, base: str) -> bool:
         allowed = (
             scaffold_files(source)
             | scaffold_files(old)
-            | {SOURCE_FILE, "AGENTS.md", ".husky/pre-push"}
+            | {
+                SOURCE_FILE,
+                "AGENTS.md",
+                "CLAUDE.md",
+                "AGENTS.override.md",
+                ".husky/pre-push",
+            }
         )
         allowed |= {
             ".claude/skills/" + path.name
@@ -451,24 +554,34 @@ def check_scaffold_update(root: Path, base: str) -> bool:
             for path in (tree / ".agents/skills").iterdir()
             if path.is_dir()
         }
-        if not names <= allowed or update_plan(root, source, source) != ({}, {}):
+        changes, links, _ = update_plan(root, source, source)
+        if not names <= allowed or changes or links:
             return False
         if any(
             (root / name).exists()
             for name in scaffold_files(old) - scaffold_files(source)
         ):
             return False
-        end = "<!-- hard-eng:end -->"
-        if "AGENTS.md" in names and (
-            subprocess.check_output(
-                ["git", "show", f"{base}:AGENTS.md"], cwd=root, text=True
-            ).rsplit(end, 1)[-1]
-            != (root / "AGENTS.md").read_text().rsplit(end, 1)[-1]
-        ):
+        if not preserved_instructions(root, base, names):
             return False
         print(
             "Scaffold-only update: source CI verified; checking installed Python hooks.",
             flush=True,
         )
         verify_candidate(root, source, {}, {}, Path(temporary) / "candidate")
+    return True
+
+
+def preserved_instructions(root: Path, base: str, names: set[str]) -> bool:
+    end = "<!-- hard-eng:end -->\n\n"
+    for name in names & {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}:
+        original = subprocess.run(
+            ["git", "show", f"{base}:{name}"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        ).stdout
+        if original.split(end, 1)[-1] != (root / name).read_text().split(end, 1)[-1]:
+            return False
     return True

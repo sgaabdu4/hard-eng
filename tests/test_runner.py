@@ -491,9 +491,11 @@ def test_wrapped_actionlint_and_decimate_use_latest_packages(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     commands: list[list[str]] = []
+    environments: list[object] = []
 
     def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         commands.append(command)
+        environments.append(_kwargs["env"])
         return subprocess.CompletedProcess(command, 0, json.dumps({"PATH": ""}), "")
 
     monkeypatch.setattr(subprocess, "run", run)
@@ -509,9 +511,14 @@ def test_wrapped_actionlint_and_decimate_use_latest_packages(
     tool_setup.provision_tools(tmp_path, [group], 30)
     assert "aqua:rhysd/actionlint@latest" in commands[0]
     assert 'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest' in commands[2]
-    assert "MISE_NPM_PACKAGE_MANAGER=pnpm" in commands[2]
-    assert "MISE_NPM_PACKAGE_MANAGER=pnpm" not in commands[0]
+    assert "MISE_NPM_PACKAGE_MANAGER=npm" in commands[2]
+    assert "MISE_NPM_PACKAGE_MANAGER=npm" not in commands[0]
+    assert f"NPM_CONFIG_CACHE={tmp_path}/hard-eng-tools/npm/cache" in commands[2]
     assert len(commands) == 4
+    for command, environment in zip(commands, environments, strict=True):
+        assert isinstance(environment, dict)
+        cache_age = int(environment["PNPM_CONFIG_DLX_CACHE_MAX_AGE"])
+        assert cache_age == 0 if "install" in command else cache_age > 0
 
 
 @pytest.mark.parametrize("wrapped", [False, True])

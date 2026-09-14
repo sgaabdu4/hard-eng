@@ -22,7 +22,7 @@ branch = true
 [tool.pyrefly]
 preset = "strict"
 check-unannotated-defs = true
-search-path = [".hooks"]
+search-path = [".hooks", "tests"]
 
 [tool.deptry]
 # Canonical skill submodules have their own dependency manifests and validation.

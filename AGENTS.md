@@ -1,5 +1,6 @@
 # Agent Rules
 
+- Installed-project startup = when `.hooks/hard-eng-source.json` exists, require the current session's Hard Eng update result before repository work, including read-only investigation. If SessionStart supplied no result, first run `curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh` from the repository root. Tell the user whether it updated, found no newer verified release, or failed; report any failure explicitly and retain the required gates. Missing updater output is a failed attempt even if the pipeline exits 0. Do not rerun setup when this session already has a result, or treat an installed marker/session file alone as a successful update.
 - Before editing, state the single change being implemented, which files it will touch, and how it will be verified. Prefer a native command or existing file. Every new file, dependency, wrapper or abstraction must be necessary for that change.
 - Scope = the user's request + accepted constraints; preserve unrelated work.
 - Publication = before recording tracked content or publishing, apply [publication privacy](.agents/skills/he-ship/references/checks.md#publication-privacy) for the destination's audience.

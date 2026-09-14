@@ -9,6 +9,7 @@ import runpy
 import subprocess
 import sys
 import tomllib
+from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,7 +18,6 @@ if TYPE_CHECKING:
 
 SOURCE = Path(__file__).resolve().parent
 sys.path.insert(0, str(SOURCE / ".hooks"))
-START, END = "<!-- hard-eng:start -->", "<!-- hard-eng:end -->"
 
 
 def merge(
@@ -77,32 +77,6 @@ def gate_config(root: Path) -> GateConfig:
     config: GateConfig = {"version": 1, "packages": packages, "shared": shared}
     adapt_packages(root, config)
     return config
-
-
-def agent_instructions(root: Path, previous: Path | None = None) -> str:
-    agents = root / "AGENTS.md"
-    existing = agents.read_bytes().decode("utf-8") if agents.exists() else ""
-    if START in existing or END in existing:
-        if (
-            existing.count(START) != 1
-            or existing.count(END) != 1
-            or not existing.startswith(START)
-        ):
-            raise ValueError("Resolve conflicting Hard Eng markers in AGENTS.md first")
-        expected = (
-            f"{START}\n{((previous or SOURCE) / 'AGENTS.md').read_text().rstrip()}\n"
-        )
-        if existing.split(END, 1)[0] != expected:
-            raise ValueError(
-                "Local Hard Eng instructions differ; preserve them and ask before replacing them"
-            )
-        existing = existing.split(END, 1)[1]
-        if not existing.startswith("\n\n"):
-            raise ValueError("Resolve conflicting Hard Eng markers in AGENTS.md first")
-        existing = existing[2:]
-    return (
-        f"{START}\n{(SOURCE / 'AGENTS.md').read_text().rstrip()}\n{END}\n\n{existing}"
-    )
 
 
 def configure_hooks(root: Path, changes: dict[str, str]) -> None:
@@ -253,14 +227,18 @@ def configure_dart(
     target = directory / "analysis_options.yaml"
     typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
     options: JsonObject = typing["dart_options"](target) if target.exists() else {}
+    original = deepcopy(options)
+    existing = target.read_bytes().decode("utf-8") if target.exists() else ""
     migrate_dart_plugins(options, SOURCE)
     for section, groups in typing["DART_TYPING"].items():
         section_options = options.setdefault(section, {})
         if not isinstance(section_options, dict):
             raise TypeError(f"Dart {section} settings must be an object")
         for group, settings in groups.items():
-            current = section_options.setdefault(
-                group, [] if isinstance(settings, list) else {}
+            current = (
+                section_options.get(group, [])
+                if isinstance(settings, list)
+                else section_options.setdefault(group, {})
             )
             if group == "rules" and isinstance(current, list):
                 dart_rule_settings(current)
@@ -275,15 +253,25 @@ def configure_dart(
                 current.update(settings)
             else:
                 validate_dart_exclusions(directory, current)
-    changes[str(target.relative_to(root))] = yaml.safe_dump(options, sort_keys=False)
-    if any(
+    content = (
+        existing
+        if target.exists() and options == original
+        else yaml.safe_dump(options, sort_keys=False)
+    )
+    marker = "# Hard Eng test coverage uses dart run coverage:test_with_coverage.\n"
+    if marker not in content and any(
         "coverage:test_with_coverage" in gate["command"] for gate in package["checks"]
     ):
         # Declare coverage tooling without hiding production-import checks.
-        changes[str(target.relative_to(root))] = (
-            "# Hard Eng test coverage uses dart run coverage:test_with_coverage.\n"
-            + changes[str(target.relative_to(root))]
-        )
+        content = marker + content
+    if content != existing:
+        changes[str(target.relative_to(root))] = content
+    configure_dart_scanner(root, directory, changes)
+
+
+def configure_dart_scanner(
+    root: Path, directory: Path, changes: dict[str, str]
+) -> None:
     scanner_names = (
         ".dart-decimaterc",
         ".dart-decimaterc.json",
@@ -597,7 +585,9 @@ def plan_install(
     if Path(git_root).resolve() != root:
         raise ValueError("Run setup from the target Git repository root")
     changes = scaffold_changes(root, previous)
-    changes["AGENTS.md"] = agent_instructions(root, previous)
+    from agent_hooks import configure_instructions
+
+    configure_instructions(root, SOURCE, previous, changes)
     configure_hooks(root, changes)
     configure_mcp(root, changes)
     configure_ignores(root, changes)

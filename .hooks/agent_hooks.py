@@ -12,6 +12,42 @@ from project_setup import dependency_command
 from update import require_current
 
 
+def configure_instructions(
+    root: Path, source: Path, previous: Path | None, changes: dict[str, str]
+) -> None:
+    start, end = "<!-- hard-eng:start -->", "<!-- hard-eng:end -->"
+    instructions = {
+        "AGENTS.md": (source / "AGENTS.md").read_text().rstrip(),
+    }
+    claude = root / "CLAUDE.md"
+    if not (claude.is_symlink() and claude.resolve() == root / "AGENTS.md"):
+        instructions["CLAUDE.md"] = "@AGENTS.md"
+    if (root / "AGENTS.override.md").exists():
+        instructions["AGENTS.override.md"] = (
+            "Read and follow [shared instructions](AGENTS.md) before repository work."
+        )
+    for name, content in instructions.items():
+        target = root / name
+        existing = target.read_bytes().decode("utf-8") if target.exists() else ""
+        if start in existing or end in existing:
+            old = (
+                ((previous or source) / name).read_text().rstrip()
+                if name == "AGENTS.md"
+                else content
+            )
+            prefix = f"{start}\n{old}\n{end}\n\n"
+            if (
+                existing.count(start) != 1
+                or existing.count(end) != 1
+                or not existing.startswith(prefix)
+            ):
+                raise ValueError(
+                    f"Local Hard Eng instructions differ or have conflicting markers in {name}; preserve them and resolve before replacing them"
+                )
+            existing = existing[len(prefix) :]
+        changes[name] = f"{start}\n{content}\n{end}\n\n{existing}"
+
+
 def project_pre_push(root: Path, hook: Path) -> Path:
     """Validate repository hook ownership and preserve Husky's forwarding shim."""
     if not hook.parent.resolve().is_relative_to(root):
@@ -164,7 +200,7 @@ def session_context(root: Path, payload: JsonObject) -> str:
         "Use configured MCPs when relevant to the task. Before relying on one, verify a real call against the intended repository/index, service project or running app/device; registration alone is not readiness. If unavailable, warn and continue with available tools."
     )
     messages.append(learning_context("start/resume"))
-    return " ".join(messages)
+    return "\n".join(messages)
 
 
 def completion_notice(agent: str | None, output: str) -> JsonObject:
@@ -306,6 +342,8 @@ def handle_event(root: Path, event: str, agent: str) -> int:
                 else learning_context(event)
             )
             output = context_output(agent, native, message)
+            if event == "session" and agent in {"claude", "codex"}:
+                output["systemMessage"] = "Hard Eng startup: " + message.splitlines()[0]
     except (OSError, ValueError, TypeError) as error:
         message = f"Hard Eng hook input/setup failed: {error}. Continue with available tools; do not claim verification passed."
         output = (

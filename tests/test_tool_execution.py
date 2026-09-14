@@ -1,6 +1,7 @@
 """Exercise shared-cache exclusion through real gate subprocesses."""
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -12,17 +13,21 @@ from types import ModuleType
 import pytest
 import tool_setup
 import update
+from conftest import commit, git
 from gate_config import Gate, Group, validate_gate, validate_package_services
 
 
 @pytest.mark.parametrize("flag", [["--max-crap", "0"], ["--max-crap=0"]])
+@pytest.mark.parametrize(
+    "prefix", [["fallow"], ["pnpm", "exec", "fallow"], ["pnpm", "dlx", "fallow@3.0.0"]]
+)
 def test_gate_rejects_disabled_fallow_metric_before_execution(
-    tmp_path: Path, flag: list[str]
+    tmp_path: Path, flag: list[str], prefix: list[str]
 ) -> None:
-    gate: Gate = {"name": "audit", "command": ["fallow", "audit", *flag]}
+    gate: Gate = {"name": "audit", "command": [*prefix, "audit", *flag]}
     with pytest.raises(ValueError, match="CRAP enforcement cannot be disabled"):
         validate_gate(gate, tmp_path, set())
-    gate["command"] = ["fallow", "audit", "--max-crap", "30"]
+    gate["command"] = [*prefix, "audit", "--max-crap", "30"]
     with pytest.raises(ValueError, match="require a native fallow report"):
         validate_gate(gate, tmp_path, set())
     gate["report"] = {"type": "fallow", "path": "audit.json"}
@@ -71,14 +76,19 @@ def test_unresolved_package_selectors_fail_instead_of_skipping_validation(
         )
 
 
-def test_existing_fallow_audit_must_be_the_enforced_gate(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "prefix", ["fallow", "pnpm exec fallow", "pnpm dlx fallow@3.0.0"]
+)
+def test_existing_fallow_audit_must_be_the_enforced_gate(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, prefix: str
+) -> None:
     from project_setup import adapt_javascript
 
     (tmp_path / "package.json").write_text(
         json.dumps(
             {
                 "scripts": {
-                    "check:fallow": "fallow audit --format json --output-file coverage/fallow.json"
+                    "check:fallow": f"{prefix} audit --format json --output-file reports/fallow.json"
                 }
             }
         )
@@ -100,7 +110,35 @@ def test_existing_fallow_audit_must_be_the_enforced_gate(tmp_path: Path) -> None
         validate_package_services(tmp_path, group, {}, {}, inherited)
     adapt_javascript(tmp_path, group, "pnpm")
     assert len(group["checks"]) == 1
+    assert group["checks"][0]["report"]["path"] == "reports/fallow.json"
     validate_package_services(tmp_path, group, {}, {}, inherited)
+    managed = tmp_path / "managed"
+    stale = tmp_path / "node_modules/.bin"
+    for directory, output in ((managed, "managed"), (stale, "stale")):
+        directory.mkdir(parents=True)
+        binary = directory / "fallow"
+        binary.write_text(f"#!/bin/sh\nprintf '%s\\n' '{output}' \"$@\"\n")
+        binary.chmod(0o755)
+    monkeypatch.setenv("PATH", str(stale) + os.pathsep + os.environ["PATH"])
+
+    def provision(
+        root: Path, batch: list[str], timeout: float, *, use_npm: bool
+    ) -> None:
+        assert batch == ["npm:fallow@latest"]
+        monkeypatch.setenv("PATH", str(managed) + os.pathsep + os.environ["PATH"])
+
+    monkeypatch.setattr(tool_setup, "provision_batch", provision)
+    tool_setup.provision_tools(tmp_path, [group], 30)
+    command = runner.prepare_command(group, group["checks"][0], 30)
+    result = subprocess.check_output(command, cwd=tmp_path, text=True)
+    assert result.splitlines() == [
+        "managed",
+        "audit",
+        "--format",
+        "json",
+        "--output-file",
+        "reports/fallow.json",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -296,6 +334,31 @@ def test_candidate_provisions_yaml_without_host_site_packages(
         ).returncode
         != 0
     )
+
+
+def test_configuration_candidate_without_origin_uses_head(
+    release: tuple[Path, Path, str], capfd: pytest.CaptureFixture[str]
+) -> None:
+    source, target, _ = release
+    (target / "package.json").unlink()
+    commit(target, "application without task plan")
+    config = json.loads((target / "hard-eng.gates.json").read_text())
+    config["shared"][0]["command"] = [
+        "python3",
+        "-c",
+        "print('APPLICATION_SCOPE_CHECK')",
+    ]
+
+    update.verify_candidate(
+        target,
+        source,
+        {"hard-eng.gates.json": json.dumps(config)},
+        {},
+        target.parent / "candidate",
+    )
+
+    assert git(target, "remote") == ""
+    assert "APPLICATION_SCOPE_CHECK" in capfd.readouterr().err
 
 
 @pytest.mark.parametrize("executable", ["uv", "uvx"])

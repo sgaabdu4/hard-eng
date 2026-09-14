@@ -4,7 +4,53 @@ import json
 import math
 from pathlib import Path
 
-from gate_config import JsonObject
+from gate_config import JsonObject, Report
+
+
+def native_fallow_command(arguments: list[str]) -> list[str] | None:
+    if arguments[:2] in (["pnpm", "dlx"], ["pnpm", "exec"]):
+        arguments = arguments[2:]
+    if not arguments or Path(arguments[0]).name.split("@", 1)[0] != "fallow":
+        return None
+    return ["fallow", *arguments[1:]]
+
+
+def validate_fallow_command(arguments: list[str], report: Report) -> None:
+    invocation = native_fallow_command(arguments)
+    if invocation is None:
+        return
+    for index, argument in enumerate(invocation):
+        flag, separator, value = argument.partition("=")
+        if flag == "--max-crap":
+            value = (
+                value
+                if separator
+                else next(iter(invocation[index + 1 : index + 2]), "")
+            )
+            if not math.isfinite(float(value)) or float(value) <= 0:
+                raise ValueError(
+                    "Fallow CRAP enforcement cannot be disabled; repair its coverage input"
+                )
+    if "audit" in invocation and report.get("type") != "fallow":
+        raise ValueError(
+            "Fallow audit gates require a native fallow report; exit status alone cannot prove enabled metrics"
+        )
+
+
+def fallow_report_path(arguments: list[str]) -> str | None:
+    invocation = native_fallow_command(arguments) or []
+    for index, argument in enumerate(invocation):
+        flag, separator, value = argument.partition("=")
+        if flag == "--output-file":
+            output = (
+                value
+                if separator
+                else next(iter(invocation[index + 1 : index + 2]), "")
+            )
+            if not output:
+                raise ValueError("check:fallow --output-file needs a report path")
+            return output
+    return None
 
 
 def validate_fallow_audit(report: JsonObject) -> None:

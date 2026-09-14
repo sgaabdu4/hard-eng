@@ -34,7 +34,7 @@ Evidence: [TODO: Starting check command and actual result, or existing log link]
 ## ux_reference
 
 Result: Pending
-Evidence: [TODO: Current route/component, before capture, rendered proposed media shown and inspected, affected devices, actual design owners and settled direction]
+Evidence: [TODO: Current route/component, before capture, Markdown image reference to the rendered proposal shown and inspected in conversation, affected devices, actual design owners and settled direction]
 
 [TODO: For nonvisual work replace this body with N/A — a change-specific reason. Unavailable browser/captures are Blocked, not N/A.]
 

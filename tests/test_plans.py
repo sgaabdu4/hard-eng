@@ -107,15 +107,16 @@ def test_invalid_completion(
         validate_plan(path)
 
 
+@pytest.mark.parametrize("status", ["Ready", "Complete"])
 def test_ready_requires_baseline_and_rendered_evidence(
-    tmp_path: Path, completed_plan: str
+    tmp_path: Path, completed_plan: str, status: str
 ) -> None:
     path = tmp_path / "PLAN.md"
-    ready = completed_plan.replace("Status: Complete", "Status: Ready").replace(
-        "- [x]", "- [ ]"
-    )
+    ready = completed_plan.replace("Status: Complete", f"Status: {status}")
+    if status == "Ready":
+        ready = ready.replace("- [x]", "- [ ]")
     path.write_text(ready)
-    assert validate_plan(path) == "Ready"
+    assert validate_plan(path) == status
     for result in ("Blocked", "Pending", "N/A — unavailable browser"):
         path.write_text(
             ready.replace(
@@ -124,6 +125,20 @@ def test_ready_requires_baseline_and_rendered_evidence(
         )
         with pytest.raises(ValueError, match="Result"):
             validate_plan(path)
+    visual = ready.replace(
+        "N/A — fixture commands have no visual interface.",
+        "Result: Passed\nEvidence: Rendered proposal inspected at the affected size.",
+    )
+    path.write_text(visual)
+    with pytest.raises(ValueError, match="Markdown image reference"):
+        validate_plan(path)
+    path.write_text(
+        visual.replace(
+            "Rendered proposal inspected at the affected size.",
+            "![Proposed state](https://example.test/proposed.png) inspected at the affected size.",
+        )
+    )
+    assert validate_plan(path) == status
     path.write_text(ready.replace("Result: Passed", "Result: Blocked", 1))
     with pytest.raises(ValueError, match="Result"):
         validate_plan(path)
@@ -201,7 +216,7 @@ def test_planning_only_can_stop_before_implementation(
     path = tmp_path / "PLAN.md"
     path.write_text(completed_plan.replace("Status: Complete", "Status: Ready"))
     # This fixture has only Markdown files: stopping for approval is legitimate.
-    validate_plans(tmp_path)
+    assert validate_plans(tmp_path) == "Ready"
     with pytest.raises(ValueError, match="requires Complete"):
         validate_plans(tmp_path, stage="Complete")
     (tmp_path / "app.py").write_text("print('implementation')\n")

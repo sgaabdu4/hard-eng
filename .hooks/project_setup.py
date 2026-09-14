@@ -10,6 +10,7 @@ import tomllib
 from fnmatch import fnmatchcase
 from pathlib import Path
 
+from fallow_report import fallow_report_path, validate_fallow_command
 from gate_config import (
     GateConfig,
     Group,
@@ -70,26 +71,6 @@ def validate_command_output(
     validate_fallow_command(arguments, report)
 
 
-def validate_fallow_command(arguments: list[str], report: Report) -> None:
-    invocation = arguments[2:] if arguments[:2] == ["pnpm", "dlx"] else arguments
-    if not invocation or Path(invocation[0]).name.split("@", 1)[0] != "fallow":
-        return
-    for index, argument in enumerate(arguments):
-        flag, separator, value = argument.partition("=")
-        if flag == "--max-crap":
-            value = (
-                value if separator else next(iter(arguments[index + 1 : index + 2]), "")
-            )
-            if not math.isfinite(float(value)) or float(value) <= 0:
-                raise ValueError(
-                    "Fallow CRAP enforcement cannot be disabled; repair its coverage input"
-                )
-    if "audit" in arguments and report.get("type") != "fallow":
-        raise ValueError(
-            "Fallow audit gates require a native fallow report; exit status alone cannot prove enabled metrics"
-        )
-
-
 def is_shell_script(path: Path) -> bool:
     if path.suffix in {".sh", ".bash"}:
         return True
@@ -108,6 +89,12 @@ def is_deployment_file(path: Path) -> bool:
 def package_script_arguments(
     command: list[str], directory: Path, pnpm_only: bool = False
 ) -> list[str]:
+    return package_script_invocation(command, directory, pnpm_only)[0]
+
+
+def package_script_invocation(
+    command: list[str], directory: Path, pnpm_only: bool = False
+) -> tuple[list[str], Path]:
     arguments = list(command)
     scripts_seen = set()
     while arguments:
@@ -150,7 +137,7 @@ def package_script_arguments(
         arguments = shlex.split(script) + arguments[3:]
         if not arguments:
             raise ValueError("Configured package test script is empty")
-    return arguments
+    return arguments, directory
 
 
 def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
@@ -509,6 +496,11 @@ def adapt_javascript(directory: Path, package: Group, manager: str) -> None:
         for gate in package["checks"]:
             if gate.get("role") == "dead-code-duplicates":
                 gate["command"] = [manager, "run", "check:fallow"]
+                output = fallow_report_path(
+                    package_script_arguments(gate["command"], directory)
+                )
+                if output is not None:
+                    gate.setdefault("report", {})["path"] = output
     dependencies = {
         **manifest.get("dependencies", {}),
         **manifest.get("devDependencies", {}),

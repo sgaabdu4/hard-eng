@@ -5,7 +5,7 @@ description: Apply Hard Eng's planning, project context, verification and gate-a
 
 # Hard Eng
 
-Load only matching routes.
+Select the matching route automatically from the task and current stage; no explicit skill invocation is required. Load only matching routes and continue to the next authorized stage when its prerequisites pass.
 
 ```mermaid
 flowchart LR

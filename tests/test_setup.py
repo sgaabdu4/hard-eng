@@ -396,6 +396,9 @@ def test_install_preserves_project_and_repeats(
 ) -> None:
     repository(tmp_path)
     (tmp_path / "AGENTS.md").write_text("# Project rules\n\nKeep this.\n")
+    custom_skill = tmp_path / ".agents/skills/local-work/SKILL.md"
+    custom_skill.parent.mkdir(parents=True)
+    custom_skill.write_text("# Existing project skill\nKeep this too.\n")
     installer.install(tmp_path)
     before = snapshot(tmp_path)
     installer.install(tmp_path)
@@ -403,6 +406,7 @@ def test_install_preserves_project_and_repeats(
     instructions = (tmp_path / "AGENTS.md").read_text()
     assert instructions.count("<!-- hard-eng:start -->") == 1
     assert instructions.endswith("# Project rules\n\nKeep this.\n")
+    assert custom_skill.read_text() == "# Existing project skill\nKeep this too.\n"
     assert not (tmp_path / "DECISION.md").exists()
     assert not (tmp_path / "PLAN.md").exists()
     assert not (tmp_path / "AGENTS.override.md").exists()
@@ -660,16 +664,8 @@ def test_hook_registrations_invoke_shared_runner(
         "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"
     )
     for agent, path, events in (
-        (
-            "claude",
-            ".claude/settings.json",
-            "SessionStart PostToolUseFailure Stop",
-        ),
-        (
-            "codex",
-            ".codex/hooks.json",
-            "SessionStart Stop",
-        ),
+        ("claude", ".claude/settings.json", "SessionStart PostToolUseFailure Stop"),
+        ("codex", ".codex/hooks.json", "SessionStart Stop"),
         (
             "copilot",
             ".github/hooks/hard-eng.json",
