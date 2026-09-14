@@ -1,5 +1,6 @@
 """Provision current native tools before concurrent gate execution."""
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -12,6 +13,25 @@ from pathlib import Path
 from gate_config import Group
 
 UV_LOCK = threading.Lock()
+
+
+def ensure_python_runtime() -> None:
+    """Run the installed CLI with its YAML dependency without changing host Python."""
+    if importlib.util.find_spec("yaml") is None:
+        os.execvp(
+            "uv",
+            [
+                "uv",
+                "run",
+                "--no-project",
+                "--with",
+                "pyyaml",
+                "--python",
+                sys.executable,
+                "python",
+                *sys.argv,
+            ],
+        )
 
 
 def execution_lock(command: list[str]) -> AbstractContextManager[object]:
