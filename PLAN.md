@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current Dart interface coverage repair: native classification rejects CustomerRelationsStore, an abstract interface containing only method signatures with no executable bodies; its real lifecycle LCOV legitimately has no record for that file. Recognize only abstract interface declarations whose members are all MethodDeclaration with EmptyFunctionBody. Keep concrete interfaces and declarations with fields, constructors or executable methods required. Reuse dart_coverage.py and the existing native classifier/report test; no new helper, dependency or coverage waiver. The source baseline is verified d30b365, distinct from the consumer's ongoing baseline repairs.
+
 Current UI evidence correction: the user wants before/after images only when their appearance differs. For matching UI paths, permit one explained `UI appearance: unchanged` declaration after an actual matched comparison, with no labeled duplicate attachments. Otherwise require the existing before/after evidence. Missing, empty or contradictory declarations fail; unchanged appearance never waives behavior tests. Move the existing path/body selection into ship_evidence.py because shipping.py is at its 700-line boundary; keep network validation and shipping checks unchanged. Update HE Ship's owner guidance and remove HE Build's unconditional pair requirement. No image-processing dependency, stored hashes or new configuration.
 
 Current attachment repair: validate authentic GitHub image/video attachments using a one-byte GET with silent body output instead of HEAD. Both approved StaffToDo PR59 attachments independently return 403 to HEAD and 206 image/png to the ranged GET; suppressing the binary body preserves the existing text-only gh reader. Keep URL, status, media and length checks. Reuse shipping.py and its existing tests; no new helper, dependency or upload. The separate overbroad UI-path evidence requirement remains unresolved by this transport repair.
@@ -55,6 +57,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Native abstract-interface signature-only sources are exempt from missing LCOV records; concrete interfaces and executable members still fail missing coverage.
+- [x] Native regression fails against the original classifier and passes after repair; final source gates remain required before authorized delivery and supported consumer adoption.
 
 - [x] An inspected unchanged-appearance declaration passes without attachment requests; real visual changes still require valid distinct before/after evidence.
 - [x] Empty, duplicate and contradictory unchanged declarations fail; matching paths without proof still fail and unrelated paths retain existing behavior.
@@ -130,6 +135,8 @@ The user selected Frontline Fitness's Main board for the temporary tracker test 
 
 ## Baseline + execution
 
+Dart interface repair baseline: unchanged d30b365b2231187db015f7f2ad13d6f21a596b77 passed all 17 gates, 470 regressions, four performance tests, exact main Hard Eng CI 34807990604 and native delivered for PR66. One builder owns this small classifier change; preserve the consumer's independent baseline repairs.
+
 UI evidence baseline: source ebb328499a5ad014c267e2f4589d0be4d9d7b391 passed all local gates and PR65 CI; main run 34806779985 attempt 1 encountered a Semgrep analysis timeout, unchanged attempt 2 passed, and native delivered passed. This is the starting revision. One builder owns the contained policy and guidance change; no new agent/dependency.
 
 Attachment repair baseline: unchanged source bd42ac12ec3a19f2c6aed77c09b539772c9e2844 passed all 17 gates, 466 regression tests and four performance tests, followed by required main CI 34804245012 and native delivered for PR64. Reuse matching source/environment evidence; one builder owns this contained fix.
@@ -149,6 +156,10 @@ A structural check cannot prove truthful evidence, actual approval or that a pla
 N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has no visual application.
 
 ## Verification
+
+Dart interface release gate: final Complete check passed all 17 gates, 470 regression tests and four performance tests (`/tmp/he-dart-interface-complete.log`). Ready for ship — local implementation and verification complete; delivery not performed. Authorized source PR/main/native delivery and supported consumer adoption remain pending.
+
+Dart interface repair: the pre-implementation Ready gate passed (`/tmp/he-dart-interface-ready.log`). The original native classifier/report rejected the actual CustomerRelationsStore and the new regression failed specifically on the signature-only interface (`/tmp/he-dart-interface-consumer-red.log`, `/tmp/he-dart-interface-red.log`). After the five-line classifier fix, all 135 classifier/report tests pass, including abstract-interface method/getter/setter signatures and required concrete-interface, constructor, field and method-body controls (`/tmp/he-dart-interface-tests.log`). The source reader accepts the actual unchanged lifecycle LCOV at 25440/34478 lines (73.79%); its SHA256 remains 5b26fa7657af41433131531e6a532e35f074483d34dc25b23bae030989391405 before/after (`/tmp/he-dart-interface-consumer-green.log`). Diff review confirms no coverage threshold, report or dependency change. Final Complete gate and source PR/main/native delivery remain pending, followed by supported consumer adoption.
 
 UI evidence release gate: final Complete rerun passed all 17 gates, 470 regression tests and four performance tests (`/tmp/he-ui-evidence-complete-final.log`). Ready for ship — local implementation and verification complete; delivery not performed. Authorized PR/main/native delivery and supported consumer adoption remain pending.
 
