@@ -5,9 +5,18 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 from gate_config import Group
+
+UV_LOCK = threading.Lock()
+
+
+def execution_lock(command: list[str]) -> AbstractContextManager[object]:
+    """Keep uv-backed gates from mutating the shared cache concurrently."""
+    return UV_LOCK if Path(command[0]).name in {"uv", "uvx"} else nullcontext()
 
 
 def managed_command(command: list[str]) -> list[str]:

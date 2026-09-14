@@ -29,7 +29,7 @@ from gate_config import (
     validate_dart_boundaries,
     validate_dart_exclusions,
 )
-from tool_setup import managed_command, provision_tools
+from tool_setup import execution_lock, managed_command, provision_tools
 
 DartAnalyzer = TypedDict(
     "DartAnalyzer",
@@ -514,9 +514,12 @@ def run_gate(
         ) as log:
             try:
                 with (
-                    report_path.open("w")
-                    if capture and report_path is not None
-                    else nullcontext() as output
+                    execution_lock(command),
+                    (
+                        report_path.open("w")
+                        if capture and report_path is not None
+                        else nullcontext()
+                    ) as output,
                 ):
                     result = subprocess.run(
                         command,
