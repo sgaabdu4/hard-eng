@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current CI timeout repair: generated consumer workflows must honor the configured shipping CI budget instead of copying Hard Eng's own three-minute timeout. Derive minutes by rounding up validated ci_seconds; retain the source default without a policy and preserve existing project workflows. Reuse configure_ci and shipping policy validation. A focused test file is needed because test_setup.py is at 700 lines; no runtime dependency. Existing consumer workflow timeout remains an explicitly reviewed project configuration edit because setup preserves it. PR61 supplies matching source baseline proof.
+
 Current updater plan-scope repair: non-scaffold candidate checks must retain the consuming task's committed plan scope. Resolve the current configured remote shipping base using the same exact-SHA operation as initial pushes; compare the candidate against it instead of only HEAD. The changed source marker forces all application groups. Reuse ship_actions/update and native transaction tests; no new files, dependencies or fabricated plan state. PR60 provides the verified source baseline.
 
 Current Dart exclusion repair: preserve narrowly supported generated/artifact patterns required by the installed Flutter skill lint while rejecting handwritten source exclusions and ignored diagnostics. Preserve native lint-rule lists and emit YAML because the actual plugin checks YAML text rather than equivalent JSON. Reuse gate_config validation, both runner validation paths and setup's existing Dart configuration owner. Generated Dart matches require a generator header or native Git generated/vendor classification; no broad path waiver or new dependency. Verify setup preservation, includes/nested options, handwritten counterexamples and full source gates. PR #59 provides matching baseline proof.
@@ -45,6 +47,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Generated workflow uses the configured CI budget in whole minutes; absent policy preserves the source default and malformed policy fails closed.
+- [x] Existing custom workflow stays byte-exact; meaningful regressions and diff review pass.
 
 - [x] Candidate validation retains a committed Complete task plan while ignoring unchanged historical plans, with stale tracking refs and unrelated local edits preserved.
 - [x] Missing remote base and actual application-check failures block updates without changing consumer files; native regressions and diff review pass.
@@ -119,6 +124,10 @@ A structural check cannot prove truthful evidence, actual approval or that a pla
 N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has no visual application.
 
 ## Verification
+
+CI timeout release: final Complete-stage gate passed all 17 checks, 463 regressions and four performance tests (`/tmp/he-ci-timeout-complete.log`). Source PR/main CI and native delivery remain pending; consumer hosted retry is separate evidence.
+
+CI timeout repair: four configured-budget/invalid-policy regressions fail against the original generator; all six cases pass after repair (`/tmp/he-ci-timeout-red.log`, `/tmp/he-ci-timeout-green.log`). The initial full run passed 463 regressions and four performance tests; a generator complexity finding was repaired by moving budget formatting into a helper in the same owner, then focused complexity/tests passed. Final Complete-stage checks follow on the corrected tree. Existing project workflow preservation is byte-verified; StaffToDo's ten-minute timeout is a separate supported project edit. Source PR/main/native delivery and hosted consumer rerun remain pending.
 
 Updater scope release: final Complete-stage check passed all 17 gates, 457 regressions and four performance tests (`/tmp/he-candidate-base-complete.log`). Source PR/main CI and native delivery remain pending; the consumer must retry through the verified updater implementation.
 
