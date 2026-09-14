@@ -139,8 +139,9 @@ class FakeGitHub:
         ]
         self.file_payload: object = [files or []]
         self.calls: list[tuple[str, ...]] = []
-        self.head_response = (
-            "HTTP/2 200 OK\ncontent-type: image/png\ncontent-length: 10\n"
+        self.attachment_response = (
+            "HTTP/2 206 Partial Content\ncontent-type: image/png\n"
+            "content-length: 1\ncontent-range: bytes 0-0/85098\n"
         )
 
     def __call__(self, _root: Path, *args: str) -> str:
@@ -148,7 +149,9 @@ class FakeGitHub:
         if args[0] != "api":
             raise AssertionError(args)
         if "--method" in args:
-            return self.head_response
+            if "HEAD" in args:
+                raise shipping.ShippingError("gh query failed")
+            return self.attachment_response
         endpoint = args[-1]
         if "/pulls/" in endpoint and "/files?" not in endpoint:
             index = min(len(self.calls) - 1, len(self.pulls) - 1)
@@ -435,7 +438,7 @@ def test_newest_required_run_wins_over_later_finishing_old_run(
             )
 
 
-def test_ui_changes_require_and_head_check_distinct_attachments(
+def test_ui_changes_accept_attachments_that_reject_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
@@ -445,9 +448,13 @@ def test_ui_changes_require_and_head_check_distinct_attachments(
         fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
     )
     assert shipment.delivery_target == "PR"
-    heads = [call for call in fake.calls if "--method" in call]
-    assert len(heads) == 2
-    assert all("--include" in call for call in heads)
+    requests = [call for call in fake.calls if "--method" in call]
+    assert len(requests) == 2
+    assert all(
+        call[:-1]
+        == ("api", "--method", "GET", "--include", "--silent", "-H", "Range: bytes=0-0")
+        for call in requests
+    )
 
 
 @pytest.mark.parametrize(
@@ -483,7 +490,7 @@ def test_ui_changes_reject_unavailable_or_wrong_attachment_type(
 ) -> None:
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
     fake = _ui_fake(fixture)
-    fake.head_response = response
+    fake.attachment_response = response
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError):
         shipping.verify(
