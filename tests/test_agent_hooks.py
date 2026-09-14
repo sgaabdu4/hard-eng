@@ -153,6 +153,24 @@ def test_completion_runs_real_command_and_bounds_failure_log(
         assert result == {}
 
 
+@pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
+def test_completion_surfaces_only_authoritative_stage_handoffs(
+    repository: Path, agent: str
+) -> None:
+    hooks = repository / ".hooks"
+    hooks.mkdir()
+    (hooks / "hard-eng.py").write_text(
+        "print('Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check.')\n"
+    )
+    result = agent_hooks.completion(repository, {}, agent)
+    if agent == "copilot":
+        assert result == {}
+    else:
+        assert result == {
+            "systemMessage": "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."
+        }
+
+
 def test_stop_retry_allows_honest_blocker_without_rerunning(repository: Path) -> None:
     (repository / "change.txt").write_text("changed")
     response = agent_hooks.completion(repository, {"stop_hook_active": True})
@@ -374,6 +392,57 @@ def test_setup_removes_owned_routine_hooks_and_preserves_custom_hooks(
     for native, entries in hooks.items():
         assert isinstance(entries, list)
         assert result[native] == entries[1:]
+    path.write_text(changes[str(path.relative_to(repository))])
+    repeated: dict[str, str] = {}
+    installer.configure_hooks(repository, repeated)
+    assert repeated == changes
+
+
+@pytest.mark.parametrize(
+    "event,native,message",
+    [
+        ("session", "SessionStart", "Hard Eng: updating project setup"),
+        ("stop", "Stop", "Hard Eng: verifying changes"),
+    ],
+)
+def test_setup_migrates_codex_hook_status_without_duplicate(
+    repository: Path, installer: ModuleType, event: str, native: str, message: str
+) -> None:
+    path = repository / ".codex/hooks.json"
+    path.parent.mkdir(parents=True)
+    command = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py"'
+    legacy = {
+        "hooks": [
+            {"type": "command", "command": f"{command} {event} codex", "timeout": 3600}
+        ]
+    }
+    custom = {"hooks": [{"type": "command", "command": "echo custom"}]}
+    path.write_text(json.dumps({"hooks": {native: [legacy, custom]}}))
+
+    changes: dict[str, str] = {}
+    installer.configure_hooks(repository, changes)
+    result = json.loads(changes[str(path.relative_to(repository))])
+    stop_hooks = result["hooks"][native]
+    assert legacy not in stop_hooks
+    assert custom in stop_hooks
+    managed = [
+        entry
+        for entry in stop_hooks
+        if entry.get("hooks", [{}])[0].get("statusMessage")
+    ]
+    assert managed == [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"{command} {event} codex",
+                    "timeout": 3600,
+                    "statusMessage": message,
+                }
+            ]
+        }
+    ]
+
     path.write_text(changes[str(path.relative_to(repository))])
     repeated: dict[str, str] = {}
     installer.configure_hooks(repository, repeated)

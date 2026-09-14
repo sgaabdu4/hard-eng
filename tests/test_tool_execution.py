@@ -12,7 +12,142 @@ from types import ModuleType
 import pytest
 import tool_setup
 import update
-from gate_config import Group
+from gate_config import Gate, Group, validate_gate, validate_package_services
+
+
+@pytest.mark.parametrize("flag", [["--max-crap", "0"], ["--max-crap=0"]])
+def test_gate_rejects_disabled_fallow_metric_before_execution(
+    tmp_path: Path, flag: list[str]
+) -> None:
+    gate: Gate = {"name": "audit", "command": ["fallow", "audit", *flag]}
+    with pytest.raises(ValueError, match="CRAP enforcement cannot be disabled"):
+        validate_gate(gate, tmp_path, set())
+    gate["command"] = ["fallow", "audit", "--max-crap", "30"]
+    with pytest.raises(ValueError, match="require a native fallow report"):
+        validate_gate(gate, tmp_path, set())
+    gate["report"] = {"type": "fallow", "path": "audit.json"}
+    validate_gate(gate, tmp_path, set())
+
+
+def test_fallow_named_arguments_do_not_imply_tool_invocation(tmp_path: Path) -> None:
+    validate_gate(
+        {"name": "custom", "command": ["node", "check.mjs", "fallow", "audit"]},
+        tmp_path,
+        set(),
+    )
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        ["pnpm", "--dir", "child"],
+        ["pnpm", "--dir=child"],
+        ["pnpm", "-C", "child"],
+        ["npm", "--prefix", "child"],
+    ],
+)
+def test_package_directory_options_cannot_hide_suppression(
+    tmp_path: Path, prefix: list[str]
+) -> None:
+    child = tmp_path / "child"
+    child.mkdir()
+    manifest = child / "package.json"
+    manifest.write_text(json.dumps({"scripts": {"unit": "node --no-warnings --test"}}))
+    gate: Gate = {"name": "unit", "command": [*prefix, "run", "unit"]}
+    with pytest.raises(ValueError, match="suppress all Node warnings"):
+        validate_gate(gate, tmp_path, set())
+    manifest.write_text(json.dumps({"scripts": {"unit": "node --test"}}))
+    validate_gate(gate, tmp_path, set())
+
+
+def test_unresolved_package_selectors_fail_instead_of_skipping_validation(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="package selectors are not supported"):
+        validate_gate(
+            {"name": "unit", "command": ["pnpm", "--filter", "child", "run", "unit"]},
+            tmp_path,
+            set(),
+        )
+
+
+def test_existing_fallow_audit_must_be_the_enforced_gate(tmp_path: Path) -> None:
+    from project_setup import adapt_javascript
+
+    (tmp_path / "package.json").write_text(
+        json.dumps(
+            {
+                "scripts": {
+                    "check:fallow": "fallow audit --format json --output-file coverage/fallow.json"
+                }
+            }
+        )
+    )
+    group: Group = {
+        "path": ".",
+        "language": "javascript",
+        "checks": [
+            {
+                "name": "scan",
+                "role": "dead-code-duplicates",
+                "command": ["fallow"],
+                "report": {"type": "fallow", "path": "coverage/fallow.json"},
+            }
+        ],
+    }
+    inherited = {"lockfiles", "vulnerabilities", "security"}
+    with pytest.raises(ValueError, match="Wire check:fallow"):
+        validate_package_services(tmp_path, group, {}, {}, inherited)
+    adapt_javascript(tmp_path, group, "pnpm")
+    assert len(group["checks"]) == 1
+    validate_package_services(tmp_path, group, {}, {}, inherited)
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "node --no-warnings --test",
+        "NODE_NO_WARNINGS=1 node --test",
+        "NODE_OPTIONS='--trace-warnings --no-warnings' node --test",
+    ],
+)
+def test_gate_rejects_blanket_warnings_in_nested_package_scripts(
+    tmp_path: Path, script: str
+) -> None:
+    manifest = tmp_path / "package.json"
+    gate: Gate = {"name": "tests", "command": ["pnpm", "run", "verify"]}
+    scripts = {"verify": "pnpm run unit", "unit": script}
+    manifest.write_text(json.dumps({"scripts": scripts}))
+    with pytest.raises(ValueError, match="suppress all Node warnings"):
+        validate_gate(gate, tmp_path, set())
+    scripts["unit"] = (
+        "node --trace-warnings --disable-warning=ExperimentalWarning --test"
+    )
+    manifest.write_text(json.dumps({"scripts": scripts}))
+    validate_gate(gate, tmp_path, set())
+
+
+@pytest.mark.parametrize(
+    "name,value", [("NODE_NO_WARNINGS", "1"), ("NODE_OPTIONS", "--no-warnings")]
+)
+def test_inherited_warning_suppression_blocks_before_command_execution(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str,
+) -> None:
+    command = [sys.executable, "-c", "from pathlib import Path; Path('ran').touch()"]
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [{"name": "verify", "command": command}]})
+    )
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValueError, match="suppress all Node warnings"):
+        runner.check()
+    assert not (tmp_path / "ran").exists()
+    monkeypatch.delenv(name)
+    assert runner.check() == 0
+    assert (tmp_path / "ran").is_file()
 
 
 @pytest.mark.parametrize("failure", ["", "exit", "unresolved"])

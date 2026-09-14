@@ -128,6 +128,7 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
 )
 def test_dart_setup_migrates_known_plugin_with_rules(
     installer: ModuleType,
+    runner: ModuleType,
     tmp_path: Path,
     plugin: str | dict[str, str] | None,
     migrate: bool,
@@ -163,6 +164,13 @@ def test_dart_setup_migrates_known_plugin_with_rules(
     assert result["linter"]["rules"]["no_dynamic_casts"] is True
     assert result["linter"]["rules"]["no_raw_types"] is True
     path.write_text(changes["analysis_options.yaml"])
+    runner.validate_typing(tmp_path, "dart")
+    if migrate:
+        outdated = {**result, "plugins": plugins}
+        path.write_text(yaml.safe_dump(outdated))
+        with pytest.raises(ValueError, match="older than the installed canonical"):
+            runner.validate_typing(tmp_path, "dart")
+        path.write_text(changes["analysis_options.yaml"])
     repeated: dict[str, str] = {}
     installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, repeated)
     assert repeated == changes
