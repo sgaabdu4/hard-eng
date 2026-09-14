@@ -6,8 +6,9 @@ Repository-local engineering instructions, skills, checks, hooks and CI for Pyth
 
 - Detect supported packages; preserve project instructions and configuration; report conflicts.
 - Require meaningful `PRODUCT.md` and `DESIGN.md`, baseline checks, nonempty tests, at least 70% executable-line coverage and a configured performance suite. Preserve stricter coverage requirements.
-- Check task `PLAN.md` structure, reasoned N/A entries and declared readiness/completion evidence through the existing runner; see [plan checks](.agents/skills/he/references/gates.md#plan-checks). Evidence truth and user authorization still require review.
+- Check task `PLAN.md` structure, reasoned N/A entries and declared readiness/completion evidence through the existing runner; visible proposals need a Markdown image reference before Ready. See [plan checks](.agents/skills/he/references/gates.md#plan-checks). References do not prove images were displayed or inspected; evidence truth and user authorization still require review.
 - Successful Ready/Complete checks print the next-stage handoff; failed checks cannot announce readiness. Codex shows progress while its trusted session and completion hooks run. Hook registration alone does not prove execution.
+- SessionStart reports its actual updater result through native Codex/Claude messages. Installed-project instructions require the supported curl updater before work if that session has no startup result; an existing result avoids a duplicate update. This fallback is an agent instruction, not a replacement for host hook trust.
 - Reject blanket Node warning suppression in configured commands, expanded package-script arguments and the inherited Node environment. Package-directory options are resolved; unsupported package selectors fail instead of skipping inspection. Existing `check:fallow` scripts must be wired into the package gate with a native Fallow report, including active CRAP enforcement for audits. Strict Dart analysis rejects older ordinary lint pins against the installed canonical profile and disallowed exclusions. Arbitrary shell wrappers and API mock semantics still require native integration tests and review.
 - Run full checks for affected packages, dependents and shared concerns; uncertain impact expands scope. Independent checks may run in parallel.
 - Validate native exits and reports; reject findings and missing, stale or malformed evidence. Handwritten source/test files over 700 lines need a justified exception.
@@ -39,7 +40,9 @@ Existing build, integration, UI and generator scripts participate where applicab
 
 ## Install
 
-The same command installs a new project or uses the supported updater for a recorded installation. Updates select a CI-verified revision and create a local commit without pushing; conflicting local edits remain protected. Run it before editing, not concurrently in the background.
+The same command installs a new project or uses the supported updater for a recorded installation. Both transactions execute from a CI-verified main revision. Updates create a local commit without pushing; conflicting local edits remain protected. Run it before editing, not concurrently in the background.
+
+Setup prepends shared rules to `AGENTS.md`, adds Claude's native `@AGENTS.md` import to `CLAUDE.md`, and adds a shared-rules reference when an existing `AGENTS.override.md` masks Codex's normal file. Existing project instructions are preserved. These instructions guide the agent; native hooks and gates enforce only their documented executable checks.
 
 When an update changes project configuration, its isolated candidate runs the application gates without requiring a task plan to be completed first. This verifies the update only; normal completion, push and shipping checks still require their task evidence.
 
@@ -53,7 +56,7 @@ Run from your project's Git root, locally or in a cloud terminal:
 curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh
 ```
 
-No GitHub account or existing Hard Eng checkout needed. Requires Git, curl, uv and Python 3.12+; uv provisions the locked setup dependencies in the temporary source checkout. Running gates also requires pnpm and the project's SDKs. The installed check command uses uv for PyYAML when host Python lacks it. Existing configuration conflicts are reported for review.
+No GitHub account or existing Hard Eng checkout needed; public API rate limits apply, and existing GitHub credentials are used when available. Requires Git, curl, uv and Python 3.12+; uv provisions the locked setup dependencies in the temporary source checkout. Running gates also requires pnpm and the project's SDKs. Dart Decimate's reviewed install scripts require npm 11.16+; current npm is supported without changing the project's package manager. The installed check command uses uv for PyYAML when host Python lacks it. Existing configuration conflicts are reported for review.
 
 Classifying omitted type-only TypeScript coverage uses Node 22.13+ [native type stripping](https://nodejs.org/api/module.html#modulestriptypescripttypescode-options). Executable or unsupported sources still require coverage records.
 

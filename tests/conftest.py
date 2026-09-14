@@ -1,6 +1,8 @@
 """Load the actual installed-script entry points without invoking their CLI."""
 
 import importlib.util
+import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +17,8 @@ if TYPE_CHECKING:
 SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE / ".hooks"))
 
+import update
+
 
 def load_module(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
@@ -22,6 +26,23 @@ def load_module(name: str, path: Path) -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def git(root: Path, *arguments: str) -> str:
+    return subprocess.check_output(["git", *arguments], cwd=root, text=True).strip()
+
+
+def commit(root: Path, message: str) -> str:
+    git(root, "add", ".")
+    git(root, "commit", "-qm", message)
+    return git(root, "rev-parse", "HEAD")
+
+
+def init(root: Path) -> None:
+    root.mkdir()
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    git(root, "config", "user.name", "Fixture")
+    git(root, "config", "user.email", "fixture@example.invalid")
 
 
 @pytest.fixture
@@ -77,3 +98,83 @@ def shipping_policy() -> "ShippingPolicy":
         "pre_push_seconds": 180.0,
         "delivery": [],
     }
+
+
+@pytest.fixture
+def release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, str]:
+    source, target = tmp_path / "source", tmp_path / "target"
+    init(source)
+    for name in (".hooks", ".agents", ".github"):
+        shutil.copytree(
+            SOURCE / name,
+            source / name,
+            ignore=shutil.ignore_patterns("__pycache__", "skill-sources"),
+        )
+    for name in (
+        "setup.py",
+        "setup.sh",
+        "AGENTS.md",
+        "PRODUCT.md",
+        "DESIGN.md",
+        ".gitignore",
+        "pyproject.toml",
+        "uv.lock",
+    ):
+        shutil.copyfile(SOURCE / name, source / name)
+    (source / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [],
+                "shared": [
+                    {
+                        "name": "source-check",
+                        "command": ["python3", "-c", "print('SOURCE_CHECK')"],
+                    }
+                ],
+            }
+        )
+    )
+    old = commit(source, "source baseline")
+    init(target)
+    (target / "package.json").write_text('{"private":true}')
+    (target / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    subprocess.run(
+        ["python3", str(source / "setup.py"), str(target)],
+        check=True,
+        capture_output=True,
+    )
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        shutil.copyfile(SOURCE / name, target / name)
+    (target / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [],
+                "shared": [
+                    {
+                        "name": "application-check",
+                        "command": ["python3", "-c", "raise SystemExit(1)"],
+                    },
+                    {
+                        "name": "actionlint",
+                        "role": "workflows",
+                        "command": ["python3", "-c", "print('WORKFLOW_CHECK')"],
+                    },
+                    {
+                        "name": "zizmor",
+                        "role": "ci-security",
+                        "command": ["python3", "-c", "print('CI_SECURITY_CHECK')"],
+                    },
+                ],
+            }
+        )
+    )
+    (target / "project.txt").write_text("original\n")
+    commit(target, "installed baseline")
+    reference = source / ".agents/skills/he/references/workflow.md"
+    reference.write_text(reference.read_text() + "\nUpdated fixture instruction.\n")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{source.as_uri()}.insteadOf")
+    monkeypatch.setenv(
+        "GIT_CONFIG_VALUE_0", f"https://github.com/{update.UPSTREAM}.git"
+    )
+    return source, target, old

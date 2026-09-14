@@ -21,7 +21,7 @@ Load for planning-stage checks or plan validation failures. Use [HE Plan](../../
 | Command | Required declaration |
 | --- | --- |
 | `python3 .hooks/hard-eng.py check --plan-stage Draft` | Filled plan; permits pending baseline/intermediate verification. |
-| `python3 .hooks/hard-eng.py check --plan-stage Ready` | Ready or Complete; baseline Passed with evidence; UX Passed with evidence or reasoned N/A; no declared blockers. |
+| `python3 .hooks/hard-eng.py check --plan-stage Ready` | Ready or Complete; baseline Passed with evidence; UX Passed with a Markdown image reference or reasoned N/A; no declared blockers. |
 | `python3 .hooks/hard-eng.py check --plan-stage Complete` | Complete; above requirements + implementation evidence and no unchecked requirements. |
 
 Every command also runs native project checks. Ordinary `check` (including Stop/pre-push/CI) requires Complete for non-Markdown changes; Markdown-only planning can stop at Draft/Ready. Changed root/feature plans take precedence; otherwise active plans apply. An unchanged historical Complete plan cannot cover new work relative to a known base. Missing bases fail plan validation; a new branch's zero base or an unborn repository uses Git's empty tree (the whole initial snapshot). Unchanged repositories can still be audited without inventing a task plan.
