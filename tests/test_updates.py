@@ -148,6 +148,8 @@ def release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path
         "PRODUCT.md",
         "DESIGN.md",
         ".gitignore",
+        "pyproject.toml",
+        "uv.lock",
     ):
         shutil.copyfile(SOURCE / name, source / name)
     (source / "hard-eng.gates.json").write_text(
@@ -240,10 +242,8 @@ def test_shell_bootstrap_installs_from_main(
     if installed:
         assert f"Updated Hard Eng to {revision}" in result.stdout
         assert (target / "project.txt").read_text() == "preserved local work\n"
-        assert (
-            json.loads((target / update.SOURCE_FILE).read_text())["revision"]
-            == revision
-        )
+        metadata = json.loads((target / update.SOURCE_FILE).read_text())
+        assert metadata["revision"] == revision
     else:
         assert "Installed Hard Eng" in result.stdout
     assert (target / ".git/hooks/pre-push").stat().st_mode & 0o111

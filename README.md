@@ -51,7 +51,7 @@ Run from your project's Git root, locally or in a cloud terminal:
 curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh
 ```
 
-No GitHub account or existing Hard Eng checkout needed. Requires Git, curl and Python 3.12+. Running gates also requires uv, pnpm and the project's SDKs; Dart Decimate requires Cargo. Existing configuration conflicts are reported for review.
+No GitHub account or existing Hard Eng checkout needed. Requires Git, curl, uv and Python 3.12+; uv provisions the locked setup dependencies in the temporary source checkout. Running gates also requires pnpm and the project's SDKs. The installed check command uses uv for PyYAML when host Python lacks it. Existing configuration conflicts are reported for review.
 
 Classifying omitted type-only TypeScript coverage uses Node 22.13+ [native type stripping](https://nodejs.org/api/module.html#modulestriptypescripttypescode-options). Executable or unsupported sources still require coverage records.
 

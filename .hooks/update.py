@@ -149,7 +149,15 @@ def update_plan(
 ) -> tuple[dict[str, str | None], dict[str, str | None]]:
     output = subprocess.check_output(
         [
+            "uv",
+            "run",
+            "--project",
+            str(source),
+            "--locked",
+            "--no-dev",
+            "--python",
             sys.executable,
+            "python",
             str(source / "setup.py"),
             str(root),
             "--plan",
@@ -249,7 +257,15 @@ def verify_candidate(
             [sys.executable, "-m", "compileall", "-q", str(candidate / ".hooks")]
             if only_scaffold
             else [
+                "uv",
+                "run",
+                "--project",
+                str(source),
+                "--locked",
+                "--no-dev",
+                "--python",
                 sys.executable,
+                "python",
                 "-I",
                 "-c",
                 (

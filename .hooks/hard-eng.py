@@ -639,12 +639,6 @@ def pre_push() -> int:
     return verify_push(ROOT)
 
 
-def agent_hook(event: str, agent: str) -> int:
-    from agent_hooks import handle_event
-
-    return handle_event(ROOT, event, agent)
-
-
 def main() -> int:
     import argparse
 
@@ -673,6 +667,9 @@ def main() -> int:
         hook.add_argument("agent", choices=("claude", "codex", "copilot"))
     args = parser.parse_args()
     if args.command == "check":
+        from tool_setup import ensure_python_runtime
+
+        ensure_python_runtime()
         return check(base=args.base, plan_stage=args.plan_stage)
     if args.command == "pre-push":
         return pre_push()
@@ -682,7 +679,9 @@ def main() -> int:
         return run(
             ROOT, args.plan, args.pr, args.stage, args.worktree, args.merge_method
         )
-    return agent_hook(args.command, args.agent)
+    from agent_hooks import handle_event
+
+    return handle_event(ROOT, args.command, args.agent)
 
 
 if __name__ == "__main__":
