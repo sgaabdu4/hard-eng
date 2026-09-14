@@ -10,6 +10,7 @@ from typing import TextIO, cast
 
 from coverage_sources import erased_typescript
 from dart_coverage import erased_dart
+from fallow_report import validate_fallow
 from gate_config import JsonObject
 
 
@@ -156,45 +157,6 @@ def report_branches(
         print(
             f"Branch coverage: {covered}/{total} ({100 * covered / total:.2f}%; informational)"
         )
-
-
-def validate_fallow(path: Path) -> None:
-    try:
-        report = json.loads(path.read_text())
-        check, dupes = report["check"], report["dupes"]
-        stats = dupes["stats"]
-        counts = [check["total_issues"], check["summary"]["total_issues"]]
-        counts += [stats["clone_groups"], stats["duplication_percentage"]]
-        counts += list(check["summary"].values())
-        corpus = {"total_files", "total_lines", "total_tokens"}
-        counts += [value for key, value in stats.items() if key not in corpus]
-        clean = all(type(n) in (int, float) and n == 0 for n in counts)
-        if report["kind"] != "combined" or not clean:
-            raise ValueError("Fallow reports findings or skipped analysis")
-        optional = {"boundaries-not-configured", "rule-packs-not-configured"}
-        diagnostics = report.get("workspace_diagnostics", [])
-        if not isinstance(diagnostics, list):
-            raise TypeError("Fallow diagnostics must be a list")
-        if (
-            any(isinstance(value, list) and value for value in check.values())
-            or dupes["clone_groups"] != []
-            or any(
-                not isinstance(item, dict) or item.get("kind") not in optional
-                for item in diagnostics
-            )
-        ):
-            raise ValueError("Fallow reports findings or analysis diagnostics")
-        if diagnostics:
-            print(
-                "Fallow: optional boundary/policy detectors unconfigured; not verified"
-            )
-        scopes = [(check["entry_points"]["total"], 1)]
-        scopes += [(stats[key], 0) for key in corpus]
-        for value, minimum in scopes:
-            if type(value) is not int or value < minimum:
-                raise ValueError("Fallow report lacks a valid analysis scope")
-    except (KeyError, TypeError, AttributeError) as error:
-        raise ValueError("Fallow report is incomplete") from error
 
 
 def validate_osv_package(

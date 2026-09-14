@@ -19,6 +19,19 @@ SECTIONS = (
 STAGES = ("Draft", "Ready", "Complete")
 
 
+def report_stage(failed: bool, stage: str | None) -> None:
+    if failed:
+        print("Hard Eng: verification failed; the next stage is blocked.")
+    elif stage == "Ready":
+        print(
+            "Hard Eng: planning checks passed — ready for build within the authorized scope."
+        )
+    elif stage == "Complete":
+        print(
+            "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."
+        )
+
+
 def field(content: str, name: str) -> str:
     values = re.findall(rf"(?m)^{re.escape(name)}: *(.*)$", content)
     if len(values) != 1 or not values[0].strip():
@@ -85,7 +98,7 @@ def validate_plan(path: Path) -> str:
 
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
-) -> None:
+) -> str:
     explicit_stage = stage is not None
     changed = changed_files(root, base or "HEAD")
     if changed is None:
@@ -124,3 +137,4 @@ def validate_plans(
                 raise ValueError(f"plan is {status}; this check requires {stage}")
         except ValueError as error:
             raise ValueError(f"{path.relative_to(root)}: {error}") from error
+    return stage

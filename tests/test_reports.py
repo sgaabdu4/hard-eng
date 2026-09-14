@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import reports
+from gate_config import JsonObject
 
 REPORTS = {
     "lighthouse-ci": '[{"url":"http://localhost/","auditId":"largest-contentful-paint","name":"maxNumericValue","level":"error","expected":2500,"actual":1200,"passed":true}]',
@@ -63,6 +64,47 @@ def test_fallow_unknown_or_malformed_diagnostics_still_fail(
     path = tmp_path / "report.json"
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError):
+        reports.validate_fallow(path)
+
+
+@pytest.mark.parametrize("threshold", [15, 30.0, 45])
+def test_fallow_audit_requires_active_crap_enforcement(
+    tmp_path: Path, threshold: float
+) -> None:
+    combined = json.loads(REPORTS["fallow"])
+    summary: JsonObject = {
+        "max_crap_threshold": threshold,
+        "files_analyzed": 1,
+        "functions_analyzed": 1,
+        "functions_above_threshold": 0,
+        "severity_critical_count": 0,
+        "severity_high_count": 0,
+        "severity_moderate_count": 0,
+    }
+    audit: JsonObject = {
+        "kind": "audit",
+        "command": "audit",
+        "verdict": "pass",
+        "dead_code": combined["check"],
+        "duplication": combined["dupes"],
+        "complexity": {"findings": [], "summary": summary},
+    }
+    path = tmp_path / "audit.json"
+    path.write_text(json.dumps(audit))
+    reports.validate_fallow(path)
+    for invalid in (0, -1, None, True):
+        summary["max_crap_threshold"] = invalid
+        path.write_text(json.dumps(audit))
+        with pytest.raises(ValueError, match="CRAP enforcement"):
+            reports.validate_fallow(path)
+    del summary["max_crap_threshold"]
+    path.write_text(json.dumps(audit))
+    with pytest.raises(ValueError, match="incomplete"):
+        reports.validate_fallow(path)
+    summary["max_crap_threshold"] = threshold
+    summary["functions_above_threshold"] = 1
+    path.write_text(json.dumps(audit))
+    with pytest.raises(ValueError, match="complexity findings"):
         reports.validate_fallow(path)
 
 

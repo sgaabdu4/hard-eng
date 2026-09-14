@@ -53,6 +53,39 @@ def hook_events(agent: str) -> dict[str, str]:
     return events
 
 
+def owned_hook_entry(
+    agent: str,
+    event: str,
+    command: str,
+    timeout: int,
+    status_message: str | None = None,
+) -> JsonObject:
+    """Build one exact managed hook entry for setup and legacy migration."""
+    call = f"{command} {event} {agent}"
+    if agent == "copilot":
+        return {"type": "command", "bash": call, "timeoutSec": timeout}
+    handler: JsonObject = {"type": "command", "command": call, "timeout": timeout}
+    if status_message is not None:
+        handler["statusMessage"] = status_message
+    return {"hooks": [handler]}
+
+
+CODEX_HOOK_STATUS = {
+    "session": "Hard Eng: updating project setup",
+    "stop": "Hard Eng: verifying changes",
+}
+
+
+def _remove_owned_entry(hooks: JsonObject, native: str, owned: JsonObject) -> None:
+    entries = hooks.get(native)
+    if not isinstance(entries, list) or owned not in entries:
+        return
+    while owned in entries:
+        entries.remove(owned)
+    if not entries:
+        del hooks[native]
+
+
 def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
     """Remove only the exact routine registrations previously installed by us."""
     hooks = current.get("hooks", {})
@@ -68,11 +101,14 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
         if agent == "copilot":
             native = "postToolUse"
             owned = {"type": "command", "bash": call, "timeoutSec": 10}
-        entries = hooks.get(native)
-        if isinstance(entries, list) and owned in entries:
-            entries.remove(owned)
-            if not entries:
-                del hooks[native]
+        _remove_owned_entry(hooks, native, owned)
+    if agent == "codex":
+        for event in CODEX_HOOK_STATUS:
+            _remove_owned_entry(
+                hooks,
+                hook_events(agent)[event],
+                owned_hook_entry(agent, event, command, 3600),
+            )
 
 
 def learning_context(event: str) -> str:
@@ -131,6 +167,18 @@ def session_context(root: Path, payload: JsonObject) -> str:
     return " ".join(messages)
 
 
+def completion_notice(agent: str | None, output: str) -> JsonObject:
+    """Surface only the runner's explicit plan-stage handoff where supported."""
+    if agent not in {"claude", "codex"}:
+        return {}
+    lines = output.splitlines()
+    if lines and lines[-1].startswith(
+        ("Hard Eng: planning checks passed", "Hard Eng: build checks passed")
+    ):
+        return {"systemMessage": lines[-1]}
+    return {}
+
+
 def integrated_services(root: Path) -> list[str]:
     patterns = {
         "Sentry": r"(?:from\s+['\"]@sentry/|require\(['\"]@sentry/|import\s+sentry_sdk|from\s+sentry_sdk\b|package:sentry(?:_flutter)?/)",
@@ -168,7 +216,7 @@ def integrated_services(root: Path) -> list[str]:
     return sorted(found)
 
 
-def completion(root: Path, payload: JsonObject) -> JsonObject:
+def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
     if payload.get("stop_hook_active") is True:
         return {
             "systemMessage": "Report remaining verification blockers honestly. Do not claim a pass; no repeated stop-hook loop."
@@ -218,6 +266,7 @@ def completion(root: Path, payload: JsonObject) -> JsonObject:
             output = log.read().decode("utf-8", errors="replace")
         if result.returncode == 0:
             require_current(root)
+            return completion_notice(agent, output)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return {
             "decision": "block",
@@ -249,7 +298,7 @@ def handle_event(root: Path, event: str, agent: str) -> int:
         if native is None:
             raise ValueError("Unsupported native hook event")
         if event == "stop":
-            output = completion(root, payload)
+            output = completion(root, payload, agent)
         else:
             message = (
                 session_context(root, payload)

@@ -7,8 +7,44 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from gate_config import GateConfig
 from plans import validate_plan, validate_plans
 from shipping import ShippingPolicy
+
+
+@pytest.mark.parametrize(
+    "stage,message",
+    [
+        ("Ready", "ready for build"),
+        ("Complete", "ready for ship"),
+        (None, "ready for ship"),
+    ],
+)
+@pytest.mark.parametrize("lockfiles", [False, True])
+def test_stage_handoff_only_follows_successful_gate(
+    runner: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    stage: str | None,
+    message: str,
+    lockfiles: bool,
+) -> None:
+    config: GateConfig = {
+        "packages": [],
+        "shared": [{"name": "verify", "command": [sys.executable, "-c", "pass"]}],
+    }
+    if lockfiles:
+        config["shared"][0]["role"] = "lockfiles"
+    path = tmp_path / "hard-eng.gates.json"
+    path.write_text(json.dumps(config))
+    assert runner.check(plan_stage=stage) == 0
+    assert message in capsys.readouterr().out
+    config["shared"][0]["command"][-1] = "raise SystemExit(1)"
+    path.write_text(json.dumps(config))
+    assert runner.check(plan_stage=stage) == 1
+    output = capsys.readouterr().out
+    assert message not in output
+    assert "next stage is blocked" in output
 
 
 def test_complete_delivery_requires_shipping_configuration(
@@ -219,6 +255,30 @@ def test_native_cli_plan_stage_and_missing_plan(
         ).returncode
         == 0
     )
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "baseline",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+    stopped = subprocess.run(
+        command[:-1] + ["stop", "codex"],
+        input="{}",
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "ready for ship" in json.loads(stopped.stdout)["systemMessage"]
     result = subprocess.run(
         command + ["--base", "missing-comparison-base"],
         cwd=tmp_path,

@@ -314,27 +314,43 @@ def test_ship_merge_matches_verified_head_and_checks_result(
     remote.assert_not_called()
 
 
+@pytest.mark.parametrize("with_submodule", [False, True])
 def test_pre_push_snapshot_has_its_own_git_environment(
     runner: ModuleType,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     shipping_policy: ShippingPolicy,
+    with_submodule: bool,
 ) -> None:
     (tmp_path / "hard-eng.gates.json").write_text(
         json.dumps({"shipping": shipping_policy})
     )
     git(tmp_path, "config", "user.name", "Hook Fixture")
     git(tmp_path, "config", "user.email", "hook@example.invalid")
+    if with_submodule:
+        module = tmp_path.parent / f"{tmp_path.name}-module"
+        git(tmp_path, "init", "-q", str(module))
+        git(module, "config", "user.name", "Hook Fixture")
+        git(module, "config", "user.email", "hook@example.invalid")
+        (module / "contract.txt").write_text("committed")
+        git(module, "add", "contract.txt")
+        git(module, "commit", "-qm", "module fixture")
+        monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
+        git(tmp_path, "submodule", "add", "-q", str(module), "component")
     (tmp_path / ".hooks").mkdir()
     (tmp_path / ".hooks/hard-eng.py").write_text(
         "import os, subprocess\nfrom pathlib import Path\n"
         "actual = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip()\n"
         "assert Path(actual) == Path.cwd()\n"
         "assert os.environ['HE_HOOK_TEST'] == 'preserved'\n"
+        "if Path('.gitmodules').exists():\n"
+        "    assert Path('component/contract.txt').read_text() == 'committed'\n"
     )
     git(tmp_path, "add", ".")
     git(tmp_path, "commit", "-qm", "snapshot fixture")
     revision = git(tmp_path, "rev-parse", "HEAD").strip()
+    if with_submodule:
+        (tmp_path / "component/contract.txt").write_text("local edits")
     monkeypatch.setenv("GIT_DIR", str(tmp_path / ".git"))
     monkeypatch.setenv("GIT_WORK_TREE", str(tmp_path))
     monkeypatch.setenv("HE_HOOK_TEST", "preserved")
@@ -345,6 +361,8 @@ def test_pre_push_snapshot_has_its_own_git_environment(
     )
     assert runner.pre_push() == 0
     assert len(ship_actions.worktrees(tmp_path)) == 1
+    if with_submodule:
+        assert (tmp_path / "component/contract.txt").read_text() == "local edits"
 
 
 @pytest.mark.parametrize("missing_base", [False, True])
