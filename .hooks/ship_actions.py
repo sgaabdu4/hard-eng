@@ -11,6 +11,20 @@ from pathlib import Path
 from shipping import Shipment, gh, git, load_policy, verify
 
 
+def remote_base(root: Path, branch: str) -> str:
+    reference = f"refs/heads/{branch}"
+    advertised = git(root, "ls-remote", "--exit-code", "origin", reference).split()
+    if (
+        len(advertised) != 2
+        or advertised[1] != reference
+        or re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", advertised[0]) is None
+    ):
+        raise ValueError("Cannot resolve the current remote shipping base")
+    revision = advertised[0]
+    git(root, "fetch", "--no-tags", "--no-write-fetch-head", "origin", revision)
+    return revision
+
+
 def pre_push(root: Path) -> int:
     policy = load_policy(root, required=False)
     started = time.monotonic()
@@ -27,18 +41,7 @@ def pre_push(root: Path) -> int:
             continue
         base = fields[3]
         if policy and set(base) == {"0"}:
-            reference = f"refs/heads/{policy['base']}"
-            advertised = git(
-                root, "ls-remote", "--exit-code", "origin", reference
-            ).split()
-            if (
-                len(advertised) != 2
-                or advertised[1] != reference
-                or re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", advertised[0]) is None
-            ):
-                raise ValueError("Cannot resolve the current remote shipping base")
-            base = advertised[0]
-            git(root, "fetch", "--no-tags", "--no-write-fetch-head", "origin", base)
+            base = remote_base(root, policy["base"])
         environment = os.environ.copy()
         for name in git(root, "rev-parse", "--local-env-vars").splitlines():
             environment.pop(name, None)
