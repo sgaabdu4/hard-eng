@@ -49,3 +49,16 @@ def test_invalid_shipping_budget_is_rejected(tmp_path: Path) -> None:
     (tmp_path / "hard-eng.gates.json").write_text('{"shipping": {"ci_seconds": 0}}')
     with pytest.raises(ShippingError):
         configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
+
+
+def test_dart_workflow_uses_packaged_scanner_without_rust(tmp_path: Path) -> None:
+    (tmp_path / "pubspec.yaml").write_text("name: fixture\ndependencies: {}\n")
+    config: GateConfig = {
+        "packages": [{"path": ".", "language": "dart", "checks": []}],
+        "shared": [],
+    }
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, config, changes)
+    workflow = changes[".github/workflows/hard-eng.yml"]
+    assert "dart@latest" in workflow
+    assert "rust@latest" not in workflow

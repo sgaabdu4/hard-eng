@@ -26,6 +26,7 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         "biome": "npm:@biomejs/biome",
         "tsc": "npm:typescript",
         "fallow": "npm:fallow",
+        "dart-decimate": 'npm:dart-decimate[allow_builds=["dart-decimate"]]',
         "react-doctor": "npm:react-doctor",
         "jscpd": "npm:jscpd",
         "lhci": "npm:@lhci/cli",
@@ -43,7 +44,14 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         packages[name] + "@latest" for name in executables & packages.keys()
     )
     storage = Path(tempfile.gettempdir()) / "hard-eng-tools"
-    if selected:
+    for use_pnpm in (False, True):
+        batch = [
+            item
+            for item in selected
+            if item.startswith("npm:dart-decimate[") == use_pnpm
+        ]
+        if not batch:
+            continue
         command = [
             "env",
             f"MISE_DATA_DIR={storage / 'mise/data'}",
@@ -51,6 +59,7 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
             f"MISE_STATE_DIR={storage / 'mise/state'}",
             f"PNPM_CONFIG_STORE_DIR={storage / 'pnpm/store'}",
             f"PNPM_CONFIG_CACHE_DIR={storage / 'pnpm/cache'}",
+            *(["MISE_NPM_PACKAGE_MANAGER=pnpm"] if use_pnpm else []),
             "MISE_FETCH_REMOTE_VERSIONS_CACHE=0s",
             "MISE_PREFER_OFFLINE=false",
             "MISE_USE_VERSIONS_HOST=false",
@@ -63,9 +72,9 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
             "--no-config",
             "env",
             "--json",
-            *selected,
+            *batch,
         ]
-        print("Prepare latest native tools: " + ", ".join(selected), flush=True)
+        print("Prepare latest native tools: " + ", ".join(batch), flush=True)
         result = subprocess.run(
             command,
             cwd=root,
@@ -91,22 +100,3 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
             if Path(path).resolve().is_relative_to(storage.resolve())
         ]
         os.environ["PATH"] = os.pathsep.join([*tool_paths, os.environ["PATH"]])
-    if "dart-decimate" in executables:
-        subprocess.run(
-            [
-                "cargo",
-                "install",
-                "--git",
-                "https://github.com/sgaabdu4/dart-decimate",
-                "--locked",
-                "--root",
-                str(storage / "decimate"),
-                "dart-decimate",
-            ],
-            cwd=root,
-            check=True,
-            timeout=timeout,
-        )
-        os.environ["PATH"] = (
-            str(storage / "decimate/bin") + os.pathsep + os.environ["PATH"]
-        )

@@ -526,8 +526,6 @@ def configure_ci(
                 tools.append(specification)
     if "flutter@latest" in tools and "dart@latest" in tools:
         tools.remove("dart@latest")
-    if any(package.get("language") == "dart" for package in config["packages"]):
-        tools.append("rust@latest")
     changes[name] = (
         (source / name)
         .read_text()
