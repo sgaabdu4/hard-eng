@@ -1,4 +1,4 @@
-# Reject weakened verification at native boundaries
+# Complete verification integrity delivery and repair scanner analysis
 
 Status: Complete
 
@@ -24,6 +24,8 @@ The user authorized implementation and delivery with YAGNI, speed and parallel w
 - [x] Make successful planning/build gates and invoked lifecycle hooks report their stage without extra checks or false delivery claims.
 - [x] Focused negative/positive checks pass; review corrections cover package-directory resolution, audit wiring and custom command arguments. The source diff uses existing owners, one extracted Fallow report module and no additional dependency, recurring callback or stored state.
 - [x] Prepare committed submodules in the existing temporary pre-push checkout and prove original checkout edits are preserved.
+- [x] Remove the reproducible provisioning-function analysis timeout without weakening scanner coverage or timeouts; retain native timeout details in failures.
+- [x] Show the actual SessionStart updater result and require the supported curl command before work when an installed project's current session has no result, without duplicate setup or new stored state.
 
 ## Baseline + execution
 
@@ -46,4 +48,6 @@ Evidence: Final Complete gate passed all 17 checks: 538 tests, four performance 
 Pre-push exposed missing canonical submodules in its temporary checkout. The existing pre-push function now initializes the committed submodules before checking. All 27 native shipping tests passed, including a real Git fixture that reads committed module content in the snapshot, preserves original local edits and removes the temporary worktree. The final Complete check runs through pre-push on the combined committed revision before publication.
 
 Delivery target: Merge
-Delivery: Pending — PR checks, merge and exact main CI remain required.
+Delivery: Pending — PR #87 merged at b5d9f0c, but main security analysis timed out after all 539 tests passed. A native Linux scan reproduced the timeout at provision_tools with the hardcoded-token rule. The repair separates batch execution from selection in the existing module; all scanner rules and time limits remain unchanged. Follow-up PR and exact main CI are required before declaring delivery.
+
+Follow-up evidence: 212 affected native tests passed, including updater success/failure output and single-call assertions. The same Linux Semgrep 1.176.1 scan that reproduced the provisioning timeout now scans all 31 source/test files with zero findings, errors or fixpoint timeouts. Normal full gates retain latest Semgrep. The AGENTS fallback is explicitly limited to installed projects and sessions missing an updater result; it does not grant host hook trust or automatically enforce model compliance. The combined committed revision receives the final full gate through native pre-push before publication.

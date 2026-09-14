@@ -197,6 +197,36 @@ def test_copilot_claude_compatibility_registration_does_not_repeat_checks(
 
 
 @pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
+@pytest.mark.parametrize("offline", [False, True])
+def test_session_reports_updater_result_once(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    agent: str,
+    offline: bool,
+) -> None:
+    updater = Mock(
+        side_effect=OSError("offline") if offline else None,
+        return_value="No newer CI-verified Hard Eng revision is available.",
+    )
+    monkeypatch.setattr(update, "update", updater)
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"session_id":"startup"}'))
+    assert agent_hooks.handle_event(repository, "session", agent) == 0
+    output = json.loads(capsys.readouterr().out)
+    updater.assert_called_once_with(repository)
+    context = (
+        output["additionalContext"]
+        if agent == "copilot"
+        else output["hookSpecificOutput"]["additionalContext"]
+    )
+    expected = "Hard Eng update failed: offline" if offline else "No newer CI-verified"
+    assert context.startswith(expected)
+    if agent != "copilot":
+        assert output["systemMessage"] == "Hard Eng startup: " + context.splitlines()[0]
+        assert "Use configured MCPs" not in output["systemMessage"]
+
+
+@pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
 def test_failure_checkpoint_preserves_results_without_running_checks(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -319,7 +319,9 @@ def validate_semgrep(path: Path) -> None:
                     "Semgrep requires scanned files and executed rules (--time)"
                 )
         if timing.get("fixpoint_timeouts", []) != []:
-            raise ValueError("Semgrep reports analysis timeouts")
+            raise ValueError(
+                f"Semgrep reports analysis timeouts: {timing['fixpoint_timeouts']}"
+            )
         targets = timing["targets"]
         if not isinstance(targets, list) or {t["path"] for t in targets} != set(
             scanned

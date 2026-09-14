@@ -72,7 +72,6 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
     selected = sorted(
         packages[name] + "@latest" for name in executables & packages.keys()
     )
-    storage = Path(tempfile.gettempdir()) / "hard-eng-tools"
     for use_pnpm in (False, True):
         batch = [
             item
@@ -81,54 +80,59 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         ]
         if not batch:
             continue
-        command = [
-            "env",
-            f"MISE_DATA_DIR={storage / 'mise/data'}",
-            f"MISE_CACHE_DIR={storage / 'mise/cache'}",
-            f"MISE_STATE_DIR={storage / 'mise/state'}",
-            f"PNPM_CONFIG_STORE_DIR={storage / 'pnpm/store'}",
-            f"PNPM_CONFIG_CACHE_DIR={storage / 'pnpm/cache'}",
-            *(["MISE_NPM_PACKAGE_MANAGER=pnpm"] if use_pnpm else []),
-            "MISE_PREFER_OFFLINE=false",
-            "MISE_USE_VERSIONS_HOST=false",
-            "MISE_MINIMUM_RELEASE_AGE=0s",
-            "pnpm",
-            "dlx",
-            "--allow-build=@jdxcode/mise",
-            "--package=@jdxcode/mise@latest",
-            "mise",
-            "--no-config",
-        ]
-        print("Prepare latest native tools: " + ", ".join(batch), flush=True)
-        for arguments in (["install", *batch], ["env", "--json", *batch]):
-            result = subprocess.run(
-                [*command, *arguments],
-                cwd=root,
-                text=True,
-                timeout=timeout,
-                capture_output=True,
-                check=False,
-                env={
-                    **os.environ,
-                    "MISE_FETCH_REMOTE_VERSIONS_CACHE": "0s"
-                    if arguments[0] == "install"
-                    else "1h",
-                },
+        provision_batch(root, batch, timeout, use_pnpm=use_pnpm)
+
+
+def provision_batch(
+    root: Path, batch: list[str], timeout: float, *, use_pnpm: bool
+) -> None:
+    storage = Path(tempfile.gettempdir()) / "hard-eng-tools"
+    command = [
+        "env",
+        f"MISE_DATA_DIR={storage / 'mise/data'}",
+        f"MISE_CACHE_DIR={storage / 'mise/cache'}",
+        f"MISE_STATE_DIR={storage / 'mise/state'}",
+        f"PNPM_CONFIG_STORE_DIR={storage / 'pnpm/store'}",
+        f"PNPM_CONFIG_CACHE_DIR={storage / 'pnpm/cache'}",
+        *(["MISE_NPM_PACKAGE_MANAGER=pnpm"] if use_pnpm else []),
+        "MISE_PREFER_OFFLINE=false",
+        "MISE_USE_VERSIONS_HOST=false",
+        "MISE_MINIMUM_RELEASE_AGE=0s",
+        "pnpm",
+        "dlx",
+        "--allow-build=@jdxcode/mise",
+        "--package=@jdxcode/mise@latest",
+        "mise",
+        "--no-config",
+    ]
+    print("Prepare latest native tools: " + ", ".join(batch), flush=True)
+    for arguments in (["install", *batch], ["env", "--json", *batch]):
+        result = subprocess.run(
+            [*command, *arguments],
+            cwd=root,
+            text=True,
+            timeout=timeout,
+            capture_output=True,
+            check=False,
+            env={
+                **os.environ,
+                "MISE_FETCH_REMOTE_VERSIONS_CACHE": "0s"
+                if arguments[0] == "install"
+                else "1h",
+            },
+        )
+        print(result.stderr, file=sys.stderr, end="")
+        result.check_returncode()
+        if "Failed to resolve tool version" in result.stderr:
+            raise ValueError(
+                "Latest tool versions could not be resolved; retry provisioning"
             )
-            print(result.stderr, file=sys.stderr, end="")
-            result.check_returncode()
-            if "Failed to resolve tool version" in result.stderr:
-                raise ValueError(
-                    "Latest tool versions could not be resolved; retry provisioning"
-                )
-        environment = json.loads(result.stdout)
-        if not isinstance(environment, dict) or not isinstance(
-            environment.get("PATH"), str
-        ):
-            raise TypeError("Native tool setup did not return an executable PATH")
-        tool_paths = [
-            path
-            for path in environment["PATH"].split(os.pathsep)
-            if Path(path).resolve().is_relative_to(storage.resolve())
-        ]
-        os.environ["PATH"] = os.pathsep.join([*tool_paths, os.environ["PATH"]])
+    environment = json.loads(result.stdout)
+    if not isinstance(environment, dict) or not isinstance(environment.get("PATH"), str):
+        raise TypeError("Native tool setup did not return an executable PATH")
+    tool_paths = [
+        path
+        for path in environment["PATH"].split(os.pathsep)
+        if Path(path).resolve().is_relative_to(storage.resolve())
+    ]
+    os.environ["PATH"] = os.pathsep.join([*tool_paths, os.environ["PATH"]])

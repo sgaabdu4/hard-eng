@@ -164,7 +164,7 @@ def session_context(root: Path, payload: JsonObject) -> str:
         "Use configured MCPs when relevant to the task. Before relying on one, verify a real call against the intended repository/index, service project or running app/device; registration alone is not readiness. If unavailable, warn and continue with available tools."
     )
     messages.append(learning_context("start/resume"))
-    return " ".join(messages)
+    return "\n".join(messages)
 
 
 def completion_notice(agent: str | None, output: str) -> JsonObject:
@@ -306,6 +306,8 @@ def handle_event(root: Path, event: str, agent: str) -> int:
                 else learning_context(event)
             )
             output = context_output(agent, native, message)
+            if event == "session" and agent in {"claude", "codex"}:
+                output["systemMessage"] = "Hard Eng startup: " + message.splitlines()[0]
     except (OSError, ValueError, TypeError) as error:
         message = f"Hard Eng hook input/setup failed: {error}. Continue with available tools; do not claim verification passed."
         output = (
