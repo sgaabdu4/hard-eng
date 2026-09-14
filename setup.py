@@ -245,6 +245,9 @@ def configure_typing_checks(package: Group) -> None:
 def configure_dart(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
+    import yaml
+    from gate_config import validate_dart_exclusions
+
     target = directory / "analysis_options.yaml"
     typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
     options: JsonObject = typing["dart_options"](target) if target.exists() else {}
@@ -253,20 +256,21 @@ def configure_dart(
         if not isinstance(section_options, dict):
             raise TypeError(f"Dart {section} settings must be an object")
         for group, settings in groups.items():
-            current = section_options.setdefault(group, {})
+            current = section_options.setdefault(
+                group, [] if isinstance(settings, list) else {}
+            )
             if group == "rules" and isinstance(current, list):
                 if not all(isinstance(rule, str) for rule in current):
                     raise TypeError("Dart lint rule names must be strings")
-                rules: JsonObject = {str(rule): True for rule in current}
-                current = rules
-                section_options[group] = current
+                current.extend(rule for rule in settings if rule not in current)
+                continue
             if isinstance(settings, dict):
                 if not isinstance(current, dict):
                     raise TypeError(f"Dart {section}.{group} must be an object")
                 current.update(settings)
             else:
-                section_options[group] = settings
-    changes[str(target.relative_to(root))] = json.dumps(options, indent=2) + "\n"
+                validate_dart_exclusions(directory, current)
+    changes[str(target.relative_to(root))] = yaml.safe_dump(options, sort_keys=False)
     if any(
         "coverage:test_with_coverage" in gate["command"] for gate in package["checks"]
     ):

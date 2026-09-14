@@ -23,9 +23,11 @@ from gate_config import (
     Group,
     JsonObject,
     Report,
+    dart_rule_settings,
     generated_sources,
     nonproduction_source,
     validate_dart_boundaries,
+    validate_dart_exclusions,
 )
 from tool_setup import managed_command, provision_tools
 
@@ -91,9 +93,8 @@ def validate_dart_includes(
     seen.add(path)
     options = dart_options(path)
     analyzer = options.get("analyzer", {})
-    if analyzer.get("exclude") or any(
-        value == "ignore" for value in analyzer.get("errors", {}).values()
-    ):
+    validate_dart_exclusions(directory, analyzer.get("exclude", []))
+    if any(value == "ignore" for value in analyzer.get("errors", {}).values()):
         raise ValueError(
             f"Dart strict analysis cannot exclude files or ignore diagnostics: {path}"
         )
@@ -163,11 +164,10 @@ def validate_dart_typing(
             if not isinstance(section_options, dict):
                 raise TypeError(f"Dart requires {section} settings")
             actual = section_options.get(group)
+            if group == "rules":
+                actual = dart_rule_settings(actual)
             if isinstance(settings, list):
-                if actual != settings:
-                    raise ValueError(
-                        "Dart strict analysis cannot exclude project files"
-                    )
+                validate_dart_exclusions(directory, actual)
                 continue
             if not isinstance(actual, dict) or any(
                 actual.get(key) != value for key, value in settings.items()
