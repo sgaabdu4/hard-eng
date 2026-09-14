@@ -1,9 +1,9 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import path from "node:path";
-import { performance } from "node:perf_hooks";
-import process from "node:process";
-import { fileURLToPath } from "node:url";
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import {
   findSensitive,
   finiteNumber,
@@ -15,51 +15,42 @@ import {
   safeSlug,
   safeUrl,
   validateConfig,
-} from "./walkthrough-config.mjs";
-import {
-  installNavigationBridge,
-  navigationBridgeHostId,
-  navigationBridgeStorageKey,
-  WalkthroughPointer,
-} from "./walkthrough-pointer.mjs";
-import { runStep, waitForReady } from "./walkthrough-steps.mjs";
+} from './walkthrough-config.mjs';
+import { installNavigationBridge, navigationBridgeHostId, navigationBridgeStorageKey, WalkthroughPointer } from './walkthrough-pointer.mjs';
+import { runStep, waitForReady } from './walkthrough-steps.mjs';
 
-const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const require = createRequire(path.join(skillRoot, "package.json"));
-const { chromium } = require("playwright");
-const skillPackage = require(path.join(skillRoot, "package.json"));
+const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(path.join(skillRoot, 'package.json'));
+const { chromium } = require('playwright');
+const skillPackage = require(path.join(skillRoot, 'package.json'));
 
 async function run() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.config || args.config === true)
-    throw new Error("Usage: run-walkthrough.mjs --config /path/walkthrough.config.json");
+  if (!args.config || args.config === true) throw new Error('Usage: run-walkthrough.mjs --config /path/walkthrough.config.json');
   const configPath = path.resolve(String(args.config));
-  const config = JSON.parse(await readFile(configPath, "utf8"));
+  const config = JSON.parse(await readFile(configPath, 'utf8'));
   const configDir = path.dirname(configPath);
-  const outputDir = path.resolve(
-    String(args["output-dir"] || config.outputDir || path.join(configDir, "artifacts")),
-  );
+  const outputDir = path.resolve(String(args['output-dir'] || config.outputDir || path.join(configDir, 'artifacts')));
   const name = safeSlug(config.name);
-  const baseUrl = String(args["base-url"] || config.baseUrl || "");
+  const baseUrl = String(args['base-url'] || config.baseUrl || '');
   const configProblems = validateConfig(config, baseUrl);
-  if (configProblems.length > 0)
-    throw new Error(`Walkthrough config failed preflight:\n- ${configProblems.join("\n- ")}`);
+  if (configProblems.length > 0) throw new Error(`Walkthrough config failed preflight:\n- ${configProblems.join('\n- ')}`);
   config.baseUrl = baseUrl;
   const plannedVideoPath = path.join(outputDir, `${name}.webm`);
   try {
     await access(plannedVideoPath);
     throw new Error(`Refusing to overwrite an existing attempt: ${plannedVideoPath}`);
   } catch (error) {
-    if (error.code !== "ENOENT") throw error;
+    if (error.code !== 'ENOENT') throw error;
   }
   await mkdir(outputDir, { recursive: true });
-  const checkpointDir = path.join(outputDir, "step-checkpoints");
+  const checkpointDir = path.join(outputDir, 'step-checkpoints');
   if (config.captureStepScreenshots !== false) await mkdir(checkpointDir, { recursive: true });
 
   const findings = [];
   const sensitiveFindings = [];
   const timeline = [];
-  const recordFinding = (kind, detail, severity = "error") => {
+  const recordFinding = (kind, detail, severity = 'error') => {
     findings.push({
       kind,
       detail: redactedMessage(detail),
@@ -70,20 +61,14 @@ async function run() {
   const recordSensitive = (location, types) => {
     for (const type of types) {
       const key = `${location}:${type}`;
-      if (!sensitiveFindings.some((item) => item.key === key))
-        sensitiveFindings.push({ key, location, type });
+      if (!sensitiveFindings.some((item) => item.key === key)) sensitiveFindings.push({ key, location, type });
     }
   };
 
-  const allowedOrigins = new Set([
-    new URL(baseUrl).origin,
-    ...(config.allowedOrigins || []).map((value) => new URL(value).origin),
-  ]);
+  const allowedOrigins = new Set([new URL(baseUrl).origin, ...(config.allowedOrigins || []).map((value) => new URL(value).origin)]);
   const viewport = config.viewport || { width: 1440, height: 1000 };
   const pointerSource = config.pointer === false ? { enabled: false } : config.pointer || {};
-  const color = /^#[0-9a-f]{6}$/i.test(String(pointerSource.color || ""))
-    ? String(pointerSource.color)
-    : "#ff3b30";
+  const color = /^#[0-9a-f]{6}$/i.test(String(pointerSource.color || '')) ? String(pointerSource.color) : '#ff3b30';
   const pointerConfig = {
     enabled: pointerSource.enabled !== false,
     color,
@@ -92,23 +77,12 @@ async function run() {
     rippleMs: finiteNumber(pointerSource.rippleMs, 520, 120, 2000),
     moveDurationMs: finiteNumber(pointerSource.moveDurationMs, 900, 0, 5000),
     moveHoldMs: finiteNumber(pointerSource.moveHoldMs, 320, 0, 3000),
-    startX: finiteNumber(
-      pointerSource.startX,
-      Math.max(30, Math.round(viewport.width * 0.08)),
-      0,
-      viewport.width,
-    ),
-    startY: finiteNumber(
-      pointerSource.startY,
-      Math.max(30, Math.round(viewport.height * 0.08)),
-      0,
-      viewport.height,
-    ),
-    implementation: "playwright-screencast-overlay",
+    startX: finiteNumber(pointerSource.startX, Math.max(30, Math.round(viewport.width * 0.08)), 0, viewport.width),
+    startY: finiteNumber(pointerSource.startY, Math.max(30, Math.round(viewport.height * 0.08)), 0, viewport.height),
+    implementation: 'playwright-screencast-overlay',
   };
 
-  const executablePath =
-    config.executablePath || process.env.PLAYWRIGHT_EXECUTABLE_PATH || undefined;
+  const executablePath = config.executablePath || process.env.PLAYWRIGHT_EXECUTABLE_PATH || undefined;
   const browser = await chromium.launch({ headless: !args.headed, executablePath });
   let context;
   let page;
@@ -122,8 +96,8 @@ async function run() {
   const openingFramePath = path.join(outputDir, `${name}-opening.png`);
   const captureCheckpoint = async (index, step) => {
     if (config.captureStepScreenshots === false) return null;
-    const filename = `${String(index + 1).padStart(3, "0")}-${safeSlug(step.label || step.action)}.png`;
-    await page.screenshot({ path: path.join(checkpointDir, filename), animations: "disabled" });
+    const filename = `${String(index + 1).padStart(3, '0')}-${safeSlug(step.label || step.action)}.png`;
+    await page.screenshot({ path: path.join(checkpointDir, filename), animations: 'disabled' });
     return filename;
   };
   let lastCheckpointPath = null;
@@ -131,9 +105,9 @@ async function run() {
   try {
     context = await browser.newContext({
       viewport,
-      colorScheme: config.colorScheme || "light",
-      reducedMotion: config.reducedMotion || "reduce",
-      serviceWorkers: "block",
+      colorScheme: config.colorScheme || 'light',
+      reducedMotion: config.reducedMotion || 'reduce',
+      serviceWorkers: 'block',
       permissions: [],
       acceptDownloads: false,
       storageState: config.storageState ? path.resolve(configDir, config.storageState) : undefined,
@@ -142,24 +116,20 @@ async function run() {
       storageKey: navigationBridgeStorageKey,
       hostId: navigationBridgeHostId,
     });
-    await context.route("**/*", async (route) => {
+    await context.route('**/*', async (route) => {
       const request = route.request();
       const url = request.url();
-      if (config.blockEventStreams && request.resourceType() === "eventsource") {
-        recordFinding("event-stream-blocked", safeUrl(url), "info");
+      if (config.blockEventStreams && request.resourceType() === 'eventsource') {
+        recordFinding('event-stream-blocked', safeUrl(url), 'info');
         await route.abort();
         return;
       }
       if (/^https?:/i.test(url)) {
         const origin = new URL(url).origin;
-        const sensitiveInRequest = findSensitive(`${url}\n${request.postData() || ""}`);
-        if (sensitiveInRequest.length > 0) recordSensitive("request metadata", sensitiveInRequest);
+        const sensitiveInRequest = findSensitive(`${url}\n${request.postData() || ''}`);
+        if (sensitiveInRequest.length > 0) recordSensitive('request metadata', sensitiveInRequest);
         if (!allowedOrigins.has(origin)) {
-          recordFinding(
-            "external-request",
-            safeUrl(url),
-            config.blockExternalRequests === false ? "warning" : "error",
-          );
+          recordFinding('external-request', safeUrl(url), config.blockExternalRequests === false ? 'warning' : 'error');
           if (config.blockExternalRequests !== false) {
             await route.abort();
             return;
@@ -170,80 +140,63 @@ async function run() {
     });
 
     page = await context.newPage();
-    context.on("page", async (childPage) => {
+    context.on('page', async (childPage) => {
       if (childPage === page) return;
-      recordFinding("unexpected-popup", safeUrl(childPage.url()), "error");
+      recordFinding('unexpected-popup', safeUrl(childPage.url()), 'error');
       await childPage.close();
     });
-    page.on("download", async (download) => {
-      recordFinding(
-        "download-triggered",
-        path.extname(download.suggestedFilename()) || "[unknown extension]",
-        "error",
-      );
+    page.on('download', async (download) => {
+      recordFinding('download-triggered', path.extname(download.suggestedFilename()) || '[unknown extension]', 'error');
       await download.cancel();
     });
-    page.on("filechooser", () =>
-      recordFinding("file-chooser", "A file chooser was opened", "error"),
-    );
-    page.on("dialog", async (dialog) => {
-      recordFinding("dialog", dialog.type(), "error");
+    page.on('filechooser', () => recordFinding('file-chooser', 'A file chooser was opened', 'error'));
+    page.on('dialog', async (dialog) => {
+      recordFinding('dialog', dialog.type(), 'error');
       await dialog.dismiss();
     });
-    page.on("console", (message) => {
-      if (message.type() !== "error" && message.type() !== "warning") return;
+    page.on('console', (message) => {
+      if (message.type() !== 'error' && message.type() !== 'warning') return;
       const text = message.text();
       const sensitive = findSensitive(text);
-      if (sensitive.length > 0) recordSensitive("console message", sensitive);
+      if (sensitive.length > 0) recordSensitive('console message', sensitive);
       const allowed = includesAllowedSubstring(text, config.allowedConsoleMessageSubstrings);
-      const severity = allowed ? "info" : message.type() === "error" ? "error" : "warning";
-      recordFinding(
-        `console-${message.type()}`,
-        sensitive.length > 0 ? "[redacted]" : text,
-        severity,
-      );
+      const severity = allowed ? 'info' : message.type() === 'error' ? 'error' : 'warning';
+      recordFinding(`console-${message.type()}`, sensitive.length > 0 ? '[redacted]' : text, severity);
     });
-    page.on("pageerror", (error) => {
+    page.on('pageerror', (error) => {
       const allowed = includesAllowedSubstring(error.message, config.allowedPageErrorSubstrings);
-      recordFinding("page-error", error.message, allowed ? "info" : "error");
+      recordFinding('page-error', error.message, allowed ? 'info' : 'error');
     });
-    page.on("requestfailed", (request) => {
-      const failure = request.failure()?.errorText || "";
+    page.on('requestfailed', (request) => {
+      const failure = request.failure()?.errorText || '';
       const detail = `${request.method()} ${safeUrl(request.url())} ${failure}`.trim();
-      const allowed = includesAllowedSubstring(
-        request.url(),
-        config.allowedFailedRequestUrlSubstrings,
-      );
+      const allowed = includesAllowedSubstring(request.url(), config.allowedFailedRequestUrlSubstrings);
       const navigationAbort = /ERR_ABORTED|NS_BINDING_ABORTED/i.test(failure);
-      recordFinding(
-        "request-failed",
-        detail,
-        allowed ? "info" : navigationAbort ? "warning" : "error",
-      );
+      recordFinding('request-failed', detail, allowed ? 'info' : navigationAbort ? 'warning' : 'error');
     });
-    page.on("response", (response) => {
+    page.on('response', (response) => {
       const status = response.status();
       if (status < 400) return;
       const detail = `${status} ${safeUrl(response.url())}`;
       if (isAllowedHttpResponse(response.url(), status, config.allowedHttpResponses)) {
-        recordFinding("expected-http-response", detail, "info");
+        recordFinding('expected-http-response', detail, 'info');
       } else if (status >= 500) {
-        recordFinding("server-error", detail, "error");
+        recordFinding('server-error', detail, 'error');
       } else {
-        recordFinding("http-error", detail, "warning");
+        recordFinding('http-error', detail, 'warning');
       }
     });
 
     const firstStep = config.steps[0];
-    await page.goto(resolveUrl(baseUrl, firstStep.url || "/"), {
-      waitUntil: firstStep.navigationWaitUntil || config.navigationWaitUntil || "domcontentloaded",
+    await page.goto(resolveUrl(baseUrl, firstStep.url || '/'), {
+      waitUntil: firstStep.navigationWaitUntil || config.navigationWaitUntil || 'domcontentloaded',
       timeout: finiteNumber(firstStep.timeoutMs ?? config.readyTimeoutMs, 30000, 1),
     });
     await waitForReady(page, config, firstStep);
 
     pointer = new WalkthroughPointer(page, pointerConfig);
     await pointer.start();
-    await page.screenshot({ path: openingFramePath, animations: "disabled" });
+    await page.screenshot({ path: openingFramePath, animations: 'disabled' });
 
     await page.screencast.start({
       path: videoPath,
@@ -255,10 +208,7 @@ async function run() {
     const clock = () => Math.max(0, performance.now() - recordingStartedAt);
     pointer.setClock(clock);
 
-    const openingHoldMs = finiteNumber(
-      firstStep.holdMs ?? config.openingHoldMs ?? config.stepHoldMs,
-      1500,
-    );
+    const openingHoldMs = finiteNumber(firstStep.holdMs ?? config.openingHoldMs ?? config.stepHoldMs, 1500);
     await page.waitForTimeout(openingHoldMs);
     const firstCheckpoint = await captureCheckpoint(0, firstStep);
     if (firstCheckpoint) lastCheckpointPath = path.join(checkpointDir, firstCheckpoint);
@@ -290,20 +240,17 @@ async function run() {
         });
         const actionEndMs = clock();
         const [visibleText, formValues] = await Promise.all([
-          page.locator("body").innerText({ timeout: 3000 }),
-          page.locator("input, textarea").evaluateAll((elements) =>
+          page.locator('body').innerText({ timeout: 3000 }),
+          page.locator('input, textarea').evaluateAll((elements) =>
             elements.map((element) => {
-              if (element instanceof HTMLInputElement && element.type.toLowerCase() === "password")
-                return "";
-              return "value" in element ? String(element.value || "") : "";
+              if (element instanceof HTMLInputElement && element.type.toLowerCase() === 'password') return '';
+              return 'value' in element ? String(element.value || '') : '';
             }),
           ),
         ]);
-        const sensitive = findSensitive(`${visibleText}\n${formValues.join("\n")}`);
-        if (sensitive.length > 0)
-          recordSensitive(`visible text after step ${index + 1}`, sensitive);
-        const holdMs =
-          step.action === "pause" ? 0 : finiteNumber(step.holdMs ?? config.stepHoldMs, 1200);
+        const sensitive = findSensitive(`${visibleText}\n${formValues.join('\n')}`);
+        if (sensitive.length > 0) recordSensitive(`visible text after step ${index + 1}`, sensitive);
+        const holdMs = step.action === 'pause' ? 0 : finiteNumber(step.holdMs ?? config.stepHoldMs, 1200);
         if (holdMs > 0) await page.waitForTimeout(holdMs);
         const checkpoint = await captureCheckpoint(index, step);
         if (checkpoint) lastCheckpointPath = path.join(checkpointDir, checkpoint);
@@ -341,7 +288,7 @@ async function run() {
           ok: false,
           error: redactedMessage(error.message),
         });
-        recordFinding("scenario-error", `Step ${index + 1}: ${error.message}`, "error");
+        recordFinding('scenario-error', `Step ${index + 1}: ${error.message}`, 'error');
         throw error;
       }
     }
@@ -355,7 +302,7 @@ async function run() {
         await page.screencast.stop();
       } catch (error) {
         runError ||= error;
-        recordFinding("screencast-stop-error", error.message, "error");
+        recordFinding('screencast-stop-error', error.message, 'error');
       }
     }
     if (pointer) {
@@ -363,7 +310,7 @@ async function run() {
         await pointer.dispose();
       } catch (error) {
         runError ||= error;
-        recordFinding("pointer-cleanup-error", error.message, "error");
+        recordFinding('pointer-cleanup-error', error.message, 'error');
       }
     }
     if (context) {
@@ -371,24 +318,19 @@ async function run() {
         await context.close();
       } catch (error) {
         runError ||= error;
-        recordFinding("context-close-error", error.message, "error");
+        recordFinding('context-close-error', error.message, 'error');
       }
     }
     try {
       await browser.close();
     } catch (error) {
       runError ||= error;
-      recordFinding("browser-close-error", error.message, "error");
+      recordFinding('browser-close-error', error.message, 'error');
     }
   }
 
   const report = {
-    status:
-      runError ||
-      findings.some((finding) => finding.severity === "error") ||
-      sensitiveFindings.length > 0
-        ? "failed"
-        : "passed",
+    status: runError || findings.some((finding) => finding.severity === 'error') || sensitiveFindings.length > 0 ? 'failed' : 'passed',
     skill: {
       name: skillPackage.name,
       version: skillPackage.version,
@@ -399,14 +341,14 @@ async function run() {
     videoPath: screencastStarted ? videoPath : null,
     outputDir,
     recording: {
-      engine: "page.screencast",
+      engine: 'page.screencast',
       startedAfterReady: true,
       openingFramePath,
       viewport,
       quality: finiteNumber(config.videoQuality, 90, 0, 100),
       journeyEndMs,
       finalHoldMs,
-      clockOrigin: "screencast-start-resolved",
+      clockOrigin: 'screencast-start-resolved',
     },
     pointer: pointerConfig,
     pointerTrack: pointer?.track || [],
@@ -424,18 +366,10 @@ async function run() {
     error: runError ? redactedMessage(runError.message) : null,
     completedAt: new Date().toISOString(),
   };
-  await writeFile(
-    path.join(outputDir, `${name}-run-report.json`),
-    `${JSON.stringify(report, null, 2)}\n`,
-    "utf8",
-  );
-  await writeFile(
-    path.join(outputDir, `${name}-timeline.json`),
-    `${JSON.stringify(timeline, null, 2)}\n`,
-    "utf8",
-  );
+  await writeFile(path.join(outputDir, `${name}-run-report.json`), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  await writeFile(path.join(outputDir, `${name}-timeline.json`), `${JSON.stringify(timeline, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(report, null, 2));
-  if (report.status === "failed") process.exitCode = 1;
+  if (report.status === 'failed') process.exitCode = 1;
 }
 
 run().catch((error) => {
