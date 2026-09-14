@@ -30,7 +30,9 @@ def migrate_dart_plugins(options: JsonObject, source: Path) -> None:
     if not isinstance(plugins, dict):
         return
     version = plugins.get("flutter_skill_lints")
-    if isinstance(version, str) and re.fullmatch(r"\^?0\.(?:[0-9]|10)\.\d+", version):
+    if isinstance(version, str) and re.fullmatch(
+        r"\^?0\.(?:(?:[0-9]|10)\.\d+|11\.[01])", version
+    ):
         template = (
             source
             / ".agents/skills/building-flutter-apps/references/analysis_options.yaml"
