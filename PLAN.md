@@ -1,48 +1,46 @@
-# Prevent concurrent uv cache mutation
+# Verify staged updater payloads
 
 Status: Complete
 
 ## Outcome + scope
 
-Prevent parallel gate subprocesses from concurrently mutating uv's shared interpreter and tool cache. Preserve concurrent execution for independent native commands, check exit codes and latest package selection. No retry wrapper or disabled checks.
+Stage the exact managed update paths in the isolated candidate before verification so VCS-aware checks see newly added files. Migrate only the two known obsolete action pins in existing workflows while preserving project customizations. Managed-asset formatting is a separate change and is excluded from this PR.
 
 ## Repository context
 
-.hooks/tool_setup.py owns managed native commands. .hooks/hard-eng.py runs them concurrently. The existing runner test file is near its enforced700-line limit, so tests/test_tool_execution.py covers real child-process cache exclusion; the existing native overlap test stays unchanged. No new dependency.
+.hooks/update.py owns candidate verification and commit staging. .hooks/project_setup.py owns workflow generation. Existing updater and CI tests cover these boundaries. No target edits, hook bypass or new dependency is needed. One small workflow migration helper keeps the existing configuration owner within its complexity budget.
 
 ## Decisions + authorization
 
 Blockers: None
 
-Source repair, testing and merge are authorized. One builder owns the isolated checkout. The unrelated publication-privacy work remains untouched. This is the bounded baseline repair before consumer delivery resumes.
+The user authorized source repairs, full tests and verified main delivery. Use one isolated builder. Preserve unrelated unfinished source work and consumer checkouts. Public evidence uses synthetic fixtures and generic technical facts only.
 
 ## Acceptance + steps
 
-- [x] Parallel uv and uvx gate subprocesses cannot overlap within a runner; other native checks retain two-worker concurrency.
-- [x] Failures remain failures and latest-tool arguments remain unchanged.
-- [x] Focused concurrency tests and repaired baseline gate pass; final Complete gate follows before shipping.
+- [x] Newly added managed files, modifications, deletions and links are staged before candidate checks; failures leave the target and its index untouched.
+- [x] Exact old checkout and pnpm/setup pins migrate without replacing custom workflow content or unknown versions.
+- [x] Focused regressions pass; final Complete gate follows before shipping.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: Main CI34826519864 at73c5ca6767fa13869690849b0ac4e8cc36a68aba failed complexity with an interpreter-cache rename ENOENT during concurrent uv invocations. Security separately reported Semgrep analysis timeouts. Earlier PR CI34826265186 and initialized local Complete gate passed. The temporary pre-push checkout also lacks source submodules, a separately recorded limitation.
-
-Current repaired baseline: Draft gate passed all17 checks,477 regression tests and four performance tests, including Semgrep with no timeouts. Original failed evidence above is retained.
+Evidence: Source c67fced96100e91cea67e1ca773ec5bfc2257524 passed477 regressions,four performance tests,all17 gates, PR73CI34827616947, mainCI34827838302 and native delivered. This checkout begins at that verified revision; a Ready check precedes edits.
 
 ## Risks + recovery
 
-Serialize only uv-backed subprocess execution within a runner; native commands remain parallel. This may reduce overlap between Python tools but avoids a shared cache race without fresh per-check caches or duplicate downloads. Independent external processes are outside this runner's scheduling boundary. Semgrep timeout detection remains enabled.
+Staging is isolated to the candidate index and exact update paths. Existing target hooks remain authoritative. Unknown action versions remain project-owned. This PR does not include managed skill formatting or submodule changes.
 
 ## ux_reference
 
-N/A — gate scheduling has no application UI.
+N/A — updater and managed tooling have no changed product UI.
 
 ## Verification
 
 Result: Passed
-Evidence: Four real child-process regressions failed before the lock with concurrent cache-write conflicts. All92 focused tests passed after the lock, covering both uv entrypoints, success and failure propagation, and existing native overlap. Latest-tool command arguments are unchanged. Full repaired-baseline gate passed; final Complete gate follows. The fixture proves scheduling exclusion, not reproduction of uv's internal implementation.
+Evidence: Regressions reproduced missing candidate-index paths and stale workflow pins before edits. All36 focused updater/CI tests passed, followed by a supported update transaction proving both pins advance while a customized ten-minute timeout remains unchanged. Candidate tests cover additions, modifications, deletions and links, plus rejection, cleanup and preservation of unrelated staged work. Final Complete gate follows.
 
 Delivery target: Merge
-Final Complete gate passed all17 checks,477 regressions and four performance tests. Ready for ship — local implementation and verification complete; delivery not performed.
+Final Complete gate passed all17 checks,480 regressions and four performance tests. Ready for ship — local implementation and verification complete; delivery not performed.
 
-Delivery: Pending — PR CI, merge, exact main CI and native delivered verification.
+Delivery: Pending — PR CI, exact main CI, native delivered and supported consumer adoption.

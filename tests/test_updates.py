@@ -402,11 +402,19 @@ def test_candidate_uses_remote_task_plan_scope(
     }
     if not configured_base:
         del config["shipping"]
-    command = "print('APPLICATION_SCOPE_CHECK'); raise SystemExit(0)"
+    command = (
+        "import subprocess; print('APPLICATION_SCOPE_CHECK'); "
+        "staged=subprocess.check_output(['git','diff','--cached','--name-status'],text=True); "
+        "assert 'A\\tnew-managed.mjs' in staged; "
+        "assert 'D\\tremoved.txt' in staged; "
+        "assert 'M\\tproject.txt' in staged; "
+        "assert 'A\\tnew-link' in staged; raise SystemExit(0)"
+    )
     if outcome == "application-failure":
         command = command.replace("SystemExit(0)", "SystemExit(1)")
     config["shared"][0]["command"] = ["python3", "-c", command]
     config_path.write_text(json.dumps(config))
+    (target / "removed.txt").write_text("old managed content\n")
     historical = target / "features/historical/PLAN.md"
     historical.parent.mkdir(parents=True)
     historical.write_text("# Historical document without native plan fields\n")
@@ -429,9 +437,16 @@ def test_candidate_uses_remote_task_plan_scope(
     if outcome == "missing-base":
         git(remote, "update-ref", "-d", "refs/heads/main")
     candidate = target.parent / "candidate"
-    changes: dict[str, str | None] = {"project.txt": "candidate update\n"}
+    changes: dict[str, str | None] = {
+        "project.txt": "candidate update\n",
+        "new-managed.mjs": "export const value = 1;\n",
+        "removed.txt": None,
+    }
+    links: dict[str, str | None] = {"new-link": "project.txt"}
+    (target / "unrelated.txt").write_text("staged local work\n")
+    git(target, "add", "unrelated.txt")
     if outcome == "pass":
-        update.verify_candidate(target, source, changes, {}, candidate)
+        update.verify_candidate(target, source, changes, links, candidate)
     else:
         error = (
             ShippingError
@@ -439,12 +454,61 @@ def test_candidate_uses_remote_task_plan_scope(
             else subprocess.CalledProcessError
         )
         with pytest.raises(error):
-            update.verify_candidate(target, source, changes, {}, candidate)
-    assert (target / "project.txt").read_text() == "unrelated local edit\n"
-    assert git(target, "rev-parse", "origin/main") == stale
+            update.verify_candidate(target, source, changes, links, candidate)
+    assert {
+        "working": (target / "project.txt").read_text(),
+        "index": git(target, "diff", "--cached", "--name-only"),
+        "new_file": (target / "new-managed.mjs").exists(),
+        "new_link": (target / "new-link").is_symlink(),
+        "removed": (target / "removed.txt").read_text(),
+        "tracking": git(target, "rev-parse", "origin/main"),
+    } == {
+        "working": "unrelated local edit\n",
+        "index": "unrelated.txt",
+        "new_file": False,
+        "new_link": False,
+        "removed": "old managed content\n",
+        "tracking": stale,
+    }
     assert not candidate.exists()
     if outcome != "missing-base":
         assert "APPLICATION_SCOPE_CHECK" in capfd.readouterr().err
+
+
+def test_supported_update_migrates_custom_workflow_pins(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    completed_plan: str,
+) -> None:
+    source, target, _ = release
+    workflow = target / ".github/workflows/hard-eng.yml"
+    expected = workflow.read_text().replace("timeout-minutes: 3", "timeout-minutes: 10")
+    workflow.write_text(
+        expected.replace(
+            "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+            "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5",
+        ).replace(
+            "703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0",
+            "c9883cc79df532ad1a7b81bf9ab944ceb090d65c # v2.0.0",
+        )
+    )
+    (target / "package.json").unlink()
+    config_path = target / "hard-eng.gates.json"
+    config = json.loads(config_path.read_text())
+    config["shared"][0]["command"] = ["python3", "-c", "print('application passes')"]
+    config_path.write_text(json.dumps(config))
+    commit(target, "custom workflow baseline")
+    remote = target.parent / "workflow-remote.git"
+    git(target, "clone", "--bare", str(target), str(remote))
+    git(target, "remote", "add", "origin", str(remote))
+    (target / "PLAN.md").write_text(completed_plan)
+    commit(target, "completed update plan")
+    revision = commit(source, "verified workflow migration")
+    monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
+    assert revision in update.update(target)
+    assert workflow.read_text() == expected
+    assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == revision
+    assert git(target, "status", "--porcelain") == ""
 
 
 def test_failed_commit_rolls_back_scaffold(

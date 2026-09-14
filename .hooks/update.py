@@ -220,7 +220,12 @@ def verify_candidate(
     try:
         write_changes(candidate, changes)
         write_links(candidate, links)
-        subprocess.run(["git", "diff", "--check"], cwd=candidate, check=True)
+        names = sorted({*changes, *links})
+        if names:
+            subprocess.run(["git", "add", "--", *names], cwd=candidate, check=True)
+        subprocess.run(
+            ["git", "diff", "--cached", "--check"], cwd=candidate, check=True
+        )
         only_scaffold = set(changes) <= scaffold_files(source) | scaffold_files(
             root
         ) | {"AGENTS.md", SOURCE_FILE, ".husky/pre-push"}
