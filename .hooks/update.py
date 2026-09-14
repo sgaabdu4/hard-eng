@@ -249,7 +249,15 @@ def verify_candidate(
             [sys.executable, "-m", "compileall", "-q", str(candidate / ".hooks")]
             if only_scaffold
             else [
+                "uv",
+                "run",
+                "--project",
+                str(source),
+                "--locked",
+                "--no-dev",
+                "--python",
                 sys.executable,
+                "python",
                 "-I",
                 "-c",
                 (
