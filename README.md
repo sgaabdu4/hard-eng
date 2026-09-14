@@ -62,3 +62,5 @@ Native hook activation depends on client trust and behavior. Scanner completenes
 For the standard Husky `.husky/_/pre-push` forwarding shim, setup preserves the shim and Git configuration and manages `.husky/pre-push` with a shell-compatible launcher. Existing canonical Hard Eng launchers migrate; custom hooks remain protected conflicts.
 
 The updater commits that launcher together with the scaffold and revision marker. If the installed updater itself is the failing component, invoke `update.update(target_root)` from a fetched, CI-verified source checkout's `.hooks/update.py` for the repair. This uses the same verified, isolated transaction; manually copying hooks or advancing the marker is not adoption proof.
+
+For a new task branch, pre-push resolves the configured shipping base on `origin` and fetches that exact commit for comparison, while checking the exact pushed revision. An unavailable base blocks the push. Existing branches retain their advertised remote-tip comparison; direct base pushes remain blocked.
