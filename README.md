@@ -39,6 +39,8 @@ Existing build, integration, UI and generator scripts participate where applicab
 
 The same command installs a new project or uses the supported updater for a recorded installation. Updates select a CI-verified revision and create a local commit without pushing; conflicting local edits remain protected. Run it before editing, not concurrently in the background.
 
+When an update changes project configuration, its isolated candidate runs the application gates without requiring a task plan to be completed first. This verifies the update only; normal completion, push and shipping checks still require their task evidence.
+
 Codex requires separate trust for new or changed hooks, even in a trusted project. Review them with `/hooks`, then verify the startup result in a new session before claiming automatic updates or completion enforcement. The installer does not grant trust to its own hooks. See the [official hook trust instructions](https://learn.chatgpt.com/docs/hooks).
 
 Run from your project's Git root, locally or in a cloud terminal:
