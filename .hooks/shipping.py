@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fnmatch
 import json
 import math
 import os
@@ -15,6 +14,7 @@ from typing import TypedDict, cast
 from urllib.parse import urlparse
 
 from gate_config import JsonValue
+from ship_evidence import attachment_urls
 
 Delivery = TypedDict("Delivery", {"name": str, "command": list[str]})
 
@@ -64,14 +64,6 @@ _BRANCH_PARTS = re.compile(r"^[A-Za-z0-9._/-]+$")
 _SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 _PR_URL = re.compile(
     r"^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/([1-9][0-9]*)/?$"
-)
-_ATTACHMENT = re.compile(
-    r"^\s*Before:\s*!\[[^\]\r\n]*\]\((https://github\.com/user-attachments/assets/[^)\s?#]+)\)\s*$",
-    re.MULTILINE,
-)
-_AFTER_ATTACHMENT = re.compile(
-    r"^\s*After:\s*!\[[^\]\r\n]*\]\((https://github\.com/user-attachments/assets/[^)\s?#]+)\)\s*$",
-    re.MULTILINE,
 )
 _GH_TIMEOUT = 30.0
 _GIT_TIMEOUT = 30.0
@@ -502,17 +494,12 @@ def _check_attachment(root: Path, url: str) -> None:
 def _ui_evidence(
     root: Path, pull: _PullRequest, paths: list[str], policy: ShippingPolicy
 ) -> None:
-    patterns = policy["ui_paths"]
-    if not patterns or not any(
-        fnmatch.fnmatchcase(path, pattern) for path in paths for pattern in patterns
-    ):
-        return
-    before = _ATTACHMENT.findall(pull.body)
-    after = _AFTER_ATTACHMENT.findall(pull.body)
-    if len(before) != 1 or len(after) != 1 or before[0] == after[0]:
-        raise ShippingError("UI changes require distinct Before and After attachments")
-    _check_attachment(root, before[0])
-    _check_attachment(root, after[0])
+    try:
+        urls = attachment_urls(pull.body, paths, policy["ui_paths"])
+    except ValueError as error:
+        raise ShippingError(str(error)) from error
+    for url in urls:
+        _check_attachment(root, url)
 
 
 def _root_and_branch(root: Path, require_branch: bool) -> tuple[Path, str, str]:
