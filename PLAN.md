@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current Trivy report repair: accept Trivy's documented repository artifact type for directory configuration scans with Git metadata, alongside filesystem. Native same-Dockerfile before/after Git probe emits 27 successful checks and zero failures in both reports; current validator incorrectly rejects only repository. Reuse the report validator and its existing tests; no new files, dependencies or waiver. Keep schema, target/class, successful-check and finding validation unchanged. PR63 supplies matching source baseline proof. This consumer blocker is separate from the broader efficiency audit requested after both Decimate adoptions.
+
 Current Decimate installation repair: install the latest published dart-decimate npm package through the existing tool provisioner, like Fallow/React Doctor, instead of compiling Git source with Cargo. Native isolated pnpm-backed mise installation succeeds; its default embedded installer rejected this package. Select pnpm for managed npm installs with only Decimate's reviewed lifecycle script allowed, preserve live latest-version resolution and scanner failure behavior, and remove the now-unneeded Rust runtime from newly generated Dart workflows. Reuse tool_setup/project_setup and existing tests; no new package dependency or cache mechanism. PR62 supplies the verified source baseline. Measure fresh install and actual scanner behavior, not just command mocks.
 
 Current CI timeout repair: generated consumer workflows must honor the configured shipping CI budget instead of copying Hard Eng's own three-minute timeout. Derive minutes by rounding up validated ci_seconds; retain the source default without a policy and preserve existing project workflows. Reuse configure_ci and shipping policy validation. A focused test file is needed because test_setup.py is at 700 lines; no runtime dependency. Existing consumer workflow timeout remains an explicitly reviewed project configuration edit because setup preserves it. PR61 supplies matching source baseline proof.
@@ -49,6 +51,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Native filesystem and Git-repository config reports pass with the same clean results; invalid artifact types and actual failures remain rejected.
+- [x] Focused regressions, source gates and diff review pass; final release gate follows before source delivery and consumer retry.
 
 - [x] Decimate uses its latest published package, with no Cargo install path; wrapped tools and existing SDK PATH remain available.
 - [x] Native clean/failing scanner fixtures and cold package installation pass; generated Dart CI does not require Rust solely for Decimate, and full gates pass.
@@ -129,6 +134,10 @@ A structural check cannot prove truthful evidence, actual approval or that a pla
 N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has no visual application.
 
 ## Verification
+
+Trivy repository release: final Complete-stage gate passed all 17 checks, 466 regressions and four performance tests (`/tmp/he-trivy-repository-complete.log`). Source PR/main/native delivery and consumer CI retry remain pending.
+
+Trivy repository repair: native identical-Dockerfile probe gives filesystem/repository reports with 27 successful checks and zero failures; the old reader rejects repository, repaired reader accepts both. An unsafe Dockerfile in the same Git fixture exits 1 and is rejected (`/tmp/he-trivy-repository-native.log`, `/tmp/he-trivy-repository-green.log`). The regression fails against the old reader; all 133 report tests pass afterward. Ready-stage full check passes all 17 gates, 466 regressions and four performance tests (`/tmp/he-trivy-repository-ready.log`). Diff review retains only the documented directory artifact type and adjacent tests; no report completeness/finding checks weakened. Final Complete gate, PR/main/native delivery and consumer retry remain pending.
 
 Decimate package release: final Complete-stage check passed all 17 gates, 464 regressions and four performance tests (`/tmp/he-decimate-package-complete.log`). Source PR/main/native delivery and both consumer adoptions remain pending.
 

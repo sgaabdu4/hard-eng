@@ -202,6 +202,7 @@ def test_incomplete_report_fails(kind: str, content: str, tmp_path: Path) -> Non
         ("gitleaks", '"rules":[{"id":"rule"}]', '"rules":[]'),
         ("trivy", '"Failures":0', '"Failures":1'),
         ("trivy", '"Successes":1', '"Successes":0'),
+        ("trivy", '"ArtifactType":"filesystem"', '"ArtifactType":"container_image"'),
         ("fallow", '"total_issues":0', '"total_issues":1'),
         ("fallow", '"clone_groups":[]', '"clone_groups":[{}]'),
         ("react-doctor", '"complete":true', '"complete":false'),
@@ -224,6 +225,16 @@ def test_findings_and_empty_analysis_fail(
     path.write_text(REPORTS[kind].replace(old, new))
     with pytest.raises(ValueError):
         reports.SCANNERS[kind](path)
+
+
+def test_trivy_repository_config_retains_failure_checks(tmp_path: Path) -> None:
+    path = tmp_path / "report.json"
+    content = REPORTS["trivy"].replace('"filesystem"', '"repository"')
+    path.write_text(content)
+    reports.validate_trivy(path)
+    path.write_text(content.replace('"Failures":0', '"Failures":1'))
+    with pytest.raises(ValueError, match="failed checks"):
+        reports.validate_trivy(path)
 
 
 @pytest.mark.parametrize("source_type", ["artifact", "lockfile"])
