@@ -248,6 +248,95 @@ def test_update_commits_only_scaffold_and_preserves_index(
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
+@pytest.mark.parametrize("reject_commit", [False, True])
+def test_update_commits_husky_launcher_and_runs_native_hook(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    reject_commit: bool,
+) -> None:
+    source, target, _ = release
+    shim = target / ".husky/_/pre-push"
+    shim.parent.mkdir(parents=True)
+    shim.write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
+    shim.chmod(0o755)
+    dispatcher = shim.parent / "h"
+    dispatcher.write_text("""#!/usr/bin/env sh
+[ "$HUSKY" = "2" ] && set -x
+n=$(basename "$0")
+s=$(dirname "$(dirname "$0")")/$n
+
+[ ! -f "$s" ] && exit 0
+
+if [ -f "$HOME/.huskyrc" ]; then
+\techo "husky - '~/.huskyrc' is DEPRECATED, please move your code to ~/.config/husky/init.sh"
+fi
+i="${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
+[ -f "$i" ] && . "$i"
+
+[ "${HUSKY-}" = "0" ] && exit 0
+
+export PATH="node_modules/.bin:$PATH"
+sh -e "$s" "$@"
+c=$?
+
+[ $c != 0 ] && echo "husky - $n script failed (code $c)"
+[ $c = 127 ] && echo "husky - command not found in PATH=$PATH"
+exit $c
+""")
+    launcher = target / ".husky/pre-push"
+    launcher.write_text((target / ".git/hooks/pre-push").read_text())
+    git(target, "config", "core.hooksPath", ".husky/_")
+    config_path = target / "hard-eng.gates.json"
+    config = json.loads(config_path.read_text())
+    config["shared"].append(
+        {"name": "shell", "role": "shell", "command": ["python3", "-c", "pass"]}
+    )
+    config_path.write_text(json.dumps(config))
+    base = commit(target, "existing canonical Python launcher under Husky")
+    shim_bytes = shim.read_bytes()
+    dispatcher_bytes = dispatcher.read_bytes()
+    select_release(source, monkeypatch)
+    revision = git(source, "rev-parse", "HEAD")
+    monkeypatch.setenv("HUSKY", "1")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(target / "user-config"))
+    if reject_commit:
+        old_launcher = launcher.read_bytes()
+        old_marker = (target / update.SOURCE_FILE).read_bytes()
+        reject_shim = shim.with_name("pre-commit")
+        reject_shim.write_bytes(shim_bytes)
+        reject_shim.chmod(0o755)
+        (target / ".husky/pre-commit").write_text("#!/bin/sh\nexit 23\n")
+        with pytest.raises(subprocess.CalledProcessError):
+            update.update(target)
+        assert launcher.read_bytes() == old_launcher
+        assert (target / update.SOURCE_FILE).read_bytes() == old_marker
+        assert git(target, "rev-parse", "HEAD") == base
+        return
+    assert revision in update.update(target)
+    assert ".husky/pre-push" in git(target, "diff", "--name-only", base).splitlines()
+    assert launcher.read_text().startswith("#!/usr/bin/env sh\nexec python3 ")
+    assert shim.read_bytes() == shim_bytes
+    assert dispatcher.read_bytes() == dispatcher_bytes
+    assert git(target, "config", "core.hooksPath") == ".husky/_"
+    subprocess.run(
+        ["git", "hook", "run", "pre-push", "--", "origin", "unused"],
+        cwd=target,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+    )
+
+    def verified(_revision: str) -> bool:
+        return True
+
+    monkeypatch.setattr(update, "verified_revision", verified)
+    assert update.check_scaffold_update(target, base)
+    launcher.write_text("#!/bin/sh\necho custom\n")
+    commit(target, "custom hook is not a canonical scaffold update")
+    with pytest.raises(subprocess.CalledProcessError):
+        update.check_scaffold_update(target, base)
+
+
 def test_overlapping_local_edit_prevents_update(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -139,6 +139,11 @@ def update_plan(
         timeout=60,
     )
     plan = json.loads(output)
+    hook = plan.get("hook", {})
+    if hook.get("path") == ".husky/pre-push":
+        if (root / hook["path"]).is_symlink():
+            raise ValueError("Preserve the existing hook symlink before updating")
+        plan["files"][hook["path"]] = hook["content"]
     changes: dict[str, str | None] = {
         name: content
         for name, content in plan["files"].items()
@@ -218,7 +223,7 @@ def verify_candidate(
         subprocess.run(["git", "diff", "--check"], cwd=candidate, check=True)
         only_scaffold = set(changes) <= scaffold_files(source) | scaffold_files(
             root
-        ) | {"AGENTS.md", SOURCE_FILE}
+        ) | {"AGENTS.md", SOURCE_FILE, ".husky/pre-push"}
         command = (
             [sys.executable, "-m", "compileall", "-q", str(candidate / ".hooks")]
             if only_scaffold
@@ -382,7 +387,9 @@ def check_scaffold_update(root: Path, base: str) -> bool:
     with tempfile.TemporaryDirectory(prefix="hard-eng-scaffold-check-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
         allowed = (
-            scaffold_files(source) | scaffold_files(old) | {SOURCE_FILE, "AGENTS.md"}
+            scaffold_files(source)
+            | scaffold_files(old)
+            | {SOURCE_FILE, "AGENTS.md", ".husky/pre-push"}
         )
         allowed |= {
             ".claude/skills/" + path.name

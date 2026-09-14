@@ -684,7 +684,11 @@ if __name__ == "__main__":
             changes, links, hook, launcher = plan_install(
                 args.repository.resolve(), args.previous_source
             )
-            print(json.dumps({"files": changes, "links": links}))
+            hook_plan = {
+                "path": os.path.relpath(hook, args.repository.resolve()),
+                "content": launcher,
+            }
+            print(json.dumps({"files": changes, "links": links, "hook": hook_plan}))
         else:
             install(args.repository.resolve(), args.previous_source)
     except (OSError, TypeError, ValueError, subprocess.SubprocessError) as error:
