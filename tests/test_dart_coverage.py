@@ -27,6 +27,14 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
         "constants.dart": "const int answer = 42;\n"
         "abstract final class Values { static const label = 'value'; }\n"
         "typedef Mapper = String Function(int value);\nenum Choice { yes, no }\n",
+        "interface.dart": "abstract interface class Store { Future<int> read(); "
+        "int get count; set count(int value); }\n",
+        "interface_method.dart": "abstract interface class Store { int read() => 1; }\n",
+        "interface_field.dart": "abstract interface class Store { "
+        "static final created = DateTime.now(); }\n",
+        "interface_constructor.dart": "abstract interface class Store { "
+        "Store() { print('created'); } }\n",
+        "concrete_interface.dart": "interface class Store {}\n",
         "runtime.dart": "int call() => 1;\n",
         "getter.dart": "int get value => 1;\n",
         "initializer.dart": "final value = DateTime.now();\n",
@@ -41,7 +49,11 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
         (tmp_path / name).write_text(source)
     expected = {tmp_path / name for name in sources}
     erased = erased_dart(expected, tmp_path)
-    assert {path.name for path in erased} == {"barrel.dart", "constants.dart"}
+    assert {path.name for path in erased} == {
+        "barrel.dart",
+        "constants.dart",
+        "interface.dart",
+    }
     report = tmp_path / "lcov.info"
     report.write_text("SF:runtime.dart\nDA:1,1\nend_of_record\n")
     assert line_coverage(

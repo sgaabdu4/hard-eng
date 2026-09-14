@@ -22,6 +22,11 @@ bool erased(CompilationUnitMember node) {
   if (node is TopLevelVariableDeclaration) return node.variables.isConst;
   if (node is GenericTypeAlias || node is FunctionTypeAlias) return true;
   if (node is ClassDeclaration) {
+    if (node.abstractKeyword != null && node.interfaceKeyword != null &&
+        node.body.members.every((member) =>
+            member is MethodDeclaration && member.body is EmptyFunctionBody)) {
+      return true;
+    }
     if (node.abstractKeyword == null || node.finalKeyword == null ||
         node.extendsClause != null || node.withClause != null ||
         node.implementsClause != null) return false;
