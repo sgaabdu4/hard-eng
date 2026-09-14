@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current Dart exclusion repair: preserve narrowly supported generated/artifact patterns required by the installed Flutter skill lint while rejecting handwritten source exclusions and ignored diagnostics. Preserve native lint-rule lists and emit YAML because the actual plugin checks YAML text rather than equivalent JSON. Reuse gate_config validation, both runner validation paths and setup's existing Dart configuration owner. Generated Dart matches require a generator header or native Git generated/vendor classification; no broad path waiver or new dependency. Verify setup preservation, includes/nested options, handwritten counterexamples and full source gates. PR #59 provides matching baseline proof.
+
 Current first-push repair: with a configured shipping policy, compare a newly created branch against the current origin base commit rather than the empty tree. Resolve and fetch the exact remote SHA without trusting stale tracking refs; continue checking the exact pushed revision, blocking direct base pushes and failing closed on unavailable base. Reuse pre_push and its native Git tests; no new files/dependencies. Matching PR #58 checks provide the baseline. Prove preserved historical plans, stale tracking refs, dirty working-tree isolation and missing-base rejection, then full checks/source delivery.
 
 Current updater transaction repair: carry setup's selected Husky launcher through JSON planning into the isolated update commit and canonical scaffold-only verification. PR #57's prepare_hook proof did not cover this missing transaction handoff; the consumer reproduced unchanged Python launcher after update. Reuse setup/update and existing update tests, preserve custom/symlink conflicts, and run a real update followed by native Git/Husky dispatch. No new configuration or dependency. PR #57 supplies matching baseline gates.
@@ -41,6 +43,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Supported generated/artifact excludes survive setup and pass native strict validation; handwritten matches and broad patterns reject. Native plugin accepts emitted YAML/list form and rejects original JSON/map configuration.
+- [x] Included/nested options cannot hide project source or ignored diagnostics; meaningful regressions pass and the final source gate verifies the corrected tree.
 
 - [x] Initial branch push checks exact pushed revision against current remote policy base without revalidating unchanged historical plans.
 - [x] Missing remote base fails closed; existing push/deletion/base-blocking and isolation behavior remains. Native regressions and diff review pass.
@@ -109,6 +114,10 @@ A structural check cannot prove truthful evidence, actual approval or that a pla
 N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has no visual application.
 
 ## Verification
+
+Dart configuration release: final Complete-stage check passed all 17 gates, 454 regressions and four performance tests (`/tmp/he-dart-options-complete.log`). Native old/new lint-plugin proof passed. Source PR/main CI and native delivery remain pending; consumer adoption follows the verified source revision.
+
+Dart configuration repair: all 454 regressions and four performance tests passed in the initial full run; import ordering and complexity findings were then corrected and focused lint/tests passed. Final Complete-stage verification follows on the corrected tree. Ten Dart configuration cases cover generated provenance, unsafe paths, includes, nested settings, YAML/list preservation and repeat setup. A disposable fixture using the actual flutter_skill_lints 0.9.1 rule reports four configuration diagnostics from original setup output and none from repaired output (`/tmp/he-dart-options-native.log`). The fixture explicitly enables that rule; its first disabled-rule attempt is not proof. Diff review retained existing configuration owners and tests, with no source files or dependencies added. Source PR/main CI and supported consumer adoption remain pending.
 
 Result: Passed
 
