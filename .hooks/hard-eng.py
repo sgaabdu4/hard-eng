@@ -93,6 +93,10 @@ def validate_dart_includes(
     seen.add(path)
     options = dart_options(path)
     analyzer = options.get("analyzer", {})
+    if {"strict-casts", "strict-raw-types"} & analyzer.get("language", {}).keys():
+        raise ValueError(
+            f"Remove obsolete Dart language flags; use no_dynamic_casts and no_raw_types: {path}"
+        )
     validate_dart_exclusions(directory, analyzer.get("exclude", []))
     if any(value == "ignore" for value in analyzer.get("errors", {}).values()):
         raise ValueError(

@@ -246,7 +246,7 @@ def configure_dart(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
     import yaml
-    from gate_config import validate_dart_exclusions
+    from gate_config import dart_rule_settings, validate_dart_exclusions
 
     target = directory / "analysis_options.yaml"
     typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
@@ -260,13 +260,15 @@ def configure_dart(
                 group, [] if isinstance(settings, list) else {}
             )
             if group == "rules" and isinstance(current, list):
-                if not all(isinstance(rule, str) for rule in current):
-                    raise TypeError("Dart lint rule names must be strings")
+                dart_rule_settings(current)
                 current.extend(rule for rule in settings if rule not in current)
                 continue
             if isinstance(settings, dict):
                 if not isinstance(current, dict):
                     raise TypeError(f"Dart {section}.{group} must be an object")
+                if group == "language":
+                    current.pop("strict-casts", None)
+                    current.pop("strict-raw-types", None)
                 current.update(settings)
             else:
                 validate_dart_exclusions(directory, current)
@@ -289,9 +291,7 @@ def configure_dart(
     )
     if not any((directory / name).exists() for name in scanner_names):
         # Installed skill examples are not application code.
-        scanner: dict[str, list[str]] = {
-            "ignore_patterns": [".agents/**"],
-        }
+        scanner: dict[str, list[str]] = {"ignore_patterns": [".agents/**"]}
         path = directory / ".dart-decimaterc.json"
         changes[str(path.relative_to(root))] = json.dumps(scanner, indent=2) + "\n"
 
