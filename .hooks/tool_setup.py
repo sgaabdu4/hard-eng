@@ -89,7 +89,6 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
             f"PNPM_CONFIG_STORE_DIR={storage / 'pnpm/store'}",
             f"PNPM_CONFIG_CACHE_DIR={storage / 'pnpm/cache'}",
             *(["MISE_NPM_PACKAGE_MANAGER=pnpm"] if use_pnpm else []),
-            "MISE_FETCH_REMOTE_VERSIONS_CACHE=0s",
             "MISE_PREFER_OFFLINE=false",
             "MISE_USE_VERSIONS_HOST=false",
             "MISE_MINIMUM_RELEASE_AGE=0s",
@@ -99,25 +98,29 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
             "--package=@jdxcode/mise@latest",
             "mise",
             "--no-config",
-            "env",
-            "--json",
-            *batch,
         ]
         print("Prepare latest native tools: " + ", ".join(batch), flush=True)
-        result = subprocess.run(
-            command,
-            cwd=root,
-            text=True,
-            timeout=timeout,
-            capture_output=True,
-            check=False,
-        )
-        print(result.stderr, file=sys.stderr, end="")
-        result.check_returncode()
-        if "Failed to resolve tool version" in result.stderr:
-            raise ValueError(
-                "Latest tool versions could not be resolved; retry provisioning"
+        for arguments in (["install", *batch], ["env", "--json", *batch]):
+            result = subprocess.run(
+                [*command, *arguments],
+                cwd=root,
+                text=True,
+                timeout=timeout,
+                capture_output=True,
+                check=False,
+                env={
+                    **os.environ,
+                    "MISE_FETCH_REMOTE_VERSIONS_CACHE": "0s"
+                    if arguments[0] == "install"
+                    else "1h",
+                },
             )
+            print(result.stderr, file=sys.stderr, end="")
+            result.check_returncode()
+            if "Failed to resolve tool version" in result.stderr:
+                raise ValueError(
+                    "Latest tool versions could not be resolved; retry provisioning"
+                )
         environment = json.loads(result.stdout)
         if not isinstance(environment, dict) or not isinstance(
             environment.get("PATH"), str

@@ -1,6 +1,7 @@
 """Generated job deadlines honor the consumer's existing shipping budget."""
 
 import json
+import shlex
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,45 @@ def test_existing_workflow_is_preserved(tmp_path: Path) -> None:
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     assert changes == {}
     assert path.read_text() == content
+
+
+def test_existing_tool_bootstrap_migrates_with_customizations(tmp_path: Path) -> None:
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    old = """# Keep the project note
+jobs:
+  hard-eng:
+    timeout-minutes: 12
+    steps:
+      - name: Project checks
+        run: >-
+          pnpm dlx --allow-build=@jdxcode/mise
+          --package=@jdxcode/mise@latest mise --no-config exec
+          uv@latest python@3.12 node@latest flutter@latest pnpm@11.18.0
+          -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
+"""
+    path.write_text(old)
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    migrated = changes[str(path.relative_to(tmp_path))]
+    job = yaml.safe_load(migrated)["jobs"]["hard-eng"]
+    assert migrated.startswith("# Keep the project note\n")
+    assert job["timeout-minutes"] == 12
+    step = job["steps"][0]
+    assert step["name"] == "Project checks"
+    commands = step["run"].splitlines()
+    assert len(commands) == 2
+    assert " install uv@latest" in commands[0] and commands[0].endswith("&&")
+    assert commands[1].startswith("MISE_FETCH_REMOTE_VERSIONS_CACHE=1h ")
+    assert (
+        " exec uv@latest python@3.12 node@latest flutter@latest pnpm@11.18.0"
+        in commands[1]
+    )
+    assert "flutter@latest pnpm@11.18.0" in commands[0]
+    path.write_text(migrated)
+    changes.clear()
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert not changes
 
 
 @pytest.mark.parametrize("named", [False, True])
@@ -97,8 +137,16 @@ def test_invalid_shipping_budget_is_rejected(tmp_path: Path) -> None:
         configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
 
 
-def test_dart_workflow_uses_packaged_scanner_without_rust(tmp_path: Path) -> None:
-    (tmp_path / "pubspec.yaml").write_text("name: fixture\ndependencies: {}\n")
+@pytest.mark.parametrize("manager", ["dart", "flutter"])
+def test_dart_workflow_uses_packaged_scanner_without_rust(
+    tmp_path: Path, manager: str
+) -> None:
+    dependencies: dict[str, dict[str, str]] = (
+        {"flutter": {"sdk": "flutter"}} if manager == "flutter" else {}
+    )
+    (tmp_path / "pubspec.yaml").write_text(
+        yaml.safe_dump({"name": "fixture", "dependencies": dependencies})
+    )
     config: GateConfig = {
         "packages": [{"path": ".", "language": "dart", "checks": []}],
         "shared": [],
@@ -106,5 +154,21 @@ def test_dart_workflow_uses_packaged_scanner_without_rust(tmp_path: Path) -> Non
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, config, changes)
     workflow = changes[".github/workflows/hard-eng.yml"]
-    assert "dart@latest" in workflow
+    commands = yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"][-1][
+        "run"
+    ].splitlines()
+    install = shlex.split(commands[0])
+    assert install[install.index("install") + 1 : -1] == [
+        "uv@latest",
+        "python@3.12",
+        "node@latest",
+        manager + "@latest",
+    ]
+    execute = shlex.split(commands[1])
+    assert execute[execute.index("exec") + 1 : execute.index("--")] == [
+        "uv@latest",
+        "python@3.12",
+        "node@latest",
+        manager + "@latest",
+    ]
     assert "rust@latest" not in workflow

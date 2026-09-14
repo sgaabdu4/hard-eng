@@ -44,8 +44,6 @@ jobs:
           MISE_PREFER_OFFLINE: 'false'
           MISE_USE_VERSIONS_HOST: 'false'
           MISE_MINIMUM_RELEASE_AGE: 0s
-        run: >-
-          pnpm dlx --allow-build=@jdxcode/mise
-          --package=@jdxcode/mise@latest mise --no-config exec
-          uv@latest python@3.12 node@latest dart@latest
-          -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
+        run: |
+          pnpm dlx --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config install uv@latest python@3.12 node@latest dart@latest &&
+          MISE_FETCH_REMOTE_VERSIONS_CACHE=1h pnpm dlx --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config exec uv@latest python@3.12 node@latest dart@latest -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"

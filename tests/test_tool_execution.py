@@ -10,7 +10,50 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import tool_setup
 import update
+from gate_config import Group
+
+
+@pytest.mark.parametrize("failure", ["", "exit", "unresolved"])
+def test_native_tools_install_before_reading_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        environment = kwargs["env"]
+        assert isinstance(environment, dict)
+        if "install" in command:
+            assert environment["MISE_FETCH_REMOTE_VERSIONS_CACHE"] == "0s"
+            warning = (
+                "Failed to resolve tool version list" if failure == "unresolved" else ""
+            )
+            return subprocess.CompletedProcess(
+                command, 7 if failure == "exit" else 0, "", warning
+            )
+        assert len(calls) == 2 and "install" in calls[0]
+        assert environment["MISE_FETCH_REMOTE_VERSIONS_CACHE"] == "1h"
+        assert command[-1] == "aqua:gitleaks/gitleaks@latest"
+        return subprocess.CompletedProcess(command, 0, '{"PATH":""}', "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    groups: list[Group] = [
+        {"path": ".", "checks": [{"name": "scan", "command": ["gitleaks"]}]}
+    ]
+    if failure:
+        with pytest.raises((subprocess.CalledProcessError, ValueError)) as error:
+            tool_setup.provision_tools(tmp_path, groups, 30)
+        if failure == "exit":
+            assert isinstance(error.value, subprocess.CalledProcessError)
+            assert error.value.returncode == 7
+        else:
+            assert "could not be resolved" in str(error.value)
+        assert len(calls) == 1
+    else:
+        tool_setup.provision_tools(tmp_path, groups, 30)
+        assert len(calls) == 2
 
 
 def test_installed_check_provisions_yaml_and_keeps_real_gate_failures(
