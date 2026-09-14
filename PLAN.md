@@ -1,46 +1,46 @@
-# Format managed JavaScript assets
+# Remove managed Markdown trailing whitespace
 
 Status: Complete
 
 ## Outcome + scope
 
-Format the thirteen walkthrough scripts/tests and adopt the independently delivered Appwrite skill formatting revision. Keep managed assets compatible with a concrete Biome profile without changing application hooks or adding exclusions. Updater code changes ship separately.
+Remove24 whitespace-only blank-line violations from exactly eight managed Markdown references at their two source owners. Adopt the delivered skill revisions so the staged updater payload passes Git's whitespace check. No updater behavior, tests, hooks or formatting rules are changed.
 
 ## Repository context
 
-The walkthrough JavaScript is owned locally; the five Appwrite scripts are owned by the pinned skill submodule. Existing native contracts and browser smoke tests verify those owners. No dependencies, configurations or scripts are added to the repository.
+Six references belong to the Appwrite skill submodule and two to the Flutter skill submodule. The existing updater already stages exact paths and runs git diff --cached --check. Native before/after verification is sufficient; no wrapper, dependency or new regression file is needed.
 
 ## Decisions + authorization
 
 Blockers: None
 
-The authorized updater repair includes fixing incompatible managed assets at their source owners and delivering verified main. These edits were preserved from the original authorized repair plan and isolated from the updater PR. No consumer checkout was changed. One builder owns this slice.
+The user authorized this source-only repair and verified main delivery. One builder uses isolated source checkouts and preserves all consumer checkouts and unrelated source work. Public evidence uses only source-owned facts.
 
 ## Acceptance + steps
 
-- [x] All18 managed JavaScript assets pass the concrete Biome formatting and import-organization profile.
-- [x] Existing Appwrite contracts and all three walkthrough browser smoke tests pass.
-- [x] Appwrite source formatting is merged and verified on its canonical branch before pin adoption.
+- [x] Only trailing spaces on24 blank lines change in the eight references; source-owner checks pass and canonical revisions are delivered.
+- [x] Native staged-payload verification reproduces the24 violations before cleanup and passes afterward.
+- [x] Source-owner proof is complete; full integrated Hard Eng gate follows before shipping.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: The original repair began at verified source c67fced96100e91cea67e1ca773ec5bfc2257524 and passed its Ready gate before edits. Appwrite's57 native contracts passed before formatting. The original combined plan authorized this bounded slice; isolation preserves its work and evidence. Integrated updater baseline3bd3c233110f965a3b980a6994dec58acef0865e passed480 regressions,four performance tests,all17 gates, PR74CI34831093380, mainCI34831333873 and native delivered before this slice resumed.
+Evidence: Source987a34ddb6af28493c4bbdd15842d55980b59894 passed480 regressions,four performance tests,all17 gates, mainCI34832124356 and native delivered. The reported24 violations were independently located; all are spaces on otherwise blank lines. A Ready gate precedes edits.
 
 ## Risks + recovery
 
-Compatibility is proven for two-space indentation, single quotes,140-column width and import organization; no universal formatter-compatibility claim. Changes are formatting only. Transient test dependencies were kept outside the source payload after runtime checks. No hook bypass or formatter exclusions.
+No Markdown hard-break lines or non-whitespace content are changed. Do not broaden cleanup beyond the eight reported files or modify consumer hooks. Publish each owner revision before advancing its pin.
 
 ## ux_reference
 
-N/A — formatting does not change rendered product UI; existing browser interaction smoke tests verify preserved tool behavior without duplicate screenshots.
+N/A — removing spaces on blank reference lines changes no rendered product UI.
 
 ## Verification
 
 Result: Passed
-Evidence: Biome check passes all18 assets. Appwrite57 contracts pass before/after; owner PR1 and canonical-branch CI34830154375 passed at8fd4668e7a95b6e6ddf8fdcbe3854f7c935c68e9. Walkthrough gesture recording/review, native-dialog pointer and view-transition pointer smoke tests all passed. Final integrated source gate follows after the separately delivered updater repair.
+Evidence: Native git diff --cached --check on all eight source files returned exit2 with24 violations before cleanup and exit0 with no diagnostics afterward. Each new file was byte-compared with its old content after removing only trailing spaces. Appwrite57 tests passed; PR2 and canonical CI34833130640 delivered bcd92e9be8b02188bcf9d2387ca097af68c809bb. Flutter Markdown-example and routing checks passed; PR5 delivered a441039279cab51867dd3beb16af6f0254b715fe. Flutter's hosted Windows workflow does not apply to these reference paths. Final integrated source gate follows.
 
 Delivery target: Merge
-Final integrated Complete gate passed all17 checks,480 regressions and four performance tests. Ready for ship — local implementation and verification complete; delivery not performed.
+Final Complete gate passed all17 checks,480 regressions and four performance tests. Ready for ship — local implementation and verification complete; delivery not performed.
 
-Delivery: Pending — integrated source gate, PR CI, exact main CI, native delivered and supported update verification.
+Delivery: Pending — owner PR/canonical CI, Hard Eng PR/main CI, native delivered and supported updater handoff.
