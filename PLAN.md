@@ -1,47 +1,46 @@
-# Install latest tools before executing checks
+# Adopt the corrected Flutter lint profile
 
 Status: Complete
 
 ## Outcome + scope
 
-Resolve current tools with mise install and its normal network timeout before executing them. Reuse mise's native version metadata for the following execution step. Apply this to generated CI and gate provisioning while preserving explicit SDK versions, project workflow customizations and real failures.
+Fresh and updated Flutter projects use the released flutter_skill_lints ^0.11.2 profile. Upgrade known old0.11.0/0.11.1 declarations through the existing migration while preserving current, newer, custom and absent declarations.
 
 ## Repository context
 
-The workflow and tool_setup.py relied on mise exec/env for cold provisioning. Upstream mise2026.9.6 classifies both as fast commands despite MISE_PREFER_OFFLINE=false, imposing a three-second lookup limit. Existing configure_ci migration owns supported changes to installed workflows.
+The linked building-flutter-apps skill still points to a441039 and its ^0.11.0 template. project_setup.migrate_dart_plugins handles only0.0–0.10. Canonical skill5.10.2 at98b6e42 and lint0.11.2 at6b43340 are released with passing exact-commit CI and trusted publication.
 
 ## Decisions + authorization
 
 Blockers: None
 
-The user authorized confirmed shared-flow repairs, verification and PR/main delivery. One builder reuses the workflow, provisioner, migration and tests. Every install requests fresh latest versions with the existing zero-age cache setting; execution reuses the freshly resolved metadata with mise's native one-hour cache. No new dependency, file, custom cache, retry layer or global installation.
+The user authorized using corrected latest releases, repairing adoption and delivering source changes. One builder advances the existing submodule, extends the existing known-old pattern and updates the existing Dart configuration tests. No new file, dependency, resolver or compatibility layer. Canonical skill metadata, references and hosted fixture were reviewed under Writing Great Skills.
 
 ## Acceptance + steps
 
-- [x] Native cold setup installs current tools and execution selects that installation.
-- [x] Failed installation or unresolved versions stop before environment selection.
-- [x] New and installed generated workflows retain configured SDKs and custom content; migration is idempotent.
-- [x] Packaged scanners, pnpm build permissions and existing SDK PATH remain intact.
-- [x] Focused provisioning, failure and workflow regressions pass; final integration follows below.
+- [x] The linked canonical template requires ^0.11.2 and retains riverpod_lint ^3.1.9.
+- [x] Exact and caret0.11.0/0.11.1 declarations migrate automatically with existing older pins.
+- [x] Current/newer/custom/absent declarations and project analysis settings remain intact; repeating configuration is idempotent.
+- [x] Existing configuration, installer and update suites pass; final integration follows below.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: Original source9fd257c passed its source gate, but cold generated CI failed at a three-second uv lookup and could not launch it. The new regressions fail against the old provisioning/migration owner. Current108 focused tests and direct Pyrefly pass. This is an authorized baseline repair.
+Evidence: Starting sourceb682126 passed17 gates,504 tests,four performance checks and exact main CI34864008477. The published lint0.11.2 has successful Dart CI34865292958,Hard Eng CI34865292902 and publication34865785889 at6b43340087f7a03f8460cb0872d93e4e8d5928fb. Canonical skill98b6e42f5c87b27340a19c9172d7d415d3352a7e has successful CI34866797134 including its hosted compatibility fixture. The adoption gap is identified in the existing source owners.
 
 ## Risks + recovery
 
-Always resolve latest before reusing metadata. Preserve explicit version arguments and reject unresolved-version warnings. Native prototypes exposed invalid offline flags, fallback to host uv and omitted scanner paths; those approaches were removed before delivery. A failed intermediate gate and fixture annotation failure remain recorded as failed experiments, not delivery proof. Existing update candidate checks and rollback remain required.
+Restrict migration to known old exact/caret declarations, using the canonical template as the only replacement-version owner. Retain included rules and project settings. Existing candidate validation and rollback remain required. Do not treat package publication as consumer installation proof.
 
 ## ux_reference
 
-N/A — command provisioning and generated CI have no visual interface.
+N/A — dependency declarations and installer migration have no visible interface.
 
 ## Verification
 
 Result: Passed
-Evidence: Native cold installation retained attestation verification, installed uv0.12.13 and asserted that execution used the matching isolated installation. The actual provision_tools path then resolved all five scanner executables from the managed tool directory.108 focused tests pass, including failure handling, custom workflow migration, idempotence and exact Dart/Flutter tool selection. Direct Pyrefly and whitespace checks pass. The final integrated Complete gate is pending.
+Evidence: The four exact/caret0.11.0/0.11.1 regression cases fail against the original migration and pass after the bounded pattern change.119 configuration, installer and update tests pass; Ruff formatting/lint and Pyrefly pass. The linked canonical skill and its exact hosted compatibility CI were reviewed. Final integrated Complete gate pending.
 
 Delivery target: Merge
-Ready for ship — final integrated Complete gate passed all17 checks,504 tests and four performance checks; tests completed in113.41seconds. Existing GitHub authentication was used for provisioning after anonymous API quota exhaustion, matching CI. No check or attestation was disabled.
-Delivery: Pending — exact PR/main checks and native delivery proof required before consumers receive the source revision.
+Ready for ship — final Complete gate passed17 checks,510 tests and four performance checks. The full test suite completed in115.37seconds; no suppressed checks or project changes.
+Delivery: Pending — PR/main CI, native delivery verification and consumer adoption confirmation.
