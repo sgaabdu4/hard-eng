@@ -41,6 +41,8 @@ The same command installs a new project or uses the supported updater for a reco
 
 When an update changes project configuration, its isolated candidate runs the application gates without requiring a task plan to be completed first. This verifies the update only; normal completion, push and shipping checks still require their task evidence.
 
+The modern Dart profile also migrates recognized older `flutter_skill_lints` pins to the compatible version in the canonical Flutter template. It preserves unrelated plugins, custom sources and newer pins; analyzer findings still block candidate verification.
+
 Codex requires separate trust for new or changed hooks, even in a trusted project. Review them with `/hooks`, then verify the startup result in a new session before claiming automatic updates or completion enforcement. The installer does not grant trust to its own hooks. See the [official hook trust instructions](https://learn.chatgpt.com/docs/hooks).
 
 Run from your project's Git root, locally or in a cloud terminal:
