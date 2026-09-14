@@ -669,6 +669,7 @@ def install(root: Path, previous: Path | None = None) -> None:
     hook.chmod(0o755)
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
     print("Follow HE Plan to adapt the gates and configure shipping before delivery.")
+    print("Codex: review and trust new or changed hooks with /hooks.")
     print("Then run: python3 .hooks/hard-eng.py check")
 
 
