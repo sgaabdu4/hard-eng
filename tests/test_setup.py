@@ -416,7 +416,7 @@ def test_install_preserves_project_and_repeats(
     assert 'command = "pnpm"' in codex_mcp
     assert 'args = ["dlx", "context-mode@latest"]' in codex_mcp
     workflow = (tmp_path / ".github/workflows/hard-eng.yml").read_text()
-    assert "pnpm/setup@c9883cc79df532ad1a7b81bf9ab944ceb090d65c" in workflow
+    assert "pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b" in workflow
     assert "pnpm dlx --allow-build=@jdxcode/mise" in workflow
     assert "npm exec" not in workflow
     for name in ("appwrite-backend", "building-flutter-apps", "he-build", "he-ship"):
