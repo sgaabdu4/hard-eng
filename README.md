@@ -60,3 +60,5 @@ python3 .hooks/hard-eng.py check
 Native hook activation depends on client trust and behavior. Scanner completeness and application-specific UI/device, service, container and update-lifecycle acceptance remain open. See [current verification and remaining decisions](DECISION.md#current-status); local proof does not establish publication or deployment.
 
 For the standard Husky `.husky/_/pre-push` forwarding shim, setup preserves the shim and Git configuration and manages `.husky/pre-push` with a shell-compatible launcher. Existing canonical Hard Eng launchers migrate; custom hooks remain protected conflicts.
+
+The updater commits that launcher together with the scaffold and revision marker. If the installed updater itself is the failing component, invoke `update.update(target_root)` from a fetched, CI-verified source checkout's `.hooks/update.py` for the repair. This uses the same verified, isolated transaction; manually copying hooks or advancing the marker is not adoption proof.
