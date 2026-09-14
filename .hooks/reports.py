@@ -430,8 +430,11 @@ def validate_trivy_log(log: TextIO) -> None:
 def validate_trivy(path: Path) -> None:
     try:
         report = json.loads(path.read_text())
-        if report["SchemaVersion"] != 2 or report["ArtifactType"] != "filesystem":
-            raise ValueError("Expected a Trivy filesystem configuration report")
+        if report["SchemaVersion"] != 2 or report["ArtifactType"] not in (
+            "filesystem",
+            "repository",
+        ):
+            raise ValueError("Expected a Trivy directory configuration report")
         results = report["Results"]
         if not isinstance(results, list) or not results:
             raise ValueError("Trivy report contains no configuration results")
