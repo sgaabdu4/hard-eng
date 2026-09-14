@@ -13,12 +13,30 @@ from pathlib import Path
 from gate_config import (
     GateConfig,
     Group,
+    JsonObject,
     nonproduction_source,
     repository_files,
     typescript_packages,
 )
 
 PACKAGE_MANAGERS = {"npm", "npx", "pnpm", "yarn", "yarnpkg", "bun", "bunx"}
+
+
+def migrate_dart_plugins(options: JsonObject, source: Path) -> None:
+    """Keep known older plugin pins compatible with the modern Dart profile."""
+    import yaml
+
+    plugins = options.get("plugins")
+    if not isinstance(plugins, dict):
+        return
+    version = plugins.get("flutter_skill_lints")
+    if isinstance(version, str) and re.fullmatch(r"\^?0\.(?:[0-9]|10)\.\d+", version):
+        template = (
+            source
+            / ".agents/skills/building-flutter-apps/references/analysis_options.yaml"
+        )
+        canonical = yaml.safe_load(template.read_text())
+        plugins["flutter_skill_lints"] = canonical["plugins"]["flutter_skill_lints"]
 
 
 def is_shell_script(path: Path) -> bool:

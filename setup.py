@@ -247,10 +247,12 @@ def configure_dart(
 ) -> None:
     import yaml
     from gate_config import dart_rule_settings, validate_dart_exclusions
+    from project_setup import migrate_dart_plugins
 
     target = directory / "analysis_options.yaml"
     typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
     options: JsonObject = typing["dart_options"](target) if target.exists() else {}
+    migrate_dart_plugins(options, SOURCE)
     for section, groups in typing["DART_TYPING"].items():
         section_options = options.setdefault(section, {})
         if not isinstance(section_options, dict):
@@ -276,8 +278,7 @@ def configure_dart(
     if any(
         "coverage:test_with_coverage" in gate["command"] for gate in package["checks"]
     ):
-        # Dart Decimate recognizes native tooling declarations here, preserving
-        # unlisted/dev-only production-import checks unlike ignore_dependencies.
+        # Declare coverage tooling without hiding production-import checks.
         changes[str(target.relative_to(root))] = (
             "# Hard Eng test coverage uses dart run coverage:test_with_coverage.\n"
             + changes[str(target.relative_to(root))]

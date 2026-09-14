@@ -60,7 +60,7 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     options["linter"]["rules"].update({"no_dynamic_casts": True, "no_raw_types": True})
     options["analyzer"]["exclude"] = excludes
     options["linter"]["rules"] = ["avoid_print", *options["linter"]["rules"]]
-    options["plugins"] = {"riverpod_lint": "3.1.8", "flutter_skill_lints": "^0.9.1"}
+    options["plugins"] = {"riverpod_lint": "3.1.8", "flutter_skill_lints": "^0.11.0"}
     path = tmp_path / "analysis_options.yaml"
     path.write_text(yaml.safe_dump(options, sort_keys=False))
     runner.validate_typing(tmp_path, "dart", ["lib"])
@@ -107,6 +107,59 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     nested.write_text(yaml.safe_dump(result))
     with pytest.raises(ValueError, match="obsolete Dart language"):
         runner.validate_typing(tmp_path, "dart", ["lib"])
+
+
+@pytest.mark.parametrize(
+    ("plugin", "migrate"),
+    [
+        ("0.10.2", True),
+        ("^0.9.1", True),
+        (None, False),
+        ("^0.11.0", False),
+        ("0.12.0", False),
+        ({"path": "../custom-plugin"}, False),
+    ],
+)
+def test_dart_setup_migrates_known_plugin_with_rules(
+    installer: ModuleType,
+    tmp_path: Path,
+    plugin: str | dict[str, str] | None,
+    migrate: bool,
+) -> None:
+    plugins: dict[str, str | dict[str, str]] = {"other_plugin": "1.2.3"}
+    if plugin is not None:
+        plugins["flutter_skill_lints"] = plugin
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "plugins": plugins,
+                "analyzer": {
+                    "language": {"strict-casts": True, "strict-raw-types": True}
+                },
+            }
+        )
+    )
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, changes)
+    result = yaml.safe_load(changes["analysis_options.yaml"])
+    canonical = yaml.safe_load(
+        (
+            installer.SOURCE
+            / ".agents/skills/building-flutter-apps/references/analysis_options.yaml"
+        ).read_text()
+    )
+    expected = dict(plugins)
+    if migrate:
+        expected["flutter_skill_lints"] = canonical["plugins"]["flutter_skill_lints"]
+    assert result["plugins"] == expected
+    assert result["analyzer"]["language"] == {"strict-inference": True}
+    assert result["linter"]["rules"]["no_dynamic_casts"] is True
+    assert result["linter"]["rules"]["no_raw_types"] is True
+    path.write_text(changes["analysis_options.yaml"])
+    repeated: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, repeated)
+    assert repeated == changes
 
 
 @pytest.mark.parametrize("pattern", ["lib/**", "**/*.dart", "../**"])
