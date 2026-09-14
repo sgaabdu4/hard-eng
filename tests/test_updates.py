@@ -209,9 +209,27 @@ def release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path
     return source, target, old
 
 
-def test_shell_bootstrap_installs_from_main(release: tuple[Path, Path, str]) -> None:
+@pytest.mark.parametrize("installed", [False, True])
+def test_shell_bootstrap_installs_from_main(
+    release: tuple[Path, Path, str], installed: bool
+) -> None:
     source, target, _ = release
     git(source, "branch", "-M", "main")
+    if installed:
+        # Control release discovery only; the shell and update transaction are real.
+        module = source / ".hooks/update.py"
+        module.write_text(
+            module.read_text()
+            + '\nlatest_verified = lambda previous: subprocess.check_output(["git", "-C", str(Path(__file__).resolve().parents[1]), "rev-parse", "HEAD"], text=True).strip()\n'
+        )
+        commit(source, "verified fixture update")
+        (target / "project.txt").write_text("preserved local work\n")
+    else:
+        target = target.parent / "fresh"
+        init(target)
+        (target / "package.json").write_text('{"private":true}')
+        (target / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    revision = git(source, "rev-parse", "HEAD")
     result = subprocess.run(
         ["sh", str(source / "setup.sh")],
         cwd=target,
@@ -219,7 +237,15 @@ def test_shell_bootstrap_installs_from_main(release: tuple[Path, Path, str]) -> 
         capture_output=True,
         text=True,
     )
-    assert "Installed Hard Eng" in result.stdout
+    if installed:
+        assert f"Updated Hard Eng to {revision}" in result.stdout
+        assert (target / "project.txt").read_text() == "preserved local work\n"
+        assert (
+            json.loads((target / update.SOURCE_FILE).read_text())["revision"]
+            == revision
+        )
+    else:
+        assert "Installed Hard Eng" in result.stdout
     assert (target / ".git/hooks/pre-push").stat().st_mode & 0o111
     assert (target / ".github/workflows/hard-eng.yml").is_file()
 
