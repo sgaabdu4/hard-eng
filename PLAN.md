@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current Dart 3.13 lint repair: replace strict-casts and strict-raw-types defaults with their current no_dynamic_casts and no_raw_types lint equivalents while retaining strict-inference. Dart 3.13 still accepts the older options; the defect is Hard Eng rejecting the current configuration. The runner's shared defaults also drive installer configuration. Reuse existing configuration tests and native Dart analyzer proof. No new dependency, helper or gate waiver. Flutter references belong to the separately maintained building-flutter-apps submodule; its migration task owns their update and a later delivered revision adoption.
+
 Current Dart interface coverage repair: native classification rejects CustomerRelationsStore, an abstract interface containing only method signatures with no executable bodies; its real lifecycle LCOV legitimately has no record for that file. Recognize only abstract interface declarations whose members are all MethodDeclaration with EmptyFunctionBody. Keep concrete interfaces and declarations with fields, constructors or executable methods required. Reuse dart_coverage.py and the existing native classifier/report test; no new helper, dependency or coverage waiver. The source baseline is verified d30b365, distinct from the consumer's ongoing baseline repairs.
 
 Current UI evidence correction: the user wants before/after images only when their appearance differs. For matching UI paths, permit one explained `UI appearance: unchanged` declaration after an actual matched comparison, with no labeled duplicate attachments. Otherwise require the existing before/after evidence. Missing, empty or contradictory declarations fail; unchanged appearance never waives behavior tests. Move the existing path/body selection into ship_evidence.py because shipping.py is at its 700-line boundary; keep network validation and shipping checks unchanged. Update HE Ship's owner guidance and remove HE Build's unconditional pair requirement. No image-processing dependency, stored hashes or new configuration.
@@ -57,6 +59,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Current Dart lint configuration passes setup and gate validation; disabling either replacement lint fails.
+- [x] Native Dart 3.13 diagnostics reject implicit dynamic casts and raw types; corrected code passes. Separately owned Flutter reference migration is handed to its active task.
 
 - [x] Native abstract-interface signature-only sources are exempt from missing LCOV records; concrete interfaces and executable members still fail missing coverage.
 - [x] Native regression fails against the original classifier and passes after repair; final source gates remain required before authorized delivery and supported consumer adoption.
@@ -135,6 +140,8 @@ The user selected Frontline Fitness's Main board for the temporary tracker test 
 
 ## Baseline + execution
 
+Dart 3.13 baseline: unchanged source 083ec13 passed all 17 gates, 470 regressions and four performance tests, main CI 34812121983 and native delivery. One builder owns this contained compatibility repair. Dart 3.13.3 is installed; the official Dart changelog confirms both replacement lints.
+
 Dart interface repair baseline: unchanged d30b365b2231187db015f7f2ad13d6f21a596b77 passed all 17 gates, 470 regressions, four performance tests, exact main Hard Eng CI 34807990604 and native delivered for PR66. One builder owns this small classifier change; preserve the consumer's independent baseline repairs.
 
 UI evidence baseline: source ebb328499a5ad014c267e2f4589d0be4d9d7b391 passed all local gates and PR65 CI; main run 34806779985 attempt 1 encountered a Semgrep analysis timeout, unchanged attempt 2 passed, and native delivered passed. This is the starting revision. One builder owns the contained policy and guidance change; no new agent/dependency.
@@ -156,6 +163,12 @@ A structural check cannot prove truthful evidence, actual approval or that a pla
 N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has no visual application.
 
 ## Verification
+
+Dart 3.13 final Complete gate passed all 17 checks, 470 regressions and four performance tests (/tmp/he-dart313-complete-final.log). Ready for ship — local implementation and verification complete; delivery not performed. Authorized source PR/main/native delivery remains pending.
+
+Dart 3.13 integration: first Complete run passed behavior checks but failed native formatting; ruff format corrected the edited test. Fresh configure_dart output independently passes Dart 3.13.3 --fatal-infos. Final Complete rerun is required before publication.
+
+Dart 3.13 repair: Passed — pre-edit Ready gate passed all 17 checks (/tmp/he-dart313-ready.log). Existing installer regression failed against the original validator with strict analyzer.language rejection (/tmp/he-dart313-red.log); all 71 configuration/setup tests pass after the shared-default change (/tmp/he-dart313-tests.log). Native Dart 3.13.3 --fatal-infos emits no_dynamic_casts and no_raw_types for unsafe code (exit 1), then no issues for corrected code (exit 0). Existing template already uses --fatal-infos. No new tests, dependency, SDK installation or copied submodule edits. Final Complete check follows. Delivery target: Merge to origin/main; PR CI, exact main CI and native delivered remain pending.
 
 Dart interface release gate: final Complete check passed all 17 gates, 470 regression tests and four performance tests (`/tmp/he-dart-interface-complete.log`). Ready for ship — local implementation and verification complete; delivery not performed. Authorized source PR/main/native delivery and supported consumer adoption remain pending.
 
