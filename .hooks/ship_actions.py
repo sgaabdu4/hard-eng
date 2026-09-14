@@ -11,15 +11,15 @@ from pathlib import Path
 from shipping import Shipment, gh, git, load_policy, verify
 
 
-def remote_base(root: Path, branch: str) -> str:
-    reference = f"refs/heads/{branch}"
+def remote_base(root: Path, branch: str | None) -> str:
+    reference = f"refs/heads/{branch}" if branch else "HEAD"
     advertised = git(root, "ls-remote", "--exit-code", "origin", reference).split()
     if (
         len(advertised) != 2
         or advertised[1] != reference
         or re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", advertised[0]) is None
     ):
-        raise ValueError("Cannot resolve the current remote shipping base")
+        raise ValueError("Cannot resolve the current remote base")
     revision = advertised[0]
     git(root, "fetch", "--no-tags", "--no-write-fetch-head", "origin", revision)
     return revision

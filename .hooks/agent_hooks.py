@@ -12,7 +12,17 @@ from project_setup import dependency_command
 
 
 def project_pre_push(root: Path, hook: Path) -> Path:
-    """Recognize Husky's generated forwarding shim without replacing it."""
+    """Validate repository hook ownership and preserve Husky's forwarding shim."""
+    if not hook.parent.resolve().is_relative_to(root):
+        common = Path(
+            subprocess.check_output(
+                ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                cwd=root,
+                text=True,
+            ).strip()
+        ).resolve()
+        if hook.parent.resolve() != common / "hooks":
+            raise ValueError("Git hooks point outside this repository")
     shim = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"'
     if (
         hook == root / ".husky/_/pre-push"

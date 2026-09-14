@@ -234,8 +234,9 @@ def verify_candidate(
             from shipping import load_policy
 
             policy = load_policy(candidate, required=False)
-            if policy:
-                command.extend(["--base", remote_base(candidate, policy["base"])])
+            command.extend(
+                ["--base", remote_base(candidate, policy["base"] if policy else None)]
+            )
         subprocess.run(
             command, cwd=candidate, stdout=sys.stderr, check=True, timeout=3500
         )
