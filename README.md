@@ -11,9 +11,9 @@ Repository-local engineering instructions, skills, checks, hooks and CI for Pyth
 - Validate native exits and reports; reject findings and missing, stale or malformed evidence. Handwritten source/test files over 700 lines need a justified exception.
 - Install pre-push checks for the actual pushed commits, GitHub Actions checks and agent session/prompt/tool/completion hooks. Remote branch protection requires separate approval.
 - Prompt evidence-based learning throughout work: prefer existing deterministic prevention, use skills as a last resort, and capture lasting accepted decisions in terse `docs/adr/` records. Routine progress creates no learning artifact; hooks do not certify semantic judgment.
-- With a configured [shipping contract](.agents/skills/he-ship/references/checks.md), verify GitHub PR/check identity, required UI attachments and deployment proof; guard merge and task-worktree cleanup. Direct base pushes and over-budget pre-push checks fail. Visual relevance and external authority still require judgment.
+- Require a configured [shipping contract](.agents/skills/he-ship/references/checks.md) for pushes and completed delivery plans; verify GitHub PR/check identity, required UI attachments and deployment proof; guard merge and task-worktree cleanup. Direct base pushes and over-budget pre-push checks fail. Visual relevance and external authority still require judgment.
 - Configure Context Mode and Codebase Memory; add Appwrite, Sentry, Dart and Marionette MCPs when applicable. Registration alone does not prove readiness.
-- Provide CI-verified scaffold updates with conflict preservation and a separate local update commit; never automatically push. Scaffold-only updates avoid unrelated application checks.
+- Provide CI-verified scaffold updates with conflict preservation and a separate local update commit; never automatically push. Completion and shipping check installed-version freshness without changing files. Scaffold-only updates avoid unrelated application checks.
 
 ## Checks
 

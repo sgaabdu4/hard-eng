@@ -1,5 +1,6 @@
 """Reject the observed false readiness and closure cases through the real gate."""
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -7,6 +8,20 @@ from types import ModuleType
 
 import pytest
 from plans import validate_plan, validate_plans
+from shipping import ShippingPolicy
+
+
+def test_complete_delivery_requires_shipping_configuration(
+    runner: ModuleType, shipping_policy: ShippingPolicy
+) -> None:
+    root = runner.ROOT
+    validate_plans(root, base="0" * 40, stage="Complete")
+    plan = root / "PLAN.md"
+    plan.write_text(plan.read_text() + "\nDelivery target: Merge\nDelivery: Pending\n")
+    with pytest.raises(ValueError, match="shipping"):
+        validate_plans(root, base="0" * 40, stage="Complete")
+    (root / "hard-eng.gates.json").write_text(json.dumps({"shipping": shipping_policy}))
+    validate_plans(root, base="0" * 40, stage="Complete")
 
 
 @pytest.mark.parametrize(
