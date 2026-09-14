@@ -128,7 +128,9 @@ def provision_batch(
                 "Latest tool versions could not be resolved; retry provisioning"
             )
     environment = json.loads(result.stdout)
-    if not isinstance(environment, dict) or not isinstance(environment.get("PATH"), str):
+    if not isinstance(environment, dict) or not isinstance(
+        environment.get("PATH"), str
+    ):
         raise TypeError("Native tool setup did not return an executable PATH")
     tool_paths = [
         path
