@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import Mock
 
 import agent_hooks
@@ -178,13 +179,11 @@ def test_copilot_claude_compatibility_registration_does_not_repeat_checks(
 
 
 @pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
-@pytest.mark.parametrize("event", ["prompt", "tool", "failure"])
-def test_learning_checkpoint_preserves_results_without_running_checks(
+def test_failure_checkpoint_preserves_results_without_running_checks(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     agent: str,
-    event: str,
 ) -> None:
     payload = {
         "prompt": "PRIVATE_USER_STEERING",
@@ -192,7 +191,7 @@ def test_learning_checkpoint_preserves_results_without_running_checks(
         "error": "PRIVATE_FAILURE_DETAIL",
     }
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
-    assert agent_hooks.handle_event(repository, event, agent) == 0
+    assert agent_hooks.handle_event(repository, "failure", agent) == 0
     serialized = capsys.readouterr().out
     output = json.loads(serialized)
     assert not any(
@@ -206,7 +205,7 @@ def test_learning_checkpoint_preserves_results_without_running_checks(
     assert "decision" not in output
     assert "continue" not in output
     assert not (repository / ".hard-eng").exists()
-    unsupported = (agent, event) in {("codex", "failure"), ("copilot", "prompt")}
+    unsupported = agent == "codex"
     if unsupported:
         assert "Unsupported native hook event" in output["systemMessage"]
     elif agent == "copilot":
@@ -215,28 +214,19 @@ def test_learning_checkpoint_preserves_results_without_running_checks(
         assert set(output) == {"hookSpecificOutput"}
         context = output["hookSpecificOutput"]
         assert set(context) == {"hookEventName", "additionalContext"}
-        assert (
-            context["hookEventName"]
-            == {
-                "prompt": "UserPromptSubmit",
-                "tool": "PostToolUse",
-                "failure": "PostToolUseFailure",
-            }[event]
-        )
+        assert context["hookEventName"] == "PostToolUseFailure"
     # This fixture has no runner: an accidental completion dispatch would block.
     assert "he-learn/SKILL.md" in serialized or unsupported
 
 
-@pytest.mark.parametrize("event", ["prompt", "tool", "failure"])
 def test_learning_hook_compatibility_and_malformed_input_do_not_block_tools(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    event: str,
 ) -> None:
     for payload in ('{"timestamp":123}', "[]", "{"):
         monkeypatch.setattr(sys, "stdin", io.StringIO(payload))
-        assert agent_hooks.handle_event(repository, event, "claude") == 0
+        assert agent_hooks.handle_event(repository, "failure", "claude") == 0
         output = json.loads(capsys.readouterr().out)
         assert "decision" not in output
         assert "hookSpecificOutput" not in output
@@ -328,20 +318,63 @@ def test_flutter_readiness_detects_sdk_without_marionette_installed(
     assert agent_hooks.integrated_services(repository) == expected
 
 
-def test_flutter_readiness_requires_live_app_inspection(repository: Path) -> None:
-    (repository / "README.md").write_text("Flutter and Marionette are possible tools.")
-    (repository / "test").mkdir()
-    (repository / "test/widget_test.dart").write_text(
-        "import 'package:flutter/material.dart';\n"
-    )
-    assert agent_hooks.integrated_services(repository) == []
-    (repository / "main.dart").write_text("import 'package:flutter/material.dart';\n")
+def test_session_defers_integration_readiness_until_relevant_use(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scan = Mock(side_effect=AssertionError("Startup must not scan integrations"))
+    monkeypatch.setattr(agent_hooks, "integrated_services", scan)
     message = agent_hooks.session_context(repository, {})
-    assert "Dart MCP" in message
-    assert "verify its project roots" in message
-    assert "read-only analysis or runtime inspection" in message
-    assert "Marionette MCP" in message
-    assert "VM service URI" in message
-    assert "get_interactive_elements or take_screenshots" in message
+    scan.assert_not_called()
+    assert "when relevant to the task" in message
+    assert "verify a real call" in message
     assert "warn and continue" in message
-    assert "do not claim readiness from installation alone" in message
+    assert "registration alone is not readiness" in message
+
+
+@pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
+def test_setup_removes_owned_routine_hooks_and_preserves_custom_hooks(
+    repository: Path, installer: ModuleType, agent: str
+) -> None:
+    path = (
+        repository
+        / {
+            "claude": ".claude/settings.json",
+            "codex": ".codex/hooks.json",
+            "copilot": ".github/hooks/hard-eng.json",
+        }[agent]
+    )
+    path.parent.mkdir(parents=True)
+    command = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py"'
+    hooks: JsonObject = {}
+    custom: JsonObject = {"type": "command", "command": "echo custom", "timeout": 10}
+    for event, native in (("prompt", "UserPromptSubmit"), ("tool", "PostToolUse")):
+        if agent == "copilot" and event == "prompt":
+            continue
+        handler: JsonObject = {
+            "type": "command",
+            "command": f"{command} {event} {agent}",
+            "timeout": 10,
+        }
+        hooks[native] = [{"hooks": [handler]}, {"hooks": [custom]}]
+        if agent == "copilot":
+            hooks = {
+                "postToolUse": [
+                    {
+                        "type": "command",
+                        "bash": f"{command} tool copilot",
+                        "timeoutSec": 10,
+                    },
+                    {"type": "command", "bash": "echo custom", "timeoutSec": 10},
+                ]
+            }
+    path.write_text(json.dumps({"hooks": hooks}))
+    changes: dict[str, str] = {}
+    installer.configure_hooks(repository, changes)
+    result = json.loads(changes[str(path.relative_to(repository))])["hooks"]
+    for native, entries in hooks.items():
+        assert isinstance(entries, list)
+        assert result[native] == entries[1:]
+    path.write_text(changes[str(path.relative_to(repository))])
+    repeated: dict[str, str] = {}
+    installer.configure_hooks(repository, repeated)
+    assert repeated == changes
