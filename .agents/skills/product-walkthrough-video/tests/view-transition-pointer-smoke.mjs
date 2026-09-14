@@ -1,17 +1,17 @@
-import { performance } from "node:perf_hooks";
-import { chromium } from "playwright";
-import { WalkthroughPointer } from "../scripts/walkthrough-pointer.mjs";
+import { performance } from 'node:perf_hooks';
+import { chromium } from 'playwright';
+import { WalkthroughPointer } from '../scripts/walkthrough-pointer.mjs';
 
 async function redPixelCount(page, png) {
   return page.evaluate(async (pngBase64) => {
     const image = new Image();
     image.src = `data:image/png;base64,${pngBase64}`;
     await image.decode();
-    const canvas = document.createElement("canvas");
+    const canvas = document.createElement('canvas');
     canvas.width = image.naturalWidth;
     canvas.height = image.naturalHeight;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) throw new Error("canvas pixel inspection is unavailable");
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('canvas pixel inspection is unavailable');
     context.drawImage(image, 0, 0);
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
     let count = 0;
@@ -22,7 +22,7 @@ async function redPixelCount(page, png) {
       if (red > 200 && green < 120 && blue < 120) count += 1;
     }
     return count;
-  }, png.toString("base64"));
+  }, png.toString('base64'));
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -48,7 +48,7 @@ try {
     <dialog>Native sheet</dialog>
   `);
   pointer = new WalkthroughPointer(page, {
-    color: "#ff3b30",
+    color: '#ff3b30',
     enabled: true,
     moveDurationMs: 0,
     moveHoldMs: 0,
@@ -60,28 +60,28 @@ try {
   });
   pointer.setClock(() => performance.now());
   await pointer.start();
-  await page.locator("dialog").evaluate((dialog) => dialog.showModal());
+  await page.locator('dialog').evaluate((dialog) => dialog.showModal());
   await pointer.moveTo(48, 48, { durationMs: 0, holdMs: 0 });
   await page.evaluate(() => {
-    const dialog = document.querySelector("dialog");
-    const main = document.querySelector("main");
+    const dialog = document.querySelector('dialog');
+    const main = document.querySelector('main');
     const transition = document.startViewTransition(() => {
       dialog?.close();
-      if (main) main.textContent = "New page";
+      if (main) main.textContent = 'New page';
     });
-    Reflect.set(window, "__walkthroughPointerTransition", transition);
+    Reflect.set(window, '__walkthroughPointerTransition', transition);
   });
   const counts = [];
   for (let sample = 0; sample < 9; sample += 1) {
     await page.waitForTimeout(40);
     counts.push(await redPixelCount(page, await page.screenshot()));
   }
-  await page.evaluate(() => Reflect.get(window, "__walkthroughPointerTransition")?.finished);
+  await page.evaluate(() => Reflect.get(window, '__walkthroughPointerTransition')?.finished);
   const minimum = Math.min(...counts);
   if (minimum < 50) {
-    throw new Error(`pointer disappeared during the document view transition: ${counts.join(",")}`);
+    throw new Error(`pointer disappeared during the document view transition: ${counts.join(',')}`);
   }
-  console.log(`view-transition-pointer-smoke: PASS min=${minimum} samples=${counts.join(",")}`);
+  console.log(`view-transition-pointer-smoke: PASS min=${minimum} samples=${counts.join(',')}`);
 } finally {
   await pointer?.dispose();
   await browser.close();
