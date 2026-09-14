@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current updater plan-scope repair: non-scaffold candidate checks must retain the consuming task's committed plan scope. Resolve the current configured remote shipping base using the same exact-SHA operation as initial pushes; compare the candidate against it instead of only HEAD. The changed source marker forces all application groups. Reuse ship_actions/update and native transaction tests; no new files, dependencies or fabricated plan state. PR60 provides the verified source baseline.
+
 Current Dart exclusion repair: preserve narrowly supported generated/artifact patterns required by the installed Flutter skill lint while rejecting handwritten source exclusions and ignored diagnostics. Preserve native lint-rule lists and emit YAML because the actual plugin checks YAML text rather than equivalent JSON. Reuse gate_config validation, both runner validation paths and setup's existing Dart configuration owner. Generated Dart matches require a generator header or native Git generated/vendor classification; no broad path waiver or new dependency. Verify setup preservation, includes/nested options, handwritten counterexamples and full source gates. PR #59 provides matching baseline proof.
 
 Current first-push repair: with a configured shipping policy, compare a newly created branch against the current origin base commit rather than the empty tree. Resolve and fetch the exact remote SHA without trusting stale tracking refs; continue checking the exact pushed revision, blocking direct base pushes and failing closed on unavailable base. Reuse pre_push and its native Git tests; no new files/dependencies. Matching PR #58 checks provide the baseline. Prove preserved historical plans, stale tracking refs, dirty working-tree isolation and missing-base rejection, then full checks/source delivery.
@@ -43,6 +45,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Candidate validation retains a committed Complete task plan while ignoring unchanged historical plans, with stale tracking refs and unrelated local edits preserved.
+- [x] Missing remote base and actual application-check failures block updates without changing consumer files; native regressions and diff review pass.
 
 - [x] Supported generated/artifact excludes survive setup and pass native strict validation; handwritten matches and broad patterns reject. Native plugin accepts emitted YAML/list form and rejects original JSON/map configuration.
 - [x] Included/nested options cannot hide project source or ignored diagnostics; meaningful regressions pass and the final source gate verifies the corrected tree.
@@ -114,6 +119,10 @@ A structural check cannot prove truthful evidence, actual approval or that a pla
 N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has no visual application.
 
 ## Verification
+
+Updater scope release: final Complete-stage check passed all 17 gates, 457 regressions and four performance tests (`/tmp/he-candidate-base-complete.log`). Source PR/main CI and native delivery remain pending; the consumer must retry through the verified updater implementation.
+
+Updater scope repair: native Git regressions reproduce the original missing Status error and pass after repair, including actual application-check execution/failure, missing remote base, candidate removal and preserved local edits/tracking ref (`/tmp/he-candidate-base-red.log`, `/tmp/he-candidate-base-green.log`). Early fixture setup failures were corrected before this red/green proof. The initial full gate passed 457 regressions, four performance tests and all checks except a test type annotation; that annotation was corrected and native type checking passed. Final Complete-stage gate follows. Diff review retained the shared exact-base resolver, updater call and three native cases; no new files or dependencies. Source PR/main CI and supported consumer retry remain pending.
 
 Dart configuration release: final Complete-stage check passed all 17 gates, 454 regressions and four performance tests (`/tmp/he-dart-options-complete.log`). Native old/new lint-plugin proof passed. Source PR/main CI and native delivery remain pending; consumer adoption follows the verified source revision.
 
