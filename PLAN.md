@@ -42,4 +42,6 @@ Evidence: Official GitHub release refs verified. All61 existing installer tests 
 Delivery target: Merge
 Final Complete gate passed all17 checks,473 regression tests and four performance tests. Ready for ship — local implementation and verification complete; delivery not performed.
 
-Delivery: Pending — PR CI, merge, exact main CI and native delivered verification.
+PR CI34826029561 passed, including both upgraded action steps. Explicit pre-push verification failed because its temporary worktree does not initialize source skill submodules; the initialized source Complete gate passed. This separate source pre-push limitation is not repaired by this two-pin change.
+
+Delivery: Pending — current PR CI, merge, exact main CI and native delivered verification.
