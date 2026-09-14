@@ -373,8 +373,6 @@ def prepare_hook(root: Path) -> tuple[Path, str]:
         ).strip()
     )
     hook = hook if hook.is_absolute() else root / hook
-    if not hook.parent.resolve().is_relative_to(root):
-        raise ValueError("Git hooks point outside this repository")
     target = project_pre_push(root, hook)
     launcher = """#!/usr/bin/env python3
 import subprocess
