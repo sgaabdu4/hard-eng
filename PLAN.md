@@ -1,45 +1,45 @@
-# Enforce setup completion and delivery prerequisites
+# Route repeated bootstrap through the supported updater
 
 Status: Complete
 
 ## Outcome + scope
 
-Prevent green checks from masking missing shipping configuration or a stale installed scaffold. Distinguish installation, local verification and remote delivery. Use existing owners and tests only.
+Make the documented bootstrap command install new projects and update recorded installations through the existing transaction. Upstream-managed changes must not be mistaken for local customizations by the initial-install path.
 
 ## Repository context
 
-Plan validation checks local completion; pre-push accepts absent shipping policy. The updater selects CI-verified revisions only at session start. Completion checks code without checking freshness.
+setup.sh always calls setup.py without a previous source. The existing update.update function already selects a verified release, compares managed versions and preserves local changes. Reuse it; do not duplicate migration logic.
 
 ## Decisions + authorization
 
 Blockers: None
 
-The user authorized this bounded repair, source delivery and consumer verification. One builder; no new dependency, file or persistent state. Preserve unrelated consumer edits. Public evidence uses synthetic fixtures only.
+The user reported this bootstrap failure during the authorized setup repair. One builder; change the existing shell entrypoint, bootstrap test and install output/documentation only. The startup investigation also found host-owned hook trust distinct from project trust; state that prerequisite without auto-approving hooks. No new file, dependency or state.
 
 ## Acceptance + steps
 
-- [x] Complete delivery plans and pushes reject missing shipping policy; local-only planning remains supported.
-- [x] Completion and shipping reject stale or unverifiable installed revisions without mutating files; current installations and source development remain supported.
-- [x] Installer and handoff wording distinguish installed files, local checks and remote delivery.
-- [x] Existing tests prove failing and passing paths; source gates and verified main delivery precede consumer adoption.
+- [x] A project without an installed marker still uses initial setup.
+- [x] A recorded installation uses the supported update transaction, accepts upstream-managed changes and preserves unrelated local work.
+- [x] Existing conflict/rollback/update tests remain passing; shell and source checks pass before delivery.
+- [x] Installation guidance identifies Codex hook trust as a separate activation prerequisite; no global trust settings are changed.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: Source9277ea9 passed17 gates,480 regressions,four performance tests, PR77 CI34838211269 and main CI34838415076 with native delivery. The previous local plan receipt is preserved outside the repository. Run Ready before implementation.
+Evidence: Source95c130b and the identical local implementation passed all17 gates,489 regressions,four performance tests, PR78 CI34841193400, main CI34841423043 and native delivered. Reuse this matching baseline; validate the new Ready plan before code edits. The previous local delivery receipt is preserved outside the repository.
 
 ## Risks + recovery
 
-Unavailable GitHub evidence blocks a freshness claim without modifying files. Hooks depend on client activation; final-report truth still needs review. No generic state machine or natural-language authorization parser.
+Existing updater conflicts remain real blockers. No manual marker changes, file-by-file overwrite or background update concurrent with edits. The bootstrap still requires access to its source; installed updates also need the existing GitHub verification access.
 
 ## ux_reference
 
-N/A — command and hook enforcement has no visual application surface.
+N/A — shell bootstrap has no visual interface.
 
 ## Verification
 
 Result: Passed
-Evidence: The added regressions exposed stale/offline completion acceptance and missing shipping enforcement before repair. The final Complete gate passed all17 gates,489 regressions and four performance tests. Native shell installation, isolated updates, Husky forwarding and committed-snapshot rejection remain verified; existing push fixtures now supply the mandatory shipping policy. The changed skill validates. Diff review confirms no new files, dependencies or stored state. Consumer adoption remains a separate delivery step.
+Evidence: The actual shell bootstrap passed fresh installation and failed the existing-installation case before repair. Both cases passed after routing recorded installations to the real updater transaction, with release discovery controlled by the fixture and unrelated local work preserved. The final Complete gate passed all17 gates,490 regressions and four performance tests, including existing updater conflict/rollback coverage. Hook trust guidance was checked against official OpenAI documentation; no global trust settings were changed. Actual host activation remains distinct from registration and manual command proof.
 
 Delivery target: Merge
-Delivery: Pending — source PR, exact main CI, native delivery, owned-branch cleanup and consumer verification.
+Delivery: Pending — source delivery and observed consumer adoption.
