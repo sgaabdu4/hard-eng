@@ -352,9 +352,18 @@ def test_overlapping_local_edit_prevents_update(
 
 
 def test_project_configuration_update_runs_application_checks(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    completed_plan: str,
+    capfd: pytest.CaptureFixture[str],
 ) -> None:
     source, target, old = release
+    remote = target.parent / "application-remote.git"
+    git(target, "clone", "--bare", str(target), str(remote))
+    git(target, "remote", "add", "origin", str(remote))
+    (target / "package.json").unlink()
+    (target / "PLAN.md").write_text(completed_plan)
+    commit(target, "completed task plan")
     installer = source / "setup.py"
     installer.write_text(
         installer.read_text().replace('"coverage/"', '"coverage/", "fixture-cache/"')
@@ -366,13 +375,16 @@ def test_project_configuration_update_runs_application_checks(
     assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
     assert "fixture-cache/" not in (target / ".gitignore").read_text()
     assert git(target, "status", "--porcelain") == ""
+    assert "FAIL application-check" in capfd.readouterr().err
 
 
 @pytest.mark.parametrize("outcome", ["pass", "application-failure", "missing-base"])
+@pytest.mark.parametrize("configured_base", [True, False])
 def test_candidate_uses_remote_task_plan_scope(
     release: tuple[Path, Path, str],
     completed_plan: str,
     outcome: str,
+    configured_base: bool,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
     source, target, _ = release
@@ -388,6 +400,8 @@ def test_candidate_uses_remote_task_plan_scope(
         "pre_push_seconds": 180,
         "delivery": [],
     }
+    if not configured_base:
+        del config["shipping"]
     command = "print('APPLICATION_SCOPE_CHECK'); raise SystemExit(0)"
     if outcome == "application-failure":
         command = command.replace("SystemExit(0)", "SystemExit(1)")
@@ -400,6 +414,9 @@ def test_candidate_uses_remote_task_plan_scope(
     commit(target, "remote baseline with historical document")
     remote = target.parent / "remote.git"
     git(target, "clone", "--bare", str(target), str(remote))
+    if configured_base:
+        git(remote, "branch", "default", "HEAD^")
+        git(remote, "symbolic-ref", "HEAD", "refs/heads/default")
     git(target, "remote", "add", "origin", str(remote))
     git(target, "switch", "-c", "feature/update")
     plan = target / "features/current/PLAN.md"
@@ -554,6 +571,23 @@ def test_committed_scaffold_exemption_preserves_application_boundary(
         if extra != "local":
             commit(target, "mixed application change")
     assert update.check_scaffold_update(target, base) is (extra is None)
+    if extra is None:
+        hook = target / ".git/hooks/pre-push"
+        before = hook.read_bytes()
+        linked = target.parent / "linked"
+        git(target, "worktree", "add", "--detach", str(linked), "HEAD")
+        try:
+            assert update.check_scaffold_update(linked, base)
+            assert hook.read_bytes() == before
+            git(linked, "config", "core.hooksPath", str(target.parent / "external"))
+            with pytest.raises(subprocess.CalledProcessError):
+                update.check_scaffold_update(linked, base)
+            assert hook.read_bytes() == before
+        finally:
+            subprocess.run(
+                ["git", "config", "--unset", "core.hooksPath"], cwd=target, check=False
+            )
+            git(target, "worktree", "remove", "--force", str(linked))
 
 
 def test_unverified_scaffold_update_fails(
