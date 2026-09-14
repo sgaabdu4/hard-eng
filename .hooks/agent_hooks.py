@@ -12,6 +12,42 @@ from project_setup import dependency_command
 from update import require_current
 
 
+def configure_instructions(
+    root: Path, source: Path, previous: Path | None, changes: dict[str, str]
+) -> None:
+    start, end = "<!-- hard-eng:start -->", "<!-- hard-eng:end -->"
+    instructions = {
+        "AGENTS.md": (source / "AGENTS.md").read_text().rstrip(),
+    }
+    claude = root / "CLAUDE.md"
+    if not (claude.is_symlink() and claude.resolve() == root / "AGENTS.md"):
+        instructions["CLAUDE.md"] = "@AGENTS.md"
+    if (root / "AGENTS.override.md").exists():
+        instructions["AGENTS.override.md"] = (
+            "Read and follow [shared instructions](AGENTS.md) before repository work."
+        )
+    for name, content in instructions.items():
+        target = root / name
+        existing = target.read_bytes().decode("utf-8") if target.exists() else ""
+        if start in existing or end in existing:
+            old = (
+                ((previous or source) / name).read_text().rstrip()
+                if name == "AGENTS.md"
+                else content
+            )
+            prefix = f"{start}\n{old}\n{end}\n\n"
+            if (
+                existing.count(start) != 1
+                or existing.count(end) != 1
+                or not existing.startswith(prefix)
+            ):
+                raise ValueError(
+                    f"Local Hard Eng instructions differ or have conflicting markers in {name}; preserve them and resolve before replacing them"
+                )
+            existing = existing[len(prefix) :]
+        changes[name] = f"{start}\n{content}\n{end}\n\n{existing}"
+
+
 def project_pre_push(root: Path, hook: Path) -> Path:
     """Validate repository hook ownership and preserve Husky's forwarding shim."""
     if not hook.parent.resolve().is_relative_to(root):

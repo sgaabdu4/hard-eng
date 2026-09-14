@@ -86,11 +86,13 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     assert result["analyzer"]["exclude"] == excludes
     assert result["linter"]["rules"] == options["linter"]["rules"]
     assert result["plugins"] == options["plugins"]
-    assert "plugins:\n" in path.read_text()
     runner.validate_typing(tmp_path, "dart", ["lib"])
+    commented = "# Project explanation\n" + path.read_text()
+    path.write_text(commented)
     repeated: dict[str, str] = {}
     installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, repeated)
-    assert repeated == changes
+    assert "analysis_options.yaml" not in repeated
+    assert path.read_text() == commented
     for rule in ("no_dynamic_casts", "no_raw_types"):
         weakened = json.loads(json.dumps(result))
         weakened["linter"]["rules"].remove(rule)
@@ -173,7 +175,22 @@ def test_dart_setup_migrates_known_plugin_with_rules(
         path.write_text(changes["analysis_options.yaml"])
     repeated: dict[str, str] = {}
     installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, repeated)
-    assert repeated == changes
+    assert "analysis_options.yaml" not in repeated
+
+
+def test_dart_without_exclusion_key_needs_no_rewrite(
+    installer: ModuleType, runner: ModuleType, tmp_path: Path
+) -> None:
+    options = json.loads(json.dumps(runner.DART_TYPING))
+    del options["analyzer"]["exclude"]
+    content = "# Keep the project's comments\n" + yaml.safe_dump(options)
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(content)
+    runner.validate_typing(tmp_path, "dart")
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, changes)
+    assert "analysis_options.yaml" not in changes
+    assert path.read_text() == content
 
 
 @pytest.mark.parametrize("pattern", ["lib/**", "**/*.dart", "../**"])

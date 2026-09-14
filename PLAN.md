@@ -1,53 +1,56 @@
-# Complete verification integrity delivery and repair scanner analysis
+# Audit lifecycle enforcement and complete verified delivery
 
 Status: Complete
 
 ## Outcome + scope
 
-Make the observed verification failures fail automatically where the existing runner or canonical native tests can establish the contract: disabled scanner metrics, blanket warning suppression, outdated lint configuration, unrealistic execution-response doubles, and unsafe source rewrites. Reuse existing gates and suites; add no recurring scan, approval ledger, generic shell interpreter or network-dependent policy service.
+Make setup, updates and verification enforce the demonstrated native contracts while preserving project customization. Audit the entire repository, including unchanged skills, hooks, gates, CI and documentation. Keep the implementation in existing owners; add no recurring scan, approval ledger, generic shell interpreter or policy service.
 
 ## Repository context
 
-The runner validates native reports, full-suite selection and strict analyzer configuration. Canonical Appwrite guidance now correctly separates async execution status from response data. Guidance alone does not make a mock faithful or prove a source rewrite compiles. Existing command preparation and report validation are the first implementation owners; domain behavior belongs in native contract tests.
+Hard Eng owns installation, workflow guidance, command preparation and native report validation. Domain-specific behavior belongs in canonical skills and native application/tool tests. Source-suite success alone does not prove host hook activation or a consumer release.
 
 ## Decisions + authorization
 
 Blockers: None
 
-The user authorized implementation and delivery with YAGNI, speed and parallel work. Two read-only investigations examine independent native enforcement boundaries while the coordinator owns the plan, runner integration and Git operations. Preserve project customization and report semantic limits honestly. Public artifacts contain only public contracts and synthetic examples.
+The user authorized implementation, canonical repairs and delivery with YAGNI/KISS, speed and parallel work. The requested whole-repository adversarial review order was GPT-6 Astra at high reasoning, repairs and verification, then Claude Fable 5.1. Both reviews completed. Preserve project instructions, skills and custom hooks. Public artifacts contain only public contracts and synthetic examples.
 
 ## Acceptance + steps
 
-- [x] Reject the observed weakened scanner/warning configurations through the existing gate path and prove valid configurations still run. Existing named Fallow audits must be part of the package gate with native report validation.
-- [x] Verify existing Dart exclusion protection and reject ordinary older plugin pins against the installed canonical profile without a latest-version network call per check.
-- [x] Inspect the native API/autofix regression owners: synchronous response/no-polling assertions and actual rewritten-source reanalysis already cover the concrete failures. No generic semantic certification or mock scanner is claimed.
-- [x] Make successful planning/build gates and invoked lifecycle hooks report their stage without extra checks or false delivery claims.
-- [x] Focused negative/positive checks pass; review corrections cover package-directory resolution, audit wiring and custom command arguments. The source diff uses existing owners, one extracted Fallow report module and no additional dependency, recurring callback or stored state.
-- [x] Prepare committed submodules in the existing temporary pre-push checkout and prove original checkout edits are preserved.
-- [x] Remove the reproducible provisioning-function analysis timeout without weakening scanner coverage or timeouts; retain native timeout details in failures.
-- [x] Show the actual SessionStart updater result and require the supported curl command before work when an installed project's current session has no result, without duplicate setup or new stored state.
+- [x] Reject known disabled Fallow metrics, blanket warning suppression and stale canonical Dart lint pins through existing gates.
+- [x] Report validated planning/build stages and actual startup update results. Require proposed-image references for applicable Ready plans and the supported curl fallback when an installed session has no updater result.
+- [x] Resolve latest native tools without Rust source builds. Retain Decimate's reviewed lifecycle allowlist and use npm for its mise installation; bypass stale pnpm dlx resolution while reusing installed binaries.
+- [x] Repair provisioning analysis timeouts without weakening security rules or time limits; initialize committed canonical submodules in isolated pre-push verification.
+- [x] Retain inherited installation/vulnerability gates during affected-package selection, and keep required plan updates from selecting unrelated packages.
+- [x] Preserve and bridge native instruction files, including an existing Claude symlink; run both shell bootstrap paths from CI-verified source.
+- [x] Execute supported existing Fallow scripts through the managed latest tool, preserving audit arguments and their declared report path.
+- [x] Accept valid Dart configurations without exclusions and preserve unchanged YAML comments on repeat setup.
+- [x] Repair unsafe canonical Appwrite idempotency guidance and retire the canonical Flutter skill's unshipped global coordinator at their upstream owners.
+- [x] Verify per-clone pre-push restoration and no-origin configuration updates; finish the canonical documentation-link correction.
+- [x] Verify all confirmed findings from both whole-repository adversarial reviews in the final integrated revision.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: Starting main 1b4d4fdb passed the Draft command again: 17 checks, 510 tests, four performance checks and 87.45% coverage. Scope investigations confirmed native Fallow audit thresholds, existing Dart exclusion protection and producer-owned source-rewrite reanalysis. Reuse this unchanged implementation proof for readiness; no second baseline suite is needed.
+Evidence: Starting main 1b4d4fdb passed all 17 Draft checks, 510 tests, four performance checks and 87.45% line coverage. Reuse this baseline; later verification applies to the expanded audit and repairs.
 
 ## Risks + recovery
 
-Generic tooling cannot certify arbitrary shell wrappers, mock semantics or test assertions. Enforce known native contracts at their actual owners without pretending a declaration proves runtime behavior. Keep report validation fail-closed, preserve supported narrow exceptions and avoid slowing normal checks with remote lookups. Revert only task-owned changes if a check rejects a legitimate supported configuration.
+Repository checks cannot prove image display/inspection, arbitrary mock faithfulness, user authority or prerequisite delivery chronology. Native client trust and hook activation remain host-owned. Latest resolution needs network availability and respects existing provider quotas. Preserve configured-origin failures; a missing origin is a separate greenfield case. Revert only task-owned changes when recovery is needed.
 
 ## ux_reference
 
-N/A — repository-local CLI verification with no product appearance change.
+N/A — CLI and engineering-workflow changes with no product appearance change.
 
 ## Verification
 
 Result: Passed
-Evidence: Final Complete gate passed all 17 checks: 538 tests, four performance checks, zero typing diagnostics and 87.78% line coverage. Independent review found an early dependency-failure handoff gap; the existing runner now reports the blocked stage, with success/failure coverage for both execution paths. Integrated runs also exposed type narrowing, package-manager validation ordering and first-party module classification; all are repaired. Original gate code accepted the synthetic disabled-metric and warning-suppression commands; the new gate rejects both. The unmodified native Fallow 3.22.0 audit report passes validation. Native hook tests cover output contracts, exact owned-definition migration, custom-hook preservation, repeat setup and real CLI-to-Stop integration. Canonical service and autofix suites retain the domain-specific behavioral proof. An anonymous tool-download rate limit was resolved using existing authentication without changing checks or tool versions.
+Evidence: The final integrated gate passed all 17 checks, 565 tests and four performance checks, with zero typing, security or duplication findings. The first whole-repository review's six findings were repaired and verified through all 17 gates before the second review began. Appwrite's canonical correction passed 57 native tests and exact merged-revision CI at 12fac792. The Flutter coordinator removal passed its quality gate, 50 smoke assertions and exact main CI at 44dbef1a. Its subsequent documentation-link correction passed the canonical quality gate and exact merged-main CI at 91a22ac0; that revision is now pinned.
 
-Pre-push exposed missing canonical submodules in its temporary checkout. The existing pre-push function now initializes the committed submodules before checking. All 27 native shipping tests passed, including a real Git fixture that reads committed module content in the snapshot, preserves original local edits and removes the temporary worktree. The final Complete check runs through pre-push on the combined committed revision before publication.
+The second whole-repository review identified nine concrete issues in supported Fallow commands/report paths, affected-package selection, fresh-clone hooks, Dart configuration preservation, no-origin updates, a canonical link and an over-specific cache assertion. All nine are repaired. The affected updater/bootstrap/execution suites passed 68 tests; the combined gate above includes their regression coverage. Real signed Fallow 3.25.0 ran through bare, pnpm exec and previously pinned pnpm dlx invocations. Actual repeated installation preserved a CLAUDE.md symlink to AGENTS.md. Native Decimate installation and a real scan produced a report accepted by the existing validator.
+
+Fresh and existing shell fixtures execute real Git and uv transactions with controlled release discovery, preserving custom instructions/skills and rejecting an unverified updater implementation. These tests prove CLI behavior; they do not claim activation in every hosted client. The anonymous live release probe hit GitHub's API quota; the authenticated probe passed without changing policy or tool versions.
 
 Delivery target: Merge
-Delivery: Pending — PR #87 merged at b5d9f0c, but main security analysis timed out after all 539 tests passed. A native Linux scan reproduced the timeout at provision_tools with the hardcoded-token rule. The repair separates batch execution from selection in the existing module; all scanner rules and time limits remain unchanged. Follow-up PR and exact main CI are required before declaring delivery.
-
-Follow-up evidence: 212 affected native tests passed, including updater success/failure output and single-call assertions. The same Linux Semgrep 1.176.1 scan that reproduced the provisioning timeout now scans all 31 source/test files with zero findings, errors or fixpoint timeouts. Normal full gates retain latest Semgrep. The AGENTS fallback is explicitly limited to installed projects and sessions missing an updater result; it does not grant host hook trust or automatically enforce model compliance. The combined committed revision receives the final full gate through native pre-push before publication.
+Delivery: Pending — PR #87 merged at b5d9f0c but its main security analysis timed out. Follow-up PR #88 contains the scanner repair and will carry the final audit fixes. Require the committed native pre-push gate, exact PR/main CI and consumer handoffs before reporting delivery. Actual consumer rollout and host startup observation remain distinct from source verification.

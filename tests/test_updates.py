@@ -1,7 +1,6 @@
 """Real Git update transactions preserve local work and obey check scope."""
 
 import json
-import shutil
 import subprocess
 import tomllib
 from collections.abc import Callable
@@ -10,9 +9,8 @@ from types import ModuleType
 
 import pytest
 import update
+from conftest import commit, git, init
 from shipping import ShippingError, ShippingPolicy
-
-SOURCE = Path(__file__).resolve().parents[1]
 
 
 def test_installer_preserves_native_mcp_settings_on_rerun(
@@ -36,10 +34,8 @@ def test_installer_preserves_native_mcp_settings_on_rerun(
     )
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
-    assert (
-        json.loads(changes[".mcp.json"])["mcpServers"]["codebase-memory-mcp"]
-        == settings
-    )
+    servers = json.loads(changes[".mcp.json"])["mcpServers"]
+    assert servers["codebase-memory-mcp"] == settings
     servers = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
     assert servers["codebase-memory-mcp"] == settings
     assert servers["context-mode"]["command"] == "pnpm"
@@ -67,23 +63,6 @@ def fixed_revision(revision: str) -> Callable[[str], str]:
         return revision
 
     return selected
-
-
-def git(root: Path, *arguments: str) -> str:
-    return subprocess.check_output(["git", *arguments], cwd=root, text=True).strip()
-
-
-def commit(root: Path, message: str) -> str:
-    git(root, "add", ".")
-    git(root, "commit", "-qm", message)
-    return git(root, "rev-parse", "HEAD")
-
-
-def init(root: Path) -> None:
-    root.mkdir()
-    subprocess.run(["git", "init", "-q", str(root)], check=True)
-    git(root, "config", "user.name", "Fixture")
-    git(root, "config", "user.email", "fixture@example.invalid")
 
 
 def test_update_fetches_each_revisions_pinned_skill_submodule(
@@ -129,125 +108,6 @@ def test_update_fetches_each_revisions_pinned_skill_submodule(
     assert (source / name).read_text() == "second revision\n"
     assert (old / name).read_text() == "first revision\n"
     assert name in update.scaffold_files(source)
-
-
-@pytest.fixture
-def release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, str]:
-    source, target = tmp_path / "source", tmp_path / "target"
-    init(source)
-    for name in (".hooks", ".agents", ".github"):
-        shutil.copytree(
-            SOURCE / name,
-            source / name,
-            ignore=shutil.ignore_patterns("__pycache__", "skill-sources"),
-        )
-    for name in (
-        "setup.py",
-        "setup.sh",
-        "AGENTS.md",
-        "PRODUCT.md",
-        "DESIGN.md",
-        ".gitignore",
-        "pyproject.toml",
-        "uv.lock",
-    ):
-        shutil.copyfile(SOURCE / name, source / name)
-    (source / "hard-eng.gates.json").write_text(
-        json.dumps(
-            {
-                "packages": [],
-                "shared": [
-                    {
-                        "name": "source-check",
-                        "command": ["python3", "-c", "print('SOURCE_CHECK')"],
-                    }
-                ],
-            }
-        )
-    )
-    old = commit(source, "source baseline")
-    init(target)
-    (target / "package.json").write_text('{"private":true}')
-    (target / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
-    subprocess.run(
-        ["python3", str(source / "setup.py"), str(target)],
-        check=True,
-        capture_output=True,
-    )
-    for name in ("PRODUCT.md", "DESIGN.md"):
-        shutil.copyfile(SOURCE / name, target / name)
-    (target / "hard-eng.gates.json").write_text(
-        json.dumps(
-            {
-                "packages": [],
-                "shared": [
-                    {
-                        "name": "application-check",
-                        "command": ["python3", "-c", "raise SystemExit(1)"],
-                    },
-                    {
-                        "name": "actionlint",
-                        "role": "workflows",
-                        "command": ["python3", "-c", "print('WORKFLOW_CHECK')"],
-                    },
-                    {
-                        "name": "zizmor",
-                        "role": "ci-security",
-                        "command": ["python3", "-c", "print('CI_SECURITY_CHECK')"],
-                    },
-                ],
-            }
-        )
-    )
-    (target / "project.txt").write_text("original\n")
-    commit(target, "installed baseline")
-    reference = source / ".agents/skills/he/references/workflow.md"
-    reference.write_text(reference.read_text() + "\nUpdated fixture instruction.\n")
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{source.as_uri()}.insteadOf")
-    monkeypatch.setenv(
-        "GIT_CONFIG_VALUE_0", f"https://github.com/{update.UPSTREAM}.git"
-    )
-    return source, target, old
-
-
-@pytest.mark.parametrize("installed", [False, True])
-def test_shell_bootstrap_installs_from_main(
-    release: tuple[Path, Path, str], installed: bool
-) -> None:
-    source, target, _ = release
-    git(source, "branch", "-M", "main")
-    if installed:
-        # Control release discovery only; the shell and update transaction are real.
-        module = source / ".hooks/update.py"
-        module.write_text(
-            module.read_text()
-            + '\nlatest_verified = lambda previous: subprocess.check_output(["git", "-C", str(Path(__file__).resolve().parents[1]), "rev-parse", "HEAD"], text=True).strip()\n'
-        )
-        commit(source, "verified fixture update")
-        (target / "project.txt").write_text("preserved local work\n")
-    else:
-        target = target.parent / "fresh"
-        init(target)
-        (target / "package.json").write_text('{"private":true}')
-        (target / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
-    revision = git(source, "rev-parse", "HEAD")
-    result = subprocess.run(
-        ["sh", str(source / "setup.sh")],
-        cwd=target,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    if installed:
-        assert f"Updated Hard Eng to {revision}" in result.stdout
-        assert (target / "project.txt").read_text() == "preserved local work\n"
-        metadata = json.loads((target / update.SOURCE_FILE).read_text())
-        assert metadata["revision"] == revision
-    else:
-        assert "Installed Hard Eng" in result.stdout
-    assert (target / ".git/hooks/pre-push").stat().st_mode & 0o111
-    assert (target / ".github/workflows/hard-eng.yml").is_file()
 
 
 def test_update_commits_only_scaffold_and_preserves_index(

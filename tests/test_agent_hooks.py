@@ -4,6 +4,7 @@ import io
 import json
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock
@@ -12,6 +13,106 @@ import agent_hooks
 import pytest
 import update
 from gate_config import Group, JsonObject, affected_groups
+
+
+@pytest.mark.parametrize("existing", ["none", "files", "symlink"])
+def test_native_instruction_paths_preserve_project_rules(
+    installer: ModuleType, tmp_path: Path, existing: str
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "package.json").write_text('{"private":true}')
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    if existing == "files":
+        for name in ("CLAUDE.md", "AGENTS.override.md"):
+            (tmp_path / name).write_bytes(b"# Custom rules\r\nPreserve these.\r\n")
+    elif existing == "symlink":
+        (tmp_path / "AGENTS.md").write_text("# Existing rules\nKeep these.\n")
+        (tmp_path / "CLAUDE.md").symlink_to("AGENTS.md")
+    installer.install(tmp_path)
+    names = ["AGENTS.md", "CLAUDE.md"] + (
+        ["AGENTS.override.md"] if existing == "files" else []
+    )
+    before = {name: (tmp_path / name).read_bytes() for name in names}
+    installer.install(tmp_path)
+    assert before == {name: (tmp_path / name).read_bytes() for name in names}
+    if existing == "symlink":
+        assert (tmp_path / "CLAUDE.md").is_symlink()
+        assert before["CLAUDE.md"] == before["AGENTS.md"]
+        assert before["AGENTS.md"].endswith(b"# Existing rules\nKeep these.\n")
+    else:
+        assert "\n@AGENTS.md\n" in (tmp_path / "CLAUDE.md").read_text()
+    if existing == "files":
+        for name in ("CLAUDE.md", "AGENTS.override.md"):
+            assert before[name].endswith(b"# Custom rules\r\nPreserve these.\r\n")
+        assert (
+            "[shared instructions](AGENTS.md)"
+            in (tmp_path / "AGENTS.override.md").read_text()
+        )
+    else:
+        assert not (tmp_path / "AGENTS.override.md").exists()
+
+
+def test_child_change_retains_parent_install_and_vulnerability_checks(
+    repository: Path,
+) -> None:
+    groups: list[Group] = [
+        {
+            "path": ".",
+            "depends_on": [],
+            "checks": [
+                {
+                    "name": "install",
+                    "role": "lockfiles",
+                    "command": ["pnpm", "install"],
+                },
+                {
+                    "name": "audit",
+                    "role": "vulnerabilities",
+                    "command": ["osv-scanner"],
+                },
+                {"name": "unrelated", "role": "tests", "command": ["pnpm", "test"]},
+            ],
+        },
+        {"path": "packages/child", "depends_on": ["."], "checks": []},
+        {"path": "packages/other", "depends_on": ["."], "checks": []},
+        {"path": ".", "checks": []},
+    ]
+    child = repository / "packages/child/index.js"
+    child.parent.mkdir(parents=True)
+    child.write_text("export const answer = 42;\n")
+    selected = affected_groups(repository, groups, "HEAD")
+    assert [g["path"] for g in selected] == [".", "packages/child", "."]
+    assert [g["name"] for g in selected[0]["checks"]] == ["install", "audit"]
+    assert len(groups[0]["checks"]) == 3
+
+
+@pytest.mark.parametrize("credentials", ["none", "environment", "cli"])
+def test_release_lookup_supports_account_free_setup_and_existing_auth(
+    monkeypatch: pytest.MonkeyPatch, credentials: str
+) -> None:
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    if credentials == "environment":
+        monkeypatch.setenv("GITHUB_TOKEN", "fixture-token")
+    monkeypatch.setattr(update.shutil, "which", Mock(return_value="gh"))
+    auth = Mock(
+        return_value=subprocess.CompletedProcess(
+            ["gh", "auth", "token"], 0 if credentials == "cli" else 1, "fixture-token\n"
+        )
+    )
+    monkeypatch.setattr(subprocess, "run", auth)
+    request = Mock(return_value=io.StringIO('{"check_runs": []}'))
+    monkeypatch.setattr(urllib.request, "urlopen", request)
+    assert update.github_json("repos/example/fixture/check-runs") == {"check_runs": []}
+    sent = request.call_args.args[0]
+    assert sent.full_url == "https://api.github.com/repos/example/fixture/check-runs"
+    assert sent.get_header("Authorization") == (
+        None if credentials == "none" else "Bearer fixture-token"
+    )
+    assert auth.call_count == (0 if credentials == "environment" else 1)
+    monkeypatch.setattr(urllib.request, "urlopen", Mock(side_effect=OSError("offline")))
+    with pytest.raises(OSError, match="offline"):
+        update.github_json("repos/example/fixture/check-runs")
 
 
 @pytest.mark.parametrize("changed", [False, True])
@@ -296,6 +397,9 @@ def test_session_identifier_cannot_escape_repository(
         ("other/a.py", ["other", "."]),
         ("README.md", ["lib", "app", "site", "other", "."]),
         (".hooks/a.py", ["lib", "app", "site", "other", "."]),
+        ("PLAN.md", ["lib", "app", "site", "other", "."]),
+        ("features/task/PLAN.md", ["lib", "app", "site", "other", "."]),
+        ("docs/PLAN.md", ["lib", "app", "site", "other", "."]),
     ],
 )
 def test_changed_package_includes_transitive_dependents_and_shared(
@@ -311,6 +415,10 @@ def test_changed_package_includes_transitive_dependents_and_shared(
     path = repository / changed
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("change")
+    for name in ("PLAN.md", "features/task/PLAN.md"):
+        plan = repository / name
+        plan.parent.mkdir(parents=True, exist_ok=True)
+        plan.write_text("Task plan\n")
     assert [g["path"] for g in affected_groups(repository, groups, "HEAD")] == expected
 
 

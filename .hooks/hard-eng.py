@@ -175,7 +175,7 @@ def validate_dart_typing(
             if group == "rules":
                 actual = dart_rule_settings(actual)
             if isinstance(settings, list):
-                validate_dart_exclusions(directory, actual)
+                validate_dart_exclusions(directory, section_options.get(group, []))
                 continue
             if not isinstance(actual, dict) or any(
                 actual.get(key) != value for key, value in settings.items()
@@ -385,7 +385,7 @@ def prepare_command(group: Group, gate: Gate, timeout: float) -> list[str]:
             ]
         elif language == "javascript":
             validate_typescript(command, directory, group, timeout)
-    return managed_command(command)
+    return managed_command(command, ROOT / group["path"])
 
 
 def validate_typescript(
@@ -524,6 +524,7 @@ def run_gate(
                         cwd=ROOT / group["path"],
                         check=False,
                         timeout=timeout,
+                        env={**os.environ, "PNPM_CONFIG_DLX_CACHE_MAX_AGE": "0"},
                         stdout=output if capture else log,
                         stderr=log,
                     )

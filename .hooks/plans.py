@@ -19,6 +19,12 @@ SECTIONS = (
 STAGES = ("Draft", "Ready", "Complete")
 
 
+def is_plan_path(path: Path) -> bool:
+    return path.name.lower() == "plan.md" and (
+        path.parent == Path(".") or path.parts[0] == "features"
+    )
+
+
 def report_stage(failed: bool, stage: str | None) -> None:
     if failed:
         print("Hard Eng: verification failed; the next stage is blocked.")
@@ -86,6 +92,11 @@ def validate_plan(path: Path) -> str:
     proof(baseline, {"Passed"})
     if not re.fullmatch(r"N/A — [^\n]+", ux.strip()):
         proof(ux, {"Passed"})
+        if not re.search(r"!\[[^\]\n]*\]\(\S[^)\n]*\)", ux):
+            raise ValueError(
+                "UX evidence needs a Markdown image reference to the rendered proposal; "
+                "show and inspect it in the conversation before Ready"
+            )
     if status == "Complete":
         markers = re.findall(
             r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\[([^]\n]*)\](?:\s|$)", content
@@ -110,10 +121,7 @@ def validate_plans(
             else "Draft"
         )
     paths = [
-        path
-        for path in repository_files(root)
-        if path.name.lower() == "plan.md"
-        and (path.parent == root or path.relative_to(root).parts[0] == "features")
+        path for path in repository_files(root) if is_plan_path(path.relative_to(root))
     ]
     applicable = [path for path in paths if str(path.relative_to(root)) in changed]
     if not applicable:
@@ -126,6 +134,7 @@ def validate_plans(
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"
         )
+    effective_stage = "Complete"
     for path in applicable:
         try:
             status = validate_plan(path)
@@ -135,6 +144,7 @@ def validate_plans(
                 load_policy(root)
             if STAGES.index(status) < STAGES.index(stage):
                 raise ValueError(f"plan is {status}; this check requires {stage}")
+            effective_stage = min(effective_stage, status, key=STAGES.index)
         except ValueError as error:
             raise ValueError(f"{path.relative_to(root)}: {error}") from error
-    return stage
+    return stage if explicit_stage or not applicable else effective_stage
