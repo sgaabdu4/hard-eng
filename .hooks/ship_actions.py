@@ -1,6 +1,7 @@
 """Guard the mutations following verified PR delivery."""
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -24,6 +25,20 @@ def pre_push(root: Path) -> int:
             )
         if set(revision) == {"0"}:
             continue
+        base = fields[3]
+        if policy and set(base) == {"0"}:
+            reference = f"refs/heads/{policy['base']}"
+            advertised = git(
+                root, "ls-remote", "--exit-code", "origin", reference
+            ).split()
+            if (
+                len(advertised) != 2
+                or advertised[1] != reference
+                or re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", advertised[0]) is None
+            ):
+                raise ValueError("Cannot resolve the current remote shipping base")
+            base = advertised[0]
+            git(root, "fetch", "--no-tags", "--no-write-fetch-head", "origin", base)
         environment = os.environ.copy()
         for name in git(root, "rev-parse", "--local-env-vars").splitlines():
             environment.pop(name, None)
@@ -42,7 +57,7 @@ def pre_push(root: Path) -> int:
                         str(checkout / ".hooks/hard-eng.py"),
                         "check",
                         "--base",
-                        fields[3],
+                        base,
                     ],
                     cwd=checkout,
                     env=environment,

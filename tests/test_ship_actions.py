@@ -340,6 +340,99 @@ def test_pre_push_snapshot_has_its_own_git_environment(
     assert len(ship_actions.worktrees(tmp_path)) == 1
 
 
+@pytest.mark.parametrize("missing_base", [False, True])
+def test_initial_push_uses_current_remote_base_and_exact_revision(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+    missing_base: bool,
+) -> None:
+    root = tmp_path
+    bare = tmp_path.parent / f"{tmp_path.name}-origin.git"
+    git(root, "init", "--bare", "-q", str(bare))
+    git(root, "config", "user.name", "Hook Fixture")
+    git(root, "config", "user.email", "hook@example.invalid")
+    git(root, "branch", "-M", "main")
+    hooks = root / ".hooks"
+    hooks.mkdir()
+    for source in (Path(__file__).resolve().parents[1] / ".hooks").glob("*.py"):
+        (hooks / source.name).write_bytes(source.read_bytes())
+    config: dict[str, object] = {
+        "packages": [],
+        "shipping": shipping_policy,
+        "shared": [
+            {
+                "name": "committed-check",
+                "command": [
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path; assert Path('task.txt').read_text() == 'committed'",
+                ],
+            }
+        ],
+    }
+    (root / "hard-eng.gates.json").write_text(json.dumps(config))
+    git(root, "add", ".")
+    git(root, "commit", "-qm", "initial base")
+    old_base = git(root, "rev-parse", "HEAD").strip()
+    git(root, "remote", "add", "origin", str(bare))
+    git(root, "push", "-q", "origin", "main")
+    legacy = root / "features/legacy/PLAN.md"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("TODO: preserved historical plan\n")
+    git(root, "add", ".")
+    git(root, "commit", "-qm", "historical plan on current remote base")
+    git(root, "push", "-q", "origin", "main")
+    git(root, "update-ref", "refs/remotes/origin/main", old_base)
+    git(root, "switch", "-qc", "feature/initial")
+    plan = root / "PLAN.md"
+    plan.write_text(plan.read_text() + "\nCurrent task changes the fixture text.\n")
+    (root / "task.txt").write_text("committed")
+    git(root, "add", ".")
+    git(root, "commit", "-qm", "current completed task")
+    revision = git(root, "rev-parse", "HEAD").strip()
+    (root / "task.txt").write_text("uncommitted and must not be checked")
+    if missing_base:
+        shipping_policy["base"] = "missing"
+        (root / "hard-eng.gates.json").write_text(json.dumps(config))
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(
+            f"refs/heads/feature/initial {revision} refs/heads/feature/initial {'0' * 40}\n"
+        ),
+    )
+    if missing_base:
+        with pytest.raises(ValueError, match="git query failed"):
+            runner.pre_push()
+    else:
+        assert runner.pre_push() == 0
+    assert git(root, "rev-parse", "refs/remotes/origin/main").strip() == old_base
+    assert len(ship_actions.worktrees(root)) == 1
+    assert legacy.read_text() == "TODO: preserved historical plan\n"
+    assert (root / "task.txt").read_text() == "uncommitted and must not be checked"
+
+
+def test_pre_push_deletion_does_not_fetch_a_base(
+    runner: ModuleType, shipping_policy: ShippingPolicy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (runner.ROOT / "hard-eng.gates.json").write_text(
+        json.dumps({"shipping": shipping_policy})
+    )
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(f"refs/heads/task {'0' * 40} refs/heads/task {'1' * 40}\n"),
+    )
+    query = Mock(
+        side_effect=AssertionError("Deletion must not fetch or inspect a snapshot")
+    )
+    monkeypatch.setattr(ship_actions, "git", query)
+    assert runner.pre_push() == 0
+    query.assert_not_called()
+
+
 def test_pre_push_blocks_base_before_running_commands(
     runner: ModuleType, shipping_policy: ShippingPolicy, monkeypatch: pytest.MonkeyPatch
 ) -> None:
