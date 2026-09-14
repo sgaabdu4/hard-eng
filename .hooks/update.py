@@ -64,6 +64,28 @@ def latest_verified(previous: str) -> str | None:
         page += 1
 
 
+def require_current(root: Path) -> None:
+    """Check installed-scaffold freshness without changing verified work."""
+    marker = root / SOURCE_FILE
+    if not marker.exists():
+        return
+    try:
+        metadata = json.loads(marker.read_text())
+        previous = metadata.get("revision") if isinstance(metadata, dict) else None
+        if not isinstance(previous, str) or not re.fullmatch(r"[0-9a-f]{40}", previous):
+            raise ValueError("installed revision is not a published commit")
+        revision = latest_verified(previous)
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        raise ValueError(
+            f"Hard Eng freshness could not be verified: {error}"
+        ) from error
+    if revision is not None:
+        raise ValueError(
+            f"Hard Eng freshness check found newer verified revision {revision}. "
+            "Use the supported updater, preserve local edits, then reverify before shipping or claiming completion."
+        )
+
+
 def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, Path]:
     source, old = temporary / "source", temporary / "previous"
     subprocess.run(

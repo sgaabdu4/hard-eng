@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from gate_config import changed_files, repository_files
+from shipping import load_policy
 
 SECTIONS = (
     "Outcome + scope",
@@ -115,6 +116,10 @@ def validate_plans(
     for path in applicable:
         try:
             status = validate_plan(path)
+            if status == "Complete" and re.search(
+                r"(?im)^\s*(?:[-*+]\s+)?Delivery target:", path.read_text()
+            ):
+                load_policy(root)
             if STAGES.index(status) < STAGES.index(stage):
                 raise ValueError(f"plan is {status}; this check requires {stage}")
         except ValueError as error:

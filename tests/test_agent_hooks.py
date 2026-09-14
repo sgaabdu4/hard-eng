@@ -5,10 +5,72 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import agent_hooks
 import pytest
+import update
 from gate_config import Group, JsonObject, affected_groups
+
+
+@pytest.mark.parametrize("changed", [False, True])
+@pytest.mark.parametrize("upstream", [None, "b" * 40, OSError("offline")])
+def test_completion_checks_freshness_without_mutating_installation(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changed: bool,
+    upstream: str | OSError | None,
+) -> None:
+    hooks = repository / ".hooks"
+    hooks.mkdir()
+    (hooks / "hard-eng.py").write_text("raise SystemExit(0)\n")
+    marker = hooks / "hard-eng-source.json"
+    content = json.dumps({"revision": "a" * 40})
+    marker.write_text(content)
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    subprocess.run(["git", "add", "."], cwd=repository, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-qm",
+            "installed fixture",
+        ],
+        cwd=repository,
+        check=True,
+    )
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+    ).strip()
+    state = repository / ".hard-eng/sessions/known.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"base": head}))
+    if changed:
+        (repository / "change.txt").write_text("local work")
+    query = (
+        Mock(side_effect=upstream)
+        if isinstance(upstream, OSError)
+        else Mock(return_value=upstream)
+    )
+    monkeypatch.setattr(update, "latest_verified", query)
+    result = agent_hooks.completion(repository, {"session_id": "known"})
+    if upstream is None:
+        assert result.get("decision") != "block"
+    else:
+        assert result.get("decision") == "block"
+        assert "freshness" in str(result).lower()
+    query.assert_called_once_with("a" * 40)
+    assert marker.read_text() == content
+    assert (
+        subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+        ).strip()
+        == head
+    )
 
 
 @pytest.fixture

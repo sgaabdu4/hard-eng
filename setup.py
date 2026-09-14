@@ -667,8 +667,9 @@ def install(root: Path, previous: Path | None = None) -> None:
     hook.parent.mkdir(parents=True, exist_ok=True)
     hook.write_text(launcher)
     hook.chmod(0o755)
-    print(f"Installed Hard Eng in {root}")
-    print("Run: python3 .hooks/hard-eng.py check")
+    print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
+    print("Follow HE Plan to adapt the gates and configure shipping before delivery.")
+    print("Then run: python3 .hooks/hard-eng.py check")
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from gate_config import JsonObject, nonproduction_source, repository_files
 from project_setup import dependency_command
+from update import require_current
 
 
 def project_pre_push(root: Path, hook: Path) -> Path:
@@ -191,6 +192,7 @@ def completion(root: Path, payload: JsonObject) -> JsonObject:
             ["git", "ls-files", "--others", "--exclude-standard"], cwd=root, text=True
         )
         if not changed.strip() and state is not None and state.exists():
+            require_current(root)
             return {
                 "systemMessage": "No repository changes since this session's Git base; no code checks were run."
             }
@@ -211,7 +213,9 @@ def completion(root: Path, payload: JsonObject) -> JsonObject:
             )
             log.seek(max(0, log.tell() - 16000))
             output = log.read().decode("utf-8", errors="replace")
-    except (OSError, subprocess.SubprocessError) as error:
+        if result.returncode == 0:
+            require_current(root)
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return {
             "decision": "block",
             "reason": f"Verification could not run: {error}. Repair it or report the blocker honestly.",

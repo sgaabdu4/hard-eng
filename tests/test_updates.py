@@ -10,7 +10,7 @@ from types import ModuleType
 
 import pytest
 import update
-from shipping import ShippingError
+from shipping import ShippingError, ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
 
@@ -254,6 +254,7 @@ def test_update_commits_husky_launcher_and_runs_native_hook(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
     reject_commit: bool,
+    shipping_policy: ShippingPolicy,
 ) -> None:
     source, target, _ = release
     shim = target / ".husky/_/pre-push"
@@ -289,6 +290,7 @@ exit $c
     git(target, "config", "core.hooksPath", ".husky/_")
     config_path = target / "hard-eng.gates.json"
     config = json.loads(config_path.read_text())
+    config["shipping"] = shipping_policy
     config["shared"].append(
         {"name": "shell", "role": "shell", "command": ["python3", "-c", "pass"]}
     )
