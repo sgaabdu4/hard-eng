@@ -26,7 +26,9 @@ Add `shipping` to the existing `hard-eng.gates.json` from observed repository re
 }
 ```
 
-Values above are an example, not universal defaults. Use the actual target, required check names, UI owners and measured budgets. An empty UI path list explicitly describes a nonvisual project. Missing/invalid policy cannot pass a ship check. Existing pre-push rejects direct updates to the configured base and still verifies the actual pushed commit; the elapsed budget is an additional requirement, not permission to omit checks.
+Values above are an example, not universal defaults. Use the actual target, required check names, UI owners and measured budgets. An empty UI path list explicitly describes a nonvisual project. Missing/invalid policy blocks pushes, Complete plans selecting delivery and ship checks. Pre-push rejects direct updates to the configured base and still verifies the actual pushed commit; the elapsed budget is an additional requirement, not permission to omit checks.
+
+Installed-scaffold freshness is checked without mutation at completion and shipping. A newer CI-verified revision or unavailable freshness evidence blocks a completion claim. Use the supported updater, preserve conflicting local edits and reverify affected work; never advance the revision marker manually. Source development without an installed marker is outside this update check.
 
 For deployment, `delivery` contains existing project verifiers: `{"name":"production","command":["python3","scripts/verify_deployment.py"]}`. Reuse a native project command before adding a script. Each receives `HE_SHIP_REVISION` and `HE_SHIP_PR_URL`; it must inspect the actual deployed state and emit JSON `{"status":"passed","revision":"<observed source revision>"}`. Nonzero exit, missing/wrong revision or absent required commands fail. A script that echoes the expected environment variable proves nothing; validate an old-version failure and current-version success at the deployed boundary.
 

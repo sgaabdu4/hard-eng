@@ -1,44 +1,45 @@
-# Protect public publication boundaries
+# Enforce setup completion and delivery prerequisites
 
 Status: Complete
 
 ## Outcome + scope
 
-Remove private consumer references from current public documentation and change descriptions. Define one publication-privacy owner, routed from shared agent rules, planning and shipping, so private context is excluded before tracked documents are written or external artifacts published.
+Prevent green checks from masking missing shipping configuration or a stale installed scaffold. Distinguish installation, local verification and remote delivery. Use existing owners and tests only.
 
 ## Repository context
 
-AGENTS.md routes shared obligations. HE Plan controls tracked planning evidence; HE Ship's references/checks.md owns publication review. DECISION.md and PLAN.md need generic evidence. No runtime helper, denylist, dependency, schema or new file is required.
+Plan validation checks local completion; pre-push accepts absent shipping policy. The updater selects CI-verified revisions only at session start. Completion checks code without checking freshness.
 
 ## Decisions + authorization
 
 Blockers: None
 
-The user prohibits private project information and personal data in public repository artifacts. Existing source repair and delivery authorization covers sanitizing current text and updating guidance. Git history rewriting is outside this change's authorization. One builder owns the change.
+The user authorized this bounded repair, source delivery and consumer verification. One builder; no new dependency, file or persistent state. Preserve unrelated consumer edits. Public evidence uses synthetic fixtures only.
 
 ## Acceptance + steps
 
-- [x] Current affected PR descriptions and repository documents contain generic technical evidence without private consumer identifiers.
-- [x] Shared rules and planning route to the publication boundary before private context is recorded; shipping reviews every public payload.
-- [x] Metadata and changed reference links validate; existing source gates pass. No claim of automatic detection of all private context.
+- [x] Complete delivery plans and pushes reject missing shipping policy; local-only planning remains supported.
+- [x] Completion and shipping reject stale or unverifiable installed revisions without mutating files; current installations and source development remain supported.
+- [x] Installer and handoff wording distinguish installed files, local checks and remote delivery.
+- [x] Existing tests prove failing and passing paths; source gates and verified main delivery precede consumer adoption.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: Public source revision5c6bb0de5a366b1ff53e6a63ab23b6bb30db08cf passed480 regressions,four performance tests,all17 gates, PR76CI34833412629, mainCI34833608042 and native delivered. The preserved plan was reconciled with this verified main revision before resuming. Runtime implementation remains unchanged.
+Evidence: Source9277ea9 passed17 gates,480 regressions,four performance tests, PR77 CI34838211269 and main CI34838415076 with native delivery. The previous local plan receipt is preserved outside the repository. Run Ready before implementation.
 
 ## Risks + recovery
 
-Editing current text does not remove Git history, edit history, notifications or existing copies. No history rewrite is performed. Private incident details and search terms remain outside this public repository. Secret scanners cannot identify every private business fact; human/agent content review remains required.
+Unavailable GitHub evidence blocks a freshness claim without modifying files. Hooks depend on client activation; final-report truth still needs review. No generic state machine or natural-language authorization parser.
 
 ## ux_reference
 
-N/A — publication guidance and generic documentation have no visual application surface.
+N/A — command and hook enforcement has no visual application surface.
 
 ## Verification
 
 Result: Passed
-Evidence: Sixteen affected PR descriptions were replaced with generic public-source summaries and read back. Removed private operational evidence and a personal local path from the current decision document without relabeling evidence as synthetic. Both changed skill entrypoints passed the native metadata validator; all three changed routes resolve to the single publication-privacy owner. Diff review confirms guidance and current-text cleanup only, with no runtime changes, new dependency or test file. Ready and Complete checks passed all17 gates; Complete passed480 regressions and four performance tests. Current tracked source and70 current PR titles/bodies have no matches for the known private identifiers checked. These checks establish neither historical erasure nor automatic privacy detection.
+Evidence: The added regressions exposed stale/offline completion acceptance and missing shipping enforcement before repair. The final Complete gate passed all17 gates,489 regressions and four performance tests. Native shell installation, isolated updates, Husky forwarding and committed-snapshot rejection remain verified; existing push fixtures now supply the mandatory shipping policy. The changed skill validates. Diff review confirms no new files, dependencies or stored state. Consumer adoption remains a separate delivery step.
 
 Delivery target: Merge
-Delivery: Pending — generic PR description, PR CI, exact main CI, native delivered and completed-branch cleanup.
+Delivery: Pending — source PR, exact main CI, native delivery, owned-branch cleanup and consumer verification.

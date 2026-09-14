@@ -18,6 +18,7 @@ from gate_config import (
     validate_file_sizes,
     validate_group,
 )
+from shipping import ShippingPolicy, git
 
 
 def test_file_size_boundary_and_narrow_exceptions(
@@ -631,7 +632,10 @@ def test_stale_report_cannot_pass(
 
 
 def test_pre_push_tests_committed_code(
-    installer: ModuleType, tmp_path: Path, completed_plan: str
+    installer: ModuleType,
+    tmp_path: Path,
+    completed_plan: str,
+    shipping_policy: ShippingPolicy,
 ) -> None:
     root, receiver = tmp_path / "project", tmp_path / "receiver"
     root.mkdir()
@@ -645,25 +649,30 @@ def test_pre_push_tests_committed_code(
     (root / "package.json").unlink()
     for name in ("PRODUCT.md", "DESIGN.md"):
         (root / name).write_text((Path(installer.SOURCE) / name).read_text())
-    configure(root, [gate("committed-check", "raise SystemExit(1)")])
-    subprocess.run(["git", "add", "."], cwd=root, check=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.invalid",
-            "commit",
-            "-qm",
-            "fixture",
-        ],
-        cwd=root,
-        check=True,
+    config: dict[str, object] = {
+        "packages": [],
+        "shared": [gate("committed-check", "raise SystemExit(1)")],
+        "shipping": shipping_policy,
+    }
+    path = root / "hard-eng.gates.json"
+    path.write_text(json.dumps(config))
+    git(root, "add", ".")
+    git(
+        root,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-qm",
+        "fixture",
     )
-    configure(root, [gate("local-repair", "pass")])
+    git(receiver, "fetch", str(root), "HEAD:refs/heads/main")
+    git(root, "remote", "add", "origin", str(receiver))
+    config["shared"] = [gate("local-repair", "pass")]
+    path.write_text(json.dumps(config))
     result = subprocess.run(
-        ["git", "push", str(receiver), "HEAD:refs/heads/main"],
+        ["git", "push", "origin", "HEAD:refs/heads/task"],
         cwd=root,
         capture_output=True,
         text=True,
@@ -672,12 +681,7 @@ def test_pre_push_tests_committed_code(
     assert result.returncode != 0
     assert "FAIL committed-check" in result.stdout
     assert "local-repair" in (root / "hard-eng.gates.json").read_text()
-    refs = (
-        subprocess.check_output(["git", "show-ref"], cwd=receiver, text=True)
-        if (receiver / "refs/heads/main").exists()
-        else ""
-    )
-    assert not refs
+    assert not (receiver / "refs/heads/task").exists()
     assert (
         len(
             subprocess.check_output(

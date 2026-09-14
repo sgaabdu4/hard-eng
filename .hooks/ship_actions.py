@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from shipping import Shipment, gh, git, load_policy, verify
+from update import require_current
 
 
 def remote_base(root: Path, branch: str | None) -> str:
@@ -26,21 +27,22 @@ def remote_base(root: Path, branch: str | None) -> str:
 
 
 def pre_push(root: Path) -> int:
-    policy = load_policy(root, required=False)
+    policy = load_policy(root)
+    assert policy is not None
     started = time.monotonic()
     for line in sys.stdin:
         fields = line.split()
         if len(fields) != 4:
             raise ValueError("Invalid pre-push input")
         revision = fields[1]
-        if policy and fields[2] == f"refs/heads/{policy['base']}":
+        if fields[2] == f"refs/heads/{policy['base']}":
             raise ValueError(
                 "Push a task branch and use a PR; direct base updates are blocked"
             )
         if set(revision) == {"0"}:
             continue
         base = fields[3]
-        if policy and set(base) == {"0"}:
+        if set(base) == {"0"}:
             base = remote_base(root, policy["base"])
         environment = os.environ.copy()
         for name in git(root, "rev-parse", "--local-env-vars").splitlines():
@@ -75,7 +77,7 @@ def pre_push(root: Path) -> int:
                     env=environment,
                     check=True,
                 )
-        if policy and time.monotonic() - started > policy["pre_push_seconds"]:
+        if time.monotonic() - started > policy["pre_push_seconds"]:
             raise ValueError(
                 "Pre-push verification exceeded its configured time budget"
             )
@@ -225,6 +227,7 @@ def run(
     if stage == "merge" and merge_method not in {"merge", "squash", "rebase"}:
         raise ValueError("Select the repository's merge method with --merge-method")
     proof_stage = "ready" if stage in {"ready", "merge"} else "delivered"
+    require_current(target)
     shipment = verify(target, plan_path, pr_url, proof_stage)
     if stage == "merge":
         if shipment.delivery_target == "PR":

@@ -11,6 +11,7 @@ from unittest.mock import Mock
 
 import pytest
 import ship_actions
+import update
 from shipping import Shipment, ShippingPolicy, git
 
 
@@ -314,8 +315,14 @@ def test_ship_merge_matches_verified_head_and_checks_result(
 
 
 def test_pre_push_snapshot_has_its_own_git_environment(
-    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    shipping_policy: ShippingPolicy,
 ) -> None:
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"shipping": shipping_policy})
+    )
     git(tmp_path, "config", "user.name", "Hook Fixture")
     git(tmp_path, "config", "user.email", "hook@example.invalid")
     (tmp_path / ".hooks").mkdir()
@@ -334,7 +341,7 @@ def test_pre_push_snapshot_has_its_own_git_environment(
     monkeypatch.setattr(
         sys,
         "stdin",
-        StringIO(f"refs/heads/task {revision} refs/heads/task {'0' * 40}\n"),
+        StringIO(f"refs/heads/task {revision} refs/heads/task {revision}\n"),
     )
     assert runner.pre_push() == 0
     assert len(ship_actions.worktrees(tmp_path)) == 1
@@ -448,6 +455,37 @@ def test_pre_push_blocks_base_before_running_commands(
     with pytest.raises(ValueError, match="use a PR"):
         runner.pre_push()
     commands.assert_not_called()
+
+
+def test_pre_push_rejects_missing_shipping_before_commands(
+    runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (runner.ROOT / "hard-eng.gates.json").write_text('{"packages": []}')
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(f"refs/heads/main {'1' * 40} refs/heads/main {'2' * 40}\n"),
+    )
+    commands = Mock()
+    monkeypatch.setattr(ship_actions.subprocess, "run", commands)
+    with pytest.raises(ValueError, match="shipping policy is required"):
+        runner.pre_push()
+    commands.assert_not_called()
+
+
+def test_shipping_rejects_stale_install_before_remote_action(
+    delivered_worktree: tuple[Path, Shipment], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, shipment = delivered_worktree
+    hooks = root / ".hooks"
+    hooks.mkdir()
+    (hooks / "hard-eng-source.json").write_text(json.dumps({"revision": "a" * 40}))
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
+    remote = Mock()
+    monkeypatch.setattr(ship_actions, "gh", remote)
+    with pytest.raises(ValueError, match="freshness"):
+        ship_actions.run(root, "PLAN.md", shipment.pr_url, "merge", None, "squash")
+    remote.assert_not_called()
 
 
 def test_pre_push_budget_fails_even_when_commands_pass(
