@@ -26,7 +26,7 @@ The user authorized using corrected latest releases, repairing adoption and deli
 ## Baseline + execution
 
 Result: Passed
-Evidence: Starting sourceb682126 passed17 gates,504 tests,four performance checks and exact main CI34864008477. The published lint0.11.2 has successful Dart CI34865292958,Hard Eng CI34865292902 and publication34865785889 at6b43340087f7a03f8460cb0872d93e4e8d5928fb. Canonical skill98b6e42f5c87b27340a19c9172d7d415d3352a7e has successful CI34866797134 including its hosted compatibility fixture. The adoption gap is identified in the existing source owners.
+Evidence: Starting sourceb682126 passed17 gates,504 tests,four performance checks and exact main CI34864008477. The published lint0.11.2 has successful Dart CI34865292958,Hard Eng CI34865292902 and publication34865785889 at6b43340087f7a03f8460cb0872d93e4e8d5928fb. Canonical skill98b6e42f5c87b27340a19c9172d7d415d3352a7e has successful settlement CI34866797134. Its release owner reports a separate successful local compatibility fixture against hosted packages. The adoption gap is identified in the existing source owners.
 
 ## Risks + recovery
 
@@ -39,7 +39,7 @@ N/A — dependency declarations and installer migration have no visible interfac
 ## Verification
 
 Result: Passed
-Evidence: The four exact/caret0.11.0/0.11.1 regression cases fail against the original migration and pass after the bounded pattern change.119 configuration, installer and update tests pass; Ruff formatting/lint and Pyrefly pass. The linked canonical skill and its exact hosted compatibility CI were reviewed. Final integrated Complete gate pending.
+Evidence: The four exact/caret0.11.0/0.11.1 regression cases fail against the original migration and pass after the bounded pattern change.119 configuration, installer and update tests pass; Ruff formatting/lint and Pyrefly pass. The linked canonical skill, exact settlement CI and separate compatibility-run handoff were reviewed. Final integrated result follows below.
 
 Delivery target: Merge
 Ready for ship — final Complete gate passed17 checks,510 tests and four performance checks. The full test suite completed in115.37seconds; no suppressed checks or project changes.
