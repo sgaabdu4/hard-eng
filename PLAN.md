@@ -23,6 +23,7 @@ The user authorized implementation and delivery with YAGNI, speed and parallel w
 - [x] Inspect the native API/autofix regression owners: synchronous response/no-polling assertions and actual rewritten-source reanalysis already cover the concrete failures. No generic semantic certification or mock scanner is claimed.
 - [x] Make successful planning/build gates and invoked lifecycle hooks report their stage without extra checks or false delivery claims.
 - [x] Focused negative/positive checks pass; review corrections cover package-directory resolution, audit wiring and custom command arguments. The source diff uses existing owners, one extracted Fallow report module and no additional dependency, recurring callback or stored state.
+- [x] Prepare committed submodules in the existing temporary pre-push checkout and prove original checkout edits are preserved.
 
 ## Baseline + execution
 
@@ -42,7 +43,7 @@ N/A — repository-local CLI verification with no product appearance change.
 Result: Passed
 Evidence: Final Complete gate passed all 17 checks: 538 tests, four performance checks, zero typing diagnostics and 87.78% line coverage. Independent review found an early dependency-failure handoff gap; the existing runner now reports the blocked stage, with success/failure coverage for both execution paths. Integrated runs also exposed type narrowing, package-manager validation ordering and first-party module classification; all are repaired. Original gate code accepted the synthetic disabled-metric and warning-suppression commands; the new gate rejects both. The unmodified native Fallow 3.22.0 audit report passes validation. Native hook tests cover output contracts, exact owned-definition migration, custom-hook preservation, repeat setup and real CLI-to-Stop integration. Canonical service and autofix suites retain the domain-specific behavioral proof. An anonymous tool-download rate limit was resolved using existing authentication without changing checks or tool versions.
 
-Ready for ship — local implementation and verification complete; delivery not performed.
+Pre-push exposed missing canonical submodules in its temporary checkout. The existing pre-push function now initializes the committed submodules before checking. All 27 native shipping tests passed, including a real Git fixture that reads committed module content in the snapshot, preserves original local edits and removes the temporary worktree. The final Complete check runs through pre-push on the combined committed revision before publication.
 
 Delivery target: Merge
 Delivery: Pending — PR checks, merge and exact main CI remain required.

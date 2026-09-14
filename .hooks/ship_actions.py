@@ -56,6 +56,13 @@ def pre_push(root: Path) -> int:
                 check=True,
             )
             try:
+                if (checkout / ".gitmodules").is_file():
+                    subprocess.run(
+                        ["git", "submodule", "update", "--init", "--recursive"],
+                        cwd=checkout,
+                        env=environment,
+                        check=True,
+                    )
                 result = subprocess.run(
                     [
                         sys.executable,
