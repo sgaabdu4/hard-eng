@@ -39,7 +39,7 @@ N/A — candidate verification has no visual interface.
 ## Verification
 
 Result: Passed
-Evidence: The original native candidate failed with Draft requiring Complete before application execution. The updated candidate/plan suite passed73 tests across all plan states, actual passing/failing application commands, remote-base discovery and local index/file preservation. Final Complete gate passed all17 gates,508 regressions and four performance tests. Review confirmed no CLI bypass flag, dependency or new file. Ready for ship — local verification complete; remote delivery remains pending.
+Evidence: The original native candidate failed with Draft requiring Complete before application execution. Native candidate tests now cover all plan states, actual passing/failing application commands, remote-base discovery and local index/file preservation without duplicating every failure across every plan state. Final Complete gate passed all17 gates,496 regressions and four performance tests. Review confirmed no CLI bypass flag, dependency or new file. Ready for ship — local verification complete; remote delivery remains pending.
 
 Delivery target: Merge
 Delivery: Pending — PR, exact main CI and native delivered proof remain required.

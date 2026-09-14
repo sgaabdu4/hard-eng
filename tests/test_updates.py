@@ -404,15 +404,16 @@ def test_project_configuration_update_runs_application_checks(
     assert "FAIL application-check" in capfd.readouterr().err
 
 
-@pytest.mark.parametrize("outcome", ["pass", "application-failure", "missing-base"])
+@pytest.mark.parametrize(
+    "outcome",
+    ["Draft", "Ready", "Complete", "absent", "application-failure", "missing-base"],
+)
 @pytest.mark.parametrize("configured_base", [True, False])
-@pytest.mark.parametrize("plan_status", ["Draft", "Ready", "Complete", None])
 def test_candidate_uses_remote_task_plan_scope(
     release: tuple[Path, Path, str],
     completed_plan: str,
     outcome: str,
     configured_base: bool,
-    plan_status: str | None,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
     source, target, _ = release
@@ -454,11 +455,10 @@ def test_candidate_uses_remote_task_plan_scope(
     git(target, "remote", "add", "origin", str(remote))
     git(target, "switch", "-c", "feature/update")
     plan = target / "features/current/PLAN.md"
-    if plan_status:
+    if outcome != "absent":
         plan.parent.mkdir(parents=True)
-        plan.write_text(
-            completed_plan.replace("Status: Complete", f"Status: {plan_status}")
-        )
+        status = outcome if outcome in ("Draft", "Ready") else "Complete"
+        plan.write_text(completed_plan.replace("Status: Complete", f"Status: {status}"))
         commit(target, "task plan")
     git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
     stale = git(target, "rev-parse", "origin/main")
@@ -474,7 +474,7 @@ def test_candidate_uses_remote_task_plan_scope(
     links: dict[str, str | None] = {"new-link": "project.txt"}
     (target / "unrelated.txt").write_text("staged local work\n")
     git(target, "add", "unrelated.txt")
-    if outcome == "pass":
+    if outcome not in {"application-failure", "missing-base"}:
         update.verify_candidate(target, source, changes, links, candidate)
     else:
         error = (
