@@ -30,6 +30,7 @@ flowchart TD
 
 ## Plan + questions
 
+- Tracked evidence = apply [publication privacy](../he-ship/references/checks.md#publication-privacy) before writing plans or attaching evidence.
 - Both sizes = [PLAN.md](templates/PLAN.md), short entries for small work; one plan per effort at root or `features/<slug>/PLAN.md` (filename case-insensitive). Reuse the same plan. Fill every section; `N/A — reason` must explain inapplicability from repository facts. Unavailable tools, failed checks + missing proof are blockers, never N/A.
 - Questions = inspect repository facts first; ask only user-dependent choices that can change outcome, UX, scope or material risk. Resolve prerequisite choices first; batch independent questions with a recommendation + consequences. Never supply the human's answer or treat silence as approval. Clear request → no ritual interview.
 - Proof = reconcile every material requested behavior + preserved constraint with an intended check + observable expected result in Acceptance + steps; explicitly mark exclusions or blockers. Use [test design](../he/references/testing.md) + [E2E](../e2e/SKILL.md) for applicable proof. Ready needs planned feature proof + actual baseline/UX evidence; Complete needs actual feature results.
