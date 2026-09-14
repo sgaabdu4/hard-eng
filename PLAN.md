@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current Decimate installation repair: install the latest published dart-decimate npm package through the existing tool provisioner, like Fallow/React Doctor, instead of compiling Git source with Cargo. Native isolated pnpm-backed mise installation succeeds; its default embedded installer rejected this package. Select pnpm for managed npm installs with only Decimate's reviewed lifecycle script allowed, preserve live latest-version resolution and scanner failure behavior, and remove the now-unneeded Rust runtime from newly generated Dart workflows. Reuse tool_setup/project_setup and existing tests; no new package dependency or cache mechanism. PR62 supplies the verified source baseline. Measure fresh install and actual scanner behavior, not just command mocks.
+
 Current CI timeout repair: generated consumer workflows must honor the configured shipping CI budget instead of copying Hard Eng's own three-minute timeout. Derive minutes by rounding up validated ci_seconds; retain the source default without a policy and preserve existing project workflows. Reuse configure_ci and shipping policy validation. A focused test file is needed because test_setup.py is at 700 lines; no runtime dependency. Existing consumer workflow timeout remains an explicitly reviewed project configuration edit because setup preserves it. PR61 supplies matching source baseline proof.
 
 Current updater plan-scope repair: non-scaffold candidate checks must retain the consuming task's committed plan scope. Resolve the current configured remote shipping base using the same exact-SHA operation as initial pushes; compare the candidate against it instead of only HEAD. The changed source marker forces all application groups. Reuse ship_actions/update and native transaction tests; no new files, dependencies or fabricated plan state. PR60 provides the verified source baseline.
@@ -47,6 +49,9 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] Decimate uses its latest published package, with no Cargo install path; wrapped tools and existing SDK PATH remain available.
+- [x] Native clean/failing scanner fixtures and cold package installation pass; generated Dart CI does not require Rust solely for Decimate, and full gates pass.
 
 - [x] Generated workflow uses the configured CI budget in whole minutes; absent policy preserves the source default and malformed policy fails closed.
 - [x] Existing custom workflow stays byte-exact; meaningful regressions and diff review pass.
@@ -124,6 +129,10 @@ A structural check cannot prove truthful evidence, actual approval or that a pla
 N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has no visual application.
 
 ## Verification
+
+Decimate package release: final Complete-stage check passed all 17 gates, 464 regressions and four performance tests (`/tmp/he-decimate-package-complete.log`). Source PR/main/native delivery and both consumer adoptions remain pending.
+
+Decimate package repair: Ready-stage full check passed all 17 gates, 464 regressions and four performance tests (`/tmp/he-decimate-package-ready.log`). Original provisioning/workflow assertions fail before repair; 95 affected cases pass afterward. Actual isolated installation of Fallow, React Doctor and Decimate completed in 15.54s, Decimate in 1.8s; clean and unreachable-private-source fixture reports passed/rejected through the existing validator, with scans about 0.05s (`/tmp/he-decimate-native-package.log`, `/tmp/he-decimate-native-validation.log`). Public library exports are legitimate entrypoints; the initial public-library fixture was corrected before claiming failure detection. The default embedded npm installer rejected Decimate, while switching every tool to pnpm affected React Doctor, so pnpm and the named lifecycle approval are scoped only to Decimate. Existing latest resolution and other tool paths remain. No custom cache, source-build fallback or added production file. Final Complete gate and source PR/main/native delivery follow; hosted consumer timing and the user's requested broader audit remain separate subsequent work after both consumers adopt.
 
 CI timeout release: final Complete-stage gate passed all 17 checks, 463 regressions and four performance tests (`/tmp/he-ci-timeout-complete.log`). Source PR/main CI and native delivery remain pending; consumer hosted retry is separate evidence.
 

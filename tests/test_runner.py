@@ -486,7 +486,7 @@ def test_coverage_excludes_native_generated_and_vendor_attributes(
     assert len(runner.production_files(tmp_path, group, include_tests=True)) == 3
 
 
-def test_wrapped_actionlint_keeps_separate_dart_provisioning(
+def test_wrapped_actionlint_and_decimate_use_latest_packages(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     commands: list[list[str]] = []
@@ -507,9 +507,10 @@ def test_wrapped_actionlint_keeps_separate_dart_provisioning(
     }
     tool_setup.provision_tools(tmp_path, [group], 30)
     assert "aqua:rhysd/actionlint@latest" in commands[0]
-    assert commands[1][:2] == ["cargo", "install"]
-    assert commands[1][-1] == "dart-decimate"
-    assert os.environ["PATH"].startswith(str(tmp_path / "hard-eng-tools/decimate/bin"))
+    assert 'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest' in commands[1]
+    assert "MISE_NPM_PACKAGE_MANAGER=pnpm" in commands[1]
+    assert "MISE_NPM_PACKAGE_MANAGER=pnpm" not in commands[0]
+    assert len(commands) == 2
 
 
 @pytest.mark.parametrize("wrapped", [False, True])
