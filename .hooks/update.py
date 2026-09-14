@@ -254,16 +254,25 @@ def verify_candidate(
         command = (
             [sys.executable, "-m", "compileall", "-q", str(candidate / ".hooks")]
             if only_scaffold
-            else [sys.executable, str(candidate / ".hooks/hard-eng.py"), "check"]
+            else [
+                sys.executable,
+                "-I",
+                "-c",
+                (
+                    "import runpy, sys; "
+                    "sys.path.insert(0, '.hooks'); "
+                    "raise SystemExit(runpy.run_path('.hooks/hard-eng.py')['check']("
+                    "base=sys.argv[1], verify_plan=False))"
+                ),
+            ]
         )
         if not only_scaffold:
             from ship_actions import remote_base
             from shipping import load_policy
 
             policy = load_policy(candidate, required=False)
-            command.extend(
-                ["--base", remote_base(candidate, policy["base"] if policy else None)]
-            )
+            # An update candidate is verification input, not a completed task.
+            command.append(remote_base(candidate, policy["base"] if policy else None))
         subprocess.run(
             command, cwd=candidate, stdout=sys.stderr, check=True, timeout=3500
         )

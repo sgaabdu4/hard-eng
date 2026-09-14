@@ -586,7 +586,11 @@ def run_gate(
 
 
 def check(
-    timeout: float = 600, base: str | None = None, plan_stage: str | None = None
+    timeout: float = 600,
+    base: str | None = None,
+    plan_stage: str | None = None,
+    *,
+    verify_plan: bool = True,
 ) -> int:
     from gate_config import load_groups
     from update import check_scaffold_update
@@ -597,7 +601,8 @@ def check(
     groups = load_groups(ROOT, base)
     from plans import validate_plans
 
-    validate_plans(ROOT, base, plan_stage)
+    if verify_plan:
+        validate_plans(ROOT, base, plan_stage)
     provision_tools(ROOT, groups, timeout)
     output_lock = threading.Lock()
 

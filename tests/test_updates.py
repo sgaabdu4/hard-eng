@@ -382,7 +382,6 @@ def test_overlapping_local_edit_prevents_update(
 def test_project_configuration_update_runs_application_checks(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
-    completed_plan: str,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
     source, target, old = release
@@ -390,8 +389,7 @@ def test_project_configuration_update_runs_application_checks(
     git(target, "clone", "--bare", str(target), str(remote))
     git(target, "remote", "add", "origin", str(remote))
     (target / "package.json").unlink()
-    (target / "PLAN.md").write_text(completed_plan)
-    commit(target, "completed task plan")
+    commit(target, "application without task plan")
     installer = source / "setup.py"
     installer.write_text(
         installer.read_text().replace('"coverage/"', '"coverage/", "fixture-cache/"')
@@ -406,7 +404,10 @@ def test_project_configuration_update_runs_application_checks(
     assert "FAIL application-check" in capfd.readouterr().err
 
 
-@pytest.mark.parametrize("outcome", ["pass", "application-failure", "missing-base"])
+@pytest.mark.parametrize(
+    "outcome",
+    ["Draft", "Ready", "Complete", "absent", "application-failure", "missing-base"],
+)
 @pytest.mark.parametrize("configured_base", [True, False])
 def test_candidate_uses_remote_task_plan_scope(
     release: tuple[Path, Path, str],
@@ -420,7 +421,7 @@ def test_candidate_uses_remote_task_plan_scope(
     (target / "package.json").unlink()
     config_path = target / "hard-eng.gates.json"
     config = json.loads(config_path.read_text())
-    config["shipping"] = {
+    policy: ShippingPolicy = {
         "base": "main",
         "checks": ["fixture"],
         "ui_paths": [],
@@ -428,6 +429,7 @@ def test_candidate_uses_remote_task_plan_scope(
         "pre_push_seconds": 180,
         "delivery": [],
     }
+    config["shipping"] = policy
     if not configured_base:
         del config["shipping"]
     command = (
@@ -443,11 +445,8 @@ def test_candidate_uses_remote_task_plan_scope(
     config["shared"][0]["command"] = ["python3", "-c", command]
     config_path.write_text(json.dumps(config))
     (target / "removed.txt").write_text("old managed content\n")
-    historical = target / "features/historical/PLAN.md"
-    historical.parent.mkdir(parents=True)
-    historical.write_text("# Historical document without native plan fields\n")
     git(target, "branch", "-M", "main")
-    commit(target, "remote baseline with historical document")
+    commit(target, "remote baseline")
     remote = target.parent / "remote.git"
     git(target, "clone", "--bare", str(target), str(remote))
     if configured_base:
@@ -456,9 +455,11 @@ def test_candidate_uses_remote_task_plan_scope(
     git(target, "remote", "add", "origin", str(remote))
     git(target, "switch", "-c", "feature/update")
     plan = target / "features/current/PLAN.md"
-    plan.parent.mkdir()
-    plan.write_text(completed_plan)
-    commit(target, "completed authorized task plan")
+    if outcome != "absent":
+        plan.parent.mkdir(parents=True)
+        status = outcome if outcome in ("Draft", "Ready") else "Complete"
+        plan.write_text(completed_plan.replace("Status: Complete", f"Status: {status}"))
+        commit(target, "task plan")
     git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
     stale = git(target, "rev-parse", "origin/main")
     (target / "project.txt").write_text("unrelated local edit\n")
@@ -473,7 +474,7 @@ def test_candidate_uses_remote_task_plan_scope(
     links: dict[str, str | None] = {"new-link": "project.txt"}
     (target / "unrelated.txt").write_text("staged local work\n")
     git(target, "add", "unrelated.txt")
-    if outcome == "pass":
+    if outcome not in {"application-failure", "missing-base"}:
         update.verify_candidate(target, source, changes, links, candidate)
     else:
         error = (

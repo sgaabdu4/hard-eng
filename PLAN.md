@@ -1,45 +1,45 @@
-# Route repeated bootstrap through the supported updater
+# Verify automatic update candidates before task completion
 
 Status: Complete
 
 ## Outcome + scope
 
-Make the documented bootstrap command install new projects and update recorded installations through the existing transaction. Upstream-managed changes must not be mistaken for local customizations by the initial-install path.
+Allow automatic updates to verify changed project configuration before a task has completed, including when no task plan exists. Keep all application gates, transactional preservation and normal completion/shipping requirements.
 
 ## Repository context
 
-setup.sh always calls setup.py without a previous source. The existing update.update function already selects a verified release, compares managed versions and preserves local changes. Reuse it; do not duplicate migration logic.
+The updater stages a detached candidate then invokes the normal check command, which infers Complete from non-Markdown changes. This requires completion evidence before the update can be applied. The existing runner owns both plan validation and native gates; separate those responsibilities only for the internal updater call.
 
 ## Decisions + authorization
 
 Blockers: None
 
-The user reported this bootstrap failure during the authorized setup repair. One builder; change the existing shell entrypoint, bootstrap test and install output/documentation only. The startup investigation also found host-owned hook trust distinct from project trust; state that prerequisite without auto-approving hooks. No new file, dependency or state.
+The user authorized auditing running tasks and correcting shared Hard Eng defects with strict YAGNI. One builder; touch the existing runner, updater, updater tests and README. No new file, dependency, persistent state or public bypass flag. Use synthetic fixtures in this public repository.
 
 ## Acceptance + steps
 
-- [x] A project without an installed marker still uses initial setup.
-- [x] A recorded installation uses the supported update transaction, accepts upstream-managed changes and preserves unrelated local work.
-- [x] Existing conflict/rollback/update tests remain passing; shell and source checks pass before delivery.
-- [x] Installation guidance identifies Codex hook trust as a separate activation prerequisite; no global trust settings are changed.
+- [x] Candidate application gates run with Draft, Ready, Complete or absent task plans.
+- [x] A failing application gate or missing remote base still rejects the update and preserves local files/index.
+- [x] Normal check, completion and shipping plan requirements remain enforced.
+- [x] The focused regression fails on the original boundary and passes after the correction.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: Source95c130b and the identical local implementation passed all17 gates,489 regressions,four performance tests, PR78 CI34841193400, main CI34841423043 and native delivered. Reuse this matching baseline; validate the new Ready plan before code edits. The previous local delivery receipt is preserved outside the repository.
+Evidence: Matching source62aaa63 passed all17 gates,490 regressions,four performance tests, PR79 CI34843080857, main CI34843538127 and native delivered. Reuse this unchanged implementation baseline; validate the Ready plan before code edits and reproduce the candidate planning failure in the existing native fixture.
 
 ## Risks + recovery
 
-Existing updater conflicts remain real blockers. No manual marker changes, file-by-file overwrite or background update concurrent with edits. The bootstrap still requires access to its source; installed updates also need the existing GitHub verification access.
+Only the internal updater call omits task-plan validation; it cannot declare completion or ship. Application failures, managed conflicts, missing base and transaction rollback remain blockers. Host hook trust/activation remains separately unverified.
 
 ## ux_reference
 
-N/A — shell bootstrap has no visual interface.
+N/A — candidate verification has no visual interface.
 
 ## Verification
 
 Result: Passed
-Evidence: The actual shell bootstrap passed fresh installation and failed the existing-installation case before repair. Both cases passed after routing recorded installations to the real updater transaction, with release discovery controlled by the fixture and unrelated local work preserved. The final Complete gate passed all17 gates,490 regressions and four performance tests, including existing updater conflict/rollback coverage. Hook trust guidance was checked against official OpenAI documentation; no global trust settings were changed. Actual host activation remains distinct from registration and manual command proof.
+Evidence: The original native candidate failed with Draft requiring Complete before application execution. Native candidate tests now cover all plan states, actual passing/failing application commands, remote-base discovery and local index/file preservation without duplicating every failure across every plan state. Final Complete gate passed all17 gates,496 regressions and four performance tests. Review confirmed no CLI bypass flag, dependency or new file. Ready for ship — local verification complete; remote delivery remains pending.
 
 Delivery target: Merge
-Delivery: Pending — source delivery and observed consumer adoption.
+Delivery: Pending — PR, exact main CI and native delivered proof remain required.
