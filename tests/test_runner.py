@@ -508,10 +508,10 @@ def test_wrapped_actionlint_and_decimate_use_latest_packages(
     }
     tool_setup.provision_tools(tmp_path, [group], 30)
     assert "aqua:rhysd/actionlint@latest" in commands[0]
-    assert 'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest' in commands[1]
-    assert "MISE_NPM_PACKAGE_MANAGER=pnpm" in commands[1]
+    assert 'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest' in commands[2]
+    assert "MISE_NPM_PACKAGE_MANAGER=pnpm" in commands[2]
     assert "MISE_NPM_PACKAGE_MANAGER=pnpm" not in commands[0]
-    assert len(commands) == 2
+    assert len(commands) == 4
 
 
 @pytest.mark.parametrize("wrapped", [False, True])
@@ -531,7 +531,7 @@ def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
     def native_environment(
         command: list[str], **_kwargs: object
     ) -> subprocess.CompletedProcess[str]:
-        captured.extend(command)
+        captured[:] = command
         return subprocess.CompletedProcess(
             command, 0, json.dumps({"PATH": str(scanner)}), ""
         )
