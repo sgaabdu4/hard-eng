@@ -39,8 +39,6 @@ def project_pre_push(root: Path, hook: Path) -> Path:
 def hook_events(agent: str) -> dict[str, str]:
     events = {
         "session": "SessionStart",
-        "prompt": "UserPromptSubmit",
-        "tool": "PostToolUse",
         "failure": "PostToolUseFailure",
         "stop": "Stop",
     }
@@ -49,13 +47,32 @@ def hook_events(agent: str) -> dict[str, str]:
     if agent == "copilot":
         events.update(
             session="sessionStart",
-            tool="postToolUse",
             failure="postToolUseFailure",
             stop="agentStop",
         )
-        # Config-file prompt hook output is dropped by Copilot.
-        del events["prompt"]
     return events
+
+
+def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
+    """Remove only the exact routine registrations previously installed by us."""
+    hooks = current.get("hooks", {})
+    if not isinstance(hooks, dict):
+        raise TypeError("Conflicting hooks: expected an object")
+    for event, native in (("prompt", "UserPromptSubmit"), ("tool", "PostToolUse")):
+        if agent == "copilot" and event == "prompt":
+            continue
+        call = f"{command} {event} {agent}"
+        owned: JsonObject = {
+            "hooks": [{"type": "command", "command": call, "timeout": 10}]
+        }
+        if agent == "copilot":
+            native = "postToolUse"
+            owned = {"type": "command", "bash": call, "timeoutSec": 10}
+        entries = hooks.get(native)
+        if isinstance(entries, list) and owned in entries:
+            entries.remove(owned)
+            if not entries:
+                del hooks[native]
 
 
 def learning_context(event: str) -> str:
@@ -108,22 +125,8 @@ def session_context(root: Path, payload: JsonObject) -> str:
         except (OSError, subprocess.SubprocessError):
             messages.append("Session revision unavailable; use full checks.")
     messages.append(
-        "Use the active Context Mode and Codebase Memory MCP tools for this repository; verify a real call and the repository/index before claiming readiness. If unavailable, warn and continue with available tools."
+        "Use configured MCPs when relevant to the task. Before relying on one, verify a real call against the intended repository/index, service project or running app/device; registration alone is not readiness. If unavailable, warn and continue with available tools."
     )
-    for service in integrated_services(root):
-        if service == "Dart":
-            messages.append(
-                "This repository contains Flutter. Use the configured Dart MCP: verify its project roots and perform a read-only analysis or runtime inspection for this repository. The native Dart package launcher downloads the server on demand and requires a compatible Dart SDK. If startup or the call fails, warn and continue; registration alone does not prove readiness."
-            )
-            continue
-        if service == "Marionette":
-            messages.append(
-                "This repository contains Flutter. Use the configured Marionette MCP: connect to the intended debug app's VM service URI, then call get_interactive_elements or take_screenshots to verify the app/device. If the server, marionette_flutter binding or running app is unavailable, warn and continue; do not claim readiness from installation alone."
-            )
-            continue
-        messages.append(
-            f"This repository imports {service}. Use its configured MCP for a read-only call to verify the intended project and endpoint/organization. If configuration or access is missing, warn and continue; do not invent credentials or claim readiness."
-        )
     messages.append(learning_context("start/resume"))
     return " ".join(messages)
 

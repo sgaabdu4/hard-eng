@@ -663,25 +663,25 @@ def test_hook_registrations_invoke_shared_runner(
         (
             "claude",
             ".claude/settings.json",
-            "SessionStart UserPromptSubmit PostToolUse PostToolUseFailure Stop",
+            "SessionStart PostToolUseFailure Stop",
         ),
         (
             "codex",
             ".codex/hooks.json",
-            "SessionStart UserPromptSubmit PostToolUse Stop",
+            "SessionStart Stop",
         ),
         (
             "copilot",
             ".github/hooks/hard-eng.json",
-            "sessionStart postToolUse postToolUseFailure agentStop",
+            "sessionStart postToolUseFailure agentStop",
         ),
     ):
         hooks = json.loads((root / path).read_text())["hooks"]
         assert set(hooks) == set(events.split())
         calls = {
-            "codex": ("session", "prompt", "tool", "stop"),
-            "claude": ("session", "prompt", "tool", "failure", "stop"),
-            "copilot": ("session", "tool", "failure", "stop"),
+            "codex": ("session", "stop"),
+            "claude": ("session", "failure", "stop"),
+            "copilot": ("session", "failure", "stop"),
         }[agent]
         for event, native in zip(calls, events.split(), strict=True):
             (registration,) = hooks[native]
