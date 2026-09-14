@@ -1,6 +1,7 @@
 """Adapt native template commands to the target project's existing stack."""
 
 import json
+import math
 import os
 import re
 import shlex
@@ -486,6 +487,19 @@ def import_configuration(directory: Path, package: Group, content: str) -> str:
     )
 
 
+def workflow_budget(root: Path, content: str) -> str:
+    from shipping import load_policy
+
+    policy = load_policy(root, required=False)
+    if policy is None:
+        return content
+    return re.sub(
+        r"(?m)^    timeout-minutes: \d+$",
+        f"    timeout-minutes: {math.ceil(policy['ci_seconds'] / 60)}",
+        content,
+    )
+
+
 def configure_ci(
     root: Path, source: Path, config: GateConfig, changes: dict[str, str]
 ) -> None:
@@ -519,3 +533,4 @@ def configure_ci(
         .read_text()
         .replace("uv@latest python@3.12 node@latest", " ".join(tools))
     )
+    changes[name] = workflow_budget(root, changes[name])
