@@ -14,6 +14,7 @@ from gate_config import (
     GateConfig,
     Group,
     JsonObject,
+    Report,
     nonproduction_source,
     repository_files,
     typescript_packages,
@@ -23,22 +24,70 @@ PACKAGE_MANAGERS = {"npm", "npx", "pnpm", "yarn", "yarnpkg", "bun", "bunx"}
 
 
 def migrate_dart_plugins(options: JsonObject, source: Path) -> None:
-    """Keep known older plugin pins compatible with the modern Dart profile."""
+    """Upgrade ordinary older pins to the installed canonical Dart profile."""
     import yaml
 
     plugins = options.get("plugins")
     if not isinstance(plugins, dict):
         return
     version = plugins.get("flutter_skill_lints")
-    if isinstance(version, str) and re.fullmatch(
-        r"\^?0\.(?:(?:[0-9]|10)\.\d+|11\.[01])", version
-    ):
+    installed = (
+        re.fullmatch(r"\^?(\d+)\.(\d+)\.(\d+)", version or "")
+        if isinstance(version, str)
+        else None
+    )
+    if installed:
         template = (
             source
             / ".agents/skills/building-flutter-apps/references/analysis_options.yaml"
         )
         canonical = yaml.safe_load(template.read_text())
-        plugins["flutter_skill_lints"] = canonical["plugins"]["flutter_skill_lints"]
+        current = canonical["plugins"]["flutter_skill_lints"]
+        latest = re.fullmatch(r"\^?(\d+)\.(\d+)\.(\d+)", current)
+        if latest is None:
+            raise ValueError(
+                "Canonical Flutter lint version must be an exact or caret version"
+            )
+        if tuple(map(int, installed.groups())) < tuple(map(int, latest.groups())):
+            plugins["flutter_skill_lints"] = current
+
+
+def validate_command_output(
+    command: list[str], directory: Path, report: Report
+) -> None:
+    arguments = package_script_arguments(command, directory)
+    options = shlex.split(os.environ.get("NODE_OPTIONS", ""))
+    suppressed = os.environ.get("NODE_NO_WARNINGS") == "1"
+    for argument in arguments:
+        key, _, value = argument.partition("=")
+        if key == "NODE_OPTIONS":
+            options.extend(shlex.split(value))
+        suppressed |= key == "NODE_NO_WARNINGS" and value == "1"
+    if suppressed or "--no-warnings" in [*arguments, *options]:
+        raise ValueError(
+            "Verification cannot suppress all Node warnings; repair the warning owner or use a justified narrow native exception"
+        )
+    validate_fallow_command(arguments, report)
+
+
+def validate_fallow_command(arguments: list[str], report: Report) -> None:
+    invocation = arguments[2:] if arguments[:2] == ["pnpm", "dlx"] else arguments
+    if not invocation or Path(invocation[0]).name.split("@", 1)[0] != "fallow":
+        return
+    for index, argument in enumerate(arguments):
+        flag, separator, value = argument.partition("=")
+        if flag == "--max-crap":
+            value = (
+                value if separator else next(iter(arguments[index + 1 : index + 2]), "")
+            )
+            if not math.isfinite(float(value)) or float(value) <= 0:
+                raise ValueError(
+                    "Fallow CRAP enforcement cannot be disabled; repair its coverage input"
+                )
+    if "audit" in arguments and report.get("type") != "fallow":
+        raise ValueError(
+            "Fallow audit gates require a native fallow report; exit status alone cannot prove enabled metrics"
+        )
 
 
 def is_shell_script(path: Path) -> bool:
@@ -65,15 +114,35 @@ def package_script_arguments(
         executable = Path(arguments[0]).name
         if pnpm_only and executable in PACKAGE_MANAGERS - {"pnpm"}:
             raise ValueError(f"JavaScript checks must use pnpm, not: {executable}")
+        if executable in {"npm", "pnpm", "yarn", "bun"}:
+            while len(arguments) > 2 and arguments[1].split("=", 1)[0] in {
+                "--dir",
+                "--prefix",
+                "-C",
+            }:
+                _, separator, value = arguments[1].partition("=")
+                directory = (
+                    directory / (value if separator else arguments[2])
+                ).resolve()
+                arguments = [arguments[0], *arguments[2 if separator else 3 :]]
+            if (
+                len(arguments) > 1
+                and arguments[1].startswith("-")
+                and any(value in arguments for value in ("run", "run-script"))
+            ):
+                raise ValueError(
+                    "Use an explicit package directory and run script for verification; package selectors are not supported"
+                )
         if (
             executable not in {"npm", "pnpm", "yarn", "bun"}
             or len(arguments) <= 2
             or arguments[1] not in {"run", "run-script"}
         ):
             break
-        if arguments[2] in scripts_seen:
+        identity = (directory.resolve(), arguments[2])
+        if identity in scripts_seen:
             raise ValueError("Recursive package test script")
-        scripts_seen.add(arguments[2])
+        scripts_seen.add(identity)
         package = json.loads((directory / "package.json").read_text())
         script = package.get("scripts", {}).get(arguments[2])
         if not isinstance(script, str):
@@ -436,6 +505,10 @@ def javascript_files(directory: Path) -> list[str]:
 
 def adapt_javascript(directory: Path, package: Group, manager: str) -> None:
     manifest = json.loads((directory / "package.json").read_text())
+    if "check:fallow" in manifest.get("scripts", {}):
+        for gate in package["checks"]:
+            if gate.get("role") == "dead-code-duplicates":
+                gate["command"] = [manager, "run", "check:fallow"]
     dependencies = {
         **manifest.get("dependencies", {}),
         **manifest.get("devDependencies", {}),

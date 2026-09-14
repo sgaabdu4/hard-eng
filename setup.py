@@ -106,7 +106,7 @@ def agent_instructions(root: Path, previous: Path | None = None) -> str:
 
 
 def configure_hooks(root: Path, changes: dict[str, str]) -> None:
-    from agent_hooks import hook_events, remove_routine_hooks
+    import agent_hooks
 
     command = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py"'
     for agent, name in (
@@ -115,21 +115,21 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
         ("copilot", ".github/hooks/hard-eng.json"),
     ):
         hooks: JsonObject = {}
-        for event, native in hook_events(agent).items():
-            call = f"{command} {event} {agent}"
+        for event, native in agent_hooks.hook_events(agent).items():
             timeout = 3600 if event in {"session", "stop"} else 10
+            status_message = (
+                agent_hooks.CODEX_HOOK_STATUS.get(event) if agent == "codex" else None
+            )
             hooks[native] = [
-                {"hooks": [{"type": "command", "command": call, "timeout": timeout}]}
+                agent_hooks.owned_hook_entry(
+                    agent, event, command, timeout, status_message=status_message
+                )
             ]
-            if agent == "copilot":
-                hooks[native] = [
-                    {"type": "command", "bash": call, "timeoutSec": timeout}
-                ]
         target = root / name
         current: JsonObject = json.loads(target.read_text()) if target.exists() else {}
         if current.get("disableAllHooks"):
             raise ValueError(f"{agent} hooks are disabled; ask before changing that")
-        remove_routine_hooks(current, agent, command)
+        agent_hooks.remove_routine_hooks(current, agent, command)
         additions: JsonObject = {"hooks": hooks}
         if agent == "copilot":
             additions["version"] = 1

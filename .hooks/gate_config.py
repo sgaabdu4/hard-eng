@@ -150,6 +150,20 @@ def dart_rule_settings(value: object) -> object:
     return value
 
 
+def validate_dart_plugins(options: JsonObject) -> None:
+    from project_setup import migrate_dart_plugins
+
+    plugins = options.get("plugins")
+    if not isinstance(plugins, dict):
+        return
+    updated: JsonObject = {"plugins": dict(plugins)}
+    migrate_dart_plugins(updated, Path(__file__).resolve().parents[1])
+    if updated["plugins"] != plugins:
+        raise ValueError(
+            "Flutter lint version is older than the installed canonical profile; run the supported Hard Eng updater"
+        )
+
+
 def validate_dart_exclusions(directory: Path, values: object) -> None:
     allowed = {
         ".dart_tool/**",
@@ -295,6 +309,9 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
         raise ValueError(
             f"{gate['name']}: put the executable in command; separate tool fields are unsupported"
         )
+    from project_setup import validate_command_output
+
+    validate_command_output(command, directory, report)
 
 
 def validate_dart_boundaries(
@@ -475,15 +492,15 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         raise ValueError(
             "Missing mandatory performance suite; configure a workload and budget"
         )
-    for gate in group["checks"]:
-        validate_gate(gate, directory, report_paths)
-        validate_performance_gate(gate)
     if group.get("language") == "javascript":
         from project_setup import javascript_manager, package_script_arguments
 
         javascript_manager(directory)
         for gate in group["checks"]:
             package_script_arguments(gate["command"], directory, pnpm_only=True)
+    for gate in group["checks"]:
+        validate_gate(gate, directory, report_paths)
+        validate_performance_gate(gate)
     return len(group["checks"])
 
 
@@ -599,6 +616,14 @@ def validate_package_services(
         require_roles(group["path"], {"imports"}, roles)
     if language == "javascript":
         manifest = json.loads((directory / "package.json").read_text())
+        if "check:fallow" in manifest.get("scripts", {}) and not any(
+            gate["command"][:3] == ["pnpm", "run", "check:fallow"]
+            and gate.get("report", {}).get("type") == "fallow"
+            for gate in group["checks"]
+        ):
+            raise ValueError(
+                "Wire check:fallow into this package's gate with a native fallow report; a separate combined scan does not verify that audit"
+            )
         dependencies = {
             **manifest.get("dependencies", {}),
             **manifest.get("devDependencies", {}),
