@@ -40,6 +40,9 @@ def test_package_include_root_is_a_directory(
     baseline.write_text("analyzer:\n  exclude: ['**/*.dart']\n")
     with pytest.raises(ValueError, match="cannot exclude project files"):
         runner.validate_dart_includes(options, tmp_path)
+    baseline.write_text("analyzer:\n  language:\n    strict-casts: false\n")
+    with pytest.raises(ValueError, match="obsolete Dart language"):
+        runner.validate_dart_includes(options, tmp_path)
 
 
 def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
@@ -70,9 +73,16 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     artifact.parent.mkdir()
     artifact.write_text("tool-managed artifact\n")
     changes: dict[str, str] = {}
+    options["analyzer"]["language"].update(
+        {"strict-casts": True, "strict-raw-types": False}
+    )
+    path.write_text(yaml.safe_dump(options))
+    with pytest.raises(ValueError, match="obsolete Dart language"):
+        runner.validate_typing(tmp_path, "dart", ["lib"])
     installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, changes)
     path.write_text(changes["analysis_options.yaml"])
     result = yaml.safe_load(path.read_text())
+    assert result["analyzer"]["language"] == {"strict-inference": True}
     assert result["analyzer"]["exclude"] == excludes
     assert result["linter"]["rules"] == options["linter"]["rules"]
     assert result["plugins"] == options["plugins"]
@@ -92,6 +102,10 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     options["analyzer"]["exclude"] = ["lib/**"]
     nested.write_text(yaml.safe_dump(options))
     with pytest.raises(ValueError, match="cannot exclude project files"):
+        runner.validate_typing(tmp_path, "dart", ["lib"])
+    result["analyzer"]["language"]["strict-raw-types"] = True
+    nested.write_text(yaml.safe_dump(result))
+    with pytest.raises(ValueError, match="obsolete Dart language"):
         runner.validate_typing(tmp_path, "dart", ["lib"])
 
 
