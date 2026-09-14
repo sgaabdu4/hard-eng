@@ -106,7 +106,7 @@ def agent_instructions(root: Path, previous: Path | None = None) -> str:
 
 
 def configure_hooks(root: Path, changes: dict[str, str]) -> None:
-    from agent_hooks import hook_events
+    from agent_hooks import hook_events, remove_routine_hooks
 
     command = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py"'
     for agent, name in (
@@ -129,6 +129,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
         current: JsonObject = json.loads(target.read_text()) if target.exists() else {}
         if current.get("disableAllHooks"):
             raise ValueError(f"{agent} hooks are disabled; ask before changing that")
+        remove_routine_hooks(current, agent, command)
         additions: JsonObject = {"hooks": hooks}
         if agent == "copilot":
             additions["version"] = 1
@@ -291,7 +292,6 @@ def configure_dart(
         ".dart-decimate.toml",
     )
     if not any((directory / name).exists() for name in scanner_names):
-        # Installed skill examples are not application code.
         scanner: dict[str, list[str]] = {"ignore_patterns": [".agents/**"]}
         path = directory / ".dart-decimaterc.json"
         changes[str(path.relative_to(root))] = json.dumps(scanner, indent=2) + "\n"

@@ -1,45 +1,49 @@
-# Migrate the Dart analyzer plugin with its required rules
+# Keep routine agent hooks quiet
 
 Status: Complete
 
 ## Outcome + scope
 
-Upgrade recognized old Flutter lint plugin pins when installing the modern Dart rule profile, so the command does not leave a contradictory analyzer configuration for the agent to repair.
+Remove repeated learning prompts after ordinary prompts/tools, unnecessary integration probes at session start, and duplicate source-suite execution during verified updates. Preserve actual failure, completion, push and CI verification. Review active consumer tasks for concrete shared-flow defects.
 
 ## Repository context
 
-configure_dart removes old strict-casts/strict-raw-types flags but preserves an installed plugin that still requires them. The canonical Flutter skill template already owns the compatible plugin version. Reuse that template and the existing project setup owner; no dependency resolver or duplicate version registry.
+agent_hooks.py owns native events and startup context; setup.py registers those events and detects integrations at installation. Successful tool calls repeat the same instruction, and startup scans source to request every integration. Existing owners can remove this overhead without a cache, dependency or new state.
 
 ## Decisions + authorization
 
 Blockers: None
 
-The user explicitly requires the command to perform this known migration deterministically. One builder; existing setup.py, project_setup.py, Dart setup tests and README only. No new file, dependency or persistent state. Recognized older numeric/caret pins migrate; absent, newer and custom plugin declarations remain untouched. Use synthetic public fixtures.
+The user authorized fixing confirmed flow inefficiencies and reviewing active tasks. One builder owns this source change. Request real tool readiness proof when relevant. Preserve session updates, failure diagnostics, original Git baseline and full verification. No test-result cache or verification checks removed. Public evidence uses synthetic fixtures only.
 
 ## Acceptance + steps
 
-- [x] Known old plugin pins migrate to the canonical template version alongside the modern rules.
-- [x] Unrelated plugins, absent/custom/newer declarations and project settings remain preserved.
-- [x] Repeated setup is idempotent and the changed transaction still requires actual candidate checks.
-- [x] Native analyzer evidence distinguishes the obsolete-plugin contradiction from genuine code diagnostics.
+- [x] Fresh installs register session, supported failure and stop events, with no successful prompt/tool callbacks.
+- [x] Supported updates remove obsolete owned callbacks while preserving unrelated user hooks.
+- [x] Startup avoids integration scans and unrelated tool calls; relevant use still requires real readiness proof.
+- [x] Failure/completion behavior, unchanged-session honesty and verification gates remain intact.
+- [x] Review active tasks, route concrete defects to existing owners and report remaining delivery limits.
+- [x] Reuse the exact source revision's upstream CI proof during updates; retain candidate whitespace/compile/application checks, conflict protection and rollback.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: Matching sourced47e367 passed all17 gates,496 regressions,four performance tests, PR80 CI34846438558, main CI34846738375 and native delivered. Reuse this unchanged baseline and validate the Ready declaration before the targeted regression.
+Evidence: Unchanged implementation b4c508e passed all17 gates,502 regressions,four performance tests and exact main CI34850243972. Reuse matching baseline; validate Ready before production edits, then exercise installed registration/update and native hook responses plus the final gate.
 
 ## Risks + recovery
 
-Do not replace custom plugin sources or downgrade newer versions. Plugin migration can reveal genuine code diagnostics; those remain required failures. Existing candidate verification and rollback protect the project. Host hook activation remains separate.
+Preserve custom hooks; do not retain obsolete owned registrations. Startup guidance cannot prove native host trust or integration readiness. Full completion checks intentionally remain uncached. Consumer/plugin failures have separate owners and remain open until their proof arrives.
 
 ## ux_reference
 
-N/A — analyzer configuration has no visual interface.
+N/A — native hook configuration and text output have no visual interface.
 
 ## Verification
 
 Result: Passed
-Evidence: Both recognized old-pin cases failed the original installer assertion; the corrected, focused Dart suite passed16 tests. On Dart3.13.3, a synthetic project using0.10.2 produced CFG_STRICT_ANALYSIS; running the actual installer migrated it to the canonical plugin and removed that diagnostic. CFG_E2E_ENTRYPOINT remained before/after, so this is targeted compatibility proof, not a claim the synthetic app is complete. Final Complete gate passed all17 gates,502 regressions and four performance tests. No checks were weakened and no new repository files/dependencies/state were added. Ready for ship — local verification complete; delivery remains pending.
+Evidence: Ready gate passed before implementation. Hook/setup/update suites passed139 tests and the hook change passed all17 gates with497 regressions and four performance tests. Native synthetic updater removed owned callbacks, preserved a custom callback and committed a clean target. Fixture preparation first exposed missing remote and manifest/gate configuration; these were corrected in the temporary fixture without changing production checks. Startup rejects integration scanning; existing failure/completion regressions remain. Removed275 repeated characters per ordinary tool call; no token/runtime benchmark claim. The reused updater regression failed on the duplicate source-suite call, then all78 updater/hook tests passed after its removal. Exact-source CI selection, candidate checks, conflict preservation and rollback remain. No cache or new state. Active-task review identified an external lint/fix regression; its existing owner is repairing it and has updated its own wrapper through the supported command. Consumer delivery and that package release remain separate open work. Final integrated gate follows on this combined change.
+
+Final integrated proof: all17 gates passed,497 regressions and four performance tests; no new files, dependencies or persistent state. Ready for ship — local implementation and verification complete; delivery not performed.
 
 Delivery target: Merge
-Delivery: Pending — PR, exact main CI and native delivered proof required.
+Delivery: Pending — task PR, required CI, merge and exact main verification.

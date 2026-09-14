@@ -271,7 +271,7 @@ def test_update_commits_only_scaffold_and_preserves_index(
     assert changed == {update.SOURCE_FILE, ".agents/skills/he/references/workflow.md"}
     assert git(target, "diff", "--cached", "--name-only") == "staged.txt"
     assert (target / "project.txt").read_text() == "unrelated working edit\n"
-    assert "SOURCE_CHECK" in capfd.readouterr().err
+    assert "SOURCE_CHECK" not in capfd.readouterr().err
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
