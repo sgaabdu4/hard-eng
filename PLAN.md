@@ -4,6 +4,8 @@ Status: Complete
 
 ## Outcome + scope
 
+Current UI evidence correction: the user wants before/after images only when their appearance differs. For matching UI paths, permit one explained `UI appearance: unchanged` declaration after an actual matched comparison, with no labeled duplicate attachments. Otherwise require the existing before/after evidence. Missing, empty or contradictory declarations fail; unchanged appearance never waives behavior tests. Move the existing path/body selection into ship_evidence.py because shipping.py is at its 700-line boundary; keep network validation and shipping checks unchanged. Update HE Ship's owner guidance and remove HE Build's unconditional pair requirement. No image-processing dependency, stored hashes or new configuration.
+
 Current attachment repair: validate authentic GitHub image/video attachments using a one-byte GET with silent body output instead of HEAD. Both approved StaffToDo PR59 attachments independently return 403 to HEAD and 206 image/png to the ranged GET; suppressing the binary body preserves the existing text-only gh reader. Keep URL, status, media and length checks. Reuse shipping.py and its existing tests; no new helper, dependency or upload. The separate overbroad UI-path evidence requirement remains unresolved by this transport repair.
 
 Current Trivy report repair: accept Trivy's documented repository artifact type for directory configuration scans with Git metadata, alongside filesystem. Native same-Dockerfile before/after Git probe emits 27 successful checks and zero failures in both reports; current validator incorrectly rejects only repository. Reuse the report validator and its existing tests; no new files, dependencies or waiver. Keep schema, target/class, successful-check and finding validation unchanged. PR63 supplies matching source baseline proof. This consumer blocker is separate from the broader efficiency audit requested after both Decimate adoptions.
@@ -53,6 +55,10 @@ The user explicitly authorized the gate/guidance changes, thorough subagent test
 The user selected Frontline Fitness's Main board for the temporary tracker test and unlocked the phone, then authorized enabling the required Safari testing settings. These are live instructions, not synthetic fixture replies. Tracker work was restricted to temporary test artifacts and cleanup. Device Hub control remained unavailable; the user performed the two physical taps while native device captures supplied the evidence. No Safari setting was changed.
 
 ## Acceptance + steps
+
+- [x] An inspected unchanged-appearance declaration passes without attachment requests; real visual changes still require valid distinct before/after evidence.
+- [x] Empty, duplicate and contradictory unchanged declarations fail; matching paths without proof still fail and unrelated paths retain existing behavior.
+- [x] Skill guidance consistently selects useful evidence; shipping regressions and actual comparison checks pass, with the final full gate required before delivery.
 
 - [x] Authentic GitHub attachments pass the existing shipping verifier using the native ranged request; unsupported URLs, unavailable and non-media responses still fail.
 - [x] Existing shipping regressions pass, with the real two-URL failure and repaired success independently verified; final full gate follows.
@@ -124,6 +130,8 @@ The user selected Frontline Fitness's Main board for the temporary tracker test 
 
 ## Baseline + execution
 
+UI evidence baseline: source ebb328499a5ad014c267e2f4589d0be4d9d7b391 passed all local gates and PR65 CI; main run 34806779985 attempt 1 encountered a Semgrep analysis timeout, unchanged attempt 2 passed, and native delivered passed. This is the starting revision. One builder owns the contained policy and guidance change; no new agent/dependency.
+
 Attachment repair baseline: unchanged source bd42ac12ec3a19f2c6aed77c09b539772c9e2844 passed all 17 gates, 466 regression tests and four performance tests, followed by required main CI 34804245012 and native delivered for PR64. Reuse matching source/environment evidence; one builder owns this contained fix.
 
 Result: Passed
@@ -141,6 +149,12 @@ A structural check cannot prove truthful evidence, actual approval or that a pla
 N/A — this affects a Python CLI gate and Markdown instructions; Hard Eng has no visual application.
 
 ## Verification
+
+UI evidence release gate: final Complete rerun passed all 17 gates, 470 regression tests and four performance tests (`/tmp/he-ui-evidence-complete-final.log`). Ready for ship — local implementation and verification complete; delivery not performed. Authorized PR/main/native delivery and supported consumer adoption remain pending.
+
+UI evidence integration: the first Complete gate passed 470 regressions, four performance tests and all other checks, but Deptry rejected the new local import. Adding ship_evidence to the existing first-party module list fixed that declaration check (`/tmp/he-ui-evidence-deptry.log`); no external dependency or ignore was added. Final Complete rerun follows.
+
+UI evidence correction: the pre-implementation Ready check passed all 17 gates (`/tmp/he-ui-evidence-ready.log`). The unchanged-note shipping scenario failed on the original rule (`/tmp/he-ui-evidence-red.log`); all 68 shipping/action cases pass after repair (`/tmp/he-ui-evidence-tests.log`), including missing/contradictory evidence and unchanged transport validation. Both skill packages pass native metadata validation, and all 15 changed-package relative links resolve. The actual StaffToDo baseline/final dashboard PNGs are both 85098 bytes and byte-identical; direct inspection confirms the same rendered dashboard. The note records this comparison without duplicating public uploads; behavior tests remain required. Diff review confirms one focused evidence-selection owner, no new dependencies/configuration or automated visual-truth claim. Complete gate and authorized PR/main/native delivery remain pending, followed by supported consumer adoption. PR65 transport repair was delivered at ebb328499a5ad014c267e2f4589d0be4d9d7b391 with main CI and native proof.
 
 Attachment release gate: final Complete check passed all 17 gates, 466 regression tests and four performance tests (`/tmp/he-attachment-complete.log`). Ready for ship — local implementation and verification complete; delivery not performed. Source PR, required main CI and native delivery are pending, followed by supported consumer adoption. The separate evidence-policy correction remains open.
 

@@ -438,6 +438,22 @@ def test_newest_required_run_wins_over_later_finishing_old_run(
             )
 
 
+def test_unchanged_ui_needs_comparison_note_without_uploads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, ui_paths=["src/**"])
+    fake = _ui_fake(
+        fixture,
+        body="UI appearance: unchanged — inspected the same dashboard, state and viewport before/after; no visible difference.",
+    )
+    _patch_gh(monkeypatch, fake)
+    shipment = shipping.verify(
+        fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
+    )
+    assert shipment.delivery_target == "PR"
+    assert not any("--method" in call for call in fake.calls)
+
+
 def test_ui_changes_accept_attachments_that_reject_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -460,6 +476,9 @@ def test_ui_changes_accept_attachments_that_reject_head(
 @pytest.mark.parametrize(
     "body",
     [
+        "UI appearance: unchanged — ",
+        "UI appearance: unchanged — compared dashboard\nUI appearance: unchanged — compared dashboard",
+        "UI appearance: unchanged — compared dashboard\n" + _UI_BODY,
         "After: ![new](https://github.com/user-attachments/assets/new-image)",
         "Before: ![old](https://example.invalid/old)\nAfter: ![new](https://github.com/user-attachments/assets/new-image)",
         "Before: ![old](https://github.com/user-attachments/assets/same)\nAfter: ![new](https://github.com/user-attachments/assets/same)",

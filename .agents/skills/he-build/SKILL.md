@@ -29,7 +29,7 @@ flowchart TD
 ```
 
 - Behavior = required connected callers, persistence, API and interface work; a skeleton or file checklist is not an accepted outcome. Keep changes at existing owners; apply relevant stack/design/security guidance only for the changed boundary.
-- Proof = [test quality](../he/references/testing.md) + [actual-diff review](../code-review/SKILL.md); required runtime journeys, visual evidence and applicable accessibility states → [E2E](../e2e/SKILL.md). Retain and inspect matching UI before/after evidence for the PR. Reuse these owners for regression, defect reopening and review findings; no duplicate checker or mandatory test/agent count.
+- Proof = [test quality](../he/references/testing.md) + [actual-diff review](../code-review/SKILL.md); required runtime journeys, visual evidence and applicable accessibility states → [E2E](../e2e/SKILL.md). PR evidence selection → [HE Ship](../he-ship/references/checks.md#ui-evidence-in-the-pr). Reuse these owners for regression, defect reopening and review findings; no duplicate checker or mandatory test/agent count.
 - Progress = same plan + remaining work. Retain the actual starting-baseline outcome + evidence; record later build results in Verification. Keep Status Ready and Verification Pending during an unblocked feature build; baseline repair follows HE Plan's Draft route above. A material decision or unavailable prerequisite → Draft + exact blocker/resume condition; preserve completed steps and continue independent authorized work. Never replace missing proof with a pass or N/A.
 
 ## Parallel work + integration
