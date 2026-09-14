@@ -10,6 +10,7 @@ from types import ModuleType
 
 import pytest
 import update
+from shipping import ShippingError
 
 SOURCE = Path(__file__).resolve().parents[1]
 
@@ -365,6 +366,68 @@ def test_project_configuration_update_runs_application_checks(
     assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
     assert "fixture-cache/" not in (target / ".gitignore").read_text()
     assert git(target, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("outcome", ["pass", "application-failure", "missing-base"])
+def test_candidate_uses_remote_task_plan_scope(
+    release: tuple[Path, Path, str],
+    completed_plan: str,
+    outcome: str,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    source, target, _ = release
+    commit(source, "verified source candidate")
+    (target / "package.json").unlink()
+    config_path = target / "hard-eng.gates.json"
+    config = json.loads(config_path.read_text())
+    config["shipping"] = {
+        "base": "main",
+        "checks": ["fixture"],
+        "ui_paths": [],
+        "ci_seconds": 180,
+        "pre_push_seconds": 180,
+        "delivery": [],
+    }
+    command = "print('APPLICATION_SCOPE_CHECK'); raise SystemExit(0)"
+    if outcome == "application-failure":
+        command = command.replace("SystemExit(0)", "SystemExit(1)")
+    config["shared"][0]["command"] = ["python3", "-c", command]
+    config_path.write_text(json.dumps(config))
+    historical = target / "features/historical/PLAN.md"
+    historical.parent.mkdir(parents=True)
+    historical.write_text("# Historical document without native plan fields\n")
+    git(target, "branch", "-M", "main")
+    commit(target, "remote baseline with historical document")
+    remote = target.parent / "remote.git"
+    git(target, "clone", "--bare", str(target), str(remote))
+    git(target, "remote", "add", "origin", str(remote))
+    git(target, "switch", "-c", "feature/update")
+    plan = target / "features/current/PLAN.md"
+    plan.parent.mkdir()
+    plan.write_text(completed_plan)
+    commit(target, "completed authorized task plan")
+    git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
+    stale = git(target, "rev-parse", "origin/main")
+    (target / "project.txt").write_text("unrelated local edit\n")
+    if outcome == "missing-base":
+        git(remote, "update-ref", "-d", "refs/heads/main")
+    candidate = target.parent / "candidate"
+    changes: dict[str, str | None] = {"project.txt": "candidate update\n"}
+    if outcome == "pass":
+        update.verify_candidate(target, source, changes, {}, candidate)
+    else:
+        error = (
+            ShippingError
+            if outcome == "missing-base"
+            else subprocess.CalledProcessError
+        )
+        with pytest.raises(error):
+            update.verify_candidate(target, source, changes, {}, candidate)
+    assert (target / "project.txt").read_text() == "unrelated local edit\n"
+    assert git(target, "rev-parse", "origin/main") == stale
+    assert not candidate.exists()
+    if outcome != "missing-base":
+        assert "APPLICATION_SCOPE_CHECK" in capfd.readouterr().err
 
 
 def test_failed_commit_rolls_back_scaffold(
