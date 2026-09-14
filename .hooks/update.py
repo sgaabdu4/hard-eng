@@ -149,7 +149,15 @@ def update_plan(
 ) -> tuple[dict[str, str | None], dict[str, str | None]]:
     output = subprocess.check_output(
         [
+            "uv",
+            "run",
+            "--project",
+            str(source),
+            "--locked",
+            "--no-dev",
+            "--python",
             sys.executable,
+            "python",
             str(source / "setup.py"),
             str(root),
             "--plan",
