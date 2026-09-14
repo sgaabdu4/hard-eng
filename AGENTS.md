@@ -2,6 +2,7 @@
 
 - Before editing, state the single change being implemented, which files it will touch, and how it will be verified. Prefer a native command or existing file. Every new file, dependency, wrapper or abstraction must be necessary for that change.
 - Scope = the user's request + accepted constraints; preserve unrelated work.
+- Publication = before recording tracked content or publishing, apply [publication privacy](.agents/skills/he-ship/references/checks.md#publication-privacy) for the destination's audience.
 - YAGNI = ultra always unless the user changes it. Understand the real flow first; reuse existing code, stdlib, native features and installed dependencies before adding code.
 - Additions = before adding a file, dependency, abstraction, configuration or stored state, identify the current agreed requirement it serves and why the existing code or a direct command cannot satisfy it. Without both answers, leave it out. Keep this reasoning in normal updates; create no justification files.
 - Changes = fix the cause at its existing owner. Optional improvements and extra infrastructure require an explicit user request; do not silently include them under robustness, best practices or future needs.
