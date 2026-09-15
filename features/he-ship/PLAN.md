@@ -4,20 +4,22 @@ Status: Complete
 
 ## Outcome + scope
 
-Add HE Ship after HE Build's local Ready-for-ship handoff. Enforce the mechanically verifiable delivery requirements through the existing CLI and configuration: task branch/PR, required current checks, before/after attachments for configured UI paths, confirmed merge and configured delivery verification, and safe task-worktree/branch cleanup. Keep the same effort plan and preserve build proof when delivery alone is blocked. Apply YAGNI at every stage. No source commit, push, merge, global installation, remote repository-setting changes or other-project edits.
+Add HE Ship after HE Build's local Ready-for-ship handoff. Enforce mechanically verifiable delivery requirements through the existing CLI and configuration. The current follow-up closes one observed gap: a Deploy plan with no configured deployment verifier must fail before build completion or merge, instead of first failing after deployment. Keep the existing configuration, runner and plan; add no dependency or alternate workflow. Global installation and remote repository-setting changes remain outside scope.
 
 ## Repository context
 
-The source has a native runner, exact-pushed-revision pre-push checks, Complete plan validation, installed skills and shared gate configuration. It has no shipping verifier. Existing HE Build, HE routing, installer-test and other plan changes are unrelated starting work to preserve. Source research and the proposed delivery flow are in `/tmp/he-ship-research-parent-20260910/PROPOSAL.md`.
+The source now has native shipping, plan validation and configured deployment commands. Plan validation checks that shipping configuration exists, but does not reject an empty delivery list for Deploy. Shipping checks that list only at the delivered stage. Move this configuration prerequisite to readiness while keeping runtime deployment execution at delivered. Earlier implementation evidence below is historical.
 
 ## Decisions + authorization
 
 Blockers: None
 
-The user approved implementation, deterministic enforcement, PR/task-branch default, before/after UI evidence, verified shipping followed by safe cleanup, measured CI/pre-push efficiency and YAGNI. Existing Autonomous participation applies; multiple disposable sandboxes and subagents are authorized. This authorizes local source work and sandbox verification, not publishing Hard Eng or changing remote protection rules. Skill instructions and configuration cannot grant external authority.
+The user authorized fixing observed Hard Eng enforcement defects through source PR/main delivery, with YAGNI and preserved project customizations. Task mode: Autonomous. This narrow follow-up uses one implementation owner, existing fixtures and source gates. It does not authorize production data changes, global trust changes or remote protection changes.
 
 ## Acceptance + steps
 
+- [x] Ready/Complete plans selecting Deploy reject missing deployment commands while Merge remains valid without them.
+- [x] Ship readiness rejects an unconfigured Deploy plan before provider calls or merge, while configured deployment commands still execute only after confirmed delivery.
 - [x] Add a terse HE Ship skill with conditional proof/recovery routes; make HE Plan/Build retain UI baseline evidence and establish task isolation at the appropriate starting stage.
 - [x] Preserve local Complete as build completion; retain required pending delivery explicitly in the same plan without falsely ticking remote proof or creating another status schema.
 - [x] Native shipping checks reject wrong repository/branch/PR, stale or missing required checks, missing before/after UI evidence, unconfirmed merge and missing configured delivery proof.
@@ -30,7 +32,7 @@ The user approved implementation, deterministic enforcement, PR/task-branch defa
 ## Baseline + execution
 
 Result: Passed
-Evidence: `uv run python .hooks/hard-eng.py check --plan-stage Draft` exited 0 on the starting source. All 17 gates passed, including 310 tests and four performance tests. Log: `/tmp/he-ship-baseline-20260910.log`.
+Evidence: The current follow-up baseline `uv run python .hooks/hard-eng.py check --plan-stage Draft` passed all 17 gates, including 565 tests, four performance tests and 87.53% line coverage. Native Ready plan validation passed before implementation. The earlier implementation receipts below are historical.
 
 One source coordinator owns integration and shared files. Independent bounded implementation/testing may be delegated after the interfaces and Ready baseline are settled. Reuse existing native fixtures and Python tools. A focused shipping module is needed because the current runner has no PR/delivery-state checks; configuration remains in the existing file. No new dependency or general workflow engine is planned.
 
@@ -49,7 +51,7 @@ N/A — the delivered feature is a CLI and skill workflow; UI sandbox captures v
 ## Verification
 
 Result: Passed
-Evidence: Integrated gates and sandbox journeys passed. Final review exposed multiple push URLs bypassing the single-endpoint guard; its regression reproduced the failure, and all 60 focused shipping cases pass after the correction. The final Complete-stage gate passed on this final source.
+Evidence: Three focused cases reproduced acceptance of an unconfigured Deploy plan before the fix. After moving the existing configuration prerequisite earlier, all 107 plan/shipping/action tests pass, including configured readiness without executing deployment and existing old-revision rejection during actual delivery. The integrated Complete gate passed all 17 checks, including 569 tests and four performance checks. The initial integrated run caught a complexity-limit violation; extracting shipping policy validation from plan selection fixed it without weakening the limit. Final diff review found no additional defect. Remote follow-up delivery remains pending; older implementation receipts below do not establish its result.
 
 Ready for ship — local implementation and verification complete; delivery not performed.
 
@@ -80,6 +82,7 @@ An extra broad `ruff .` invocation also scanned separately owned canonical skill
 
 Limits: GitHub PR/check/attachment responses and server merge coordination were simulated, while Git transport, native hooks/agents, browser interaction and HTTP revision checks were real. These runs do not prove hosted GitHub upload/CI/merge/deployment integration. The initial provider supports same-origin GitHub PRs; fork PRs, differing push endpoints and initialized submodules require repository-owned handling. Runtime verifiers remain trusted project code, and active-task ownership/visual relevance require agent judgment. Local hooks do not replace server protection. Temporary sandbox evidence is local and has not been published.
 
-Delivery of Hard Eng itself is not authorized and is not part of local build completion.
+Delivery target: Merge
+Delivery: Pending — source PR/main checks and guarded cleanup remain. Earlier delivery restrictions and results above describe the original implementation run.
 
 The owned temporary HTTP server was stopped after verification; its source, captures and receipts remain available in the sandbox.

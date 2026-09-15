@@ -647,6 +647,8 @@ def verify(root: Path, plan: Path, pr_url: str, stage: str) -> Shipment:
     if repository != f"{owner}/{name}".lower():
         raise ShippingError("PR URL repository does not match origin")
     resolved_plan, target = _plan_target(resolved_root, plan)
+    if target == "Deploy" and not policy["delivery"]:
+        raise ShippingError("Deploy target requires configured delivery checks")
     pull = _pull(resolved_root, owner, name, number)
     if pull.base_ref != policy["base"]:
         raise ShippingError("PR base branch does not match shipping policy")
@@ -665,8 +667,6 @@ def verify(root: Path, plan: Path, pr_url: str, stage: str) -> Shipment:
         _ui_evidence(resolved_root, pull, paths, policy)
     _checks(resolved_root, repository, revision, policy)
     if stage == "delivered" and target == "Deploy":
-        if not policy["delivery"]:
-            raise ShippingError("Deploy target requires configured delivery checks")
         _delivery(resolved_root, policy, revision, url)
     current = _pull(resolved_root, owner, name, number)
     if current != pull:
