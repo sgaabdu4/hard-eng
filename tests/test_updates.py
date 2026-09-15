@@ -129,8 +129,12 @@ def test_update_commits_only_scaffold_and_preserves_index(
     capfd: pytest.CaptureFixture[str],
 ) -> None:
     source, target, _ = release
+    ignored = ".agents/skills/he/references/ignored-update.md"
+    ignored_path = source / ignored
+    ignored_path.write_text("ignored update fixture\n")
     revision = commit(source, "verified update")
     monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
+    (target / ".git/info/exclude").write_text(f"{ignored}\n")
     (target / "staged.txt").write_text("unrelated staged work\n")
     git(target, "add", "staged.txt")
     (target / "project.txt").write_text("unrelated working edit\n")
@@ -141,7 +145,11 @@ def test_update_commits_only_scaffold_and_preserves_index(
             target, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"
         ).splitlines()
     )
-    assert changed == {update.SOURCE_FILE, ".agents/skills/he/references/workflow.md"}
+    assert changed == {
+        update.SOURCE_FILE,
+        ".agents/skills/he/references/workflow.md",
+        ignored,
+    }
     assert git(target, "diff", "--cached", "--name-only") == "staged.txt"
     assert (target / "project.txt").read_text() == "unrelated working edit\n"
     assert "SOURCE_CHECK" not in capfd.readouterr().err

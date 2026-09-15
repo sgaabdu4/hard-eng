@@ -404,7 +404,11 @@ def commit_update(
     try:
         write_changes(root, changes)
         write_links(root, links)
-        subprocess.run(["git", "add", "--", *names], cwd=root, check=True)
+        subprocess.run(
+            ["git", "add", "--force", "--", *names],
+            cwd=root,
+            check=True,
+        )
         subprocess.run(
             [
                 "git",
