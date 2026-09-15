@@ -247,6 +247,30 @@ exit $c
         update.check_scaffold_update(target, base)
 
 
+def test_ignored_local_configuration_prevents_update(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    select_release(source, monkeypatch)
+    name = ".mcp.json"
+    git(target, "rm", "--cached", name)
+    git(target, "commit", "-qm", "keep integration configuration local")
+    (target / ".git/info/exclude").write_text(name + "\n")
+    local = '{"mcpServers":{"private":{"command":"private-integration"}}}\n'
+    (target / name).write_text(local)
+    (target / "staged.txt").write_text("unrelated staged work\n")
+    git(target, "add", "staged.txt")
+    (target / "project.txt").write_text("unrelated working edit\n")
+    before = git(target, "rev-parse", "HEAD")
+    with pytest.raises(ValueError, match="overlaps local edits"):
+        update.update(target)
+    assert (target / name).read_text() == local
+    assert git(target, "rev-parse", "HEAD") == before
+    assert git(target, "diff", "--cached", "--name-only") == "staged.txt"
+    assert (target / "project.txt").read_text() == "unrelated working edit\n"
+    assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
 def test_overlapping_local_edit_prevents_update(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
