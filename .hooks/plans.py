@@ -107,6 +107,23 @@ def validate_plan(path: Path) -> str:
     return status
 
 
+def _validate_shipping(root: Path, path: Path, status: str) -> None:
+    content = path.read_text()
+    if status in {"Ready", "Complete"} and re.search(
+        r"(?im)^\s*(?:[-*+]\s+)?Delivery target:", content
+    ):
+        policy = load_policy(root)
+        if (
+            policy is not None
+            and not policy["delivery"]
+            and re.search(
+                r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*Deploy\s*$",
+                plan_sections(content)["Verification"],
+            )
+        ):
+            raise ValueError("Deploy target requires configured delivery checks")
+
+
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
@@ -138,10 +155,7 @@ def validate_plans(
     for path in applicable:
         try:
             status = validate_plan(path)
-            if status == "Complete" and re.search(
-                r"(?im)^\s*(?:[-*+]\s+)?Delivery target:", path.read_text()
-            ):
-                load_policy(root)
+            _validate_shipping(root, path, status)
             if STAGES.index(status) < STAGES.index(stage):
                 raise ValueError(f"plan is {status}; this check requires {stage}")
             effective_stage = min(effective_stage, status, key=STAGES.index)

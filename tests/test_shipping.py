@@ -273,6 +273,39 @@ def test_ready_returns_identity_after_current_checks(
     assert any("check-runs" in call[-1] for call in fake.calls)
 
 
+@pytest.mark.parametrize("configured", [False, True])
+def test_deploy_readiness_requires_verifier_without_running_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, configured: bool
+) -> None:
+    fixture = _fixture(
+        tmp_path,
+        target="Deploy",
+        delivery=[
+            {"name": "live", "command": [sys.executable, "-c", "raise SystemExit(1)"]}
+        ]
+        if configured
+        else [],
+    )
+    fake = FakeGitHub(_pull(fixture), [_check(fixture.head)])
+    _patch_gh(monkeypatch, fake)
+    if configured:
+        shipment = shipping.verify(
+            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
+        )
+        assert shipment.delivery_target == "Deploy"
+    else:
+        with pytest.raises(
+            shipping.ShippingError, match="Deploy target requires configured delivery"
+        ):
+            shipping.verify(
+                fixture.root,
+                fixture.plan,
+                "https://github.com/acme/widget/pull/1",
+                "ready",
+            )
+        assert not fake.calls
+
+
 def test_ready_accepts_same_second_check_timestamps(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
