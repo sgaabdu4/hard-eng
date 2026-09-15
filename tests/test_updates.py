@@ -262,10 +262,12 @@ def test_ignored_local_configuration_prevents_update(
     git(target, "add", "staged.txt")
     (target / "project.txt").write_text("unrelated working edit\n")
     before = git(target, "rev-parse", "HEAD")
+    marker_before = (target / update.SOURCE_FILE).read_bytes()
     with pytest.raises(ValueError, match="overlaps local edits"):
         update.update(target)
     assert (target / name).read_text() == local
     assert git(target, "rev-parse", "HEAD") == before
+    assert (target / update.SOURCE_FILE).read_bytes() == marker_before
     assert git(target, "diff", "--cached", "--name-only") == "staged.txt"
     assert (target / "project.txt").read_text() == "unrelated working edit\n"
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
