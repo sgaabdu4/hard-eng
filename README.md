@@ -1,79 +1,272 @@
 <img src="assets/readme/hard-eng-hero.png" alt="Hard Eng" width="100%">
 
-Repository-local engineering instructions, skills, checks, hooks and CI for Python, JavaScript/TypeScript and Dart/Flutter, including monorepos.
+# Hard Eng
 
-## Capabilities
+**An alpha engineering workflow for one developer building with coding agents.**
 
-- Detect supported packages; preserve project instructions and configuration; report conflicts.
-- Require meaningful `PRODUCT.md` and `DESIGN.md`, baseline checks, nonempty tests, at least 70% executable-line coverage and a configured performance suite. Preserve stricter coverage requirements.
-- Check task `PLAN.md` structure, reasoned N/A entries and declared readiness/completion evidence through the existing runner; visible proposals need a Markdown image reference before Ready. See [plan checks](.agents/skills/he/references/gates.md#plan-checks). References do not prove images were displayed or inspected; evidence truth and user authorization still require review.
-- Successful Ready/Complete checks print the next-stage handoff; failed checks cannot announce readiness. Codex shows progress while its trusted session and completion hooks run. Hook registration alone does not prove execution.
-- SessionStart reports its actual updater result through native Codex/Claude messages. Installed-project instructions require the supported curl updater before work if that session has no startup result; an existing result avoids a duplicate update. This fallback is an agent instruction, not a replacement for host hook trust.
-- Reject blanket Node warning suppression in configured commands, expanded package-script arguments and the inherited Node environment. Package-directory options are resolved; unsupported package selectors fail instead of skipping inspection. Existing `check:fallow` scripts must be wired into the package gate with a native Fallow report, including active CRAP enforcement for audits. Strict Dart analysis rejects older ordinary lint pins against the installed canonical profile and disallowed exclusions. Arbitrary shell wrappers and API mock semantics still require native integration tests and review.
-- Run full checks for affected packages, dependents and shared concerns; uncertain impact expands scope. Independent checks may run in parallel.
-- Validate native exits and reports; reject findings and missing, stale or malformed evidence. Handwritten source/test files over 700 lines need a justified exception.
-- Install pre-push checks for the actual pushed commits and agent session/failure/completion hooks. Preserve existing GitHub Actions jobs for adaptation; generate a new workflow only after project check names and measured budgets are configured. Ordinary prompts and successful tools trigger no Hard Eng callback. Remote branch protection requires separate approval.
-- Prompt evidence-based learning throughout work: prefer existing deterministic prevention, use skills as a last resort, and capture lasting accepted decisions in terse `docs/adr/` records. Routine progress creates no learning artifact; hooks do not certify semantic judgment.
-- Require a configured [shipping contract](.agents/skills/he-ship/references/checks.md) for pushes and completed delivery plans; verify GitHub PR/check identity, required UI attachments and deployment proof; guard merge and task-worktree cleanup. Direct base pushes and over-budget pre-push checks fail. Visual relevance and external authority still require judgment.
-- Configure Context Mode and Codebase Memory; add applicable Appwrite, Sentry, Dart and Marionette MCPs with known targets. Missing service choices remain explicitly pending while the core scaffold installs; existing conflicts are preserved and reported. Follow [integration setup](.agents/skills/he/references/integrations.md) before claiming readiness. Startup does not probe every service; registration alone is not proof.
-- Provide CI-verified scaffold updates with conflict preservation and a separate local update commit; never automatically push. Reuse upstream CI for the exact source revision instead of rerunning its source suite in every consumer; still verify the installed candidate. Completion and shipping check installed-version freshness without changing files. Scaffold-only updates avoid unrelated application checks.
+Hard Eng lives inside an existing repository. It helps turn a task into a clear plan, a checked build, and delivery evidence—while keeping the developer responsible for the decisions that matter.
 
-## Checks
+It adds shared instructions, skills, project checks, and optional native integrations. It preserves project-owned instructions and configuration, reports conflicts instead of overwriting them, and never pushes on its own.
 
-| Stack | Native tools |
-|---|---|
-| Python | Ruff, Pyrefly, pytest/coverage, Vulture, jscpd, Deptry, Import Linter |
-| JavaScript/TypeScript | Biome, TypeScript, project tests/coverage, Fallow; React adds React Doctor |
-| Dart/Flutter | Format, analyzer, tests/coverage, Dart Decimate |
-| Shared / conditional | Gitleaks, OSV, Semgrep, Actionlint, Zizmor, ShellCheck and deployment checks |
+> **Alpha** — the supported scaffold and checks are still evolving. A successful install or local check is useful evidence, not proof that every host ran a hook, every user journey works, or a release reached production. See [current verification and open limits](DECISION.md#current-status).
 
-Existing build, integration, UI and generator scripts participate where applicable. [Performance guidance](.agents/skills/he/references/gates.md) covers project-specific budgets and native reports; setup does not invent product benchmarks.
+## What it is for
 
-## Skills
+Hard Eng is designed for a solo developer who wants an agent to carry routine work forward without blurring responsibility.
 
-- Work: [Hard Eng](.agents/skills/he/SKILL.md), [HE Plan](.agents/skills/he-plan/SKILL.md) (scaled planning, Wayfinder and repository-grounded UX references), [HE Build](.agents/skills/he-build/SKILL.md), [HE Ship](.agents/skills/he-ship/SKILL.md), [Research](.agents/skills/research/SKILL.md), [Code Review](.agents/skills/code-review/SKILL.md), [Codebase Design](.agents/skills/codebase-design/SKILL.md).
-- Verification: [E2E](.agents/skills/e2e/SKILL.md), [Security Review](.agents/skills/security-review/SKILL.md), [Product Walkthrough Video](.agents/skills/product-walkthrough-video/SKILL.md).
-- Stack guidance: [Appwrite Backend](.agents/skills/appwrite-backend/SKILL.md), [Building Flutter Apps](.agents/skills/building-flutter-apps/SKILL.md).
-- Authoring: [Writing Great Skills](.agents/skills/writing-great-skills/SKILL.md). [Test quality](.agents/skills/he/references/testing.md) is shared by Hard Eng and Code Review.
+| Part | What it does |
+| --- | --- |
+| **Setup and updates** | Adds the scaffold to a target repository from a CI-verified source revision. Existing instructions, skills, hooks, and configuration are preserved; genuine conflicts are surfaced for review. |
+| **Project context** | Keeps the product, design, task plan, and ownership boundaries visible to the agent through files such as [PRODUCT.md](PRODUCT.md), [DESIGN.md](DESIGN.md), and `PLAN.md`. |
+| **Stage skills** | Routes work to focused planning, build, shipping, research, review, and verification guidance. |
+| **Checks and evidence** | Runs configured native commands, examines their reports, and records what has actually been proved. A passing command cannot turn an unverified claim into a fact. |
+| **Native integrations** | Can register agent-session, Git pre-push, CI, and applicable development-tool connections. Their activation depends on the host client, its trust settings, and its supported behavior. |
 
-[HE Learn](.agents/skills/he-learn/SKILL.md) routes repeated failures to prevention and lasting decisions to terse ADRs. Skills guide judgment; passing tools do not certify product behavior or test quality.
+Hard Eng is a repository-local scaffold, not a global agent directory or a product-management system. It does not decide the product, invent requirements, grant approval, or replace real testing and release checks.
 
-## Install
+## The work loop
 
-The same command installs a new project or uses the supported updater for a recorded installation. Both transactions execute from a CI-verified main revision. Updates create a local commit without pushing; conflicting local edits remain protected. Run it before editing, not concurrently in the background.
+The main `he` skill routes a task automatically from its current stage:
 
-Setup prepends shared rules to `AGENTS.md`, adds Claude's native `@AGENTS.md` import to `CLAUDE.md`, and adds a shared-rules reference when an existing `AGENTS.override.md` masks Codex's normal file. Existing project instructions are preserved. These instructions guide the agent; native hooks and gates enforce only their documented executable checks.
+| Task situation | Route |
+| --- | --- |
+| New work or a material scope change | [HE Plan](.agents/skills/he-plan/SKILL.md) |
+| An authorized, ready plan | [HE Build](.agents/skills/he-build/SKILL.md) |
+| A requested PR, merge, or deployment | [HE Ship](.agents/skills/he-ship/SKILL.md) |
+| A repeated failure or a lasting decision | [HE Learn](.agents/skills/he-learn/SKILL.md) |
 
-When an update changes project configuration, its isolated candidate runs the application gates without requiring a task plan to be completed first. This verifies the update only; normal completion, push and shipping checks still require their task evidence.
+## The stage skills, explained
 
-The modern Dart profile migrates recognized older `flutter_skill_lints` and `riverpod_lint` versions, including native version mappings, to the canonical Flutter template. This targets the current native analyzer plugin system, not legacy `custom_lint` compatibility; older major declarations also migrate. Unrelated plugins, custom sources, mapping diagnostics and newer pins remain intact. Application gates must pass before an installed update is accepted; compatibility failures require a project migration, never a lint waiver. Flutter's native build/platform exclusions are accepted while excluded handwritten Dart source remains blocked.
+### HE Plan — make the work buildable
 
-Codex requires separate trust for new or changed hooks, even in a trusted project. Review them with `/hooks`, then verify the startup result in a new session before claiming automatic updates or completion enforcement. The installer does not grant trust to its own hooks. See the [official hook trust instructions](https://learn.chatgpt.com/docs/hooks).
+**Inputs:** the requested outcome, repository context, and settled decisions. **Work:** define scope, acceptance evidence, UX references where needed, and the smallest execution arrangement; prove the current baseline before implementation. **Completion:** a ready plan with any material blockers resolved. **Handoff:** **Ready for Build** only when the plan, baseline, and authorization are all real.
 
-Run from your project's Git root, locally or in a cloud terminal:
+```mermaid
+flowchart TD
+  A[Task and repository context] --> B[Plan scope, evidence, and acceptance]
+  B --> C[Prove the starting baseline]
+  C --> D{Ready and authorized?}
+  D -->|Yes| E[Ready for Build]
+  D -->|No| F[Resolve the actual decision or blocker]
+  F --> B
+```
+
+Human-led planning presents the completed proposal for approval. Autonomous planning advances once the task already authorizes it, while still stopping for unresolved material choices, external authority, or missing proof.
+
+### HE Build — implement and prove locally
+
+**Inputs:** a Ready, authorized plan and its baseline evidence. **Work:** deliver connected behavior in focused slices, review the real diff, and run the required local checks and journeys. **Completion:** the plan is Complete with actual verification evidence. **Handoff:** **Ready for Ship** means local implementation is proved; it is not a push, merge, or deployment.
+
+```mermaid
+flowchart TD
+  A[Ready plan] --> B[Implement one complete behavior]
+  B --> C[Focused checks and diff review]
+  C --> D{Proof passes?}
+  D -->|No| E[Repair the actual owner]
+  E --> B
+  D -->|Yes| F{More build work?}
+  F -->|Yes| B
+  F -->|No| G[Integrated proof and Complete check]
+  G --> H[Ready for Ship]
+```
+
+### HE Ship — prove the remote outcome
+
+**Inputs:** Ready-for-Ship local evidence and the developer's explicit delivery scope. **Work:** prepare the task branch and PR, verify the current remote checks and applicable UI or deployment evidence, then perform only authorized delivery actions. **Completion:** the PR, merge, or deployment has the proof required by the project. **Handoff:** report the actual remote outcome or the exact blocker and resume condition.
+
+```mermaid
+flowchart TD
+  A[Ready for Ship plus delivery authority] --> B[PR and current evidence]
+  B --> C[Verify remote checks]
+  C --> D{Requested action authorized?}
+  D -->|No| E[Report a ready handoff]
+  D -->|Yes| F[Guarded PR, merge, or deployment]
+  F --> G[Confirm the delivered revision]
+```
+
+### HE Learn — prevent a proven repeat
+
+**Inputs:** repeated failure evidence or a lasting accepted decision. **Work:** confirm the common cause, repair it at the narrowest owner, and prefer a deterministic check over new process. **Completion:** the original failure is blocked, a nearby valid case still works, or the remaining limit is explicit. **Handoff:** record durable decisions tersely and return to the affected stage.
+
+```mermaid
+flowchart TD
+  A[Observed repeat or lasting decision] --> B[Confirm cause and scope]
+  B --> C[Repair the existing owner or check]
+  C --> D[Prove failure and nearby valid case]
+  D --> E{Executable prevention sufficient?}
+  E -->|Yes| F[Resume the affected stage]
+  E -->|No| G[Smallest justified skill or explicit limit]
+  G --> F
+```
+
+### Human-led work
+
+```mermaid
+flowchart TD
+  A[Work request] --> B[Plan]
+  B --> C{Developer decides scope and approach}
+  C -->|Authorize| D[Build]
+  C -->|Change needed| B
+  D --> E[Run checks and collect evidence]
+  E --> F{Developer authorizes delivery}
+  F -->|Yes| G[Ship: PR, merge, or deploy]
+  F -->|Not yet| H[Keep a ready handoff]
+  G --> I[Confirm CI and delivery evidence]
+```
+
+Use this loop when the developer wants to review meaningful choices before the agent proceeds. The agent can research, draft, implement, and verify within the accepted task, but it pauses for a real scope decision or an external action that has not been authorized.
+
+### Autonomous work within a boundary
+
+```mermaid
+flowchart TD
+  A[Authorized task and boundary] --> B[Plan]
+  B --> C[Build]
+  C --> D[Run checks and collect evidence]
+  D --> E{Scope, decision, or authority changed?}
+  E -->|No| F{Delivery already authorized?}
+  E -->|Yes| G[Ask the developer]
+  G --> B
+  F -->|No| H[Leave a ready handoff]
+  F -->|Yes| I[Ship]
+  I --> J[Confirm CI and delivery evidence]
+```
+
+Autonomy means the agent keeps moving through the authorized loop. It does not mean it can extend the task, choose a meaningful product trade-off, merge, publish, spend money, change access, or claim delivery without the required authority and evidence.
+
+## What gets checked
+
+Hard Eng discovers supported packages and uses their existing commands alongside configured checks. It supports Python, JavaScript/TypeScript, and Dart/Flutter repositories, including monorepos.
+
+Its baseline policy expects meaningful product and design context, nonempty tests, at least 70% executable-line coverage, and a configured performance suite; stricter project requirements remain in place.
+
+Hard Eng discovers source roots and package managers, but the project supplies the real commands and budgets. **Required** means a configured language package is rejected without that role. **Conditional** means the check becomes required only when the project declares or uses the relevant capability.
+
+| Stack | Required gate roles and purpose | Native tools | Conditional or project-configured work |
+| --- | --- | --- | --- |
+| Python | Formatting, lint, complexity, strict types, annotations, tests, dead code, duplicate code, dependencies, and performance. | Ruff, Pyrefly, pytest with coverage, Vulture, jscpd, and Deptry. | Import Linter is required when the package has real Python import roots. |
+| JavaScript / TypeScript | Formatting/linting, focused-test detection, types, typing style, tests, dead code/duplicates, and performance. TypeScript packages also require architectural boundaries. | Biome, TypeScript, project test and coverage commands, and Fallow. | React adds React Doctor. Existing `build`, integration-test, UI-test, generated-code, boundary, and `check:fallow` scripts must be wired into the package gate with their native reports where applicable. |
+| Dart / Flutter | Formatting, static analysis, tests with coverage, dead code/duplicates, explicit architectural boundaries, and performance. | Dart format and analyzer, Dart test/coverage, and Dart Decimate. | A Dart boundary rule needs real project prefixes; the tool will not accept a blanket glob. Flutter-specific build or device proof remains a project requirement. |
+
+Every language package also needs security, lockfile, and vulnerability coverage, either directly or through its declared workspace owner. Security uses Semgrep or the configured language-native rule. Performance is never an empty placeholder: it must be serial and emit a supported native report. Existing build, integration, UI, generator, and boundary scripts become part of the contract only when the project already declares them.
+
+Across the repository, [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md) must have their required, filled sections, and handwritten source or test files over 700 physical lines need a justified exception. The runner validates reports as well as exits: missing, malformed, stale, incomplete, skipped, or failing evidence does not pass.
+
+### Shared checks, CI, and delivery
+
+These are separate from a package's language matrix:
+
+| When present | Required shared coverage |
+| --- | --- |
+| Every supported repository | Source-secret scanning; Git-history secret scanning unless the project explicitly disables it. |
+| GitHub Actions workflow | Actionlint and Zizmor workflow-security coverage. |
+| Shell scripts | ShellCheck coverage. |
+| Deployment configuration | A deployment-configuration check such as Trivy. |
+| A delivery request | The project's shipping contract: actual PR identity, required CI checks, applicable UI proof, and a deployment verifier when the target is Deploy. |
+
+Setup preserves existing workflows. It adds a new workflow only when the project has measured shipping policy, and it does not turn a local gate pass into CI, merge, or deployment proof.
+
+Read the [gate contract](.agents/skills/he/references/gates.md), [testing guidance](.agents/skills/he/references/testing.md), and [shipping contract](.agents/skills/he-ship/references/checks.md) before treating a green result as release-ready.
+
+## Security and approval boundaries
+
+Hard Eng checks the security work a repository has configured. It does not become the repository's access-control system or promise that a scan makes an application safe.
+
+| Concern | What Hard Eng can enforce | What still needs judgment or product controls |
+| --- | --- | --- |
+| Secrets | Gitleaks checks source files and, when configured, Git history. | A scan cannot revoke an exposed secret or find every copy outside the scanned scope. |
+| Dependencies and images | OSV checks selected lockfiles or images and rejects reported vulnerabilities, errors, and incomplete reports. | The project must select the right lockfiles and images; a clean scan does not prove exploitability or complete coverage. |
+| Code, workflow, and deployment configuration | Configured Semgrep, Actionlint, Zizmor, ShellCheck, and deployment checks reject their findings, errors, or incomplete reports. | Scan rules and scope must match the real trust boundary. |
+| Permissions and external actions | The workflow keeps task authorization separate from agent participation. It does not grant the agent permission to merge, publish, spend, change access, or handle sensitive data. | Applications must enforce their own identity, role, tenant, and data rules at the real server or service boundary. |
+
+Run [Security Review](.agents/skills/security-review/SKILL.md) when a change crosses a trust boundary. It traces the sensitive asset, caller, required permission, and enforcing code; scanner success alone is never an application security certificate.
+
+## Install in a target repository
+
+Run this from the Git root of the repository you want to set up:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh
 ```
 
-No GitHub account or existing Hard Eng checkout needed; public API rate limits apply, and existing GitHub credentials are used when available. Requires Git, curl, uv and Python 3.12+; uv provisions the locked setup dependencies in the temporary source checkout. Running gates also requires pnpm and the project's SDKs. Dart Decimate's reviewed install scripts require npm 11.16+; current npm is supported without changing the project's package manager. The installed check command uses uv for PyYAML when host Python lacks it. Existing configuration conflicts are reported for review.
+The same command installs a new scaffold or updates an existing recorded installation. It uses a CI-verified source revision, creates a local update commit when configuration changes, and does not push it. Review any reported conflicts before proceeding.
 
-Classifying omitted type-only TypeScript coverage uses Node 22.13+ [native type stripping](https://nodejs.org/api/module.html#modulestriptypescripttypescode-options). Executable or unsupported sources still require coverage records.
+It needs Git, curl, uv, and Python 3.12 or later. Running the resulting checks also needs the project’s own SDKs and pnpm where applicable; Dart Decimate provisioning requires npm 11.16 or later.
 
-Omitted Dart declaration-only coverage uses the analyzer from the package's existing `.dart_tool/package_config.json`. The parser reads source as data; it does not execute it. Only proven directive/constant/type declarations are exempt. Missing or incompatible analyzer support leaves coverage required, as do runtime methods, getters, constructors and initializers.
-
-## Check
+Then run the installed project’s configured check:
 
 ```sh
 python3 .hooks/hard-eng.py check
 ```
 
-## Status
+For a deeper installation and update contract, see [setup.sh](setup.sh), [setup.py](setup.py), and the [integration guidance](.agents/skills/he/references/integrations.md). New or changed hooks still need to be trusted by the relevant client; registration alone does not prove they executed.
 
-Native hook activation depends on client trust and behavior. Scanner completeness and application-specific UI/device, service, container and update-lifecycle acceptance remain open. See [current verification and remaining decisions](DECISION.md#current-status); local proof does not establish publication or deployment.
+## Setup and update paths
 
-For the standard Husky `.husky/_/pre-push` forwarding shim, setup preserves the shim and Git configuration and manages `.husky/pre-push` with a shell-compatible launcher. Existing canonical Hard Eng launchers migrate; custom hooks remain protected conflicts.
+```mermaid
+flowchart TD
+  A[Target Git repository] --> B{Hard Eng already installed?}
+  B -->|No| C{Project files already exist?}
+  C -->|No| D[Greenfield setup]
+  C -->|Yes| E[Brownfield setup: preserve existing instructions and configuration]
+  D --> F[Install the scaffold]
+  E --> F
+  F --> G[Configure project checks and integrations]
+  B -->|Yes| H[Look for a newer CI-verified revision]
+  H --> I{Newer revision available?}
+  I -->|No| J[Keep the current version]
+  I -->|Yes| K{Managed paths clean?}
+  K -->|No| L[Report the conflict and preserve local work]
+  K -->|Yes| M[Verify an isolated update candidate]
+  M --> N[Create a local update commit]
+```
 
-The updater commits that launcher together with the scaffold and revision marker. If the installed updater itself is the failing component, invoke `update.update(target_root)` from a fetched, CI-verified source checkout's `.hooks/update.py` for the repair. This uses the same verified, isolated transaction; manually copying hooks or advancing the marker is not adoption proof.
+Greenfield and brownfield setup use the same installer. Brownfield setup keeps project-owned files and asks for a decision on a genuine overlap. An existing installation updates only from a verified revision, verifies the candidate before changing managed paths, and never pushes the resulting local commit.
 
-For a new task branch, pre-push resolves the configured shipping base on `origin` and fetches that exact commit for comparison, while checking the exact pushed revision. An unavailable base blocks the push. Existing branches retain their advertised remote-tip comparison; direct base pushes remain blocked.
+## How enforcement works
+
+```mermaid
+flowchart TD
+  A[Change, task plan, or push] --> B{Where the check runs}
+  B -->|Manual command| C[Hard Eng runner]
+  B -->|Trusted, supported host hook| C
+  B -->|Installed pre-push hook| C
+  B -->|Configured CI job| C
+  C --> D[Run configured commands and validate reports]
+  D --> E{Checks pass and evidence is complete?}
+  E -->|Yes| F[Return the current-stage handoff]
+  E -->|No| G[Fail or block with the actual cause]
+  G --> H[Repair code, configuration, or report at its owner]
+  H --> C
+```
+
+The runner does not accept a green exit alone: it checks required reports and their scope. A failed manual check blocks a readiness claim; an invoked pre-push hook checks the commits being pushed; and a configured CI job fails its own run. A host hook helps only when that client supports and trusts it. None of these paths grants new authority or proves complete application acceptance.
+
+## Skills at a glance
+
+| Need | Guidance |
+| --- | --- |
+| Keep task context and choose a stage | [Hard Eng](.agents/skills/he/SKILL.md) |
+| Research a codebase or a current external fact | [Research](.agents/skills/research/SKILL.md) |
+| Review code, design, security, or real journeys | [Code Review](.agents/skills/code-review/SKILL.md), [Codebase Design](.agents/skills/codebase-design/SKILL.md), [Security Review](.agents/skills/security-review/SKILL.md), [E2E](.agents/skills/e2e/SKILL.md), [Product Walkthrough Video](.agents/skills/product-walkthrough-video/SKILL.md) |
+| Work with Appwrite or Flutter | [Appwrite Backend](https://github.com/sgaabdu4/appwrite-backend), [Building Flutter Apps](https://github.com/sgaabdu4/building-flutter-apps) |
+| Author or improve a skill | [Writing Great Skills](.agents/skills/writing-great-skills/SKILL.md) |
+
+Skills guide judgment. The checks enforce only their documented, executable contracts.
+
+## Evidence, CI, and the alpha boundary
+
+Hard Eng distinguishes three things:
+
+1. **A local result** shows what the configured command reported in this checkout.
+2. **Delivery evidence** connects a task to its actual pull request, required CI, UI proof when applicable, and deployment verification when configured.
+3. **Human judgment** remains necessary for product correctness, realistic test behavior, user authority, client hook trust, and acceptance on real devices or services.
+
+The source suite and installer fixtures verify supported behavior, but they cannot guarantee third-party host activation, scanner completeness, application-specific UI or service acceptance, or every consumer’s release lifecycle. The maintained record of what has been verified and what remains open is [DECISION.md](DECISION.md#current-status).
+
+## Read next
+
+- [Product intent and boundaries](PRODUCT.md)
+- [Technical component overview](DESIGN.md)
+- [Current verification, decisions, and acceptance gaps](DECISION.md#current-status)
+- [Planning, build, and shipping workflow](.agents/skills/he/references/workflow.md)
