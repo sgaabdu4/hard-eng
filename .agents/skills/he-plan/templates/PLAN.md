@@ -36,7 +36,13 @@ Evidence: [TODO: Starting check command and actual result, or existing log link]
 Result: Pending
 Evidence: [TODO: Current route/component, before capture, Markdown image reference to the rendered proposal shown and inspected in conversation, affected devices, actual design owners and settled direction]
 
-[TODO: For nonvisual work replace this body with N/A — a change-specific reason. Unavailable browser/captures are Blocked, not N/A.]
+Surface: [TODO: Existing or New — actual route/screen and production owner]
+Before: [TODO: Markdown image of the unmodified starting screen; only a new app without prior UI may use N/A — reason]
+Proposed: [TODO: Markdown image of the proposed state on that actual screen]
+Capture: [TODO: Starting revision, native command/browser/device actions, route/state assertions and observed result; link existing artifacts]
+Review: [TODO: Actual before/proposal inspection against the real screen, affected devices and settled direction]
+
+[TODO: For nonvisual work replace this body with N/A — a change-specific reason. Unavailable browser/captures remain Blocked.]
 
 ## Verification
 
