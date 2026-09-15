@@ -318,7 +318,11 @@ def verify_candidate(
         write_links(candidate, links)
         names = sorted({*changes, *links})
         if names:
-            subprocess.run(["git", "add", "--", *names], cwd=candidate, check=True)
+            subprocess.run(
+                ["git", "add", "--force", "--", *names],
+                cwd=candidate,
+                check=True,
+            )
         subprocess.run(
             ["git", "diff", "--cached", "--check"], cwd=candidate, check=True
         )
@@ -400,7 +404,11 @@ def commit_update(
     try:
         write_changes(root, changes)
         write_links(root, links)
-        subprocess.run(["git", "add", "--", *names], cwd=root, check=True)
+        subprocess.run(
+            ["git", "add", "--force", "--", *names],
+            cwd=root,
+            check=True,
+        )
         subprocess.run(
             [
                 "git",

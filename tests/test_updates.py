@@ -129,8 +129,12 @@ def test_update_commits_only_scaffold_and_preserves_index(
     capfd: pytest.CaptureFixture[str],
 ) -> None:
     source, target, _ = release
+    ignored = ".agents/skills/he/references/ignored-update.md"
+    ignored_path = source / ignored
+    ignored_path.write_text("ignored update fixture\n")
     revision = commit(source, "verified update")
     monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
+    (target / ".git/info/exclude").write_text(f"{ignored}\n")
     (target / "staged.txt").write_text("unrelated staged work\n")
     git(target, "add", "staged.txt")
     (target / "project.txt").write_text("unrelated working edit\n")
@@ -141,7 +145,11 @@ def test_update_commits_only_scaffold_and_preserves_index(
             target, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"
         ).splitlines()
     )
-    assert changed == {update.SOURCE_FILE, ".agents/skills/he/references/workflow.md"}
+    assert changed == {
+        update.SOURCE_FILE,
+        ".agents/skills/he/references/workflow.md",
+        ignored,
+    }
     assert git(target, "diff", "--cached", "--name-only") == "staged.txt"
     assert (target / "project.txt").read_text() == "unrelated working edit\n"
     assert "SOURCE_CHECK" not in capfd.readouterr().err
@@ -292,8 +300,7 @@ def test_candidate_uses_remote_task_plan_scope(
     source, target, _ = release
     commit(source, "verified source candidate")
     (target / "package.json").unlink()
-    config_path = target / "hard-eng.gates.json"
-    config = json.loads(config_path.read_text())
+    config = json.loads((target / "hard-eng.gates.json").read_text())
     policy: ShippingPolicy = {
         "base": "main",
         "checks": ["fixture"],
@@ -316,7 +323,7 @@ def test_candidate_uses_remote_task_plan_scope(
     if outcome == "application-failure":
         command = command.replace("SystemExit(0)", "SystemExit(1)")
     config["shared"][0]["command"] = ["python3", "-c", command]
-    config_path.write_text(json.dumps(config))
+    (target / "hard-eng.gates.json").write_text(json.dumps(config))
     (target / "removed.txt").write_text("old managed content\n")
     git(target, "branch", "-M", "main")
     commit(target, "remote baseline")
@@ -330,8 +337,12 @@ def test_candidate_uses_remote_task_plan_scope(
     plan = target / "features/current/PLAN.md"
     if outcome != "absent":
         plan.parent.mkdir(parents=True)
-        status = outcome if outcome in ("Draft", "Ready") else "Complete"
-        plan.write_text(completed_plan.replace("Status: Complete", f"Status: {status}"))
+        plan.write_text(
+            completed_plan.replace(
+                "Status: Complete",
+                f"Status: {outcome if outcome in ('Draft', 'Ready') else 'Complete'}",
+            )
+        )
         commit(target, "task plan")
     git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
     stale = git(target, "rev-parse", "origin/main")
@@ -345,6 +356,8 @@ def test_candidate_uses_remote_task_plan_scope(
         "removed.txt": None,
     }
     links: dict[str, str | None] = {"new-link": "project.txt"}
+    with (target / ".git/info/exclude").open("a") as handle:
+        handle.write("new-managed.mjs\n")
     (target / "unrelated.txt").write_text("staged local work\n")
     git(target, "add", "unrelated.txt")
     if outcome not in {"application-failure", "missing-base"}:
