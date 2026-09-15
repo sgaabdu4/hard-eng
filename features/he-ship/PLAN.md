@@ -51,6 +51,7 @@ N/A — the delivered feature is a CLI and skill workflow; UI sandbox captures v
 ## Verification
 
 Result: Passed
+E2E: Passed — Historical native shipping, stale-revision rejection and configured delivery prerequisite journeys are recorded below; remote delivery remains distinct.
 Evidence: Three focused cases reproduced acceptance of an unconfigured Deploy plan before the fix. After moving the existing configuration prerequisite earlier, all 107 plan/shipping/action tests pass, including configured readiness without executing deployment and existing old-revision rejection during actual delivery. The integrated Complete gate passed all 17 checks, including 569 tests and four performance checks. The initial integrated run caught a complexity-limit violation; extracting shipping policy validation from plan selection fixed it without weakening the limit. Final diff review found no additional defect. Remote follow-up delivery remains pending; older implementation receipts below do not establish its result.
 
 Ready for ship — local implementation and verification complete; delivery not performed.

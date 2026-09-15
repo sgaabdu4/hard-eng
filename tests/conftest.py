@@ -50,8 +50,7 @@ def installer() -> ModuleType:
     return load_module("installer", SOURCE / "setup.py")
 
 
-@pytest.fixture
-def completed_plan() -> str:
+def plan_document() -> str:
     return """# Fixture command behavior
 Status: Complete
 ## Outcome + scope
@@ -74,7 +73,13 @@ N/A — fixture commands have no visual interface.
 ## Verification
 Result: Passed
 Evidence: The test asserts the observed command exit; this is fixture data.
+E2E: Passed — fixture command is invoked through the native CLI and its exit is asserted.
 """
+
+
+@pytest.fixture
+def completed_plan() -> str:
+    return plan_document()
 
 
 @pytest.fixture
@@ -101,14 +106,18 @@ def shipping_policy() -> "ShippingPolicy":
 
 
 @pytest.fixture
-def release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, str]:
+def release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shipping_policy: "ShippingPolicy"
+) -> tuple[Path, Path, str]:
     source, target = tmp_path / "source", tmp_path / "target"
     init(source)
     for name in (".hooks", ".agents", ".github"):
         shutil.copytree(
             SOURCE / name,
             source / name,
-            ignore=shutil.ignore_patterns("__pycache__", "skill-sources"),
+            ignore=shutil.ignore_patterns(
+                "__pycache__", "skill-sources", "node_modules"
+            ),
         )
     for name in (
         "setup.py",
@@ -138,6 +147,9 @@ def release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path
     init(target)
     (target / "package.json").write_text('{"private":true}')
     (target / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (target / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [], "shipping": shipping_policy})
+    )
     subprocess.run(
         ["python3", str(source / "setup.py"), str(target)],
         check=True,

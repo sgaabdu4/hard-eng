@@ -3,9 +3,10 @@
 import json
 import re
 import subprocess
-from collections import deque
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
+
+from dependency_graph import dependency_review_guidance, expand_dependents
 
 type JsonValue = (
     str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
@@ -391,7 +392,7 @@ def changed_packages(
     from plans import is_plan_path
 
     names = changed_files(root, base)
-    if not names:
+    if names is None:
         return None
     names = {name for name in names if not is_plan_path(Path(name))}
     selected: set[str] = set()
@@ -404,35 +405,27 @@ def changed_packages(
         ):
             return None
         selected.add(max(matches, key=len))
-    return selected or None
+    return selected
 
 
 def affected_groups(root: Path, groups: list[Group], base: str | None) -> list[Group]:
     packages = groups[:-1]
-    if (
-        base is None
-        or not packages
-        or any("depends_on" not in group for group in packages)
-    ):
+    if base is None or not packages:
         return groups
     by_path = {group["path"]: group for group in packages}
-    if len(by_path) != len(packages):
-        return groups
-    dependents: dict[str, list[str]] = {name: [] for name in by_path}
-    for group in packages:
-        for dependency in group["depends_on"]:
-            if dependency not in by_path:
-                raise ValueError(f"Unknown package dependency: {dependency}")
-            dependents[dependency].append(group["path"])
     selected = changed_packages(root, by_path, base)
     if selected is None:
         return groups
-    pending = deque(selected)
-    while pending:
-        for dependent in dependents[pending.popleft()]:
-            if dependent not in selected:
-                selected.add(dependent)
-                pending.append(dependent)
+    if not selected:
+        return [groups[-1]]
+    guidance = dependency_review_guidance(packages)
+    if any("depends_on" not in group for group in packages):
+        if guidance is not None:
+            print("Package impact is unknown; checking all packages. " + guidance)
+        return groups
+    if len(by_path) != len(packages):
+        return groups
+    selected = expand_dependents(packages, by_path, selected)
     print("Affected packages and dependents: " + ", ".join(sorted(selected)))
     return selected_services(root, packages, selected) + [groups[-1]]
 
@@ -668,15 +661,22 @@ def validate_package_services(
         require_roles(group["path"], required, roles)
 
 
-def load_groups(root: Path, base: str | None = None) -> list[Group]:
-    validate_documents(root)
-    config = cast(GateConfig, json.loads((root / "hard-eng.gates.json").read_text()))
+def parse_config(content: str) -> GateConfig:
+    config = cast(GateConfig, json.loads(content))
     if (
         not isinstance(config, dict)
         or not isinstance(config.get("packages"), list)
         or not isinstance(config.get("shared"), list)
     ):
-        raise TypeError("Gate configuration must contain packages and shared lists")
+        raise TypeError(
+            "Gate configuration must contain packages and shared lists; preserve existing checks and migrate to the current HE templates before reinstalling"
+        )
+    return config
+
+
+def load_groups(root: Path, base: str | None = None) -> list[Group]:
+    validate_documents(root)
+    config = parse_config((root / "hard-eng.gates.json").read_text())
     if type(config.get("scan_git_history", True)) is not bool:
         raise TypeError("scan_git_history must be true or false")
     if "shipping" in config:

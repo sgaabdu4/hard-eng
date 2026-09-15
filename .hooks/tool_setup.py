@@ -3,18 +3,20 @@
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
-import threading
-from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 from fallow_report import native_fallow_command
 from gate_config import Group
 from project_setup import package_script_invocation
 
-UV_LOCK = threading.Lock()
+NATIVE_SCANNERS = {
+    "dart-decimate": "dart-decimate",
+    "react-doctor": "React Doctor",
+}
 
 
 def ensure_python_runtime() -> None:
@@ -36,11 +38,6 @@ def ensure_python_runtime() -> None:
         )
 
 
-def execution_lock(command: list[str]) -> AbstractContextManager[object]:
-    """Keep uv-backed gates from mutating the shared cache concurrently."""
-    return UV_LOCK if Path(command[0]).name in {"uv", "uvx"} else nullcontext()
-
-
 def managed_command(command: list[str], directory: Path | None = None) -> list[str]:
     if directory is not None:
         command = managed_scanner_command(command, directory)
@@ -50,17 +47,33 @@ def managed_command(command: list[str], directory: Path | None = None) -> list[s
 
 
 def managed_scanner_command(command: list[str], directory: Path) -> list[str]:
-    """Keep a package Fallow audit's arguments without its stale local binary."""
+    """Keep supported scanner arguments without a stale package-local binary."""
     arguments, resolved = package_script_invocation(command, directory)
     invocation = native_fallow_command(arguments)
+    candidate = (
+        arguments[2:]
+        if arguments[:2] in (["pnpm", "dlx"], ["pnpm", "exec"])
+        else arguments
+    )
+    if invocation is None and candidate:
+        executable = Path(candidate[0]).name.split("@", 1)[0]
+        if executable in NATIVE_SCANNERS:
+            invocation = [executable, *candidate[1:]]
     if invocation is not None:
+        scanner = (
+            "Fallow" if invocation[0] == "fallow" else NATIVE_SCANNERS[invocation[0]]
+        )
         if resolved.resolve() != directory.resolve():
             raise ValueError(
-                "Configure the Fallow gate in its explicit package directory"
+                f"Configure the {scanner} gate in its explicit package directory"
             )
         if any(value in arguments for value in ("&&", "||", ";", "|", ">", "2>")):
+            if scanner == "Fallow":
+                raise ValueError(
+                    "Fallow audit must be one native invocation with its arguments"
+                )
             raise ValueError(
-                "Fallow audit must be one native invocation with its arguments"
+                f"{scanner} must be one native invocation with its arguments"
             )
         return invocation
     return command
@@ -83,7 +96,10 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         "k6": "aqua:grafana/k6",
     }
     commands = [
-        managed_scanner_command(gate["command"], root / group["path"])
+        package_script_invocation(
+            managed_scanner_command(gate["command"], root / group["path"]),
+            root / group["path"],
+        )[0]
         for group in groups
         for gate in group["checks"]
     ]
@@ -112,6 +128,12 @@ def provision_batch(
     root: Path, batch: list[str], timeout: float, *, use_npm: bool
 ) -> None:
     storage = Path(tempfile.gettempdir()) / "hard-eng-tools"
+    environment = os.environ.copy()
+    if shutil.which("gh"):
+        environment.setdefault(
+            "MISE_GITHUB_CREDENTIAL_COMMAND",
+            'gh auth token --hostname "$MISE_CREDENTIAL_HOST"',
+        )
     command = [
         "env",
         f"MISE_DATA_DIR={storage / 'mise/data'}",
@@ -141,7 +163,7 @@ def provision_batch(
             capture_output=True,
             check=False,
             env={
-                **os.environ,
+                **environment,
                 "PNPM_CONFIG_DLX_CACHE_MAX_AGE": "0"
                 if arguments[0] == "install"
                 else "60",

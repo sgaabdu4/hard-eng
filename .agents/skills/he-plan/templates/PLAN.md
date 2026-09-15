@@ -42,5 +42,6 @@ Evidence: [TODO: Current route/component, before capture, Markdown image referen
 
 Result: Pending
 Evidence: [TODO: Before completion: actual commands/results, runtime proof and remaining limits. Planning evidence does not prove implementation.]
+E2E: Required — [TODO: Exact affected journey, environment, command/tool and expected result. Before Complete replace with Passed — actual runtime evidence; for no applicable journey use N/A — concrete reason. Deployment-only proof uses Delivery — journey/verifier and requires Delivery target: Deploy plus configured delivery checks. Unchanged visuals do not make interactions inapplicable.]
 
 [TODO: If shipping is requested, retain Delivery target: PR, Merge or Deploy plus the required remote proof and pending state here as prose. Complete describes local build acceptance; shipping remains unfinished until HE Ship verifies it. Preserve UI baseline/final evidence for the PR.]

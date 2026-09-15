@@ -1,7 +1,7 @@
 """Adapt native template commands to the target project's existing stack."""
 
+import configparser
 import json
-import math
 import os
 import re
 import shlex
@@ -558,9 +558,69 @@ def python_roots(directory: Path, package: Group) -> list[str]:
     return sorted(roots)
 
 
+def import_linter_owner(
+    directory: Path,
+) -> tuple[Path, configparser.ConfigParser] | None:
+    for name in ("setup.cfg", ".importlinter"):
+        owner = directory / name
+        if not owner.is_file():
+            continue
+        parser = configparser.ConfigParser()
+        parser.read(owner)
+        if parser.has_section("importlinter"):
+            return owner, parser
+    return None
+
+
+def has_recursive_import_contract(
+    parser: configparser.ConfigParser, roots: list[str]
+) -> bool:
+    root_option = (
+        "root_packages"
+        if parser.has_option("importlinter", "root_packages")
+        else "root_package"
+    )
+    configured_roots = {
+        value.strip()
+        for value in parser.get("importlinter", root_option, fallback="").splitlines()
+        if value.strip()
+    }
+    if not set(roots).issubset(configured_roots):
+        return False
+    contracts = [
+        parser[section]
+        for section in parser.sections()
+        if section.startswith("importlinter:")
+    ]
+    ancestors = set()
+    for contract in contracts:
+        if (
+            contract.get("name", "").strip()
+            and contract.get("type", "").strip() == "acyclic_siblings"
+            and contract.get("depth", "").strip() == "0"
+        ):
+            ancestors.update(
+                value.strip()
+                for value in contract.get("ancestors", "").splitlines()
+                if value.strip()
+            )
+    return all({root, root + ".**"} <= ancestors for root in roots)
+
+
 def import_configuration(directory: Path, package: Group, content: str) -> str:
     roots = python_roots(directory, package)
-    if not roots or "importlinter" in tomllib.loads(content).get("tool", {}):
+    if not roots:
+        return content
+    configured = import_linter_owner(directory)
+    if configured is not None:
+        owner, parser = configured
+        if has_recursive_import_contract(parser, roots):
+            return content
+        raise ValueError(
+            f"Import Linter prioritizes {owner.name}; preserve its existing contracts "
+            "and add a depth-zero acyclic_siblings contract covering each root and its descendants there"
+        )
+    if "importlinter" in tomllib.loads(content).get("tool", {}):
         return content
     ancestors = [value for root in roots for value in (root, root + ".**")]
     return content + (
@@ -570,103 +630,3 @@ def import_configuration(directory: Path, package: Group, content: str) -> str:
         + json.dumps(ancestors)
         + "\ndepth = 0\n"
     )
-
-
-def workflow_budget(root: Path, content: str) -> str:
-    from shipping import load_policy
-
-    policy = load_policy(root, required=False)
-    if policy is None:
-        return content
-    return re.sub(
-        r"(?m)^    timeout-minutes: \d+$",
-        f"    timeout-minutes: {math.ceil(policy['ci_seconds'] / 60)}",
-        content,
-    )
-
-
-def migrate_workflow_pins(content: str) -> str:
-    for action, old, new, before, after in (
-        (
-            "actions/checkout",
-            "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
-            "3d3c42e5aac5ba805825da76410c181273ba90b1",
-            "v5",
-            "v7.0.1",
-        ),
-        (
-            "pnpm/setup",
-            "c9883cc79df532ad1a7b81bf9ab944ceb090d65c",
-            "703c52620218391530e48b9e8870d5c0082e1b9b",
-            "v2.0.0",
-            "v2.1.0",
-        ),
-    ):
-        content = re.sub(
-            rf"(?m)^([ \t]*(?:-[ \t]+)?uses:[ \t]+){re.escape(action)}@{old}([ \t]*(?:#.*)?)$",
-            lambda match, action=action, new=new, before=before, after=after: (
-                match[1]
-                + action
-                + "@"
-                + new
-                + match[2].replace(f"# {before}", f"# {after}", 1)
-            ),
-            content,
-        )
-    return content
-
-
-def migrate_workflow_tools(content: str) -> str:
-    launcher = "pnpm dlx --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config"
-    return re.sub(
-        r"(?m)^        run: >-\n"
-        r"          pnpm dlx --allow-build=@jdxcode/mise\n"
-        r"          --package=@jdxcode/mise@latest mise --no-config exec\n"
-        r"          (?P<tools>[^\n]+)\n"
-        r"          -- (?P<check>uv run --no-project --with pyyaml python "
-        r'\.hooks/hard-eng\.py check --base "\$BASE_SHA")\n',
-        lambda match: (
-            "        run: |\n"
-            f"          {launcher} install {match['tools']} &&\n"
-            f"          MISE_FETCH_REMOTE_VERSIONS_CACHE=1h {launcher} exec {match['tools']} -- {match['check']}\n"
-        ),
-        content,
-    )
-
-
-def configure_ci(
-    root: Path, source: Path, config: GateConfig, changes: dict[str, str]
-) -> None:
-    name = ".github/workflows/hard-eng.yml"
-    if (root / name).exists():
-        original = (root / name).read_text()
-        migrated = migrate_workflow_tools(migrate_workflow_pins(original))
-        if migrated != original:
-            changes[name] = migrated
-        return
-    tools = ["uv@latest", "python@3.12", "node@latest"]
-    for package in config["packages"]:
-        directory = root / package["path"]
-        language = package.get("language")
-        if language not in {"python", "javascript", "dart"}:
-            continue
-        manager, _, _ = dependency_command(directory, language)
-        if manager in {"dart", "flutter", "pnpm", "yarn", "bun", "poetry"}:
-            version = "latest"
-            if language == "javascript":
-                declared = json.loads((directory / "package.json").read_text()).get(
-                    "packageManager", ""
-                )
-                if declared.startswith(manager + "@"):
-                    version = declared.split("@", 1)[1].split("+", 1)[0]
-            specification = manager + "@" + version
-            if specification not in tools:
-                tools.append(specification)
-    if "flutter@latest" in tools and "dart@latest" in tools:
-        tools.remove("dart@latest")
-    changes[name] = (
-        (source / name)
-        .read_text()
-        .replace("uv@latest python@3.12 node@latest dart@latest", " ".join(tools))
-    )
-    changes[name] = workflow_budget(root, changes[name])
