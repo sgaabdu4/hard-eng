@@ -1,79 +1,244 @@
 <img src="assets/readme/hard-eng-hero.png" alt="Hard Eng" width="100%">
 
-Repository-local engineering instructions, skills, checks, hooks and CI for Python, JavaScript/TypeScript and Dart/Flutter, including monorepos.
+# Hard Eng
 
-## Capabilities
+**An alpha workflow for one developer building with coding agents.**
 
-- Detect supported packages; preserve project instructions and configuration; report conflicts.
-- Require meaningful `PRODUCT.md` and `DESIGN.md`, baseline checks, nonempty tests, at least 70% executable-line coverage and a configured performance suite. Preserve stricter coverage requirements.
-- Check task `PLAN.md` structure, reasoned N/A entries and declared readiness/completion evidence through the existing runner; visible proposals need a Markdown image reference before Ready. See [plan checks](.agents/skills/he/references/gates.md#plan-checks). References do not prove images were displayed or inspected; evidence truth and user authorization still require review.
-- Successful Ready/Complete checks print the next-stage handoff; failed checks cannot announce readiness. Codex shows progress while its trusted session and completion hooks run. Hook registration alone does not prove execution.
-- SessionStart reports its actual updater result through native Codex/Claude messages. Installed-project instructions require the supported curl updater before work if that session has no startup result; an existing result avoids a duplicate update. This fallback is an agent instruction, not a replacement for host hook trust.
-- Reject blanket Node warning suppression in configured commands, expanded package-script arguments and the inherited Node environment. Package-directory options are resolved; unsupported package selectors fail instead of skipping inspection. Existing `check:fallow` scripts must be wired into the package gate with a native Fallow report, including active CRAP enforcement for audits. Strict Dart analysis rejects older ordinary lint pins against the installed canonical profile and disallowed exclusions. Arbitrary shell wrappers and API mock semantics still require native integration tests and review.
-- Run full checks for affected packages, dependents and shared concerns; uncertain impact expands scope. Independent checks may run in parallel.
-- Validate native exits and reports; reject findings and missing, stale or malformed evidence. Handwritten source/test files over 700 lines need a justified exception.
-- Install pre-push checks for the actual pushed commits and agent session/failure/completion hooks. Preserve existing GitHub Actions jobs for adaptation; generate a new workflow only after project check names and measured budgets are configured. Ordinary prompts and successful tools trigger no Hard Eng callback. Remote branch protection requires separate approval.
-- Prompt evidence-based learning throughout work: prefer existing deterministic prevention, use skills as a last resort, and capture lasting accepted decisions in terse `docs/adr/` records. Routine progress creates no learning artifact; hooks do not certify semantic judgment.
-- Require a configured [shipping contract](.agents/skills/he-ship/references/checks.md) for pushes and completed delivery plans; verify GitHub PR/check identity, required UI attachments and deployment proof; guard merge and task-worktree cleanup. Direct base pushes and over-budget pre-push checks fail. Visual relevance and external authority still require judgment.
-- Configure Context Mode and Codebase Memory; add applicable Appwrite, Sentry, Dart and Marionette MCPs with known targets. Missing service choices remain explicitly pending while the core scaffold installs; existing conflicts are preserved and reported. Follow [integration setup](.agents/skills/he/references/integrations.md) before claiming readiness. Startup does not probe every service; registration alone is not proof.
-- Provide CI-verified scaffold updates with conflict preservation and a separate local update commit; never automatically push. Reuse upstream CI for the exact source revision instead of rerunning its source suite in every consumer; still verify the installed candidate. Completion and shipping check installed-version freshness without changing files. Scaffold-only updates avoid unrelated application checks.
+Hard Eng adds planning skills, project checks, and delivery verification to your repository. It preserves project instructions and carries work through **Setup → Plan → Build → Ship**, with **Learn** when a lasting fix or decision is needed.
 
-## Checks
+> **Alpha:** supported hooks and application acceptance still have limits. [Verified behavior and open gaps](DECISION.md#current-status).
 
-| Stack | Native tools |
-|---|---|
-| Python | Ruff, Pyrefly, pytest/coverage, Vulture, jscpd, Deptry, Import Linter |
-| JavaScript/TypeScript | Biome, TypeScript, project tests/coverage, Fallow; React adds React Doctor |
-| Dart/Flutter | Format, analyzer, tests/coverage, Dart Decimate |
-| Shared / conditional | Gitleaks, OSV, Semgrep, Actionlint, Zizmor, ShellCheck and deployment checks |
+[Setup](#1-setup-and-session-start) · [Plan](#2-plan) · [Build](#3-build) · [Ship](#4-ship) · [Learn](#5-learn) · [Checks](#the-gate-contract) · [Enforcement](#what-is-actually-enforced)
 
-Existing build, integration, UI and generator scripts participate where applicable. [Performance guidance](.agents/skills/he/references/gates.md) covers project-specific budgets and native reports; setup does not invent product benchmarks.
+## 1. Setup and session start
 
-## Skills
-
-- Work: [Hard Eng](.agents/skills/he/SKILL.md), [HE Plan](.agents/skills/he-plan/SKILL.md) (scaled planning, Wayfinder and repository-grounded UX references), [HE Build](.agents/skills/he-build/SKILL.md), [HE Ship](.agents/skills/he-ship/SKILL.md), [Research](.agents/skills/research/SKILL.md), [Code Review](.agents/skills/code-review/SKILL.md), [Codebase Design](.agents/skills/codebase-design/SKILL.md).
-- Verification: [E2E](.agents/skills/e2e/SKILL.md), [Security Review](.agents/skills/security-review/SKILL.md), [Product Walkthrough Video](.agents/skills/product-walkthrough-video/SKILL.md).
-- Stack guidance: [Appwrite Backend](.agents/skills/appwrite-backend/SKILL.md), [Building Flutter Apps](.agents/skills/building-flutter-apps/SKILL.md).
-- Authoring: [Writing Great Skills](.agents/skills/writing-great-skills/SKILL.md). [Test quality](.agents/skills/he/references/testing.md) is shared by Hard Eng and Code Review.
-
-[HE Learn](.agents/skills/he-learn/SKILL.md) routes repeated failures to prevention and lasting decisions to terse ADRs. Skills guide judgment; passing tools do not certify product behavior or test quality.
-
-## Install
-
-The same command installs a new project or uses the supported updater for a recorded installation. Both transactions execute from a CI-verified main revision. Updates create a local commit without pushing; conflicting local edits remain protected. Run it before editing, not concurrently in the background.
-
-Setup prepends shared rules to `AGENTS.md`, adds Claude's native `@AGENTS.md` import to `CLAUDE.md`, and adds a shared-rules reference when an existing `AGENTS.override.md` masks Codex's normal file. Existing project instructions are preserved. These instructions guide the agent; native hooks and gates enforce only their documented executable checks.
-
-When an update changes project configuration, its isolated candidate runs the application gates without requiring a task plan to be completed first. This verifies the update only; normal completion, push and shipping checks still require their task evidence.
-
-The modern Dart profile migrates recognized older `flutter_skill_lints` and `riverpod_lint` versions, including native version mappings, to the canonical Flutter template. This targets the current native analyzer plugin system, not legacy `custom_lint` compatibility; older major declarations also migrate. Unrelated plugins, custom sources, mapping diagnostics and newer pins remain intact. Application gates must pass before an installed update is accepted; compatibility failures require a project migration, never a lint waiver. Flutter's native build/platform exclusions are accepted while excluded handwritten Dart source remains blocked.
-
-Codex requires separate trust for new or changed hooks, even in a trusted project. Review them with `/hooks`, then verify the startup result in a new session before claiming automatic updates or completion enforcement. The installer does not grant trust to its own hooks. See the [official hook trust instructions](https://learn.chatgpt.com/docs/hooks).
-
-Run from your project's Git root, locally or in a cloud terminal:
+Run this from the target repository's Git root:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh
 ```
 
-No GitHub account or existing Hard Eng checkout needed; public API rate limits apply, and existing GitHub credentials are used when available. Requires Git, curl, uv and Python 3.12+; uv provisions the locked setup dependencies in the temporary source checkout. Running gates also requires pnpm and the project's SDKs. Dart Decimate's reviewed install scripts require npm 11.16+; current npm is supported without changing the project's package manager. The installed check command uses uv for PyYAML when host Python lacks it. Existing configuration conflicts are reported for review.
+| Starting point | What happens |
+| --- | --- |
+| New project | Install the scaffold; establish product/design context, checks, and intended integrations. |
+| Existing project | Preserve custom instructions, skills, hooks, and configuration; report genuine conflicts. |
+| Hard Eng already installed | Select a newer CI-verified revision when available, verify an isolated candidate, then apply changes and create a local update commit. |
 
-Classifying omitted type-only TypeScript coverage uses Node 22.13+ [native type stripping](https://nodejs.org/api/module.html#modulestriptypescripttypescode-options). Executable or unsupported sources still require coverage records.
+Setup prepends rules to `AGENTS.md` and connects `CLAUDE.md`. It configures Context Mode, Codebase Memory, and applicable Appwrite, Sentry, Dart, and Marionette connections. Reuse known service and hosting choices; resolve missing choices and verify a real call before relying on an integration. The installer/updater never pushes.
 
-Omitted Dart declaration-only coverage uses the analyzer from the package's existing `.dart_tool/package_config.json`. The parser reads source as data; it does not execute it. Only proven directive/constant/type declarations are exempt. Missing or incompatible analyzer support leaves coverage required, as do runtime methods, getters, constructors and initializers.
-
-## Check
-
-```sh
-python3 .hooks/hard-eng.py check
+```mermaid
+flowchart TD
+  A[Open target Git repository] --> B{Current session has an update result?}
+  B -->|Yes| R{Result succeeded?}
+  B -->|No| C[Run published setup command]
+  C --> D{Managed installation exists?}
+  D -->|No| E{Existing project files?}
+  E -->|No| N[Prepare new-project scaffold]
+  E -->|Yes| P[Prepare scaffold preserving project-owned content]
+  N --> F{Setup conflicts?}
+  P --> F
+  F -->|Yes| X[Report blocker; preserve work and existing gates]
+  F -->|No| I[Install scaffold]
+  D -->|Yes| V{Newer CI-verified revision?}
+  V -->|No| H[Reuse current installation]
+  V -->|Yes| M{Managed paths clean?}
+  M -->|No| X
+  M -->|Yes| T[Verify isolated update candidate]
+  T --> Q{Candidate passes?}
+  Q -->|No| X
+  Q -->|Yes| U[Apply update and make local commit]
+  R -->|No| X
+  R -->|Yes| Z[Resolve missing checks and service choices]
+  I --> Z
+  H --> Z
+  U --> Z
+  Z --> W[Load project context and select task stage]
 ```
 
-## Status
+Trusted SessionStart hooks attempt the update; without a result, agent instructions require the command above before work. Reuse a current result and never run concurrent setup. A failed update does not waive existing checks.
 
-Native hook activation depends on client trust and behavior. Scanner completeness and application-specific UI/device, service, container and update-lifecycle acceptance remain open. See [current verification and remaining decisions](DECISION.md#current-status); local proof does not establish publication or deployment.
+Requires Git, curl, uv, Python 3.12+, and the project's SDKs/package manager. Dart Decimate provisioning needs npm 11.16+. Details: [entry command](setup.sh), [installer](setup.py), [integrations](.agents/skills/he/references/integrations.md).
 
-For the standard Husky `.husky/_/pre-push` forwarding shim, setup preserves the shim and Git configuration and manages `.husky/pre-push` with a shell-compatible launcher. Existing canonical Hard Eng launchers migrate; custom hooks remain protected conflicts.
+## 2. Plan
 
-The updater commits that launcher together with the scaffold and revision marker. If the installed updater itself is the failing component, invoke `update.update(target_root)` from a fetched, CI-verified source checkout's `.hooks/update.py` for the repair. This uses the same verified, isolated transaction; manually copying hooks or advancing the marker is not adoption proof.
+The `he` skill tells the agent to select the appropriate stage; you do not need to invoke skills by name. Reuse an existing Ready plan. New work starts with the request, accepted decisions, and product/design context, recorded in one `PLAN.md`.
 
-For a new task branch, pre-push resolves the configured shipping base on `origin` and fetches that exact commit for comparison, while checking the exact pushed revision. An unavailable base blocks the push. Existing branches retain their advertised remote-tip comparison; direct base pushes remain blocked.
+[HE Plan](.agents/skills/he-plan/SKILL.md) covers:
+
+1. **Research:** inspect the codebase, compare relevant options, and verify current external facts through primary sources. Test consequential assumptions with the cheapest useful investigation or authorized prototype.
+2. **Scope and decisions:** define outcomes, boundaries, and the smallest execution arrangement. Ask only unresolved material questions. Parallel work needs named owners and an integration check.
+3. **UX:** for visible changes, inspect and show the real baseline and a proposal rendered through the same app screen in isolation. Record route, state, viewport, and source owner. New screens use a nearby flow; a new app may use a labelled concept.
+4. **E2E:** name the actual journey and expected result, or explain inapplicability. Unchanged appearance does not waive interaction testing; missing or failed proof stays blocked.
+5. **Readiness:** run the Draft baseline gate after planning/preview work, then the Ready gate. A failed baseline needs a separate authorized repair delivered through verified main before feature work resumes.
+
+```mermaid
+flowchart TD
+  A[Request and project context] --> B[Research; use Wayfinder if needed]
+  B --> C[Scope, UX reference, and planned proof]
+  C --> D{Draft baseline passes?}
+  D -->|No| R[Separate authorized repair]
+  R --> V[Merge repair and verify main]
+  V --> A
+  D -->|Yes| E{Ready check passes?}
+  E -->|No| B
+  E -->|Yes| F{Participation mode}
+  F -->|Human-led| G[Approve plan, UX, and execution approach]
+  G --> H[Ready for Build]
+  F -->|Autonomous and authorized| H
+```
+
+For new feature work, reuse your participation choice or ask once. **Human-led** work gets one combined proposal approval; **autonomous** work continues within existing authority. Neither mode invents answers or expands delivery scope. Announce **Ready for Build** only when readiness and authorization are established.
+
+### Optional: Wayfinder
+
+[Wayfinder](.agents/skills/he-plan/references/wayfinding.md) handles dependent unresolved decisions or an explicit request. A settled direction needs no map. Otherwise it maps the destination, questions, blockers, and research, human-choice, prototype, or prerequisite tickets.
+
+Charting stops after preparing the map. Later sessions resolve one decision ticket at a time, except research; authorized independent research may run in parallel. Human-choice and prototype decisions need your answer or verdict. Once direction is clear, return to normal planning. Use an existing authorized tracker or local Markdown, without installing another tracker.
+
+[Research](.agents/skills/research/SKILL.md) supplies evidence; [Codebase Design](.agents/skills/codebase-design/SKILL.md) helps with architecture/domain questions; [UX guidance](.agents/skills/he-plan/references/ux.md) governs real-screen previews.
+
+```mermaid
+flowchart TD
+  A[Explore destination and dependent questions] --> B{Direction settled?}
+  B -->|Yes| P[Continue normal planning]
+  B -->|No| M[Map tickets and blockers; stop charting]
+  M -->|Later work session| T[Claim an unblocked decision ticket]
+  T --> R[Resolve through research, human input, prototype, or prerequisite]
+  R --> U[Record resolution and update the map]
+  U -->|Direction settled| P
+  U -->|More decisions: next session| T
+```
+
+## 3. Build
+
+[HE Build](.agents/skills/he-build/SKILL.md) implements the authorized plan in a task branch/worktree. Build complete behaviors, review the diff, run focused checks and planned [E2E](.agents/skills/e2e/SKILL.md), and compare UI with the accepted reference.
+
+```mermaid
+flowchart TD
+  A[Ready, authorized plan] --> B[Implement a complete behavior]
+  B --> C[Focused checks, review, and real journey proof]
+  C --> D{Pass?}
+  D -->|No| E[Diagnose and repair the owner]
+  E --> B
+  D -->|Yes| F{More planned work?}
+  F -->|Yes| B
+  F -->|No| G[Integrate results and run Complete gate]
+  G --> H{Pass?}
+  H -->|No| E
+  H -->|Yes| I[Ready for Ship]
+```
+
+One coordinator integrates parallel work and owns shared Git changes. Record actual local proof in the same plan before marking it Complete. Only deployment-dependent E2E may remain pending, under a Deploy target with a configured runtime verifier. Announce **Ready for Ship** after the Complete gate passes.
+
+## 4. Ship
+
+[HE Ship](.agents/skills/he-ship/SKILL.md) delivers only your authorized target: **PR, Merge, or Deploy**. Reuse the task branch/PR, review outgoing content for privacy, and verify required CI for the current revision.
+
+```mermaid
+flowchart TD
+  A[Ready for Ship and delivery scope] --> B[PR with current CI and evidence]
+  B --> C{Required checks pass?}
+  C -->|No| X[Fix through Build or report the blocker]
+  C -->|Yes| D{Authorized target}
+  D -->|PR| E[Report PR and actual status]
+  D -->|Merge or Deploy| F[Merge and verify main revision]
+  F --> G{Main proof passes?}
+  G -->|No| X
+  G -->|Yes| H{Deploy required?}
+  H -->|No| K[Guarded cleanup and delivery report]
+  H -->|Yes| I[Verify intended runtime and affected behavior]
+  I --> J{Runtime proof passes?}
+  J -->|No| X
+  J -->|Yes| K
+```
+
+For visible work, compare matching before/final states. Publish an image pair only when appearance differs; otherwise record the comparison. Deploy needs the configured runtime verifier. Clean up only after confirmed merge and required delivery proof, preserving unrelated or uncertain worktrees. Local Complete is not delivery.
+
+## 5. Learn
+
+[HE Learn](.agents/skills/he-learn/SKILL.md) runs when a repeated failure or lasting decision needs attention, at whichever stage it occurs.
+
+```mermaid
+flowchart TD
+  A[Observed failure or decision] --> B{Durable gap?}
+  B -->|None| C[Continue without new process or files]
+  B -->|Repeated failure| D[Research the common cause]
+  D --> E[Fix owner and prefer executable prevention]
+  E --> F[Prove failure caught and nearby valid case passes]
+  F --> G[Record result and resume affected stage]
+  B -->|Lasting accepted decision| H[Record a terse decision and its scope]
+  H --> G
+```
+
+Prefer fixing the existing invariant, test, checker, or hook. A skill change is a last resort when executable prevention cannot cover the problem. A failed or unavailable prevention test remains an explicit gap.
+
+## The gate contract
+
+Hard Eng discovers supported packages, including monorepos. Each project's `hard-eng.gates.json` supplies commands, reports, budgets, and package relationships. Missing required roles fail configuration; conditional checks apply when the relevant capability is present.
+
+| Stack | Required coverage | Native tools | Conditional or project-configured work |
+| --- | --- | --- | --- |
+| Python | Formatting, lint, complexity, strict types, annotations, tests with coverage, dead code, duplicate code, dependencies, and performance. | Ruff, Pyrefly, Pytest/coverage, Vulture, jscpd, and Deptry. | Import Linter is required when the package has real Python import roots. |
+| JavaScript / TypeScript | Formatting/linting, focused-test detection, types, typing style, tests with coverage, dead code/duplicates, and performance. TypeScript packages also require architectural boundaries. | Biome, TypeScript, the project test/coverage runner, and Fallow. | React adds React Doctor. Existing `build`, integration-test, UI-test, generated-code, boundary, and `check:fallow` scripts must be wired into the package gate with native reports where applicable. |
+| Dart / Flutter | Formatting, static analysis, tests with coverage, dead code/duplicates, explicit architectural boundaries, and performance. | Dart format/analyzer, Dart test/coverage, and Dart Decimate. | A Dart boundary rule needs real project prefixes; Flutter build or device proof remains a project requirement. |
+
+All language packages need security checks, lockfile/vulnerability coverage, nonempty tests with **at least 70% executable-line coverage**, and a serial performance suite with a real workload, budget, and native report. Stricter project rules remain. Security may use shared checks; lockfile/vulnerability checks may also use a native workspace owner.
+
+Fill [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md). Handwritten source/test files over 700 physical lines need a justified exception. Checks validate native reports as well as exits; missing, stale, incomplete, or failing proof does not pass. See this repository's [configuration example](hard-eng.gates.json).
+
+### Shared checks, CI, and delivery
+
+| When present | Required shared coverage |
+| --- | --- |
+| Every supported repository | Gitleaks source-secret scanning; Git-history secret scanning unless the project explicitly disables it. |
+| GitHub Actions workflow | Actionlint and Zizmor workflow-security coverage. |
+| Shell scripts | ShellCheck coverage. |
+| Deployment configuration | A deployment-configuration check such as Trivy. |
+| A delivery request | The project shipping contract: actual PR identity, required CI, applicable UI proof, and a deployment verifier for Deploy. |
+
+Run affected packages, reviewed dependents, and shared checks. Unknown relationships and changes to gate configuration normally require full scope. Parallelize independent checks, cache tool downloads, and retain latest-tool resolution.
+
+Give each CI assertion one owner, preserving its reports, thresholds, and deployment dependencies. Measure pre-push, required CI checks, and total pipeline time. Setup preserves existing workflows; it adds one only when none exists and shipping policy is configured. Details: [gates](.agents/skills/he/references/gates.md), [testing](.agents/skills/he/references/testing.md), [shipping](.agents/skills/he-ship/references/checks.md).
+
+## Security and authority
+
+Semgrep or configured native rules check code; OSV checks selected lockfiles or images. Scanners depend on correct scope and cannot replace server-side access controls or secret rotation.
+
+[Security Review](.agents/skills/security-review/SKILL.md) examines changed trust boundaries. Review outgoing content for secrets, personal data, and private project details. Skills and passing checks never grant authority to publish, spend, or change access.
+
+## What is actually enforced
+
+**Skills guide reasoning; hooks and gates enforce executable checks.** Plan validation checks declared status, results, UX references, and E2E fields. It cannot authenticate screenshots, judge design quality, or prove that an agent followed every instruction.
+
+- **SessionStart:** attempts an update and reports the result or failure.
+- **Stop:** checks planning/completion state and freshness; changed implementation runs native checks. Planning-only or known unchanged sessions may avoid them. Repeated stop loops are bounded.
+- **Pre-push:** verifies pushed revisions in isolated worktrees.
+- **CI:** runs configured checks and fails its job on failure.
+
+Explicit Draft/Ready/Complete commands normally run native checks too. Verified scaffold-only updates have a dedicated path that avoids unrelated product checks. Completion and shipping check scaffold freshness. Host hooks work only when supported, trusted, and invoked; registration alone proves nothing.
+
+```mermaid
+flowchart TD
+  A[SessionStart] --> B[Attempt update and report result or failure]
+  C[Stop] --> D{Incomplete changed Draft evidence?}
+  D -->|Yes| F[Block completion and identify missing planning work]
+  D -->|No| P{Planning-only handoff or known unchanged session?}
+  P -->|Yes| E[Check freshness and return notice]
+  P -->|No| G[Native check]
+  H[Manual check] --> G
+  I[Git pre-push] --> J[Isolated pushed-change check]
+  K[Configured CI] --> G
+  G --> L[Run configured commands and validate reports]
+  J --> L
+  L --> M{Complete evidence passes?}
+  M -->|Yes| N[Return the current-stage result]
+  M -->|No| O[Report cause; repair its owner]
+  O --> H
+```
+
+## Read next
+
+- [Product intent and boundaries](PRODUCT.md)
+- [Technical component overview](DESIGN.md)
+- [Current verification, decisions, and acceptance gaps](DECISION.md#current-status)
+- [Research guidance](.agents/skills/research/SKILL.md)
