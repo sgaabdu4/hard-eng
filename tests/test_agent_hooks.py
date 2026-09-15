@@ -452,6 +452,30 @@ def test_changed_package_includes_transitive_dependents_and_shared(
     assert [g["path"] for g in affected_groups(repository, groups, "HEAD")] == expected
 
 
+def test_cross_package_fallow_coverage_owner_must_be_selected_with_its_consumer(
+    repository: Path,
+) -> None:
+    groups: list[Group] = [
+        {"path": "packages/website", "checks": [], "depends_on": ["packages/api"]},
+        {"path": "packages/api", "checks": [], "depends_on": ["packages/website"]},
+        {"path": ".", "checks": []},
+    ]
+    (repository / "packages/api").mkdir(parents=True)
+    (repository / "packages/api/change.mjs").write_text(
+        "export const changed = true;\n"
+    )
+    assert [group["path"] for group in affected_groups(repository, groups, "HEAD")] == [
+        "packages/website",
+        "packages/api",
+        ".",
+    ]
+    groups[0]["depends_on"] = []
+    assert [group["path"] for group in affected_groups(repository, groups, "HEAD")] == [
+        "packages/api",
+        ".",
+    ]
+
+
 def test_unknown_base_or_dependency_information_checks_every_package(
     repository: Path,
     capsys: pytest.CaptureFixture[str],

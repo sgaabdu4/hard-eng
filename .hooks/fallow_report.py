@@ -2,14 +2,20 @@
 
 import json
 import math
+import os
 import shlex
 from pathlib import Path
 
 from gate_config import Gate, Group, JsonObject, Report
 
 
-def owns_package_fallow(group: Group, gate: Gate, scripts: dict[str, str]) -> bool:
-    """Keep the audit owner while allowing already-run coverage to be reused."""
+def owns_package_fallow(
+    group: Group,
+    gate: Gate,
+    scripts: dict[str, str],
+    package_groups: list[Group] | None = None,
+) -> bool:
+    """Keep the audit owner while allowing serial coverage to be reused."""
     command = gate["command"]
     if gate.get("report", {}).get("type") != "fallow":
         return False
@@ -21,16 +27,83 @@ def owns_package_fallow(group: Group, gate: Gate, scripts: dict[str, str]) -> bo
         standalone = shlex.split(scripts.get("check:fallow", ""))
     except ValueError:
         return False
+    prerequisites = _serial_test_prerequisites(group, gate)
+    if not prerequisites:
+        return False
+    expected = _chain_commands(prerequisites + [command])
+    if standalone == expected:
+        return True
+    if package_groups is None:
+        return False
+    dependencies = _dependency_coverage_commands(group, package_groups)
+    return dependencies is not None and standalone == _chain_commands(
+        prerequisites + dependencies + [command]
+    )
+
+
+def _serial_test_prerequisites(
+    group: Group, gate: Gate | None
+) -> list[list[str]] | None:
+    prerequisites = []
     for previous in group["checks"]:
-        if previous is gate:
-            break
-        if (
-            previous.get("role") == "tests"
-            and not previous.get("parallel")
-            and standalone == [*previous["command"], "&&", *command]
+        if gate is not None and previous is gate:
+            return prerequisites
+        if previous.get("role") == "tests":
+            if previous.get("parallel"):
+                return None
+            prerequisites.append(previous["command"])
+    return prerequisites if gate is None else None
+
+
+def _dependency_coverage_commands(
+    group: Group, package_groups: list[Group]
+) -> list[list[str]] | None:
+    by_path = {
+        candidate["path"]: (index, candidate)
+        for index, candidate in enumerate(package_groups)
+    }
+    current_index = next(
+        (index for index, candidate in enumerate(package_groups) if candidate is group),
+        None,
+    )
+    if current_index is None:
+        return None
+    commands: list[list[str]] = []
+    for dependency in group.get("depends_on", []):
+        owner = by_path.get(dependency)
+        if owner is None:
+            return None
+        owner_index, owner_group = owner
+        if owner_index >= current_index or group["path"] not in owner_group.get(
+            "depends_on", []
         ):
-            return True
-    return False
+            return None
+        owner_commands = _serial_test_prerequisites(owner_group, None)
+        if not owner_commands or any(
+            command[:2] != ["pnpm", "run"] for command in owner_commands
+        ):
+            return None
+        commands.extend(
+            [
+                [
+                    "pnpm",
+                    "--dir",
+                    os.path.relpath(dependency, start=group["path"]),
+                    "run",
+                    *command[2:],
+                ]
+                for command in owner_commands
+            ]
+        )
+    return commands
+
+
+def _chain_commands(commands: list[list[str]]) -> list[str]:
+    return [
+        argument
+        for index, command in enumerate(commands)
+        for argument in (["&&"] if index else []) + command
+    ]
 
 
 def native_fallow_command(arguments: list[str]) -> list[str] | None:

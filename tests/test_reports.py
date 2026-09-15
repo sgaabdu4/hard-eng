@@ -89,6 +89,86 @@ def test_delegated_fallow_reuses_only_its_completed_coverage_owner(
     ]
 
 
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        None,
+        "extra",
+        "missing-owner-edge",
+        "missing-consumer-edge",
+        "late-owner",
+        "parallel-owner",
+        "wrong-directory",
+    ],
+)
+def test_delegated_fallow_reuses_only_selected_declared_coverage_owners(
+    tmp_path: Path, invalid: str | None
+) -> None:
+    owner: Group = {
+        "path": "packages/website",
+        "language": "javascript",
+        "depends_on": ["packages/api"],
+        "checks": [
+            {
+                "name": "coverage",
+                "role": "tests",
+                "command": ["pnpm", "run", "test:coverage"],
+            }
+        ],
+    }
+    scan: Gate = {
+        "name": "scan",
+        "role": "dead-code-duplicates",
+        "command": ["pnpm", "run", "scan"],
+        "report": {"type": "fallow", "path": "coverage/fallow.json"},
+    }
+    consumer: Group = {
+        "path": "packages/api",
+        "language": "javascript",
+        "depends_on": ["packages/website"],
+        "checks": [
+            {
+                "name": "coverage",
+                "role": "tests",
+                "command": ["pnpm", "run", "test:coverage"],
+            },
+            scan,
+        ],
+    }
+    scripts = "pnpm run test:coverage && pnpm --dir ../website run test:coverage && pnpm run scan"
+    if invalid == "extra":
+        scripts = "pnpm run test:coverage && echo stale && pnpm --dir ../website run test:coverage && pnpm run scan"
+    elif invalid == "wrong-directory":
+        scripts = "pnpm run test:coverage && pnpm --dir packages/website run test:coverage && pnpm run scan"
+    elif invalid == "missing-owner-edge":
+        owner["depends_on"] = []
+    elif invalid == "missing-consumer-edge":
+        consumer["depends_on"] = []
+    elif invalid == "parallel-owner":
+        owner["checks"][0]["parallel"] = True
+    (tmp_path / "packages/api").mkdir(parents=True)
+    (tmp_path / "packages/website").mkdir(parents=True)
+    (tmp_path / "packages/api/package.json").write_text(
+        json.dumps({"scripts": {"check:fallow": scripts}})
+    )
+    (tmp_path / "packages/website/package.json").write_text(json.dumps({"scripts": {}}))
+    by_directory: dict[tuple[Path, str], Group] = {
+        ((tmp_path / "packages/api").resolve(), "javascript"): consumer,
+        ((tmp_path / "packages/website").resolve(), "javascript"): owner,
+    }
+    inherited = {"lockfiles", "vulnerabilities", "security"}
+    package_groups = [consumer, owner] if invalid == "late-owner" else [owner, consumer]
+    if invalid is not None:
+        with pytest.raises(ValueError, match="Wire check:fallow"):
+            validate_package_services(
+                tmp_path, consumer, by_directory, {}, inherited, package_groups
+            )
+        return
+    validate_package_services(
+        tmp_path, consumer, by_directory, {}, inherited, package_groups
+    )
+
+
 REPORTS = {
     "lighthouse-ci": '[{"url":"http://localhost/","auditId":"largest-contentful-paint","name":"maxNumericValue","level":"error","expected":2500,"actual":1200,"passed":true}]',
     "deptry": "[]",

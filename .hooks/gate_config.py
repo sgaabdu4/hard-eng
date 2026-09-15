@@ -583,7 +583,12 @@ def validate_required_checks(root: Path, config: GateConfig) -> None:
                 {gate.get("role", "") for gate in group["checks"]},
             )
         validate_package_services(
-            root, group, by_directory, workspace_languages, shared_roles
+            root,
+            group,
+            by_directory,
+            workspace_languages,
+            shared_roles,
+            config["packages"],
         )
 
 
@@ -593,6 +598,7 @@ def validate_package_services(
     by_directory: dict[tuple[Path, str], Group],
     manifests: dict[str, str],
     shared_roles: set[str],
+    package_groups: list[Group] | None = None,
 ) -> None:
     from project_setup import python_roots, workspace_matches, workspace_members
 
@@ -617,7 +623,7 @@ def validate_package_services(
 
         manifest = json.loads((directory / "package.json").read_text())
         if "check:fallow" in manifest.get("scripts", {}) and not any(
-            owns_package_fallow(group, gate, manifest["scripts"])
+            owns_package_fallow(group, gate, manifest["scripts"], package_groups)
             for gate in group["checks"]
         ):
             raise ValueError(
