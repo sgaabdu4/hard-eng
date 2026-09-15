@@ -472,7 +472,15 @@ def update(root: Path) -> str:
             return "Hard Eng already matches the verified source."
         names = sorted({*changes, *links})
         if subprocess.check_output(
-            ["git", "status", "--porcelain", "--untracked-files=all", "--", *names],
+            [
+                "git",
+                "status",
+                "--porcelain",
+                "--untracked-files=all",
+                "--ignored",
+                "--",
+                *names,
+            ],
             cwd=root,
             text=True,
         ):
@@ -492,7 +500,15 @@ def update(root: Path) -> str:
                 "Files changed during verification; the update was not applied"
             )
         if subprocess.check_output(
-            ["git", "status", "--porcelain", "--untracked-files=all", "--", *names],
+            [
+                "git",
+                "status",
+                "--porcelain",
+                "--untracked-files=all",
+                "--ignored",
+                "--",
+                *names,
+            ],
             cwd=root,
             text=True,
         ):
