@@ -2,7 +2,6 @@
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import threading
@@ -513,59 +512,12 @@ def test_wrapped_actionlint_and_decimate_use_latest_packages(
     assert 'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest' in commands[2]
     assert "MISE_NPM_PACKAGE_MANAGER=npm" in commands[2]
     assert "MISE_NPM_PACKAGE_MANAGER=npm" not in commands[0]
-    assert f"NPM_CONFIG_CACHE={tmp_path}/hard-eng-tools/npm/cache" in commands[2]
     assert len(commands) == 4
     for command, environment in zip(commands, environments, strict=True):
         assert isinstance(environment, dict)
+        assert "NPM_CONFIG_CACHE" in environment
         cache_age = int(environment["PNPM_CONFIG_DLX_CACHE_MAX_AGE"])
         assert cache_age == 0 if "install" in command else cache_age > 0
-
-
-@pytest.mark.parametrize("wrapped", [False, True])
-def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wrapped: bool
-) -> None:
-    sdk, scanner = tmp_path / "sdk", tmp_path / "hard-eng-tools/scanner"
-    for directory, executable in ((sdk, "uv"), (scanner, "gitleaks")):
-        directory.mkdir(parents=True)
-        path = directory / executable
-        path.write_text("#!/bin/sh\nexit 0\n")
-        path.chmod(0o755)
-    monkeypatch.setenv("PATH", str(sdk))
-    monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
-    captured: list[str] = []
-
-    def native_environment(
-        command: list[str], **_kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        captured[:] = command
-        return subprocess.CompletedProcess(
-            command, 0, json.dumps({"PATH": str(scanner)}), ""
-        )
-
-    monkeypatch.setattr(subprocess, "run", native_environment)
-    command = ["node", "scan.mjs", "gitleaks"] if wrapped else ["gitleaks"]
-    tool_setup.provision_tools(
-        tmp_path,
-        [{"path": ".", "checks": [{"name": "secrets", "command": command}]}],
-        30,
-    )
-    assert shutil.which("uv") == str(sdk / "uv")
-    assert shutil.which("gitleaks") == str(scanner / "gitleaks")
-    assert captured[:2] == ["env", f"MISE_DATA_DIR={tmp_path}/hard-eng-tools/mise/data"]
-    assert f"PNPM_CONFIG_STORE_DIR={tmp_path}/hard-eng-tools/pnpm/store" in captured
-    assert f"PNPM_CONFIG_CACHE_DIR={tmp_path}/hard-eng-tools/pnpm/cache" in captured
-    assert captured[captured.index("pnpm") :] == [
-        "pnpm",
-        "dlx",
-        "--allow-build=@jdxcode/mise",
-        "--package=@jdxcode/mise@latest",
-        "mise",
-        "--no-config",
-        "env",
-        "--json",
-        "aqua:gitleaks/gitleaks@latest",
-    ]
 
 
 @pytest.mark.parametrize(

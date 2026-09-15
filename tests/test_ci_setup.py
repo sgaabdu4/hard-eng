@@ -2,15 +2,93 @@
 
 import json
 import shlex
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
+import tool_setup
 import yaml
 from ci_setup import configure_ci
 from gate_config import GateConfig
 from shipping import ShippingError, ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+@pytest.mark.parametrize("location", ["local", "runner", "configured"])
+def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wrapped: bool, location: str
+) -> None:
+    for name in (
+        "RUNNER_TEMP",
+        "MISE_DATA_DIR",
+        "MISE_CACHE_DIR",
+        "MISE_STATE_DIR",
+        "PNPM_CONFIG_STORE_DIR",
+        "PNPM_CONFIG_CACHE_DIR",
+        "NPM_CONFIG_CACHE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    storage = tmp_path / "hard-eng-tools"
+    if location != "local":
+        monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
+        storage = tmp_path / "runner/hard-eng-tools"
+    data = storage / "mise/data"
+    if location == "configured":
+        data = tmp_path / "configured/data"
+        monkeypatch.setenv("MISE_DATA_DIR", str(data))
+        monkeypatch.setenv("PNPM_CONFIG_STORE_DIR", str(tmp_path / "configured/store"))
+    sdk, scanner = tmp_path / "sdk", data / "installs/gitleaks/test/bin"
+    for directory, executable in ((sdk, "uv"), (scanner, "gitleaks")):
+        directory.mkdir(parents=True)
+        path = directory / executable
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o755)
+    monkeypatch.setenv("PATH", str(sdk))
+    monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
+    captured: list[str] = []
+
+    def native_environment(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        captured[:] = command
+        environment = _kwargs["env"]
+        assert isinstance(environment, dict)
+        assert environment["MISE_DATA_DIR"] == str(data)
+        assert environment["PNPM_CONFIG_STORE_DIR"] == str(
+            tmp_path / "configured/store"
+            if location == "configured"
+            else storage / "pnpm/store"
+        )
+        assert environment["PNPM_CONFIG_CACHE_DIR"] == str(storage / "pnpm/cache")
+        return subprocess.CompletedProcess(
+            command, 0, json.dumps({"PATH": str(scanner)}), ""
+        )
+
+    monkeypatch.setattr(subprocess, "run", native_environment)
+    command = ["node", "scan.mjs", "gitleaks"] if wrapped else ["gitleaks"]
+    tool_setup.provision_tools(
+        tmp_path,
+        [{"path": ".", "checks": [{"name": "secrets", "command": command}]}],
+        30,
+    )
+    assert shutil.which("uv") == str(sdk / "uv")
+    assert shutil.which("gitleaks") == str(scanner / "gitleaks")
+    assert captured[0] == "env"
+    assert not any(argument.startswith("MISE_DATA_DIR=") for argument in captured)
+    assert captured[captured.index("pnpm") :] == [
+        "pnpm",
+        "dlx",
+        "--allow-build=@jdxcode/mise",
+        "--package=@jdxcode/mise@latest",
+        "mise",
+        "--no-config",
+        "env",
+        "--json",
+        "aqua:gitleaks/gitleaks@latest",
+    ]
 
 
 @pytest.mark.parametrize("seconds,minutes", [(600, 10), (601, 11), (60, 1)])
@@ -33,6 +111,20 @@ def test_generated_ci_timeout(
     workflow = changes[".github/workflows/hard-eng.yml"]
     assert yaml.safe_load(workflow)["jobs"]["hard-eng"]["timeout-minutes"] == minutes
     assert '--base "$BASE_SHA"' in workflow
+    steps = yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"]
+    cache = next(
+        step for step in steps if step.get("name") == "Cache native tool downloads"
+    )
+    assert cache["with"]["path"] == "${{ runner.temp }}/hard-eng-tools"
+    assert "runner.os" in cache["with"]["key"] and "runner.arch" in cache["with"]["key"]
+    assert "hard-eng.gates.json" in cache["with"]["key"]
+    checks = next(step for step in steps if step.get("name") == "Run required checks")
+    assert checks["env"]["MISE_DATA_DIR"].startswith(cache["with"]["path"] + "/")
+    assert "if" not in checks
+    assert (
+        "install " in checks["run"]
+        and "MISE_FETCH_REMOTE_VERSIONS_CACHE=1h" in checks["run"]
+    )
 
 
 @pytest.mark.parametrize("name", ["hard-eng.yml", "quality.yml", "release.yaml"])
