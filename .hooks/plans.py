@@ -64,8 +64,8 @@ def evidence_field(content: str, name: str) -> str:
     return value
 
 
-def plan_sections(content: str) -> dict[str, str]:
-    if re.search(
+def plan_sections(content: str, *, allow_placeholders: bool = False) -> dict[str, str]:
+    if not allow_placeholders and re.search(
         r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$",
         content,
     ):
@@ -170,7 +170,7 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
         if field(content, "Status") != "Draft":
             continue
         try:
-            sections = plan_sections(content)
+            sections = plan_sections(content, allow_placeholders=True)
             blockers = field(sections["Decisions + authorization"], "Blockers")
             waiting |= blockers != "None"
             errors = readiness_errors(sections)

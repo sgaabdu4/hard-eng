@@ -282,7 +282,17 @@ def test_same_image_cannot_represent_a_visible_change(
         validate_plan(path)
 
 
-@pytest.mark.parametrize("state", ["incomplete", "question", "unchanged-question"])
+@pytest.mark.parametrize(
+    "state",
+    [
+        "incomplete",
+        "question",
+        "unchanged-question",
+        "question-template",
+        "question-code",
+        "question-code-parked",
+    ],
+)
 def test_native_stop_reports_incomplete_visual_planning(
     repository: Path, completed_plan: str, state: str
 ) -> None:
@@ -326,9 +336,25 @@ def test_native_stop_reports_incomplete_visual_planning(
         + "\n## Historical example\n\nBlockers: obsolete example outside decisions\n"
     )
     if state == "question":
-        (repository / "proposal.svg").write_text(
+        (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+        captures = repository / ".hard-eng/ux"
+        captures.mkdir(parents=True)
+        (captures / "proposal.svg").write_text(
             '<svg xmlns="http://www.w3.org/2000/svg"/>'
         )
+    if state == "question-template":
+        plan = repository / "PLAN.md"
+        plan.write_text(plan.read_text() + "\n[TODO: Fill after the user answers]\n")
+    if state == "question-code-parked":
+        plan = repository / "PLAN.md"
+        parked = repository / "features/parked/PLAN.md"
+        parked.parent.mkdir(parents=True)
+        plan.rename(parked)
+        plan.write_text(completed_plan)
+        git(repository, "add", ".")
+        git(repository, "commit", "-qm", "parked question")
+    if state.startswith("question-code"):
+        (repository / "app.py").write_text("print('implementation')\n")
     if state == "unchanged-question":
         git(repository, "add", "PLAN.md")
         git(repository, "commit", "-qm", "question")
@@ -345,10 +371,14 @@ def test_native_stop_reports_incomplete_visual_planning(
         check=True,
     )
     response = json.loads(result.stdout)
+    if state.startswith("question-code"):
+        assert response.get("decision") == "block"
+        assert "requires Complete" in response["reason"]
+        return
     assert "Planning incomplete" in response["systemMessage"]
     assert "Markdown image" in response["systemMessage"]
     assert (response.get("decision") == "block") is not question
-    assert (repository / "checked").exists() is (state == "question")
+    assert not (repository / "checked").exists()
 
 
 @pytest.mark.parametrize("status", ["Ready", "Complete"])

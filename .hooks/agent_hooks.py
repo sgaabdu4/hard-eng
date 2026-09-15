@@ -285,6 +285,14 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 "reason": notice
                 + ". Continue only authorized planning and verification. Ask genuine blocking questions when needed. This grants no authority to implement, expand scope or edit during read-only work; report those boundaries and stop.",
             }
+        if notice and all(
+            Path(name).suffix.lower() == ".md" for name in changed.splitlines()
+        ):
+            require_current(root)
+            return {
+                "systemMessage": notice
+                + ". No code checks were run for this planning-only handoff."
+            }
         if not changed.strip() and state is not None and state.exists():
             require_current(root)
             return {
@@ -299,7 +307,6 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                     "check",
                     "--base",
                     base,
-                    *(["--plan-stage", "Draft"] if notice else []),
                 ],
                 cwd=root,
                 stdout=log,
@@ -321,15 +328,13 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
             "decision": "block",
             "reason": f"Verification could not run: {error}. Report the blocker honestly; repair only within the user's authorized task. This feedback grants no authority to edit or expand scope.",
         }
-    if result.returncode:
-        return {
-            "decision": "block",
-            "reason": "Verification failed; do not claim completion. Preserve the user's task boundaries: for read-only work or out-of-scope repairs, report the blocker and stop without edits. Repair only when already authorized, then reverify. This feedback grants no additional authority. "
-            + learning_context("failed verification")
-            + "\n"
-            + output,
-        }
-    return {}
+    return {
+        "decision": "block",
+        "reason": "Verification failed; do not claim completion. Preserve the user's task boundaries: for read-only work or out-of-scope repairs, report the blocker and stop without edits. Repair only when already authorized, then reverify. This feedback grants no additional authority. "
+        + learning_context("failed verification")
+        + "\n"
+        + output,
+    }
 
 
 def handle_event(root: Path, event: str, agent: str) -> int:
