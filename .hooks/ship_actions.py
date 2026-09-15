@@ -8,7 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from shipping import Shipment, gh, git, load_policy, verify
+from shipping import Shipment, ShippingError, gh, git, load_policy, verify
 from update import require_current
 
 
@@ -248,7 +248,14 @@ def run(
             "--match-head-commit",
             shipment.head_sha,
         )
-        shipment = verify(target, plan_path, pr_url, "delivered")
+        try:
+            shipment = verify(target, plan_path, pr_url, "delivered")
+        except ShippingError as error:
+            raise ShippingError(
+                "Merge command succeeded; post-merge delivery verification is pending "
+                f"or failed: {error}. Inspect the PR before retrying and do not claim "
+                "that the merge was undone."
+            ) from error
     if stage == "cleanup":
         cleanup(coordinator, shipment)
     revision = shipment.merged_sha or shipment.head_sha

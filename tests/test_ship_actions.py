@@ -12,7 +12,7 @@ from unittest.mock import Mock
 import pytest
 import ship_actions
 import update
-from shipping import Shipment, ShippingPolicy, git
+from shipping import Shipment, ShippingError, ShippingPolicy, git
 
 
 @pytest.fixture
@@ -312,6 +312,32 @@ def test_ship_merge_matches_verified_head_and_checks_result(
             root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "squash"
         )
     remote.assert_not_called()
+
+
+def test_ship_merge_reports_pending_delivery_after_merge_command(
+    delivered_worktree: tuple[Path, Shipment], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, shipment = delivered_worktree
+    verified = Mock(
+        side_effect=[
+            shipment,
+            ShippingError("required check is not successful: hard-eng"),
+        ]
+    )
+    remote = Mock(return_value="Merged")
+    monkeypatch.setattr(ship_actions, "verify", verified)
+    monkeypatch.setattr(ship_actions, "gh", remote)
+
+    with pytest.raises(
+        ShippingError,
+        match="Merge command succeeded; post-merge delivery verification is pending",
+    ):
+        ship_actions.run(
+            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "squash"
+        )
+
+    assert remote.called
+    assert verified.call_args_list[-1].args[-1] == "delivered"
 
 
 @pytest.mark.parametrize("with_submodule", [False, True])

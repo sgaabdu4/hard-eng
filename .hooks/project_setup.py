@@ -68,10 +68,7 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
         "**/*.gr.dart",
         "**/*.arb",
     }
-    native = {
-        f"{name}/**"
-        for name in ("build", "android", "ios", "web", "windows", "macos", "linux")
-    }
+    native = {"build/**"}
     if (
         not (directory / "pubspec.yaml").is_file()
         or dependency_command(directory, "dart")[0] != "flutter"
