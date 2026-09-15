@@ -10,6 +10,8 @@ It adds shared instructions, skills, project checks, and optional native integra
 
 > **Alpha** — the supported scaffold and checks are still evolving. A successful install or local check is useful evidence, not proof that every host ran a hook, every user journey works, or a release reached production. See [current verification and open limits](DECISION.md#current-status).
 
+[Install](#install-in-a-target-repository) · [Workflow](#the-work-loop) · [Gates](#what-gets-checked) · [Security](#security-and-approval-boundaries) · [Enforcement](#how-enforcement-works)
+
 ## What it is for
 
 Hard Eng is designed for a solo developer who wants an agent to carry routine work forward without blurring responsibility.
@@ -51,7 +53,7 @@ flowchart TD
   F --> B
 ```
 
-Human-led planning presents the completed proposal for approval. Autonomous planning advances once the task already authorizes it, while still stopping for unresolved material choices, external authority, or missing proof.
+A failed baseline takes the authorized prerequisite-repair route: fix and verify that repair on main before resuming the feature. Human-led planning presents the completed proposal for approval. Autonomous planning advances once the task already authorizes it, while still stopping for unresolved material choices, external authority, or missing proof.
 
 ### HE Build — implement and prove locally
 
