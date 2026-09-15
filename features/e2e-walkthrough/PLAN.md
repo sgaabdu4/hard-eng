@@ -42,6 +42,7 @@ N/A — guidance routing changes have no product UI. Browser fixtures verify exi
 ## Verification
 
 Result: Passed
+E2E: Passed — Historical browser gesture, native-dialog, pointer and negative recording-verifier journeys are recorded below; retained limitations still apply.
 Evidence: Existing `node tests/gesture-smoke.mjs`, `node tests/native-dialog-pointer-smoke.mjs` and `node tests/view-transition-pointer-smoke.mjs` each exited 0 in `/tmp/he-e2e-walkthrough-20260910/package`, using unchanged source scripts and bundled Playwright 1.62.1. Logs: `/tmp/he-e2e-walkthrough-20260910/{gesture,dialog,transition}.log`. Gesture smoke passed full motion assertions, normal and pointer-free recorder/reviewer paths, and rejection of ambiguous keyboard evidence and no-op scrolling. The initial `pnpm test` wrapper aborted dependency preparation; direct script runs avoided installation and supplied the actual passing proof.
 
 Both skills passed the available native quick validator; all 11 local links/anchors resolve. The actual diff preserves explicit-only walkthrough invocation, centralizes defect reopening in E2E, reuses every checker and adds no implementation machinery. Manual route review covered ordinary browser regression, recorded web proof, polished delivery, native-device capture and raw timing claims. This validates routing instructions and existing checker behavior, not automatic host skill selection or a newly approved customer video.

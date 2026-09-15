@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Strict Playwright screencast pipeline for polished, reviewed product walkthroughs.",
   "scripts": {
-    "test": "npm run test:gesture && npm run test:dialog-pointer && npm run test:view-transition-pointer",
+    "test": "pnpm run test:gesture && pnpm run test:dialog-pointer && pnpm run test:view-transition-pointer",
     "test:dialog-pointer": "node tests/native-dialog-pointer-smoke.mjs",
     "test:gesture": "node tests/gesture-smoke.mjs",
     "test:view-transition-pointer": "node tests/view-transition-pointer-smoke.mjs",

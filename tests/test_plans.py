@@ -12,6 +12,65 @@ from plans import validate_plan, validate_plans
 from shipping import ShippingPolicy
 
 
+@pytest.mark.parametrize("status", ["Ready", "Complete"])
+def test_runtime_journey_cannot_disappear_behind_nonvisual_ux(
+    tmp_path: Path, completed_plan: str, status: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    plan = completed_plan.replace("Status: Complete", f"Status: {status}")
+    e2e = next(line for line in plan.splitlines() if line.startswith("E2E:"))
+    path.write_text(plan.replace(e2e, ""))
+    with pytest.raises(ValueError, match="E2E"):
+        validate_plan(path)
+    path.write_text(
+        plan.replace(
+            e2e,
+            "E2E: Required — complete and rebook through the browser; confirm retained history",
+        )
+    )
+    if status == "Complete":
+        with pytest.raises(ValueError, match="E2E is still Required"):
+            validate_plan(path)
+    else:
+        assert validate_plan(path) == status
+    path.write_text(plan.replace(e2e, "E2E: Passed — Pending browser access"))
+    with pytest.raises(ValueError, match="actual runtime evidence"):
+        validate_plan(path)
+    path.write_text(plan)
+    assert validate_plan(path) == status
+
+
+@pytest.mark.parametrize("target", ["PR", "Merge", "Deploy"])
+def test_deployment_journey_keeps_delivery_open(
+    runner: ModuleType, shipping_policy: ShippingPolicy, target: str
+) -> None:
+    path = runner.ROOT / "PLAN.md"
+    content = path.read_text()
+    e2e = next(line for line in content.splitlines() if line.startswith("E2E:"))
+    path.write_text(
+        content.replace(
+            e2e, "E2E: Delivery — rebook on the deployed revision and verify history"
+        )
+        + f"\nDelivery target: {target}\n"
+    )
+    config = runner.ROOT / "hard-eng.gates.json"
+    config.write_text(json.dumps({"shipping": shipping_policy}))
+    with pytest.raises(ValueError, match="delivery checks"):
+        validate_plans(runner.ROOT, base="0" * 40, stage="Complete")
+    if target == "Deploy":
+        shipping_policy["delivery"] = [
+            {
+                "name": "journey",
+                "command": [sys.executable, "-c", "raise SystemExit(1)"],
+            }
+        ]
+        config.write_text(json.dumps({"shipping": shipping_policy}))
+        # Build readiness schedules this verifier; it cannot claim deployed proof.
+        assert (
+            validate_plans(runner.ROOT, base="0" * 40, stage="Complete") == "Complete"
+        )
+
+
 @pytest.mark.parametrize(
     "stage,message",
     [
@@ -333,6 +392,14 @@ def test_native_cli_plan_stage_and_missing_plan(
         == 0
     )
     plan = tmp_path / "PLAN.md"
+    completed = plan.read_text()
+    e2e = next(line for line in completed.splitlines() if line.startswith("E2E:"))
+    plan.write_text(completed.replace(e2e, ""))
+    result = subprocess.run(
+        command, cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 1 and "E2E" in result.stderr
+    plan.write_text(completed)
     plan.write_text(plan.read_text().replace("Status: Complete", "Status: Draft"))
     result = subprocess.run(
         command, cwd=tmp_path, capture_output=True, text=True, check=False

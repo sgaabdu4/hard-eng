@@ -48,6 +48,7 @@ N/A — this is agent guidance and existing CLI gate routing; no product UI chan
 ## Verification
 
 Result: Passed
+E2E: Passed — Historical native bug, blocked-actor, negative gate and parallel-writer CLI journeys are recorded below; this migration adds no new runtime claim.
 Evidence: Initial sandbox receipts are under `/tmp/he-build-sandboxes-20260910/evidence/`. The previous integrated source passed `uv run python .hooks/hard-eng.py check --plan-stage Complete`: all 17 gates, including 310 tests and the separate 4-test performance suite (`source-complete.log`). Expanded testing covers the 16 scenarios below under `/tmp/he-build-edgecases-20260910/`, including fresh native reruns of invalid readiness, valid shared-writer readiness and authorized baseline Exception after the two-bullet skill repair. Final integrated source gate receipt follows below.
 
 - Native bug actor reproduced CLI `2 3 -> -1`, added function/CLI regressions that failed, fixed the inventory owner, preserved positive/equal cases, and passed all 4 tests plus Complete. Independent parent Complete rerun exited 0 (`bug-parent-complete.log`); actual actor receipt: `bug-final.md`, execution: `bug-events.jsonl`.

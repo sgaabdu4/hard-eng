@@ -45,6 +45,28 @@ def test_package_include_root_is_a_directory(
         runner.validate_dart_includes(options, tmp_path)
 
 
+@pytest.mark.parametrize(
+    "section,group,rule",
+    [
+        ("analyzer", "language", "strict-inference"),
+        ("linter", "rules", "avoid_dynamic_calls"),
+    ],
+)
+def test_dart_setup_rejects_explicit_conflicts_without_writes(
+    installer: ModuleType, tmp_path: Path, section: str, group: str, rule: str
+) -> None:
+    path = tmp_path / "analysis_options.yaml"
+    original = yaml.safe_dump({section: {group: {rule: False}}})
+    path.write_text(original)
+    changes: dict[str, str] = {}
+    with pytest.raises(ValueError, match="Conflicting setting"):
+        installer.configure_dart(
+            tmp_path, tmp_path, {"path": ".", "checks": []}, changes
+        )
+    assert path.read_text() == original
+    assert not changes
+
+
 def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     installer: ModuleType, runner: ModuleType, tmp_path: Path
 ) -> None:

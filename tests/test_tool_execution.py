@@ -1,4 +1,4 @@
-"""Exercise shared-cache exclusion through real gate subprocesses."""
+"""Exercise native tool selection and execution through real subprocesses."""
 
 import json
 import os
@@ -15,11 +15,95 @@ import tool_setup
 import update
 from conftest import commit, git
 from gate_config import Gate, Group, validate_gate, validate_package_services
+from project_setup import import_configuration
+
+RECURSIVE_IMPORT_LINTER = """[importlinter]
+root_package = example
+
+[importlinter:contract:recursive-siblings]
+name = No sibling dependency cycles
+type = acyclic_siblings
+ancestors =
+    example
+    example.**
+depth = 0
+"""
+SPLIT_RECURSIVE_IMPORT_LINTER = """[importlinter]
+root_package = example
+
+[importlinter:contract:root-siblings]
+name = No direct sibling dependency cycles
+type = acyclic_siblings
+ancestors =
+    example
+depth = 0
+
+[importlinter:contract:descendant-siblings]
+name = No descendant sibling dependency cycles
+type = acyclic_siblings
+ancestors =
+    example.**
+depth = 0
+"""
+
+
+def executable(directory: Path, name: str, output: str) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    binary = directory / name
+    binary.write_text(f"#!/bin/sh\nprintf '%s\\n' '{output}' \"$@\"\n")
+    binary.chmod(0o755)
+
+
+def execute_provisioned_scanner(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    group: Group,
+    scanner: str,
+    package: str,
+    *,
+    stale_local: bool,
+    expected_use_npm: bool,
+) -> list[str]:
+    managed = tmp_path / "managed"
+    executable(managed, scanner, "managed")
+    if stale_local:
+        stale = tmp_path / "node_modules/.bin"
+        executable(stale, scanner, "stale")
+        monkeypatch.setenv("PATH", str(stale) + os.pathsep + os.environ["PATH"])
+
+    def provision(
+        _root: Path, batch: list[str], _timeout: float, *, use_npm: bool
+    ) -> None:
+        assert batch == [package]
+        assert use_npm == expected_use_npm
+        monkeypatch.setenv("PATH", str(managed) + os.pathsep + os.environ["PATH"])
+
+    monkeypatch.setattr(tool_setup, "provision_batch", provision)
+    tool_setup.provision_tools(tmp_path, [group], 30)
+    command = runner.prepare_command(group, group["checks"][0], 30)
+    return subprocess.check_output(command, cwd=tmp_path, text=True).splitlines()
+
+
+def import_linter_project(tmp_path: Path) -> Path:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "src/example"
+    source.mkdir(parents=True)
+    (source / "__init__.py").write_text("value = 1\n")
+    project = tmp_path / "pyproject.toml"
+    project.write_text('[project]\nname = "fixture"\nversion = "1"\n')
+    return project
 
 
 @pytest.mark.parametrize("flag", [["--max-crap", "0"], ["--max-crap=0"]])
 @pytest.mark.parametrize(
-    "prefix", [["fallow"], ["pnpm", "exec", "fallow"], ["pnpm", "dlx", "fallow@3.0.0"]]
+    "prefix",
+    [
+        ["fallow"],
+        ["pnpm", "exec", "fallow"],
+        ["pnpm", "dlx", "fallow@3.0.0"],
+        ["pnpm", "dlx", "--package=fallow@latest", "--allow-build=fallow", "fallow"],
+    ],
 )
 def test_gate_rejects_disabled_fallow_metric_before_execution(
     tmp_path: Path, flag: list[str], prefix: list[str]
@@ -77,7 +161,13 @@ def test_unresolved_package_selectors_fail_instead_of_skipping_validation(
 
 
 @pytest.mark.parametrize(
-    "prefix", ["fallow", "pnpm exec fallow", "pnpm dlx fallow@3.0.0"]
+    "prefix",
+    [
+        "fallow",
+        "pnpm exec fallow",
+        "pnpm dlx fallow@3.0.0",
+        "pnpm dlx --package=fallow@latest --allow-build=fallow fallow",
+    ],
 )
 def test_existing_fallow_audit_must_be_the_enforced_gate(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, prefix: str
@@ -112,26 +202,16 @@ def test_existing_fallow_audit_must_be_the_enforced_gate(
     assert len(group["checks"]) == 1
     assert group["checks"][0]["report"]["path"] == "reports/fallow.json"
     validate_package_services(tmp_path, group, {}, {}, inherited)
-    managed = tmp_path / "managed"
-    stale = tmp_path / "node_modules/.bin"
-    for directory, output in ((managed, "managed"), (stale, "stale")):
-        directory.mkdir(parents=True)
-        binary = directory / "fallow"
-        binary.write_text(f"#!/bin/sh\nprintf '%s\\n' '{output}' \"$@\"\n")
-        binary.chmod(0o755)
-    monkeypatch.setenv("PATH", str(stale) + os.pathsep + os.environ["PATH"])
-
-    def provision(
-        root: Path, batch: list[str], timeout: float, *, use_npm: bool
-    ) -> None:
-        assert batch == ["npm:fallow@latest"]
-        monkeypatch.setenv("PATH", str(managed) + os.pathsep + os.environ["PATH"])
-
-    monkeypatch.setattr(tool_setup, "provision_batch", provision)
-    tool_setup.provision_tools(tmp_path, [group], 30)
-    command = runner.prepare_command(group, group["checks"][0], 30)
-    result = subprocess.check_output(command, cwd=tmp_path, text=True)
-    assert result.splitlines() == [
+    assert execute_provisioned_scanner(
+        runner,
+        tmp_path,
+        monkeypatch,
+        group,
+        "fallow",
+        "npm:fallow@latest",
+        stale_local=True,
+        expected_use_npm=False,
+    ) == [
         "managed",
         "audit",
         "--format",
@@ -229,6 +309,177 @@ def test_native_tools_install_before_reading_environment(
         assert len(calls) == 2
 
 
+@pytest.mark.parametrize(
+    ("scanner", "script", "package", "expected_use_npm", "arguments"),
+    [
+        (
+            "dart-decimate",
+            "dart-decimate check . --threshold 0 --format json",
+            'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest',
+            True,
+            ["check", ".", "--threshold", "0", "--format", "json"],
+        ),
+        (
+            "react-doctor",
+            "react-doctor --scope full --blocking warning --json --json-out coverage/react.json",
+            "npm:react-doctor@latest",
+            False,
+            [
+                "--scope",
+                "full",
+                "--blocking",
+                "warning",
+                "--json",
+                "--json-out",
+                "coverage/react.json",
+            ],
+        ),
+    ],
+)
+@pytest.mark.parametrize("stale_local", [False, True])
+def test_package_script_scanner_executes_provisioned_native_executable(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scanner: str,
+    script: str,
+    package: str,
+    expected_use_npm: bool,
+    arguments: list[str],
+    stale_local: bool,
+) -> None:
+    (tmp_path / "package.json").write_text(json.dumps({"scripts": {"audit": script}}))
+    group: Group = {
+        "path": ".",
+        "checks": [{"name": scanner, "command": ["pnpm", "run", "audit"]}],
+    }
+    assert execute_provisioned_scanner(
+        runner,
+        tmp_path,
+        monkeypatch,
+        group,
+        scanner,
+        package,
+        stale_local=stale_local,
+        expected_use_npm=expected_use_npm,
+    ) == ["managed", *arguments]
+
+
+def test_package_script_dart_boundary_gate_checks_native_configuration(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "package.json").write_text(
+        json.dumps(
+            {"scripts": {"audit": "dart-decimate check . --boundary-violations"}}
+        )
+    )
+    group: Group = {"path": ".", "language": "dart", "checks": []}
+    gate: Gate = {"name": "boundaries", "command": ["pnpm", "run", "audit"]}
+    calls: list[list[str]] = []
+
+    def native_config(command: list[str], **_kwargs: object) -> str:
+        calls.append(command)
+        return json.dumps({"config": {"boundaries": []}})
+
+    monkeypatch.setattr(subprocess, "check_output", native_config)
+    with pytest.raises(ValueError, match="nonempty project from/disallow prefixes"):
+        runner.prepare_command(group, gate, 5)
+    assert calls == [["dart-decimate", "config", ".", "--format", "json"]]
+
+
+@pytest.mark.parametrize(
+    ("name", "configuration"),
+    [
+        (".importlinter", "[importlinter]\nroot_package = example\n"),
+        (
+            "setup.cfg",
+            "[metadata]\nname = fixture\n\n[importlinter]\nroot_package = example\n",
+        ),
+    ],
+)
+def test_installer_rejects_import_linter_priority_owner_without_partial_write(
+    installer: ModuleType, tmp_path: Path, name: str, configuration: str
+) -> None:
+    project = import_linter_project(tmp_path)
+    original = project.read_text()
+    (tmp_path / name).write_text(configuration)
+
+    with pytest.raises(ValueError, match=rf"prioritizes {name}"):
+        installer.install(tmp_path)
+
+    assert project.read_text() == original
+    assert (tmp_path / name).read_text() == configuration
+    assert not (tmp_path / ".hooks").exists()
+
+
+@pytest.mark.parametrize(
+    "configurations",
+    [
+        {".importlinter": RECURSIVE_IMPORT_LINTER},
+        {".importlinter": SPLIT_RECURSIVE_IMPORT_LINTER},
+        {"setup.cfg": "[metadata]\nname = fixture\n\n" + RECURSIVE_IMPORT_LINTER},
+        {
+            "setup.cfg": "[metadata]\nname = fixture\n\n" + RECURSIVE_IMPORT_LINTER,
+            ".importlinter": "[importlinter]\nroot_package = example\n",
+        },
+    ],
+    ids=[
+        "dotfile",
+        "dotfile-split-recursive-contracts",
+        "setup-cfg",
+        "setup-cfg-prioritizes-over-dotfile",
+    ],
+)
+def test_installer_accepts_effective_import_linter_recursive_contract(
+    installer: ModuleType, tmp_path: Path, configurations: dict[str, str]
+) -> None:
+    project = import_linter_project(tmp_path)
+    for name, configuration in configurations.items():
+        (tmp_path / name).write_text(configuration)
+
+    installer.install(tmp_path)
+
+    assert "[tool.importlinter]" not in project.read_text()
+    assert {
+        name: (tmp_path / name).read_text() for name in configurations
+    } == configurations
+
+
+def test_unrelated_setup_cfg_does_not_block_toml_import_contract(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src/example"
+    source.mkdir(parents=True)
+    (source / "__init__.py").write_text("value = 1\n")
+    (tmp_path / "setup.cfg").write_text("[metadata]\nname = fixture\n")
+
+    content = import_configuration(
+        tmp_path,
+        {"path": ".", "checks": [], "sources": ["src"]},
+        '[project]\nname = "fixture"\nversion = "1"\n',
+    )
+
+    assert "[tool.importlinter]" in content
+
+
+def test_installer_rejects_old_manifest_without_partial_scaffold(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    manifest = tmp_path / "hard-eng.gates.json"
+    original = (
+        '{"checks": [{"name": "existing", "command": ["python3", "verify.py"]}]}\n'
+    )
+    manifest.write_text(original)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="existing-app"\nversion="1.0"\n'
+    )
+    with pytest.raises(TypeError, match="preserve existing checks and migrate"):
+        installer.install(tmp_path)
+    assert manifest.read_text() == original
+    assert not (tmp_path / ".hooks").exists()
+
+
 def test_installed_check_provisions_yaml_and_keeps_real_gate_failures(
     tmp_path: Path,
 ) -> None:
@@ -278,6 +529,7 @@ def test_candidate_provisions_yaml_without_host_site_packages(
     source, target = tmp_path / "source", tmp_path / "target"
     original = Path(__file__).resolve().parents[1]
     (source / ".agents/skills").mkdir(parents=True)
+    git(source, "init", "-q")
     (target / ".agents/skills").mkdir(parents=True)
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copyfile(original / name, source / name)
@@ -361,19 +613,22 @@ def test_configuration_candidate_without_origin_uses_head(
     assert "APPLICATION_SCOPE_CHECK" in capfd.readouterr().err
 
 
-@pytest.mark.parametrize("executable", ["uv", "uvx"])
 @pytest.mark.parametrize("exit_code", [0, 7])
-def test_uv_gate_processes_do_not_share_cache_concurrently(
-    runner: ModuleType, tmp_path: Path, executable: str, exit_code: int
+def test_native_uv_gate_processes_overlap_with_shared_cache(
+    runner: ModuleType, tmp_path: Path, exit_code: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    binary = tmp_path / executable
-    binary.symlink_to(sys.executable)
-    code = (
-        "import pathlib,time,sys;"
-        "cache=pathlib.Path('cache-write');"
-        "cache.mkdir();time.sleep(0.1);cache.rmdir();"
-        "pathlib.Path(sys.argv[1]).touch();sys.exit(int(sys.argv[2]))"
-    )
+    monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "uv-cache"))
+    code = """import pathlib, time, sys
+index = int(sys.argv[1])
+pathlib.Path(f'start-{index}').touch()
+deadline = time.monotonic() + 3
+while not pathlib.Path(f'start-{1-index}').exists():
+    if time.monotonic() > deadline:
+        raise RuntimeError('Independent native uv gates did not overlap')
+    time.sleep(0.01)
+pathlib.Path(str(index)).touch()
+sys.exit(int(sys.argv[2]))
+"""
     output_lock = threading.Lock()
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [
@@ -382,7 +637,18 @@ def test_uv_gate_processes_do_not_share_cache_concurrently(
                 {"path": "."},
                 {
                     "name": str(index),
-                    "command": [str(binary), "-c", code, str(index), str(exit_code)],
+                    "command": [
+                        "uv",
+                        "run",
+                        "--no-project",
+                        "--python",
+                        sys.executable,
+                        "python",
+                        "-c",
+                        code,
+                        str(index),
+                        str(exit_code),
+                    ],
                 },
                 5,
                 output_lock,

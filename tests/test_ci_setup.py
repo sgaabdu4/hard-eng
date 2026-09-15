@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 import yaml
+from ci_setup import configure_ci
 from gate_config import GateConfig
-from project_setup import configure_ci
-from shipping import ShippingError
+from shipping import ShippingError, ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("seconds,minutes", [(600, 10), (601, 11), (60, 1), (None, 3)])
+@pytest.mark.parametrize("seconds,minutes", [(600, 10), (601, 11), (60, 1)])
 def test_generated_ci_timeout(
     tmp_path: Path, seconds: int | None, minutes: int
 ) -> None:
@@ -35,8 +35,9 @@ def test_generated_ci_timeout(
     assert '--base "$BASE_SHA"' in workflow
 
 
-def test_existing_workflow_is_preserved(tmp_path: Path) -> None:
-    path = tmp_path / ".github/workflows/hard-eng.yml"
+@pytest.mark.parametrize("name", ["hard-eng.yml", "quality.yml", "release.yaml"])
+def test_existing_workflow_is_preserved(tmp_path: Path, name: str) -> None:
+    path = tmp_path / ".github/workflows" / name
     path.parent.mkdir(parents=True)
     content = "# Project-owned workflow\njobs:\n  custom:\n    timeout-minutes: 17\n"
     path.write_text(content)
@@ -44,6 +45,12 @@ def test_existing_workflow_is_preserved(tmp_path: Path) -> None:
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     assert changes == {}
     assert path.read_text() == content
+
+
+def test_unconfigured_project_does_not_inherit_source_ci_budget(tmp_path: Path) -> None:
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert not changes
 
 
 def test_existing_tool_bootstrap_migrates_with_customizations(tmp_path: Path) -> None:
@@ -139,7 +146,7 @@ def test_invalid_shipping_budget_is_rejected(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("manager", ["dart", "flutter"])
 def test_dart_workflow_uses_packaged_scanner_without_rust(
-    tmp_path: Path, manager: str
+    tmp_path: Path, manager: str, shipping_policy: ShippingPolicy
 ) -> None:
     dependencies: dict[str, dict[str, str]] = (
         {"flutter": {"sdk": "flutter"}} if manager == "flutter" else {}
@@ -151,6 +158,9 @@ def test_dart_workflow_uses_packaged_scanner_without_rust(
         "packages": [{"path": ".", "language": "dart", "checks": []}],
         "shared": [],
     }
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({**config, "shipping": shipping_policy})
+    )
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, config, changes)
     workflow = changes[".github/workflows/hard-eng.yml"]

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 import shipping
+from conftest import plan_document
 
 
 @dataclass(frozen=True)
@@ -28,29 +29,7 @@ def _native(root: Path, *args: str) -> str:
 
 
 def _plan(target: str = "PR") -> str:
-    return f"""# Fixture shipping plan
-Status: Complete
-## Outcome + scope
-Verify a disposable shipping fixture.
-## Repository context
-The test uses a temporary Git repository and controlled provider responses.
-## Decisions + authorization
-Blockers: None
-This is an authorized disposable test.
-## Acceptance + steps
-- [x] Verify the fixture delivery boundary.
-## Baseline + execution
-Result: Passed
-Evidence: The fixture baseline is committed before verification.
-## Risks + recovery
-N/A — the disposable repository is removed after the test.
-## ux_reference
-N/A — this fixture has no product interface.
-## Verification
-Result: Passed
-Evidence: The verifier asserts the provider and command contracts.
-Delivery target: {target}
-"""
+    return plan_document() + f"Delivery target: {target}\n"
 
 
 def _fixture(

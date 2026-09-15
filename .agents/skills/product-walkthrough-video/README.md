@@ -6,8 +6,8 @@ Workflow owner for the bundled recorder, review and MP4 delivery scripts. Run co
 
 ```bash
 cd /absolute/path/to/product-walkthrough-video
-npm ci --ignore-scripts
-npx playwright install chromium
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm exec playwright install chromium
 brew install ffmpeg
 ```
 

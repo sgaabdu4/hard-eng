@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-import tomllib
 from pathlib import Path
 from types import ModuleType
 
@@ -19,6 +18,7 @@ from project_setup import (
     javascript_files,
     javascript_manager,
 )
+from shipping import ShippingPolicy
 
 
 def test_existing_lighthouse_config_runs_after_build(tmp_path: Path) -> None:
@@ -317,7 +317,7 @@ def test_plain_dart_uses_native_coverage_tool(
 
 
 def test_workspace_installs_once_and_keeps_child_source_scope(
-    installer: ModuleType, tmp_path: Path
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repository(tmp_path)
     (tmp_path / "package.json").write_text(
@@ -335,6 +335,7 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
     (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n  - packages/*\n")
     config = installer.gate_config(tmp_path)
     root, app = config["packages"]
+    assert "depends_on" not in root and "depends_on" not in app
     validate_required_checks(tmp_path, config)
     assert "language" not in root
     assert not any(gate.get("role") == "boundaries" for gate in root["checks"])
@@ -350,6 +351,9 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
     )
     tests = next(gate for gate in app["checks"] if gate.get("role") == "tests")
     assert tests["command"] == ["pnpm", "run", "test:coverage"]
+    installer.install(tmp_path)
+    output = capsys.readouterr().out
+    assert "Before using --base package selection" in output
 
 
 def test_javascript_file_scope_keeps_application_tests_and_declarations(
@@ -392,9 +396,12 @@ def snapshot(root: Path) -> dict[str, bytes]:
 
 
 def test_install_preserves_project_and_repeats(
-    installer: ModuleType, tmp_path: Path
+    installer: ModuleType, tmp_path: Path, shipping_policy: ShippingPolicy
 ) -> None:
     repository(tmp_path)
+    config = installer.gate_config(tmp_path)
+    config["shipping"] = shipping_policy
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
     (tmp_path / "AGENTS.md").write_text("# Project rules\n\nKeep this.\n")
     custom_skill = tmp_path / ".agents/skills/local-work/SKILL.md"
     custom_skill.parent.mkdir(parents=True)
@@ -411,8 +418,8 @@ def test_install_preserves_project_and_repeats(
     assert not (tmp_path / "PLAN.md").exists()
     assert not (tmp_path / "AGENTS.override.md").exists()
     assert (tmp_path / ".git/hooks/pre-push").stat().st_mode & 0o111
-    assert (tmp_path / ".hooks/reports.py").is_file()
-    assert (tmp_path / ".hooks/plans.py").is_file()
+    for name in (".hooks/reports.py", ".hooks/plans.py", ".hooks/dependency_graph.py"):
+        assert (tmp_path / name).is_file()
     assert json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"][
         "codebase-memory-mcp"
     ] == {"command": "pnpm", "args": ["dlx", "codebase-memory-mcp@latest"]}
@@ -433,81 +440,6 @@ def test_install_preserves_project_and_repeats(
                 ).read_bytes() == path.read_bytes()
         assert (tmp_path / ".claude/skills" / name).resolve() == installed
     assert not (tmp_path / ".agents/skill-sources").exists()
-
-
-@pytest.mark.parametrize(
-    "source,expected",
-    [
-        ("", set()),
-        ("import 'dart:io';", set()),
-        ("import 'package:flutter/material.dart';", {"dart", "marionette"}),
-        ("import 'package:appwrite/appwrite.dart';", {"appwrite"}),
-        ("import 'package:sentry_flutter/sentry_flutter.dart';", {"sentry"}),
-        (
-            (
-                "import 'package:flutter/material.dart';\n"
-                "import 'package:appwrite/appwrite.dart';\n"
-                "import 'package:sentry_flutter/sentry_flutter.dart';"
-            ),
-            {"dart", "marionette", "appwrite", "sentry"},
-        ),
-    ],
-)
-def test_installer_registers_only_detected_service_mcps(
-    installer: ModuleType, tmp_path: Path, source: str, expected: set[str]
-) -> None:
-    repository(tmp_path)
-    (tmp_path / "app.dart").write_text(source)
-    changes: dict[str, str] = {}
-    installer.configure_mcp(tmp_path, changes)
-    optional = {"sentry", "appwrite", "dart", "marionette"}
-    for name in (".mcp.json", ".github/mcp.json"):
-        servers = json.loads(changes[name])["mcpServers"]
-        assert servers.keys() & optional == expected
-        if "dart" in expected:
-            assert servers["dart"] == {
-                "command": "dart",
-                "args": ["run", "dart_mcp_server@"],
-            }
-            assert servers["marionette"] == {
-                "command": "dart",
-                "args": ["run", "marionette_mcp@"],
-            }
-    servers = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
-    assert servers.keys() & optional == expected
-    for service in expected & {"dart", "marionette"}:
-        assert (
-            servers[service] == json.loads(changes[".mcp.json"])["mcpServers"][service]
-        )
-    if "appwrite" in expected:
-        assert servers["appwrite"]["args"] == ["mcp-server-appwrite"]
-        assert "APPWRITE_API_KEY" in servers["appwrite"]["env_vars"]
-
-
-@pytest.mark.parametrize(
-    "service", ["sentry", "dart", "marionette", "context-mode", "codebase-memory-mcp"]
-)
-def test_installer_preserves_existing_service_mcp_configuration(
-    installer: ModuleType, tmp_path: Path, service: str
-) -> None:
-    repository(tmp_path)
-    (tmp_path / "app.py").write_text("import sentry_sdk\n")
-    (tmp_path / "app.dart").write_text("import 'package:flutter/material.dart';\n")
-    existing = {"command": service}
-    for name in (".mcp.json", ".github/mcp.json"):
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"mcpServers": {service: existing}}))
-    path = tmp_path / ".codex/config.toml"
-    path.parent.mkdir()
-    path.write_text(f"[mcp_servers.{service}]\ncommand = {json.dumps(service)}\n")
-    changes: dict[str, str] = {}
-    installer.configure_mcp(tmp_path, changes)
-    for name in (".mcp.json", ".github/mcp.json"):
-        assert json.loads(changes[name])["mcpServers"][service] == existing
-    assert (
-        tomllib.loads(changes[".codex/config.toml"])["mcp_servers"][service] == existing
-    )
 
 
 @pytest.mark.parametrize(

@@ -30,7 +30,7 @@ from gate_config import (
     validate_dart_exclusions,
 )
 from project_setup import package_script_arguments as test_arguments
-from tool_setup import execution_lock, managed_command, provision_tools
+from tool_setup import managed_command, provision_tools
 
 DartAnalyzer = TypedDict(
     "DartAnalyzer",
@@ -336,8 +336,7 @@ def production_files(
 
 
 def prepare_command(group: Group, gate: Gate, timeout: float) -> list[str]:
-    command = gate["command"]
-    validate_dart_boundaries(command, ROOT / group["path"], timeout)
+    command = managed_command(gate["command"], ROOT / group["path"])
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 
@@ -385,7 +384,8 @@ def prepare_command(group: Group, gate: Gate, timeout: float) -> list[str]:
             ]
         elif language == "javascript":
             validate_typescript(command, directory, group, timeout)
-    return managed_command(command, ROOT / group["path"])
+    validate_dart_boundaries(command, ROOT / group["path"], timeout)
+    return command
 
 
 def validate_typescript(
@@ -512,13 +512,10 @@ def run_gate(
         ) as log:
             try:
                 with (
-                    execution_lock(command),
-                    (
-                        report_path.open("w")
-                        if capture and report_path is not None
-                        else nullcontext()
-                    ) as output,
-                ):
+                    report_path.open("w")
+                    if capture and report_path is not None
+                    else nullcontext()
+                ) as output:
                     result = subprocess.run(
                         command,
                         cwd=ROOT / group["path"],

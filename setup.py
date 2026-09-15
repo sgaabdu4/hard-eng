@@ -125,61 +125,9 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
 
 
 def configure_mcp(root: Path, changes: dict[str, str]) -> None:
-    from agent_hooks import integrated_services
+    from mcp_setup import configure_mcp as configure
 
-    optional: dict[str, JsonObject] = {
-        "Sentry": {"url": "https://mcp.sentry.dev/mcp"},
-        "Appwrite": {"command": "uvx", "args": ["mcp-server-appwrite"]},
-        "Dart": {"command": "dart", "args": ["run", "dart_mcp_server@"]},
-        "Marionette": {"command": "dart", "args": ["run", "marionette_mcp@"]},
-    }
-    detected = {
-        service.lower(): optional[service] for service in integrated_services(root)
-    }
-    for name in (".mcp.json", ".github/mcp.json"):
-        target = root / name
-        current: JsonObject = json.loads(target.read_text()) if target.exists() else {}
-        plugins = (
-            ["codebase-memory-mcp"]
-            if name == ".mcp.json"
-            else ["context-mode", "codebase-memory-mcp"]
-        )
-        servers: JsonObject = {
-            plugin: {"command": "pnpm", "args": ["dlx", f"{plugin}@latest"]}
-            for plugin in plugins
-        }
-        existing = current.setdefault("mcpServers", {})
-        if not isinstance(existing, dict):
-            raise TypeError(f"Conflicting MCP servers in {name}; expected an object")
-        servers = {
-            plugin: settings
-            for plugin, settings in servers.items()
-            if plugin not in existing
-        }
-        for plugin in sorted(detected.keys() - existing.keys()):
-            settings = detected[plugin]
-            servers[plugin] = (
-                {"type": "http", **settings} if "url" in settings else settings
-            )
-        changes[name] = (
-            json.dumps(merge(current, {"mcpServers": servers}), indent=2) + "\n"
-        )
-    target = root / ".codex/config.toml"
-    codex_config = target.read_text() if target.exists() else ""
-    parsed = tomllib.loads(codex_config)
-    for plugin in ("context-mode", "codebase-memory-mcp"):
-        existing_server = parsed.get("mcp_servers", {}).get(plugin)
-        if existing_server is None:
-            codex_config += f'\n[mcp_servers."{plugin}"]\ncommand = "pnpm"\nargs = ["dlx", "{plugin}@latest"]\n'
-    for plugin, settings in detected.items():
-        if plugin not in parsed.get("mcp_servers", {}):
-            codex_config += f'\n[mcp_servers."{plugin}"]\n'
-            codex_config += "".join(
-                f"{key} = {json.dumps(value)}\n" for key, value in settings.items()
-            )
-            if plugin == "appwrite":
-                codex_config += 'env_vars = ["APPWRITE_ENDPOINT", "APPWRITE_PROJECT_ID", "APPWRITE_API_KEY"]\n'
-    changes[".codex/config.toml"] = codex_config
+    configure(root, changes)
 
 
 def configure_typing_checks(package: Group) -> None:
@@ -250,7 +198,7 @@ def configure_dart(
                 if group == "language":
                     current.pop("strict-casts", None)
                     current.pop("strict-raw-types", None)
-                current.update(settings)
+                merge(current, settings, (section, group))
             else:
                 validate_dart_exclusions(directory, current)
     content = (
@@ -601,10 +549,11 @@ def plan_install(
     changes[".hooks/hard-eng-source.json"] = json.dumps({"revision": revision}) + "\n"
     if not (root / "hard-eng.gates.json").exists():
         changes["hard-eng.gates.json"] = json.dumps(gate_config(root), indent=2) + "\n"
-    config = json.loads(
+    from gate_config import parse_config, repository_files, typescript_packages
+
+    config = parse_config(
         changes.get("hard-eng.gates.json") or (root / "hard-eng.gates.json").read_text()
     )
-    from gate_config import repository_files, typescript_packages
     from project_setup import adapt_boundaries
 
     typescript = typescript_packages(root, repository_files(root))
@@ -620,10 +569,10 @@ def plan_install(
             "python": configure_python,
             "dart": configure_dart,
             "javascript": configure_javascript,
-        }.get(package.get("language"))
+        }.get(package.get("language", ""))
         if configure is not None:
             configure(root, root / package["path"], package, changes)
-    from project_setup import configure_ci
+    from ci_setup import configure_ci
 
     configure_ci(root, SOURCE, config, changes)
     if ".github/workflows/hard-eng.yml" in changes:
@@ -658,9 +607,21 @@ def install(root: Path, previous: Path | None = None) -> None:
     hook.parent.mkdir(parents=True, exist_ok=True)
     hook.write_text(launcher)
     hook.chmod(0o755)
+    from dependency_graph import dependency_review_guidance
+
+    config = json.loads((root / "hard-eng.gates.json").read_text())
+    guidance = dependency_review_guidance(config["packages"])
+    if guidance is not None:
+        print("Before using --base package selection, " + guidance)
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
     print("Follow HE Plan to adapt the gates and configure shipping before delivery.")
-    print("Codex: review and trust new or changed hooks with /hooks.")
+    print(
+        "Integration setup: .agents/skills/he/references/integrations.md — reuse existing choices; resolve only missing service targets and verify relevant real calls."
+    )
+    print(
+        "Codex: trust the project to load .codex configuration, then review new or changed hooks with /hooks. Hook-trust bypass alone does not trust the project.\n"
+        "MCP entries still need host loading and authentication. In Codex, inspect `codex mcp list`; use `codex mcp login <name>` for an unauthenticated OAuth server, then verify a real call in the task."
+    )
     print("Then run: python3 .hooks/hard-eng.py check")
 
 

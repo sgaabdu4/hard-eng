@@ -149,6 +149,8 @@ def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, 
 
 
 def scaffold_files(source: Path) -> set[str]:
+    from gate_config import repository_files
+
     skills = list((source / ".agents/skills").iterdir())
     if any(skill.is_symlink() and not skill.is_dir() for skill in skills):
         raise ValueError(
@@ -158,9 +160,11 @@ def scaffold_files(source: Path) -> set[str]:
         str(path.relative_to(source)) for path in (source / ".hooks").glob("*.py")
     } | {
         str(path.relative_to(source))
-        for skill in skills
-        for path in skill.rglob("*")
-        if path.is_file()
+        for skill in [
+            source / ".agents/skills",
+            *(skill for skill in skills if skill.is_symlink()),
+        ]
+        for path in repository_files(skill)
     }
 
 
