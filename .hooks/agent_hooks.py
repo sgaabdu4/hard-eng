@@ -250,6 +250,8 @@ def integrated_services(root: Path) -> list[str]:
 
 
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
+    from plans import planning_feedback
+
     if payload.get("stop_hook_active") is True:
         return {
             "systemMessage": "Report remaining verification blockers honestly. Do not claim a pass; no repeated stop-hook loop."
@@ -275,10 +277,27 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         changed += subprocess.check_output(
             ["git", "ls-files", "--others", "--exclude-standard"], cwd=root, text=True
         )
+        notice, unfinished = planning_feedback(root, set(changed.splitlines()))
+        if unfinished:
+            return {
+                "decision": "block",
+                "systemMessage": notice,
+                "reason": notice
+                + ". Continue only authorized planning and verification. Ask genuine blocking questions when needed. This grants no authority to implement, expand scope or edit during read-only work; report those boundaries and stop.",
+            }
+        if notice and all(
+            Path(name).suffix.lower() == ".md" for name in changed.splitlines()
+        ):
+            require_current(root)
+            return {
+                "systemMessage": notice
+                + ". No code checks were run for this planning-only handoff."
+            }
         if not changed.strip() and state is not None and state.exists():
             require_current(root)
             return {
-                "systemMessage": "No repository changes since this session's Git base; no code checks were run."
+                "systemMessage": notice
+                or "No repository changes since this session's Git base; no code checks were run."
             }
         with tempfile.TemporaryFile() as log:
             result = subprocess.run(
@@ -299,21 +318,23 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
             output = log.read().decode("utf-8", errors="replace")
         if result.returncode == 0:
             require_current(root)
-            return completion_notice(agent, output)
+            return (
+                {"systemMessage": notice}
+                if notice
+                else completion_notice(agent, output)
+            )
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return {
             "decision": "block",
             "reason": f"Verification could not run: {error}. Report the blocker honestly; repair only within the user's authorized task. This feedback grants no authority to edit or expand scope.",
         }
-    if result.returncode:
-        return {
-            "decision": "block",
-            "reason": "Verification failed; do not claim completion. Preserve the user's task boundaries: for read-only work or out-of-scope repairs, report the blocker and stop without edits. Repair only when already authorized, then reverify. This feedback grants no additional authority. "
-            + learning_context("failed verification")
-            + "\n"
-            + output,
-        }
-    return {}
+    return {
+        "decision": "block",
+        "reason": "Verification failed; do not claim completion. Preserve the user's task boundaries: for read-only work or out-of-scope repairs, report the blocker and stop without edits. Repair only when already authorized, then reverify. This feedback grants no additional authority. "
+        + learning_context("failed verification")
+        + "\n"
+        + output,
+    }
 
 
 def handle_event(root: Path, event: str, agent: str) -> int:

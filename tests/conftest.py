@@ -50,6 +50,14 @@ def installer() -> ModuleType:
     return load_module("installer", SOURCE / "setup.py")
 
 
+@pytest.fixture
+def repository(tmp_path: Path) -> Path:
+    root = tmp_path / "repository"
+    init(root)
+    git(root, "commit", "--allow-empty", "-qm", "baseline")
+    return root
+
+
 def plan_document() -> str:
     return """# Fixture command behavior
 Status: Complete
@@ -80,6 +88,20 @@ E2E: Passed — fixture command is invoked through the native CLI and its exit i
 @pytest.fixture
 def completed_plan() -> str:
     return plan_document()
+
+
+@pytest.fixture
+def visual_plan(completed_plan: str) -> str:
+    return completed_plan.replace(
+        "N/A — fixture commands have no visual interface.",
+        "Result: Passed\n"
+        "Evidence: Synthetic capture contract for this test, not app acceptance.\n"
+        "Surface: Existing — /account, rendered by app/account/page.tsx\n"
+        "Before: ![Before](https://example.test/account-before.png)\n"
+        "Proposed: ![Proposed](https://example.test/account-proposed.png)\n"
+        "Capture: Native browser test account.spec.ts passed the route and screen assertions.\n"
+        "Review: Inspected both account captures at the same viewport; only the proposed label differs.",
+    )
 
 
 @pytest.fixture
