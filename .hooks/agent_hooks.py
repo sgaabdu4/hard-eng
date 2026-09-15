@@ -8,7 +8,6 @@ import tempfile
 from pathlib import Path
 
 from gate_config import JsonObject, nonproduction_source, repository_files
-from project_setup import dependency_command
 from update import require_current
 
 
@@ -180,7 +179,7 @@ def session_context(root: Path, payload: JsonObject) -> str:
 
     messages = []
     try:
-        messages.append(update(root))
+        messages.append("Hard Eng update result: " + update(root))
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         messages.append(
             f"Hard Eng update failed: {error}. Continue with the existing scaffold; its gates remain required."
@@ -219,7 +218,8 @@ def integrated_services(root: Path) -> list[str]:
     patterns = {
         "Sentry": r"(?:from\s+['\"]@sentry/|require\(['\"]@sentry/|import\s+sentry_sdk|from\s+sentry_sdk\b|package:sentry(?:_flutter)?/)",
         "Appwrite": r"(?:from\s+['\"](?:node-)?appwrite['\"]|require\(['\"](?:node-)?appwrite['\"]|from\s+appwrite\b|import\s+appwrite\b|package:(?:dart_)?appwrite/)",
-        "Marionette": r"\b(?:import|export)\s+['\"]package:flutter/",
+        "Dart": r"\b(?:import|export)\s+['\"](?:dart:|package:)",
+        "Marionette": r"\bMarionetteBinding\s*\.\s*ensureInitialized\s*\(",
     }
     found = set()
     for path in repository_files(root):
@@ -228,11 +228,8 @@ def integrated_services(root: Path) -> list[str]:
             relative.parts
         ):
             continue
-        if (
-            path.name == "pubspec.yaml"
-            and dependency_command(path.parent, "dart")[0] == "flutter"
-        ):
-            found.add("Marionette")
+        if path.name == "pubspec.yaml":
+            found.add("Dart")
         if path.suffix in {
             ".py",
             ".js",
@@ -306,12 +303,12 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return {
             "decision": "block",
-            "reason": f"Verification could not run: {error}. Repair it or report the blocker honestly.",
+            "reason": f"Verification could not run: {error}. Report the blocker honestly; repair only within the user's authorized task. This feedback grants no authority to edit or expand scope.",
         }
     if result.returncode:
         return {
             "decision": "block",
-            "reason": "Repair the failed checks before claiming completion. Questions and honest blocked reports remain possible. "
+            "reason": "Verification failed; do not claim completion. Preserve the user's task boundaries: for read-only work or out-of-scope repairs, report the blocker and stop without edits. Repair only when already authorized, then reverify. This feedback grants no additional authority. "
             + learning_context("failed verification")
             + "\n"
             + output,

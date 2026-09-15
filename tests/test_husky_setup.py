@@ -101,7 +101,9 @@ def test_shell_bootstrap_installs_verified_main(
     metadata = json.loads((target / update.SOURCE_FILE).read_text())
     assert metadata["revision"] == revision
     assert (target / ".git/hooks/pre-push").stat().st_mode & 0o111
-    assert (target / ".github/workflows/hard-eng.yml").is_file()
+    assert (target / ".github/workflows/hard-eng.yml").is_file() is installed
+    if not installed:
+        assert "CI setup pending" in result.stderr
 
 
 def test_shell_bootstrap_current_clone_installs_missing_pre_push(

@@ -10,6 +10,8 @@ from gate_config import JsonObject, Report
 def native_fallow_command(arguments: list[str]) -> list[str] | None:
     if arguments[:2] in (["pnpm", "dlx"], ["pnpm", "exec"]):
         arguments = arguments[2:]
+        while arguments and arguments[0].startswith(("--package=", "--allow-build=")):
+            arguments = arguments[1:]
     if not arguments or Path(arguments[0]).name.split("@", 1)[0] != "fallow":
         return None
     return ["fallow", *arguments[1:]]

@@ -22,10 +22,10 @@ let chromiumExecutable = '';
 try {
   chromiumExecutable = require('playwright').chromium.executablePath();
 } catch {
-  preflightError('playwright is not installed; run: npm ci --ignore-scripts --prefix skills/product-walkthrough-video');
+  preflightError('playwright is not installed; run pnpm install --frozen-lockfile --ignore-scripts from this package directory');
 }
 if (!existsSync(chromiumExecutable)) {
-  preflightError('Chromium is not installed; run: cd skills/product-walkthrough-video && npx playwright install chromium');
+  preflightError('Chromium is not installed; run pnpm exec playwright install chromium from this package directory');
 }
 for (const tool of ['ffmpeg', 'ffprobe']) {
   const probe = spawnSync(tool, ['-version'], { stdio: 'ignore' });

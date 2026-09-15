@@ -320,7 +320,11 @@ def test_session_reports_updater_result_once(
         if agent == "copilot"
         else output["hookSpecificOutput"]["additionalContext"]
     )
-    expected = "Hard Eng update failed: offline" if offline else "No newer CI-verified"
+    expected = (
+        "Hard Eng update failed: offline"
+        if offline
+        else "Hard Eng update result: No newer CI-verified"
+    )
     assert context.startswith(expected)
     if agent != "copilot":
         assert output["systemMessage"] == "Hard Eng startup: " + context.splitlines()[0]
@@ -397,8 +401,8 @@ def test_session_identifier_cannot_escape_repository(
         ("other/a.py", ["other", "."]),
         ("README.md", ["lib", "app", "site", "other", "."]),
         (".hooks/a.py", ["lib", "app", "site", "other", "."]),
-        ("PLAN.md", ["lib", "app", "site", "other", "."]),
-        ("features/task/PLAN.md", ["lib", "app", "site", "other", "."]),
+        ("PLAN.md", ["."]),
+        ("features/task/PLAN.md", ["."]),
         ("docs/PLAN.md", ["lib", "app", "site", "other", "."]),
     ],
 )
@@ -424,6 +428,7 @@ def test_changed_package_includes_transitive_dependents_and_shared(
 
 def test_unknown_base_or_dependency_information_checks_every_package(
     repository: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     groups: list[Group] = [
         {"path": "a", "checks": [], "depends_on": []},
@@ -432,7 +437,58 @@ def test_unknown_base_or_dependency_information_checks_every_package(
     ]
     assert affected_groups(repository, groups, "missing-reference") == groups
     del groups[0]["depends_on"]
+    changed = repository / "a/change.py"
+    changed.parent.mkdir()
+    changed.write_text("change")
     assert affected_groups(repository, groups, "HEAD") == groups
+    output = capsys.readouterr().out
+    assert "Package impact is unknown" in output
+    assert "depends_on" in output
+
+
+@pytest.mark.parametrize("plans", [[], ["PLAN.md", "features/task/PLAN.md"]])
+def test_known_no_package_change_runs_shared_checks(
+    repository: Path, plans: list[str]
+) -> None:
+    groups: list[Group] = [
+        {"path": "a", "checks": []},
+        {"path": "b", "checks": []},
+        {"path": ".", "checks": []},
+    ]
+    for name in plans:
+        plan = repository / name
+        plan.parent.mkdir(parents=True, exist_ok=True)
+        plan.write_text("Task plan\n")
+    assert affected_groups(repository, groups, "HEAD") == [groups[-1]]
+
+
+def test_single_package_without_dependency_mapping_checks_full_package(
+    repository: Path,
+) -> None:
+    groups: list[Group] = [
+        {"path": "app", "checks": []},
+        {"path": ".", "checks": []},
+    ]
+    changed = repository / "app/change.py"
+    changed.parent.mkdir()
+    changed.write_text("change")
+    assert affected_groups(repository, groups, "HEAD") == groups
+
+
+def test_root_lockfile_change_includes_reviewed_consumers(repository: Path) -> None:
+    groups: list[Group] = [
+        {"path": ".", "checks": [], "depends_on": []},
+        {"path": "packages/app", "checks": [], "depends_on": ["."]},
+        {"path": "packages/site", "checks": [], "depends_on": ["."]},
+        {"path": ".", "checks": []},
+    ]
+    (repository / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    assert [group["path"] for group in affected_groups(repository, groups, "HEAD")] == [
+        ".",
+        "packages/app",
+        "packages/site",
+        ".",
+    ]
 
 
 def test_service_readiness_follows_sdk_imports(repository: Path) -> None:
@@ -444,7 +500,7 @@ def test_service_readiness_follows_sdk_imports(repository: Path) -> None:
     (repository / "client.dart").write_text(
         "import 'package:appwrite/appwrite.dart';\n"
     )
-    assert agent_hooks.integrated_services(repository) == ["Appwrite", "Sentry"]
+    assert agent_hooks.integrated_services(repository) == ["Appwrite", "Dart", "Sentry"]
 
 
 def test_skill_sdk_examples_do_not_register_project_services(repository: Path) -> None:
@@ -460,9 +516,7 @@ def test_skill_sdk_examples_do_not_register_project_services(repository: Path) -
 
 
 @pytest.mark.parametrize("directory", [".", "apps/mobile"])
-@pytest.mark.parametrize(
-    "sdk,expected", [("flutter", ["Dart", "Marionette"]), ("dart", [])]
-)
+@pytest.mark.parametrize("sdk,expected", [("flutter", ["Dart"]), ("dart", ["Dart"])])
 def test_flutter_readiness_detects_sdk_without_marionette_installed(
     repository: Path, directory: str, sdk: str, expected: list[str]
 ) -> None:

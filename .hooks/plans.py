@@ -76,6 +76,29 @@ def plan_sections(content: str) -> dict[str, str]:
     return sections
 
 
+def e2e_proof(verification: str, status: str) -> None:
+    e2e = field(verification, "E2E")
+    match = re.fullmatch(r"(Required|Passed|Delivery|N/A) — (\S.*)", e2e)
+    if match is None:
+        raise ValueError(
+            "plan E2E needs Required, Passed, Delivery or N/A — concrete journey/evidence or reason"
+        )
+    if status == "Complete" and match[1] == "Required":
+        raise ValueError(
+            "complete plan E2E is still Required; run the journey and record Passed evidence"
+        )
+    if match[1] == "Passed" and re.match(
+        r"(?i)^(pending|none|blocked|n/a)\b", match[2]
+    ):
+        raise ValueError("plan E2E Passed needs actual runtime evidence")
+    if match[1] == "Delivery" and not re.search(
+        r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*Deploy\s*$", verification
+    ):
+        raise ValueError(
+            "delivery E2E requires Delivery target: Deploy and configured delivery checks"
+        )
+
+
 def validate_plan(path: Path) -> str:
     content = path.read_text()
     sections = plan_sections(content)
@@ -90,6 +113,7 @@ def validate_plan(path: Path) -> str:
     if field(sections["Decisions + authorization"], "Blockers") != "None":
         raise ValueError("ready/complete plan has unresolved Blockers")
     proof(baseline, {"Passed"})
+    e2e_proof(verification, status)
     if not re.fullmatch(r"N/A — [^\n]+", ux.strip()):
         proof(ux, {"Passed"})
         if not re.search(r"!\[[^\]\n]*\]\(\S[^)\n]*\)", ux):

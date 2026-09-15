@@ -58,6 +58,19 @@ def test_uninitialized_skill_submodule_cannot_be_silently_omitted(
         update.scaffold_files(tmp_path)
 
 
+def test_scaffold_distribution_excludes_ignored_runtime_files(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q")
+    (tmp_path / ".gitignore").write_text("node_modules/\n__pycache__/\n")
+    skill = tmp_path / ".agents/skills/recorder"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("# Recorder\n")
+    for directory in ("node_modules", "__pycache__"):
+        binary = skill / directory / "binary"
+        binary.parent.mkdir()
+        binary.write_bytes(b"\xff\x00")
+    assert update.scaffold_files(tmp_path) == {".agents/skills/recorder/SKILL.md"}
+
+
 def fixed_revision(revision: str) -> Callable[[str], str]:
     def selected(_previous: str) -> str:
         return revision
