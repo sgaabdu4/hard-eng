@@ -127,8 +127,20 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
 def provision_batch(
     root: Path, batch: list[str], timeout: float, *, use_npm: bool
 ) -> None:
-    storage = Path(tempfile.gettempdir()) / "hard-eng-tools"
+    storage = (
+        Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hard-eng-tools"
+    )
     environment = os.environ.copy()
+    for name, directory in {
+        "MISE_DATA_DIR": "mise/data",
+        "MISE_CACHE_DIR": "mise/cache",
+        "MISE_STATE_DIR": "mise/state",
+        "PNPM_CONFIG_STORE_DIR": "pnpm/store",
+        "PNPM_CONFIG_CACHE_DIR": "pnpm/cache",
+        "NPM_CONFIG_CACHE": "npm/cache",
+    }.items():
+        environment.setdefault(name, str(storage / directory))
+    data_directory = Path(environment["MISE_DATA_DIR"])
     if shutil.which("gh"):
         environment.setdefault(
             "MISE_GITHUB_CREDENTIAL_COMMAND",
@@ -136,12 +148,6 @@ def provision_batch(
         )
     command = [
         "env",
-        f"MISE_DATA_DIR={storage / 'mise/data'}",
-        f"MISE_CACHE_DIR={storage / 'mise/cache'}",
-        f"MISE_STATE_DIR={storage / 'mise/state'}",
-        f"PNPM_CONFIG_STORE_DIR={storage / 'pnpm/store'}",
-        f"PNPM_CONFIG_CACHE_DIR={storage / 'pnpm/cache'}",
-        f"NPM_CONFIG_CACHE={storage / 'npm/cache'}",
         *(["MISE_NPM_PACKAGE_MANAGER=npm"] if use_npm else []),
         "MISE_PREFER_OFFLINE=false",
         "MISE_USE_VERSIONS_HOST=false",
@@ -186,6 +192,6 @@ def provision_batch(
     tool_paths = [
         path
         for path in environment["PATH"].split(os.pathsep)
-        if Path(path).resolve().is_relative_to(storage.resolve())
+        if Path(path).resolve().is_relative_to(data_directory.resolve())
     ]
     os.environ["PATH"] = os.pathsep.join([*tool_paths, os.environ["PATH"]])
