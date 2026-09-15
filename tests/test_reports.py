@@ -6,10 +6,88 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import reports
-from gate_config import JsonObject
+from gate_config import (
+    Gate,
+    Group,
+    JsonObject,
+    validate_gate,
+    validate_package_services,
+)
+from test_tool_execution import execute_provisioned_scanner
+
+
+@pytest.mark.parametrize(
+    "prerequisite", ["before", "missing", "after", "parallel", "different"]
+)
+def test_delegated_fallow_reuses_only_its_completed_coverage_owner(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    prerequisite: str,
+) -> None:
+    manifest = {
+        "scripts": {
+            "test:coverage": "node --test",
+            "check:fallow": "pnpm run test:coverage && pnpm run scan",
+            "scan": "fallow audit --max-crap 30 --format json --output-file coverage/fallow.json",
+        }
+    }
+    (tmp_path / "package.json").write_text(json.dumps(manifest))
+    coverage: Gate = {
+        "name": "coverage",
+        "role": "tests",
+        "command": ["pnpm", "run", "test:coverage"],
+    }
+    scan: Gate = {
+        "name": "scan",
+        "role": "dead-code-duplicates",
+        "command": ["pnpm", "run", "scan"],
+        "report": {"type": "fallow", "path": "coverage/fallow.json"},
+    }
+    group: Group = {
+        "path": ".",
+        "language": "javascript",
+        "checks": [coverage, scan],
+    }
+    if prerequisite == "missing":
+        group["checks"] = [scan]
+    elif prerequisite == "after":
+        group["checks"].reverse()
+    elif prerequisite == "parallel":
+        coverage["parallel"] = True
+    elif prerequisite == "different":
+        coverage["command"] = ["node", "--test"]
+    inherited = {"lockfiles", "vulnerabilities", "security"}
+    if prerequisite != "before":
+        with pytest.raises(ValueError, match="Wire check:fallow"):
+            validate_package_services(tmp_path, group, {}, {}, inherited)
+        return
+    validate_package_services(tmp_path, group, {}, {}, inherited)
+    validate_gate(scan, tmp_path, set())
+    assert execute_provisioned_scanner(
+        runner,
+        tmp_path,
+        monkeypatch,
+        {"path": ".", "checks": [scan]},
+        "fallow",
+        "npm:fallow@latest",
+        stale_local=True,
+        expected_use_npm=False,
+    ) == [
+        "managed",
+        "audit",
+        "--max-crap",
+        "30",
+        "--format",
+        "json",
+        "--output-file",
+        "coverage/fallow.json",
+    ]
+
 
 REPORTS = {
     "lighthouse-ci": '[{"url":"http://localhost/","auditId":"largest-contentful-paint","name":"maxNumericValue","level":"error","expected":2500,"actual":1200,"passed":true}]',

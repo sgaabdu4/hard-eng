@@ -2,9 +2,35 @@
 
 import json
 import math
+import shlex
 from pathlib import Path
 
-from gate_config import JsonObject, Report
+from gate_config import Gate, Group, JsonObject, Report
+
+
+def owns_package_fallow(group: Group, gate: Gate, scripts: dict[str, str]) -> bool:
+    """Keep the audit owner while allowing already-run coverage to be reused."""
+    command = gate["command"]
+    if gate.get("report", {}).get("type") != "fallow":
+        return False
+    if command[:3] == ["pnpm", "run", "check:fallow"]:
+        return True
+    if command[:2] != ["pnpm", "run"] or gate.get("parallel"):
+        return False
+    try:
+        standalone = shlex.split(scripts.get("check:fallow", ""))
+    except ValueError:
+        return False
+    for previous in group["checks"]:
+        if previous is gate:
+            break
+        if (
+            previous.get("role") == "tests"
+            and not previous.get("parallel")
+            and standalone == [*previous["command"], "&&", *command]
+        ):
+            return True
+    return False
 
 
 def native_fallow_command(arguments: list[str]) -> list[str] | None:
