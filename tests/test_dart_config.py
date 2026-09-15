@@ -285,22 +285,18 @@ def test_dart_exclusions_reject_nonfile_matches(tmp_path: Path, kind: str) -> No
 @pytest.mark.parametrize(
     "kind", ["empty", "generated", "ignored", "handwritten", "tracked", "symlink"]
 )
-def test_flutter_native_exclusions_preserve_source_checks(
+def test_flutter_build_exclusion_preserves_source_checks(
     runner: ModuleType, tmp_path: Path, kind: str
 ) -> None:
     (tmp_path / "pubspec.yaml").write_text(
         "name: native_exclusions\ndependencies:\n  flutter:\n    sdk: flutter\n"
     )
-    excludes = [
-        f"{name}/**"
-        for name in ("build", "android", "ios", "web", "windows", "macos", "linux")
-    ]
-    excludes.append("**/*.g.dart")
+    excludes = ["build/**", "**/*.g.dart"]
     if kind != "empty":
         relative = (
             "build/source.g.dart"
             if kind in {"ignored", "tracked"}
-            else "android/source.dart"
+            else "build/source.dart"
         )
         source = tmp_path / relative
         source.parent.mkdir()
@@ -308,7 +304,8 @@ def test_flutter_native_exclusions_preserve_source_checks(
             "// GENERATED CODE - DO NOT MODIFY BY HAND\n" if kind == "generated" else ""
         )
         source.write_text(header + "void important() {}\n")
-        (tmp_path / ".gitignore").write_text("build/\n")
+        if kind in {"ignored", "tracked"}:
+            (tmp_path / ".gitignore").write_text("build/\n")
         if kind == "tracked":
             git(tmp_path, "add", "-f", relative)
         if kind == "symlink":

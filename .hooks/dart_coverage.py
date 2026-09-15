@@ -22,23 +22,28 @@ bool erased(CompilationUnitMember node) {
   if (node is TopLevelVariableDeclaration) return node.variables.isConst;
   if (node is GenericTypeAlias || node is FunctionTypeAlias) return true;
   if (node is ClassDeclaration) {
-    if (node.abstractKeyword != null && node.interfaceKeyword != null &&
-        node.body.members.every((member) =>
-            member is MethodDeclaration && member.body is EmptyFunctionBody)) {
-      return true;
-    }
-    if (node.abstractKeyword == null || node.finalKeyword == null ||
-        node.extendsClause != null || node.withClause != null ||
-        node.implementsClause != null) return false;
-    final children = descendants(node).toList();
-    return !children.any((child) => child is FormalParameterList) &&
-        children.whereType<ClassMember>().every((member) =>
-            member is FieldDeclaration && member.isStatic && member.fields.isConst);
+    if (node.abstractKeyword == null && node.sealedKeyword == null) return false;
+    return node.body.members.every(erasedClassMember);
   }
   if (node is EnumDeclaration) {
     return node.withClause == null && node.implementsClause == null &&
         !descendants(node).any((child) => child is ClassMember ||
             child is ArgumentList || child is FormalParameterList);
+  }
+  return false;
+}
+
+bool erasedClassMember(ClassMember member) {
+  if (descendants(member).any((child) =>
+      child is FormalParameterDefaultClause)) return false;
+  if (member is MethodDeclaration) return member.body is EmptyFunctionBody;
+  if (member is FieldDeclaration) {
+    return member.isStatic && member.fields.isConst;
+  }
+  if (member is ConstructorDeclaration) {
+    return member.factoryKeyword != null &&
+        member.redirectedConstructor != null &&
+        member.body is EmptyFunctionBody;
   }
   return false;
 }
