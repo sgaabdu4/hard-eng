@@ -33,6 +33,20 @@ def test_generated_ci_timeout(
     workflow = changes[".github/workflows/hard-eng.yml"]
     assert yaml.safe_load(workflow)["jobs"]["hard-eng"]["timeout-minutes"] == minutes
     assert '--base "$BASE_SHA"' in workflow
+    steps = yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"]
+    cache = next(
+        step for step in steps if step.get("name") == "Cache native tool downloads"
+    )
+    assert cache["with"]["path"] == "${{ runner.temp }}/hard-eng-tools"
+    assert "runner.os" in cache["with"]["key"] and "runner.arch" in cache["with"]["key"]
+    assert "hard-eng.gates.json" in cache["with"]["key"]
+    checks = next(step for step in steps if step.get("name") == "Run required checks")
+    assert checks["env"]["MISE_DATA_DIR"].startswith(cache["with"]["path"] + "/")
+    assert "if" not in checks
+    assert (
+        "install " in checks["run"]
+        and "MISE_FETCH_REMOTE_VERSIONS_CACHE=1h" in checks["run"]
+    )
 
 
 @pytest.mark.parametrize("name", ["hard-eng.yml", "quality.yml", "release.yaml"])

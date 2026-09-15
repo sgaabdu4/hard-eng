@@ -513,19 +513,39 @@ def test_wrapped_actionlint_and_decimate_use_latest_packages(
     assert 'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest' in commands[2]
     assert "MISE_NPM_PACKAGE_MANAGER=npm" in commands[2]
     assert "MISE_NPM_PACKAGE_MANAGER=npm" not in commands[0]
-    assert f"NPM_CONFIG_CACHE={tmp_path}/hard-eng-tools/npm/cache" in commands[2]
     assert len(commands) == 4
     for command, environment in zip(commands, environments, strict=True):
         assert isinstance(environment, dict)
+        assert "NPM_CONFIG_CACHE" in environment
         cache_age = int(environment["PNPM_CONFIG_DLX_CACHE_MAX_AGE"])
         assert cache_age == 0 if "install" in command else cache_age > 0
 
 
 @pytest.mark.parametrize("wrapped", [False, True])
+@pytest.mark.parametrize("location", ["local", "runner", "configured"])
 def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wrapped: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wrapped: bool, location: str
 ) -> None:
-    sdk, scanner = tmp_path / "sdk", tmp_path / "hard-eng-tools/scanner"
+    for name in (
+        "RUNNER_TEMP",
+        "MISE_DATA_DIR",
+        "MISE_CACHE_DIR",
+        "MISE_STATE_DIR",
+        "PNPM_CONFIG_STORE_DIR",
+        "PNPM_CONFIG_CACHE_DIR",
+        "NPM_CONFIG_CACHE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    storage = tmp_path / "hard-eng-tools"
+    if location != "local":
+        monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
+        storage = tmp_path / "runner/hard-eng-tools"
+    data = storage / "mise/data"
+    if location == "configured":
+        data = tmp_path / "configured/data"
+        monkeypatch.setenv("MISE_DATA_DIR", str(data))
+        monkeypatch.setenv("PNPM_CONFIG_STORE_DIR", str(tmp_path / "configured/store"))
+    sdk, scanner = tmp_path / "sdk", data / "installs/gitleaks/test/bin"
     for directory, executable in ((sdk, "uv"), (scanner, "gitleaks")):
         directory.mkdir(parents=True)
         path = directory / executable
@@ -539,6 +559,15 @@ def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
         command: list[str], **_kwargs: object
     ) -> subprocess.CompletedProcess[str]:
         captured[:] = command
+        environment = _kwargs["env"]
+        assert isinstance(environment, dict)
+        assert environment["MISE_DATA_DIR"] == str(data)
+        assert environment["PNPM_CONFIG_STORE_DIR"] == str(
+            tmp_path / "configured/store"
+            if location == "configured"
+            else storage / "pnpm/store"
+        )
+        assert environment["PNPM_CONFIG_CACHE_DIR"] == str(storage / "pnpm/cache")
         return subprocess.CompletedProcess(
             command, 0, json.dumps({"PATH": str(scanner)}), ""
         )
@@ -552,9 +581,8 @@ def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
     )
     assert shutil.which("uv") == str(sdk / "uv")
     assert shutil.which("gitleaks") == str(scanner / "gitleaks")
-    assert captured[:2] == ["env", f"MISE_DATA_DIR={tmp_path}/hard-eng-tools/mise/data"]
-    assert f"PNPM_CONFIG_STORE_DIR={tmp_path}/hard-eng-tools/pnpm/store" in captured
-    assert f"PNPM_CONFIG_CACHE_DIR={tmp_path}/hard-eng-tools/pnpm/cache" in captured
+    assert captured[0] == "env"
+    assert not any(argument.startswith("MISE_DATA_DIR=") for argument in captured)
     assert captured[captured.index("pnpm") :] == [
         "pnpm",
         "dlx",
