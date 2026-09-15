@@ -6,7 +6,8 @@ from types import ModuleType
 
 import pytest
 import yaml
-from gate_config import validate_dart_exclusions
+from conftest import git
+from gate_config import JsonObject, validate_dart_exclusions
 
 
 @pytest.mark.parametrize("style", ["absolute", "trailing-slash", "relative"])
@@ -82,7 +83,7 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     options["linter"]["rules"].update({"no_dynamic_casts": True, "no_raw_types": True})
     options["analyzer"]["exclude"] = excludes
     options["linter"]["rules"] = ["avoid_print", *options["linter"]["rules"]]
-    options["plugins"] = {"riverpod_lint": "3.1.8", "flutter_skill_lints": "^0.11.2"}
+    options["plugins"] = {"riverpod_lint": "3.1.9", "flutter_skill_lints": "^0.11.2"}
     path = tmp_path / "analysis_options.yaml"
     path.write_text(yaml.safe_dump(options, sort_keys=False))
     runner.validate_typing(tmp_path, "dart", ["lib"])
@@ -134,32 +135,56 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
 
 
 @pytest.mark.parametrize(
-    ("plugin", "migrate"),
+    ("name", "plugin", "migrate"),
     [
-        ("0.10.2", True),
-        ("^0.9.1", True),
-        (None, False),
-        ("0.11.0", True),
-        ("^0.11.0", True),
-        ("0.11.1", True),
-        ("^0.11.1", True),
-        ("0.11.2", False),
-        ("^0.11.2", False),
-        ("0.12.0", False),
-        (">=0.11.0 <0.12.0", False),
-        ({"path": "../custom-plugin"}, False),
+        ("flutter_skill_lints", "0.10.2", True),
+        ("flutter_skill_lints", "^0.9.1", True),
+        ("flutter_skill_lints", None, False),
+        ("flutter_skill_lints", "0.11.0", True),
+        ("flutter_skill_lints", "^0.11.0", True),
+        ("flutter_skill_lints", "0.11.1", True),
+        ("flutter_skill_lints", "^0.11.1", True),
+        ("flutter_skill_lints", "0.11.2", False),
+        ("flutter_skill_lints", "^0.11.2", False),
+        ("flutter_skill_lints", "0.12.0", False),
+        ("flutter_skill_lints", ">=0.11.0 <0.12.0", False),
+        ("flutter_skill_lints", {"path": "../custom-plugin"}, False),
+        (
+            "flutter_skill_lints",
+            {"version": "^0.9.1", "diagnostics": {"use_ref_mounted_after_await": True}},
+            True,
+        ),
+        ("riverpod_lint", "3.1.8", True),
+        ("riverpod_lint", "2.6.5", True),
+        ("riverpod_lint", "^2.6.5", True),
+        ("riverpod_lint", {"version": "^2.6.5"}, True),
+        ("riverpod_lint", {"version": "3.1.8"}, True),
+        ("riverpod_lint", {"version": "^3.1.9"}, False),
+        ("riverpod_lint", {"version": "^4.0.0"}, False),
+        ("riverpod_lint", {"version": "3.1.8", "path": "../custom"}, False),
+        (
+            "riverpod_lint",
+            {"version": "3.1.8", "git": "https://example.invalid/plugin"},
+            False,
+        ),
+        (
+            "riverpod_lint",
+            {"version": "3.1.8", "hosted": "https://example.invalid"},
+            False,
+        ),
     ],
 )
 def test_dart_setup_migrates_known_plugin_with_rules(
     installer: ModuleType,
     runner: ModuleType,
     tmp_path: Path,
-    plugin: str | dict[str, str] | None,
+    name: str,
+    plugin: str | JsonObject | None,
     migrate: bool,
 ) -> None:
-    plugins: dict[str, str | dict[str, str]] = {"other_plugin": "1.2.3"}
+    plugins: JsonObject = {"other_plugin": "1.2.3"}
     if plugin is not None:
-        plugins["flutter_skill_lints"] = plugin
+        plugins[name] = plugin
     path = tmp_path / "analysis_options.yaml"
     path.write_text(
         yaml.safe_dump(
@@ -182,7 +207,10 @@ def test_dart_setup_migrates_known_plugin_with_rules(
     )
     expected = dict(plugins)
     if migrate:
-        expected["flutter_skill_lints"] = canonical["plugins"]["flutter_skill_lints"]
+        version = canonical["plugins"][name]
+        expected[name] = (
+            {**plugin, "version": version} if isinstance(plugin, dict) else version
+        )
     assert result["plugins"] == expected
     assert result["analyzer"]["language"] == {"strict-inference": True}
     assert result["linter"]["rules"]["no_dynamic_casts"] is True
@@ -192,8 +220,12 @@ def test_dart_setup_migrates_known_plugin_with_rules(
     if migrate:
         outdated = {**result, "plugins": plugins}
         path.write_text(yaml.safe_dump(outdated))
-        with pytest.raises(ValueError, match="older than the installed canonical"):
+        with pytest.raises(
+            ValueError, match="older than the installed canonical"
+        ) as error:
             runner.validate_typing(tmp_path, "dart")
+        assert name in str(error.value)
+        assert canonical["plugins"][name] in str(error.value)
         path.write_text(changes["analysis_options.yaml"])
     repeated: dict[str, str] = {}
     installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, repeated)
@@ -248,3 +280,52 @@ def test_dart_exclusions_reject_nonfile_matches(tmp_path: Path, kind: str) -> No
         path.symlink_to(target)
     with pytest.raises(ValueError, match="unsafe path"):
         validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
+
+
+@pytest.mark.parametrize(
+    "kind", ["empty", "generated", "ignored", "handwritten", "tracked", "symlink"]
+)
+def test_flutter_native_exclusions_preserve_source_checks(
+    runner: ModuleType, tmp_path: Path, kind: str
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text(
+        "name: native_exclusions\ndependencies:\n  flutter:\n    sdk: flutter\n"
+    )
+    excludes = [
+        f"{name}/**"
+        for name in ("build", "android", "ios", "web", "windows", "macos", "linux")
+    ]
+    excludes.append("**/*.g.dart")
+    if kind != "empty":
+        relative = (
+            "build/source.g.dart"
+            if kind in {"ignored", "tracked"}
+            else "android/source.dart"
+        )
+        source = tmp_path / relative
+        source.parent.mkdir()
+        header = (
+            "// GENERATED CODE - DO NOT MODIFY BY HAND\n" if kind == "generated" else ""
+        )
+        source.write_text(header + "void important() {}\n")
+        (tmp_path / ".gitignore").write_text("build/\n")
+        if kind == "tracked":
+            git(tmp_path, "add", "-f", relative)
+        if kind == "symlink":
+            source.unlink()
+            target = tmp_path / "outside.dart"
+            target.write_text("void important() {}\n")
+            source.symlink_to(target)
+    if kind in {"handwritten", "tracked", "symlink"}:
+        with pytest.raises(ValueError, match="handwritten source|unsafe path"):
+            validate_dart_exclusions(tmp_path, excludes)
+    else:
+        validate_dart_exclusions(tmp_path, excludes)
+
+
+def test_pure_dart_platform_sources_remain_required(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text("name: plain_dart\n")
+    with pytest.raises(ValueError, match="cannot exclude project files"):
+        validate_dart_exclusions(tmp_path, ["web/**"])
