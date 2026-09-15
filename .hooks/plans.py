@@ -49,10 +49,19 @@ def proof(content: str, allowed: set[str]) -> None:
     result = field(content, "Result")
     if result not in allowed:
         raise ValueError(f"plan Result {result!r} must be one of {sorted(allowed)}")
-    if re.match(r"(?i)^(?:pending|none|blocked|n/a)\b", field(content, "Evidence")):
+    evidence_field(content, "Evidence")
+
+
+def evidence_field(content: str, name: str) -> str:
+    value = field(content, name)
+    if re.match(
+        r"(?i)^(?:pending|none|blocked|n/a|unavailable|not (?:run|inspected|captured))\b",
+        value,
+    ):
         raise ValueError(
-            "plan Evidence must describe actual proof, not a pending result"
+            f"plan {name} must describe actual proof, not a pending result"
         )
+    return value
 
 
 def plan_sections(content: str) -> dict[str, str]:
@@ -99,28 +108,103 @@ def e2e_proof(verification: str, status: str) -> None:
         )
 
 
+def ux_proof(content: str) -> None:
+    if re.fullmatch(r"N/A — [^\n]+", content.strip()):
+        return
+    proof(content, {"Passed"})
+    image = r"!\[[^\]\n]*\]\((\S[^)\n]*)\)"
+    if not re.search(image, content):
+        raise ValueError(
+            "UX evidence needs a Markdown image reference to the rendered proposal"
+        )
+    surface = field(content, "Surface")
+    if not re.fullmatch(r"(Existing|New) — \S.+", surface):
+        raise ValueError(
+            "UX Surface needs Existing or New — actual app route/screen and source owner"
+        )
+    before = field(content, "Before")
+    baseline = re.fullmatch(image, before)
+    if baseline is None and not (
+        surface.startswith("New — ") and re.fullmatch(r"N/A — \S.+", before)
+    ):
+        raise ValueError(
+            "UX Before needs the actual baseline image; only a new app may explain its absence"
+        )
+    proposed = re.fullmatch(image, field(content, "Proposed"))
+    if proposed is None:
+        raise ValueError(
+            "UX Proposed needs a Markdown image of the proposed actual screen"
+        )
+    if baseline and baseline[1] == proposed[1]:
+        raise ValueError(
+            "A visible UX change needs distinct before and proposed image references"
+        )
+    for name in ("Capture", "Review"):
+        evidence_field(content, name)
+
+
+def readiness_errors(sections: dict[str, str], status: str = "Ready") -> list[str]:
+    errors = []
+    for name in ("Baseline + execution", "ux_reference", "Verification"):
+        try:
+            if name == "Baseline + execution":
+                proof(sections[name], {"Passed"})
+            elif name == "ux_reference":
+                ux_proof(sections[name])
+            else:
+                e2e_proof(sections[name], status)
+        except ValueError as error:
+            errors.append(f"{name}: {error}")
+    return errors
+
+
+def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
+    paths = [
+        path for path in repository_files(root) if is_plan_path(path.relative_to(root))
+    ]
+    selected = [path for path in paths if str(path.relative_to(root)) in changed]
+    messages = []
+    waiting = False
+    for path in selected or paths:
+        content = path.read_text()
+        if field(content, "Status") != "Draft":
+            continue
+        try:
+            sections = plan_sections(content)
+            blockers = field(sections["Decisions + authorization"], "Blockers")
+            waiting |= blockers != "None"
+            errors = readiness_errors(sections)
+            if blockers != "None":
+                errors.insert(0, f"waiting for: {blockers}")
+        except ValueError as error:
+            errors = [str(error)]
+        messages.append(
+            f"{path.relative_to(root)}: "
+            + "; ".join(
+                errors
+                or ["still Draft; run the Ready check before a readiness handoff"]
+            )
+        )
+    notice = (
+        "Hard Eng: Planning incomplete — " + " | ".join(messages) if messages else ""
+    )
+    return notice, bool(messages) and not waiting and bool(changed)
+
+
 def validate_plan(path: Path) -> str:
     content = path.read_text()
     sections = plan_sections(content)
     status = field(content, "Status")
     if status not in STAGES:
         raise ValueError("plan Status must be Draft, Ready or Complete")
-    baseline = sections["Baseline + execution"]
-    ux = sections["ux_reference"]
     verification = sections["Verification"]
     if status == "Draft":
         return status
     if field(sections["Decisions + authorization"], "Blockers") != "None":
         raise ValueError("ready/complete plan has unresolved Blockers")
-    proof(baseline, {"Passed"})
-    e2e_proof(verification, status)
-    if not re.fullmatch(r"N/A — [^\n]+", ux.strip()):
-        proof(ux, {"Passed"})
-        if not re.search(r"!\[[^\]\n]*\]\(\S[^)\n]*\)", ux):
-            raise ValueError(
-                "UX evidence needs a Markdown image reference to the rendered proposal; "
-                "show and inspect it in the conversation before Ready"
-            )
+    errors = readiness_errors(sections, status)
+    if errors:
+        raise ValueError("; ".join(errors))
     if status == "Complete":
         markers = re.findall(
             r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\[([^]\n]*)\](?:\s|$)", content

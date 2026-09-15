@@ -1,12 +1,14 @@
 """Reject the observed false readiness and closure cases through the real gate."""
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+from conftest import SOURCE, git
 from gate_config import GateConfig
 from plans import validate_plan, validate_plans
 from shipping import ShippingPolicy
@@ -189,7 +191,7 @@ def test_invalid_completion(
 
 @pytest.mark.parametrize("status", ["Ready", "Complete"])
 def test_ready_requires_baseline_and_rendered_evidence(
-    tmp_path: Path, completed_plan: str, status: str
+    tmp_path: Path, completed_plan: str, visual_plan: str, status: str
 ) -> None:
     path = tmp_path / "PLAN.md"
     ready = completed_plan.replace("Status: Complete", f"Status: {status}")
@@ -218,10 +220,135 @@ def test_ready_requires_baseline_and_rendered_evidence(
             "![Proposed state](https://example.test/proposed.png) inspected at the affected size.",
         )
     )
+    with pytest.raises(ValueError, match="Surface"):
+        validate_plan(path)
+    path.write_text(visual_plan.replace("Status: Complete", f"Status: {status}"))
     assert validate_plan(path) == status
     path.write_text(ready.replace("Result: Passed", "Result: Blocked", 1))
     with pytest.raises(ValueError, match="Result"):
         validate_plan(path)
+
+
+@pytest.mark.parametrize("name", ["Surface", "Before", "Proposed", "Capture", "Review"])
+def test_visual_readiness_requires_capture_context(
+    tmp_path: Path, visual_plan: str, name: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(
+        "\n".join(
+            line for line in visual_plan.splitlines() if not line.startswith(f"{name}:")
+        )
+    )
+    with pytest.raises(ValueError, match=name):
+        validate_plan(path)
+
+
+@pytest.mark.parametrize("name", ["Capture", "Review"])
+def test_pending_capture_or_review_cannot_establish_readiness(
+    tmp_path: Path, visual_plan: str, name: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(
+        "\n".join(
+            f"{name}: Pending browser access" if line.startswith(f"{name}:") else line
+            for line in visual_plan.splitlines()
+        )
+    )
+    with pytest.raises(ValueError, match=name):
+        validate_plan(path)
+
+
+def test_new_app_can_explain_absent_baseline_but_existing_screen_cannot(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    missing_before = visual_plan.replace(
+        "Before: ![Before](https://example.test/account-before.png)",
+        "Before: N/A — greenfield app has no prior screen; concept uses the supplied brief.",
+    )
+    path.write_text(missing_before)
+    with pytest.raises(ValueError, match="Before"):
+        validate_plan(path)
+    path.write_text(missing_before.replace("Surface: Existing", "Surface: New"))
+    assert validate_plan(path) == "Complete"
+
+
+def test_same_image_cannot_represent_a_visible_change(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan.replace("account-proposed.png", "account-before.png"))
+    with pytest.raises(ValueError, match="distinct"):
+        validate_plan(path)
+
+
+@pytest.mark.parametrize("state", ["incomplete", "question", "unchanged-question"])
+def test_native_stop_reports_incomplete_visual_planning(
+    repository: Path, completed_plan: str, state: str
+) -> None:
+    question = state != "incomplete"
+    shutil.copytree(
+        SOURCE / ".hooks",
+        repository / ".hooks",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        shutil.copyfile(SOURCE / name, repository / name)
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [],
+                "shared": [
+                    {
+                        "name": "fixture-check",
+                        "command": [
+                            sys.executable,
+                            "-c",
+                            "from pathlib import Path; Path('checked').touch()",
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    git(repository, "add", ".")
+    git(repository, "commit", "-qm", "native hooks")
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", "Status: Draft")
+        .replace(
+            "Blockers: None",
+            "Blockers: choose the target screen" if question else "Blockers: None",
+        )
+        .replace(
+            "N/A — fixture commands have no visual interface.",
+            "Result: Passed\nEvidence: Only a prose description; actual screen capture is missing.",
+        )
+        + "\n## Historical example\n\nBlockers: obsolete example outside decisions\n"
+    )
+    if state == "question":
+        (repository / "proposal.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg"/>'
+        )
+    if state == "unchanged-question":
+        git(repository, "add", "PLAN.md")
+        git(repository, "commit", "-qm", "question")
+        (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+        session = repository / ".hard-eng/sessions/acceptance.json"
+        session.parent.mkdir(parents=True)
+        session.write_text(json.dumps({"base": git(repository, "rev-parse", "HEAD")}))
+    result = subprocess.run(
+        [sys.executable, "-B", str(repository / ".hooks/hard-eng.py"), "stop", "codex"],
+        cwd=repository,
+        input=json.dumps({"session_id": "acceptance"}),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    response = json.loads(result.stdout)
+    assert "Planning incomplete" in response["systemMessage"]
+    assert "Markdown image" in response["systemMessage"]
+    assert (response.get("decision") == "block") is not question
+    assert (repository / "checked").exists() is (state == "question")
 
 
 @pytest.mark.parametrize("status", ["Ready", "Complete"])
