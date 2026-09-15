@@ -613,10 +613,11 @@ def validate_package_services(
     if language == "python" and python_roots(directory, group):
         require_roles(group["path"], {"imports"}, roles)
     if language == "javascript":
+        from fallow_report import owns_package_fallow
+
         manifest = json.loads((directory / "package.json").read_text())
         if "check:fallow" in manifest.get("scripts", {}) and not any(
-            gate["command"][:3] == ["pnpm", "run", "check:fallow"]
-            and gate.get("report", {}).get("type") == "fallow"
+            owns_package_fallow(group, gate, manifest["scripts"])
             for gate in group["checks"]
         ):
             raise ValueError(
