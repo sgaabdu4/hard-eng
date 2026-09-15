@@ -46,7 +46,7 @@ Setup prepends shared rules to `AGENTS.md`, adds Claude's native `@AGENTS.md` im
 
 When an update changes project configuration, its isolated candidate runs the application gates without requiring a task plan to be completed first. This verifies the update only; normal completion, push and shipping checks still require their task evidence.
 
-The modern Dart profile also migrates recognized older `flutter_skill_lints` pins to the compatible version in the canonical Flutter template. It preserves unrelated plugins, custom sources and newer pins; analyzer findings still block candidate verification.
+The modern Dart profile migrates recognized older `flutter_skill_lints` and `riverpod_lint` versions, including native version mappings, to the canonical Flutter template. This targets the current native analyzer plugin system, not legacy `custom_lint` compatibility; older major declarations also migrate. Unrelated plugins, custom sources, mapping diagnostics and newer pins remain intact. Application gates must pass before an installed update is accepted; compatibility failures require a project migration, never a lint waiver. Flutter's native build/platform exclusions are accepted while excluded handwritten Dart source remains blocked.
 
 Codex requires separate trust for new or changed hooks, even in a trusted project. Review them with `/hooks`, then verify the startup result in a new session before claiming automatic updates or completion enforcement. The installer does not grant trust to its own hooks. See the [official hook trust instructions](https://learn.chatgpt.com/docs/hooks).
 

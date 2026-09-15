@@ -16,6 +16,7 @@ from gate_config import (
     Group,
     JsonObject,
     Report,
+    generated_sources,
     nonproduction_source,
     repository_files,
     typescript_packages,
@@ -31,26 +32,91 @@ def migrate_dart_plugins(options: JsonObject, source: Path) -> None:
     plugins = options.get("plugins")
     if not isinstance(plugins, dict):
         return
-    version = plugins.get("flutter_skill_lints")
-    installed = (
-        re.fullmatch(r"\^?(\d+)\.(\d+)\.(\d+)", version or "")
-        if isinstance(version, str)
-        else None
+    template = (
+        source / ".agents/skills/building-flutter-apps/references/analysis_options.yaml"
     )
-    if installed:
-        template = (
-            source
-            / ".agents/skills/building-flutter-apps/references/analysis_options.yaml"
+    canonical = yaml.safe_load(template.read_text())
+    for name in ("flutter_skill_lints", "riverpod_lint"):
+        entry = plugins.get(name)
+        if isinstance(entry, dict) and {"path", "git", "hosted"} & entry.keys():
+            continue
+        version = entry.get("version") if isinstance(entry, dict) else entry
+        installed = (
+            re.fullmatch(r"\^?(\d+)\.(\d+)\.(\d+)", version)
+            if isinstance(version, str)
+            else None
         )
-        canonical = yaml.safe_load(template.read_text())
-        current = canonical["plugins"]["flutter_skill_lints"]
+        if installed is None:
+            continue
+        current = canonical["plugins"][name]
         latest = re.fullmatch(r"\^?(\d+)\.(\d+)\.(\d+)", current)
         if latest is None:
             raise ValueError(
                 "Canonical Flutter lint version must be an exact or caret version"
             )
         if tuple(map(int, installed.groups())) < tuple(map(int, latest.groups())):
-            plugins["flutter_skill_lints"] = current
+            plugins[name] = (
+                {**entry, "version": current} if isinstance(entry, dict) else current
+            )
+
+
+def validate_dart_exclusions(directory: Path, values: object) -> None:
+    allowed = {
+        ".dart_tool/**",
+        "**/*.g.dart",
+        "**/*.freezed.dart",
+        "**/*.gr.dart",
+        "**/*.arb",
+    }
+    native = {
+        f"{name}/**"
+        for name in ("build", "android", "ios", "web", "windows", "macos", "linux")
+    }
+    if (
+        not (directory / "pubspec.yaml").is_file()
+        or dependency_command(directory, "dart")[0] != "flutter"
+    ):
+        native.clear()
+    if not isinstance(values, list) or any(
+        not isinstance(value, str) or value not in allowed | native for value in values
+    ):
+        raise ValueError("Dart strict analysis cannot exclude project files")
+    roots = {pattern.split("/", 1)[0] for pattern in set(values) & native}
+    matches = {
+        path
+        for pattern in set(values) - native - {".dart_tool/**"}
+        for path in directory.glob(pattern)
+        if path.relative_to(directory).parts[0] not in roots
+    }
+    if roots:
+        command = ["git", "ls-files", "-zco", "--exclude-standard", "--"]
+        names = subprocess.check_output(
+            [*command, *sorted(roots)],
+            cwd=directory,
+            text=True,
+        ).split("\0")
+        matches.update(
+            directory / name
+            for name in names
+            if name
+            and (Path(name).suffix == ".dart" or (directory / name).is_symlink())
+        )
+    names = [str(path.relative_to(directory)) for path in matches]
+    generated = generated_sources(directory, names)
+    for path in matches:
+        if (
+            ".dart_tool/**" in values
+            and path.relative_to(directory).parts[0] == ".dart_tool"
+        ):
+            continue
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"Dart generated exclusion matches an unsafe path: {path}")
+        if path.suffix != ".dart" or str(path.relative_to(directory)) in generated:
+            continue
+        with path.open("rb") as source:
+            header = source.read(2048).splitlines()[:10]
+        if b"// GENERATED CODE - DO NOT MODIFY BY HAND" not in header:
+            raise ValueError(f"Dart exclusion matches handwritten source: {path}")
 
 
 def validate_command_output(

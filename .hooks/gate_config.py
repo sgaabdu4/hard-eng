@@ -157,48 +157,28 @@ def validate_dart_plugins(options: JsonObject) -> None:
     plugins = options.get("plugins")
     if not isinstance(plugins, dict):
         return
-    updated: JsonObject = {"plugins": dict(plugins)}
+    migrated = dict(plugins)
+    updated: JsonObject = {"plugins": migrated}
     migrate_dart_plugins(updated, Path(__file__).resolve().parents[1])
     if updated["plugins"] != plugins:
+        versions = {
+            name: value.get("version") if isinstance(value, dict) else value
+            for name, value in plugins.items()
+        }
+        changes = ", ".join(
+            f"{name}: {versions[name]} -> {value.get('version') if isinstance(value, dict) else value}"
+            for name, value in migrated.items()
+            if value != plugins.get(name)
+        )
         raise ValueError(
-            "Flutter lint version is older than the installed canonical profile; run the supported Hard Eng updater"
+            f"Analyzer plugin version is older than the installed canonical profile ({changes}); run the supported Hard Eng updater and verify application compatibility"
         )
 
 
 def validate_dart_exclusions(directory: Path, values: object) -> None:
-    allowed = {
-        ".dart_tool/**",
-        "**/*.g.dart",
-        "**/*.freezed.dart",
-        "**/*.gr.dart",
-        "**/*.arb",
-    }
-    if not isinstance(values, list) or any(
-        not isinstance(value, str) or value not in allowed for value in values
-    ):
-        raise ValueError("Dart strict analysis cannot exclude project files")
-    matches = {
-        path
-        for pattern in set(values)
-        if pattern != ".dart_tool/**"
-        for path in directory.glob(pattern)
-    }
-    names = [str(path.relative_to(directory)) for path in matches]
-    generated = generated_sources(directory, names)
-    for path in matches:
-        if (
-            ".dart_tool/**" in values
-            and path.relative_to(directory).parts[0] == ".dart_tool"
-        ):
-            continue
-        if path.is_symlink() or not path.is_file():
-            raise ValueError(f"Dart generated exclusion matches an unsafe path: {path}")
-        if path.suffix != ".dart" or str(path.relative_to(directory)) in generated:
-            continue
-        with path.open("rb") as source:
-            header = source.read(2048).splitlines()[:10]
-        if b"// GENERATED CODE - DO NOT MODIFY BY HAND" not in header:
-            raise ValueError(f"Dart exclusion matches handwritten source: {path}")
+    from project_setup import validate_dart_exclusions as validate
+
+    validate(directory, values)
 
 
 def validate_file_sizes(root: Path, exceptions: dict[str, dict[str, str]]) -> None:
