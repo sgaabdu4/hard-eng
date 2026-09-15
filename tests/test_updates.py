@@ -292,8 +292,7 @@ def test_candidate_uses_remote_task_plan_scope(
     source, target, _ = release
     commit(source, "verified source candidate")
     (target / "package.json").unlink()
-    config_path = target / "hard-eng.gates.json"
-    config = json.loads(config_path.read_text())
+    config = json.loads((target / "hard-eng.gates.json").read_text())
     policy: ShippingPolicy = {
         "base": "main",
         "checks": ["fixture"],
@@ -316,7 +315,7 @@ def test_candidate_uses_remote_task_plan_scope(
     if outcome == "application-failure":
         command = command.replace("SystemExit(0)", "SystemExit(1)")
     config["shared"][0]["command"] = ["python3", "-c", command]
-    config_path.write_text(json.dumps(config))
+    (target / "hard-eng.gates.json").write_text(json.dumps(config))
     (target / "removed.txt").write_text("old managed content\n")
     git(target, "branch", "-M", "main")
     commit(target, "remote baseline")
@@ -330,8 +329,12 @@ def test_candidate_uses_remote_task_plan_scope(
     plan = target / "features/current/PLAN.md"
     if outcome != "absent":
         plan.parent.mkdir(parents=True)
-        status = outcome if outcome in ("Draft", "Ready") else "Complete"
-        plan.write_text(completed_plan.replace("Status: Complete", f"Status: {status}"))
+        plan.write_text(
+            completed_plan.replace(
+                "Status: Complete",
+                f"Status: {outcome if outcome in ('Draft', 'Ready') else 'Complete'}",
+            )
+        )
         commit(target, "task plan")
     git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
     stale = git(target, "rev-parse", "origin/main")
@@ -345,6 +348,8 @@ def test_candidate_uses_remote_task_plan_scope(
         "removed.txt": None,
     }
     links: dict[str, str | None] = {"new-link": "project.txt"}
+    with (target / ".git/info/exclude").open("a") as handle:
+        handle.write("new-managed.mjs\n")
     (target / "unrelated.txt").write_text("staged local work\n")
     git(target, "add", "unrelated.txt")
     if outcome not in {"application-failure", "missing-base"}:

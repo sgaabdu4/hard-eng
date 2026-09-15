@@ -318,7 +318,11 @@ def verify_candidate(
         write_links(candidate, links)
         names = sorted({*changes, *links})
         if names:
-            subprocess.run(["git", "add", "--", *names], cwd=candidate, check=True)
+            subprocess.run(
+                ["git", "add", "--force", "--", *names],
+                cwd=candidate,
+                check=True,
+            )
         subprocess.run(
             ["git", "diff", "--cached", "--check"], cwd=candidate, check=True
         )
