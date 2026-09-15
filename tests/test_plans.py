@@ -286,6 +286,7 @@ def test_same_image_cannot_represent_a_visible_change(
     "state",
     [
         "incomplete",
+        "template",
         "question",
         "unchanged-question",
         "question-template",
@@ -296,7 +297,7 @@ def test_same_image_cannot_represent_a_visible_change(
 def test_native_stop_reports_incomplete_visual_planning(
     repository: Path, completed_plan: str, state: str
 ) -> None:
-    question = state != "incomplete"
+    question = state not in {"incomplete", "template"}
     shutil.copytree(
         SOURCE / ".hooks",
         repository / ".hooks",
@@ -342,9 +343,15 @@ def test_native_stop_reports_incomplete_visual_planning(
         (captures / "proposal.svg").write_text(
             '<svg xmlns="http://www.w3.org/2000/svg"/>'
         )
-    if state == "question-template":
+    if state in {"question-template", "template"}:
         plan = repository / "PLAN.md"
-        plan.write_text(plan.read_text() + "\n[TODO: Fill after the user answers]\n")
+        template = (SOURCE / ".agents/skills/he-plan/templates/PLAN.md").read_text()
+        if question:
+            template = template.replace(
+                "Blockers: [TODO: None or concrete unresolved decisions]",
+                "Blockers: choose the target screen",
+            )
+        plan.write_text(template)
     if state == "question-code-parked":
         plan = repository / "PLAN.md"
         parked = repository / "features/parked/PLAN.md"
@@ -376,8 +383,10 @@ def test_native_stop_reports_incomplete_visual_planning(
         assert "requires Complete" in response["reason"]
         return
     assert "Planning incomplete" in response["systemMessage"]
-    assert "Markdown image" in response["systemMessage"]
+    assert "ux_reference" in response["systemMessage"]
     assert (response.get("decision") == "block") is not question
+    if state == "template":
+        assert "Blockers is unfilled" in response["systemMessage"]
     assert not (repository / "checked").exists()
 
 

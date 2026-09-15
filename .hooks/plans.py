@@ -17,6 +17,7 @@ SECTIONS = (
     "Verification",
 )
 STAGES = ("Draft", "Ready", "Complete")
+PLACEHOLDERS = r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"
 
 
 def is_plan_path(path: Path) -> bool:
@@ -65,10 +66,7 @@ def evidence_field(content: str, name: str) -> str:
 
 
 def plan_sections(content: str, *, allow_placeholders: bool = False) -> dict[str, str]:
-    if not allow_placeholders and re.search(
-        r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$",
-        content,
-    ):
+    if not allow_placeholders and re.search(PLACEHOLDERS, content):
         raise ValueError("plan contains unfilled template placeholders")
     if not re.search(r"(?m)^# \S.+$", content):
         raise ValueError("plan needs a title")
@@ -172,10 +170,13 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
         try:
             sections = plan_sections(content, allow_placeholders=True)
             blockers = field(sections["Decisions + authorization"], "Blockers")
-            waiting |= blockers != "None"
+            question = blockers != "None" and re.search(PLACEHOLDERS, blockers) is None
+            waiting |= question
             errors = readiness_errors(sections)
-            if blockers != "None":
+            if question:
                 errors.insert(0, f"waiting for: {blockers}")
+            elif blockers != "None":
+                errors.insert(0, "Blockers is unfilled")
         except ValueError as error:
             errors = [str(error)]
         messages.append(

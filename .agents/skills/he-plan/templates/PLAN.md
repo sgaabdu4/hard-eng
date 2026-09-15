@@ -42,7 +42,7 @@ Proposed: [TODO: Markdown image of the proposed state on that actual screen]
 Capture: [TODO: Starting revision, native command/browser/device actions, route/state assertions and observed result; link existing artifacts]
 Review: [TODO: Actual before/proposal inspection against the real screen, affected devices and settled direction]
 
-[TODO: For nonvisual work replace this body with N/A — a change-specific reason. Unavailable browser/captures are Blocked, not N/A.]
+[TODO: For nonvisual work replace this body with N/A — a change-specific reason. Unavailable browser/captures remain Blocked.]
 
 ## Verification
 
