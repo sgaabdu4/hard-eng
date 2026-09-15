@@ -1,6 +1,6 @@
 # Preserve verified typed runtime boundaries
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -25,7 +25,7 @@ Evidence: The source baseline b707b67 passed main CI and native Complete/pre-pus
 - [x] Canonical guidance prefers an existing verified typed adapter and preserves no-suppression policy.
 - [x] The actual Open Runtimes context is accepted by an existing typed entrypoint and serializes the expected unauthorized response.
 - [x] The existing submodule points to the verified canonical master revision.
-- [ ] Integrated source checks and remote delivery pass.
+- [x] Integrated source Ready checks pass; Complete, pre-push and remote delivery remain mandatory.
 
 ## Risks + recovery
 
@@ -37,8 +37,8 @@ N/A — skill reference guidance has no product UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Canonical 56 tests and master CI passed. Independently reran the actual official Open Runtimes context fixture through an existing function entrypoint; it returned the expected typed 403 response without production mutation. Source Ready/Complete/pre-push and hosted checks remain required.
+Result: Passed
+Evidence: Canonical 56 tests and master CI passed. Independently reran the actual official Open Runtimes context fixture through an existing function entrypoint; it returned the expected typed 403 response without production mutation. The full source Ready check passed with this exact submodule revision; the subsequent plan-only Complete check reuses that baseline. Native pre-push and hosted checks remain required.
 E2E: Passed — actual official Open Runtimes request/context/response objects invoked a typed function entrypoint and produced the expected serialized unauthorized response.
 
 Delivery target: Merge
