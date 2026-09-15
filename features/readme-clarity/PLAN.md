@@ -37,7 +37,7 @@ Documentation could overstate hook activation or security coverage. Verify each 
 ## Verification
 
 Result: Passed
-Evidence: The official Mermaid CLI rendered all eight diagrams successfully; visual inspection led to vertical layouts for readable labels. All 31 local links resolve. Whitespace and public-text checks pass. The stack gate matrix was checked against required roles and report validators; a duplicated overview table was removed. Source runtime code is unchanged. Native pre-push and hosted CI remain required before delivery.
+Evidence: The official Mermaid CLI rendered all eight diagrams successfully; visual inspection led to vertical layouts for readable labels. Local links resolve. Whitespace and public-text checks pass. The stack gate matrix was checked against required roles and report validators; a duplicated overview table was removed. Startup fallback, preserved project instructions, service setup and affected-check behavior remain documented. Source runtime code is unchanged. Native pre-push and hosted CI remain required before delivery.
 E2E: Passed — rendered and inspected all eight native Mermaid diagrams and verified documented commands and links against the repository.
 
 Delivery target: Merge

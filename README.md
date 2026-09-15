@@ -164,6 +164,8 @@ These are separate from a package's language matrix:
 | Deployment configuration | A deployment-configuration check such as Trivy. |
 | A delivery request | The project's shipping contract: actual PR identity, required CI checks, applicable UI proof, and a deployment verifier when the target is Deploy. |
 
+Checks cover affected packages, their declared dependents, and shared concerns; uncertain impact runs everything. Independent checks can run in parallel. CI and pre-push must stay within the project's measured time budgets, and cached tool downloads never replace check results.
+
 Setup preserves existing workflows. It adds a new workflow only when the project has measured shipping policy, and it does not turn a local gate pass into CI, merge, or deployment proof.
 
 Read the [gate contract](.agents/skills/he/references/gates.md), [testing guidance](.agents/skills/he/references/testing.md), and [shipping contract](.agents/skills/he-ship/references/checks.md) before treating a green result as release-ready.
@@ -190,6 +192,10 @@ curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | s
 ```
 
 The same command installs a new scaffold or updates an existing recorded installation. It uses a CI-verified source revision, creates a local update commit when configuration changes, and does not push it. Review any reported conflicts before proceeding.
+
+Setup prepends shared rules to `AGENTS.md` and connects `CLAUDE.md` while preserving existing project instructions, skills, and custom hooks. It configures Context Mode and Codebase Memory, plus applicable Appwrite, Sentry, Dart, and Marionette connections. Known service settings are reused; missing choices remain pending instead of being guessed. See [integration setup](.agents/skills/he/references/integrations.md) for service choices and connection verification.
+
+Trusted session hooks report the startup update result. If that session has no result, the agent's instructions require this command before work. Reuse an existing result; do not run setup concurrently in the background. Completion and shipping also check that the installed scaffold is current.
 
 It needs Git, curl, uv, and Python 3.12 or later. Running the resulting checks also needs the project’s own SDKs and pnpm where applicable; Dart Decimate provisioning requires npm 11.16 or later.
 
