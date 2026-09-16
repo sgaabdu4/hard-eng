@@ -6,8 +6,11 @@ import re
 import sys
 from pathlib import Path
 
+import yaml
 from gate_config import GateConfig
 from project_setup import dependency_command
+
+MAINTENANCE_EVENTS = {"schedule", "workflow_dispatch"}
 
 
 def workflow_budget(root: Path, content: str) -> str:
@@ -96,6 +99,41 @@ def workflow_tools(root: Path, config: GateConfig) -> list[str]:
     return tools
 
 
+def maintenance_workflows_only(workflows: list[Path]) -> bool:
+    """Allow a generated quality owner beside scheduled/manual maintenance jobs."""
+    if not workflows:
+        return False
+    for path in workflows:
+        try:
+            workflow = yaml.safe_load(path.read_text())
+        except yaml.YAMLError:
+            return False
+        if not isinstance(workflow, dict):
+            return False
+        triggers = workflow.get("on", workflow.get(True))
+        events = (
+            {triggers}
+            if isinstance(triggers, str)
+            else set(triggers)
+            if isinstance(triggers, (list, dict))
+            and all(isinstance(event, str) for event in triggers)
+            else set()
+        )
+        if not events or not events <= MAINTENANCE_EVENTS:
+            return False
+        jobs = workflow.get("jobs")
+        if isinstance(jobs, dict) and any(
+            isinstance(step, dict)
+            and isinstance(step.get("run"), str)
+            and re.search(r"\.hooks/hard-eng\.py\s+check(?:\s|$)", step["run"])
+            for job in jobs.values()
+            if isinstance(job, dict) and isinstance(job.get("steps"), list)
+            for step in job["steps"]
+        ):
+            return False
+    return True
+
+
 def configure_ci(
     root: Path, source: Path, config: GateConfig, changes: dict[str, str]
 ) -> None:
@@ -106,10 +144,12 @@ def configure_ci(
         if migrated != original:
             changes[name] = migrated
         return
-    if any(
-        path.suffix in {".yml", ".yaml"}
+    workflows = [
+        path
         for path in (root / ".github/workflows").glob("*")
-    ):
+        if path.is_file() and path.suffix in {".yml", ".yaml"}
+    ]
+    if workflows and not maintenance_workflows_only(workflows):
         print(
             "Existing CI retained: integrate missing Hard Eng checks into their current jobs and require those results in shipping.checks; do not add a duplicate full pipeline.",
             file=sys.stderr,
@@ -123,6 +163,14 @@ def configure_ci(
             file=sys.stderr,
         )
         return
+    shipping = config.get("shipping")
+    checks = shipping.get("checks") if isinstance(shipping, dict) else None
+    if not isinstance(checks, list) or not all(
+        isinstance(check, str) for check in checks
+    ):
+        raise ValueError("Generated CI requires shipping checks in gate configuration")
+    if "hard-eng" not in checks:
+        checks.append("hard-eng")
     tools = workflow_tools(root, config)
     changes[name] = (
         (source / name)
