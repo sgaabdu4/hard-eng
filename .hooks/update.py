@@ -314,6 +314,12 @@ def verify_candidate(
         check=True,
     )
     try:
+        if (candidate / ".gitmodules").is_file():
+            subprocess.run(
+                ["git", "submodule", "update", "--init", "--recursive"],
+                cwd=candidate,
+                check=True,
+            )
         write_changes(candidate, changes)
         write_links(candidate, links)
         names = sorted({*changes, *links})
@@ -342,7 +348,7 @@ def verify_candidate(
                 "-c",
                 """import compileall, sys
 from pathlib import Path
-sys.path.insert(0, '.hooks')
+sys.path.insert(0, sys.argv[1])
 from gate_config import parse_config
 from gitleaks_scan import validate_current_files_gate
 config = parse_config(Path('hard-eng.gates.json').read_text())
@@ -351,6 +357,7 @@ for gate in gates:
     validate_current_files_gate(gate.get('role'), gate['command'])
 raise SystemExit(not compileall.compile_dir('.hooks', quiet=1))
 """,
+                str(source / ".hooks"),
             ]
             if only_scaffold
             else [

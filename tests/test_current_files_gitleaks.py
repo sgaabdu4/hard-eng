@@ -10,6 +10,9 @@ from types import ModuleType
 
 import gitleaks_scan
 import pytest
+import update
+from conftest import commit, init
+from conftest import git as git_output
 from gate_config import validate_gate
 from gitleaks_scan import run_current_files, snapshot_command
 
@@ -48,8 +51,10 @@ contents = {
         'untracked.txt',
         'deleted.txt',
         'inside-link.txt',
+        'skill-alias',
         'skills/submodule/submodule.txt',
         'generated/output.txt',
+        '.claude/skills/example/SKILL.md',
     )
     if (root / path).is_file()
 }
@@ -109,6 +114,10 @@ def test_current_files_include_authored_changes_and_exclude_ignored_output(
     os.symlink(project / "tracked.txt", project / "inside-link.txt")
     git(project, "add", "inside-link.txt")
     git(project, "commit", "-qm", "inside link input")
+    alias = project / "skill-alias"
+    alias.symlink_to("skills/submodule/submodule.txt")
+    git(project, "add", "skill-alias")
+    git(project, "commit", "-qm", "submodule alias input")
     (project / "tracked-ignored.txt").write_text("tracked ignored\n")
     git(project, "add", "-f", "tracked-ignored.txt")
     git(project, "commit", "-qm", "tracked ignored input")
@@ -135,6 +144,7 @@ def test_current_files_include_authored_changes_and_exclude_ignored_output(
         "tracked.txt": "modified\n",
         "untracked.txt": "untracked\n",
         "inside-link.txt": "modified\n",
+        "skill-alias": "modified submodule\n",
         "skills/submodule/submodule.txt": "modified submodule\n",
     }
     assert Path(observed["report"]) == project / "reports/gitleaks.sarif"
@@ -171,6 +181,122 @@ def test_native_secrets_gate_uses_current_files_snapshot(
     observed = json.loads(result.read_text())
     assert observed["contents"]["untracked.txt"] == "untracked\n"
     assert "generated/output.txt" not in observed["contents"]
+
+
+def test_current_files_requires_an_initialized_gitlink_before_aliases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = repository(tmp_path)
+    add_submodule(project, tmp_path)
+    checkout = tmp_path / "checkout"
+    git(tmp_path, "clone", "--quiet", str(project), str(checkout))
+    result = tmp_path / "result.json"
+    monkeypatch.setenv("GITLEAKS_SCOPE_RESULT", str(result))
+
+    with pytest.raises(
+        ValueError, match="submodule is uninitialized: skills/submodule"
+    ):
+        run_current_files(
+            scan_command(scanner_script(tmp_path), monkeypatch),
+            checkout,
+            30,
+            None,
+            sys.stderr,
+        )
+
+    assert not result.exists()
+
+
+@pytest.mark.parametrize("gate_fails", [False, True])
+def test_candidate_initializes_consumer_submodule_and_cleans_up(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+    gate_fails: bool,
+) -> None:
+    source, target, _ = release
+    module = target.parent / "consumer-module"
+    init(module)
+    (module / "skill.txt").write_text("pinned skill\n")
+    commit(module, "consumer skill")
+    git(
+        target,
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        str(module),
+        ".skills",
+    )
+    (target / "skill-link").symlink_to(".skills/skill.txt")
+    (target / "package.json").unlink()
+    config_path = target / "hard-eng.gates.json"
+    config = json.loads(config_path.read_text())
+    config["shared"][0]["command"] = [
+        "python3",
+        "-c",
+        (
+            "from pathlib import Path; "
+            "assert Path('skill-link').read_text() == 'pinned skill\\n'; "
+            f"print('SUBMODULE_READ'); raise SystemExit({int(gate_fails)})"
+        ),
+    ]
+    config_path.write_text(json.dumps(config))
+    commit(target, "consumer with linked submodule")
+    config_before = (target / ".git/config").read_bytes()
+    (target / ".skills/skill.txt").write_text("local skill edit\n")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
+    monkeypatch.setenv("GIT_CONFIG_KEY_1", "protocol.file.allow")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_1", "always")
+    candidate = target.parent / "candidate"
+    if gate_fails:
+        with pytest.raises(subprocess.CalledProcessError):
+            update.verify_candidate(
+                target, source, {"project.txt": "updated\n"}, {}, candidate
+            )
+    else:
+        update.verify_candidate(
+            target, source, {"project.txt": "updated\n"}, {}, candidate
+        )
+    assert "\nSUBMODULE_READ\n" in capfd.readouterr().err
+    assert not candidate.exists()
+    assert git_output(target, "worktree", "list", "--porcelain").count("worktree ") == 1
+    assert (target / "skill-link").read_text() == "local skill edit\n"
+    assert (target / ".git/config").read_bytes() == config_before
+    assert (target / "project.txt").read_text() == "original\n"
+
+
+def test_clean_checkout_requires_committed_skill_link_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = repository(tmp_path)
+    (project / ".gitignore").write_text(".agents/\nreports/\n")
+    skill = project / ".agents/skills/example/SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("# Required skill\n")
+    alias = project / ".claude/skills/example"
+    alias.parent.mkdir(parents=True)
+    alias.symlink_to("../../.agents/skills/example", target_is_directory=True)
+    git(project, "add", ".gitignore", ".claude")
+    git(project, "commit", "-qm", "incomplete migration")
+    checkout = tmp_path / "checkout"
+    git(tmp_path, "clone", "--quiet", str(project), str(checkout))
+    result = tmp_path / "result.json"
+    monkeypatch.setenv("GITLEAKS_SCOPE_RESULT", str(result))
+    command = scan_command(scanner_script(tmp_path), monkeypatch)
+
+    with pytest.raises(ValueError, match="source is missing: .claude/skills/example"):
+        run_current_files(command, checkout, 30, None, sys.stderr)
+    assert not result.exists()
+
+    git(project, "add", "--force", ".agents/skills/example")
+    git(project, "commit", "-qm", "include required skill target")
+    git(checkout, "pull", "--ff-only", "--quiet")
+    assert run_current_files(command, checkout, 30, None, sys.stderr).returncode == 0
+    assert (
+        json.loads(result.read_text())["contents"][".claude/skills/example/SKILL.md"]
+        == "# Required skill\n"
+    )
 
 
 def test_current_files_reject_external_symbolic_links_before_scanning(

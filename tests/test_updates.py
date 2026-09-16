@@ -317,6 +317,20 @@ def test_scaffold_update_validates_retained_files_scanner(
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
+def test_scaffold_update_does_not_import_extra_candidate_hook_modules(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    shadow = target / ".hooks/typing.py"
+    shadow.write_text('raise RuntimeError("candidate hook import")\n')
+    commit(target, "preserved project hook module")
+    select_release(source, monkeypatch)
+
+    assert "Updated Hard Eng" in update.update(target)
+    assert shadow.read_text() == 'raise RuntimeError("candidate hook import")\n'
+    assert git(target, "status", "--porcelain") == ""
+
+
 def test_overlapping_local_edit_prevents_update(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

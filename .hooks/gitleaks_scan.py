@@ -94,6 +94,10 @@ def copy_scan_entry(
             raise ValueError(
                 f"Gitleaks source is not a tracked submodule: {relative_path}"
             )
+        if not (source / ".git").exists():
+            raise ValueError(
+                f"Gitleaks submodule is uninitialized: {relative_path}; run git submodule update --init --recursive"
+            )
         copy_scan_tree(source, target, ancestors)
         return
     copy_link_target(source, target, ancestors)
