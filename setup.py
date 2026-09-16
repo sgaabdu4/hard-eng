@@ -82,6 +82,21 @@ def gate_config(root: Path) -> GateConfig:
 def configure_hooks(root: Path, changes: dict[str, str]) -> None:
     import agent_hooks
 
+    codex_config = root / ".codex/config.toml"
+    if codex_config.exists():
+        features = tomllib.loads(codex_config.read_text()).get("features", {})
+        setting = (
+            "hooks"
+            if isinstance(features, dict) and "hooks" in features
+            else "codex_hooks"
+        )
+        if isinstance(features, dict) and features.get(setting) is False:
+            raise ValueError(
+                "Codex hooks are disabled by the project-local "
+                f".codex/config.toml [features].{setting} setting; preserve it and ask before changing it. "
+                "`codex --enable hooks` enables one launch but does not resolve this installer conflict."
+            )
+
     command = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py"'
     for agent, name in (
         ("claude", ".claude/settings.json"),
@@ -639,7 +654,7 @@ def install(root: Path, previous: Path | None = None) -> None:
         "Integration setup: .agents/skills/he/references/integrations.md — reuse existing choices; resolve only missing service targets and verify relevant real calls."
     )
     print(
-        "Codex: trust the project to load .codex configuration, then review new or changed hooks with /hooks. Hook-trust bypass alone does not trust the project.\n"
+        "Codex: if hooks are disabled for this launch, start with `codex --enable hooks`; trust the project to load .codex configuration, then review new or changed hooks with /hooks. Hook-trust bypass alone does not trust the project.\n"
         "MCP entries still need host loading and authentication. In Codex, inspect `codex mcp list`; use `codex mcp login <name>` for an unauthenticated OAuth server, then verify a real call in the task."
     )
     print("Then run: python3 .hooks/hard-eng.py check")

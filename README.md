@@ -57,6 +57,8 @@ flowchart TD
 
 Trusted SessionStart hooks attempt the update; without a result, agent instructions require the command above before work. Reuse a current result and never run concurrent setup. A failed update does not waive existing checks.
 
+In Codex CLI, use `codex --enable hooks`, trust the project, then `/hooks` to review and trust Hard Eng's hooks. Changed hook definitions need review again. `--yolo` disables sandbox/approval protections; it is not hook setup. A disabled SessionStart cannot warn you itself; Codex supplies the hook-trust warning. [Native hook instructions](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
+
 Requires Git, curl, uv, Python 3.12+, and the project's SDKs/package manager. Dart Decimate provisioning needs npm 11.16+. Details: [entry command](setup.sh), [installer](setup.py), [integrations](.agents/skills/he/references/integrations.md).
 
 ## 2. Plan
@@ -67,7 +69,7 @@ The `he` skill tells the agent to select the appropriate stage; you do not need 
 
 1. **Research:** inspect the codebase, compare relevant options, and verify current external facts through primary sources. Test consequential assumptions with the cheapest useful investigation or authorized prototype.
 2. **Scope and decisions:** define outcomes, boundaries, and the smallest execution arrangement. Ask only unresolved material questions. Parallel work needs named owners and an integration check.
-3. **UX:** for visible changes, inspect and show the real baseline and a proposal rendered through the same app screen in isolation. Record route, state, viewport, and source owner. New screens use a nearby flow; a new app may use a labelled concept.
+3. **UX:** show the relevant flow using a lightweight mock grounded in the actual website/design system, or an isolated actual-app preview. Label which it is; record owners, rendering and inspection. A dashboard shell does not cover unseen decision-bearing workflows. Actual-app captures need a real baseline; mocks may explain its absence.
 4. **E2E:** name the actual journey and expected result, or explain inapplicability. Unchanged appearance does not waive interaction testing; missing or failed proof stays blocked.
 5. **Readiness:** run the Draft baseline gate after planning/preview work, then the Ready gate. A failed baseline needs a separate authorized repair delivered through verified main before feature work resumes.
 
@@ -211,7 +213,7 @@ Semgrep or configured native rules check code; OSV checks selected lockfiles or 
 **Skills guide reasoning; hooks and gates enforce executable checks.** Plan validation checks declared status, results, UX references, and E2E fields. It cannot authenticate screenshots, judge design quality, or prove that an agent followed every instruction.
 
 - **SessionStart:** attempts an update and reports the result or failure.
-- **Stop:** checks planning/completion state and freshness; changed implementation runs native checks. Planning-only or known unchanged sessions may avoid them. Repeated stop loops are bounded.
+- **Stop:** distinguishes declared prerequisite clarification from approval handoffs. Approval needs baseline, UX and E2E planning evidence; changed implementation runs native checks. Planning-only or known unchanged sessions may avoid expensive checks. Repeated stop loops are bounded.
 - **Pre-push:** verifies pushed revisions in isolated worktrees.
 - **CI:** runs configured checks and fails its job on failure.
 
@@ -220,7 +222,7 @@ Explicit Draft/Ready/Complete commands normally run native checks too. Verified 
 ```mermaid
 flowchart TD
   A[SessionStart] --> B[Attempt update and report result or failure]
-  C[Stop] --> D{Incomplete changed Draft evidence?}
+  C[Stop] --> D{Invalid Draft handoff or missing approval evidence?}
   D -->|Yes| F[Block completion and identify missing planning work]
   D -->|No| P{Planning-only handoff or known unchanged session?}
   P -->|Yes| E[Check freshness and return notice]
