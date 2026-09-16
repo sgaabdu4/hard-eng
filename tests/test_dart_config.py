@@ -343,9 +343,10 @@ def test_pure_dart_platform_sources_remain_required(
         "empty",
         "generated",
         "vendored",
-        "nonproduction",
         "handwritten-untracked",
         "handwritten-tracked",
+        "handwritten-test-untracked",
+        "handwritten-test-tracked",
     ],
 )
 def test_flutter_platform_exclusions_require_no_authored_dart(
@@ -358,8 +359,8 @@ def test_flutter_platform_exclusions_require_no_authored_dart(
     android.mkdir()
     if kind != "empty":
         relative = (
-            "android/test/fixture.dart"
-            if kind == "nonproduction"
+            "android/test/fixture_test.dart"
+            if kind.startswith("handwritten-test")
             else "android/main.dart"
         )
         source = tmp_path / relative
@@ -371,7 +372,7 @@ def test_flutter_platform_exclusions_require_no_authored_dart(
             (tmp_path / ".gitattributes").write_text(
                 "android/main.dart linguist-vendored=true\n"
             )
-        if kind == "handwritten-tracked":
+        if kind in {"handwritten-tracked", "handwritten-test-tracked"}:
             git(tmp_path, "add", relative)
     if kind.startswith("handwritten"):
         with pytest.raises(ValueError, match="handwritten source"):
