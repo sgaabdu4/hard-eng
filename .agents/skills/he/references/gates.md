@@ -29,10 +29,12 @@ Load for planning-stage checks or plan validation failures. Use [HE Plan](../../
 | Command | Required declaration |
 | --- | --- |
 | `python3 .hooks/hard-eng.py check --plan-stage Draft` | Filled plan; permits pending baseline/intermediate verification. |
-| `python3 .hooks/hard-eng.py check --plan-stage Ready` | Ready or Complete; baseline Passed with evidence; UX Passed with a Markdown image reference or reasoned N/A; explicit E2E disposition; no declared blockers. |
+| `python3 .hooks/hard-eng.py check --plan-stage Ready` | Ready or Complete; baseline Passed with evidence; UX Passed with a rendered Mock/Existing/New proposal image or reasoned N/A; explicit E2E disposition; no declared blockers. |
 | `python3 .hooks/hard-eng.py check --plan-stage Complete` | Complete; above requirements + implementation evidence, no unchecked requirements, and no pending local E2E. Deployment-only E2E requires Deploy and configured delivery checks. |
 
 Every command also runs native project checks. Ordinary `check` (including Stop/pre-push/CI) requires Complete for non-Markdown changes; Markdown-only planning can stop at Draft/Ready. Changed root/feature plans take precedence; otherwise active plans apply. An unchanged historical Complete plan cannot cover new work relative to a known base. Missing bases fail plan validation; a new branch's zero base or an unborn repository uses Git's empty tree (the whole initial snapshot). Unchanged repositories can still be audited without inventing a task plan.
+
+Draft Stop requires an explicit `Handoff: Clarification` with a real prerequisite question, or `Handoff: Approval` with baseline, UX and E2E planning evidence. Missing/invalid declarations and incomplete approval evidence block; a clarification does not waive another plan's requirements. This is a declared handoff check, not a trusted approval record or proof of the conversation's meaning. See [HE Plan](../../he-plan/SKILL.md#readiness--authorization).
 
 Plan-only edits after a matching passed baseline → use the same stage command with `--base HEAD` to validate the plan and affected checks. The baseline must cover the current code/configuration/environment; the base flag cannot substitute for that proof. Uncommitted code/config changes remain in the comparison, unknown impact retains full scope, and required pre-push/CI checks still run. Do not repeat the whole application suite solely for plan wording or a Draft-to-Ready declaration change.
 

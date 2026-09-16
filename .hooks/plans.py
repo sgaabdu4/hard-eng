@@ -17,6 +17,7 @@ SECTIONS = (
     "Verification",
 )
 STAGES = ("Draft", "Ready", "Complete")
+HANDOFFS = ("Clarification", "Approval")
 PLACEHOLDERS = r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"
 
 
@@ -116,23 +117,22 @@ def ux_proof(content: str) -> None:
             "UX evidence needs a Markdown image reference to the rendered proposal"
         )
     surface = field(content, "Surface")
-    if not re.fullmatch(r"(Existing|New) — \S.+", surface):
+    if not re.fullmatch(r"(Existing|New|Mock) — \S.+", surface):
         raise ValueError(
-            "UX Surface needs Existing or New — actual app route/screen and source owner"
+            "UX Surface needs Existing, New or Mock — actual screen or design-system owner"
         )
     before = field(content, "Before")
     baseline = re.fullmatch(image, before)
     if baseline is None and not (
-        surface.startswith("New — ") and re.fullmatch(r"N/A — \S.+", before)
+        surface.startswith(("New — ", "Mock — "))
+        and re.fullmatch(r"N/A — \S.+", before)
     ):
         raise ValueError(
-            "UX Before needs the actual baseline image; only a new app may explain its absence"
+            "UX Before needs the actual baseline image; only a new app or design-system mock may explain its absence"
         )
     proposed = re.fullmatch(image, field(content, "Proposed"))
     if proposed is None:
-        raise ValueError(
-            "UX Proposed needs a Markdown image of the proposed actual screen"
-        )
+        raise ValueError("UX Proposed needs a Markdown image of the rendered proposal")
     if baseline and baseline[1] == proposed[1]:
         raise ValueError(
             "A visible UX change needs distinct before and proposed image references"
@@ -156,40 +156,63 @@ def readiness_errors(sections: dict[str, str], status: str = "Ready") -> list[st
     return errors
 
 
+def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, list[str]]:
+    """Validate the declared Draft pause without treating it as authorization."""
+    decisions = sections["Decisions + authorization"]
+    errors = []
+    try:
+        handoff = field(decisions, "Handoff")
+        blockers = field(decisions, "Blockers")
+    except ValueError as error:
+        return None, None, [str(error)]
+    question = blockers != "None" and re.search(PLACEHOLDERS, blockers) is None
+    if handoff not in HANDOFFS:
+        errors.append("Handoff must be Clarification or Approval")
+    elif handoff == "Clarification" and not question:
+        errors.append("Clarification needs concrete Blockers")
+    elif handoff == "Approval" and blockers != "None" and not question:
+        errors.append("Approval Blockers must be None or a concrete decision")
+    return handoff, blockers, errors
+
+
 def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
     paths = [
         path for path in repository_files(root) if is_plan_path(path.relative_to(root))
     ]
     selected = [path for path in paths if str(path.relative_to(root)) in changed]
     messages = []
-    waiting = False
+    unfinished = False
     for path in selected or paths:
         content = path.read_text()
         if field(content, "Status") != "Draft":
             continue
         try:
             sections = plan_sections(content, allow_placeholders=True)
-            blockers = field(sections["Decisions + authorization"], "Blockers")
-            question = blockers != "None" and re.search(PLACEHOLDERS, blockers) is None
-            waiting |= question
-            errors = readiness_errors(sections)
-            if question:
-                errors.insert(0, f"waiting for: {blockers}")
-            elif blockers != "None":
-                errors.insert(0, "Blockers is unfilled")
+            handoff, blockers, errors = draft_handoff(sections)
+            if handoff == "Approval":
+                try:
+                    plan_sections(content)
+                except ValueError as error:
+                    errors.append(str(error))
+                errors.extend(readiness_errors(sections))
+            if not errors and handoff == "Clarification":
+                errors = [f"waiting for: {blockers}"]
+            elif not errors and handoff == "Approval":
+                errors = [
+                    "approval handoff prepared; authorization remains outside this plan"
+                ]
+                if blockers != "None":
+                    errors.append(f"decisions to resolve: {blockers}")
+            else:
+                unfinished = True
         except ValueError as error:
             errors = [str(error)]
-        messages.append(
-            f"{path.relative_to(root)}: "
-            + "; ".join(
-                errors
-                or ["still Draft; run the Ready check before a readiness handoff"]
-            )
-        )
+            unfinished = True
+        messages.append(f"{path.relative_to(root)}: " + "; ".join(errors))
     notice = (
         "Hard Eng: Planning incomplete — " + " | ".join(messages) if messages else ""
     )
-    return notice, bool(messages) and not waiting and bool(changed)
+    return notice, unfinished
 
 
 def validate_plan(path: Path) -> str:
@@ -200,6 +223,9 @@ def validate_plan(path: Path) -> str:
         raise ValueError("plan Status must be Draft, Ready or Complete")
     verification = sections["Verification"]
     if status == "Draft":
+        _, _, errors = draft_handoff(sections)
+        if errors:
+            raise ValueError("; ".join(errors))
         return status
     if field(sections["Decisions + authorization"], "Blockers") != "None":
         raise ValueError("ready/complete plan has unresolved Blockers")
