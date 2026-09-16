@@ -18,6 +18,8 @@ The user authorized the isolated canonical repair. The snapshot wraps only the e
 
 ## Acceptance + steps
 
+- [x] Reject scaffold-only updates whose retained files-scanner commands conflict with the candidate validator, before changing the installed revision or local files.
+- [x] Prove an existing wrapped files scanner is rejected, a native scanner updates successfully without running application checks, and local work is preserved.
 - [x] Snapshot tracked and nonignored authored files, omitting only Git-declared working-tree deletions.
 - [x] Recursively include Gitlinks and safe in-repository aliases while rejecting external links and directory-link cycles.
 - [x] Preserve SARIF source paths and reject report paths escaping through absolute paths or symlinks.
@@ -28,6 +30,7 @@ The user authorized the isolated canonical repair. The snapshot wraps only the e
 
 Result: Passed
 Evidence: Untouched `c5b6466` passed the relevant runner subset (134 tests). The repair branch then passed Ruff, Pyrefly, and 144 focused scanner/runner tests.
+Follow-up baseline: `python3 .hooks/hard-eng.py check --plan-stage Draft` passed on 2026-09-16 before implementation. One builder will add the existing native-command compatibility check to the isolated updater candidate; a Terra reviewer independently confirmed the cause. Preserve project configuration rather than automatically rewriting wrappers.
 
 ## Risks + recovery
 
@@ -40,7 +43,8 @@ N/A — native source-security gate behavior has no product interface.
 ## Verification
 
 Result: Passed
+Follow-up (2026-09-16): a retained project-specific files-scanner wrapper reproduced the native-command validation failure. The new updater regression failed before the fix because the update incorrectly succeeded, while its native-command case passed. Candidate verification now invokes the existing files-scanner validator before accepting a scaffold-only update. The 48 focused tests and 712 full-suite tests passed; the first Complete run failed dead-code analysis because a helper was referenced only inside a subprocess string. Removing that unnecessary helper and keeping the check in the existing candidate subprocess restored the dead-code pass; both updater regression cases passed again. Custom commands are not rewritten; other repositories were not changed. Delivery of this follow-up remains pending.
 Evidence: The normal Ready-stage native gate passed all configured checks: 697 tests in 109.57 seconds, managed Gitleaks 8.30.1 scanned the initialized canonical source tree with no findings, and a generic positive fixture retained its relative SARIF source URI without exposing the marker value.
-E2E: Passed — temporary Git fixtures invoke the native files-gate owner with tracked, untracked, ignored, deleted, submodule, alias, and symlink-cycle inputs; focused tests passed.
+E2E: Passed — temporary Git fixtures invoke the native files-gate owner with tracked, untracked, ignored, deleted, submodule, alias, and symlink-cycle inputs. The follow-up also exercises real Git update transactions: incompatible scanner config fails with HEAD, marker, config and worktree unchanged; a native command updates successfully without running the fixture's failing application gate.
 
 Delivery target: Merge

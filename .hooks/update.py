@@ -336,7 +336,22 @@ def verify_candidate(
             ".husky/pre-push",
         }
         command = (
-            [sys.executable, "-m", "compileall", "-q", str(candidate / ".hooks")]
+            [
+                sys.executable,
+                "-I",
+                "-c",
+                """import compileall, sys
+from pathlib import Path
+sys.path.insert(0, '.hooks')
+from gate_config import parse_config
+from gitleaks_scan import validate_current_files_gate
+config = parse_config(Path('hard-eng.gates.json').read_text())
+gates = config['shared'] + [gate for group in config['packages'] for gate in group['checks']]
+for gate in gates:
+    validate_current_files_gate(gate.get('role'), gate['command'])
+raise SystemExit(not compileall.compile_dir('.hooks', quiet=1))
+""",
+            ]
             if only_scaffold
             else [
                 "uv",

@@ -273,6 +273,50 @@ def test_ignored_local_configuration_prevents_update(
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
+@pytest.mark.parametrize("wrapped", [True, False])
+def test_scaffold_update_validates_retained_files_scanner(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+    wrapped: bool,
+) -> None:
+    source, target, old = release
+    config_path = target / "hard-eng.gates.json"
+    config = json.loads(config_path.read_text())
+    command = ["gitleaks", "dir", ".", "--report-path", "coverage/files.sarif"]
+    if wrapped:
+        command = [
+            "node",
+            "scripts/run_tracked_gitleaks.mjs",
+            *command[:2],
+            *command[3:],
+        ]
+    config["shared"].append(
+        {"name": "files", "role": "secrets-files", "command": command}
+    )
+    config_path.write_text(json.dumps(config))
+    before = commit(target, "existing project scanner")
+    config_before = config_path.read_bytes()
+    marker_before = (target / update.SOURCE_FILE).read_bytes()
+    select_release(source, monkeypatch)
+
+    if wrapped:
+        with pytest.raises(subprocess.CalledProcessError):
+            update.update(target)
+        assert (
+            "secrets-files requires native `gitleaks dir .`" in capfd.readouterr().err
+        )
+        assert git(target, "rev-parse", "HEAD") == before
+        assert (target / update.SOURCE_FILE).read_bytes() == marker_before
+    else:
+        assert "Updated Hard Eng" in update.update(target)
+        assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] != old
+        assert "FAIL application-check" not in capfd.readouterr().err
+    assert config_path.read_bytes() == config_before
+    assert git(target, "status", "--porcelain") == ""
+    assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
 def test_overlapping_local_edit_prevents_update(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
