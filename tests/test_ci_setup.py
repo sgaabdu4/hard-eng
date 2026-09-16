@@ -10,7 +10,7 @@ import pytest
 import tool_setup
 import yaml
 from ci_setup import configure_ci
-from gate_config import GateConfig
+from gate_config import GateConfig, parse_config
 from shipping import ShippingError, ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -170,8 +170,8 @@ def test_generated_ci_timeout(
     )
 
 
-@pytest.mark.parametrize("name", ["hard-eng.yml", "quality.yml", "release.yaml"])
-def test_existing_workflow_is_preserved(tmp_path: Path, name: str) -> None:
+def test_existing_hard_eng_workflow_is_preserved(tmp_path: Path) -> None:
+    name = "hard-eng.yml"
     path = tmp_path / ".github/workflows" / name
     path.parent.mkdir(parents=True)
     content = "# Project-owned workflow\njobs:\n  custom:\n    timeout-minutes: 17\n"
@@ -182,7 +182,82 @@ def test_existing_workflow_is_preserved(tmp_path: Path, name: str) -> None:
     assert path.read_text() == content
 
 
-def test_unconfigured_project_does_not_inherit_source_ci_budget(tmp_path: Path) -> None:
+def test_maintenance_only_workflow_receives_a_quality_owner(
+    tmp_path: Path, shipping_policy: ShippingPolicy
+) -> None:
+    path = tmp_path / ".github/workflows/nightly.yml"
+    path.parent.mkdir(parents=True)
+    content = """on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo cleanup
+"""
+    path.write_text(content)
+    config = parse_config(
+        json.dumps(
+            {
+                "packages": [],
+                "shared": [],
+                "shipping": {**shipping_policy, "checks": ["quality"]},
+            }
+        )
+    )
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    changes: dict[str, str] = {}
+
+    configure_ci(tmp_path, SOURCE, config, changes)
+
+    assert path.read_text() == content
+    assert ".github/workflows/hard-eng.yml" in changes
+    assert config["shipping"]["checks"] == ["quality", "hard-eng"]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "on: pull_request\njobs:\n  quality:\n    runs-on: ubuntu-latest\n",
+        "on: [\n",
+        """on: workflow_dispatch
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python3 .hooks/hard-eng.py check --base \"$BASE_SHA\"
+""",
+    ],
+)
+def test_existing_quality_or_invalid_workflow_is_preserved(
+    tmp_path: Path, shipping_policy: ShippingPolicy, content: str
+) -> None:
+    path = tmp_path / ".github/workflows/quality.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(content)
+    config = parse_config(
+        json.dumps({"packages": [], "shared": [], "shipping": shipping_policy})
+    )
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    changes: dict[str, str] = {}
+
+    configure_ci(tmp_path, SOURCE, config, changes)
+
+    assert changes == {}
+    assert path.read_text() == content
+
+
+def test_unconfigured_maintenance_project_does_not_inherit_source_ci_budget(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / ".github/workflows/nightly.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text("on: workflow_dispatch\njobs: {}\n")
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": []})
+    )
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     assert not changes
@@ -289,13 +364,16 @@ def test_dart_workflow_uses_packaged_scanner_without_rust(
     (tmp_path / "pubspec.yaml").write_text(
         yaml.safe_dump({"name": "fixture", "dependencies": dependencies})
     )
-    config: GateConfig = {
-        "packages": [{"path": ".", "language": "dart", "checks": []}],
-        "shared": [],
-    }
-    (tmp_path / "hard-eng.gates.json").write_text(
-        json.dumps({**config, "shipping": shipping_policy})
+    config = parse_config(
+        json.dumps(
+            {
+                "packages": [{"path": ".", "language": "dart", "checks": []}],
+                "shared": [],
+                "shipping": shipping_policy,
+            }
+        )
     )
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, config, changes)
     workflow = changes[".github/workflows/hard-eng.yml"]

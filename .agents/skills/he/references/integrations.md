@@ -14,8 +14,10 @@ flowchart TD
 ```
 
 - Greenfield = imports cannot reveal an unimplemented product choice. Resolve intended backend/observability from the product plan before configuring those services; no blanket installation of unrelated integrations.
-- Brownfield/update = inspect existing harness entries, actual endpoint, project identity and env owner first. Valid matching setup needs no repeat interview. A legacy Hard Eng entry is not proof of suitability; migrate it within existing authorization, preserving custom settings. Unknown consequential choices remain explicit blockers.
+- Brownfield/update = an install/update request covers routine migration within task scope; preserve explicit user restrictions and unrelated customizations. Inspect existing harness entries, actual endpoint, project identity and env owner first; use the pinned source as authority. Migrate incompatible project commands at their owner, preserving security/behavior; preserve custom valid hooks and remove only proven-obsolete Hard Eng-owned hooks, instructions and bootstrap. A legacy Hard Eng entry is not proof of suitability. Unknown consequential choices remain explicit blockers.
+- Retirement before repair = identify user-retired tooling before adapting gates. Remove its obsolete workflows and registrations within authorization; do not repair, recreate or add infrastructure for a workflow the user wants retired.
 - The piped installer has no interactive questionnaire. Unresolved optional services are reported as `MCP setup pending`; the core scaffold is installed so HE Plan can resolve only the missing choices. Supply the known endpoint/host from the existing environment, then rerun setup. Conflicting existing configuration fails before writes. Do not mark setup ready from exit status or a revision marker alone.
+- Completion = finish routine repairs and configured CI integration; ensure CI provisions pnpm before pnpm-dependent caching. Local gates prove local setup. When shipping is authorized, use the existing isolated pre-push check on the final rebased commit, including required skill targets even when ignored, then verify hosted required checks. Installation/update does not authorize publication.
 
 | Integration | Selection + proof |
 | --- | --- |
