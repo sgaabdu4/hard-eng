@@ -91,6 +91,49 @@ def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
     ]
 
 
+def test_managed_python_scanner_provisions_project_local_uv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cold existing job receives uv before its managed scanner runs."""
+    storage = tmp_path / "hard-eng-tools"
+    uv_bin = storage / "mise/data/installs/uv/latest/bin"
+    commands: list[list[str]] = []
+    monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setenv("MISE_DATA_DIR", str(storage / "mise/data"))
+    monkeypatch.setenv("MISE_CACHE_DIR", str(storage / "mise/cache"))
+    monkeypatch.setenv("MISE_STATE_DIR", str(storage / "mise/state"))
+
+    def native_environment(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        if command[-3:] == ["env", "--json", "uv@latest"]:
+            uv_bin.mkdir(parents=True)
+            binary = uv_bin / "uv"
+            binary.write_text("#!/bin/sh\nexit 0\n")
+            binary.chmod(0o755)
+            return subprocess.CompletedProcess(
+                command, 0, json.dumps({"PATH": str(uv_bin)}), ""
+            )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", native_environment)
+    tool_setup.provision_tools(
+        tmp_path,
+        [
+            {
+                "path": ".",
+                "checks": [{"name": "security", "command": ["semgrep", "scan", "."]}],
+            }
+        ],
+        30,
+    )
+    assert commands[0][-2:] == ["install", "uv@latest"]
+    assert commands[1][-3:] == ["env", "--json", "uv@latest"]
+    assert shutil.which("uv") == str(uv_bin / "uv")
+
+
 @pytest.mark.parametrize("seconds,minutes", [(600, 10), (601, 11), (60, 1)])
 def test_generated_ci_timeout(
     tmp_path: Path, seconds: int | None, minutes: int

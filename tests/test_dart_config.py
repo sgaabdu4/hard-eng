@@ -1,6 +1,7 @@
 """Resolve Dart package directories without bypassing included analysis rules."""
 
 import json
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
@@ -8,6 +9,14 @@ import pytest
 import yaml
 from conftest import git
 from gate_config import JsonObject, validate_dart_exclusions
+
+
+def dart_format_command(installer: ModuleType) -> list[str]:
+    return json.loads(
+        (
+            installer.SOURCE / ".agents/skills/he/templates/hard-eng.dart.json"
+        ).read_text()
+    )["packages"][0]["checks"][1]["command"]
 
 
 @pytest.mark.parametrize("style", ["absolute", "trailing-slash", "relative"])
@@ -326,3 +335,136 @@ def test_pure_dart_platform_sources_remain_required(
     (tmp_path / "pubspec.yaml").write_text("name: plain_dart\n")
     with pytest.raises(ValueError, match="cannot exclude project files"):
         validate_dart_exclusions(tmp_path, ["web/**"])
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "empty",
+        "generated",
+        "vendored",
+        "nonproduction",
+        "handwritten-untracked",
+        "handwritten-tracked",
+    ],
+)
+def test_flutter_platform_exclusions_require_no_authored_dart(
+    runner: ModuleType, tmp_path: Path, kind: str
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text(
+        "name: platform_exclusions\ndependencies:\n  flutter:\n    sdk: flutter\n"
+    )
+    android = tmp_path / "android"
+    android.mkdir()
+    if kind != "empty":
+        relative = (
+            "android/test/fixture.dart"
+            if kind == "nonproduction"
+            else "android/main.dart"
+        )
+        source = tmp_path / relative
+        source.parent.mkdir(exist_ok=True)
+        source.write_text("void important() {}\n")
+        if kind == "generated":
+            source.write_text("// GENERATED CODE - DO NOT MODIFY BY HAND\n")
+        if kind == "vendored":
+            (tmp_path / ".gitattributes").write_text(
+                "android/main.dart linguist-vendored=true\n"
+            )
+        if kind == "handwritten-tracked":
+            git(tmp_path, "add", relative)
+    if kind.startswith("handwritten"):
+        with pytest.raises(ValueError, match="handwritten source"):
+            validate_dart_exclusions(tmp_path, ["android/**"])
+    else:
+        validate_dart_exclusions(tmp_path, ["android/**"])
+    with pytest.raises(ValueError, match="cannot exclude project files"):
+        validate_dart_exclusions(tmp_path, ["ios/**"])
+
+
+def test_dart_format_discovers_authored_files_and_skips_deleted_or_generated_output(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command = dart_format_command(installer)
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/baseline.dart").write_text("void main() {}\n")
+    (tmp_path / "lib/deleted.dart").write_text("void main() {}\n")
+    git(tmp_path, "add", "lib/deleted.dart")
+    (tmp_path / "lib/deleted.dart").unlink()
+    for name in (
+        "top_level_test.dart",
+        "test/unit_test.dart",
+        "integration_test/new_journey.dart",
+        "test_driver/driver.dart",
+        "android/entrypoint.dart",
+    ):
+        source = tmp_path / name
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text("void main() {}\n")
+    for name in ("build/generated.dart", "android/build/generated.dart"):
+        source = tmp_path / name
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text("void malformed( {\n")
+    bin_directory = tmp_path / "bin"
+    bin_directory.mkdir()
+    output = tmp_path / "format-arguments"
+    dart = bin_directory / "dart"
+    dart.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$FORMAT_ARGUMENTS"\n')
+    dart.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_directory) + ":/usr/bin:/bin")
+    monkeypatch.setenv("FORMAT_ARGUMENTS", str(output))
+    subprocess.run(command, cwd=tmp_path, check=True)
+    arguments = output.read_text().splitlines()
+    assert {
+        "lib/baseline.dart",
+        "top_level_test.dart",
+        "test/unit_test.dart",
+        "integration_test/new_journey.dart",
+        "test_driver/driver.dart",
+        "android/entrypoint.dart",
+    } <= set(arguments)
+    assert {
+        "lib/deleted.dart",
+        "build/generated.dart",
+        "android/build/generated.dart",
+    }.isdisjoint(arguments)
+
+
+def test_dart_format_fails_when_git_inventory_fails(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command = dart_format_command(installer)
+    bin_directory = tmp_path / "bin"
+    bin_directory.mkdir()
+    failed_git = bin_directory / "git"
+    failed_git.write_text("#!/bin/sh\nexit 19\n")
+    failed_git.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_directory) + ":/usr/bin:/bin")
+    result = subprocess.run(command, cwd=tmp_path, check=False)
+    assert result.returncode == 19
+
+
+def test_dart_format_skips_an_empty_inventory(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command = dart_format_command(installer)
+    bin_directory = tmp_path / "bin"
+    bin_directory.mkdir()
+    empty_git = bin_directory / "git"
+    empty_git.write_text("#!/bin/sh\nexit 0\n")
+    empty_git.chmod(0o755)
+    failed_dart = bin_directory / "dart"
+    failed_dart.write_text("#!/bin/sh\nexit 23\n")
+    failed_dart.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_directory) + ":/usr/bin:/bin")
+    result = subprocess.run(command, cwd=tmp_path, check=False)
+    assert result.returncode == 0

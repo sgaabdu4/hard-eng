@@ -17,6 +17,7 @@ NATIVE_SCANNERS = {
     "dart-decimate": "dart-decimate",
     "react-doctor": "React Doctor",
 }
+MANAGED_PYTHON_SCANNERS = {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "poetry"}
 
 
 def ensure_python_runtime() -> None:
@@ -41,7 +42,7 @@ def ensure_python_runtime() -> None:
 def managed_command(command: list[str], directory: Path | None = None) -> list[str]:
     if directory is not None:
         command = managed_scanner_command(command, directory)
-    if command[0] in {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "poetry"}:
+    if command[0] in MANAGED_PYTHON_SCANNERS:
         return ["uvx", command[0] + "@latest", *command[1:]]
     return command
 
@@ -81,6 +82,7 @@ def managed_scanner_command(command: list[str], directory: Path) -> list[str]:
 
 def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
     packages = {
+        "uv": "uv",
         "gitleaks": "aqua:gitleaks/gitleaks",
         "osv-scanner": "aqua:google/osv-scanner",
         "actionlint": "aqua:rhysd/actionlint",
@@ -104,6 +106,8 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         for gate in group["checks"]
     ]
     executables = {command[0] for command in commands}
+    if executables & MANAGED_PYTHON_SCANNERS:
+        executables.add("uv")
     executables.update(
         argument
         for command in commands
