@@ -479,7 +479,7 @@ def run_gate(
         directory = ROOT / group["path"]
         expected_sources: set[Path] = set()
         command = prepare_command(group, gate, timeout)
-        from reports import SCANNER_LOGS, SCANNERS
+        from reports import SCANNERS, emit_dart_test_failure, validate_scanner_log
 
         report = gate.get("report", {})
         kind = report.get("type", "")
@@ -504,9 +504,9 @@ def run_gate(
             report_path, coverage_path, directory, expected_sources = prepare_reports(
                 group, report, kind, tests, scanner, command
             )
-        capture = (tests and kind == "dart-tests" and report.get("stdout", True)) or (
-            scanner and report.get("stdout") is True
-        )
+        capture = tests and kind == "dart-tests" and report.get("stdout", True)
+        capture = capture or scanner and report.get("stdout") is True
+        result = None
         with tempfile.TemporaryFile(
             mode="w+", encoding="utf-8", errors="replace"
         ) as log:
@@ -531,8 +531,8 @@ def run_gate(
                     print(f"OUTPUT {group['path']}/{gate['name']}", flush=True)
                     log.seek(0)
                     shutil.copyfileobj(log, sys.stdout)
-            if scanner in SCANNER_LOGS:
-                SCANNER_LOGS[scanner](log)
+                    emit_dart_test_failure(result, tests, kind, report_path)
+            validate_scanner_log(scanner, log)
         if result.returncode == 0 and scanner and report_path is not None:
             if (
                 scanner == "osv"

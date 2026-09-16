@@ -494,6 +494,28 @@ def test_nonempty_completed_tests(tmp_path: Path) -> None:
         reports.completed_tests(path, "dart-tests")
 
 
+def test_dart_test_failure_keeps_one_bounded_failure_context(tmp_path: Path) -> None:
+    path = tmp_path / "tests.jsonl"
+    path.write_text(
+        '{"type":"testStart","test":{"id":7,"name":"rejects an invalid payload"}}\n'
+        '{"type":"error","testID":7,"error":"Expected a valid payload\\nActual: malformed"}\n'
+        '{"type":"testDone","testID":7,"result":"failure"}\n'
+        '{"type":"done","success":false}\n'
+    )
+    assert reports.dart_test_failure(
+        subprocess.CompletedProcess([], 1), True, "dart-tests", path
+    ) == (
+        "Dart test failure: rejects an invalid payload: Expected a valid payload Actual: malformed"
+    )
+    path.write_text('{"type":"done","success":true}\n')
+    assert (
+        reports.dart_test_failure(
+            subprocess.CompletedProcess([], 0), True, "dart-tests", path
+        )
+        is None
+    )
+
+
 def test_coverage_requires_unexecuted_files_and_merges_lcov(tmp_path: Path) -> None:
     path = tmp_path / "lcov.info"
     path.write_text(
