@@ -244,6 +244,37 @@ def test_command_failure_survives_later_pass(
     assert runner.check() == 0
 
 
+def test_dart_test_failure_surfaces_machine_context(
+    runner: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (runner.ROOT / "lib").mkdir()
+    (runner.ROOT / "lib" / "fixture.dart").write_text("void main() {}\n")
+    events = (
+        '{"type":"testStart","test":{"id":1,"name":"rejects malformed input"}}\n'
+        '{"type":"error","testID":1,"error":"Expected valid input"}\n'
+        '{"type":"testDone","testID":1,"result":"failure"}\n'
+        '{"type":"done","success":false}'
+    )
+    check = gate(
+        "tests",
+        f"import sys;print({events!r});raise SystemExit(1)",
+        role="tests",
+        report={
+            "type": "dart-tests",
+            "tests": "coverage/tests.jsonl",
+            "coverage": "coverage/lcov.info",
+        },
+    )
+    assert runner.run_gate(
+        {"path": ".", "language": "dart", "sources": ["lib"]},
+        check,
+        5,
+        threading.Lock(),
+    )
+    output = capsys.readouterr().out
+    assert "Dart test failure: rejects malformed input: Expected valid input" in output
+
+
 def test_missing_command_and_timeout_fail(runner: ModuleType) -> None:
     missing = {"name": "missing", "command": ["/nonexistent/hard-eng-check"]}
     assert runner.run_gate({"path": "."}, missing, 1, threading.Lock()) is True
