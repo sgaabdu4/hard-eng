@@ -150,6 +150,9 @@ _UI_BODY = (
     "Before: ![old](https://github.com/user-attachments/assets/old-image)\n"
     "After: ![new](https://github.com/user-attachments/assets/new-image)"
 )
+_NATIVE_VIDEO_BODY = "Before:\n\nhttps://github.com/user-attachments/assets/old-video\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video"
+_NATIVE_VIDEO_BODY_CRLF = _NATIVE_VIDEO_BODY.replace("\n", "\r\n")
+_MIXED_UI_BODY = "Before: ![old](https://github.com/user-attachments/assets/old-image)\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video"
 
 
 def _ui_fake(fixture: Fixture, *, body: str = _UI_BODY) -> FakeGitHub:
@@ -466,11 +469,22 @@ def test_unchanged_ui_needs_comparison_note_without_uploads(
     assert not any("--method" in call for call in fake.calls)
 
 
-def test_ui_changes_accept_attachments_that_reject_head(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("body", "content_type"),
+    [
+        (_UI_BODY, "image/png"),
+        (_NATIVE_VIDEO_BODY, "video/mp4"),
+        (_NATIVE_VIDEO_BODY_CRLF, "video/mp4"),
+        (_MIXED_UI_BODY, "image/png"),
+    ],
+    ids=["images", "native-video", "native-video-crlf", "mixed-image-video"],
+)
+def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, content_type: str
 ) -> None:
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
-    fake = _ui_fake(fixture)
+    fake = _ui_fake(fixture, body=body)
+    fake.attachment_response = f"HTTP/2 206 Partial Content\ncontent-type: {content_type}\ncontent-length: 1\ncontent-range: bytes 0-0/85098\n"
     _patch_gh(monkeypatch, fake)
     shipment = shipping.verify(
         fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
@@ -494,6 +508,13 @@ def test_ui_changes_accept_attachments_that_reject_head(
         "After: ![new](https://github.com/user-attachments/assets/new-image)",
         "Before: ![old](https://example.invalid/old)\nAfter: ![new](https://github.com/user-attachments/assets/new-image)",
         "Before: ![old](https://github.com/user-attachments/assets/same)\nAfter: ![new](https://github.com/user-attachments/assets/same)",
+        "Before:\n\nhttps://github.com/user-attachments/assets/old-video",
+        "Before:\n\nhttps://example.invalid/old-video\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video",
+        "Before:\n\nhttps://github.com/user-attachments/assets/same\n\nAfter:\n\nhttps://github.com/user-attachments/assets/same",
+        "Before:\n\nhttps://github.com/user-attachments/assets/old-video\n\nBefore:\n\nhttps://github.com/user-attachments/assets/extra-video\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video",
+        "Before:\n\nhttps://github.com/user-attachments/assets/old-video?query\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video",
+        "https://github.com/user-attachments/assets/old-video\n\nhttps://github.com/user-attachments/assets/new-video",
+        "UI appearance: unchanged — compared dashboard\n" + _NATIVE_VIDEO_BODY,
     ],
 )
 def test_ui_changes_reject_missing_foreign_or_duplicate_evidence(

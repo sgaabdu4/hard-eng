@@ -50,6 +50,35 @@ Before: ![Before](https://github.com/user-attachments/assets/actual-before-id)
 After: ![After](https://github.com/user-attachments/assets/actual-after-id)
 ```
 
+When the installed `gh pr create` or `gh pr edit` supports `--attach`, upload
+images or videos directly; a browser upload is not a prerequisite. For video,
+keep its local Markdown reference as the only content in its paragraph in the
+body file:
+
+```markdown
+Before:
+
+![](evidence/before.mp4)
+
+After:
+
+![](evidence/after.mp4)
+```
+
+Create or update the PR with that body and both local files:
+
+```sh
+gh pr create --title "Title" --body-file pr-body.md \
+  --attach evidence/before.mp4 --attach evidence/after.mp4
+gh pr edit https://github.com/owner/repo/pull/123 --body-file pr-body.md \
+  --attach evidence/before.mp4 --attach evidence/after.mp4
+```
+
+GitHub CLI rewrites each video reference to a standalone GitHub asset URL, so
+the published body has the same labels followed by raw URLs. The verifier
+accepts those URLs only under `Before:` or `After:`; image Markdown and mixed
+image/video pairs remain supported.
+
 When appearance is unchanged, omit the duplicate attachments and record one comparison note instead:
 
 ```text
