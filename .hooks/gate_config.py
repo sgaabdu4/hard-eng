@@ -290,6 +290,9 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
         raise ValueError(
             f"{gate['name']}: put the executable in command; separate tool fields are unsupported"
         )
+    from gitleaks_scan import validate_current_files_gate
+
+    validate_current_files_gate(gate.get("role"), command)
     from project_setup import validate_command_output
 
     validate_command_output(command, directory, report)
