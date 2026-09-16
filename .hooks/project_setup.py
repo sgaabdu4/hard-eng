@@ -23,6 +23,7 @@ from gate_config import (
 )
 
 PACKAGE_MANAGERS = {"npm", "npx", "pnpm", "yarn", "yarnpkg", "bun", "bunx"}
+FLUTTER_PLATFORM_ROOTS = {"android", "ios", "web", "windows", "macos", "linux"}
 
 
 def migrate_dart_plugins(options: JsonObject, source: Path) -> None:
@@ -68,12 +69,15 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
         "**/*.gr.dart",
         "**/*.arb",
     }
-    native = {"build/**"}
-    if (
-        not (directory / "pubspec.yaml").is_file()
-        or dependency_command(directory, "dart")[0] != "flutter"
-    ):
-        native.clear()
+    flutter = (directory / "pubspec.yaml").is_file() and dependency_command(
+        directory, "dart"
+    )[0] == "flutter"
+    native = {"build/**"} if flutter else set()
+    native.update(
+        f"{root}/**"
+        for root in FLUTTER_PLATFORM_ROOTS
+        if flutter and (directory / root).is_dir()
+    )
     if not isinstance(values, list) or any(
         not isinstance(value, str) or value not in allowed | native for value in values
     ):
@@ -86,9 +90,8 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
         if path.relative_to(directory).parts[0] not in roots
     }
     if roots:
-        command = ["git", "ls-files", "-zco", "--exclude-standard", "--"]
         names = subprocess.check_output(
-            [*command, *sorted(roots)],
+            ["git", "ls-files", "-zco", "--exclude-standard", "--", *sorted(roots)],
             cwd=directory,
             text=True,
         ).split("\0")
@@ -101,14 +104,16 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
     names = [str(path.relative_to(directory)) for path in matches]
     generated = generated_sources(directory, names)
     for path in matches:
-        if (
-            ".dart_tool/**" in values
-            and path.relative_to(directory).parts[0] == ".dart_tool"
-        ):
+        relative = path.relative_to(directory)
+        if ".dart_tool/**" in values and relative.parts[0] == ".dart_tool":
             continue
         if path.is_symlink() or not path.is_file():
             raise ValueError(f"Dart generated exclusion matches an unsafe path: {path}")
-        if path.suffix != ".dart" or str(path.relative_to(directory)) in generated:
+        if path.suffix != ".dart" or str(relative) in generated:
+            continue
+        if relative.parts[0] in FLUTTER_PLATFORM_ROOTS and nonproduction_source(
+            relative
+        ):
             continue
         with path.open("rb") as source:
             header = source.read(2048).splitlines()[:10]
