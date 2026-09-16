@@ -67,6 +67,7 @@ Verify fixture command exits; no product release.
 The test creates commands in a temporary Git repository.
 ## Decisions + authorization
 Blockers: None
+Handoff: Approval
 Authorized test fixture; no external actions.
 ## Acceptance + steps
 - [x] Observe the configured command exit.

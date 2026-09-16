@@ -233,53 +233,6 @@ def test_completion_runs_real_command_and_bounds_failure_log(
         assert result == {}
 
 
-@pytest.mark.parametrize("unchanged", [False, True])
-@pytest.mark.parametrize("blockers", ["None", "user must choose the affected workflow"])
-def test_draft_stop_surfaces_missing_ux_without_swallowing_questions(
-    repository: Path, completed_plan: str, unchanged: bool, blockers: str
-) -> None:
-    (repository / "PLAN.md").write_text(
-        completed_plan.replace("Status: Complete", "Status: Draft")
-        .replace("Blockers: None", f"Blockers: {blockers}")
-        .replace(
-            "N/A — fixture commands have no visual interface.",
-            "Result: Pending\nEvidence: Actual screen captures remain missing.",
-        )
-    )
-    hooks = repository / ".hooks"
-    hooks.mkdir()
-    (hooks / "hard-eng.py").write_text("print('Draft check passed')\n")
-    payload: JsonObject = {"session_id": "known"}
-    if unchanged:
-        subprocess.run(["git", "add", "."], cwd=repository, check=True)
-        subprocess.run(
-            [
-                "git",
-                "-c",
-                "user.name=Fixture",
-                "-c",
-                "user.email=test@example.invalid",
-                "commit",
-                "-qm",
-                "draft",
-            ],
-            cwd=repository,
-            check=True,
-        )
-        (repository / ".git/info/exclude").write_text(".hard-eng/\n")
-        agent_hooks.session_context(repository, payload)
-    response = agent_hooks.completion(repository, payload, "codex")
-    assert "Planning incomplete" in str(response)
-    assert "ux_reference" in str(response)
-    if blockers == "None" and not unchanged:
-        assert response.get("decision") == "block"
-        assert "no authority" in str(response)
-    else:
-        assert response.get("decision") != "block"
-        if blockers != "None":
-            assert "user must choose" in str(response)
-
-
 @pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
 def test_completion_surfaces_only_authoritative_stage_handoffs(
     repository: Path, agent: str

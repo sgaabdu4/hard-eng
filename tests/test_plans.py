@@ -324,7 +324,7 @@ def test_native_stop_reports_incomplete_visual_planning(
     )
     git(repository, "add", ".")
     git(repository, "commit", "-qm", "native hooks")
-    (repository / "PLAN.md").write_text(
+    plan_content = (
         completed_plan.replace("Status: Complete", "Status: Draft")
         .replace(
             "Blockers: None",
@@ -336,6 +336,12 @@ def test_native_stop_reports_incomplete_visual_planning(
         )
         + "\n## Historical example\n\nBlockers: obsolete example outside decisions\n"
     )
+    (repository / "PLAN.md").write_text(plan_content)
+    if question:
+        plan = repository / "PLAN.md"
+        plan.write_text(
+            plan.read_text().replace("Handoff: Approval", "Handoff: Clarification")
+        )
     if state == "question":
         (repository / ".git/info/exclude").write_text(".hard-eng/\n")
         captures = repository / ".hard-eng/ux"
@@ -350,6 +356,10 @@ def test_native_stop_reports_incomplete_visual_planning(
             template = template.replace(
                 "Blockers: [TODO: None or concrete unresolved decisions]",
                 "Blockers: choose the target screen",
+            )
+            template = template.replace(
+                "Handoff: [TODO: Clarification or Approval]",
+                "Handoff: Clarification",
             )
         plan.write_text(template)
     if state == "question-code-parked":
@@ -383,10 +393,11 @@ def test_native_stop_reports_incomplete_visual_planning(
         assert "requires Complete" in response["reason"]
         return
     assert "Planning incomplete" in response["systemMessage"]
-    assert "ux_reference" in response["systemMessage"]
+    expected_notice = {"incomplete": "ux_reference", "template": "Handoff"}.get(
+        state, "waiting for: choose the target screen"
+    )
+    assert expected_notice in response["systemMessage"]
     assert (response.get("decision") == "block") is not question
-    if state == "template":
-        assert "Blockers is unfilled" in response["systemMessage"]
     assert not (repository / "checked").exists()
 
 
@@ -565,6 +576,51 @@ def test_native_cli_plan_stage_and_missing_plan(
         command, cwd=tmp_path, capture_output=True, text=True, check=False
     )
     assert result.returncode == 1 and "E2E" in result.stderr
+    plan.write_text(completed)
+    pending_baseline = completed.replace("Status: Complete", "Status: Draft").replace(
+        "Result: Passed", "Result: Pending", 1
+    )
+    plan.write_text(pending_baseline)
+    assert (
+        subprocess.run(
+            command + ["--plan-stage", "Draft"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
+    stopped = subprocess.run(
+        command[:-1] + ["stop", "codex"],
+        input="{}",
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    pending_response = json.loads(stopped.stdout)
+    assert pending_response["decision"] == "block"
+    assert "Baseline + execution" in pending_response["systemMessage"]
+    mock = completed.replace("Status: Complete", "Status: Ready").replace(
+        "N/A — fixture commands have no visual interface.",
+        "Result: Passed\n"
+        "Evidence: Rendered design-system mock inspected.\n"
+        "Surface: Mock — account card in app/ui/account-card.tsx\n"
+        "Before: N/A — design-system mock has no app capture.\n"
+        "Proposed: ![Mock](https://example.test/account-mock.png)\n"
+        "Capture: Storybook account-card story rendered at the target viewport.\n"
+        "Review: Inspected the mock with the affected controls and states.",
+    )
+    plan.write_text(mock)
+    assert (
+        subprocess.run(
+            command + ["--plan-stage", "Ready"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
     plan.write_text(completed)
     plan.write_text(plan.read_text().replace("Status: Complete", "Status: Draft"))
     result = subprocess.run(
