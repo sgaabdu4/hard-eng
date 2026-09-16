@@ -111,10 +111,6 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
             raise ValueError(f"Dart generated exclusion matches an unsafe path: {path}")
         if path.suffix != ".dart" or str(relative) in generated:
             continue
-        if relative.parts[0] in FLUTTER_PLATFORM_ROOTS and nonproduction_source(
-            relative
-        ):
-            continue
         with path.open("rb") as source:
             header = source.read(2048).splitlines()[:10]
         if b"// GENERATED CODE - DO NOT MODIFY BY HAND" not in header:
