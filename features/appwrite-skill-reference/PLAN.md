@@ -4,56 +4,56 @@ Status: Complete
 
 ## Outcome + scope
 
-Advance the existing canonical Appwrite skill submodule pointer to the verified
-upstream revision that corrects Dart Function authentication examples. Do not copy
-or edit the canonical skill contents in this repository.
+Advance the existing canonical Appwrite skill submodule to the verified upstream
+revision that documents the Dart Function runtime ABI boundary. Do not copy or
+edit canonical skill content in this repository.
 
 ## Repository context
 
-Hard Eng distributes the canonical backend guidance through
-`.agents/skill-sources/appwrite-backend`. Its current pointer predates the
-upstream correction. The upstream revision passed its master CI before this
-integration task began.
+Hard Eng distributes backend guidance through
+`.agents/skill-sources/appwrite-backend`. The selected upstream revision
+clarifies that the generated runtime context is private, confines dynamic work
+to one documented boundary, and requires typed application handling beyond it.
 
 ## Decisions + authorization
 
 Blockers: None
-The user authorized this pointer-only release, pull request, merge and delivery.
-The existing submodule is the source of truth; a pointer update is sufficient and
-avoids a divergent local copy.
-
-## Acceptance + steps
-
-- [x] The submodule pointer resolves to the verified upstream revision.
-- [x] Existing source contracts accept the updated pointer without copied skill
-  content or unrelated source changes.
+The user authorized this pointer-only release, pull request, merge, and delivery.
+The existing submodule is the source of truth; an updated pointer avoids a
+divergent local copy.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: The clean source main checkout is at the prior verified release. The
-upstream canonical repository reports successful master CI for the target
-revision. Local inspection shows the task diff contains only the submodule
-pointer and this required plan.
+Evidence: The selected canonical revision `7dd4a895c336d7889f53bd062569b52a2a5a1843`
+is merged on its default branch. Its main CI passed and its 58 source contracts
+and pinned formatter check passed before publication.
+
+## Acceptance + steps
+
+- [x] The submodule pointer resolves to the verified upstream revision.
+- [x] The source diff contains no copied canonical skill content.
+- [x] The exact Hard Eng candidate passes its native Ready gate.
 
 ## Risks + recovery
 
-An unavailable or incompatible submodule revision blocks publication. Restore the
-previous pointer if its focused source contract fails; do not patch the
-distributed copy to hide an upstream issue.
+An unavailable or incompatible submodule revision blocks publication. Restore
+the prior pointer if integrated checks fail; do not patch the distributed copy
+to conceal an upstream issue.
 
 ## ux_reference
 
-N/A — this is a documentation-source pointer update with no product UI.
+N/A — this is a guidance-source pointer update with no product UI.
 
 ## Verification
 
 Result: Passed
-Evidence: Upstream master CI passed for the selected canonical revision. The
-canonical skill's source contract passed 24 tests on the selected pointer.
-Native pre-push results remain pending on the exact committed candidate.
-E2E: N/A — no user-facing runtime behavior changes here.
+Evidence: The upstream main CI and local canonical contracts passed for the
+selected revision. The exact pointer candidate passed the source Ready gate
+with 687 tests. Native pre-push, PR, main CI, and Delivered checks remain
+required for publication.
+E2E: N/A — the canonical owner separately proved its runtime boundary.
 
 Delivery target: Merge
-Delivery: Pending — PR merge, main CI and native delivered verification are
+Delivery: Pending — PR merge, main CI, and native Delivered verification are
 required.
