@@ -10,23 +10,41 @@ from typing import TextIO, cast
 
 from coverage_sources import erased_typescript
 from dart_coverage import erased_dart
+from dart_test_report import dart_events, failure_summary
 from fallow_report import validate_fallow
 from gate_config import JsonObject
 
 
+def dart_test_failure(
+    result: subprocess.CompletedProcess[bytes] | None,
+    tests: bool,
+    kind: str,
+    path: Path | None,
+) -> str | None:
+    if result and result.returncode and tests and kind == "dart-tests" and path:
+        return failure_summary(path)
+    return None
+
+
+def emit_dart_test_failure(
+    result: subprocess.CompletedProcess[bytes] | None,
+    tests: bool,
+    kind: str,
+    path: Path | None,
+) -> None:
+    if summary := dart_test_failure(result, tests, kind, path):
+        print(summary)
+
+
+def validate_scanner_log(scanner: str | None, log: TextIO) -> None:
+    if scanner in SCANNER_LOGS:
+        SCANNER_LOGS[scanner](log)
+
+
 def completed_tests(path: Path, kind: str) -> int:
     if kind == "dart-tests":
-        events = [
-            json.loads(line) for line in path.read_text().splitlines() if line.strip()
-        ]
-        events = [
-            item
-            for event in events
-            for item in (event if isinstance(event, list) else [event])
-        ]
         if (
-            not events
-            or not all(isinstance(event, dict) for event in events)
+            not (events := dart_events(path))
             or events[-1].get("type") != "done"
             or events[-1].get("success") is not True
         ):
