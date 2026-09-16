@@ -9,7 +9,7 @@ Python scanners through the existing local Mise owner. Dart setup discovers
 authored package files at each format run, including platform and test files,
 without traversing generated build output. Strict Dart analysis accepts the
 platform exclusions Flutter itself adds only where every matched Dart file is
-generated, vendored, or nonproduction. This does not change documented shell
+generated or vendored. This does not change documented shell
 prerequisites for a Python environment missing YAML.
 
 ## Repository context
@@ -64,13 +64,15 @@ N/A — runtime setup and source formatting have no product interface.
 ## Verification
 
 Result: Passed
-Evidence: Focused provisioner, formatter, and Dart exclusion contracts passed
-17/17. The real cold provisioner receipt selected `uv@latest` with no `uv` on
+Evidence: The all-up Ready gate passed 687 tests and the focused provisioner,
+formatter, and Dart exclusion contracts passed 73/73. The real cold provisioner
+receipt selected `uv@latest` with no `uv` on
 PATH, exposed the temporary Mise executable, then executed `uvx` for the
 managed scanner. Native formatter receipts reject an inventory failure, skip a
 deleted input and empty inventory, exclude malformed generated output, and
 fail for a newly added authored file after setup. Flutter platform exclusion
-fixtures reject both tracked and untracked handwritten Dart.
+fixtures accept only generated or vendored Dart and reject tracked and
+untracked handwritten files, including test paths.
 E2E: N/A — the native subprocess fixtures exercise the runtime and formatter
 boundaries directly.
 
