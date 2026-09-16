@@ -42,3 +42,5 @@ N/A — native source-security gate behavior has no product interface.
 Result: Passed
 Evidence: The normal Ready-stage native gate passed all configured checks: 697 tests in 109.57 seconds, managed Gitleaks 8.30.1 scanned the initialized canonical source tree with no findings, and a generic positive fixture retained its relative SARIF source URI without exposing the marker value.
 E2E: Passed — temporary Git fixtures invoke the native files-gate owner with tracked, untracked, ignored, deleted, submodule, alias, and symlink-cycle inputs; focused tests passed.
+
+Delivery target: Merge
