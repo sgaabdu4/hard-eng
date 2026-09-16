@@ -516,14 +516,15 @@ def run_gate(
                     if capture and report_path is not None
                     else nullcontext()
                 ) as output:
-                    result = subprocess.run(
+                    from gitleaks_scan import run_gate_command
+
+                    result = run_gate_command(
+                        gate.get("role"),
                         command,
-                        cwd=ROOT / group["path"],
-                        check=False,
-                        timeout=timeout,
-                        env={**os.environ, "PNPM_CONFIG_DLX_CACHE_MAX_AGE": "0"},
-                        stdout=output if capture else log,
-                        stderr=log,
+                        directory,
+                        timeout,
+                        output if capture else log,
+                        log,
                     )
             finally:
                 with output_lock:
