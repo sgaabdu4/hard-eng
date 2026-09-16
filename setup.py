@@ -130,13 +130,25 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
     configure(root, changes)
 
 
-def configure_typing_checks(package: Group) -> None:
+def configure_typing_checks(root: Path, package: Group) -> None:
     template = (
         SOURCE
         / ".agents/skills/he/templates"
         / f"hard-eng.{package.get('language')}.json"
     )
     if template.exists():
+        root_dart_sources = list(
+            dict.fromkeys(
+                [
+                    *package.get("sources", ["lib"]),
+                    *(
+                        name
+                        for name in ("test", "tests", "integration_test", "test_driver")
+                        if (root / name).is_dir()
+                    ),
+                ]
+            )
+        )
         for required in json.loads(template.read_text())["packages"][0]["checks"]:
             if required["role"] not in {"types", "annotations", "typing-style"}:
                 continue
@@ -144,7 +156,15 @@ def configure_typing_checks(package: Group) -> None:
                 value
                 for argument in required["command"]
                 for value in (
-                    package.get("sources", ["src"]) if argument == "src" else [argument]
+                    package.get("sources", ["src"])
+                    if argument == "src"
+                    else [argument]
+                    if not (
+                        argument == "."
+                        and package.get("language") == "dart"
+                        and package.get("path") == "."
+                    )
+                    else root_dart_sources
                 )
             ]
             matching = next(
@@ -564,7 +584,7 @@ def plan_install(
             changes[str(ignore)] = (
                 "# Include production and tests; replace Semgrep's default test exclusions.\n"
             )
-        configure_typing_checks(package)
+        configure_typing_checks(root, package)
         configure = {
             "python": configure_python,
             "dart": configure_dart,

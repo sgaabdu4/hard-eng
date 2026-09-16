@@ -263,12 +263,28 @@ def test_standalone_python_does_not_invent_import_architecture(
     assert "imports" not in {gate["role"] for gate in package["checks"]}
     tests = next(gate for gate in package["checks"] if gate["role"] == "tests")
     assert "--cov=main" in tests["command"]
-    installer.configure_typing_checks(package)
-    installer.configure_typing_checks(package)
+    installer.configure_typing_checks(tmp_path, package)
+    installer.configure_typing_checks(tmp_path, package)
     annotations = [gate for gate in package["checks"] if gate["role"] == "annotations"]
     assert len(annotations) == 1
     assert "main.py" in annotations[0]["command"]
     assert "src" not in annotations[0]["command"]
+
+
+def test_nested_dart_owner_keeps_native_analyzer_scope(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    child = tmp_path / "functions/worker"
+    child.mkdir(parents=True)
+    function: Group = {
+        "path": "functions/worker",
+        "language": "dart",
+        "sources": ["."],
+        "checks": [],
+    }
+
+    installer.configure_typing_checks(tmp_path, function)
+    assert function["checks"][0]["command"] == ["dart", "analyze", "--fatal-infos", "."]
 
 
 def test_plain_dart_uses_native_coverage_tool(
@@ -276,6 +292,13 @@ def test_plain_dart_uses_native_coverage_tool(
 ) -> None:
     repository(tmp_path)
     (tmp_path / "package.json").unlink()
+    authored: list[Path] = []
+    for name in ("lib", "test", "tests", "integration_test", "test_driver"):
+        directory = tmp_path / name
+        directory.mkdir()
+        path = directory / "fixture.dart"
+        path.write_text("void main() {}\n")
+        authored.append(path)
     (tmp_path / "pubspec.yaml").write_text(
         'name: fixture\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n'
     )
@@ -288,6 +311,15 @@ def test_plain_dart_uses_native_coverage_tool(
     assert result.returncode == 0, result.stderr
     config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
     checks = {gate["role"]: gate for gate in config["packages"][0]["checks"]}
+    assert checks["types"]["command"][:3] == ["dart", "analyze", "--fatal-infos"]
+    assert set(checks["types"]["command"][3:]) == {
+        "lib",
+        "test",
+        "tests",
+        "integration_test",
+        "test_driver",
+    }
+    assert len(checks["types"]["command"][3:]) == 5
     assert checks["lockfiles"]["command"] == [
         "dart",
         "pub",
@@ -314,6 +346,14 @@ def test_plain_dart_uses_native_coverage_tool(
     installer.install(tmp_path)
     assert not scanner.exists()
     assert (tmp_path / "dart-decimate.toml").read_bytes() == preserved
+    assert [path.read_text() for path in authored] == ["void main() {}\n"] * len(
+        authored
+    )
+    updated = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    types = [
+        check for check in updated["packages"][0]["checks"] if check["role"] == "types"
+    ]
+    assert types == [checks["types"]]
 
 
 def test_workspace_installs_once_and_keeps_child_source_scope(
