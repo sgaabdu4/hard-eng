@@ -9,6 +9,7 @@ from types import ModuleType
 import pytest
 import update
 from conftest import commit, git, init
+from test_updates import select_release
 
 
 def test_husky_update_preserves_shim_and_runs_shell_launcher(
@@ -150,3 +151,48 @@ def test_shell_bootstrap_current_clone_installs_missing_pre_push(
     assert hook.stat().st_mode & 0o111
     assert 'hard-eng.py", "pre-push"' in hook.read_text()
     assert git(fresh, "rev-parse", "HEAD") == git(target, "rev-parse", "HEAD")
+
+
+def test_linked_worktree_may_use_the_common_checkout_hooks(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    shim = target / ".husky/_/pre-push"
+    shim.parent.mkdir(parents=True)
+    shim.write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
+    (shim.parent / "h").write_text(
+        'n=$(basename "$0")\ns=$(dirname "$(dirname "$0")")/$n\nsh -e "$s" "$@"\n'
+    )
+    (shim.parent / ".gitignore").write_text("*\n")
+    git(target, "config", "core.hooksPath", ".husky/_")
+    config_path = target / "hard-eng.gates.json"
+    config = json.loads(config_path.read_text())
+    config["shared"].append(
+        {"name": "shell", "role": "shell", "command": ["python3", "-c", "pass"]}
+    )
+    config_path.write_text(json.dumps(config))
+    base = commit(target, "Husky hooks")
+    select_release(source, monkeypatch)
+    update.update(target)
+    assert (target / ".husky/pre-push").is_file()
+
+    def verified(_revision: str) -> bool:
+        return True
+
+    monkeypatch.setattr(update, "verified_revision", verified)
+    git(target, "config", "extensions.worktreeConfig", "true")
+    linked = target / ".claude/worktrees/task"
+    git(target, "worktree", "add", "--detach", str(linked), "HEAD")
+    revision = json.loads((target / update.SOURCE_FILE).read_text())["revision"]
+    try:
+        git(linked, "config", "--worktree", "core.hooksPath", str(shim.parent))
+        assert not update.pre_push_missing(linked)
+        assert update.repair_current_hook(linked, revision).endswith("available.")
+        assert update.check_scaffold_update(linked, base)
+        git(linked, "config", "--worktree", "core.hooksPath", str(target.parent))
+        with pytest.raises(ValueError, match="outside this repository"):
+            update.pre_push_missing(linked)
+        with pytest.raises(subprocess.CalledProcessError):
+            update.check_scaffold_update(linked, base)
+    finally:
+        git(target, "worktree", "remove", "--force", str(linked))
