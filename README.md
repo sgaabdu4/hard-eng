@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | s
 | Existing project | Preserve custom instructions, skills, hooks, and configuration; report genuine conflicts. |
 | Hard Eng already installed | Select a newer CI-verified revision when available, verify an isolated candidate, then apply changes and create a local update commit. |
 
-Setup prepends rules to `AGENTS.md` and connects `CLAUDE.md`. It configures Context Mode, Codebase Memory, and applicable Appwrite, Sentry, Dart, and Marionette connections. Reuse known service and hosting choices; resolve missing choices and verify a real call before relying on an integration. The installer/updater never pushes.
+Setup prepends rules to `AGENTS.md` and connects `CLAUDE.md`. It configures Context Mode, Codebase Memory, and applicable Appwrite, Sentry, Dart, and Marionette connections; Marionette is registered only for a `marionette_flutter` dependency, pinned to the `pubspec.lock` version. Reuse known service and hosting choices; resolve missing choices and verify a real call before relying on an integration. The installer/updater never pushes.
 
 ```mermaid
 flowchart TD

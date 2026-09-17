@@ -185,14 +185,46 @@ def sentry_server(root: Path) -> JsonObject | None:
     return None
 
 
+def marionette_server(root: Path) -> JsonObject | None:
+    """Pin the server to the app's package; connect rejects a version mismatch."""
+    import yaml
+    from gate_config import nonproduction_source, repository_files
+
+    for path in repository_files(root):
+        relative = path.relative_to(root)
+        if path.name != "pubspec.yaml" or nonproduction_source(relative):
+            continue
+        if {".agents", ".claude", ".hooks"} & set(relative.parts):
+            continue
+        manifest = yaml.safe_load(path.read_text())
+        if "marionette_flutter" not in {
+            **(manifest.get("dependencies") or {}),
+            **(manifest.get("dev_dependencies") or {}),
+        }:
+            continue
+        lock = path.parent / "pubspec.lock"
+        locked = (
+            yaml.safe_load(lock.read_text())
+            .get("packages", {})
+            .get("marionette_flutter", {})
+            if lock.is_file()
+            else {}
+        )
+        return {
+            "command": "dart",
+            "args": ["run", f"marionette_mcp@{locked.get('version', '')}"],
+        }
+    return None
+
+
 def detected_servers(root: Path) -> dict[str, JsonObject]:
     from agent_hooks import integrated_services
 
     optional: dict[str, JsonObject | None] = {
         "Dart": {"command": "dart", "args": ["mcp-server"]},
-        "Marionette": {"command": "dart", "args": ["run", "marionette_mcp@"]},
+        "Marionette": marionette_server(root),
     }
-    services = integrated_services(root)
+    services = [*integrated_services(root), "Marionette"]
     if any(
         server.get("command") == "dart"
         and server.get("args") == ["run", "dart_mcp_server@"]
