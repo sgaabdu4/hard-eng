@@ -523,11 +523,12 @@ def validate_dart_decimate(path: Path) -> None:
         envelope = {
             "schema_version": "dart-decimate.report.v1",
             "kind": "combined",
-            "tool": "dart-decimate",
             "command": "check",
             "verdict": "pass",
         }
-        if any(report[key] != value for key, value in envelope.items()):
+        if any(report[key] != value for key, value in envelope.items()) or not (
+            re.fullmatch(r"dart-decimate( \d+\.\d+\.\d+\S*)?", report["tool"])
+        ):
             raise ValueError("Expected a passing combined Dart Decimate check")
         if report["findings"] != [] or report["clone_groups"] != []:
             raise ValueError("Dart Decimate reports findings or duplicate code")
