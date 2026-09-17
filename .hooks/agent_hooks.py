@@ -219,7 +219,6 @@ def integrated_services(root: Path) -> list[str]:
         "Sentry": r"(?:from\s+['\"]@sentry/|require\(['\"]@sentry/|import\s+sentry_sdk|from\s+sentry_sdk\b|package:sentry(?:_flutter)?/)",
         "Appwrite": r"(?:from\s+['\"](?:node-)?appwrite['\"]|require\(['\"](?:node-)?appwrite['\"]|from\s+appwrite\b|import\s+appwrite\b|package:(?:dart_)?appwrite/)",
         "Dart": r"\b(?:import|export)\s+['\"](?:dart:|package:)",
-        "Marionette": r"\bMarionetteBinding\s*\.\s*ensureInitialized\s*\(",
     }
     found = set()
     for path in repository_files(root):
@@ -244,8 +243,6 @@ def integrated_services(root: Path) -> list[str]:
             found.update(
                 name for name, pattern in patterns.items() if re.search(pattern, source)
             )
-    if "Marionette" in found:
-        found.add("Dart")
     return sorted(found)
 
 

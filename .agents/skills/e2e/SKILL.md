@@ -12,15 +12,18 @@ Select by actual surface + explicit browser/device requirements. Reuse the proje
 ```mermaid
 flowchart LR
   S{Surface} -->|Web UI| B[Existing browser E2E]
-  B -->|Recorded journey proof needed| V[Product Walkthrough: recorded E2E]
+  B -->|Recorded proof needed| V[Product Walkthrough: recorded E2E]
   S -->|Polished web video requested| D[Product Walkthrough: video delivery]
   S -->|Flutter + Riverpod| F[Building Flutter Apps]
   S -->|Other Flutter| I[Existing Flutter integration + device tools]
+  F -->|Recorded proof needed| G[Recorded proof: references/flutter.md]
+  I -->|Recorded proof needed| G
   S -->|Native / React Native / desktop| N[Platform + device runner]
   S -->|API / worker / CLI / pure Dart| A[Real request / event / command boundary]
   click V "../product-walkthrough-video/SKILL.md"
   click D "../product-walkthrough-video/SKILL.md"
   click F "../building-flutter-apps/SKILL.md"
+  click G "references/flutter.md"
 ```
 
 OS-owned dialogs → platform control beyond the app tree. Browser exploration → durable regressions in existing tests. API/CLI journeys need UI runtime only when the journey includes it.
@@ -37,7 +40,6 @@ OS-owned dialogs → platform control beyond the app tree. Browser exploration �
 ## Visual proof and completion
 
 - Capture the smallest useful evidence set. Ordinary regression work does not require video. When screenshots or video are requested or needed, inspect the actual delivered media and confirm its subject, required steps and final state.
-- Recorded web proof → Product Walkthrough's recorded E2E route owns the bundled recorder + mechanical/visual WebM checks. Video delivery adds its MP4 conversion + final review. Keep backend readback + repeatable journey assertions here; media checks alone cannot prove acceptance.
-- Walkthrough checkers require their recorder's video + full run report. Other browser/device captures → existing artifacts + direct inspection; do not invent a compatible report. Raw rendering/timing claims need unmodified capture because walkthrough pacing and reload presentation can alter the evidence.
+- Recorded proof follows the selected route's owner; backend readback + repeatable journey assertions stay here and media checks alone cannot prove acceptance. Captures outside an owned pipeline → existing artifacts + direct inspection; do not invent a compatible report.
 - Keep secrets and personal data out of artifacts. Show requested evidence to the user; treat test artifacts as local unless their inclusion as repository assets is authorized.
 - Report tested surfaces, outcomes and exact gaps separately. Assertions, persisted state, deployment identity and visual evidence prove different things. An unavailable device, account or unreviewed artifact remains unproven.
