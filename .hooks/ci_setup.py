@@ -11,6 +11,29 @@ from gate_config import GateConfig
 from project_setup import dependency_command
 
 MAINTENANCE_EVENTS = {"schedule", "workflow_dispatch"}
+OLD_TRIGGERS = (
+    "on:\n  push:\n    branches-ignore:\n      - 'feature/**'\n  pull_request:\n"
+)
+OLD_BASE = "${{ github.event.pull_request.base.sha || github.event.before }}"
+NEW_BASE = "${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}"
+
+
+def workflow_triggers(source: Path, base: str) -> tuple[str, str]:
+    """The template trigger block and its copy for the project's base branch."""
+    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    block = template[template.index("on:\n") : template.index("\n\npermissions:") + 1]
+    return block, block.replace("      - main\n", f"      - {base}\n", 1)
+
+
+def migrate_workflow_triggers(root: Path, source: Path, content: str) -> str:
+    """Move generated push/PR triggers to default-branch pushes plus workflow_call."""
+    from shipping import load_policy
+
+    policy = load_policy(root, required=False)
+    if policy is None or OLD_TRIGGERS not in content:
+        return content
+    _, triggers = workflow_triggers(source, policy["base"])
+    return content.replace(OLD_TRIGGERS, triggers, 1).replace(OLD_BASE, NEW_BASE, 1)
 
 
 def workflow_budget(root: Path, content: str) -> str:
@@ -140,7 +163,9 @@ def configure_ci(
     name = ".github/workflows/hard-eng.yml"
     if (root / name).exists():
         original = (root / name).read_text()
-        migrated = migrate_workflow_tools(migrate_workflow_pins(original))
+        migrated = migrate_workflow_triggers(
+            root, source, migrate_workflow_tools(migrate_workflow_pins(original))
+        )
         if migrated != original:
             changes[name] = migrated
         return
@@ -157,7 +182,8 @@ def configure_ci(
         return
     from shipping import load_policy
 
-    if load_policy(root, required=False) is None:
+    policy = load_policy(root, required=False)
+    if policy is None:
         print(
             "CI setup pending: configure project shipping checks and a measured ci_seconds budget, then rerun setup. The source repository's timeout is not a project budget.",
             file=sys.stderr,
@@ -172,9 +198,11 @@ def configure_ci(
     if "hard-eng" not in checks:
         checks.append("hard-eng")
     tools = workflow_tools(root, config)
+    block, triggers = workflow_triggers(source, policy["base"])
     changes[name] = (
         (source / name)
         .read_text()
         .replace("uv@latest python@3.12 node@latest dart@latest", " ".join(tools))
+        .replace(block, triggers, 1)
     )
     changes[name] = workflow_budget(root, changes[name])

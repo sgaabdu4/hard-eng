@@ -322,7 +322,7 @@ def test_known_action_pins_migrate_without_replacing_custom_workflow(
         )
     )
     custom = "# Project-owned note\n" + old.replace(
-        "timeout-minutes: 3", "timeout-minutes: 10"
+        "timeout-minutes: 5", "timeout-minutes: 10"
     )
     if named:
         custom = custom.replace("- uses:", "- name: Configure tool\n        uses:")
@@ -331,7 +331,7 @@ def test_known_action_pins_migrate_without_replacing_custom_workflow(
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     expected = "# Project-owned note\n" + (
         SOURCE / ".github/workflows/hard-eng.yml"
-    ).read_text().replace("timeout-minutes: 3", "timeout-minutes: 10")
+    ).read_text().replace("timeout-minutes: 5", "timeout-minutes: 10")
     if named:
         expected = expected.replace("- uses:", "- name: Configure tool\n        uses:")
     assert changes[str(path.relative_to(tmp_path))] == expected
@@ -395,3 +395,92 @@ def test_dart_workflow_uses_packaged_scanner_without_rust(
         manager + "@latest",
     ]
     assert "rust@latest" not in workflow
+
+
+def test_workflow_runs_once_per_change(tmp_path: Path) -> None:
+    """A PR must not run the same check twice; only default-branch pushes run."""
+    template = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
+    triggers = template.get("on", template.get(True))
+    assert "pull_request" in triggers
+    assert triggers["push"] == {"branches": ["main"]}
+    config: GateConfig = {
+        "packages": [],
+        "shared": [],
+        "shipping": {
+            "base": "trunk",
+            "checks": ["hard-eng"],
+            "ui_paths": [],
+            "ci_seconds": 120,
+            "pre_push_seconds": 120,
+            "delivery": [],
+        },
+    }
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, config, changes)
+    generated = yaml.safe_load(changes[".github/workflows/hard-eng.yml"])
+    assert generated.get("on", generated.get(True))["push"] == {"branches": ["trunk"]}
+
+
+def test_workflow_call_base_input_feeds_check() -> None:
+    """A project's deploy workflow can call Hard Eng and pass its own base."""
+    workflow = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    assert "base_sha" in triggers["workflow_call"]["inputs"]
+    steps = workflow["jobs"]["hard-eng"]["steps"]
+    checks = next(step for step in steps if step.get("name") == "Run required checks")
+    assert checks["env"]["BASE_SHA"].startswith("${{ inputs.base_sha ||")
+    assert "github.event.pull_request.base.sha" in checks["env"]["BASE_SHA"]
+    assert "github.event.before" in checks["env"]["BASE_SHA"]
+
+
+OLD_TRIGGERS = (
+    "on:\n  push:\n    branches-ignore:\n      - 'feature/**'\n  pull_request:\n"
+)
+OLD_BASE = "BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}"
+
+
+def test_generated_triggers_migrate_with_customizations(tmp_path: Path) -> None:
+    """Installed copies move to single runs plus workflow_call; custom triggers stay."""
+    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    new_triggers = template[
+        template.index("on:\n") : template.index("\n\npermissions:") + 1
+    ]
+    new_base = next(line for line in template.splitlines() if "BASE_SHA:" in line)
+    old = "# Project-owned note\n" + template.replace(
+        new_triggers, OLD_TRIGGERS, 1
+    ).replace(new_base.strip(), OLD_BASE, 1).replace(
+        "timeout-minutes: 5", "timeout-minutes: 10"
+    )
+    assert "pull_request:\n\npermissions:" in old, "installed shape"
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(old)
+    config: GateConfig = {"packages": [], "shared": []}
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, config, changes)
+    assert changes == {}, "no shipping base to migrate towards"
+    config["shipping"] = {
+        "base": "trunk",
+        "checks": ["hard-eng"],
+        "ui_paths": [],
+        "ci_seconds": 120,
+        "pre_push_seconds": 120,
+        "delivery": [],
+    }
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    configure_ci(tmp_path, SOURCE, config, changes)
+    migrated = changes[str(path.relative_to(tmp_path))]
+    assert migrated == "# Project-owned note\n" + template.replace(
+        "      - main\n", "      - trunk\n", 1
+    ).replace("timeout-minutes: 5", "timeout-minutes: 10")
+    path.write_text(migrated)
+    changes.clear()
+    configure_ci(tmp_path, SOURCE, config, changes)
+    assert changes == {}
+    custom = old.replace(
+        "branches-ignore:\n      - 'feature/**'", "branches:\n      - develop"
+    )
+    path.write_text(custom)
+    configure_ci(tmp_path, SOURCE, config, changes)
+    assert changes == {}
