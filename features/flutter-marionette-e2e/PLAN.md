@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-Register the Marionette MCP server for Flutter projects that depend on `marionette_flutter`, pinned to the version in `pubspec.lock`, and give the E2E skill a Flutter route that drives the app through Marionette while `xcrun simctl io recordVideo` or `adb shell screenrecord` records the screen. Web walkthrough content (Playwright) and Flutter content live in separate files; only `e2e/SKILL.md` routes between them. No new scripts, recorder wrapper or extra MCP servers.
+Register the Marionette MCP server for Flutter projects that depend on `marionette_flutter`, pinned to the version in `pubspec.lock`, and give the E2E skill a Flutter route that drives the app through Marionette while `xcrun simctl io recordVideo` or `adb shell screenrecord` records the screen. Web walkthrough content (Playwright) and Flutter content live in separate files; only `e2e/SKILL.md` routes between them. Raise this repository's pre-push and CI time budgets from 180 to 300 seconds, because the suite alone now takes about 190 seconds locally and in CI. No new scripts, recorder wrapper or extra MCP servers.
 
 ## Repository context
 
@@ -45,4 +45,4 @@ Evidence: Red on the unmodified hooks (`git stash` of `mcp_setup.py`/`agent_hook
 E2E: Passed — `dart run marionette_mcp@0.6.0 --help` printed the server usage (exit 0), proving the exact-version descriptor; on the booted iPhone 17 Pro simulator `xcrun simctl io recordVideo --codec=h264 --force` ran in the background while the simulator appearance was toggled, `kill -INT` stopped it with "Recording completed. Writing to disk." and exit 0, ffprobe read h264 1206x2622, 74 frames, 4.38 s, and the extracted first and last frames were viewed and show the app screen; the earlier static-screen run produced 1 frame at 0.07 s, which the reference now documents.
 
 Delivery target: PR
-Delivery: Pending — full `hard-eng.py check --base origin/main` on the final tree passed: exit 0, 743 tests in 192 s, every native check passed. PR awaits the user's go-ahead.
+Delivery: Pending — full `hard-eng.py check --base origin/main` on the final tree passed: exit 0, 743 tests in 192 s, every native check passed. The first push was rejected by the pre-push hook after every check passed because the run exceeded the 180-second budget, matching the CI cancellation on PR #115; the user chose to raise both budgets to 300 seconds (workflow timeout 5 minutes) and push with `--no-verify`.
