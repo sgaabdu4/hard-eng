@@ -13,7 +13,7 @@ flowchart TD
   W --> S[Stop charting; research may proceed]
   N[Next session: load map] --> C[Select + claim frontier ticket]
   C --> R[Resolve one decision]
-  R --> U[Close + link gist; update tickets + fog]
+  R --> U[Close + link resolution; update tickets + fog]
   U --> E[Stop; clear route hands off to HE Plan]
 ```
 
@@ -31,13 +31,13 @@ Map = low-resolution index; decision detail lives once, in its ticket. Refer to 
 | --- | --- |
 | Destination | One or two lines defining the observable end + boundary. |
 | Notes | Domain, applicable local skills, participation + standing preferences. |
-| Decisions so far | One linked gist per closed decision; initially empty. |
+| Decisions so far | One linked resolution summary per closed decision; initially empty. |
 | Not yet specified | In-scope questions too blurry to state precisely; no decided, live-ticket or out-of-scope work. |
 | Out of scope | Work beyond the destination + reason; link any closed mis-scoped ticket. |
 
 - Ticket = descriptive title + `Question`, sized to one session; a decision/investigation, not a build slice. Fields: `Type`, `Status: open|closed`, `Assignee`, `Blocked by` links. Assets + evidence are linked from its resolution.
 - Precise question → ticket, even if blocked. Blurry question → Not yet specified. Create tickets before wiring blockers; reject cycles.
-- Frontier = open + unassigned + every blocker closed. Resolve → record answer + evidence/context pointers, close ticket, add linked gist to map. Keep secrets out of pointers.
+- Frontier = open + unassigned + every blocker closed. Resolve → record answer + evidence/context pointers, close ticket, add linked resolution summary to map. Keep secrets out of pointers.
 - Newly precise fog → new tickets, remove that fog, then wire blockers. Update invalidated tickets. Beyond-destination ticket → close + record reason under Out of scope, not Decisions so far; reconsider only in a newly scoped effort.
 
 ## Decision routes
