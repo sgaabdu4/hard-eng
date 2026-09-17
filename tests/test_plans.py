@@ -657,7 +657,16 @@ def test_unchanged_complete_plan_predates_e2e_rule(
         + "\n"
     )
     git(tmp_path, "add", ".")
-    git(tmp_path, "commit", "-qm", "historical plans")
+    git(
+        tmp_path,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.test",
+        "commit",
+        "-qm",
+        "historical plans",
+    )
     assert validate_plans(tmp_path, stage="Complete") == "Complete"
     legacy.write_text(legacy.read_text() + "\nReopened for new work.\n")
     with pytest.raises(ValueError, match="features/legacy/PLAN.md: .*E2E"):
