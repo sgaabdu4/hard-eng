@@ -84,7 +84,9 @@ def plan_sections(content: str, *, allow_placeholders: bool = False) -> dict[str
     return sections
 
 
-def e2e_proof(verification: str, status: str) -> None:
+def e2e_proof(verification: str, status: str, *, legacy: bool = False) -> None:
+    if legacy and not re.search(r"(?m)^E2E:", verification):
+        return
     e2e = field(verification, "E2E")
     match = re.fullmatch(r"(Required|Passed|Delivery|N/A) — (\S.*)", e2e)
     if match is None:
@@ -141,7 +143,9 @@ def ux_proof(content: str) -> None:
         evidence_field(content, name)
 
 
-def readiness_errors(sections: dict[str, str], status: str = "Ready") -> list[str]:
+def readiness_errors(
+    sections: dict[str, str], status: str = "Ready", *, legacy: bool = False
+) -> list[str]:
     errors = []
     for name in ("Baseline + execution", "ux_reference", "Verification"):
         try:
@@ -150,7 +154,7 @@ def readiness_errors(sections: dict[str, str], status: str = "Ready") -> list[st
             elif name == "ux_reference":
                 ux_proof(sections[name])
             else:
-                e2e_proof(sections[name], status)
+                e2e_proof(sections[name], status, legacy=legacy)
         except ValueError as error:
             errors.append(f"{name}: {error}")
     return errors
@@ -215,7 +219,8 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
     return notice, unfinished
 
 
-def validate_plan(path: Path) -> str:
+def validate_plan(path: Path, *, changed: bool = True) -> str:
+    """Unchanged Complete plans predate later rules such as the E2E field."""
     content = path.read_text()
     sections = plan_sections(content)
     status = field(content, "Status")
@@ -229,7 +234,9 @@ def validate_plan(path: Path) -> str:
         return status
     if field(sections["Decisions + authorization"], "Blockers") != "None":
         raise ValueError("ready/complete plan has unresolved Blockers")
-    errors = readiness_errors(sections, status)
+    errors = readiness_errors(
+        sections, status, legacy=status == "Complete" and not changed
+    )
     if errors:
         raise ValueError("; ".join(errors))
     if status == "Complete":
@@ -289,7 +296,7 @@ def validate_plans(
     effective_stage = "Complete"
     for path in applicable:
         try:
-            status = validate_plan(path)
+            status = validate_plan(path, changed=str(path.relative_to(root)) in changed)
             _validate_shipping(root, path, status)
             if STAGES.index(status) < STAGES.index(stage):
                 raise ValueError(f"plan is {status}; this check requires {stage}")

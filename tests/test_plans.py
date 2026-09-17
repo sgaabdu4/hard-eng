@@ -559,15 +559,16 @@ def test_native_cli_plan_stage_and_missing_plan(
         check=False,
     )
     assert result.returncode == 1 and "Cannot verify plan scope" in result.stderr
-    assert (
-        subprocess.run(
-            command + ["--base", "0" * 40],
-            cwd=tmp_path,
-            capture_output=True,
-            check=False,
-        ).returncode
-        == 0
-    )
+    for base in ("0" * 40, ""):
+        assert (
+            subprocess.run(
+                command + ["--base", base],
+                cwd=tmp_path,
+                capture_output=True,
+                check=False,
+            ).returncode
+            == 0
+        ), f"empty or zero base {base!r} must run full scope"
     plan = tmp_path / "PLAN.md"
     completed = plan.read_text()
     e2e = next(line for line in completed.splitlines() if line.startswith("E2E:"))
@@ -641,3 +642,23 @@ def test_native_cli_plan_stage_and_missing_plan(
         command, cwd=tmp_path, capture_output=True, text=True, check=False
     )
     assert result.returncode == 1 and "applicable PLAN" in result.stderr
+
+
+def test_unchanged_complete_plan_predates_e2e_rule(
+    runner: ModuleType, tmp_path: Path, completed_plan: str
+) -> None:
+    """A plan completed before the E2E rule fails only once it is edited."""
+    legacy = tmp_path / "features/legacy/PLAN.md"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        "\n".join(
+            line for line in completed_plan.splitlines() if not line.startswith("E2E:")
+        )
+        + "\n"
+    )
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-qm", "historical plans")
+    assert validate_plans(tmp_path, stage="Complete") == "Complete"
+    legacy.write_text(legacy.read_text() + "\nReopened for new work.\n")
+    with pytest.raises(ValueError, match="features/legacy/PLAN.md: .*E2E"):
+        validate_plans(tmp_path, stage="Complete")
