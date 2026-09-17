@@ -346,38 +346,112 @@ def test_legacy_appwrite_cloud_conflict_is_preserved(
     assert not (tmp_path / ".hooks").exists()
 
 
+MARIONETTE_LOCK = (
+    "packages:\n"
+    "  marionette_flutter:\n"
+    '    dependency: "direct main"\n'
+    "    source: hosted\n"
+    '    version: "0.6.0"\n'
+)
+
+
 @pytest.mark.parametrize(
-    "source,expected",
+    "files,expected,marionette_args",
     [
-        ("", set()),
-        ("import 'dart:io';", {"dart"}),
-        ("import 'package:flutter/material.dart';", {"dart"}),
-        ("import 'package:marionette_flutter/marionette_flutter.dart';", {"dart"}),
+        ({"app.dart": ""}, set(), None),
+        ({"app.dart": "import 'dart:io';"}, {"dart"}, None),
+        ({"app.dart": "import 'package:flutter/material.dart';"}, {"dart"}, None),
         (
-            "import 'package:marionette_flutter/marionette_flutter.dart';\nMarionetteBinding.ensureInitialized();",
-            {"dart", "marionette"},
+            {
+                "app.dart": "import 'package:marionette_flutter/marionette_flutter.dart';\nMarionetteBinding.ensureInitialized();"
+            },
+            {"dart"},
+            None,
         ),
-        ("import 'package:appwrite/appwrite.dart';", {"dart", "appwrite"}),
-        ("import 'package:sentry_flutter/sentry_flutter.dart';", {"dart", "sentry"}),
         (
-            (
-                "import 'package:flutter/material.dart';\n"
-                "import 'package:appwrite/appwrite.dart';\n"
-                "import 'package:sentry_flutter/sentry_flutter.dart';"
-            ),
+            {
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n  marionette_flutter: ^0.6.0\n",
+                "pubspec.lock": MARIONETTE_LOCK,
+            },
+            {"dart", "marionette"},
+            ["run", "marionette_mcp@0.6.0"],
+        ),
+        (
+            {
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\ndev_dependencies:\n  marionette_flutter: ^0.6.0\n"
+            },
+            {"dart", "marionette"},
+            ["run", "marionette_mcp@"],
+        ),
+        (
+            {
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\ndev_dependencies:\n  marionette_flutter: ^0.6.0\n",
+                "pubspec.lock": MARIONETTE_LOCK.replace("marionette_flutter", "meta"),
+            },
+            {"dart", "marionette"},
+            ["run", "marionette_mcp@"],
+        ),
+        (
+            {
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n"
+            },
+            {"dart", "marionette"},
+            ["run", "marionette_mcp@"],
+        ),
+        (
+            {
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n",
+                "pubspec.lock": MARIONETTE_LOCK,
+            },
+            {"dart", "marionette"},
+            ["run", "marionette_mcp@0.6.0"],
+        ),
+        (
+            {
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\ndev_dependencies:\n"
+            },
+            {"dart", "marionette"},
+            ["run", "marionette_mcp@"],
+        ),
+        (
+            {"pubspec.yaml": "name: tool\ndependencies:\n  meta: ^1.0.0\n"},
+            {"dart"},
+            None,
+        ),
+        (
+            {"app.dart": "import 'package:appwrite/appwrite.dart';"},
+            {"dart", "appwrite"},
+            None,
+        ),
+        (
+            {"app.dart": "import 'package:sentry_flutter/sentry_flutter.dart';"},
+            {"dart", "sentry"},
+            None,
+        ),
+        (
+            {
+                "app.dart": (
+                    "import 'package:flutter/material.dart';\n"
+                    "import 'package:appwrite/appwrite.dart';\n"
+                    "import 'package:sentry_flutter/sentry_flutter.dart';"
+                )
+            },
             {"dart", "appwrite", "sentry"},
+            None,
         ),
     ],
 )
 def test_installer_registers_only_detected_service_mcps(
     installer: ModuleType,
     tmp_path: Path,
-    source: str,
+    files: dict[str, str],
     expected: set[str],
+    marionette_args: list[str] | None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository(tmp_path)
-    (tmp_path / "app.dart").write_text(source)
+    for name, content in files.items():
+        (tmp_path / name).write_text(content)
     monkeypatch.setenv("APPWRITE_ENDPOINT", "https://fra.cloud.appwrite.io/v1")
     monkeypatch.setenv("SENTRY_HOST", "sentry.io")
     monkeypatch.setenv("SENTRY_MCP_URL", "https://mcp.sentry.dev/mcp/example/app")
@@ -395,7 +469,7 @@ def test_installer_registers_only_detected_service_mcps(
         if "marionette" in expected:
             assert servers["marionette"] == {
                 "command": "dart",
-                "args": ["run", "marionette_mcp@"],
+                "args": marionette_args,
             }
     servers = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
     assert servers.keys() & optional == expected
