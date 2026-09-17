@@ -46,4 +46,4 @@ Evidence: Red on unmodified code: `test_workflow_runs_once_per_change` (`branche
 E2E: N/A — CI workflow wiring is proven by actionlint/zizmor and YAML assertions; GitHub-hosted runs are remote delivery proof outside local tests.
 
 Delivery target: PR
-Delivery: Pending — PR with green required `hard-eng` check.
+Delivery: Pending — both PR runs passed every check but were cancelled by the 3-minute job timeout at 3m07; the pre-push and CI budgets are raised to 300 seconds (workflow timeout 5 minutes) on the user's decision, and the rerun is the green proof.

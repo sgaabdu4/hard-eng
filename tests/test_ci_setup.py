@@ -322,7 +322,7 @@ def test_known_action_pins_migrate_without_replacing_custom_workflow(
         )
     )
     custom = "# Project-owned note\n" + old.replace(
-        "timeout-minutes: 3", "timeout-minutes: 10"
+        "timeout-minutes: 5", "timeout-minutes: 10"
     )
     if named:
         custom = custom.replace("- uses:", "- name: Configure tool\n        uses:")
@@ -331,7 +331,7 @@ def test_known_action_pins_migrate_without_replacing_custom_workflow(
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     expected = "# Project-owned note\n" + (
         SOURCE / ".github/workflows/hard-eng.yml"
-    ).read_text().replace("timeout-minutes: 3", "timeout-minutes: 10")
+    ).read_text().replace("timeout-minutes: 5", "timeout-minutes: 10")
     if named:
         expected = expected.replace("- uses:", "- name: Configure tool\n        uses:")
     assert changes[str(path.relative_to(tmp_path))] == expected
@@ -450,7 +450,7 @@ def test_generated_triggers_migrate_with_customizations(tmp_path: Path) -> None:
     old = "# Project-owned note\n" + template.replace(
         new_triggers, OLD_TRIGGERS, 1
     ).replace(new_base.strip(), OLD_BASE, 1).replace(
-        "timeout-minutes: 3", "timeout-minutes: 10"
+        "timeout-minutes: 5", "timeout-minutes: 10"
     )
     assert "pull_request:\n\npermissions:" in old, "installed shape"
     path = tmp_path / ".github/workflows/hard-eng.yml"
@@ -473,7 +473,7 @@ def test_generated_triggers_migrate_with_customizations(tmp_path: Path) -> None:
     migrated = changes[str(path.relative_to(tmp_path))]
     assert migrated == "# Project-owned note\n" + template.replace(
         "      - main\n", "      - trunk\n", 1
-    ).replace("timeout-minutes: 3", "timeout-minutes: 10")
+    ).replace("timeout-minutes: 5", "timeout-minutes: 10")
     path.write_text(migrated)
     changes.clear()
     configure_ci(tmp_path, SOURCE, config, changes)
