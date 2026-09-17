@@ -48,7 +48,11 @@ def configure_instructions(
 
 
 def project_pre_push(root: Path, hook: Path) -> Path:
-    """Validate repository hook ownership and preserve Husky's forwarding shim."""
+    """Validate repository hook ownership and preserve Husky's forwarding shim.
+
+    A linked worktree may run the hooks of the repository's common checkout.
+    """
+    owner = root
     if not hook.parent.resolve().is_relative_to(root):
         common = Path(
             subprocess.check_output(
@@ -57,11 +61,14 @@ def project_pre_push(root: Path, hook: Path) -> Path:
                 text=True,
             ).strip()
         ).resolve()
-        if hook.parent.resolve() != common / "hooks":
-            raise ValueError("Git hooks point outside this repository")
+        directory = hook.parent.resolve()
+        if directory != common / "hooks":
+            if common.name != ".git" or not directory.is_relative_to(common.parent):
+                raise ValueError("Git hooks point outside this repository")
+            owner, hook = common.parent, directory / hook.name
     shim = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"'
     if (
-        hook == root / ".husky/_/pre-push"
+        hook == owner / ".husky/_/pre-push"
         and not hook.is_symlink()
         and hook.is_file()
         and hook.read_text().rstrip("\n") == shim
