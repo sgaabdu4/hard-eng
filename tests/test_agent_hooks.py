@@ -12,7 +12,9 @@ from unittest.mock import Mock
 import agent_hooks
 import pytest
 import update
+from conftest import commit, git
 from gate_config import Group, JsonObject, affected_groups
+from shipping import ShippingPolicy
 
 
 @pytest.mark.parametrize("existing", ["none", "files", "symlink"])
@@ -642,3 +644,38 @@ def test_setup_migrates_codex_hook_status_without_duplicate(
     repeated: dict[str, str] = {}
     installer.configure_hooks(repository, repeated)
     assert repeated == changes
+
+
+def test_new_branch_zero_base_compares_with_default_branch(
+    repository: Path, shipping_policy: ShippingPolicy
+) -> None:
+    """A branch's first push changes only its own files, not the whole tree."""
+    from gate_config import changed_files
+
+    git(repository, "branch", "-M", "main")
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [], "shipping": shipping_policy})
+    )
+    (repository / "shared.py").write_text("shared = 1\n")
+    commit(repository, "default branch base")
+    bare = repository.parent / "origin.git"
+    git(repository, "init", "--bare", "-q", str(bare))
+    git(repository, "remote", "add", "origin", str(bare))
+    git(repository, "push", "-q", "origin", "main")
+    git(repository, "switch", "-qc", "task")
+    (repository / "task.py").write_text("task = 1\n")
+    commit(repository, "task work")
+    git(repository, "switch", "-q", "main")
+    (repository / "later.py").write_text("later = 1\n")
+    commit(repository, "default branch moved on")
+    git(repository, "push", "-q", "origin", "main")
+    everything = {"hard-eng.gates.json", "shared.py", "later.py"}
+    assert changed_files(repository, "0" * 40) == everything
+    git(repository, "switch", "-q", "task")
+    assert changed_files(repository, "0" * 40) == {"task.py"}
+    git(repository, "update-ref", "-d", "refs/remotes/origin/main")
+    assert changed_files(repository, "0" * 40) == {
+        "hard-eng.gates.json",
+        "shared.py",
+        "task.py",
+    }

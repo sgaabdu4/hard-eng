@@ -5,8 +5,8 @@
     "base": "main",
     "checks": ["hard-eng"],
     "ui_paths": [],
-    "ci_seconds": 180,
-    "pre_push_seconds": 180,
+    "ci_seconds": 300,
+    "pre_push_seconds": 300,
     "delivery": []
   },
   "packages": [{

@@ -1,6 +1,7 @@
 """Validate required documents and gate configuration before execution."""
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -333,9 +334,24 @@ def validate_dart_boundaries(
         )
 
 
+def initial_base(root: Path) -> str:
+    """A new branch compares with its shipping-base merge base, else the empty tree."""
+    from shipping import git, load_policy
+
+    try:
+        policy = load_policy(root, required=False)
+        branch = f"refs/remotes/origin/{policy['base']}" if policy else "HEAD"
+        merged = git(root, "merge-base", branch, "HEAD").strip()
+        if merged != git(root, "rev-parse", "HEAD").strip():
+            return merged
+    except ValueError:
+        pass
+    return git(root, "hash-object", "-w", "-t", "tree", os.devnull).strip()
+
+
 def changed_files(root: Path, base: str) -> set[str] | None:
     try:
-        initial = (len(base) in {40, 64} and set(base) == {"0"}) or (
+        if re.fullmatch(r"0{40}|0{64}", base) or (
             base == "HEAD"
             and subprocess.run(
                 ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
@@ -345,14 +361,8 @@ def changed_files(root: Path, base: str) -> set[str] | None:
                 check=False,
             ).returncode
             == 1
-        )
-        if initial:
-            base = subprocess.check_output(
-                ["git", "hash-object", "-w", "-t", "tree", "--stdin"],
-                input="",
-                cwd=root,
-                text=True,
-            ).strip()
+        ):
+            base = initial_base(root)
         changed = subprocess.check_output(
             ["git", "diff", "--name-only", "--no-renames", "-z", base, "--"],
             cwd=root,

@@ -478,6 +478,7 @@ def test_supported_update_migrates_custom_workflow_pins(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
     completed_plan: str,
+    shipping_policy: ShippingPolicy,
 ) -> None:
     source, target, _ = release
     workflow = target / ".github/workflows/hard-eng.yml"
@@ -486,17 +487,30 @@ def test_supported_update_migrates_custom_workflow_pins(
         expected.replace(
             "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
             "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5",
-        ).replace(
+        )
+        .replace(
             "703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0",
             "c9883cc79df532ad1a7b81bf9ab944ceb090d65c # v2.0.0",
+        )
+        .replace(
+            expected[expected.index("on:\n") : expected.index("\n\npermissions:") + 1],
+            "on:\n  push:\n    branches-ignore:\n      - 'feature/**'\n  pull_request:\n",
+            1,
+        )
+        .replace(
+            "${{ inputs.base_sha || github.event.pull_request.base.sha",
+            "${{ github.event.pull_request.base.sha",
+            1,
         )
     )
     (target / "package.json").unlink()
     config_path = target / "hard-eng.gates.json"
     config = json.loads(config_path.read_text())
     config["shared"][0]["command"] = ["python3", "-c", "print('application passes')"]
+    config["shipping"] = shipping_policy
     config_path.write_text(json.dumps(config))
     commit(target, "custom workflow baseline")
+    git(target, "branch", "-M", shipping_policy["base"])
     remote = target.parent / "workflow-remote.git"
     git(target, "clone", "--bare", str(target), str(remote))
     git(target, "remote", "add", "origin", str(remote))
