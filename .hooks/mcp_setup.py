@@ -186,7 +186,7 @@ def sentry_server(root: Path) -> JsonObject | None:
 
 
 def marionette_server(root: Path) -> JsonObject | None:
-    """Pin the server to the app's package; connect rejects a version mismatch."""
+    """Register for any Flutter app; pin to the locked package when present."""
     import yaml
     from gate_config import nonproduction_source, repository_files
 
@@ -197,10 +197,14 @@ def marionette_server(root: Path) -> JsonObject | None:
         if {".agents", ".claude", ".hooks"} & set(relative.parts):
             continue
         manifest = yaml.safe_load(path.read_text())
-        if "marionette_flutter" not in {
+        dependencies = {
             **(manifest.get("dependencies") or {}),
             **(manifest.get("dev_dependencies") or {}),
-        }:
+        }
+        if not any(
+            isinstance(value, dict) and value.get("sdk") == "flutter"
+            for value in dependencies.values()
+        ):
             continue
         lock = path.parent / "pubspec.lock"
         locked = (

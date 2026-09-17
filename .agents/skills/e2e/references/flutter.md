@@ -17,8 +17,8 @@ flowchart TD
 
 ## Server registration
 
-- Trigger = a `marionette_flutter` entry in `pubspec.yaml`. Hard Eng setup/update then registers the `marionette` server as `dart run marionette_mcp@<pubspec.lock version>`, falling back to `dart run marionette_mcp@` (latest) when the lock has no entry. No `dart pub global activate`.
-- Detection runs only when setup installs or an update applies a newer verified revision; existing MCP entries are preserved, so a written pin does not follow a later lock upgrade. When no update is due, or after upgrading `marionette_flutter`, add or edit the `marionette` entry in `.mcp.json` (and `.codex/config.toml`) by hand with the same command.
+- Trigger = any Flutter app (a `flutter` SDK dependency in `pubspec.yaml`). Hard Eng setup/update registers the `marionette` server as `dart run marionette_mcp@<pubspec.lock version>` when the lock records `marionette_flutter`, otherwise `dart run marionette_mcp@` (latest). No `dart pub global activate`. Registration alone drives nothing: the app binding below is still required.
+- Detection runs only when setup installs or an update applies a newer verified revision; existing MCP entries are preserved, so a written pin does not follow a later lock upgrade. After adding or upgrading `marionette_flutter`, edit the `marionette` entry in `.mcp.json` (and `.codex/config.toml`) by hand to the locked version.
 - Servers load at session start → start a new agent session after registration. Absent tools in the registering session are not a failed install.
 
 ## App binding

@@ -370,7 +370,7 @@ MARIONETTE_LOCK = (
         ),
         (
             {
-                "pubspec.yaml": "name: app\ndependencies:\n  marionette_flutter: ^0.6.0\n",
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n  marionette_flutter: ^0.6.0\n",
                 "pubspec.lock": MARIONETTE_LOCK,
             },
             {"dart", "marionette"},
@@ -378,15 +378,22 @@ MARIONETTE_LOCK = (
         ),
         (
             {
-                "pubspec.yaml": "name: app\ndev_dependencies:\n  marionette_flutter: ^0.6.0\n"
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\ndev_dependencies:\n  marionette_flutter: ^0.6.0\n"
             },
             {"dart", "marionette"},
             ["run", "marionette_mcp@"],
         ),
         (
             {
-                "pubspec.yaml": "name: app\ndev_dependencies:\n  marionette_flutter: ^0.6.0\n",
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\ndev_dependencies:\n  marionette_flutter: ^0.6.0\n",
                 "pubspec.lock": MARIONETTE_LOCK.replace("marionette_flutter", "meta"),
+            },
+            {"dart", "marionette"},
+            ["run", "marionette_mcp@"],
+        ),
+        (
+            {
+                "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n"
             },
             {"dart", "marionette"},
             ["run", "marionette_mcp@"],
@@ -396,13 +403,18 @@ MARIONETTE_LOCK = (
                 "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n",
                 "pubspec.lock": MARIONETTE_LOCK,
             },
-            {"dart"},
-            None,
+            {"dart", "marionette"},
+            ["run", "marionette_mcp@0.6.0"],
         ),
         (
             {
                 "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\ndev_dependencies:\n"
             },
+            {"dart", "marionette"},
+            ["run", "marionette_mcp@"],
+        ),
+        (
+            {"pubspec.yaml": "name: tool\ndependencies:\n  meta: ^1.0.0\n"},
             {"dart"},
             None,
         ),
