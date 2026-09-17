@@ -10,7 +10,7 @@ import tomllib
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from fallow_report import fallow_report_path, validate_fallow_command
+from fallow_report import fallow_report_path, validate_scanner_command
 from gate_config import (
     GateConfig,
     Group,
@@ -132,7 +132,7 @@ def validate_command_output(
         raise ValueError(
             "Verification cannot suppress all Node warnings; repair the warning owner or use a justified narrow native exception"
         )
-    validate_fallow_command(arguments, report)
+    validate_scanner_command(arguments, report)
 
 
 def is_shell_script(path: Path) -> bool:
@@ -351,7 +351,7 @@ def adapt_boundaries(package: Group, typescript: set[str]) -> None:
                 "name": "lint:boundaries",
                 "role": "boundaries",
                 "command": (
-                    ["dart-decimate", "check", ".", "--boundary-violations"]
+                    ["dart-decimate", "check", ".", "--boundary-violations", "--strict"]
                     if package.get("language") == "dart"
                     else ["pnpm", "run", "lint:boundaries"]
                 ),
@@ -580,6 +580,7 @@ def adapt_javascript(directory: Path, package: Group, manager: str) -> None:
                     "full",
                     "--blocking",
                     "warning",
+                    "--no-respect-inline-disables",
                     "--json",
                     "--json-out",
                     "coverage/react-doctor.json",

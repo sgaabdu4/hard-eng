@@ -115,6 +115,9 @@ def test_gate_rejects_disabled_fallow_metric_before_execution(
     with pytest.raises(ValueError, match="require a native fallow report"):
         validate_gate(gate, tmp_path, set())
     gate["report"] = {"type": "fallow", "path": "audit.json"}
+    with pytest.raises(ValueError, match="add --gate all"):
+        validate_gate(gate, tmp_path, set())
+    gate["command"] = [*prefix, "audit", "--gate=all", "--max-crap", "30"]
     validate_gate(gate, tmp_path, set())
 
 
@@ -314,14 +317,14 @@ def test_native_tools_install_before_reading_environment(
     [
         (
             "dart-decimate",
-            "dart-decimate check . --threshold 0 --format json",
+            "dart-decimate check . --threshold 0 --strict --format json",
             'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest',
             True,
-            ["check", ".", "--threshold", "0", "--format", "json"],
+            ["check", ".", "--threshold", "0", "--strict", "--format", "json"],
         ),
         (
             "react-doctor",
-            "react-doctor --scope full --blocking warning --json --json-out coverage/react.json",
+            "react-doctor --scope full --blocking warning --no-respect-inline-disables --json --json-out coverage/react.json",
             "npm:react-doctor@latest",
             False,
             [
@@ -329,6 +332,7 @@ def test_native_tools_install_before_reading_environment(
                 "full",
                 "--blocking",
                 "warning",
+                "--no-respect-inline-disables",
                 "--json",
                 "--json-out",
                 "coverage/react.json",
@@ -370,7 +374,11 @@ def test_package_script_dart_boundary_gate_checks_native_configuration(
 ) -> None:
     (tmp_path / "package.json").write_text(
         json.dumps(
-            {"scripts": {"audit": "dart-decimate check . --boundary-violations"}}
+            {
+                "scripts": {
+                    "audit": "dart-decimate check . --boundary-violations --strict"
+                }
+            }
         )
     )
     group: Group = {"path": ".", "language": "dart", "checks": []}
