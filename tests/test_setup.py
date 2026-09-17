@@ -163,7 +163,7 @@ def test_existing_gate_config_gets_boundary_gate_once(
             'name: fixture\nenvironment:\n  sdk: ">=3.10.0 <4.0.0"\n'
         )
         (tmp_path / "app.dart").write_text("const value = 1;\n")
-        command = ["dart-decimate", "check", ".", "--boundary-violations"]
+        command = ["dart-decimate", "check", ".", "--boundary-violations", "--strict"]
     else:
         (tmp_path / "app.ts").write_text("export const value = 1;\n")
         command = ["pnpm", "run", "lint:boundaries"]
@@ -211,7 +211,7 @@ def test_dart_boundary_gate_requires_blocking_project_rules(
         "check_output",
         native_config,
     )
-    command = ["dart-decimate", "check", ".", "--boundary-violations"]
+    command = ["dart-decimate", "check", ".", "--boundary-violations", "--strict"]
     if valid:
         validate_dart_boundaries(command, tmp_path, 5)
     else:

@@ -302,7 +302,7 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
 def validate_dart_boundaries(
     command: list[str], directory: Path, timeout: float
 ) -> None:
-    if command != ["dart-decimate", "check", ".", "--boundary-violations"]:
+    if command[:4] != ["dart-decimate", "check", ".", "--boundary-violations"]:
         return
     from tool_setup import managed_command
 

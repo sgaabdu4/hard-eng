@@ -445,7 +445,7 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
             {
                 "name": "dead-code",
                 "role": "dead-code-duplicates",
-                "command": ["fallow"],
+                "command": ["fallow", "--fail-on-issues"],
             },
             {
                 "name": "performance",

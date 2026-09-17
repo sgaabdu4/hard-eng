@@ -106,36 +106,88 @@ def _chain_commands(commands: list[list[str]]) -> list[str]:
     ]
 
 
-def native_fallow_command(arguments: list[str]) -> list[str] | None:
+SCANNERS = {"fallow", "dart-decimate", "react-doctor"}
+TOLERANCE_FLAGS = {
+    "--baseline",
+    "--save-baseline",
+    "--dead-code-baseline",
+    "--health-baseline",
+    "--dupes-baseline",
+    "--regression-baseline",
+    "--fail-on-regression",
+    "--tolerance",
+}
+
+
+def native_scanner_command(arguments: list[str]) -> list[str] | None:
+    """Return a scanner executable with its arguments behind package-manager prefixes."""
     if arguments[:2] in (["pnpm", "dlx"], ["pnpm", "exec"]):
         arguments = arguments[2:]
         while arguments and arguments[0].startswith(("--package=", "--allow-build=")):
             arguments = arguments[1:]
-    if not arguments or Path(arguments[0]).name.split("@", 1)[0] != "fallow":
+    if not arguments:
         return None
-    return ["fallow", *arguments[1:]]
+    executable = Path(arguments[0]).name.split("@", 1)[0]
+    return [executable, *arguments[1:]] if executable in SCANNERS else None
 
 
-def validate_fallow_command(arguments: list[str], report: Report) -> None:
-    invocation = native_fallow_command(arguments)
+def native_fallow_command(arguments: list[str]) -> list[str] | None:
+    invocation = native_scanner_command(arguments)
+    return invocation if invocation and invocation[0] == "fallow" else None
+
+
+def option(invocation: list[str], flag: str) -> str | None:
+    for index, argument in enumerate(invocation):
+        key, separator, value = argument.partition("=")
+        if key == flag:
+            return value if separator else next(iter(invocation[index + 1 :]), "")
+    return None
+
+
+def fallow_failure(invocation: list[str], report: Report) -> str | None:
+    crap = option(invocation, "--max-crap")
+    if crap is not None and (not math.isfinite(float(crap)) or float(crap) <= 0):
+        return "Fallow CRAP enforcement cannot be disabled; repair its coverage input"
+    if "audit" not in invocation:
+        if "--fail-on-issues" not in invocation:
+            return "Fallow scans must fail on every finding; add --fail-on-issues"
+        return None
+    if report.get("type") != "fallow":
+        return "Fallow audit gates require a native fallow report; exit status alone cannot prove enabled metrics"
+    if option(invocation, "--gate") != "all":
+        return (
+            "Fallow audit must fail on every finding, not only new ones; add --gate all"
+        )
+    return None
+
+
+def scanner_failure(invocation: list[str], report: Report) -> str | None:
+    if invocation[0] == "dart-decimate":
+        if "check" in invocation and "--strict" not in invocation:
+            return "dart-decimate check must fail on every finding; add --strict"
+    elif invocation[0] == "react-doctor":
+        if option(invocation, "--blocking") != "warning":
+            return "React Doctor must fail on warnings; use --blocking warning"
+        if "--no-respect-inline-disables" not in invocation:
+            return "React Doctor must not honour inline suppressions; add --no-respect-inline-disables"
+    else:
+        return fallow_failure(invocation, report)
+    return None
+
+
+def validate_scanner_command(arguments: list[str], report: Report) -> None:
+    """Every finding fails; none may be baselined, tolerated or suppressed."""
+    invocation = native_scanner_command(arguments)
     if invocation is None:
         return
-    for index, argument in enumerate(invocation):
-        flag, separator, value = argument.partition("=")
-        if flag == "--max-crap":
-            value = (
-                value
-                if separator
-                else next(iter(invocation[index + 1 : index + 2]), "")
+    for argument in invocation:
+        if argument.partition("=")[0] in TOLERANCE_FLAGS:
+            raise ValueError(
+                f"{invocation[0]} cannot tolerate existing findings with {argument}; repair every reported finding and commit the repair before continuing"
             )
-            if not math.isfinite(float(value)) or float(value) <= 0:
-                raise ValueError(
-                    "Fallow CRAP enforcement cannot be disabled; repair its coverage input"
-                )
-    if "audit" in invocation and report.get("type") != "fallow":
-        raise ValueError(
-            "Fallow audit gates require a native fallow report; exit status alone cannot prove enabled metrics"
-        )
+    failure = scanner_failure(invocation, report)
+    if failure is not None:
+        raise ValueError(failure)
 
 
 def fallow_report_path(arguments: list[str]) -> str | None:
