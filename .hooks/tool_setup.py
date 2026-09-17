@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from fallow_report import native_fallow_command
+from fallow_report import native_scanner_command
 from gate_config import Group
 from project_setup import package_script_invocation
 
@@ -50,16 +50,7 @@ def managed_command(command: list[str], directory: Path | None = None) -> list[s
 def managed_scanner_command(command: list[str], directory: Path) -> list[str]:
     """Keep supported scanner arguments without a stale package-local binary."""
     arguments, resolved = package_script_invocation(command, directory)
-    invocation = native_fallow_command(arguments)
-    candidate = (
-        arguments[2:]
-        if arguments[:2] in (["pnpm", "dlx"], ["pnpm", "exec"])
-        else arguments
-    )
-    if invocation is None and candidate:
-        executable = Path(candidate[0]).name.split("@", 1)[0]
-        if executable in NATIVE_SCANNERS:
-            invocation = [executable, *candidate[1:]]
+    invocation = native_scanner_command(arguments)
     if invocation is not None:
         scanner = (
             "Fallow" if invocation[0] == "fallow" else NATIVE_SCANNERS[invocation[0]]

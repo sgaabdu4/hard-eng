@@ -33,7 +33,7 @@ def test_delegated_fallow_reuses_only_its_completed_coverage_owner(
         "scripts": {
             "test:coverage": "node --test",
             "check:fallow": "pnpm run test:coverage && pnpm run scan",
-            "scan": "fallow audit --max-crap 30 --format json --output-file coverage/fallow.json",
+            "scan": "fallow audit --gate all --max-crap 30 --format json --output-file coverage/fallow.json",
         }
     }
     (tmp_path / "package.json").write_text(json.dumps(manifest))
@@ -80,6 +80,8 @@ def test_delegated_fallow_reuses_only_its_completed_coverage_owner(
     ) == [
         "managed",
         "audit",
+        "--gate",
+        "all",
         "--max-crap",
         "30",
         "--format",
@@ -650,3 +652,42 @@ def test_junit_rejects_entities(tmp_path: Path) -> None:
     path.write_text(f"<!DOCTYPE testsuite [{entities}]><testsuite>&h;</testsuite>")
     with pytest.raises(ET.ParseError, match="amplification"):
         reports.completed_tests(path, "python-tests")
+
+
+@pytest.mark.parametrize(
+    ("command", "message"),
+    [
+        ("dart-decimate check . --boundary-violations", "add --strict"),
+        ("dart-decimate check lib --strict --tolerance 1", "tolerate"),
+        ("dart-decimate check . --strict --regression-baseline=x", "tolerate"),
+        ("pnpm dlx dart-decimate@latest check . --fail-on-regression", "tolerate"),
+        ("react-doctor --scope full --blocking warning", "no-respect-inline-disables"),
+        ("react-doctor --blocking error --no-respect-inline-disables", "--blocking"),
+        ("react-doctor --no-respect-inline-disables", "--blocking warning"),
+        ("fallow --fail-on-issues --dead-code-baseline x", "tolerate"),
+        ("fallow --only dead-code,dupes --format json", "add --fail-on-issues"),
+        ("fallow audit --gate all --save-baseline", "tolerate"),
+        ("fallow audit --gate new", "add --gate all"),
+    ],
+)
+def test_gate_rejects_tolerated_or_suppressed_findings(
+    tmp_path: Path, command: str, message: str
+) -> None:
+    gate: Gate = {"name": "scan", "command": command.split()}
+    if command.startswith("fallow audit"):
+        gate["report"] = {"type": "fallow", "path": "audit.json"}
+    with pytest.raises(ValueError, match=message):
+        validate_gate(gate, tmp_path, set())
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "dart-decimate check . --boundary-violations --strict",
+        "dart-decimate check . --threshold 0 --strict --format json",
+        "react-doctor --blocking=warning --no-respect-inline-disables --json",
+        "fallow --only dead-code,dupes --fail-on-issues",
+    ],
+)
+def test_gate_accepts_strict_scanner_commands(tmp_path: Path, command: str) -> None:
+    validate_gate({"name": "scan", "command": command.split()}, tmp_path, set())
