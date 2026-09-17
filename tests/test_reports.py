@@ -408,6 +408,7 @@ def test_incomplete_report_fails(kind: str, content: str, tmp_path: Path) -> Non
         ("react-doctor", '"complete":true', '"complete":false'),
         ("react-doctor", '"analyzedFileCount":1', '"analyzedFileCount":2'),
         ("react-doctor", '"skippedChecks":[]', '"skippedChecks":["lint"]'),
+        ("dart-decimate", '"tool":"dart-decimate"', '"tool":"other-tool 1.0.0"'),
         ("dart-decimate", '"findings":[]', '"findings":[{}]'),
         ("dart-decimate", '"dead_files":0', '"dead_files":1'),
         ("dart-decimate", '"files":1', '"files":0'),
@@ -425,6 +426,16 @@ def test_findings_and_empty_analysis_fail(
     path.write_text(REPORTS[kind].replace(old, new))
     with pytest.raises(ValueError):
         reports.SCANNERS[kind](path)
+
+
+@pytest.mark.parametrize(
+    "tool", ["dart-decimate", "dart-decimate 0.0.44", "dart-decimate 0.1.0-beta.1"]
+)
+def test_dart_decimate_accepts_versioned_tool_name(tmp_path: Path, tool: str) -> None:
+    path = tmp_path / "report.json"
+    content = REPORTS["dart-decimate"].replace('"dart-decimate"', f'"{tool}"')
+    path.write_text(content)
+    reports.validate_dart_decimate(path)
 
 
 def test_trivy_repository_config_retains_failure_checks(tmp_path: Path) -> None:
