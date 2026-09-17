@@ -38,4 +38,23 @@ Draft Stop requires an explicit `Handoff: Clarification` with a real prerequisit
 
 Plan-only edits after a matching passed baseline → use the same stage command with `--base HEAD` to validate the plan and affected checks. The baseline must cover the current code/configuration/environment; the base flag cannot substitute for that proof. Uncommitted code/config changes remain in the comparison, unknown impact retains full scope, and required pre-push/CI checks still run. Do not repeat the whole application suite solely for plan wording or a Draft-to-Ready declaration change.
 
-The check validates structure + declarations, not evidence truth, approval, relevance or delivery chronology. A passing Draft/Ready run is not implementation completion. Baseline Exception is rejected. If the Ready or Complete command fails, return the same plan to Draft with the actual blocker; do not replace failure with N/A or leave a false Ready/Complete claim. Starting failures follow [HE Plan's baseline repair route](../../he-plan/SKILL.md#baseline-repair); build regressions stay in their current effort. Neither route may weaken checks to bypass actual findings.
+The check validates structure + declarations, not evidence truth, approval, relevance or delivery chronology. A passing Draft/Ready run is not implementation completion. Baseline Exception is rejected. If the Ready or Complete command fails, return the same plan to Draft with the actual blocker; do not replace failure with N/A or leave a false Ready/Complete claim. Starting failures follow [baseline repair](#baseline-repair); build regressions stay in their current effort. Neither route may weaken checks to bypass actual findings.
+
+## Baseline repair
+
+```mermaid
+flowchart TD
+  F[Failed baseline: feature stays Draft + blocked] --> A{Repair + main delivery authorized?}
+  A -->|No| Q[Resolve only missing scope or prerequisite]
+  A -->|Yes| R[Separate repair plan + task branch]
+  R --> B[HE Build: baseline repairs only from truthful Draft]
+  B --> C[All native checks pass + repair plan Complete]
+  C --> S[HE Ship: merge repairs + verify main CI and delivery]
+  S --> N[Fresh feature branch from verified main + new baseline]
+  click B "../../he-build/SKILL.md"
+  click S "../../he-ship/SKILL.md"
+```
+
+- Repair scope = all actual enforced baseline failures, including pre-existing debt; age or effort is not an exemption. Correct proven false positives only under the existing [native exception rule](#adapt--repair-checks). Reuse valid user authorization; otherwise ask for the missing repair/delivery scope.
+- Repair is the sole failed-baseline implementation route: record failures, bounded repair steps + intended proof before edits. Preserve the original failed evidence; after repair, record the passing rerun as current baseline and complete normal build checks. Never declare Ready while checks fail.
+- Feature resumes only after the repair revision is on the intended main branch and required CI/delivery checks pass. An open PR or local pass is insufficient. Keep repair and feature plans/diffs separate; apply the feature's original authorization and readiness rules after updating its baseline.

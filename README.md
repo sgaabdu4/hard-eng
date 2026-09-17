@@ -81,10 +81,11 @@ flowchart TD
   D -->|No| R[Separate authorized repair]
   R --> V[Merge repair and verify main]
   V --> A
-  D -->|Yes| E{Ready check passes?}
+  D -->|Yes| J[Resolve proposal choices; Draft Approval while waiting]
+  J --> E{Ready check passes?}
   E -->|No| B
   E -->|Yes| F{Participation mode}
-  F -->|Human-led| G[Approve plan, UX, and execution approach]
+  F -->|Human-led| G[Reuse or obtain approval of plan, UX, and execution approach]
   G --> H[Ready for Build]
   F -->|Autonomous and authorized| H
 ```
@@ -97,7 +98,7 @@ For new feature work, reuse your participation choice or ask once. **Human-led**
 
 Charting stops after preparing the map. Later sessions resolve one decision ticket at a time, except research; authorized independent research may run in parallel. Human-choice and prototype decisions need your answer or verdict. Once direction is clear, return to normal planning. Use an existing authorized tracker or local Markdown, without installing another tracker.
 
-[Research](.agents/skills/research/SKILL.md) supplies evidence; [Codebase Design](.agents/skills/codebase-design/SKILL.md) helps with architecture/domain questions; [UX guidance](.agents/skills/he-plan/references/ux.md) governs real-screen previews.
+[Research](.agents/skills/research/SKILL.md) supplies evidence; [Codebase Design](.agents/skills/codebase-design/SKILL.md) helps with architecture/domain questions; [UX guidance](.agents/skills/he-plan/references/ux.md) covers lightweight mocks and actual-app previews.
 
 ```mermaid
 flowchart TD
