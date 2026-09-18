@@ -73,7 +73,12 @@ def gate_config(root: Path) -> GateConfig:
             else:
                 package["checks"].insert(0, gate)
     if not packages:
-        raise ValueError("No supported project manifest found")
+        raise ValueError(
+            "No supported project manifest found. New project: ask the user which type to create "
+            "(Python, Flutter, Next.js or OpenNext on Cloudflare) unless their request says, "
+            "create it with that stack's official scaffold command, then rerun setup. "
+            "A new Flutter app uses Riverpod per .agents/skills/building-flutter-apps."
+        )
     config: GateConfig = {"version": 1, "packages": packages, "shared": shared}
     adapt_packages(root, config)
     return config
@@ -658,6 +663,7 @@ def install(root: Path, previous: Path | None = None) -> None:
         "MCP entries still need host loading and authentication. In Codex, inspect `codex mcp list`; use `codex mcp login <name>` for an unauthenticated OAuth server, then verify a real call in the task."
     )
     print("Then run: python3 .hooks/hard-eng.py check")
+    print("Start a new agent session so it loads the installed skills.")
 
 
 if __name__ == "__main__":

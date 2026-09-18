@@ -20,6 +20,7 @@ curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | s
 
 | Starting point | What happens |
 | --- | --- |
+| Empty repository | Setup stops. The agent asks which project type to create (Python, Flutter, Next.js or OpenNext on Cloudflare) unless the request says, creates it, then reruns setup. New Flutter apps use Riverpod. |
 | New project | Install the scaffold; establish product/design context, checks, and intended integrations. |
 | Existing project | Preserve custom instructions, skills, hooks, and configuration; report genuine conflicts. |
 | Hard Eng already installed | Select a newer CI-verified revision when available, verify an isolated candidate, then apply changes and create a local update commit. |
@@ -33,10 +34,10 @@ flowchart TD
   B -->|No| C[Run published setup command]
   C --> D{Managed installation exists?}
   D -->|No| E{Existing project files?}
-  E -->|No| N[Prepare new-project scaffold]
+  E -->|No| N[Ask project type; create project]
+  N --> C
   E -->|Yes| P[Prepare scaffold preserving project-owned content]
-  N --> F{Setup conflicts?}
-  P --> F
+  P --> F{Setup conflicts?}
   F -->|Yes| X[Report blocker; preserve work and existing gates]
   F -->|No| I[Install scaffold]
   D -->|Yes| V{Newer CI-verified revision?}
@@ -49,7 +50,8 @@ flowchart TD
   Q -->|Yes| U[Apply update and make local commit]
   R -->|No| X
   R -->|Yes| Z[Resolve missing checks and service choices]
-  I --> Z
+  I --> S[Start a new agent session to load skills]
+  S --> Z
   H --> Z
   U --> Z
   Z --> W[Load project context and select task stage]
