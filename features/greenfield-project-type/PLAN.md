@@ -44,5 +44,5 @@ Result: Passed
 E2E: Passed — this checkout's `setup.py` against an empty scratch Git repository printed the project-type question, exited 1 and wrote nothing; against a fresh `flutter create --platforms=macos --empty` app it installed, linked `building-flutter-apps` and printed "Start a new agent session so it loads the installed skills."
 Evidence: `test_missing_project_manifest_fails` failed with `setup.py` stashed and passed after. `hard-eng.py check --base origin/main` exit 0: all 17 checks passed, 770 tests and 4 performance checks.
 
-Delivery target: PR
-Delivery: Pending — PR opened; exact PR CI and merge remain unverified.
+Delivery target: Merge
+Delivery: Pending — PR #120 CI passed on 22e5009; the user authorized merging once CI passes. Merge and merged-main CI remain unverified.
