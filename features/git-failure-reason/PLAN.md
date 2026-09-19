@@ -43,4 +43,4 @@ E2E: Passed — the real runner in this checkout, outside pytest, printed `Hard 
 Evidence: The new test failed before the change and passes after; `tests/test_shipping.py` and `tests/test_ship_actions.py` 89 passed. The full check result is recorded in the delivery line below.
 
 Delivery target: Merge
-Delivery: Pending — the full check has not run yet.
+Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks passed, 776 tests and 4 performance checks. PR CI, merge, merged-main CI and cleanup remain unverified.
