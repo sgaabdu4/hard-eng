@@ -442,6 +442,11 @@ def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) 
         _check_revision(run, revision)
         if run.get("status") != "completed":
             raise PendingCheck(f"required check has not completed: {name}")
+        if run.get("conclusion") == "skipped":
+            raise ShippingError(
+                f"required check was skipped: {name}; a required job must always "
+                "conclude, so put path conditions on its steps, not the job"
+            )
         if run.get("conclusion") != "success":
             raise ShippingError(f"required check is not successful: {name}")
         started = _timestamp(run.get("started_at"), f"check {name}")

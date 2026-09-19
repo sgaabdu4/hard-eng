@@ -379,7 +379,6 @@ def test_ready_rejects_pr_identity_and_mergeability(
     "changes",
     [
         {"status": "in_progress"},
-        {"conclusion": "skipped"},
         {"conclusion": "failure"},
         {"head_sha": "a" * 40},
         {"truncated": True},
@@ -396,6 +395,18 @@ def test_ready_rejects_noncurrent_or_unsuccessful_checks(
     fake = FakeGitHub(_pull(fixture), [_check(fixture.head, **changes)])
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError):
+        shipping.verify(
+            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
+        )
+
+
+def test_skipped_required_check_names_the_job_level_condition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    skipped = _check(fixture.head, conclusion="skipped")
+    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [skipped]))
+    with pytest.raises(shipping.ShippingError, match="was skipped: build.*steps"):
         shipping.verify(
             fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
         )
