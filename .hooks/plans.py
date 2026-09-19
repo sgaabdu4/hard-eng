@@ -42,8 +42,12 @@ def report_stage(failed: bool, stage: str | None) -> None:
 
 def field(content: str, name: str) -> str:
     values = re.findall(rf"(?m)^{re.escape(name)}: *(.*)$", content)
-    if len(values) != 1 or not values[0].strip():
-        raise ValueError(f"plan needs one filled '{name}:' field")
+    if len(values) != 1:
+        raise ValueError(f"plan needs one '{name}:' field, found {len(values)}")
+    if not values[0].strip():
+        raise ValueError(
+            f"'{name}:' needs text on the label's line; a list may follow it"
+        )
     return values[0].strip()
 
 
@@ -245,7 +249,10 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
         )
         if any(marker.lower() != "x" for marker in markers):
             raise ValueError("complete plan has unchecked requirements")
-        proof(verification, {"Passed"})
+        try:
+            proof(verification, {"Passed"})
+        except ValueError as error:
+            raise ValueError(f"Verification: {error}") from error
     return status
 
 

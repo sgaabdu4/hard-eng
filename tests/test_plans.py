@@ -164,6 +164,11 @@ def test_deploy_plan_requires_verifier_before_handoff(
         ("Status: Complete", "Status: Approved", "Status"),
         ("Evidence:", "Missing evidence:", "Evidence"),
         (
+            "Evidence: The test asserts the observed command exit; this is fixture data.",
+            "Evidence:\n- The test asserts the observed command exit.",
+            "Verification: 'Evidence:' needs text on the label's line",
+        ),
+        (
             "Controlled fixture baseline; not production acceptance.",
             "Pending",
             "Evidence",
