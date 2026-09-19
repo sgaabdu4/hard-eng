@@ -168,6 +168,32 @@ def test_cleanup_preserves_submodules_even_when_git_ignores_them(
     assert ship_actions.remote_branch(root, "origin", shipment.branch) == original_head
 
 
+def test_cleanup_removes_task_with_uninitialized_submodule(
+    delivered_worktree: tuple[Path, Shipment], tmp_path: Path
+) -> None:
+    root, shipment = delivered_worktree
+    module = tmp_path / "module"
+    git(tmp_path, "init", "-q", str(module))
+    git(module, "config", "user.name", "Ship Fixture")
+    git(module, "config", "user.email", "ship-fixture@example.test")
+    (module / "work.txt").write_text("baseline")
+    git(module, "add", "work.txt")
+    git(module, "commit", "-qm", "module baseline")
+    allow = ("-c", "protocol.file.allow=always")
+    git(shipment.root, *allow, "submodule", "add", "-q", str(module), "component")
+    git(shipment.root, "commit", "-qm", "include module")
+    git(shipment.root, "submodule", "deinit", "-q", "-f", "component")
+    git(shipment.root, "push", "-q", "origin", shipment.branch)
+    shipment = replace(
+        shipment, head_sha=git(shipment.root, "rev-parse", "HEAD").strip()
+    )
+    assert git(shipment.root, "submodule", "status").startswith("-")
+    ship_actions.cleanup(root, shipment)
+    assert not shipment.root.exists()
+    assert git(root, "branch", "--list", shipment.branch).strip() == ""
+    assert ship_actions.remote_branch(root, shipment.remote, shipment.branch) is None
+
+
 def test_cleanup_rejects_remote_branch_reuse(
     delivered_worktree: tuple[Path, Shipment],
 ) -> None:
