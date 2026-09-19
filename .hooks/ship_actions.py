@@ -211,7 +211,8 @@ def cleanup(coordinator: Path, shipment: Shipment) -> None:
     if tracking in references.splitlines():
         git(coordinator, "update-ref", "-d", tracking, shipment.head_sha)
     cleanup_guard(coordinator, shipment)
-    git(coordinator, "worktree", "remove", str(shipment.root))
+    # Git refuses any worktree with a submodule gitlink; the guard proved it clean.
+    git(coordinator, "worktree", "remove", "--force", str(shipment.root))
     print(f"Removed task worktree {shipment.root}", flush=True)
     git(
         coordinator,
