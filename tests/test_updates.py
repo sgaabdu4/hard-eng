@@ -216,7 +216,7 @@ exit $c
         reject_shim.write_bytes(shim_bytes)
         reject_shim.chmod(0o755)
         (target / ".husky/pre-commit").write_text("#!/bin/sh\nexit 23\n")
-        with pytest.raises(subprocess.CalledProcessError):
+        with pytest.raises(subprocess.SubprocessError):
             update.update(target)
         assert launcher.read_bytes() == old_launcher
         assert (target / update.SOURCE_FILE).read_bytes() == old_marker
@@ -530,9 +530,11 @@ def test_failed_commit_rolls_back_scaffold(
     source, target, old = release
     select_release(source, monkeypatch)
     hook = target / ".git/hooks/pre-commit"
-    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.write_text("#!/bin/sh\necho 'AGENTS.md is over its budget' >&2\nexit 1\n")
     hook.chmod(0o755)
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(
+        subprocess.SubprocessError, match="AGENTS.md is over its budget"
+    ):
         update.update(target)
     assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
     assert git(target, "status", "--porcelain") == ""
