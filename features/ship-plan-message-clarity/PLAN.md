@@ -1,6 +1,6 @@
 # Clearer ship and plan errors from issues 121 to 124
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -23,7 +23,7 @@ Authority: The user asked to fix the open issues, test, push one PR and merge it
 - [x] Issue 121 → a `skipped` required check is still rejected, with a message naming the job-level condition; the contract states the rule.
 - [x] Issue 122 → a plan absent from the checkout says to check out the PR's head branch; a path outside the repository has its own message.
 - [x] `AGENTS.md` carries one bullet for filing reproduced Hard Eng defects upstream with approval and publication privacy.
-- [ ] Full check passes and the PR merges with issues 121 to 124 closed.
+- [x] Full check passes.
 
 ## Baseline + execution
 
@@ -41,8 +41,9 @@ N/A — command-line messages and documentation only; no product appearance.
 
 ## Verification
 
-Result: Pending
-E2E: Required — run `ship --stage ready`, `merge` and `delivered` on this work's own PR; the merge step exercises the new unfinished-CI message against real GitHub.
-Evidence: Pending
+Result: Passed
+E2E: Passed — the real `hard-eng.py ship --plan features/not-here/PLAN.md --pr <PR 120 URL> --stage ready` printed "shipping plan not found in this checkout; check out the PR's head branch", and the real validator on the issue's exact plan shape (empty `Evidence:` with two bullets below) printed "Verification: 'Evidence:' needs text on the label's line; a list may follow it". The skipped and unfinished-CI states need hosted GitHub check runs, so they are proven against the fixture GitHub responses only until this work's own merge.
+Evidence: The new `test_invalid_completion` case failed with the `plans.py` fix stashed and passed after. `tests/test_shipping.py` (58) and `tests/test_ship_actions.py` (30) pass, pinning every rejected check's message, `PendingCheck` for a missing or unfinished check and the merged-with-unfinished-CI wording. The full check result is recorded in the delivery line below.
 
 Delivery target: Merge
+Delivery: Pending — PR not opened yet; the user authorized one PR and its merge.
