@@ -400,6 +400,17 @@ def test_required_check_that_has_not_started_is_pending_not_failed(
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
+def test_failed_git_command_reports_its_own_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LC_ALL", "C")
+    root = _fixture(tmp_path).root
+    with pytest.raises(shipping.ShippingError, match=r"^git query failed: fatal: \S"):
+        shipping.git(root, "rev-parse", "--verify", "missing")
+    with pytest.raises(shipping.ShippingError, match=r"^git query failed$"):
+        shipping.git(root, "rev-parse", "--verify", "--quiet", "missing")
+
+
 def test_ready_rejects_invalid_provider_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
