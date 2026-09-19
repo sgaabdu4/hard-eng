@@ -444,8 +444,7 @@ def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) 
             raise PendingCheck(f"required check has not completed: {name}")
         if run.get("conclusion") == "skipped":
             raise ShippingError(
-                f"required check was skipped: {name}; a required job must always "
-                "conclude, so put path conditions on its steps, not the job"
+                f"required check was skipped; gate its steps, not the job: {name}"
             )
         if run.get("conclusion") != "success":
             raise ShippingError(f"required check is not successful: {name}")
@@ -551,8 +550,12 @@ def _clean(root: Path) -> None:
 def _plan_target(root: Path, plan: Path) -> tuple[Path, str]:
     resolved_root = root.resolve()
     resolved_plan = plan.resolve()
-    if not resolved_plan.is_relative_to(resolved_root) or not resolved_plan.is_file():
-        raise ShippingError("shipping plan must be an existing repository file")
+    if not resolved_plan.is_relative_to(resolved_root):
+        raise ShippingError("shipping plan must be inside the repository")
+    if not resolved_plan.is_file():
+        raise ShippingError(
+            "shipping plan not found in this checkout; check out the PR's head branch"
+        )
     try:
         from plans import plan_sections, validate_plan
 

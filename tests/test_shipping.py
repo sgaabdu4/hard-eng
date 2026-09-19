@@ -400,13 +400,29 @@ def test_ready_rejects_noncurrent_or_unsuccessful_checks(
         )
 
 
+def test_plan_missing_from_checkout_says_to_check_out_the_pr_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [_check(fixture.head)]))
+    with pytest.raises(shipping.ShippingError, match="not found in this checkout"):
+        shipping.verify(
+            fixture.root,
+            fixture.root / "features/x/PLAN.md",
+            "https://github.com/acme/widget/pull/1",
+            "ready",
+        )
+
+
 def test_skipped_required_check_names_the_job_level_condition(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture = _fixture(tmp_path)
     skipped = _check(fixture.head, conclusion="skipped")
     _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [skipped]))
-    with pytest.raises(shipping.ShippingError, match="was skipped: build.*steps"):
+    with pytest.raises(
+        shipping.ShippingError, match="was skipped; gate its steps, not the job: build"
+    ):
         shipping.verify(
             fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
         )
