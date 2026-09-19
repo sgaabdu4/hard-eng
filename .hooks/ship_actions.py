@@ -8,7 +8,15 @@ import tempfile
 import time
 from pathlib import Path
 
-from shipping import Shipment, ShippingError, gh, git, load_policy, verify
+from shipping import (
+    PendingCheck,
+    Shipment,
+    ShippingError,
+    gh,
+    git,
+    load_policy,
+    verify,
+)
 from update import require_current
 
 
@@ -250,6 +258,11 @@ def run(
         )
         try:
             shipment = verify(target, plan_path, pr_url, "delivered")
+        except PendingCheck as error:
+            raise ShippingError(
+                f"Merged; base-branch CI has not finished ({error}). Run ship "
+                "--stage delivered once it completes; do not retry the merge."
+            ) from error
         except ShippingError as error:
             raise ShippingError(
                 "Merge command succeeded; post-merge delivery verification is pending "

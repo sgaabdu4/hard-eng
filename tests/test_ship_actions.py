@@ -12,7 +12,7 @@ from unittest.mock import Mock
 import pytest
 import ship_actions
 import update
-from shipping import Shipment, ShippingError, ShippingPolicy, git
+from shipping import PendingCheck, Shipment, ShippingError, ShippingPolicy, git
 
 
 @pytest.fixture
@@ -338,6 +338,23 @@ def test_ship_merge_reports_pending_delivery_after_merge_command(
 
     assert remote.called
     assert verified.call_args_list[-1].args[-1] == "delivered"
+
+
+def test_ship_merge_reports_unfinished_base_ci_as_merged_not_failed(
+    delivered_worktree: tuple[Path, Shipment], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, shipment = delivered_worktree
+    pending = PendingCheck("required check missing: hard-eng")
+    monkeypatch.setattr(ship_actions, "verify", Mock(side_effect=[shipment, pending]))
+    monkeypatch.setattr(ship_actions, "gh", Mock(return_value="Merged"))
+
+    with pytest.raises(ShippingError, match="Merged; base-branch CI") as raised:
+        ship_actions.run(
+            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "squash"
+        )
+
+    assert "failed" not in str(raised.value)
+    assert "ship --stage delivered" in str(raised.value)
 
 
 @pytest.mark.parametrize("with_submodule", [False, True])
