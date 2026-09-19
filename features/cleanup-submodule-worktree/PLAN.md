@@ -43,4 +43,4 @@ E2E: Passed — the new test builds real Git repositories (coordinator, bare ori
 Evidence: `tests/test_ship_actions.py` 30 passed, including the locked, dirty, ignored-file, added-commit and initialized-submodule protections. The full check result is recorded in the delivery line below.
 
 Delivery target: Merge
-Delivery: Pending — the full check has not run yet.
+Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks passed, 775 tests and 4 performance checks. A first run failed the duplicates check on copied test setup, repaired by one shared helper. PR CI, merge, merged-main CI and this task's own cleanup remain unverified.
