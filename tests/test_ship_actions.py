@@ -130,11 +130,7 @@ def test_cleanup_preserves_active_git_operation(
     )
 
 
-def test_cleanup_preserves_submodules_even_when_git_ignores_them(
-    delivered_worktree: tuple[Path, Shipment], tmp_path: Path
-) -> None:
-    root, shipment = delivered_worktree
-    original_head = shipment.head_sha
+def _with_submodule(shipment: Shipment, tmp_path: Path) -> Shipment:
     module = tmp_path / "module"
     git(tmp_path, "init", "-q", str(module))
     git(module, "config", "user.name", "Ship Fixture")
@@ -142,20 +138,19 @@ def test_cleanup_preserves_submodules_even_when_git_ignores_them(
     (module / "work.txt").write_text("baseline")
     git(module, "add", "work.txt")
     git(module, "commit", "-qm", "module baseline")
-    git(
-        shipment.root,
-        "-c",
-        "protocol.file.allow=always",
-        "submodule",
-        "add",
-        "-q",
-        str(module),
-        "component",
-    )
+    allow = ("-c", "protocol.file.allow=always")
+    git(shipment.root, *allow, "submodule", "add", "-q", str(module), "component")
     git(shipment.root, "commit", "-qm", "include module")
-    shipment = replace(
-        shipment, head_sha=git(shipment.root, "rev-parse", "HEAD").strip()
-    )
+    head = git(shipment.root, "rev-parse", "HEAD").strip()
+    return replace(shipment, head_sha=head)
+
+
+def test_cleanup_preserves_submodules_even_when_git_ignores_them(
+    delivered_worktree: tuple[Path, Shipment], tmp_path: Path
+) -> None:
+    root, shipment = delivered_worktree
+    original_head = shipment.head_sha
+    shipment = _with_submodule(shipment, tmp_path)
     with pytest.raises(ValueError, match="initialized submodules"):
         ship_actions.cleanup(root, shipment)
     git(shipment.root, "config", "diff.ignoreSubmodules", "all")
@@ -166,6 +161,20 @@ def test_cleanup_preserves_submodules_even_when_git_ignores_them(
         ship_actions.cleanup(root, shipment)
     assert nested.read_text() == "valuable nested work"
     assert ship_actions.remote_branch(root, "origin", shipment.branch) == original_head
+
+
+def test_cleanup_removes_task_with_uninitialized_submodule(
+    delivered_worktree: tuple[Path, Shipment], tmp_path: Path
+) -> None:
+    root, shipment = delivered_worktree
+    shipment = _with_submodule(shipment, tmp_path)
+    git(shipment.root, "submodule", "deinit", "-q", "-f", "component")
+    git(shipment.root, "push", "-q", "origin", shipment.branch)
+    assert git(shipment.root, "submodule", "status").startswith("-")
+    ship_actions.cleanup(root, shipment)
+    assert not shipment.root.exists()
+    assert git(root, "branch", "--list", shipment.branch).strip() == ""
+    assert ship_actions.remote_branch(root, shipment.remote, shipment.branch) is None
 
 
 def test_cleanup_rejects_remote_branch_reuse(
