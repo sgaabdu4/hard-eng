@@ -18,7 +18,6 @@ from ship_evidence import attachment_urls
 
 Delivery = TypedDict("Delivery", {"name": str, "command": list[str]})
 
-
 ShippingPolicy = TypedDict(
     "ShippingPolicy",
     {
@@ -111,7 +110,8 @@ def _run(
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ShippingError(f"{executable} query unavailable") from error
     if result.returncode != 0:
-        raise ShippingError(f"{executable} query failed")
+        reason = result.stderr.strip().rpartition("\n")[2]
+        raise ShippingError(f"{executable} query failed: {reason}".removesuffix(": "))
     return result.stdout
 
 
