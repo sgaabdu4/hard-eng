@@ -431,7 +431,7 @@ def commit_update(
             cwd=root,
             check=True,
         )
-        subprocess.run(
+        result = subprocess.run(
             [
                 "git",
                 "commit",
@@ -442,10 +442,19 @@ def commit_update(
                 *names,
             ],
             cwd=root,
-            stdout=sys.stderr,
-            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
             timeout=3500,
         )
+        sys.stderr.write(result.stdout)
+        if result.returncode != 0:
+            # SessionStart stderr never reaches the agent, so the error carries the reason.
+            tail = " | ".join(result.stdout.strip().splitlines()[-5:])
+            raise subprocess.SubprocessError(
+                f"git commit exited {result.returncode}: {tail}".removesuffix(": ")
+            )
     except (OSError, subprocess.SubprocessError):
         for name, content in before.items():
             target = root / name
