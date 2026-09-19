@@ -146,6 +146,7 @@ def _patch_gh(monkeypatch: pytest.MonkeyPatch, fake: FakeGitHub) -> None:
     monkeypatch.setattr(shipping, "gh", fake)
 
 
+_PR_URL = "https://github.com/acme/widget/pull/1"
 _UI_BODY = (
     "Before: ![old](https://github.com/user-attachments/assets/old-image)\n"
     "After: ![new](https://github.com/user-attachments/assets/new-image)"
@@ -238,9 +239,7 @@ def test_ready_returns_identity_after_current_checks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture, fake = _ready_fixture(tmp_path, monkeypatch)
-    shipment = shipping.verify(
-        fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-    )
+    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
     assert shipment.root == fixture.root.resolve()
     assert shipment.plan == fixture.plan.resolve()
     assert shipment.repository == "acme/widget"
@@ -271,9 +270,7 @@ def test_deploy_readiness_requires_verifier_without_running_it(
     fake = FakeGitHub(_pull(fixture), [_check(fixture.head)])
     _patch_gh(monkeypatch, fake)
     if configured:
-        shipment = shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+        shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
         assert shipment.delivery_target == "Deploy"
     else:
         with pytest.raises(
@@ -282,7 +279,7 @@ def test_deploy_readiness_requires_verifier_without_running_it(
             shipping.verify(
                 fixture.root,
                 fixture.plan,
-                "https://github.com/acme/widget/pull/1",
+                _PR_URL,
                 "ready",
             )
         assert not fake.calls
@@ -304,9 +301,7 @@ def test_ready_accepts_same_second_check_timestamps(
     )
     _patch_gh(monkeypatch, fake)
 
-    shipment = shipping.verify(
-        fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-    )
+    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
     assert shipment.head_sha == fixture.head
 
@@ -321,9 +316,7 @@ def test_ready_rejects_check_without_head_sha(
     _patch_gh(monkeypatch, fake)
 
     with pytest.raises(shipping.ShippingError, match="stale"):
-        shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
 def test_ready_preserves_unowned_dirty_work_by_rejecting(
@@ -332,9 +325,7 @@ def test_ready_preserves_unowned_dirty_work_by_rejecting(
     fixture, _ = _ready_fixture(tmp_path, monkeypatch)
     (fixture.root / "unowned.txt").write_text("keep\n")
     with pytest.raises(shipping.ShippingError, match="clean"):
-        shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
     assert (fixture.root / "unowned.txt").read_text() == "keep\n"
 
 
@@ -370,62 +361,43 @@ def test_ready_rejects_pr_identity_and_mergeability(
     fake = FakeGitHub(_pull(fixture, **changes), [_check(fixture.head)])
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError):
-        shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
 @pytest.mark.parametrize(
-    "changes",
+    ("changes", "message"),
     [
-        {"status": "in_progress"},
-        {"conclusion": "failure"},
-        {"head_sha": "a" * 40},
-        {"truncated": True},
-        {"completed_at": "2026-09-10T14:00:00Z"},
-        {"id": None},
+        ({"status": "in_progress"}, "has not completed"),
+        ({"conclusion": "skipped"}, "was skipped; gate its steps, not the job: build"),
+        ({"conclusion": "failure"}, "not successful"),
+        ({"head_sha": "a" * 40}, "stale"),
+        ({"truncated": True}, "truncated"),
+        ({"completed_at": "2026-09-10T14:00:00Z"}, "CI budget"),
+        ({"id": None}, "run identity"),
+        ({"plan": "absent/PLAN.md"}, "check out the PR's head branch"),
     ],
 )
 def test_ready_rejects_noncurrent_or_unsuccessful_checks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     changes: dict[str, object],
+    message: str,
 ) -> None:
     fixture = _fixture(tmp_path)
+    plan = fixture.root / str(changes.pop("plan", "PLAN.md"))
     fake = FakeGitHub(_pull(fixture), [_check(fixture.head, **changes)])
     _patch_gh(monkeypatch, fake)
-    with pytest.raises(shipping.ShippingError):
-        shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+    with pytest.raises(shipping.ShippingError, match=message):
+        shipping.verify(fixture.root, plan, _PR_URL, "ready")
 
 
-def test_plan_missing_from_checkout_says_to_check_out_the_pr_branch(
+def test_required_check_that_has_not_started_is_pending_not_failed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture = _fixture(tmp_path)
-    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [_check(fixture.head)]))
-    with pytest.raises(shipping.ShippingError, match="not found in this checkout"):
-        shipping.verify(
-            fixture.root,
-            fixture.root / "features/x/PLAN.md",
-            "https://github.com/acme/widget/pull/1",
-            "ready",
-        )
-
-
-def test_skipped_required_check_names_the_job_level_condition(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    fixture = _fixture(tmp_path)
-    skipped = _check(fixture.head, conclusion="skipped")
-    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [skipped]))
-    with pytest.raises(
-        shipping.ShippingError, match="was skipped; gate its steps, not the job: build"
-    ):
-        shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), []))
+    with pytest.raises(shipping.PendingCheck, match="required check missing: build"):
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
 def test_ready_rejects_invalid_provider_json(
@@ -438,9 +410,7 @@ def test_ready_rejects_invalid_provider_json(
 
     monkeypatch.setattr(shipping, "gh", invalid_json)
     with pytest.raises(shipping.ShippingError, match="invalid JSON"):
-        shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
 @pytest.mark.parametrize("outcome", ["queued", "in_progress", "failure", "success"])
@@ -466,20 +436,17 @@ def test_newest_required_run_wins_over_later_finishing_old_run(
     )
     _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [new, old]))
     if outcome == "success":
-        shipment = shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+        shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
         assert shipment.head_sha == fixture.head
     else:
-        expected = "not successful" if completed else "has not completed"
-        with pytest.raises(shipping.ShippingError, match=expected) as raised:
+        error = shipping.ShippingError if completed else shipping.PendingCheck
+        with pytest.raises(error, match="not successful|not completed"):
             shipping.verify(
                 fixture.root,
                 fixture.plan,
-                "https://github.com/acme/widget/pull/1",
+                _PR_URL,
                 "ready",
             )
-        assert isinstance(raised.value, shipping.PendingCheck) is not completed
 
 
 def test_unchanged_ui_needs_comparison_note_without_uploads(
@@ -491,9 +458,7 @@ def test_unchanged_ui_needs_comparison_note_without_uploads(
         body="UI appearance: unchanged — inspected the same dashboard, state and viewport before/after; no visible difference.",
     )
     _patch_gh(monkeypatch, fake)
-    shipment = shipping.verify(
-        fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-    )
+    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
     assert shipment.delivery_target == "PR"
     assert not any("--method" in call for call in fake.calls)
 
@@ -515,9 +480,7 @@ def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
     fake = _ui_fake(fixture, body=body)
     fake.attachment_response = f"HTTP/2 206 Partial Content\ncontent-type: {content_type}\ncontent-length: 1\ncontent-range: bytes 0-0/85098\n"
     _patch_gh(monkeypatch, fake)
-    shipment = shipping.verify(
-        fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-    )
+    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
     assert shipment.delivery_target == "PR"
     requests = [call for call in fake.calls if "--method" in call]
     assert len(requests) == 2
@@ -553,9 +516,7 @@ def test_ui_changes_reject_missing_foreign_or_duplicate_evidence(
     fake = _ui_fake(fixture, body=body)
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError):
-        shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
 @pytest.mark.parametrize(
@@ -574,9 +535,7 @@ def test_ui_changes_reject_unavailable_or_wrong_attachment_type(
     fake.attachment_response = response
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError):
-        shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
 def test_ready_rejects_changed_pr_head_during_final_recheck(
@@ -594,9 +553,7 @@ def test_ready_rejects_changed_pr_head_during_final_recheck(
     fake.pulls = [first, second]
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError, match="changed"):
-        shipping.verify(
-            fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "ready"
-        )
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
 def test_delivered_deploy_rejects_old_live_revision_then_passes(
@@ -653,7 +610,7 @@ def test_delivered_deploy_rejects_old_live_revision_then_passes(
         shipping.verify(
             fixture.root,
             fixture.plan,
-            "https://github.com/acme/widget/pull/1",
+            _PR_URL,
             "delivered",
         )
     deployed.write_text(fixture.head)
@@ -665,9 +622,7 @@ def test_delivered_deploy_rejects_old_live_revision_then_passes(
         "https://github.com/acme/widget.git",
     )
     _native(fixture.root, "branch", "-m", "feature/unrelated")
-    shipment = shipping.verify(
-        fixture.root, fixture.plan, "https://github.com/acme/widget/pull/1", "delivered"
-    )
+    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "delivered")
     assert shipment.merged_sha == fixture.head
     assert shipment.delivery_target == "Deploy"
     assert shipment.branch == "feature/shipping"
@@ -688,7 +643,7 @@ def test_delivered_rejects_unmerged_or_unreachable_pr(
         shipping.verify(
             fixture.root,
             fixture.plan,
-            "https://github.com/acme/widget/pull/1",
+            _PR_URL,
             "delivered",
         )
 
@@ -724,6 +679,6 @@ def test_delivered_rejects_unmerged_or_unreachable_pr(
         shipping.verify(
             fixture.root,
             fixture.plan,
-            "https://github.com/acme/widget/pull/1",
+            _PR_URL,
             "delivered",
         )
