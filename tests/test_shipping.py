@@ -444,13 +444,15 @@ def test_newest_required_run_wins_over_later_finishing_old_run(
         )
         assert shipment.head_sha == fixture.head
     else:
-        with pytest.raises(shipping.ShippingError, match="not successful"):
+        expected = "not successful" if completed else "has not completed"
+        with pytest.raises(shipping.ShippingError, match=expected) as raised:
             shipping.verify(
                 fixture.root,
                 fixture.plan,
                 "https://github.com/acme/widget/pull/1",
                 "ready",
             )
+        assert isinstance(raised.value, shipping.PendingCheck) is not completed
 
 
 def test_unchanged_ui_needs_comparison_note_without_uploads(

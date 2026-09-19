@@ -51,6 +51,10 @@ class ShippingError(ValueError):
     pass
 
 
+class PendingCheck(ShippingError):
+    """A required check has not concluded yet; it has not failed."""
+
+
 _CONFIG_KEYS = {
     "base",
     "checks",
@@ -428,7 +432,7 @@ def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) 
             by_name[name].append(item)
     for name, candidates in by_name.items():
         if not candidates:
-            raise ShippingError(f"required check missing: {name}")
+            raise PendingCheck(f"required check missing: {name}")
         run = max(candidates, key=_run_sort_key)
         if run.get("truncated") is True or (
             isinstance(run.get("output"), dict)
@@ -436,7 +440,9 @@ def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) 
         ):
             raise ShippingError(f"required check truncated: {name}")
         _check_revision(run, revision)
-        if run.get("status") != "completed" or run.get("conclusion") != "success":
+        if run.get("status") != "completed":
+            raise PendingCheck(f"required check has not completed: {name}")
+        if run.get("conclusion") != "success":
             raise ShippingError(f"required check is not successful: {name}")
         started = _timestamp(run.get("started_at"), f"check {name}")
         completed = _timestamp(run.get("completed_at"), f"check {name}")
