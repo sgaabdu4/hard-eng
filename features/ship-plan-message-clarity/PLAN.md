@@ -46,4 +46,4 @@ E2E: Passed — the real `hard-eng.py ship --plan features/not-here/PLAN.md --pr
 Evidence: The new `test_invalid_completion` case failed with the `plans.py` fix stashed and passed after. `tests/test_shipping.py` (58) and `tests/test_ship_actions.py` (30) pass, pinning every rejected check's message, `PendingCheck` for a missing or unfinished check and the merged-with-unfinished-CI wording. The full check result is recorded in the delivery line below.
 
 Delivery target: Merge
-Delivery: Pending — PR not opened yet; the user authorized one PR and its merge.
+Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks passed, 774 tests and 4 performance checks. The user authorized one PR and its merge; PR CI, merge and merged-main CI remain unverified.
