@@ -595,11 +595,12 @@ def plan_install(
     config = parse_config(
         changes.get("hard-eng.gates.json") or (root / "hard-eng.gates.json").read_text()
     )
-    from project_setup import adapt_boundaries
+    from project_setup import adapt_boundaries, strict_scanner_flags
 
     typescript = typescript_packages(root, repository_files(root))
     for package in config.get("packages", []):
         adapt_boundaries(package, typescript)
+        strict_scanner_flags(package)
         ignore = Path(package["path"]) / ".semgrepignore"
         if not (root / ignore).exists():
             changes[str(ignore)] = (
