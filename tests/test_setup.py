@@ -6,6 +6,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from fallow_report import Report, validate_scanner_command
 from gate_config import (
     Gate,
     GateConfig,
@@ -19,6 +20,7 @@ from project_setup import (
     import_configuration,
     javascript_files,
     javascript_manager,
+    strict_scanner_flags,
 )
 from reports import parallel_hint
 from shipping import ShippingPolicy
@@ -709,3 +711,38 @@ def test_hook_registrations_invoke_shared_runner(
                 text=True,
             )
             assert json.loads(result.stdout) == [event, agent]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["react-doctor", "src", "--scope", "full", "--blocking", "warning", "--json"],
+        ["pnpm", "exec", "react-doctor", "--blocking", "warning"],
+        ["dart-decimate", "check", ".", "--boundary-violations"],
+        ["fallow", "dead-code", "--format", "json"],
+        ["fallow", "audit", "--format", "json"],
+    ],
+)
+def test_update_gives_an_older_scanner_gate_its_required_strict_flags(
+    command: list[str],
+) -> None:
+    """An installed project's check must not stay broken after an update."""
+    report: Report = {"type": "fallow", "path": "coverage/fallow.json"}
+    with pytest.raises(ValueError, match="add --"):
+        validate_scanner_command(command, report)
+    package: Group = {
+        "path": ".",
+        "checks": [
+            {"name": "scanner", "command": list(command)},
+            {"name": "script", "command": ["pnpm", "run", "audit"]},
+            {"name": "new-only", "command": ["fallow", "audit", "--gate", "new"]},
+        ],
+    }
+    strict_scanner_flags(package)
+    upgraded = package["checks"][0]["command"]
+    assert upgraded[: len(command)] == command
+    validate_scanner_command(upgraded, report)
+    strict_scanner_flags(package)
+    assert package["checks"][0]["command"] == upgraded
+    assert package["checks"][1]["command"] == ["pnpm", "run", "audit"]
+    assert package["checks"][2]["command"] == ["fallow", "audit", "--gate", "new"]
