@@ -41,8 +41,8 @@ def commit(root: Path, message: str) -> str:
 def init(root: Path) -> None:
     root.mkdir()
     subprocess.run(["git", "init", "-q", str(root)], check=True)
-    git(root, "config", "user.name", "Fixture")
-    git(root, "config", "user.email", "fixture@example.invalid")
+    with (root / ".git/config").open("a") as config:
+        config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
 
 
 @pytest.fixture
@@ -116,8 +116,7 @@ def runner(tmp_path: Path, completed_plan: str) -> ModuleType:
     return module
 
 
-@pytest.fixture
-def shipping_policy() -> "ShippingPolicy":
+def default_policy() -> "ShippingPolicy":
     return {
         "base": "main",
         "checks": ["hard-eng"],
@@ -129,10 +128,16 @@ def shipping_policy() -> "ShippingPolicy":
 
 
 @pytest.fixture
-def release(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shipping_policy: "ShippingPolicy"
-) -> tuple[Path, Path, str]:
-    source, target = tmp_path / "source", tmp_path / "target"
+def shipping_policy() -> "ShippingPolicy":
+    return default_policy()
+
+
+@pytest.fixture(scope="session")
+def release_template(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, str]:
+    """One installed project per test process; each test receives its own copy."""
+    root = tmp_path_factory.mktemp("release")
+    source, target = root / "source", root / "target"
+    shipping_policy = default_policy()
     init(source)
     for name in (".hooks", ".agents", ".github"):
         shutil.copytree(
@@ -207,6 +212,19 @@ def release(
     commit(target, "installed baseline")
     reference = source / ".agents/skills/he/references/workflow.md"
     reference.write_text(reference.read_text() + "\nUpdated fixture instruction.\n")
+    return root, old
+
+
+@pytest.fixture
+def release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    release_template: tuple[Path, str],
+) -> tuple[Path, Path, str]:
+    template, old = release_template
+    source, target = tmp_path / "source", tmp_path / "target"
+    for name in ("source", "target"):
+        shutil.copytree(template / name, tmp_path / name, symlinks=True)
     monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
     monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{source.as_uri()}.insteadOf")
     monkeypatch.setenv(
