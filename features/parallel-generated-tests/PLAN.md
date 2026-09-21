@@ -14,7 +14,7 @@ Owners: `.hooks/project_setup.py` (generated gate commands), `setup.py` `configu
 
 Blockers: None
 Handoff: Approval
-Authority: The user asked to fix the gates Hard Eng generates for other projects, to upgrade an existing older gate as well, and to make their CI fast. One function serves new and existing projects, because `configure_python` already runs in both paths. Only a command with the generated `uv run --with` shape is changed; a custom command is left alone because xdist may not be installable there. An update that changes `hard-eng.gates.json` already runs the project's checks in a candidate worktree and rolls back on failure, so a suite that cannot run in parallel keeps its current scaffold; the hint tells the user how to proceed. Merge awaits the user's go-ahead.
+Authority: The user asked to fix the gates Hard Eng generates for other projects, to upgrade an existing older gate as well, and to make their CI fast. One function serves new and existing projects, because `configure_python` already runs in both paths. Only a command with the generated `uv run --with` shape is changed; a custom command is left alone because xdist may not be installable there. An update that changes `hard-eng.gates.json` already runs the project's checks in a candidate worktree and rolls back on failure, so a suite that cannot run in parallel keeps its current scaffold; the hint tells the user how to proceed. After PR 135 passed CI, the user approved merging it before testing on real projects.
 
 ## Acceptance + steps
 
@@ -42,5 +42,5 @@ Result: Passed
 E2E: Passed — a scratch uv project was installed from this branch with the real `setup.py`. Its generated tests gate read `pytest -n auto` with `pytest-xdist`; the real `run_gate` ran it on 16 workers, 8 tests passed, and the coverage and JUnit reports were accepted. With a failing test added, the gate failed and printed the `-n 0` hint.
 Evidence: The new test passes; `tests/test_setup.py`, `tests/test_runner.py` and `tests/test_updates.py` 178 passed before the hint was added. The full check result is recorded in the delivery line below.
 
-Delivery target: PR
-Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks, 788 tests and 4 performance checks passed. A first run failed the types gate on untyped JSON in the new test; it now uses the typed config parser. PR CI and merge remain unverified.
+Delivery target: Merge
+Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks, 788 tests and 4 performance checks passed. A first run failed the types gate on untyped JSON in the new test; it now uses the typed config parser. PR 135 CI passed; merge, merged-main CI and cleanup remain unverified.
