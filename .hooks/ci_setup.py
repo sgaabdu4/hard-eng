@@ -103,10 +103,18 @@ def migrate_docs_path(source: Path, content: str) -> str:
     template = (source / ".github/workflows/hard-eng.yml").read_text()
     cache = "      - name: Cache native tool downloads\n"
     checks = "      - name: Run required checks\n"
-    if "id: impact" in content or any(
+    if "id: impact" in content:
+        return content
+    if any(
         content.count(step) != 1 or step + "        if:" in content
         for step in (cache, checks)
     ):
+        print(
+            "Docs-only CI steps not added: .github/workflows/hard-eng.yml is customised. "
+            "Copy the `impact` and docs-only secret scan steps from the Hard Eng template "
+            "to skip tool setup when only docs change.",
+            file=sys.stderr,
+        )
         return content
     impact = template[
         template.index("      - name: Find whether") : template.index(cache)

@@ -492,7 +492,9 @@ def test_generated_triggers_migrate_with_customizations(tmp_path: Path) -> None:
     assert changes == {}
 
 
-def test_old_workflow_gains_docs_only_steps(tmp_path: Path) -> None:
+def test_old_workflow_gains_docs_only_steps(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Installed workflows skip tool setup for docs-only changes after an update."""
     template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
     impact = template[
@@ -517,6 +519,11 @@ def test_old_workflow_gains_docs_only_steps(tmp_path: Path) -> None:
     changes.clear()
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     assert changes == {}
+    assert "Docs-only CI steps not added" not in capsys.readouterr().err
+    path.write_text(old.replace("Cache native tool downloads", "Cache project tools"))
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes == {}
+    assert "Docs-only CI steps not added" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
