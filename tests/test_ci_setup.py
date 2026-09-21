@@ -11,7 +11,7 @@ import tool_setup
 import yaml
 from ci_setup import configure_ci
 from conftest import commit, load_module
-from gate_config import GateConfig, parse_config
+from gate_config import GateConfig, Group, parse_config
 from shipping import ShippingError, ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -534,7 +534,7 @@ def test_impact_reports_docs_only_before_tools(
     packages: list[str],
     expected: str,
 ) -> None:
-    groups = [{"path": path, "checks": []} for path in packages]
+    groups: list[Group] = [{"path": path, "checks": []} for path in packages]
     (repository / "hard-eng.gates.json").write_text(
         json.dumps({"packages": groups, "shared": []})
     )
