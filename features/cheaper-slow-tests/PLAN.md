@@ -14,7 +14,7 @@ Owners: `tests/conftest.py` (`release`, `init`) and `.hooks/update.py` `fetch_so
 
 Blockers: None
 Handoff: Approval
-Authority: The user asked to make the slowest tests cheaper after the CI timing work in PR 133. The two Dart coverage tests stay as they are: each of their seven classifier calls proves a different outcome and costs about 4.2 seconds of real Dart analyzer start-up. The `delivered_worktree` fixture stays per-test because its worktree and remote hold absolute paths. `repository_files` is not cached, because the check's file listing must stay current. `uv run --project` in the updater is the behavior under test. Merge awaits the user's go-ahead.
+Authority: The user asked to make the slowest tests cheaper after the CI timing work in PR 133. The two Dart coverage tests stay as they are: each of their seven classifier calls proves a different outcome and costs about 4.2 seconds of real Dart analyzer start-up. The `delivered_worktree` fixture stays per-test because its worktree and remote hold absolute paths. `repository_files` is not cached, because the check's file listing must stay current. `uv run --project` in the updater is the behavior under test. After PR 134 passed CI, the user approved merging it.
 
 ## Acceptance + steps
 
@@ -43,5 +43,5 @@ Result: Passed
 E2E: N/A — no runtime journey changes; the updater guard is exercised by the existing real-Git update tests.
 Evidence: Alternating runs with four workers, twice each: main 71.8 and 73.7 seconds, this branch 65.3 and 65.2 seconds, 787 passed every time. In isolation `tests/test_updates.py` went from 82 to 62 seconds. The full check result is recorded in the delivery line below.
 
-Delivery target: PR
-Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks, 787 tests and 4 performance checks passed. PR CI and merge remain unverified.
+Delivery target: Merge
+Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks, 787 tests and 4 performance checks passed. PR 134 CI passed at the pushed revision; merge, merged-main CI and cleanup remain unverified.
