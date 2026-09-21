@@ -14,7 +14,7 @@ Owners: `.hooks/project_setup.py` and `setup.py` `plan_install`, which already a
 
 Blockers: None
 Handoff: Approval
-Authority: The user asked that generated gates be fixed for other projects and that an older gate be upgraded to the new form on update; this reverses PR 118's stated assumption that installs keep their commands. Only flags whose absence the check reports with an exact `add --flag` message are appended. The flags can surface findings that an inline suppression hid; those must be repaired, which is the existing rule. Merge awaits the user's go-ahead.
+Authority: The user asked that generated gates be fixed for other projects and that an older gate be upgraded to the new form on update; this reverses PR 118's stated assumption that installs keep their commands. Only flags whose absence the check reports with an exact `add --flag` message are appended. The flags can surface findings that an inline suppression hid; those must be repaired, which is the existing rule. After PR 136 passed CI, the user approved merging it.
 
 ## Acceptance + steps
 
@@ -41,5 +41,5 @@ Result: Passed
 E2E: Passed — in a throwaway worktree of a real four-package JavaScript project installed at b50c3c8, the check first stopped at `React Doctor must not honour inline suppressions`. After the real `setup.py` from this branch ran with that project's previous source, all three React Doctor gates carried the flag and the check went on to select and run gates. In a second real project the flag, added by hand, surfaced no hidden findings and all 18 gates passed in 33 seconds.
 Evidence: The new test passes for five older commands. The full check result is recorded in the delivery line below.
 
-Delivery target: PR
-Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks, 793 tests and 4 performance checks passed. A first run failed the types gate on an untyped list and report in the new code; both were annotated before the passing run. PR CI and merge remain unverified.
+Delivery target: Merge
+Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks, 793 tests and 4 performance checks passed. A first run failed the types gate on an untyped list and report in the new code; both were annotated before the passing run. PR 136 CI passed; merge, merged-main CI and cleanup remain unverified.
