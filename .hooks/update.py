@@ -139,12 +139,13 @@ def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, 
         timeout=60,
     )
     for tree in (source, old):
-        subprocess.run(
-            ["git", "submodule", "update", "--init", "--recursive"],
-            cwd=tree,
-            check=True,
-            timeout=120,
-        )
+        if (tree / ".gitmodules").is_file():
+            subprocess.run(
+                ["git", "submodule", "update", "--init", "--recursive"],
+                cwd=tree,
+                check=True,
+                timeout=120,
+            )
     return source, old
 
 
