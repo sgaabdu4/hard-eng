@@ -27,6 +27,12 @@ def is_plan_path(path: Path) -> bool:
     )
 
 
+def is_documentation(path: Path) -> bool:
+    """Plans and top-level Markdown, which only the secret scan reads."""
+    top_level = path.parent == Path(".") and path.suffix.lower() == ".md"
+    return is_plan_path(path) or (top_level and path.name != "AGENTS.md")
+
+
 def report_stage(failed: bool, stage: str | None) -> None:
     if failed:
         print("Hard Eng: verification failed; the next stage is blocked.")
