@@ -14,7 +14,7 @@ Owners: `.hooks/gitleaks_scan.py` (gitleaks commands) and `.hooks/gate_config.py
 
 Blockers: None
 Handoff: Approval
-Authority: The user asked to build the scan-only-new-commits change after seeing the trial measurement and the trade-off. The resolved commit id, not the caller's text, goes into the command, so a base cannot inject gitleaks or Git options. Accepted trade-off: a commit already in the base's history is not rescanned on later based checks, so a newly added gitleaks rule reaches old history only through a check without `--base`. Merge awaits the user's go-ahead.
+Authority: The user asked to build the scan-only-new-commits change after seeing the trial measurement and the trade-off. The resolved commit id, not the caller's text, goes into the command, so a base cannot inject gitleaks or Git options. Accepted trade-off: a commit already in the base's history is not rescanned on later based checks, so a newly added gitleaks rule reaches old history only through a check without `--base`. After PR 137 passed CI, the user approved merging it.
 
 ## Acceptance + steps
 
@@ -41,5 +41,5 @@ Result: Passed
 E2E: Passed — with the real gitleaks in a scratch repository holding a token committed and removed before the base: the based check scanned 1 commit and passed; the check without a base found the old token; after a second token was committed and removed after the base, the based check failed on it; an all-zero base scanned the full history and found both.
 Evidence: The new test passes. The full check result is recorded in the delivery line below.
 
-Delivery target: PR
-Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks, 794 tests and 4 performance checks passed. PR CI and merge remain unverified.
+Delivery target: Merge
+Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks, 794 tests and 4 performance checks passed. PR 137 CI passed; merge, merged-main CI and cleanup remain unverified.
