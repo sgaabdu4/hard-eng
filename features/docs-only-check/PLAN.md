@@ -14,7 +14,7 @@ Owner: `.hooks/gate_config.py` `changed_packages` and `affected_groups`; the doc
 
 Blockers: None
 Handoff: Approval
-Authority: The user asked to fix all open Hard Eng issues and open a PR to main; 131 was the only one open. The secret scan stays because `gitleaks dir .` reads Markdown and `validate_required_checks` requires it; dropping it would weaken a required check. Only top-level Markdown counts as documentation, because Markdown inside a package can be a build or test input. The issue's configurable path list is left out: the fixed rule meets the reported case, and the list can be added when a project needs to widen or narrow it. Plan-only diffs now run only the secret scan instead of every shared gate. The user then asked to raise the handwritten-file limit from 700 to 1000 lines in the same PR; `validate_file_sizes` in `.hooks/gate_config.py`, its boundary test and the README change together, and it applies to installed projects too.
+Authority: The user asked to fix all open Hard Eng issues and open a PR to main; 131 was the only one open. After PR 132 passed CI, the user approved merging it. The secret scan stays because `gitleaks dir .` reads Markdown and `validate_required_checks` requires it; dropping it would weaken a required check. Only top-level Markdown counts as documentation, because Markdown inside a package can be a build or test input. The issue's configurable path list is left out: the fixed rule meets the reported case, and the list can be added when a project needs to widen or narrow it. Plan-only diffs now run only the secret scan instead of every shared gate. The user then asked to raise the handwritten-file limit from 700 to 1000 lines in the same PR; `validate_file_sizes` in `.hooks/gate_config.py`, its boundary test and the README change together, and it applies to installed projects too.
 
 ## Acceptance + steps
 
@@ -43,5 +43,5 @@ Result: Passed
 E2E: Passed — in a scratch worktree of this branch with only `README.md` and this plan edited, `hard-eng.py check --base HEAD` printed the secret-scan-only line, ran only `secrets-files`, and exited 0 in 6 seconds; the same repository runs all 17 checks, about four minutes, for a code change.
 Evidence: `tests/test_agent_hooks.py` selection tests pass. The full check result is recorded in the delivery line below.
 
-Delivery target: PR
-Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks passed, 783 tests and 4 performance checks. A first run failed the then 700-line limit on `gate_config.py` and the test file; the helpers moved to their existing owners before the passing run. After the limit rose to 1000, the full check passed again: 17 checks, 783 tests. PR CI remains unverified.
+Delivery target: Merge
+Delivery: Pending — `hard-eng.py check --base origin/main` exit 0: all 17 checks passed, 783 tests and 4 performance checks. A first run failed the then 700-line limit on `gate_config.py` and the test file; the helpers moved to their existing owners before the passing run. After the limit rose to 1000, the full check passed again: 17 checks, 783 tests. PR 132 CI passed at e9ece7d; merge, merged-main CI and cleanup remain unverified.
