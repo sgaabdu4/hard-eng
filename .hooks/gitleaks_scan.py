@@ -155,6 +155,36 @@ def run_current_files(
         )
 
 
+def new_commits_command(
+    command: list[str], repository: Path, base: str | None
+) -> list[str]:
+    """Scan only the commits a known base lacks; earlier ones were scanned on entry."""
+    if base is None or "--log-opts=--all" not in command:
+        return command
+    resolved = subprocess.run(
+        [
+            "git",
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            "--end-of-options",
+            base + "^{commit}",
+        ],
+        cwd=repository,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    revision = resolved.stdout.strip()
+    if resolved.returncode or set(revision) == {"0"}:
+        return command  # Unknown base: keep the full-history scan.
+    print(f"Secret history scan covers commits since {revision[:7]}.")
+    return [
+        f"--log-opts={revision}..HEAD" if argument == "--log-opts=--all" else argument
+        for argument in command
+    ]
+
+
 def run_gate_command(
     role: object,
     command: list[str],

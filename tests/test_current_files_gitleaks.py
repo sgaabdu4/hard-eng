@@ -451,3 +451,22 @@ def test_secrets_files_gate_rejects_scan_targets_outside_its_snapshot(
             tmp_path,
             set(),
         )
+
+
+def test_history_scan_covers_only_commits_a_known_base_lacks(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A based check must not rescan the whole history; an unknown base must."""
+    base = git_output(repository, "rev-parse", "HEAD")
+    full = ["gitleaks", "git", ".", "--log-opts=--all", "--report-path", "r.sarif"]
+    scoped = gitleaks_scan.new_commits_command(full, repository, "HEAD")
+    assert scoped == [
+        *full[:3],
+        f"--log-opts={base}..HEAD",
+        *full[4:],
+    ]
+    assert base[:7] in capsys.readouterr().out
+    for unknown in (None, "0" * 40, "missing-reference", "--all"):
+        assert gitleaks_scan.new_commits_command(full, repository, unknown) == full
+    custom = [*full[:3], "--log-opts=main..HEAD"]
+    assert gitleaks_scan.new_commits_command(custom, repository, "HEAD") == custom
