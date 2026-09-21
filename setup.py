@@ -312,8 +312,9 @@ def configure_javascript(
 def configure_python(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
-    from project_setup import import_configuration
+    from project_setup import import_configuration, parallel_pytest
 
+    parallel_pytest(package)
     native = directory / "pyrefly.toml"
     project = directory / "pyproject.toml"
     content = project.read_text()

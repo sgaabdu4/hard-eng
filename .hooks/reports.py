@@ -36,6 +36,15 @@ def emit_dart_test_failure(
         print(summary)
 
 
+def parallel_hint(code: int, tests: bool, command: list[str]) -> str:
+    if code == 0 or not tests or "-n auto" not in " ".join(command):
+        return ""
+    return (
+        "\nThese tests ran in parallel (-n auto). If they pass serially, isolate "
+        "the state they share, or set -n 0 in this gate's command."
+    )
+
+
 def validate_scanner_log(scanner: str | None, log: TextIO) -> None:
     if scanner in SCANNER_LOGS:
         SCANNER_LOGS[scanner](log)

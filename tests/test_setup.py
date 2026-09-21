@@ -7,8 +7,10 @@ from types import ModuleType
 
 import pytest
 from gate_config import (
+    Gate,
     GateConfig,
     Group,
+    parse_config,
     validate_dart_boundaries,
     validate_required_checks,
 )
@@ -18,6 +20,7 @@ from project_setup import (
     javascript_files,
     javascript_manager,
 )
+from reports import parallel_hint
 from shipping import ShippingPolicy
 
 
@@ -249,6 +252,45 @@ def test_python_packages_receive_recursive_import_contract(
     (tmp_path / "pyproject.toml").write_text(content)
     installer.install(tmp_path)
     assert (tmp_path / "pyproject.toml").read_text() == content
+
+
+def test_python_tests_run_in_parallel_unless_a_project_opts_out(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
+    (tmp_path / "app.py").write_text("value = 1\n")
+    gates = tmp_path / "hard-eng.gates.json"
+
+    def tests_gate() -> tuple[GateConfig, Gate]:
+        config = parse_config(gates.read_text())
+        checks = config["packages"][0]["checks"]
+        return config, next(gate for gate in checks if gate.get("role") == "tests")
+
+    installer.install(tmp_path)
+    config, gate = tests_gate()
+    parallel = gate["command"]
+    runner = parallel.index("-n") - 1
+    assert parallel[runner : runner + 3] == ["pytest", "-n", "auto"]
+    assert parallel[runner - 4 : runner] == [
+        "--with",
+        "pytest-xdist",
+        "--upgrade-package",
+        "pytest-xdist",
+    ]
+    gate["command"] = [*parallel[: runner - 4], "pytest", *parallel[runner + 3 :]]
+    gates.write_text(json.dumps(config))
+    installer.install(tmp_path)
+    assert tests_gate()[1]["command"] == parallel
+    config, gate = tests_gate()
+    gate["command"] = [value if value != "auto" else "0" for value in parallel]
+    gates.write_text(json.dumps(config))
+    installer.install(tmp_path)
+    assert tests_gate()[1]["command"] == gate["command"]
+    assert "-n 0" in parallel_hint(1, True, parallel)
+    assert parallel_hint(0, True, parallel) == parallel_hint(1, True, gate["command"])
+    assert parallel_hint(1, True, gate["command"]) == ""
 
 
 def test_standalone_python_does_not_invent_import_architecture(

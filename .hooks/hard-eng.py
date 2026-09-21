@@ -545,7 +545,7 @@ def run_gate(
                 validate_osv(report_path, empty_pnpm=directory)
             else:
                 SCANNERS[scanner](report_path)
-        from reports import completed_tests, line_coverage
+        from reports import completed_tests, line_coverage, parallel_hint
 
         if (
             result.returncode == 0
@@ -564,7 +564,8 @@ def run_gate(
             if covered * 100 < total * 70:
                 raise ValueError("Line coverage is below the required 70%")
         print(
-            f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} (exit {result.returncode})",
+            f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} (exit {result.returncode})"
+            + parallel_hint(result.returncode, tests, command),
             flush=True,
         )
         failed |= result.returncode != 0
