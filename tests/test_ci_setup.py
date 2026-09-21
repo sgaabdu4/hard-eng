@@ -10,7 +10,8 @@ import pytest
 import tool_setup
 import yaml
 from ci_setup import configure_ci
-from gate_config import GateConfig, parse_config
+from conftest import commit, load_module
+from gate_config import GateConfig, Group, parse_config
 from shipping import ShippingError, ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -163,7 +164,12 @@ def test_generated_ci_timeout(
     assert "hard-eng.gates.json" in cache["with"]["key"]
     checks = next(step for step in steps if step.get("name") == "Run required checks")
     assert checks["env"]["MISE_DATA_DIR"].startswith(cache["with"]["path"] + "/")
-    assert "if" not in checks
+    scan = next(step for step in steps if "secret scan" in step.get("name", ""))
+    assert "if" not in yaml.safe_load(workflow)["jobs"]["hard-eng"]
+    assert {checks["if"], scan["if"]} == {
+        "steps.impact.outputs.docs_only != 'true'",
+        "steps.impact.outputs.docs_only == 'true'",
+    }
     assert (
         "install " in checks["run"]
         and "MISE_FETCH_REMOTE_VERSIONS_CACHE=1h" in checks["run"]
@@ -484,3 +490,57 @@ def test_generated_triggers_migrate_with_customizations(tmp_path: Path) -> None:
     path.write_text(custom)
     configure_ci(tmp_path, SOURCE, config, changes)
     assert changes == {}
+
+
+def test_old_workflow_gains_docs_only_steps(tmp_path: Path) -> None:
+    """Installed workflows skip tool setup for docs-only changes after an update."""
+    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    impact = template[
+        template.index("      - name: Find whether") : template.index(
+            "      - name: Cache native"
+        )
+    ]
+    scan = template[
+        template.index("      - name: Run the secret") : template.index(
+            "      - name: Run required checks"
+        )
+    ]
+    old = template.replace(impact, "").replace(scan, "")
+    old = old.replace("        if: steps.impact.outputs.docs_only != 'true'\n", "")
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(old)
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes[".github/workflows/hard-eng.yml"] == template
+    path.write_text(template)
+    changes.clear()
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes == {}
+
+
+@pytest.mark.parametrize(
+    "changed,packages,expected",
+    [
+        ("README.md", ["."], "true"),
+        ("app.py", ["."], "false"),
+        ("README.md", [], "false"),
+    ],
+)
+def test_impact_reports_docs_only_before_tools(
+    repository: Path,
+    capsys: pytest.CaptureFixture[str],
+    changed: str,
+    packages: list[str],
+    expected: str,
+) -> None:
+    groups: list[Group] = [{"path": path, "checks": []} for path in packages]
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": groups, "shared": []})
+    )
+    commit(repository, "configure")
+    (repository / changed).write_text("change\n")
+    module = load_module("impact_runner", SOURCE / ".hooks/hard-eng.py")
+    module.__dict__["ROOT"] = repository
+    assert module.impact("HEAD") == 0
+    assert capsys.readouterr().out == f"docs_only={expected}\n"
