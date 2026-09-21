@@ -39,7 +39,7 @@ N/A — command-line gate selection only; no product appearance.
 ## Verification
 
 Result: Passed
-E2E: N/A — gate selection is exercised through `affected_groups` against real Git repositories in the tests above.
+E2E: Passed — in a scratch worktree of this branch with only `README.md` and this plan edited, `hard-eng.py check --base HEAD` printed the secret-scan-only line, ran only `secrets-files`, and exited 0 in 6 seconds; the same repository runs all 17 checks, about four minutes, for a code change.
 Evidence: `tests/test_agent_hooks.py` selection tests pass. The full check result is recorded in the delivery line below.
 
 Delivery target: PR
