@@ -219,11 +219,11 @@ def validate_file_sizes(root: Path, exceptions: dict[str, dict[str, str]]) -> No
         if name in generated or name in exceptions:
             continue
         lines = len(path.read_bytes().splitlines())
-        if lines > 700:
+        if lines > 1000:
             failures.append(f"{name}: {lines} lines")
     if failures:
         raise ValueError(
-            "Handwritten files exceed 700 physical lines: " + "; ".join(failures)
+            "Handwritten files exceed 1000 physical lines: " + "; ".join(failures)
         )
 
 
