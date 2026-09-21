@@ -13,7 +13,7 @@ import agent_hooks
 import pytest
 import update
 from conftest import commit, git
-from gate_config import Group, JsonObject, affected_groups
+from gate_config import Gate, Group, JsonObject, affected_groups
 from shipping import ShippingPolicy
 
 
@@ -380,7 +380,10 @@ def test_session_identifier_cannot_escape_repository(
         ("lib/a.py", ["lib", "app", "site", "."]),
         ("app/a.py", ["app", "site", "."]),
         ("other/a.py", ["other", "."]),
-        ("README.md", ["lib", "app", "site", "other", "."]),
+        ("README.md", ["."]),
+        ("AGENTS.md", ["lib", "app", "site", "other", "."]),
+        (".agents/skills/x.md", ["lib", "app", "site", "other", "."]),
+        ("lib/README.md", ["lib", "app", "site", "."]),
         (".hooks/a.py", ["lib", "app", "site", "other", "."]),
         ("PLAN.md", ["."]),
         ("features/task/PLAN.md", ["."]),
@@ -451,20 +454,27 @@ def test_unknown_base_or_dependency_information_checks_every_package(
     assert "depends_on" in output
 
 
-@pytest.mark.parametrize("plans", [[], ["PLAN.md", "features/task/PLAN.md"]])
-def test_known_no_package_change_runs_shared_checks(
-    repository: Path, plans: list[str]
+@pytest.mark.parametrize(
+    "docs", [[], ["PLAN.md", "features/task/PLAN.md"], ["README.md", "CHANGELOG.md"]]
+)
+@pytest.mark.parametrize("root", ["a", "."])
+def test_docs_only_change_runs_only_the_secret_scan(
+    repository: Path, docs: list[str], root: str
 ) -> None:
+    secrets: Gate = {"name": "secrets", "role": "secrets-files", "command": ["x"]}
+    workflows: Gate = {"name": "workflows", "role": "workflows", "command": ["x"]}
     groups: list[Group] = [
-        {"path": "a", "checks": []},
+        {"path": root, "checks": []},
         {"path": "b", "checks": []},
-        {"path": ".", "checks": []},
+        {"path": ".", "checks": [secrets, workflows]},
     ]
-    for name in plans:
-        plan = repository / name
-        plan.parent.mkdir(parents=True, exist_ok=True)
-        plan.write_text("Task plan\n")
-    assert affected_groups(repository, groups, "HEAD") == [groups[-1]]
+    for name in docs:
+        document = repository / name
+        document.parent.mkdir(parents=True, exist_ok=True)
+        document.write_text("Documentation\n")
+    assert affected_groups(repository, groups, "HEAD") == [
+        {"path": ".", "checks": [secrets]}
+    ]
 
 
 def test_single_package_without_dependency_mapping_checks_full_package(

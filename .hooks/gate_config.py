@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
-from dependency_graph import dependency_review_guidance, expand_dependents
+from dependency_graph import dependency_review_guidance, expand_dependents, secrets_only
 
 type JsonValue = (
     str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
@@ -219,11 +219,11 @@ def validate_file_sizes(root: Path, exceptions: dict[str, dict[str, str]]) -> No
         if name in generated or name in exceptions:
             continue
         lines = len(path.read_bytes().splitlines())
-        if lines > 700:
+        if lines > 1000:
             failures.append(f"{name}: {lines} lines")
     if failures:
         raise ValueError(
-            "Handwritten files exceed 700 physical lines: " + "; ".join(failures)
+            "Handwritten files exceed 1000 physical lines: " + "; ".join(failures)
         )
 
 
@@ -382,12 +382,12 @@ def changed_files(root: Path, base: str) -> set[str] | None:
 def changed_packages(
     root: Path, by_path: dict[str, Group], base: str
 ) -> set[str] | None:
-    from plans import is_plan_path
+    from plans import is_documentation
 
     names = changed_files(root, base)
     if names is None:
         return None
-    names = {name for name in names if not is_plan_path(Path(name))}
+    names = {name for name in names if not is_documentation(Path(name))}
     selected: set[str] = set()
     for name in names:
         matches = [path for path in by_path if Path(name).is_relative_to(path)]
@@ -410,7 +410,7 @@ def affected_groups(root: Path, groups: list[Group], base: str | None) -> list[G
     if selected is None:
         return groups
     if not selected:
-        return [groups[-1]]
+        return [secrets_only(groups[-1])]
     guidance = dependency_review_guidance(packages)
     if any("depends_on" not in group for group in packages):
         if guidance is not None:

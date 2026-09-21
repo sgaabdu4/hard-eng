@@ -40,3 +40,11 @@ def expand_dependents(
                 selected.add(dependent)
                 pending.append(dependent)
     return selected
+
+
+def secrets_only(shared: Group) -> Group:
+    """Plans and top-level docs are read only by the secret scan."""
+    print("Only plans or top-level docs changed; running the secret scan only.")
+    roles = {"secrets-files", "secrets-history"}
+    checks = [gate for gate in shared["checks"] if gate.get("role") in roles]
+    return {**shared, "checks": checks}

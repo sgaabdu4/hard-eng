@@ -189,7 +189,7 @@ Hard Eng discovers supported packages, including monorepos. Each project's `hard
 
 All language packages need security checks, lockfile/vulnerability coverage, nonempty tests with **at least 70% executable-line coverage**, and a serial performance suite with a real workload, budget, and native report. Stricter project rules remain. Security may use shared checks; lockfile/vulnerability checks may also use a native workspace owner.
 
-Fill [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md). Handwritten source/test files over 700 physical lines need a justified exception. Checks validate native reports as well as exits; missing, stale, incomplete, or failing proof does not pass. See this repository's [configuration example](hard-eng.gates.json).
+Fill [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md). Handwritten source/test files over 1000 physical lines need a justified exception. Checks validate native reports as well as exits; missing, stale, incomplete, or failing proof does not pass. See this repository's [configuration example](hard-eng.gates.json).
 
 ### Shared checks, CI, and delivery
 

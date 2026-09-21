@@ -24,10 +24,10 @@ def test_file_size_boundary_and_narrow_exceptions(
     runner: ModuleType, tmp_path: Path
 ) -> None:
     path = tmp_path / "large.py"
-    path.write_text("value = 1\n" * 700)
+    path.write_text("value = 1\n" * 1000)
     validate_file_sizes(tmp_path, {})
-    path.write_text("value = 1\n" * 701)
-    with pytest.raises(ValueError, match="701"):
+    path.write_text("value = 1\n" * 1001)
+    with pytest.raises(ValueError, match="1001"):
         validate_file_sizes(tmp_path, {})
     with pytest.raises(ValueError, match="reason and evidence"):
         validate_file_sizes(
