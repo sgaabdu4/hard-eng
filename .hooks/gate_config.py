@@ -697,4 +697,9 @@ def load_groups(root: Path, base: str | None = None) -> list[Group]:
     if not count:
         raise ValueError("No checks configured; verification cannot pass")
     validate_required_checks(root, config)
+    from gitleaks_scan import new_commits_command
+
+    for gate in config["shared"]:
+        if gate.get("role") == "secrets-history":
+            gate["command"] = new_commits_command(gate["command"], root, base)
     return affected_groups(root, groups, base)
