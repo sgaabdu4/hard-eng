@@ -632,6 +632,20 @@ def check(
     return int(failed)
 
 
+def impact(base: str) -> int:
+    """Tell CI whether the check will run only the secret scan, before tools."""
+    from contextlib import redirect_stdout
+
+    from gate_config import changed_packages, parse_config
+
+    config = parse_config((ROOT / "hard-eng.gates.json").read_text())
+    by_path = {group["path"]: group for group in config["packages"]}
+    with redirect_stdout(sys.stderr):
+        docs_only = bool(by_path) and changed_packages(ROOT, by_path, base) == set()
+    print(f"docs_only={str(docs_only).lower()}")
+    return 0
+
+
 def pre_push() -> int:
     from ship_actions import pre_push as verify_push
 
@@ -650,6 +664,10 @@ def main() -> int:
         "--base", help="Git comparison base; unknown impact runs all checks"
     )
     checks.add_argument("--plan-stage", choices=("Draft", "Ready", "Complete"))
+    impacts = commands.add_parser(
+        "impact", help="Print docs_only=true when only the secret scan applies"
+    )
+    impacts.add_argument("--base", required=True)
     commands.add_parser("pre-push", help="Verify the actual commits being pushed")
     shipping = commands.add_parser(
         "ship", help="Verify PR delivery or perform guarded shipping actions"
@@ -670,6 +688,8 @@ def main() -> int:
 
         ensure_python_runtime()
         return check(base=args.base, plan_stage=args.plan_stage)
+    if args.command == "impact":
+        return impact(args.base)
     if args.command == "pre-push":
         return pre_push()
     if args.command == "ship":

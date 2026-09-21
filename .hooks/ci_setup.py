@@ -98,6 +98,27 @@ def migrate_workflow_tools(content: str) -> str:
     )
 
 
+def migrate_docs_path(source: Path, content: str) -> str:
+    """Add the template's docs-only steps to a generated workflow without them."""
+    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    cache = "      - name: Cache native tool downloads\n"
+    checks = "      - name: Run required checks\n"
+    if "id: impact" in content or any(
+        content.count(step) != 1 or step + "        if:" in content
+        for step in (cache, checks)
+    ):
+        return content
+    impact = template[
+        template.index("      - name: Find whether") : template.index(cache)
+    ]
+    scan = template[
+        template.index("      - name: Run the secret") : template.index(checks)
+    ]
+    condition = "        if: steps.impact.outputs.docs_only != 'true'\n"
+    content = content.replace(cache, impact + cache + condition)
+    return content.replace(checks, scan + checks + condition)
+
+
 def workflow_tools(root: Path, config: GateConfig) -> list[str]:
     tools = ["uv@latest", "python@3.12", "node@latest"]
     for package in config["packages"]:
@@ -163,8 +184,9 @@ def configure_ci(
     name = ".github/workflows/hard-eng.yml"
     if (root / name).exists():
         original = (root / name).read_text()
+        migrated = migrate_workflow_tools(migrate_workflow_pins(original))
         migrated = migrate_workflow_triggers(
-            root, source, migrate_workflow_tools(migrate_workflow_pins(original))
+            root, source, migrate_docs_path(source, migrated)
         )
         if migrated != original:
             changes[name] = migrated
