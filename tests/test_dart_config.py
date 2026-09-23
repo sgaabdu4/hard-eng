@@ -92,7 +92,7 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     options["linter"]["rules"].update({"no_dynamic_casts": True, "no_raw_types": True})
     options["analyzer"]["exclude"] = excludes
     options["linter"]["rules"] = ["avoid_print", *options["linter"]["rules"]]
-    options["plugins"] = {"riverpod_lint": "3.1.9", "flutter_skill_lints": "^0.11.2"}
+    options["plugins"] = {"riverpod_lint": "3.1.9", "flutter_skill_lints": "^0.12.0"}
     path = tmp_path / "analysis_options.yaml"
     path.write_text(yaml.safe_dump(options, sort_keys=False))
     runner.validate_typing(tmp_path, "dart", ["lib"])
@@ -153,9 +153,10 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
         ("flutter_skill_lints", "^0.11.0", True),
         ("flutter_skill_lints", "0.11.1", True),
         ("flutter_skill_lints", "^0.11.1", True),
-        ("flutter_skill_lints", "0.11.2", False),
-        ("flutter_skill_lints", "^0.11.2", False),
+        ("flutter_skill_lints", "0.11.2", True),
+        ("flutter_skill_lints", "^0.11.2", True),
         ("flutter_skill_lints", "0.12.0", False),
+        ("flutter_skill_lints", "^0.12.0", False),
         ("flutter_skill_lints", ">=0.11.0 <0.12.0", False),
         ("flutter_skill_lints", {"path": "../custom-plugin"}, False),
         (
