@@ -39,7 +39,10 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
         "static final created = DateTime.now(); }\n",
         "interface_constructor.dart": "abstract interface class Store { "
         "Store() { print('created'); } }\n",
-        "default_parameter.dart": "abstract class Store { int read([int page = 1]); }\n",
+        "default_parameter.dart": "abstract class Store { int read([int page = 1]); "
+        "Future<void> clear({bool files = false}); }\n",
+        "default_body.dart": "abstract class Store { "
+        "int read([int page = 1]) => page; }\n",
         "factory_body.dart": "abstract class Store { factory Store() { throw ''; } }\n",
         "factory_expression.dart": "abstract class Store { "
         "factory Store() => throw ''; }\n",
@@ -66,6 +69,7 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
         "interface.dart",
         "abstract_contract.dart",
         "redirecting_factory.dart",
+        "default_parameter.dart",
     }
     report = tmp_path / "lcov.info"
     report.write_text("SF:runtime.dart\nDA:1,1\nend_of_record\n")
@@ -101,13 +105,22 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
     library.mkdir()
     (library / "contract.dart").write_text(
         "abstract class Reader {}\n"
-        "abstract class Contract implements Reader { int read(); }\n"
+        "abstract class Contract implements Reader {\n"
+        "  int read();\n"
+        "  int page([int value = 1, Duration wait = const Duration(seconds: 1)]);\n"
+        "  List<bool> clear({bool files = false});\n"
+        "}\n"
     )
     (library / "runtime_contract.dart").write_text(
         "import 'contract.dart';\n"
         "final class RuntimeContract implements Contract {\n"
         "  @override\n"
         "  int read() => 2;\n"
+        "  @override\n"
+        "  int page([int value = 1, Duration wait = const Duration(seconds: 1)]) =>\n"
+        "      value;\n"
+        "  @override\n"
+        "  List<bool> clear({bool files = false}) => [files];\n"
         "}\n"
     )
     (library / "state.dart").write_text(
@@ -136,6 +149,11 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
         "  test('runs declaration consumers', () {\n"
         "    final Contract contract = RuntimeContract();\n"
         "    expect(contract.read(), 2);\n"
+        "    expect([contract.page(), contract.page(3)], [1, 3]);\n"
+        "    expect([contract.clear(), contract.clear(files: true)], [\n"
+        "      [false],\n"
+        "      [true],\n"
+        "    ]);\n"
         "    expect(State(enabled: true), isA<State>());\n"
         "    expect(run(), 1);\n"
         "    expect(uncalled, isA<Function>());\n"
@@ -184,6 +202,7 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
     native = lcov_coverage(report, tmp_path)
     assert library / "contract.dart" not in native
     assert library / "state.dart" not in native
+    assert native[library / "runtime_contract.dart"] == (4, 4)
     assert native[library / "runtime.dart"] == (1, 1)
     assert native[library / "uncovered.dart"] == (0, 1)
     assert line_coverage(report, "dart-tests", tmp_path, expected) == (1, 2)
