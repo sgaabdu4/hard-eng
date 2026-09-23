@@ -169,6 +169,14 @@ def scaffold_files(source: Path) -> set[str]:
     }
 
 
+def without_skills(files: set[str], skills: set[str]) -> set[str]:
+    return {
+        name
+        for name in files
+        if not any(name.startswith(f".agents/skills/{skill}/") for skill in skills)
+    }
+
+
 def pre_push_missing(root: Path) -> bool:
     from agent_hooks import project_pre_push
 
@@ -234,7 +242,11 @@ def update_plan(
         for name, content in plan["files"].items()
         if not (root / name).is_file() or (root / name).read_text() != content
     }
-    for name in scaffold_files(previous) - scaffold_files(source):
+    skills = {path.name for path in (source / ".agents/skills").iterdir()}
+    unused = skills - {Path(name).name for name in plan["links"]}
+    for name in scaffold_files(previous) - without_skills(
+        scaffold_files(source), unused
+    ):
         target = root / name
         if target.exists():
             if (
@@ -250,9 +262,9 @@ def update_plan(
         for name, target in plan["links"].items()
         if not (root / name).is_symlink()
     }
-    removed_skills = {path.name for path in (previous / ".agents/skills").iterdir()} - {
-        path.name for path in (source / ".agents/skills").iterdir()
-    }
+    removed_skills = {path.name for path in (previous / ".agents/skills").iterdir()} - (
+        skills - unused
+    )
     for skill in removed_skills:
         name = ".claude/skills/" + skill
         link = root / name
@@ -268,6 +280,10 @@ def write_changes(root: Path, changes: dict[str, str | None]) -> None:
         target = root / name
         if content is None:
             target.unlink(missing_ok=True)
+            for parent in target.parents:
+                if parent == root or not parent.is_dir() or any(parent.iterdir()):
+                    break
+                parent.rmdir()
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content)
@@ -462,6 +478,7 @@ def commit_update(
             if content is None:
                 target.unlink(missing_ok=True)
             else:
+                target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(content)
         for name, target in before_links.items():
             (root / name).unlink(missing_ok=True)
