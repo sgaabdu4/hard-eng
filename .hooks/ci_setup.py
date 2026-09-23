@@ -151,6 +151,36 @@ def workflow_tools(root: Path, config: GateConfig) -> list[str]:
     return tools
 
 
+def migrate_workflow_sdks(root: Path, config: GateConfig, content: str) -> str:
+    """Add SDKs that packages added after CI generation need; keep project tools."""
+    required = workflow_tools(root, config)[3:]
+    pattern = re.compile(
+        r"(?m)^(?P<indent> +)(?P<launcher>pnpm dlx \S+ \S+ mise --no-config) "
+        r"install (?P<tools>[^&\n]+) &&\n"
+        r"(?P=indent)MISE_FETCH_REMOTE_VERSIONS_CACHE=1h (?P=launcher) exec (?P=tools) -- "
+    )
+    match = pattern.search(content)
+    if match is None:
+        names = set(re.findall(r"\b([a-z]+)@", content))
+        missing = [tool for tool in required if tool.split("@")[0] not in names]
+        if missing:
+            print(
+                "CI tools not added: .github/workflows/hard-eng.yml is customised. "
+                f"Add {' '.join(missing)} to its mise install and exec tool lists.",
+                file=sys.stderr,
+            )
+        return content
+    tools = match["tools"].split()
+    names = {tool.split("@")[0] for tool in tools}
+    tools += [tool for tool in required if tool.split("@")[0] not in names]
+    if any(tool.startswith("flutter@") for tool in tools):
+        tools = [tool for tool in tools if not tool.startswith("dart@")]
+    if tools == match["tools"].split():
+        return content
+    updated = match.group(0).replace(match["tools"], " ".join(tools))
+    return content.replace(match.group(0), updated, 1)
+
+
 def maintenance_workflows_only(workflows: list[Path]) -> bool:
     """Allow a generated quality owner beside scheduled/manual maintenance jobs."""
     if not workflows:
@@ -193,6 +223,7 @@ def configure_ci(
     if (root / name).exists():
         original = (root / name).read_text()
         migrated = migrate_workflow_tools(migrate_workflow_pins(original))
+        migrated = migrate_workflow_sdks(root, config, migrated)
         migrated = migrate_workflow_triggers(
             root, source, migrate_docs_path(source, migrated)
         )
