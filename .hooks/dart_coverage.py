@@ -34,9 +34,9 @@ bool erased(CompilationUnitMember node) {
 }
 
 bool erasedClassMember(ClassMember member) {
+  if (member is MethodDeclaration) return member.body is EmptyFunctionBody;
   if (descendants(member).any((child) =>
       child is FormalParameterDefaultClause)) return false;
-  if (member is MethodDeclaration) return member.body is EmptyFunctionBody;
   if (member is FieldDeclaration) {
     return member.isStatic && member.fields.isConst;
   }
