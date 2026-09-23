@@ -48,7 +48,7 @@ def test_appwrite_unresolved_setup_installs_framework_and_reports_pending(
     installer.install(tmp_path)
     assert (
         "MCP setup pending: Appwrite needs the deployed endpoint"
-        in capsys.readouterr().out
+        in capsys.readouterr().err
     )
     assert (tmp_path / ".hooks/hard-eng.py").is_file()
     assert (
@@ -234,7 +234,7 @@ def test_appwrite_does_not_reuse_external_launcher(
     )
     assert (
         "MCP setup pending: Appwrite needs the deployed endpoint"
-        in capsys.readouterr().out
+        in capsys.readouterr().err
     )
 
 
@@ -305,7 +305,7 @@ def test_sentry_unsupported_stdio_target_stays_pending_for_missing_hosts(
     assert_preserved_pending_stdio_server(
         target, original, changes, "sentry", "sentry-mcp"
     )
-    assert "MCP setup pending: existing Sentry MCP target" in capsys.readouterr().out
+    assert "MCP setup pending: existing Sentry MCP target" in capsys.readouterr().err
 
     target.write_text(
         json.dumps(
@@ -323,7 +323,7 @@ def test_sentry_unsupported_stdio_target_stays_pending_for_missing_hosts(
     from mcp_setup import sentry_server
 
     assert sentry_server(tmp_path) is None
-    assert "MCP setup pending: existing Sentry MCP target" in capsys.readouterr().out
+    assert "MCP setup pending: existing Sentry MCP target" in capsys.readouterr().err
 
 
 def test_legacy_appwrite_cloud_conflict_is_preserved(
