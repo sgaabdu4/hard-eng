@@ -54,6 +54,9 @@ def test_appwrite_unresolved_setup_installs_framework_and_reports_pending(
     assert (
         "appwrite" not in json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"]
     )
+    guide = tmp_path / ".claude/skills/appwrite-backend/references/mcp-servers.md"
+    assert guide.is_file()
+    assert not (tmp_path / ".agents/skills/building-flutter-apps").exists()
 
 
 def test_mcp_setup_leaves_unmanaged_vscode_jsonc_untouched(

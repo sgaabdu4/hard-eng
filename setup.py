@@ -500,11 +500,24 @@ def configure_deployment(root: Path, config: GateConfig) -> None:
             return
 
 
-def scaffold_changes(root: Path, previous: Path | None = None) -> dict[str, str]:
-    from update import scaffold_files
+STACK_SKILLS = {"appwrite-backend": "Appwrite", "building-flutter-apps": "Dart"}
+
+
+def unused_skills(root: Path) -> set[str]:
+    from agent_hooks import integrated_services
+
+    services = integrated_services(root)
+    return {skill for skill, service in STACK_SKILLS.items() if service not in services}
+
+
+def scaffold_changes(
+    root: Path, previous: Path | None, unused: set[str]
+) -> dict[str, str]:
+    from update import scaffold_files, without_skills
 
     changes = {
-        name: (SOURCE / name).read_text() for name in sorted(scaffold_files(SOURCE))
+        name: (SOURCE / name).read_text()
+        for name in sorted(without_skills(scaffold_files(SOURCE), unused))
     }
     for name, content in changes.items():
         target = root / name
@@ -519,10 +532,10 @@ def scaffold_changes(root: Path, previous: Path | None = None) -> dict[str, str]
     return changes
 
 
-def prepare_skill_links(root: Path) -> dict[str, str]:
+def prepare_skill_links(root: Path, unused: set[str]) -> dict[str, str]:
     links = {}
     for skill in (SOURCE / ".agents/skills").iterdir():
-        if not skill.is_dir():
+        if not skill.is_dir() or skill.name in unused:
             continue
         name = ".claude/skills/" + skill.name
         link = root / name
@@ -573,7 +586,8 @@ def plan_install(
     ).strip()
     if Path(git_root).resolve() != root:
         raise ValueError("Run setup from the target Git repository root")
-    changes = scaffold_changes(root, previous)
+    unused = unused_skills(root)
+    changes = scaffold_changes(root, previous, unused)
     from agent_hooks import configure_instructions
 
     configure_instructions(root, SOURCE, previous, changes)
@@ -627,7 +641,7 @@ def plan_install(
     ):
         changes["hard-eng.gates.json"] = json.dumps(config, indent=2) + "\n"
     hook, launcher = prepare_hook(root)
-    links = prepare_skill_links(root)
+    links = prepare_skill_links(root, unused)
     validate_destinations(root, changes, hook)
     return changes, links, hook, launcher
 

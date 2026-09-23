@@ -1,6 +1,7 @@
 """Real Git update transactions preserve local work and obey check scope."""
 
 import json
+import shutil
 import subprocess
 import tomllib
 from collections.abc import Callable
@@ -342,6 +343,52 @@ def test_overlapping_local_edit_prevents_update(
         update.update(target)
     assert reference.read_text() == "local custom instructions\n"
     assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
+
+
+@pytest.mark.parametrize("case", ["unedited", "edited", "rejected"])
+def test_update_removes_unused_stack_skill_unless_edited(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    source, target, old = release
+    skill = ".agents/skills/appwrite-backend"
+    link = ".claude/skills/appwrite-backend"
+    shutil.copytree(source / skill, target / skill)
+    (target / link).symlink_to("../../" + skill)
+    guide = target / skill / "SKILL.md"
+    if case == "edited":
+        guide.write_text("local Appwrite rules\n")
+    commit(target, "install from a release that copied every skill")
+    installed = set(git(target, "ls-files", "--", skill, link).splitlines())
+    select_release(source, monkeypatch)
+    if case == "edited":
+        with pytest.raises(ValueError, match="Local scaffold edit"):
+            update.update(target)
+        assert guide.read_text() == "local Appwrite rules\n"
+        assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
+        return
+    if case == "rejected":
+        hook = target / ".git/hooks/pre-commit"
+        hook.write_text("#!/bin/sh\nexit 1\n")
+        hook.chmod(0o755)
+        with pytest.raises(subprocess.SubprocessError):
+            update.update(target)
+        assert git(target, "status", "--porcelain") == ""
+        assert (target / link / "SKILL.md").is_file()
+        return
+    update.update(target)
+    deleted = git(
+        target,
+        "diff-tree",
+        "--no-commit-id",
+        "--name-only",
+        "--diff-filter=D",
+        "-r",
+        "HEAD",
+    )
+    assert set(deleted.splitlines()) == installed
+    assert not (target / skill).exists()
+    assert not (target / link).is_symlink()
+    assert (target / ".claude/skills/he/SKILL.md").is_file()
 
 
 def test_project_configuration_update_runs_application_checks(

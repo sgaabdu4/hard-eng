@@ -393,6 +393,9 @@ def test_plain_dart_uses_native_coverage_tool(
     assert [path.read_text() for path in authored] == ["void main() {}\n"] * len(
         authored
     )
+    flutter = tmp_path / ".claude/skills/building-flutter-apps"
+    assert (flutter / "SKILL.md").is_file()
+    assert not (tmp_path / ".agents/skills/appwrite-backend").exists()
     updated = json.loads((tmp_path / "hard-eng.gates.json").read_text())
     types = [
         check for check in updated["packages"][0]["checks"] if check["role"] == "types"
@@ -518,6 +521,10 @@ def test_install_preserves_project_and_repeats(
         canonical = entry.parent
         name = canonical.name
         installed = tmp_path / ".agents/skills" / name
+        if name in installer.STACK_SKILLS:
+            assert not installed.exists()
+            assert not (tmp_path / ".claude/skills" / name).is_symlink()
+            continue
         for path in canonical.rglob("*"):
             if path.is_file():
                 assert (
