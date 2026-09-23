@@ -360,6 +360,20 @@ def test_invalid_shipping_budget_is_rejected(tmp_path: Path) -> None:
         configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
 
 
+def generated_tools(root: Path, config: GateConfig) -> tuple[str, list[str], list[str]]:
+    """Run setup and return the workflow plus its mise install and exec tool lists."""
+    changes: dict[str, str] = {}
+    configure_ci(root, SOURCE, config, changes)
+    workflow = changes[".github/workflows/hard-eng.yml"]
+    steps = yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"]
+    install, execute = map(shlex.split, steps[-1]["run"].splitlines())
+    return (
+        workflow,
+        install[install.index("install") + 1 : -1],
+        execute[execute.index("exec") + 1 : execute.index("--")],
+    )
+
+
 @pytest.mark.parametrize("manager", ["dart", "flutter"])
 def test_dart_workflow_uses_packaged_scanner_without_rust(
     tmp_path: Path, manager: str, shipping_policy: ShippingPolicy
@@ -380,26 +394,9 @@ def test_dart_workflow_uses_packaged_scanner_without_rust(
         )
     )
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
-    changes: dict[str, str] = {}
-    configure_ci(tmp_path, SOURCE, config, changes)
-    workflow = changes[".github/workflows/hard-eng.yml"]
-    commands = yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"][-1][
-        "run"
-    ].splitlines()
-    install = shlex.split(commands[0])
-    assert install[install.index("install") + 1 : -1] == [
-        "uv@latest",
-        "python@3.12",
-        "node@latest",
-        manager + "@latest",
-    ]
-    execute = shlex.split(commands[1])
-    assert execute[execute.index("exec") + 1 : execute.index("--")] == [
-        "uv@latest",
-        "python@3.12",
-        "node@latest",
-        manager + "@latest",
-    ]
+    workflow, installed, executed = generated_tools(tmp_path, config)
+    tools = ["uv@latest", "python@3.12", "node@latest", manager + "@latest"]
+    assert installed == executed == tools
     assert "rust@latest" not in workflow
 
 
@@ -551,3 +548,52 @@ def test_impact_reports_docs_only_before_tools(
     module.__dict__["ROOT"] = repository
     assert module.impact("HEAD") == 0
     assert capsys.readouterr().out == f"docs_only={expected}\n"
+
+
+def flutter_app_config(root: Path) -> GateConfig:
+    app = root / "app"
+    app.mkdir()
+    (app / "pubspec.yaml").write_text(
+        yaml.safe_dump({"name": "app", "dependencies": {"flutter": {"sdk": "flutter"}}})
+    )
+    return {
+        "packages": [{"path": "app", "language": "dart", "checks": []}],
+        "shared": [],
+    }
+
+
+def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> None:
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    old = (
+        (SOURCE / ".github/workflows/hard-eng.yml")
+        .read_text()
+        .replace(
+            "uv@latest python@3.12 node@latest dart@latest",
+            "uv@latest python@3.12 pnpm@12.4.1 dart@latest rust@latest",
+        )
+    )
+    path.write_text(old)
+    config = flutter_app_config(tmp_path)
+    workflow, installed, executed = generated_tools(tmp_path, config)
+    tools = ["uv@latest", "python@3.12", "pnpm@12.4.1", "rust@latest", "flutter@latest"]
+    assert installed == executed == tools
+    path.write_text(workflow)
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, config, changes)
+    assert not changes
+
+
+def test_customised_workflow_names_missing_sdk(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    content = "jobs:\n  custom:\n    steps:\n      - run: mise exec dart@latest -- make check\n"
+    path.write_text(content)
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, flutter_app_config(tmp_path), changes)
+    assert not changes
+    assert "Add flutter@latest to its mise install and exec tool lists." in (
+        capsys.readouterr().err
+    )
