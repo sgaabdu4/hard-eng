@@ -14,7 +14,7 @@ Owners: `.agents/skill-sources/building-flutter-apps` submodule; `migrate_dart_p
 
 Blockers: None
 Handoff: Approval
-Authority: User approved bumping the pin and opening a Hard Eng PR; merge is not authorized.
+Authority: User approved bumping the pin, opening a Hard Eng PR, and merging it once CI passes.
 
 ## Acceptance + steps
 
@@ -42,5 +42,5 @@ Result: Passed
 Evidence: `git submodule status` → `7f3f1cd` (v5.11.0). `uv run pytest -q tests/test_dart_config.py` → 54 passed, including `0.11.2`/`^0.11.2` → migrate and `0.12.0`/`^0.12.0` → keep. Full Complete gate below.
 E2E: N/A — configuration pin; proof is the migration tests and gate.
 
-Delivery target: PR
-Delivery: Pending — PR checks green; merge not authorized.
+Delivery target: Merge
+Delivery: Pending — PR checks green, merge to main, main CI green.
