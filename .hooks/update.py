@@ -12,6 +12,7 @@ from operator import itemgetter
 from pathlib import Path
 
 UPSTREAM = "sgaabdu4/hard-eng"
+REPOSITORY = f"https://github.com/{UPSTREAM}.git"
 SOURCE_FILE = ".hooks/hard-eng-source.json"
 
 
@@ -114,7 +115,7 @@ def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, 
             "clone",
             "--quiet",
             "--filter=blob:none",
-            f"https://github.com/{UPSTREAM}.git",
+            REPOSITORY,
             str(source),
         ],
         check=True,
@@ -448,13 +449,14 @@ def commit_update(
             cwd=root,
             check=True,
         )
+        message = f"Update Hard Eng to {revision}"
         result = subprocess.run(
             [
                 "git",
                 "commit",
                 "--only",
                 "-m",
-                f"Update Hard Eng to {revision}",
+                message,
                 "--",
                 *names,
             ],
@@ -652,8 +654,9 @@ def check_scaffold_update(root: Path, base: str) -> bool:
 def preserved_instructions(root: Path, base: str, names: set[str]) -> bool:
     end = "<!-- hard-eng:end -->\n\n"
     for name in names & {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}:
+        blob = f"{base}:{name}"
         original = subprocess.run(
-            ["git", "show", f"{base}:{name}"],
+            ["git", "show", blob],
             cwd=root,
             text=True,
             capture_output=True,
