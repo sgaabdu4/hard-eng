@@ -46,5 +46,5 @@ Result: Passed
 Evidence: With the old `setup.py`, the new and strengthened tests failed (both root forms duplicated, earlier-install duplicates kept, fresh install duplicated); with only the matcher change, the two project-named duplicate cases still failed. With the fix, `pytest tests/test_setup.py tests/test_dart_config.py` → 118 passed. Real installer on a synthetic root Dart fixture: a fresh install gave one `types-lint` on `lib test`. After the gate was changed to `strict-types-lint` `dart analyze --fatal-infos`, reinstall kept exactly that gate with no duplicate. Starting from the issue's duplicated state (`strict-types-lint` path-less as `project-types` + `strict-types-lint` on `lib test`), reinstall and a repeat left only the path-less `strict-types-lint` as `types`. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, 810 tests passed.
 E2E: Passed — `setup.py` fresh install and reinstall on the synthetic fixture, with the same reconciliation covered by `test_plain_dart_uses_native_coverage_tool`.
 
-Delivery target: PR
-Delivery: Pending — PR checks green.
+Delivery target: Merge
+Delivery: Pending — PR checks green, merge to main, main CI green.

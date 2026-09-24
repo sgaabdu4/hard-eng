@@ -46,3 +46,6 @@ N/A — hook-only change with no visual surface.
 Result: Passed
 Evidence: `uv run pytest tests/test_setup.py` → 58 passed; with the LCOV append removed, or with a selector that also matches `@TestOn('!browser')`, the new test fails. Synthetic package runs as listed under Acceptance. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, 804 tests passed.
 E2E: Passed — `setup.py` installed into a synthetic Flutter package with `lib/web_adapter.dart`; Hard Eng's `run_gate` ran the rewritten tests gate with real `flutter test` and `dart test` on Chrome → `Line coverage: 2/2 (100.00%)`, `PASS tests`.
+
+Delivery target: Merge
+Delivery: Pending — PR checks green, merge to main, main CI green.
