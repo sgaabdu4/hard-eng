@@ -15,7 +15,8 @@ Evidence (synthetic package, Flutter 3.47.5 / Dart 3.13.4, Chrome): `flutter tes
 
 Blockers: None
 Handoff: Approval
-Authority: User asked to fix all open Hard Eng issues.
+Authority: User asked to fix all open Hard Eng issues, combine this with the #159 fix in one PR and decide the coverage trade-offs.
+Trade-offs decided: accept dart2js source-map LCOV as the browser coverage producer and keep file-level inventory required. Do not infer uncovered functions from missing lines: on Dart 3.13.4, a test that called `revokeBlobUrl` (`=> web.URL.revokeObjectURL(url)`) and a one-statement block forwarder produced no lines for either, exactly like an uncalled function. With `--dart2js-args=-O0`, an uncalled function was still absent. `dart test` offers only dart2js and dart2wasm for Chrome, and dart2wasm wrote an empty report. Files made only of inlined forwarders keep failing rather than being exempted. The `sh -c` tests command follows the existing Dart format gate.
 Consumer contract: browser tests carry `@TestOn('browser')` (so `flutter test` skips them), import `package:test/test.dart` rather than `flutter_test`, and the package declares `test` as a dev dependency; Chrome must be available. Only an unmodified template Flutter tests command is rewritten; a customized command is left to its owner.
 
 ## Acceptance + steps
