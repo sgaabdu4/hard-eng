@@ -331,6 +331,71 @@ def test_nested_dart_owner_keeps_native_analyzer_scope(
     assert function["checks"][0]["command"] == ["dart", "analyze", "--fatal-infos", "."]
 
 
+@pytest.mark.parametrize(
+    ("command", "adequate"),
+    [
+        (["dart", "analyze", "--fatal-infos"], True),
+        (["dart", "analyze", "--fatal-infos", "."], True),
+        (["dart", "analyze"], False),
+        (["dart", "analyze", "--fatal-infos", "lib"], False),
+    ],
+)
+def test_root_dart_analyzer_is_reused_only_when_it_covers_the_package(
+    installer: ModuleType, tmp_path: Path, command: list[str], adequate: bool
+) -> None:
+    for name in ("lib", "test"):
+        (tmp_path / name).mkdir()
+    existing = {"name": "analyze", "role": "types", "command": list(command)}
+    package: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [existing],
+    }
+
+    installer.configure_typing_checks(tmp_path, package)
+    installer.configure_typing_checks(tmp_path, package)
+    types = [gate for gate in package["checks"] if gate["role"] == "types"]
+    assert len(types) == 1
+    assert existing["command"] == command
+    assert (types[0] is existing) is adequate
+    if not adequate:
+        assert existing["role"] == "project-types"
+        assert types[0]["command"] == [
+            "dart",
+            "analyze",
+            "--fatal-infos",
+            "lib",
+            "test",
+        ]
+
+
+def test_root_dart_update_consolidates_duplicate_template_analyzers(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    for name in ("lib", "test"):
+        (tmp_path / name).mkdir()
+    explicit = ["dart", "analyze", "--fatal-infos", "lib", "test"]
+    package: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [
+            {
+                "name": "types-lint",
+                "role": "project-types",
+                "command": ["dart", "analyze", "--fatal-infos", "."],
+            },
+            {"name": "strict-types-lint", "role": "types", "command": explicit},
+        ],
+    }
+
+    installer.configure_typing_checks(tmp_path, package)
+    assert package["checks"] == [
+        {"name": "types-lint", "role": "types", "command": explicit}
+    ]
+
+
 def test_plain_dart_uses_native_coverage_tool(
     installer: ModuleType, tmp_path: Path
 ) -> None:
@@ -355,6 +420,11 @@ def test_plain_dart_uses_native_coverage_tool(
     assert result.returncode == 0, result.stderr
     config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
     checks = {gate["role"]: gate for gate in config["packages"][0]["checks"]}
+    assert [
+        gate["name"]
+        for gate in config["packages"][0]["checks"]
+        if gate["command"][:2] == ["dart", "analyze"]
+    ] == ["types-lint"]
     assert checks["types"]["command"][:3] == ["dart", "analyze", "--fatal-infos"]
     assert set(checks["types"]["command"][3:]) == {
         "lib",

@@ -175,37 +175,53 @@ def configure_typing_checks(root: Path, package: Group) -> None:
         for required in json.loads(template.read_text())["packages"][0]["checks"]:
             if required["role"] not in {"types", "annotations", "typing-style"}:
                 continue
+            root_dart = package.get("language") == "dart" and package.get("path") == "."
+            template_command = required["command"]
             required["command"] = [
                 value
-                for argument in required["command"]
+                for argument in template_command
                 for value in (
                     package.get("sources", ["src"])
                     if argument == "src"
-                    else [argument]
-                    if not (
-                        argument == "."
-                        and package.get("language") == "dart"
-                        and package.get("path") == "."
-                    )
                     else root_dart_sources
+                    if argument == "." and root_dart
+                    else [argument]
                 )
             ]
+            accepted = [required["command"]]
+            if root_dart and "." in template_command:
+                accepted += adopt_root_dart_gates(
+                    package["checks"], required, template_command
+                )
             matching = next(
-                (
-                    gate
-                    for gate in package["checks"]
-                    if gate["command"] == required["command"]
-                ),
+                (gate for gate in package["checks"] if gate["command"] in accepted),
                 None,
             )
             if matching is not None:
                 matching["role"] = required["role"]
+                # Earlier installs could leave identical copies of the reused gate.
+                package["checks"][:] = [
+                    gate
+                    for gate in package["checks"]
+                    if gate is matching or gate["command"] != matching["command"]
+                ]
                 continue
             for gate in package["checks"]:
                 if gate.get("role") == required["role"]:
                     gate["role"] = "project-" + required["role"]
             required["name"] = "strict-" + required["name"]
             package["checks"].append(required)
+
+
+def adopt_root_dart_gates(
+    checks: list[Gate], required: Gate, template_command: list[str]
+) -> list[list[str]]:
+    for gate in checks:
+        # Hard Eng's own unexpanded root gate follows the expanded template.
+        if gate["name"] == required["name"] and gate["command"] == template_command:
+            gate["command"] = required["command"]
+    # A project's package-root analyzer already covers the explicit directories.
+    return [template_command, [value for value in template_command if value != "."]]
 
 
 def configure_dart(
