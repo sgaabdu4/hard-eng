@@ -39,7 +39,7 @@ N/A — no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Sandbox: fresh install reformatted with tab indentation → `setup.py --plan` plans no file changes (before the fix: all five JSON files). Removing `codebase-memory-mcp` and the `Stop` hook → only `.mcp.json` and `.claude/settings.json` are planned, both entries come back and a user-added server is kept. Without the fix, `test_install_preserves_project_and_repeats` and `test_installer_preserves_native_mcp_settings_on_rerun` fail on the rewritten files. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, FULLCOUNT tests.
+Evidence: Sandbox: fresh install reformatted with tab indentation → `setup.py --plan` plans no file changes (before the fix: all five JSON files). Removing `codebase-memory-mcp` and the `Stop` hook → only `.mcp.json` and `.claude/settings.json` are planned, both entries come back and a user-added server is kept. Without the fix, `test_install_preserves_project_and_repeats` and `test_installer_preserves_native_mcp_settings_on_rerun` fail on the rewritten files. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, 802 tests.
 E2E: N/A — setup planning change; the sandbox `setup.py --plan` run exercises the affected boundary.
 
 Delivery target: Merge

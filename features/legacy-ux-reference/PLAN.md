@@ -39,7 +39,7 @@ N/A — no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Without the fix, the `ux` case of `test_unchanged_complete_plan_predates_newer_rules` fails with `ux_reference: plan needs one 'Surface:' field, found 0`, the error in #148; with it, both cases and `test_legacy_ux_reference_keeps_its_original_rules` pass. All 102 Complete plan versions in this repository's history still validate as unchanged plans. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, FULLCOUNT tests.
+Evidence: Without the fix, the `ux` case of `test_unchanged_complete_plan_predates_newer_rules` fails with `ux_reference: plan needs one 'Surface:' field, found 0`, the error in #148; with it, both cases and `test_legacy_ux_reference_keeps_its_original_rules` pass. All 102 Complete plan versions in this repository's history still validate as unchanged plans. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, 802 tests.
 E2E: N/A — plan validation change; the CLI check on a legacy plan exercises the affected boundary.
 
 Delivery target: Merge
