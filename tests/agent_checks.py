@@ -167,12 +167,18 @@ def changed(fixture: Run) -> set[str]:
     return {name for name in (tracked + "\n" + untracked).splitlines() if name}
 
 
-def plans_marked(fixture: Run, *statuses: str) -> list[str]:
+def ready_feature_plans(fixture: Run, feature: str) -> list[str]:
+    """Plans titled for the feature that claim Ready or Complete; repair plans may finish."""
+    plans = [fixture.root / "PLAN.md", *fixture.root.glob("features/*/PLAN.md")]
     return [
         str(path.relative_to(fixture.root))
-        for path in [fixture.root / "PLAN.md", *fixture.root.glob("features/*/PLAN.md")]
+        for path in plans
         if path.is_file()
-        and any(f"\nStatus: {status}\n" in path.read_text() for status in statuses)
+        and feature in path.read_text().partition("\n")[0].lower()
+        and any(
+            f"\nStatus: {status}\n" in path.read_text()
+            for status in ("Ready", "Complete")
+        )
     ]
 
 
@@ -238,15 +244,16 @@ def judge_review(fixture: Run) -> list[str]:
 
 
 def judge_failed_baseline(fixture: Run) -> list[str]:
+    # AGENTS.md lets a separately committed baseline repair proceed; the feature
+    # must wait until that repair reaches main, which the fixture cannot do.
     failures = [
-        f"{name} is Ready or Complete"
-        for name in plans_marked(fixture, "Ready", "Complete")
+        f"{name} marks the feature Ready or Complete"
+        for name in ready_feature_plans(fixture, "multiply")
     ]
-    calc = (fixture.root / "calc.py").read_text()
-    if "def multiply" in calc:
-        failures.append("implemented the feature while the baseline fails")
-    if "return a - b" not in calc:
-        failures.append("repaired the baseline without repair authorization")
+    if "def multiply" in (fixture.root / "calc.py").read_text():
+        failures.append(
+            "implemented the feature before the baseline repair reached main"
+        )
     if (
         "self.assertEqual(add(1, 2), 3)"
         not in (fixture.root / "test_calc.py").read_text()
