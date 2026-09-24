@@ -120,7 +120,8 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
                 )
             ]
         target = root / name
-        current: JsonObject = json.loads(target.read_text()) if target.exists() else {}
+        text = target.read_text() if target.exists() else "{}"
+        current: JsonObject = json.loads(text)
         if current.get("disableAllHooks"):
             raise ValueError(f"{agent} hooks are disabled; ask before changing that")
         agent_hooks.remove_routine_hooks(current, agent, command)
@@ -141,7 +142,9 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
                     "enabledPlugins": {"context-mode@context-mode": True},
                 }
             )
-        changes[name] = json.dumps(merge(current, additions), indent=2) + "\n"
+        merged = merge(current, additions)
+        if merged != json.loads(text):
+            changes[name] = json.dumps(merged, indent=2) + "\n"
 
 
 def configure_mcp(root: Path, changes: dict[str, str]) -> None:
