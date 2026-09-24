@@ -556,6 +556,16 @@ def test_session_defers_integration_readiness_until_relevant_use(
     assert "registration alone is not readiness" in message
 
 
+def assert_rerun_keeps_written_hooks(
+    repository: Path, installer: ModuleType, path: Path, changes: dict[str, str]
+) -> None:
+    written = str(path.relative_to(repository))
+    path.write_text(changes[written])
+    repeated: dict[str, str] = {}
+    installer.configure_hooks(repository, repeated)
+    assert repeated == {name: text for name, text in changes.items() if name != written}
+
+
 @pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
 def test_setup_removes_owned_routine_hooks_and_preserves_custom_hooks(
     repository: Path, installer: ModuleType, agent: str
@@ -599,11 +609,7 @@ def test_setup_removes_owned_routine_hooks_and_preserves_custom_hooks(
     for native, entries in hooks.items():
         assert isinstance(entries, list)
         assert result[native] == entries[1:]
-    written = str(path.relative_to(repository))
-    path.write_text(changes[written])
-    repeated: dict[str, str] = {}
-    installer.configure_hooks(repository, repeated)
-    assert repeated == {name: text for name, text in changes.items() if name != written}
+    assert_rerun_keeps_written_hooks(repository, installer, path, changes)
 
 
 @pytest.mark.parametrize(
@@ -651,11 +657,7 @@ def test_setup_migrates_codex_hook_status_without_duplicate(
         }
     ]
 
-    written = str(path.relative_to(repository))
-    path.write_text(changes[written])
-    repeated: dict[str, str] = {}
-    installer.configure_hooks(repository, repeated)
-    assert repeated == {name: text for name, text in changes.items() if name != written}
+    assert_rerun_keeps_written_hooks(repository, installer, path, changes)
 
 
 def test_new_branch_zero_base_compares_with_default_branch(
