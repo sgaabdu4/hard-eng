@@ -56,6 +56,16 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
         "method.dart": "abstract final class Values { static int call() => 1; }\n",
         "constructor.dart": "class Value { const Value(); }\n",
         "enum_method.dart": "enum Choice { yes; int call() => 1; }\n",
+        "enum_field.dart": "enum Shift { am('Morning'); "
+        "const Shift(this.label); final String label; }\n",
+        "enum_default.dart": "enum Level { low, high(2); "
+        "const Level([this.value = 1]) : assert(value > 0); final int value; "
+        "static const first = low; }\n",
+        "enum_getter.dart": "enum Shift { am('Morning'); "
+        "const Shift(this.label); final String label; "
+        "String get upper => label.toUpperCase(); }\n",
+        "enum_static_final.dart": "enum Choice { yes; "
+        "static final created = DateTime.now(); }\n",
         "malformed.dart": "const int value = ;\n",
         "comment_trick.dart": "/* before */ int call() => 1; /* after */\n",
     }
@@ -70,6 +80,8 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
         "abstract_contract.dart",
         "redirecting_factory.dart",
         "default_parameter.dart",
+        "enum_field.dart",
+        "enum_default.dart",
     }
     report = tmp_path / "lcov.info"
     report.write_text("SF:runtime.dart\nDA:1,1\nend_of_record\n")
@@ -134,6 +146,13 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
         "  final bool enabled;\n"
         "}\n"
     )
+    (library / "shift.dart").write_text(
+        "enum Shift {\n"
+        "  am('Morning');\n"
+        "  const Shift(this.label);\n"
+        "  final String label;\n"
+        "}\n"
+    )
     (library / "runtime.dart").write_text("int run() => 1;\n")
     (library / "uncovered.dart").write_text("int uncalled() => 3;\n")
     tests = tmp_path / "test"
@@ -142,6 +161,7 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
         "import 'package:native_dart_coverage_fixture/contract.dart';\n"
         "import 'package:native_dart_coverage_fixture/runtime.dart';\n"
         "import 'package:native_dart_coverage_fixture/runtime_contract.dart';\n"
+        "import 'package:native_dart_coverage_fixture/shift.dart';\n"
         "import 'package:native_dart_coverage_fixture/state.dart';\n"
         "import 'package:native_dart_coverage_fixture/uncovered.dart';\n"
         "import 'package:test/test.dart';\n"
@@ -155,6 +175,7 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
         "      [true],\n"
         "    ]);\n"
         "    expect(State(enabled: true), isA<State>());\n"
+        "    expect(Shift.am.label, 'Morning');\n"
         "    expect(run(), 1);\n"
         "    expect(uncalled, isA<Function>());\n"
         "  });\n"
@@ -193,15 +214,23 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
     )
     expected = {
         library / name
-        for name in ("contract.dart", "state.dart", "runtime.dart", "uncovered.dart")
+        for name in (
+            "contract.dart",
+            "state.dart",
+            "shift.dart",
+            "runtime.dart",
+            "uncovered.dart",
+        )
     }
     assert {path.name for path in erased_dart(expected, tmp_path)} == {
         "contract.dart",
         "state.dart",
+        "shift.dart",
     }
     native = lcov_coverage(report, tmp_path)
     assert library / "contract.dart" not in native
     assert library / "state.dart" not in native
+    assert library / "shift.dart" not in native
     assert native[library / "runtime_contract.dart"] == (4, 4)
     assert native[library / "runtime.dart"] == (1, 1)
     assert native[library / "uncovered.dart"] == (0, 1)
