@@ -494,6 +494,15 @@ def test_install_preserves_project_and_repeats(
     custom_skill.parent.mkdir(parents=True)
     custom_skill.write_text("# Existing project skill\nKeep this too.\n")
     installer.install(tmp_path)
+    for name in (
+        ".mcp.json",
+        ".github/mcp.json",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        ".github/hooks/hard-eng.json",
+    ):
+        formatted = tmp_path / name
+        formatted.write_text(json.dumps(json.loads(formatted.read_text()), indent="\t"))
     before = snapshot(tmp_path)
     installer.install(tmp_path)
     assert snapshot(tmp_path) == before

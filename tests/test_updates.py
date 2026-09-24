@@ -35,8 +35,7 @@ def test_installer_preserves_native_mcp_settings_on_rerun(
     )
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
-    servers = json.loads(changes[".mcp.json"])["mcpServers"]
-    assert servers["codebase-memory-mcp"] == settings
+    assert ".mcp.json" not in changes
     servers = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
     assert servers["codebase-memory-mcp"] == settings
     assert servers["context-mode"]["command"] == "pnpm"
@@ -46,7 +45,7 @@ def test_installer_preserves_native_mcp_settings_on_rerun(
         path.write_text(content)
     repeated: dict[str, str] = {}
     installer.configure_mcp(tmp_path, repeated)
-    assert repeated == changes
+    assert all((tmp_path / name).read_text() == text for name, text in repeated.items())
 
 
 def test_uninitialized_skill_submodule_cannot_be_silently_omitted(

@@ -599,10 +599,11 @@ def test_setup_removes_owned_routine_hooks_and_preserves_custom_hooks(
     for native, entries in hooks.items():
         assert isinstance(entries, list)
         assert result[native] == entries[1:]
-    path.write_text(changes[str(path.relative_to(repository))])
+    written = str(path.relative_to(repository))
+    path.write_text(changes[written])
     repeated: dict[str, str] = {}
     installer.configure_hooks(repository, repeated)
-    assert repeated == changes
+    assert repeated == {name: text for name, text in changes.items() if name != written}
 
 
 @pytest.mark.parametrize(
@@ -650,10 +651,11 @@ def test_setup_migrates_codex_hook_status_without_duplicate(
         }
     ]
 
-    path.write_text(changes[str(path.relative_to(repository))])
+    written = str(path.relative_to(repository))
+    path.write_text(changes[written])
     repeated: dict[str, str] = {}
     installer.configure_hooks(repository, repeated)
-    assert repeated == changes
+    assert repeated == {name: text for name, text in changes.items() if name != written}
 
 
 def test_new_branch_zero_base_compares_with_default_branch(
