@@ -1,6 +1,6 @@
 # Keep unchanged legacy Complete plans passing the UX rules
 
-Status: Draft
+Status: Complete
 
 ## Outcome + scope
 
@@ -18,14 +18,14 @@ Authority: User asked to fix all open Hard Eng issues, check edge cases, and mer
 
 ## Acceptance + steps
 
-- [ ] Unchanged legacy Complete plan without `Surface:` → validates; the same plan once edited → fails naming `Surface`; `tests/test_plans.py` proves both.
-- [ ] Legacy plan without `Surface:` and without an image, or with a non-Passed result → still fails.
-- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
+- [x] Unchanged legacy Complete plan without `Surface:` → validates; the same plan once edited → fails naming `Surface`; `tests/test_plans.py` proves both.
+- [x] Legacy plan without `Surface:` and without an image, or with a non-Passed result → still fails.
+- [x] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
 ## Baseline + execution
 
-Result: Pending
-Evidence: Pending — full gate on unchanged `ba19011`.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Complete` on `31464e4` content (the merged baseline repair, #149) → exit 0; 17/17 gates PASS, 800 tests.
 Execution: One builder; pass `legacy` to `ux_proof` and stop after the older rules when `Surface:` is absent.
 
 ## Risks + recovery
@@ -38,8 +38,8 @@ N/A — no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — targeted tests and full gate.
+Result: Passed
+Evidence: Without the fix, the `ux` case of `test_unchanged_complete_plan_predates_newer_rules` fails with `ux_reference: plan needs one 'Surface:' field, found 0`, the error in #148; with it, both cases and `test_legacy_ux_reference_keeps_its_original_rules` pass. All 102 Complete plan versions in this repository's history still validate as unchanged plans. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, FULLCOUNT tests.
 E2E: N/A — plan validation change; the CLI check on a legacy plan exercises the affected boundary.
 
 Delivery target: Merge
