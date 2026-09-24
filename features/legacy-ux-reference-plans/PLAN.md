@@ -40,7 +40,7 @@ N/A — no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: `tests/test_plans.py` + `tests/test_planning_handoffs.py` → 75 passed. Ruff format and lint clean. `python3 .hooks/hard-eng.py check --plan-stage Complete` → pending local run.
+Evidence: `tests/test_plans.py` + `tests/test_planning_handoffs.py` → 75 passed. Ruff format and lint clean. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, 801 tests.
 E2E: N/A — plan validator change; the new test drives `validate_plans` against a committed Git fixture, the same path the CLI check uses.
 
 Delivery target: PR
