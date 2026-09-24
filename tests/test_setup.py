@@ -856,6 +856,7 @@ def test_flutter_browser_library_coverage_comes_from_browser_tests(
     web.write_text("import 'package:web/web.dart' as web;\n")
     (tmp_path / "test/vm_test.dart").write_text("void main() {}\n")
     (tmp_path / "test/web_test.dart").write_text("@TestOn('browser')\nlibrary;\n")
+    (tmp_path / "test/io_test.dart").write_text("@TestOn('!browser')\nlibrary;\n")
     plain: Group = {
         "path": ".",
         "language": "dart",
@@ -897,7 +898,10 @@ def test_flutter_browser_library_coverage_comes_from_browser_tests(
             env={"PATH": f"{tools}:/usr/bin:/bin"},
             check=True,
         )
-    assert (tmp_path / "dart.args").read_text().split()[-1] == "test/web_test.dart"
+    arguments = (tmp_path / "dart.args").read_text().split()
+    assert [value for value in arguments if value.startswith("test/")] == [
+        "test/web_test.dart"
+    ]
     assert completed_tests(tmp_path / "tests.jsonl", "dart-tests") == 2
     expected = {(tmp_path / "lib/vm.dart").resolve(), web.resolve()}
     coverage = tmp_path / "coverage/lcov.info"

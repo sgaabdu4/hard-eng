@@ -9,7 +9,7 @@ Fix [#158](https://github.com/sgaabdu4/hard-eng/issues/158): a Flutter package w
 ## Repository context
 
 Owners: `.hooks/project_setup.py` (`browser_test_coverage`, next to `strict_scanner_flags`), called for every package from `setup.py` installer loop so new and existing configs get it; inventory in `reports.line_coverage` is unchanged (`lcov_coverage` already merges duplicate `SF` records and resolves absolute `SF` paths). Test in `tests/test_setup.py`.
-Evidence (synthetic package, Flutter 3.47.5 / Dart 3.13.4, Chrome): `flutter test --platform chrome --coverage` passes the test then exits 1 with no LCOV; `flutter_tools/lib/src/test/flutter_web_platform.dart` has no coverage support. `dart test -p chrome --coverage-path=…` (dart2js) writes LCOV with a `lib/web_adapter.dart` record, and an unexecuted `if` branch line reports `DA:…,0`. `--compiler=dart2wasm` writes an empty LCOV. `dart test -p chrome` on the whole `test/` directory fails because Flutter tests import `dart:ui`, so the browser run selects `@TestOn('browser'|'chrome')` files.
+Evidence (synthetic package, Flutter 3.47.5 / Dart 3.13.4, Chrome): `flutter test --platform chrome --coverage` passes the test then exits 1 with no LCOV; `flutter_tools/lib/src/test/flutter_web_platform.dart` has no coverage support. `dart test -p chrome --coverage-path=…` (dart2js) writes LCOV with a `lib/web_adapter.dart` record, and an unexecuted `if` branch line reports `DA:…,0`. `--compiler=dart2wasm` writes an empty LCOV. `dart test -p chrome` on the whole `test/` directory fails because Flutter tests import `dart:ui`, so the browser run selects files whose `@TestOn` selector starts with `browser` or `chrome`; `@TestOn('!browser')` files are left to the VM run.
 
 ## Decisions + authorization
 
@@ -20,9 +20,9 @@ Consumer contract: browser tests carry `@TestOn('browser')` (so `flutter test` s
 
 ## Acceptance + steps
 
-- [x] Browser-importing Flutter package → tests gate runs the VM command, then `dart test --platform=chrome` on `@TestOn('browser')` files only, and the merged LCOV satisfies `line_coverage` with both runs' tests counted → `test_flutter_browser_library_coverage_comes_from_browser_tests`.
+- [x] Browser-importing Flutter package → tests gate runs the VM command, then `dart test --platform=chrome` on `@TestOn('browser')` files only (not `@TestOn('!browser')`), and the merged LCOV satisfies `line_coverage` with both runs' tests counted → `test_flutter_browser_library_coverage_comes_from_browser_tests`.
 - [x] Package without browser imports → command unchanged; rewrite is idempotent → same test.
-- [x] Real run: installed tests gate on the synthetic package → `Line coverage: 2/2`, `PASS tests`; a failing browser assertion → `Dart test failure: …`, `FAIL tests`; no browser tests → hint on stderr plus `Coverage report omits production files: lib/web_adapter.dart`.
+- [x] Real run: installed tests gate on the synthetic package → `Line coverage: 2/2`, `PASS tests`; a failing browser assertion → `Dart test failure: …`, `FAIL tests`; an added `@TestOn('!browser')` Flutter test → still `PASS tests`; no browser tests → stderr names the whole contract (annotation, `package:test` import, `test` dev dependency, Chrome) plus `Coverage report omits production files: lib/web_adapter.dart`.
 - [x] Existing config with the old VM-only command → rerunning setup rewrites it identically to a fresh install.
 - [x] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
@@ -43,5 +43,5 @@ N/A — hook-only change with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: `uv run pytest tests/test_setup.py` → 58 passed; with the LCOV append removed the new test fails. Synthetic package runs as listed under Acceptance. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, 804 tests passed.
+Evidence: `uv run pytest tests/test_setup.py` → 58 passed; with the LCOV append removed, or with a selector that also matches `@TestOn('!browser')`, the new test fails. Synthetic package runs as listed under Acceptance. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, 804 tests passed.
 E2E: Passed — `setup.py` installed into a synthetic Flutter package with `lib/web_adapter.dart`; Hard Eng's `run_gate` ran the rewritten tests gate with real `flutter test` and `dart test` on Chrome → `Line coverage: 2/2 (100.00%)`, `PASS tests`.

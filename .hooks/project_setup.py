@@ -576,8 +576,10 @@ def browser_test_coverage(directory: Path, package: Group) -> None:
                 "-c",
                 "set -e; rm -f coverage/browser.lcov; "
                 + shlex.join(FLUTTER_TESTS)
-                + '; tests=$(grep -rlE "^@TestOn\\([\'\\"][^\'\\"]*(browser|chrome)" test || true); '
-                + 'if [ -z "$tests" ]; then echo "Browser libraries need @TestOn(\'browser\') tests under test/" >&2; exit 0; fi; '
+                + '; tests=$(grep -rlE "^@TestOn\\([\'\\"] *(browser|chrome)" test || true); '
+                + 'if [ -z "$tests" ]; then echo "Browser libraries need tests under test/ marked'
+                + " @TestOn('browser') that import package:test/test.dart (not flutter_test);"
+                + ' declare test as a dev dependency and provide Chrome." >&2; exit 0; fi; '
                 + "dart test --platform=chrome --reporter=json --coverage-path=coverage/browser.lcov $tests; "
                 + "cat coverage/browser.lcov >> coverage/lcov.info",
             ]
