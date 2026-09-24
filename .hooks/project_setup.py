@@ -541,6 +541,48 @@ def strict_scanner_flags(package: Group) -> None:
             gate["command"] = [*gate["command"], *required]
 
 
+FLUTTER_TESTS = [
+    "flutter",
+    "test",
+    "--no-pub",
+    "--machine",
+    "--coverage",
+    "--coverage-path=coverage/lcov.info",
+]
+BROWSER_IMPORT = re.compile(
+    r"""^\s*import\s+['"](?:dart:(?:html|js|js_util|js_interop|js_interop_unsafe"""
+    r"""|indexed_db|svg|web_audio|web_gl)|package:web/)""",
+    re.MULTILINE,
+)
+
+
+def browser_test_coverage(directory: Path, package: Group) -> None:
+    """Add browser-test LCOV where Flutter's VM run cannot load browser libraries.
+
+    `flutter test --platform chrome --coverage` writes no LCOV, so the gate also
+    runs `@TestOn('browser')` tests with `dart test` on Chrome and appends
+    that run's LCOV to the package report.
+    """
+    if package.get("language") != "dart" or not any(
+        BROWSER_IMPORT.search(file.read_text(errors="replace"))
+        for source in package.get("sources", [])
+        for file in (directory / source).rglob("*.dart")
+    ):
+        return
+    for gate in package["checks"]:
+        if gate.get("role") == "tests" and gate["command"] == FLUTTER_TESTS:
+            gate["command"] = [
+                "sh",
+                "-c",
+                "set -e; rm -f coverage/browser.lcov; "
+                + shlex.join(FLUTTER_TESTS)
+                + '; tests=$(grep -rlE "^@TestOn\\([\'\\"][^\'\\"]*(browser|chrome)" test || true); '
+                + 'if [ -z "$tests" ]; then echo "Browser libraries need @TestOn(\'browser\') tests under test/" >&2; exit 0; fi; '
+                + "dart test --platform=chrome --reporter=json --coverage-path=coverage/browser.lcov $tests; "
+                + "cat coverage/browser.lcov >> coverage/lcov.info",
+            ]
+
+
 def parallel_pytest(package: Group) -> None:
     """Run a generated pytest gate on every core; `-n 0` keeps a suite serial."""
     for gate in package["checks"]:

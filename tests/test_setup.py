@@ -16,13 +16,15 @@ from gate_config import (
     validate_required_checks,
 )
 from project_setup import (
+    FLUTTER_TESTS,
     adapt_performance,
+    browser_test_coverage,
     import_configuration,
     javascript_files,
     javascript_manager,
     strict_scanner_flags,
 )
-from reports import parallel_hint
+from reports import completed_tests, line_coverage, parallel_hint
 from shipping import ShippingPolicy
 
 
@@ -841,3 +843,62 @@ def test_update_gives_an_older_scanner_gate_its_required_strict_flags(
     assert package["checks"][0]["command"] == upgraded
     assert package["checks"][1]["command"] == ["pnpm", "run", "audit"]
     assert package["checks"][2]["command"] == ["fallow", "audit", "--gate", "new"]
+
+
+def test_flutter_browser_library_coverage_comes_from_browser_tests(
+    tmp_path: Path,
+) -> None:
+    """Flutter's Chrome runner writes no LCOV, so browser libraries need dart test's."""
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "test").mkdir()
+    (tmp_path / "lib/vm.dart").write_text("int one() => 1;\n")
+    web = tmp_path / "lib/web.dart"
+    web.write_text("import 'package:web/web.dart' as web;\n")
+    (tmp_path / "test/vm_test.dart").write_text("void main() {}\n")
+    (tmp_path / "test/web_test.dart").write_text("@TestOn('browser')\nlibrary;\n")
+    plain: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib/vm.dart"],
+        "checks": [{"name": "tests", "role": "tests", "command": list(FLUTTER_TESTS)}],
+    }
+    browser_test_coverage(tmp_path, plain)
+    assert plain["checks"][0]["command"] == FLUTTER_TESTS
+    package: Group = {
+        **plain,
+        "sources": ["lib"],
+        "checks": [{"name": "tests", "role": "tests", "command": list(FLUTTER_TESTS)}],
+    }
+    browser_test_coverage(tmp_path, package)
+    command = package["checks"][0]["command"]
+    browser_test_coverage(tmp_path, package)
+    assert package["checks"][0]["command"] == command
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    passed = '{"type":"testDone","result":"success","hidden":false,"skipped":false}'
+    done = '{"type":"done","success":true}'
+    (tools / "flutter").write_text(
+        "#!/bin/sh\nmkdir -p coverage\n"
+        "printf 'SF:lib/vm.dart\\nDA:1,1\\nend_of_record\\n' > coverage/lcov.info\n"
+        f"echo '{passed}'; echo '{done}'\n"
+    )
+    (tools / "dart").write_text(
+        '#!/bin/sh\necho "$@" > dart.args\n'
+        f"printf 'SF:{web}\\nDA:1,1\\nend_of_record\\n' > coverage/browser.lcov\n"
+        f"echo '{passed}'; echo '{done}'\n"
+    )
+    for tool in tools.iterdir():
+        tool.chmod(0o755)
+    with (tmp_path / "tests.jsonl").open("w") as report:
+        subprocess.run(
+            command,
+            cwd=tmp_path,
+            stdout=report,
+            env={"PATH": f"{tools}:/usr/bin:/bin"},
+            check=True,
+        )
+    assert (tmp_path / "dart.args").read_text().split()[-1] == "test/web_test.dart"
+    assert completed_tests(tmp_path / "tests.jsonl", "dart-tests") == 2
+    expected = {(tmp_path / "lib/vm.dart").resolve(), web.resolve()}
+    coverage = tmp_path / "coverage/lcov.info"
+    assert line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected) == (2, 2)
