@@ -424,6 +424,9 @@ def codex_run(
         f'model_reasoning_effort="{options.effort}"',
         "--sandbox",
         "workspace-write",
+        # The sandbox keeps .git read-only; a real checkout lets agents branch and commit.
+        "--add-dir",
+        str(root / ".git"),
         # Run the installed project hooks without the interactive hook review.
         "--dangerously-bypass-hook-trust",
         "--output-last-message",
@@ -547,7 +550,7 @@ CLIENTS = {
         "gpt-6-astra",
         codex_preflight,
         codex_run,
-        "codex exec; workspace-write sandbox; fresh CODEX_HOME sharing only the login; fixture trusted; project hooks run without review",
+        "codex exec; workspace-write sandbox plus writable .git; fresh CODEX_HOME sharing only the login; fixture trusted; project hooks run without review",
     ),
     "claude": Client(
         "claude-opus-5-5",
