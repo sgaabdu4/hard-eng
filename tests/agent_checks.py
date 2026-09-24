@@ -317,9 +317,16 @@ class Agent(NamedTuple):
     problems: list[str]
 
 
+class Ready(NamedTuple):
+    """The client's version, and why it cannot run, if it cannot."""
+
+    version: str | None
+    blocker: str | None
+
+
 class Client(NamedTuple):
     model: str
-    preflight: Callable[[], str | None]
+    preflight: Callable[[], Ready]
     run: Callable[[Path, Path, argparse.Namespace, str], Agent]
     isolation: str
 
@@ -506,30 +513,33 @@ def claude_run(
     return Agent(completed, message, settings, problems)
 
 
-def codex_preflight() -> str | None:
+def output(command: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, capture_output=True, text=True, check=False)
+
+
+def codex_preflight() -> Ready:
     if shutil.which("codex") is None:
-        return "codex is not on PATH"
-    login = subprocess.run(
-        ["codex", "login", "status"], capture_output=True, text=True, check=False
-    )
-    return (
+        return Ready(None, "codex is not on PATH")
+    version = output(["codex", "--version"]).stdout.strip()
+    login = output(["codex", "login", "status"])
+    return Ready(
+        version,
         None
         if login.returncode == 0
-        else "codex is not logged in: " + (login.stdout + login.stderr).strip()
+        else "codex is not logged in: " + (login.stdout + login.stderr).strip(),
     )
 
 
-def claude_preflight() -> str | None:
+def claude_preflight() -> Ready:
     if shutil.which("claude") is None:
-        return "claude is not on PATH"
-    status = subprocess.run(
-        ["claude", "auth", "status"], capture_output=True, text=True, check=False
-    )
+        return Ready(None, "claude is not on PATH")
+    version = output(["claude", "--version"]).stdout.strip()
     try:
-        logged_in = json.loads(status.stdout).get("loggedIn") is True
+        status = json.loads(output(["claude", "auth", "status"]).stdout)
+        logged_in = status.get("loggedIn") is True
     except (json.JSONDecodeError, AttributeError):
         logged_in = False
-    return None if logged_in else "claude is not logged in"
+    return Ready(version, None if logged_in else "claude is not logged in")
 
 
 CLIENTS = {
@@ -586,8 +596,8 @@ def main() -> int:
         / "coverage/agent-checks"
         / f"{started:%Y%m%dT%H%M%SZ}-{options.client}-{options.model}"
     )
-    blocker = client.preflight()
-    if blocker is None:
+    ready = client.preflight()
+    if ready.blocker is None:
         with ThreadPoolExecutor(len(cases)) as pool:
             outcomes = list(
                 pool.map(
@@ -599,22 +609,14 @@ def main() -> int:
                 )
             )
     else:
-        outcomes = [Outcome("blocked", [blocker]) for _ in cases]
-    executable = shutil.which(options.client)
-    version = (
-        subprocess.run(
-            [executable, "--version"], capture_output=True, text=True, check=False
-        ).stdout.strip()
-        if executable
-        else None
-    )
+        outcomes = [Outcome("blocked", [ready.blocker]) for _ in cases]
     results = {
         "tested_commit": git(SOURCE, "rev-parse", "HEAD"),
         "uncommitted_changes": bool(git(SOURCE, "status", "--porcelain")),
         "started": started.isoformat(),
         "client": {
             "name": options.client,
-            "version": version,
+            "version": ready.version,
             "requested_model": options.model,
             "requested_effort": options.effort,
             "isolation": client.isolation,
