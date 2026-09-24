@@ -83,7 +83,7 @@ def link_failures(root: Path) -> list[str]:
             where = f"{source}:{number} {target}"
             if location and resolved not in paths:
                 failures.append(f"{where}: missing file")
-            elif fragment and resolved.endswith(".md"):
+            elif fragment and (not location or resolved.endswith(".md")):
                 page = text if not location else (root / resolved).read_text()
                 if fragment not in anchors(page):
                     failures.append(f"{where}: missing section")
@@ -110,7 +110,7 @@ def test_broken_links_fail_and_valid_equivalents_pass(tmp_path: Path) -> None:
         source,
         "canonical",
         "# Canonical\n\n"
-        "[ok](../he/SKILL.md#plan-checks-1) [ok](#canonical) [web](https://x.test/)\n"
+        "[ok](../he/SKILL.md#plan-checks-1) [ok](#canonical) [web](https://x.test/) [here](#nowhere)\n"
         "[gone](../he/MISSING.md) [anchor](../he/SKILL.md#absent) [case](../HE/SKILL.md)\n"
         "`[code](absent.md)`\n\n"
         "```text\n[example](generated/PLAN.md)\n```\n\n"
@@ -127,6 +127,7 @@ def test_broken_links_fail_and_valid_equivalents_pass(tmp_path: Path) -> None:
 
     assert link_failures(tmp_path) == [
         "uninitialized: SKILL.md is missing; is its submodule initialized?",
+        ".agents/skills/canonical/SKILL.md:3 #nowhere: missing section",
         ".agents/skills/canonical/SKILL.md:4 ../he/MISSING.md: missing file",
         ".agents/skills/canonical/SKILL.md:4 ../he/SKILL.md#absent: missing section",
         ".agents/skills/canonical/SKILL.md:4 ../HE/SKILL.md: missing file",
