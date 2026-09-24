@@ -75,6 +75,46 @@ def test_mcp_setup_leaves_unmanaged_vscode_jsonc_untouched(
     assert ".vscode/mcp.json" not in changes
 
 
+def test_mcp_setup_keeps_project_formatting_unless_a_server_is_added(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+
+    def compact_file(*plugins: str) -> str:
+        entries = ",\n".join(
+            f'\t\t"{plugin}": {{ "command": "pnpm", "args": ["dlx", "{plugin}@latest"] }}'
+            for plugin in plugins
+        )
+        return '{\n\t"mcpServers": {\n' + entries + "\n\t}\n}\n"
+
+    compact = {
+        ".mcp.json": compact_file("codebase-memory-mcp"),
+        ".github/mcp.json": compact_file("context-mode", "codebase-memory-mcp"),
+    }
+    for name, text in compact.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text)
+
+    def apply() -> None:
+        changes: dict[str, str] = {}
+        installer.configure_mcp(tmp_path, changes)
+        for name in compact:
+            (tmp_path / name).write_text(changes[name])
+
+    apply()
+    for name, text in compact.items():
+        assert (tmp_path / name).read_bytes() == text.encode()
+
+    missing = tmp_path / ".github/mcp.json"
+    missing.write_text(compact[".mcp.json"])
+    apply()
+    assert (tmp_path / ".mcp.json").read_bytes() == compact[".mcp.json"].encode()
+    assert json.loads(missing.read_text())["mcpServers"] == {
+        plugin: {"command": "pnpm", "args": ["dlx", f"{plugin}@latest"]}
+        for plugin in ("codebase-memory-mcp", "context-mode")
+    }
+
+
 @pytest.mark.parametrize(
     "host", ["sentry.io", "de.sentry.io", "us.sentry.io", "sentry.example.test"]
 )
