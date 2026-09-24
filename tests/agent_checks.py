@@ -1,11 +1,14 @@
-"""Run Hard Eng's agent-behaviour cases through a real Codex agent, on demand.
+"""Run Hard Eng's agent-behaviour cases through a real agent, on demand.
 
-Usage: uv run python tests/agent_checks.py [--model M] [--effort E] [--case NAME]
+Usage: uv run python tests/agent_checks.py [--client codex|claude] [--model M]
+    [--effort E] [--case NAME]
 
 Each case installs this source into a disposable Git fixture, runs one
-non-interactive `codex exec` and judges only the fixture's files, Git state and
-command results. Results and evidence go to coverage/agent-checks/<UTC time>/,
-which Git ignores and setup never installs. pytest and CI do not run this file.
+non-interactive agent session kept apart from the user's own agent setup, and
+judges the fixture's files, Git state and command results, plus the final report
+for the review case. Results and evidence go to
+coverage/agent-checks/<UTC time>-<client>-<model>/, which Git ignores and setup
+never installs. pytest and CI do not run this file.
 """
 
 import argparse
@@ -305,29 +308,20 @@ def fixture(root: Path, case: Case) -> str:
     return git(root, "rev-parse", "HEAD")
 
 
-def codex_command(
-    root: Path, evidence: Path, options: argparse.Namespace, prompt: str
-) -> list[str]:
-    return [
-        "codex",
-        "exec",
-        "--json",
-        "--cd",
-        str(root),
-        "--model",
-        options.model,
-        "--config",
-        f'model_reasoning_effort="{options.effort}"',
-        "--sandbox",
-        "workspace-write",
-        # Load the installed project hooks non-interactively.
-        "--dangerously-bypass-hook-trust",
-        "--config",
-        f'projects."{root}".trust_level="trusted"',
-        "--output-last-message",
-        str(evidence / "last-message.md"),
-        prompt,
-    ]
+class Agent(NamedTuple):
+    """What one client run observably produced; incomplete runs are never judged."""
+
+    completed: bool
+    message: str
+    settings: dict[str, object]
+    problems: list[str]
+
+
+class Client(NamedTuple):
+    model: str
+    preflight: Callable[[], str | None]
+    run: Callable[[Path, Path, argparse.Namespace, str], Agent]
+    isolation: str
 
 
 def events(path: Path) -> list[dict[str, object]]:
@@ -339,10 +333,38 @@ def events(path: Path) -> list[dict[str, object]]:
     return [event for event in parsed if isinstance(event, dict)]
 
 
-def mcp_calls(stream: list[dict[str, object]]) -> list[str]:
-    """MCP tools the agent actually called, since user and project servers may load."""
+def stream(
+    command: list[str],
+    root: Path,
+    evidence: Path,
+    timeout: int,
+    environment: dict[str, str] | None = None,
+) -> list[dict[str, object]] | None:
+    """The client's JSON event stream, or None when it exceeded the timeout."""
+    try:
+        with (
+            (evidence / "events.jsonl").open("w") as out,
+            (evidence / "stderr.log").open("w") as err,
+        ):
+            subprocess.run(
+                command,
+                cwd=root,
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=err,
+                timeout=timeout,
+                check=False,
+            )
+    except subprocess.TimeoutExpired:
+        return None
+    return events(evidence / "events.jsonl")
+
+
+def mcp_calls(found: list[dict[str, object]]) -> list[str]:
+    """MCP tools the agent actually called, as recorded in its event stream."""
     calls: list[str] = []
-    for event in stream:
+    for event in found:
         item = event.get("item")
         if (
             event.get("type") == "item.completed"
@@ -355,9 +377,8 @@ def mcp_calls(stream: list[dict[str, object]]) -> list[str]:
     return calls
 
 
-def actual_settings(thread: object, evidence: Path) -> dict[str, object]:
+def codex_settings(home: Path, thread: object, evidence: Path) -> dict[str, object]:
     """The model and policies Codex recorded for the turn, with the session copied as evidence."""
-    home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
     sessions: list[Path] = (
         sorted((home / "sessions").rglob(f"rollout-*{thread}.jsonl"))
         if isinstance(thread, str)
@@ -374,52 +395,118 @@ def actual_settings(thread: object, evidence: Path) -> dict[str, object]:
     return {"unavailable": "Codex session record has no turn context"}
 
 
-def execute(case: Case, options: argparse.Namespace, evidence: Path) -> Outcome:
-    evidence.mkdir(parents=True)
-    with tempfile.TemporaryDirectory(prefix="hard-eng-agent-") as temporary:
-        root = Path(temporary).resolve() / "project"
-        base = fixture(root, case)
-        command = codex_command(root, evidence, options, case.prompt)
-        try:
-            with (
-                (evidence / "events.jsonl").open("w") as out,
-                (evidence / "stderr.log").open("w") as err,
-            ):
-                subprocess.run(
-                    command,
-                    stdin=subprocess.DEVNULL,
-                    stdout=out,
-                    stderr=err,
-                    timeout=options.timeout,
-                    check=False,
-                )
-        except subprocess.TimeoutExpired:
-            return Outcome("blocked", [f"codex exec exceeded {options.timeout}s"])
-        stream = events(evidence / "events.jsonl")
-        settings = actual_settings(
-            next((e.get("thread_id") for e in stream if "thread_id" in e), None),
-            evidence,
-        )
-        settings["mcp_calls"] = mcp_calls(stream)
-        if not any(event.get("type") == "turn.completed" for event in stream):
-            failed = [
-                json.dumps(e)[:500]
-                for e in stream
-                if e.get("type") in {"turn.failed", "error"}
-            ]
-            return Outcome(
-                "blocked", failed or ["codex exec finished no turn"], settings
-            )
-        message = evidence / "last-message.md"
-        result = Run(root, base, message.read_text() if message.exists() else "", [])
-        failures = case.judge(result)
-        (evidence / "judge.log").write_text("\n".join(result.log) + "\n")
-        git(root, "add", "--all")
-        (evidence / "diff.patch").write_text(git(root, "diff", "--cached", base) + "\n")
-    return Outcome("fail" if failures else "pass", failures, settings)
+def codex_run(
+    root: Path, evidence: Path, options: argparse.Namespace, prompt: str
+) -> Agent:
+    # A fresh home keeps the user's memories, MCP servers, hooks, plugins and
+    # instructions out while trusting only the fixture; the login is shared.
+    home = root.parent / "codex-home"
+    home.mkdir()
+    user = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+    (home / "auth.json").symlink_to(user / "auth.json")
+    (home / "config.toml").write_text(f'[projects."{root}"]\ntrust_level = "trusted"\n')
+    command = [
+        "codex",
+        "exec",
+        "--json",
+        "--cd",
+        str(root),
+        "--model",
+        options.model,
+        "--config",
+        f'model_reasoning_effort="{options.effort}"',
+        "--sandbox",
+        "workspace-write",
+        # Run the installed project hooks without the interactive hook review.
+        "--dangerously-bypass-hook-trust",
+        "--output-last-message",
+        str(evidence / "last-message.md"),
+        prompt,
+    ]
+    environment = {**os.environ, "CODEX_HOME": str(home)}
+    found = stream(command, root, evidence, options.timeout, environment)
+    if found is None:
+        return Agent(False, "", {}, [f"codex exec exceeded {options.timeout}s"])
+    thread = next((e.get("thread_id") for e in found if "thread_id" in e), None)
+    settings = codex_settings(home, thread, evidence)
+    settings["mcp_calls"] = mcp_calls(found)
+    message = evidence / "last-message.md"
+    return Agent(
+        any(event.get("type") == "turn.completed" for event in found),
+        message.read_text() if message.exists() else "",
+        settings,
+        [
+            json.dumps(e)[:500]
+            for e in found
+            if e.get("type") in {"turn.failed", "error"}
+        ],
+    )
 
 
-def preflight() -> str | None:
+def claude_isolation() -> str:
+    """Turn off the user's plugins and keep Bash in a sandbox without network."""
+    user = Path.home() / ".claude/settings.json"
+    plugins = (
+        json.loads(user.read_text()).get("enabledPlugins") if user.exists() else None
+    )
+    return json.dumps(
+        {
+            "enabledPlugins": dict.fromkeys(plugins, False)
+            if isinstance(plugins, dict)
+            else {},
+            "sandbox": {
+                "enabled": True,
+                "autoAllowBashIfSandboxed": True,
+                "allowUnsandboxedCommands": False,
+            },
+        }
+    )
+
+
+def claude_run(
+    root: Path, evidence: Path, options: argparse.Namespace, prompt: str
+) -> Agent:
+    command = [
+        "claude",
+        "--print",
+        prompt,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        options.model,
+        "--effort",
+        options.effort,
+        # Project settings load the installed hooks; user settings, memory and MCP stay out.
+        "--setting-sources",
+        "project,local",
+        "--strict-mcp-config",
+        "--settings",
+        claude_isolation(),
+        "--permission-mode",
+        "acceptEdits",
+        "--no-session-persistence",
+    ]
+    found = stream(command, root, evidence, options.timeout)
+    if found is None:
+        return Agent(False, "", {}, [f"claude --print exceeded {options.timeout}s"])
+    nothing: dict[str, object] = {}
+    start = next((e for e in found if e.get("subtype") == "init"), nothing)
+    keys = ("model", "permissionMode", "claude_code_version", "mcp_servers", "plugins")
+    settings: dict[str, object] = {key: start.get(key) for key in keys}
+    result = next((e for e in found if e.get("type") == "result"), nothing)
+    text = result.get("result")
+    message = text if isinstance(text, str) else ""
+    (evidence / "last-message.md").write_text(message)
+    usage = result.get("modelUsage")
+    used: list[str] = sorted(usage) if isinstance(usage, dict) else []
+    settings["models_used"] = used
+    completed = result.get("is_error") is False
+    problems = [] if completed else [message or "claude --print returned no result"]
+    return Agent(completed, message, settings, problems)
+
+
+def codex_preflight() -> str | None:
     if shutil.which("codex") is None:
         return "codex is not on PATH"
     login = subprocess.run(
@@ -432,37 +519,93 @@ def preflight() -> str | None:
     )
 
 
+def claude_preflight() -> str | None:
+    if shutil.which("claude") is None:
+        return "claude is not on PATH"
+    status = subprocess.run(
+        ["claude", "auth", "status"], capture_output=True, text=True, check=False
+    )
+    try:
+        logged_in = json.loads(status.stdout).get("loggedIn") is True
+    except (json.JSONDecodeError, AttributeError):
+        logged_in = False
+    return None if logged_in else "claude is not logged in"
+
+
+CLIENTS = {
+    "codex": Client(
+        "gpt-6-astra",
+        codex_preflight,
+        codex_run,
+        "codex exec; workspace-write sandbox; fresh CODEX_HOME sharing only the login; fixture trusted; project hooks run without review",
+    ),
+    "claude": Client(
+        "claude-opus-5-5",
+        claude_preflight,
+        claude_run,
+        "claude --print; project and local settings only; user plugins off; no MCP; acceptEdits with sandboxed, network-less Bash",
+    ),
+}
+
+
+def execute(
+    case: Case, client: Client, options: argparse.Namespace, evidence: Path
+) -> Outcome:
+    evidence.mkdir(parents=True)
+    with tempfile.TemporaryDirectory(prefix="hard-eng-agent-") as temporary:
+        root = Path(temporary).resolve() / "project"
+        base = fixture(root, case)
+        agent = client.run(root, evidence, options, case.prompt)
+        if not agent.completed:
+            reasons = agent.problems or ["no completed turn"]
+            return Outcome("blocked", reasons, agent.settings)
+        result = Run(root, base, agent.message, [])
+        failures = case.judge(result)
+        (evidence / "judge.log").write_text("\n".join(result.log) + "\n")
+        git(root, "add", "--all")
+        (evidence / "diff.patch").write_text(git(root, "diff", "--cached", base) + "\n")
+    return Outcome("fail" if failures else "pass", failures, agent.settings)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--model", default="gpt-6-astra")
+    parser.add_argument("--client", choices=sorted(CLIENTS), default="codex")
+    parser.add_argument("--model", help="default: the client's model in CLIENTS")
     parser.add_argument("--effort", default="high")
     parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument(
         "--case", action="append", choices=[case.name for case in CASES]
     )
     options = parser.parse_args()
+    client = CLIENTS[options.client]
+    options.model = options.model or client.model
     cases = [case for case in CASES if not options.case or case.name in options.case]
     started = datetime.now(UTC)
-    output = SOURCE / "coverage/agent-checks" / started.strftime("%Y%m%dT%H%M%SZ")
-    blocker = preflight()
+    output = (
+        SOURCE
+        / "coverage/agent-checks"
+        / f"{started:%Y%m%dT%H%M%SZ}-{options.client}-{options.model}"
+    )
+    blocker = client.preflight()
     if blocker is None:
         with ThreadPoolExecutor(len(cases)) as pool:
             outcomes = list(
                 pool.map(
                     execute,
                     cases,
+                    repeat(client),
                     repeat(options),
                     [output / case.name for case in cases],
                 )
             )
     else:
         outcomes = [Outcome("blocked", [blocker]) for _ in cases]
-    codex = shutil.which("codex")
+    executable = shutil.which(options.client)
     version = (
         subprocess.run(
-            [codex, "--version"], capture_output=True, text=True, check=False
+            [executable, "--version"], capture_output=True, text=True, check=False
         ).stdout.strip()
-        if codex
+        if executable
         else None
     )
     results = {
@@ -470,14 +613,11 @@ def main() -> int:
         "uncommitted_changes": bool(git(SOURCE, "status", "--porcelain")),
         "started": started.isoformat(),
         "client": {
-            "name": "codex exec",
+            "name": options.client,
             "version": version,
             "requested_model": options.model,
             "requested_effort": options.effort,
-            "sandbox": "workspace-write",
-            "hooks": "installed project hooks, trust bypassed",
-            # --ignore-user-config also stops the fixture's hooks, so the user's config stays.
-            "configuration": "user Codex config (its memories and MCP servers stay reachable) plus the fixture's project config",
+            "isolation": client.isolation,
         },
         "cases": {
             case.name: {**outcome._asdict(), "evidence": str(output / case.name)}
