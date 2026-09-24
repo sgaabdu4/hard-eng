@@ -79,7 +79,7 @@ def erased_dart(files: set[Path], directory: Path) -> set[Path]:
                 text=True,
                 capture_output=True,
                 check=True,
-                timeout=60,
+                timeout=300,
             )
             outputs = json.loads(result.stdout)
         except (OSError, subprocess.SubprocessError, ValueError):
