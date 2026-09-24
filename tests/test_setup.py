@@ -370,29 +370,38 @@ def test_root_dart_analyzer_is_reused_only_when_it_covers_the_package(
         ]
 
 
-def test_root_dart_update_consolidates_duplicate_template_analyzers(
-    installer: ModuleType, tmp_path: Path
+@pytest.mark.parametrize(
+    ("name", "command", "owner"),
+    [
+        ("types-lint", ["dart", "analyze", "--fatal-infos", "."], None),
+        ("strict-types-lint", ["dart", "analyze", "--fatal-infos"], True),
+        ("analyze", ["dart", "analyze", "--fatal-infos", "."], True),
+    ],
+)
+def test_root_dart_update_consolidates_duplicate_analyzers(
+    installer: ModuleType,
+    tmp_path: Path,
+    name: str,
+    command: list[str],
+    owner: bool | None,
 ) -> None:
-    for name in ("lib", "test"):
-        (tmp_path / name).mkdir()
+    for directory in ("lib", "test"):
+        (tmp_path / directory).mkdir()
     explicit = ["dart", "analyze", "--fatal-infos", "lib", "test"]
     package: Group = {
         "path": ".",
         "language": "dart",
         "sources": ["lib"],
         "checks": [
-            {
-                "name": "types-lint",
-                "role": "project-types",
-                "command": ["dart", "analyze", "--fatal-infos", "."],
-            },
+            {"name": name, "role": "project-types", "command": command},
             {"name": "strict-types-lint", "role": "types", "command": explicit},
         ],
     }
 
     installer.configure_typing_checks(tmp_path, package)
+    # None = Hard Eng's own template gate, which follows the explicit template.
     assert package["checks"] == [
-        {"name": "types-lint", "role": "types", "command": explicit}
+        {"name": name, "role": "types", "command": command if owner else explicit}
     ]
 
 

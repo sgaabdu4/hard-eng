@@ -199,11 +199,16 @@ def configure_typing_checks(root: Path, package: Group) -> None:
             )
             if matching is not None:
                 matching["role"] = required["role"]
-                # Earlier installs could leave identical copies of the reused gate.
+                # Earlier installs could leave copies or a strict gate beside the owner.
                 package["checks"][:] = [
                     gate
                     for gate in package["checks"]
-                    if gate is matching or gate["command"] != matching["command"]
+                    if gate is matching
+                    or (
+                        gate["command"] != matching["command"]
+                        and (gate["name"], gate["command"])
+                        != ("strict-" + required["name"], required["command"])
+                    )
                 ]
                 continue
             for gate in package["checks"]:

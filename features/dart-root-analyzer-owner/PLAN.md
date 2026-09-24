@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-Fix [#159](https://github.com/sgaabdu4/hard-eng/issues/159): setup and update keep a single root Dart types gate. They reuse a project's package-root `dart analyze --fatal-infos` (with or without `.`) as the owner, expand Hard Eng's own unexpanded template gate in place, and remove identical copies left by earlier installs. Weaker or narrower analyzer commands still get the strict template gate. Non-goals: changing nested Dart package scopes, analyzer flags, or the Python types gate.
+Fix [#159](https://github.com/sgaabdu4/hard-eng/issues/159): setup and update keep a single root Dart types gate. They reuse a project's package-root `dart analyze --fatal-infos` (with or without `.`) as the owner, expand Hard Eng's own unexpanded template gate in place, and remove identical copies and Hard Eng's `strict-` gate left beside that owner by earlier installs. Weaker or narrower analyzer commands still get the strict template gate. Non-goals: changing nested Dart package scopes, analyzer flags, or the Python types gate.
 
 ## Repository context
 
@@ -22,7 +22,7 @@ Authority: The user asked to fix all open Hard Eng issues and include the releva
 
 - [x] Project root analyzer `dart analyze --fatal-infos` or `... .` → kept as the sole `types` gate, command unchanged, across repeated setup (`test_root_dart_analyzer_is_reused_only_when_it_covers_the_package`).
 - [x] Weaker `dart analyze` and narrower `... lib` → kept as `project-types`, and the strict explicit gate is added (same test).
-- [x] Earlier-install state (`types-lint` `.` as `project-types` + `strict-types-lint` explicit) → one `types-lint` explicit gate (`test_root_dart_update_consolidates_duplicate_template_analyzers`).
+- [x] Earlier-install duplicate state (project or template root gate as `project-types` + `strict-types-lint` explicit) → one `types` gate: the project's root command unchanged, or the template's `types-lint` expanded (`test_root_dart_update_consolidates_duplicate_analyzers`).
 - [x] Fresh root Dart install → exactly one analyzer gate (`test_plain_dart_uses_native_coverage_tool`).
 - [x] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
@@ -43,7 +43,7 @@ N/A — setup-only change with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: With the old `setup.py`, the new and strengthened tests failed 4 of 6 (both root forms duplicated, earlier-install duplicate kept, fresh install duplicated). With the fix, `pytest tests/test_setup.py tests/test_dart_config.py` → 116 passed. Real installer on a synthetic root Dart fixture: a fresh install gave one `types-lint` on `lib test`. After the gate was changed to `strict-types-lint` `dart analyze --fatal-infos`, reinstall kept exactly that gate with no duplicate. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0.
+Evidence: With the old `setup.py`, the new and strengthened tests failed (both root forms duplicated, earlier-install duplicates kept, fresh install duplicated); with only the matcher change, the two project-named duplicate cases still failed. With the fix, `pytest tests/test_setup.py tests/test_dart_config.py` → 118 passed. Real installer on a synthetic root Dart fixture: a fresh install gave one `types-lint` on `lib test`. After the gate was changed to `strict-types-lint` `dart analyze --fatal-infos`, reinstall kept exactly that gate with no duplicate. Starting from the issue's duplicated state (`strict-types-lint` path-less as `project-types` + `strict-types-lint` on `lib test`), reinstall and a repeat left only the path-less `strict-types-lint` as `types`. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, 810 tests passed.
 E2E: Passed — `setup.py` fresh install and reinstall on the synthetic fixture, with the same reconciliation covered by `test_plain_dart_uses_native_coverage_tool`.
 
 Delivery target: PR
