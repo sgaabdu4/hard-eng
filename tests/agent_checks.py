@@ -159,11 +159,9 @@ def run(fixture: Run, *command: str) -> int:
 
 def changed(fixture: Run) -> set[str]:
     """Committed, staged, unstaged and untracked changes since the case base."""
-    committed = git(fixture.root, "diff", "--name-only", fixture.base, "HEAD")
-    status = git(fixture.root, "status", "--porcelain", "--untracked-files=all")
-    return {name for name in committed.splitlines() if name} | {
-        line[3:] for line in status.splitlines()
-    }
+    tracked = git(fixture.root, "diff", "--name-only", fixture.base)
+    untracked = git(fixture.root, "ls-files", "--others", "--exclude-standard")
+    return {name for name in (tracked + "\n" + untracked).splitlines() if name}
 
 
 def plans_marked(fixture: Run, *statuses: str) -> list[str]:
@@ -319,12 +317,10 @@ def codex_command(
         f'model_reasoning_effort="{options.effort}"',
         "--sandbox",
         "workspace-write",
-        # Load the installed project hooks non-interactively; the user's MCP servers stay off.
+        # Load the installed project hooks non-interactively.
         "--dangerously-bypass-hook-trust",
         "--config",
         f'projects."{root}".trust_level="trusted"',
-        "--config",
-        "mcp_servers={}",
         "--output-last-message",
         str(evidence / "last-message.md"),
         prompt,
@@ -338,6 +334,22 @@ def events(path: Path) -> list[dict[str, object]]:
         if line.startswith("{")
     ]
     return [event for event in parsed if isinstance(event, dict)]
+
+
+def mcp_calls(stream: list[dict[str, object]]) -> list[str]:
+    """MCP tools the agent actually called, since user and project servers may load."""
+    calls: list[str] = []
+    for event in stream:
+        item = event.get("item")
+        if (
+            event.get("type") == "item.completed"
+            and isinstance(item, dict)
+            and item.get("type") == "mcp_tool_call"
+        ):
+            calls.append(
+                f"{item.get('server')}.{item.get('tool')}: {item.get('status')}"
+            )
+    return calls
 
 
 def actual_settings(thread: object, evidence: Path) -> dict[str, object]:
@@ -385,6 +397,7 @@ def execute(case: Case, options: argparse.Namespace, evidence: Path) -> Outcome:
             next((e.get("thread_id") for e in stream if "thread_id" in e), None),
             evidence,
         )
+        settings["mcp_calls"] = mcp_calls(stream)
         if not any(event.get("type") == "turn.completed" for event in stream):
             failed = [
                 json.dumps(e)[:500]
@@ -460,7 +473,7 @@ def main() -> int:
             "requested_effort": options.effort,
             "sandbox": "workspace-write",
             "hooks": "installed project hooks, trust bypassed",
-            "mcp_servers": "disabled",
+            "configuration": "user Codex config plus the fixture's project config",
         },
         "cases": {
             case.name: {**outcome._asdict(), "evidence": str(output / case.name)}
