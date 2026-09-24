@@ -29,3 +29,22 @@ def test_generated_package_ownership(
         "copy",
         "real",
     }
+
+
+def test_fixture_manifest_ownership(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    root = tmp_path / "pubspec.yaml"
+    fixture = tmp_path / "tests/fixtures/example/pubspec.yaml"
+    fixture.parent.mkdir(parents=True)
+    root.write_text("name: root\n")
+    fixture.write_text("name: example_fixture\n")
+
+    def owners() -> set[str]:
+        return {owner for owner, _ in package_manifests(tmp_path, [root, fixture])}
+
+    assert owners() == {"."}
+    root.write_text("name: root\nworkspace: [tests/fixtures/example]\n")
+    assert owners() == {".", "tests/fixtures/example"}
+    root.write_text("name: root\n")
+    (fixture.parent / "pubspec.lock").touch()
+    assert owners() == {".", "tests/fixtures/example"}
