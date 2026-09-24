@@ -1,6 +1,6 @@
 # Check skill links in CI and agent behaviour on demand
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -18,11 +18,11 @@ Authority: The user asked for both improvements, source-only, with applicable ch
 
 ## Acceptance + steps
 
-- [ ] Current distributed skills pass; a missing file, broken anchor, broken Mermaid click, broken Mermaid path label, wrong-case path and uninitialized submodule skill fail while valid equivalents, external URLs and fenced examples pass → `tests/test_skill_links.py`.
-- [ ] Deliberately breaking a real skill click, anchor and submodule link fails the real-repository test.
-- [ ] `python3 tests/agent_checks.py` runs planning-only, continue-approved, review-only and failed-baseline cases through `codex exec` in disposable installed fixtures; judges read only fixture files, Git state and command results; results record commit, client version, actual model/settings, timestamp, per-case status and evidence under ignored `coverage/agent-checks/`.
-- [ ] Unavailable Codex (not on PATH, logged out, failed or unfinished turn) is reported as blocked.
-- [ ] Full gate passes.
+- [x] Current distributed skills pass; a missing file, broken anchor, broken Mermaid click, broken Mermaid path label, wrong-case path and uninitialized submodule skill fail while valid equivalents, external URLs and fenced examples pass → `tests/test_skill_links.py`.
+- [x] Deliberately breaking a real skill click, anchor and submodule link fails the real-repository test.
+- [x] `python3 tests/agent_checks.py` runs planning-only, continue-approved, review-only and failed-baseline cases through `codex exec` in disposable installed fixtures; judges read only fixture files, Git state and command results; results record commit, client version, actual model/settings, timestamp, per-case status and evidence under ignored `coverage/agent-checks/`.
+- [x] Unavailable Codex (not on PATH, logged out, failed or unfinished turn) is reported as blocked.
+- [x] Full gate passes.
 
 ## Baseline + execution
 
@@ -40,6 +40,6 @@ N/A — test and developer-script change with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending implementation.
-E2E: Required — a real `codex exec` run of all four cases with saved results.
+Result: Passed
+Evidence: `tests/test_skill_links.py` → 2 passed; the real skills resolve 543 prose links, 47 Mermaid clicks and 89 anchors. Breaking the `he` testing click, the `he-build` plan-checks anchor and an Appwrite submodule link failed with all three named. `codex` removed from PATH → all four cases BLOCKED, exit 1; an unsupported model → BLOCKED with the API error. The logged-out and timeout branches were not exercised. `python3 .hooks/hard-eng.py check` on `856cfdc` → exit 0, 805 tests.
+E2E: Passed — `uv run python tests/agent_checks.py` on `06504bd` (codex-cli 0.154.0, gpt-6-astra, effort high, workspace-write, approval never) ran all four cases; results and per-case events, session, final message, judge log and diff are in ignored `coverage/agent-checks/20260924T184852Z/`. continue-approved, review-only and failed-baseline passed; planning-only failed because the agent gave the plan in chat and wrote no PLAN.md, matching the first run on `856cfdc`. That run also exposed a harness change-detection bug, fixed in `06504bd`. Agent results are per run, not a stability claim.
