@@ -676,3 +676,46 @@ def test_unchanged_complete_plan_predates_e2e_rule(
     legacy.write_text(legacy.read_text() + "\nReopened for new work.\n")
     with pytest.raises(ValueError, match="features/legacy/PLAN.md: .*E2E"):
         validate_plans(tmp_path, stage="Complete")
+
+
+def test_unchanged_complete_plan_predates_ux_surface_rule(
+    tmp_path: Path, completed_plan: str, visual_plan: str
+) -> None:
+    """A rendered proof completed before Surface/Before/Proposed/Capture/Review fails only once edited."""
+    git(tmp_path, "init", "-q")
+    legacy = tmp_path / "features/legacy/PLAN.md"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        completed_plan.replace(
+            "N/A — fixture commands have no visual interface.",
+            "Result: Passed\n"
+            "Evidence: ![Proposed state](https://example.test/proposed.png) inspected at the affected size.",
+        )
+    )
+    detailed = tmp_path / "features/detailed/PLAN.md"
+    detailed.parent.mkdir(parents=True)
+    detailed.write_text(
+        "\n".join(
+            line for line in visual_plan.splitlines() if not line.startswith("Capture:")
+        )
+        + "\n"
+    )
+    git(tmp_path, "add", ".")
+    git(
+        tmp_path,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.test",
+        "commit",
+        "-qm",
+        "historical plans",
+    )
+    assert validate_plan(legacy, changed=False) == "Complete"
+    with pytest.raises(ValueError, match="features/detailed/PLAN.md: .*Capture"):
+        validate_plans(tmp_path, stage="Complete")
+    detailed.unlink()
+    assert validate_plans(tmp_path, stage="Complete") == "Complete"
+    legacy.write_text(legacy.read_text() + "\nReopened for new work.\n")
+    with pytest.raises(ValueError, match="features/legacy/PLAN.md: .*Surface"):
+        validate_plans(tmp_path, stage="Complete")
