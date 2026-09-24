@@ -1,6 +1,7 @@
 """Reject the observed false readiness and closure cases through the real gate."""
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -10,7 +11,7 @@ from types import ModuleType
 import pytest
 from conftest import SOURCE, git
 from gate_config import GateConfig
-from plans import validate_plan, validate_plans
+from plans import ux_proof, validate_plan, validate_plans
 from shipping import ShippingPolicy
 
 
@@ -649,18 +650,26 @@ def test_native_cli_plan_stage_and_missing_plan(
     assert result.returncode == 1 and "applicable PLAN" in result.stderr
 
 
-def test_unchanged_complete_plan_predates_e2e_rule(
-    runner: ModuleType, tmp_path: Path, completed_plan: str
+@pytest.mark.parametrize(
+    ("older", "rule"),
+    [
+        ("", "E2E"),
+        ("![Proposal](https://example.test/account-proposed.png)\n", "Surface"),
+    ],
+    ids=["e2e", "ux"],
+)
+def test_unchanged_complete_plan_predates_newer_rules(
+    runner: ModuleType, tmp_path: Path, visual_plan: str, older: str, rule: str
 ) -> None:
-    """A plan completed before the E2E rule fails only once it is edited."""
+    """A plan completed before the E2E or UX field rules fails only once edited."""
+    newer = {
+        "E2E": r"(?m)^E2E:.*\n",
+        "Surface": r"(?m)^Surface:.*\n(?:(?:Before|Proposed|Capture|Review):.*\n)+",
+    }[rule]
     legacy = tmp_path / "features/legacy/PLAN.md"
     legacy.parent.mkdir(parents=True)
-    legacy.write_text(
-        "\n".join(
-            line for line in completed_plan.splitlines() if not line.startswith("E2E:")
-        )
-        + "\n"
-    )
+    legacy.write_text(re.sub(newer, older, visual_plan, count=1))
+    assert f"\n{rule}:" not in legacy.read_text()
     git(tmp_path, "add", ".")
     git(
         tmp_path,
@@ -674,5 +683,13 @@ def test_unchanged_complete_plan_predates_e2e_rule(
     )
     assert validate_plans(tmp_path, stage="Complete") == "Complete"
     legacy.write_text(legacy.read_text() + "\nReopened for new work.\n")
-    with pytest.raises(ValueError, match="features/legacy/PLAN.md: .*E2E"):
+    with pytest.raises(ValueError, match=f"features/legacy/PLAN.md: .*{rule}"):
         validate_plans(tmp_path, stage="Complete")
+
+
+def test_legacy_ux_reference_keeps_its_original_rules() -> None:
+    legacy = "Result: Passed\nEvidence: Inspected the rendered account page.\n"
+    with pytest.raises(ValueError, match="Markdown image"):
+        ux_proof(legacy, legacy=True)
+    with pytest.raises(ValueError, match="Result"):
+        ux_proof(legacy.replace("Passed", "Pending") + "![A](a.png)\n", legacy=True)

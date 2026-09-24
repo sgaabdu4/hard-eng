@@ -280,8 +280,9 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
             servers[plugin] = (
                 {"type": "http", **settings} if "url" in settings else settings
             )
-        existing.update(servers)
-        changes[name] = json.dumps(current, indent=2) + "\n"
+        if servers:
+            existing.update(servers)
+            changes[name] = json.dumps(current, indent=2) + "\n"
     target = root / ".codex/config.toml"
     codex_config = target.read_text() if target.exists() else ""
     parsed = tomllib.loads(codex_config)
