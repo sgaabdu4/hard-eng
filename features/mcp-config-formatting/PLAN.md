@@ -40,7 +40,7 @@ N/A — no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: `tests/test_mcp_setup.py` + `tests/test_setup.py` + `tests/test_updates.py` + `tests/test_hook_setup.py` → 145 passed. Ruff format and lint clean. `python3 .hooks/hard-eng.py check --plan-stage Complete` → pending local run.
+Evidence: `tests/test_mcp_setup.py` + `tests/test_setup.py` + `tests/test_updates.py` + `tests/test_hook_setup.py` → 145 passed. Ruff format and lint clean. `python3 .hooks/hard-eng.py check --plan-stage Complete` → exit 0; 17/17 gates PASS, 801 tests.
 E2E: N/A — installer change; the new test runs `configure_mcp` and writes its output the way setup does, then compares file bytes.
 
 Delivery target: PR
