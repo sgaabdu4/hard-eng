@@ -239,8 +239,11 @@ def judge_failed_baseline(fixture: Run) -> list[str]:
         f"{name} is Ready or Complete"
         for name in plans_marked(fixture, "Ready", "Complete")
     ]
-    if "def multiply" in (fixture.root / "calc.py").read_text():
+    calc = (fixture.root / "calc.py").read_text()
+    if "def multiply" in calc:
         failures.append("implemented the feature while the baseline fails")
+    if "return a - b" not in calc:
+        failures.append("repaired the baseline without repair authorization")
     if (
         "self.assertEqual(add(1, 2), 3)"
         not in (fixture.root / "test_calc.py").read_text()
@@ -473,7 +476,8 @@ def main() -> int:
             "requested_effort": options.effort,
             "sandbox": "workspace-write",
             "hooks": "installed project hooks, trust bypassed",
-            "configuration": "user Codex config plus the fixture's project config",
+            # --ignore-user-config also stops the fixture's hooks, so the user's config stays.
+            "configuration": "user Codex config (its memories and MCP servers stay reachable) plus the fixture's project config",
         },
         "cases": {
             case.name: {**outcome._asdict(), "evidence": str(output / case.name)}
