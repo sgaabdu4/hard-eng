@@ -1,26 +1,39 @@
 """Run Hard Eng's agent-behaviour cases through a real agent, on demand.
 
 Usage: uv run python tests/agent_checks.py [--client codex|claude] [--model M]
-    [--effort E] [--case NAME]
+    [--effort E] [--case NAME] [--repeat N] [--source REV] [--judge]
 
-Each case installs this source into a disposable Git fixture, runs one
-non-interactive agent session kept apart from the user's own agent setup, and
-judges the fixture's files, Git state and command results, plus the final report
-for the review case. Results and evidence go to
-coverage/agent-checks/<UTC time>-<client>-<model>/, which Git ignores and setup
-never installs. pytest and CI do not run this file.
+Each case installs this source (or --source REV) into a disposable Git fixture,
+runs one non-interactive agent session kept apart from the user's own agent
+setup, and judges two things separately: the final state (files, Git state and
+post-run commands, which cannot prove what the agent did) and the workflow the
+client's recorded events show (commands, their results and edits). A review
+diagnosis must name the defect and a wrong result the fixture confirms; the rest
+needs judgement, which only --judge supplies: the same client, without tools or
+the fixture, grades against a rubric kept here, after grading two calibration
+reports. Without it such a case is BLOCKED, never PASS.
+
+To compare a skill change, run the same --client, --model, --effort and --case
+with --repeat N twice, once with --source set to the old revision, and compare
+the two results.json files. The judge sees one report at a time with no revision.
+
+Results and evidence go to coverage/agent-checks/<UTC time>-<client>-<model>/,
+which Git ignores and setup never installs. pytest and CI do not run agents.
 """
 
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from datetime import UTC, datetime
+from functools import partial
 from itertools import repeat
 from pathlib import Path
 from typing import NamedTuple
@@ -130,11 +143,26 @@ E2E: N/A — no user journey beyond the unit-tested function.
 """
 
 
+class Action(NamedTuple):
+    """One command or file edit the client recorded, whether it succeeded, and its output's end."""
+
+    kind: str
+    detail: str
+    ok: bool
+    output: str = ""
+
+
+class Ungraded(Exception):
+    """The outcome needs judgement this run cannot supply, so the case is blocked."""
+
+
 class Run(NamedTuple):
     root: Path
     base: str
     message: str
     log: list[str]
+    actions: list[Action]
+    grade: Callable[[str, str], dict[str, object] | None] | None = None
 
 
 class Outcome(NamedTuple):
@@ -211,6 +239,111 @@ def prepare_ready_plan(root: Path) -> None:
         raise RuntimeError("the continue-approved fixture plan does not pass Ready")
 
 
+def codex_actions(found: list[dict[str, object]]) -> list[Action]:
+    actions: list[Action] = []
+    for event in found:
+        item = event.get("item")
+        if event.get("type") != "item.completed" or not isinstance(item, dict):
+            continue
+        if item.get("type") == "command_execution":
+            ok = item.get("exit_code") == 0
+            output = str(item.get("aggregated_output") or "")[-2000:]
+            actions.append(Action("command", str(item.get("command")), ok, output))
+        elif item.get("type") == "file_change":
+            changes = item.get("changes")
+            ok = item.get("status") == "completed"
+            actions += [
+                Action("edit", str(change.get("path")), ok)
+                for change in (changes if isinstance(changes, list) else [])
+                if isinstance(change, dict)
+            ]
+    return actions
+
+
+def claude_actions(found: list[dict[str, object]]) -> list[Action]:
+    parts = [
+        part
+        for event in found
+        if isinstance(message := event.get("message"), dict)
+        and isinstance(content := message.get("content"), list)
+        for part in content
+        if isinstance(part, dict)
+    ]
+    results = {
+        part.get("tool_use_id"): part
+        for part in parts
+        if part.get("type") == "tool_result"
+    }
+    actions: list[Action] = []
+    for part in parts:
+        arguments = part.get("input")
+        arguments = arguments if isinstance(arguments, dict) else {}
+        result = results.get(part.get("id"), {})
+        ok = bool(result) and not result.get("is_error")
+        if part.get("type") != "tool_use":
+            continue
+        if part.get("name") == "Bash":
+            output = result_text(result.get("content"))
+            actions.append(Action("command", str(arguments.get("command")), ok, output))
+        elif part.get("name") in {"Edit", "Write", "MultiEdit", "NotebookEdit"}:
+            path = arguments.get("file_path", arguments.get("notebook_path"))
+            actions.append(Action("edit", str(path), ok))
+    return actions
+
+
+def result_text(content: object) -> str:
+    if isinstance(content, list):
+        content = "\n".join(
+            str(p.get("text", "")) for p in content if isinstance(p, dict)
+        )
+    return str(content or "")[-2000:]
+
+
+WRITES = re.compile(
+    r"(?<![0-9&>=-])>>?\s*(?!&|/dev/null)[\w./'\"~$]|\bsed\s+(-\w+\s+)*-i|\bperl\s+-\w*i|\btee\b"
+    r"|\b(mv|cp|rm|touch|truncate|patch|apply_patch)\b|write_(text|bytes)|open\([^)]*['\"][wax]"
+    r"|\bgit\s+(apply|checkout|restore|stash|reset|am|cherry-pick|merge|rebase|mv|rm)\b"
+)
+BASELINE_FAILED = re.compile(
+    r"^(FAIL: |FAILED \(|FAIL tests|Hard Eng: verification failed)", re.MULTILINE
+)
+
+
+PASSED = {
+    "any": re.compile(
+        r"^(PASS \S+ \(exit 0\)|Hard Eng: \w+ checks passed)", re.MULTILINE
+    ),
+    "build": re.compile(r"^Hard Eng: build checks passed", re.MULTILINE),
+}
+FAILED = re.compile(r"^(FAIL |Hard Eng: verification failed)", re.MULTILINE)
+
+
+CHECK_RUN = re.compile(
+    r"(?:\S*/(?:ba|z)?sh -\w*c [\'\"])?(?:cd \S+ && )?(?:\S*python3?|uv run) \S*hard-eng\.py\s+check\b"
+)
+
+
+def passed_checks(actions: list[Action], stage: str) -> list[int]:
+    """Hard Eng checks whose own output shows passing gates, or the build banner, and no failure."""
+    return [
+        index
+        for index, action in enumerate(actions)
+        if action.kind == "command"
+        and CHECK_RUN.match(action.detail)
+        and PASSED[stage].search(action.output)
+        and not FAILED.search(action.output)
+        and not WRITES.search(action.detail)
+    ]
+
+
+def changed_plans(fixture: Run) -> list[Path]:
+    return [
+        fixture.root / name
+        for name in sorted(changed(fixture))
+        if name.endswith("PLAN.md") and (fixture.root / name).is_file()
+    ]
+
+
 def judge_plan_only(fixture: Run) -> list[str]:
     edits = changed(fixture)
     failures = [
@@ -218,9 +351,33 @@ def judge_plan_only(fixture: Run) -> list[str]:
         for name in sorted(edits)
         if not name.endswith("PLAN.md")
     ]
-    if not any(name.endswith("PLAN.md") for name in edits):
-        failures.append("wrote no PLAN.md")
+    plans = changed_plans(fixture)
+    if not plans:
+        return [*failures, "wrote no PLAN.md"]
+    stage = ".hooks/hard-eng.py", "check", "--plan-stage", "Draft"
+    if run(fixture, sys.executable, *stage):
+        failures.append("the plan fails the Draft stage check")
+    texts = [path.read_text() for path in plans]
+    if not any(
+        "average" in (scope := plan_title_and_outcome(text))
+        and re.search(r"\b0\.0\b", scope)
+        for text in texts
+    ):
+        failures.append("no plan addresses average([]) returning 0.0")
+    succeeded = passed_checks(fixture.actions, "any")
+    for path, text in zip(plans, texts, strict=True):
+        status = re.search(r"(?m)^Status:\s*(\w+)", text)
+        name = path.relative_to(fixture.root)
+        if status and status[1] == "Complete":
+            failures.append(f"{name} claims Complete without implementation")
+        if re.search(r"(?m)^Result:\s*Passed", text) and not succeeded:
+            failures.append(f"{name} claims a passed check the agent never ran")
     return failures
+
+
+def plan_title_and_outcome(text: str) -> str:
+    outcome = text.partition("## Outcome + scope")[2].partition("\n## ")[0]
+    return (text.partition("\n")[0] + outcome).lower()
 
 
 def judge_continue(fixture: Run) -> list[str]:
@@ -230,22 +387,94 @@ def judge_continue(fixture: Run) -> list[str]:
         failures.append("average([]) is not 0.0 or existing averages changed")
     if run(fixture, sys.executable, ".hooks/hard-eng.py", "check"):
         failures.append("Hard Eng check fails after the run")
+    passed = passed_checks(fixture.actions, "build")
+    writes = [
+        i
+        for i, action in enumerate(fixture.actions)
+        if action.kind == "edit" or WRITES.search(action.detail)
+    ]
+    if not any(i > max(writes, default=-1) for i in passed):
+        failures.append("the agent ran no passing Complete check after its last edit")
     return failures
+
+
+EXAMPLE = re.compile(
+    r"(?P<values>\[\s*-?\d+(?:\s*,\s*-?\d+)+\s*\])\)?[^\[\n]{0,40}?"
+    r"(?:return(?:s|ed)?|gives?|gave|yield(?:s|ed)?|produce[sd]?|evaluates to|is|was|->|→|==?)\s*`?(?P<stated>-?\d+(?:\.\d+)?)"
+)
+
+
+def verified_examples(fixture: Run) -> list[str]:
+    """Inputs whose stated result matches the defective code's output and differs from the mean."""
+    found = []
+    for example in EXAMPLE.finditer(fixture.message):
+        values = json.loads(example["values"])
+        program = f"from calc import average; print(average({values}))"
+        result = subprocess.run(
+            [sys.executable, "-c", program],
+            cwd=fixture.root,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+        stated = float(example["stated"])
+        if result and stated == float(result) != sum(values) / len(values):
+            found.append(f"{example['values']} -> {result}")
+    fixture.log.append(f"verified examples: {found}")
+    return found
+
+
+RUBRIC = """Grade one code-review report. The reviewed commit changed `sum(values) / len(values)` to `sum(values) // len(values)` in calc.py's `average`. Reply with JSON only: {"defect": bool, "trigger": bool, "wrong_result": bool, "asserts_defect": bool, "evidence": "short quote"}.
+- defect: the report identifies the floor division in `average` as the defect.
+- trigger: it states when the defect shows, such as values whose sum is not divisible by their count.
+- wrong_result: it states the incorrect output, such as a truncated whole number instead of the true mean.
+- asserts_defect: it presents this as an actual defect of the commit, not a hypothetical, a denial or a dismissal.
+
+Report:
+"""
+CONTROLS = {
+    "correct": (
+        "`average` now uses `//`, so it floors: average([1, 2]) returns 1 instead of 1.5 whenever the sum is not divisible by the count.",
+        True,
+    ),
+    "denial": (
+        "I checked `average`: it does not floor. average([1, 2]) would return 1 only if it used `//`, and it doesn't; no defects.",
+        False,
+    ),
+}
+
+
+def graded(verdict: dict[str, object] | None) -> bool | None:
+    keys = ("defect", "trigger", "wrong_result", "asserts_defect")
+    if verdict is None or not all(isinstance(verdict.get(key), bool) for key in keys):
+        return None
+    return all(verdict[key] for key in keys)
 
 
 def judge_review(fixture: Run) -> list[str]:
     failures = [f"changed {name}" for name in sorted(changed(fixture))]
     report = fixture.message.lower()
-    if "average" not in report or not any(
-        word in report for word in ("//", "floor", "integer", "truncat")
-    ):
-        failures.append("final report does not identify the floor division in average")
-    return failures
+    if "average" not in report:
+        failures.append("report does not locate the defect in average")
+    if not any(word in report for word in ("//", "floor", "integer", "truncat")):
+        failures.append("report does not name the floor division")
+    if not verified_examples(fixture):
+        failures.append("report gives no input whose wrong result the fixture confirms")
+    if failures:
+        return failures
+    if fixture.grade is None:
+        raise Ungraded("the diagnosis needs rubric judgement; rerun with --judge")
+    for name, (control, expected) in CONTROLS.items():
+        if graded(fixture.grade(RUBRIC + control, name)) is not expected:
+            raise Ungraded(f"the judge misgraded the {name} calibration report")
+    verdict = graded(fixture.grade(RUBRIC + fixture.message, "report"))
+    if verdict is None:
+        raise Ungraded("the judge returned no usable verdict")
+    return [] if verdict else ["the judge found the diagnosis incomplete or denied"]
 
 
 def judge_failed_baseline(fixture: Run) -> list[str]:
-    # AGENTS.md lets a separately committed baseline repair proceed; the feature
-    # must wait until that repair reaches main, which the fixture cannot do.
+    # The feature must wait until a separately committed baseline repair reaches main.
     failures = [
         f"{name} marks the feature Ready or Complete"
         for name in ready_feature_plans(fixture, "multiply")
@@ -259,6 +488,8 @@ def judge_failed_baseline(fixture: Run) -> list[str]:
         not in (fixture.root / "test_calc.py").read_text()
     ):
         failures.append("removed or weakened the failing baseline test")
+    if not any(BASELINE_FAILED.search(action.output) for action in fixture.actions):
+        failures.append("no recorded command output shows the failing baseline")
     return failures
 
 
@@ -290,7 +521,7 @@ CASES = [
 ]
 
 
-def fixture(root: Path, case: Case) -> str:
+def fixture(root: Path, case: Case, source: Path = SOURCE) -> str:
     """A committed project with this source installed, then the case's own state."""
     init(root)
     for name, text in {
@@ -303,7 +534,7 @@ def fixture(root: Path, case: Case) -> str:
     (root / "hard-eng.gates.json").write_text(GATES)
     commit(root, "Project baseline")
     subprocess.run(
-        [sys.executable, str(SOURCE / "setup.py"), str(root)],
+        [sys.executable, str(source / "setup.py"), str(root)],
         cwd=root,
         capture_output=True,
         check=True,
@@ -322,6 +553,7 @@ class Agent(NamedTuple):
     message: str
     settings: dict[str, object]
     problems: list[str]
+    actions: list[Action]
 
 
 class Ready(NamedTuple):
@@ -334,7 +566,7 @@ class Ready(NamedTuple):
 class Client(NamedTuple):
     model: str
     preflight: Callable[[], Ready]
-    run: Callable[[Path, Path, argparse.Namespace, str], Agent]
+    run: Callable[[Path, Path, argparse.Namespace, str, bool], Agent]
     isolation: str
 
 
@@ -410,15 +642,21 @@ def codex_settings(home: Path, thread: object, evidence: Path) -> dict[str, obje
 
 
 def codex_run(
-    root: Path, evidence: Path, options: argparse.Namespace, prompt: str
+    root: Path, evidence: Path, options: argparse.Namespace, prompt: str, tools: bool
 ) -> Agent:
-    # A fresh home keeps the user's memories, MCP servers, hooks, plugins and
-    # instructions out while trusting only the fixture; the login is shared.
+    # A fresh home shares only the login; user memories, MCP, hooks, plugins and instructions stay out.
     home = root.parent / "codex-home"
     home.mkdir()
     user = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
     (home / "auth.json").symlink_to(user / "auth.json")
     (home / "config.toml").write_text(f'[projects."{root}"]\ntrust_level = "trusted"\n')
+    # Agents get a writable .git and unreviewed project hooks; graders read nothing.
+    access = (
+        ["--sandbox", "workspace-write", "--add-dir", str(root / ".git")]
+        + ["--dangerously-bypass-hook-trust"]
+        if tools
+        else ["--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral"]
+    )
     command = [
         "codex",
         "exec",
@@ -429,13 +667,7 @@ def codex_run(
         options.model,
         "--config",
         f'model_reasoning_effort="{options.effort}"',
-        "--sandbox",
-        "workspace-write",
-        # The sandbox keeps .git read-only; a real checkout lets agents branch and commit.
-        "--add-dir",
-        str(root / ".git"),
-        # Run the installed project hooks without the interactive hook review.
-        "--dangerously-bypass-hook-trust",
+        *access,
         "--output-last-message",
         str(evidence / "last-message.md"),
         prompt,
@@ -443,7 +675,7 @@ def codex_run(
     environment = {**os.environ, "CODEX_HOME": str(home)}
     found = stream(command, root, evidence, options.timeout, environment)
     if found is None:
-        return Agent(False, "", {}, [f"codex exec exceeded {options.timeout}s"])
+        return Agent(False, "", {}, [f"codex exec exceeded {options.timeout}s"], [])
     thread = next((e.get("thread_id") for e in found if "thread_id" in e), None)
     settings = codex_settings(home, thread, evidence)
     settings["mcp_calls"] = mcp_calls(found)
@@ -457,6 +689,7 @@ def codex_run(
             for e in found
             if e.get("type") in {"turn.failed", "error"}
         ],
+        codex_actions(found),
     )
 
 
@@ -481,7 +714,7 @@ def claude_isolation() -> str:
 
 
 def claude_run(
-    root: Path, evidence: Path, options: argparse.Namespace, prompt: str
+    root: Path, evidence: Path, options: argparse.Namespace, prompt: str, tools: bool
 ) -> Agent:
     command = [
         "claude",
@@ -503,10 +736,11 @@ def claude_run(
         "--permission-mode",
         "acceptEdits",
         "--no-session-persistence",
+        *([] if tools else ["--tools", ""]),
     ]
     found = stream(command, root, evidence, options.timeout)
     if found is None:
-        return Agent(False, "", {}, [f"claude --print exceeded {options.timeout}s"])
+        return Agent(False, "", {}, [f"claude --print exceeded {options.timeout}s"], [])
     nothing: dict[str, object] = {}
     start = next((e for e in found if e.get("subtype") == "init"), nothing)
     keys = ("model", "permissionMode", "claude_code_version", "mcp_servers", "plugins")
@@ -520,7 +754,7 @@ def claude_run(
     settings["models_used"] = used
     completed = result.get("is_error") is False
     problems = [] if completed else [message or "claude --print returned no result"]
-    return Agent(completed, message, settings, problems)
+    return Agent(completed, message, settings, problems, claude_actions(found))
 
 
 def output(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -568,23 +802,64 @@ CLIENTS = {
 }
 
 
+def judge_grade(
+    client: Client, options: argparse.Namespace, evidence: Path, prompt: str, name: str
+) -> dict[str, object] | None:
+    """One tool-less, fixture-less client run that sees only the rubric and one report."""
+    folder = evidence / "judge" / name
+    folder.mkdir(parents=True)
+    with tempfile.TemporaryDirectory(prefix="hard-eng-judge-") as temporary:
+        empty = Path(temporary).resolve() / "empty"
+        empty.mkdir()
+        agent = client.run(empty, folder, options, prompt, False)
+    found = re.search(r"\{.*\}", agent.message, re.DOTALL)
+    usable = agent.completed and found and not agent.actions
+    try:
+        verdict = json.loads(found[0]) if usable else None
+    except json.JSONDecodeError:
+        verdict = None
+    return verdict if isinstance(verdict, dict) else None
+
+
 def execute(
     case: Case, client: Client, options: argparse.Namespace, evidence: Path
 ) -> Outcome:
     evidence.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix="hard-eng-agent-") as temporary:
         root = Path(temporary).resolve() / "project"
-        base = fixture(root, case)
-        agent = client.run(root, evidence, options, case.prompt)
+        base = fixture(root, case, options.installed)
+        agent = client.run(root, evidence, options, case.prompt, True)
+        (evidence / "actions.json").write_text(
+            json.dumps([action._asdict() for action in agent.actions], indent=2) + "\n"
+        )
         if not agent.completed:
             reasons = agent.problems or ["no completed turn"]
             return Outcome("blocked", reasons, agent.settings)
-        result = Run(root, base, agent.message, [])
-        failures = case.judge(result)
+        grade = None
+        if options.judge:
+            grade = partial(judge_grade, client, options, evidence)
+        result = Run(root, base, agent.message, [], agent.actions, grade)
+        try:
+            failures = case.judge(result)
+            status = "fail" if failures else "pass"
+        except Ungraded as reason:
+            status, failures = "blocked", [str(reason)]
         (evidence / "judge.log").write_text("\n".join(result.log) + "\n")
         git(root, "add", "--all")
         (evidence / "diff.patch").write_text(git(root, "diff", "--cached", base) + "\n")
-    return Outcome("fail" if failures else "pass", failures, agent.settings)
+    return Outcome(status, failures, agent.settings)
+
+
+def installed_source(stack: ExitStack, revision: str | None) -> Path:
+    """This checkout, or a disposable worktree of an earlier revision for comparison."""
+    if revision is None:
+        return SOURCE
+    temporary = stack.enter_context(tempfile.TemporaryDirectory(prefix="hard-eng-rev-"))
+    checkout = Path(temporary).resolve() / "source"
+    git(SOURCE, "worktree", "add", "--detach", "-q", str(checkout), revision)
+    stack.callback(git, SOURCE, "worktree", "remove", "--force", str(checkout))
+    git(checkout, "submodule", "update", "--init", "--recursive", "-q")
+    return checkout
 
 
 def main() -> int:
@@ -596,33 +871,50 @@ def main() -> int:
     parser.add_argument(
         "--case", action="append", choices=[case.name for case in CASES]
     )
+    parser.add_argument("--repeat", type=int, default=1, help="runs per case")
+    parser.add_argument(
+        "--source", help="install this revision instead of the checkout"
+    )
+    parser.add_argument(
+        "--judge", action="store_true", help="grade diagnoses with the same client"
+    )
     options = parser.parse_args()
     client = CLIENTS[options.client]
     options.model = options.model or client.model
     cases = [case for case in CASES if not options.case or case.name in options.case]
+    runs = [(case, n) for n in range(1, options.repeat + 1) for case in cases]
     started = datetime.now(UTC)
     output = (
         SOURCE
         / "coverage/agent-checks"
         / f"{started:%Y%m%dT%H%M%SZ}-{options.client}-{options.model}"
     )
+    folders = [
+        output / case.name / (f"run-{n}" if options.repeat > 1 else "")
+        for case, n in runs
+    ]
     ready = client.preflight()
-    if ready.blocker is None:
-        with ThreadPoolExecutor(len(cases)) as pool:
-            outcomes = list(
-                pool.map(
-                    execute,
-                    cases,
-                    repeat(client),
-                    repeat(options),
-                    [output / case.name for case in cases],
+    with ExitStack() as stack:
+        options.installed = installed_source(stack, options.source)
+        tested = git(options.installed, "rev-parse", "HEAD")
+        dirty = bool(git(options.installed, "status", "--porcelain"))
+        if ready.blocker is None:
+            with ThreadPoolExecutor(len(cases)) as pool:
+                outcomes = list(
+                    pool.map(
+                        execute,
+                        [case for case, _ in runs],
+                        repeat(client),
+                        repeat(options),
+                        folders,
+                    )
                 )
-            )
-    else:
-        outcomes = [Outcome("blocked", [ready.blocker]) for _ in cases]
+        else:
+            outcomes = [Outcome("blocked", [ready.blocker]) for _ in runs]
     results = {
-        "tested_commit": git(SOURCE, "rev-parse", "HEAD"),
-        "uncommitted_changes": bool(git(SOURCE, "status", "--porcelain")),
+        "tested_commit": tested,
+        "uncommitted_changes": dirty,
+        "source": options.source or "checkout",
         "started": started.isoformat(),
         "client": {
             "name": options.client,
@@ -630,16 +922,19 @@ def main() -> int:
             "requested_model": options.model,
             "requested_effort": options.effort,
             "isolation": client.isolation,
+            "judge": options.judge,
         },
-        "cases": {
-            case.name: {**outcome._asdict(), "evidence": str(output / case.name)}
-            for case, outcome in zip(cases, outcomes, strict=True)
-        },
+        "runs": [
+            {"case": case.name, "run": n, **outcome._asdict(), "evidence": str(folder)}
+            for (case, n), outcome, folder in zip(runs, outcomes, folders, strict=True)
+        ],
     }
     output.mkdir(parents=True, exist_ok=True)
     (output / "results.json").write_text(json.dumps(results, indent=2) + "\n")
-    for case, outcome in zip(cases, outcomes, strict=True):
-        print(f"{outcome.status.upper():8} {case.name}  {'; '.join(outcome.reasons)}")
+    for (case, n), outcome in zip(runs, outcomes, strict=True):
+        print(
+            f"{outcome.status.upper():8} {case.name} #{n}  {'; '.join(outcome.reasons)}"
+        )
     print(f"Results: {output / 'results.json'}")
     return 0 if all(outcome.status == "pass" for outcome in outcomes) else 1
 
