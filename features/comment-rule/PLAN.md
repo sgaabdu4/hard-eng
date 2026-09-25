@@ -18,7 +18,7 @@ Authority: Autonomous. The user asked for comments to be banned by default with 
 
 ## Acceptance + steps
 
-- [ ] A changed Python, Dart, TypeScript/JavaScript, Rust or shell file with two narration lines in one comment block fails `check` and names the file and line, including a block that opens after code; single-line comments, trailing comments, directives, JSDoc type blocks, rustdoc headings, comment-like text in strings, templates and heredocs, and Markdown files pass → `tests/test_comments.py`.
+- [ ] A changed Python, shell, JavaScript/TypeScript, Dart or Rust file with two narration lines in one comment block fails `check` and names the file and line, including a block that opens after code; single-line comments, trailing comments, directives, JSDoc type blocks, rustdoc headings, comment-like text in strings, templates and heredocs, and Markdown files pass → `tests/test_comments.py`.
 - [ ] An older block in a touched file fails; the same block in an untouched file does not; generated files are skipped → `tests/test_comments.py`.
 - [ ] Pre-push rejects a commit that adds a two-line comment block → real `git push` to a local bare remote in `tests/test_comments.py`.
 - [ ] AGENTS.md and gates.md state the rule.
@@ -32,7 +32,7 @@ Execution: One builder; the rule module and check call, tests, then the instruct
 
 ## Risks + recovery
 
-Projects whose touched files hold multi-line comments fail until those blocks are compressed or deleted; that is the requested behaviour. The lexers do not parse regular-expression literals or shell escapes inside double quotes, so a rare string can be misread. Recovery: narrow detection for the affected language.
+Projects whose touched files hold multi-line comments fail until those blocks are compressed or deleted; that is the requested behaviour. The rule covers Python, shell, JavaScript/TypeScript, Dart and Rust; the lexers handle strings, raw strings, templates, regex literals, heredocs and shell escapes, but they are not full parsers, so an unusual literal can still be misread. Recovery: narrow detection for the affected language.
 
 ## ux_reference
 

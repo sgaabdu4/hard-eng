@@ -11,11 +11,8 @@ from pathlib import Path
 from gate_config import changed_files, generated_sources
 
 HASH = {".py", ".pyi", ".sh", ".bash", ".zsh"}
-SLASH = {
-    ".dart", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx",
-    ".rs", ".go", ".swift", ".kt", ".kts", ".java", ".scala", ".c", ".h",
-    ".cc", ".cpp", ".hpp", ".cs", ".php",
-}  # fmt: skip
+JAVASCRIPT = {".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx"}
+SLASH = {".dart", ".rs", *JAVASCRIPT}
 DIRECTIVE = re.compile(
     r"^(#!|#\s*-\*-|//\s*ignore(_for_file)?:|///\s*<reference|//go:|//\s*\+build"
     r"|//\s*#(region|endregion))|(eslint|prettier|biome|jscpd|istanbul|c8|coverage)[-:]"
@@ -45,21 +42,16 @@ def python_comment_lines(text: str) -> dict[int, str] | None:
         return None
 
 
-SINGLE_QUOTE_STRINGS = {
-    ".dart",
-    ".js",
-    ".mjs",
-    ".cjs",
-    ".jsx",
-    ".ts",
-    ".mts",
-    ".cts",
-    ".tsx",
-    ".php",
-}
 CHARACTER = re.compile(r"'(\\.[^']{0,8}|[^'\\\n])'")
 ARITHMETIC = re.compile(r"\$?\(\(.*?\)\)")
-HEREDOC = re.compile(r"(?<!<)<<(?!<)[-~]?\s*(['\"]?)([A-Za-z_]\w*)\1")
+HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)\s*(['\"]?)([A-Za-z_]\w*)\2")
+RAW = {".rs": re.compile(r'b?r(#*)"'), ".dart": re.compile(r"r('''|\"\"\"|'|\")")}
+QUOTE = re.compile(r"'''|\"\"\"|['\"`]")
+REGEX_BEFORE = re.compile(
+    r"(^|[(,=:\[!&|?{};+\-*%<>~^]"
+    r"|\b(return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await))\s*$"
+)
+REGEX = re.compile(r"/(?![/*])(\\.|\[(\\.|[^\]\\\n])*\]|[^/\\\[\n])+/")
 
 
 def string_end(text: str, index: int, quote: str, raw: bool) -> int:
@@ -74,14 +66,22 @@ def string_end(text: str, index: int, quote: str, raw: bool) -> int:
     return len(text)
 
 
-def string_start(text: str, index: int, suffix: str) -> str | None:
-    """The quote that opens a string at index, or None for code and character literals."""
-    triple = text[index : index + 3]
-    if triple in {'"""', "'''"} and (triple == '"""' or suffix in SINGLE_QUOTE_STRINGS):
-        return triple
-    if text[index] in '"`' or (text[index] == "'" and suffix in SINGLE_QUOTE_STRINGS):
-        return text[index]
-    return None
+def string_at(text: str, index: int, suffix: str) -> int | None:
+    """Index just past a string or regex literal starting at index, else None."""
+    previous = text[index - 1 : index]
+    if previous.isalnum() or previous == "_":
+        return None
+    raw = RAW.get(suffix)
+    opened = raw.match(text, index) if raw is not None else None
+    if opened is not None:
+        closing = '"' + opened.group(1) if suffix == ".rs" else opened.group(1)
+        return string_end(text, opened.end(), closing, True)
+    quote = QUOTE.match(text, index)
+    if quote is not None and (quote.group(0) != "'" or suffix != ".rs"):
+        return string_end(text, quote.end(), quote.group(0), False)
+    regex = REGEX.match(text, index) if suffix in JAVASCRIPT else None
+    before = text[max(0, index - 16) : index]
+    return regex.end() if regex and REGEX_BEFORE.search(before) else None
 
 
 def slash_comment_lines(text: str, suffix: str) -> dict[int, str]:
@@ -98,48 +98,55 @@ def slash_comment_lines(text: str, suffix: str) -> dict[int, str]:
             close = text.find("\n" if text[index + 1] == "/" else "*/", index + 2)
             close = len(text) if close < 0 else close + (text[index + 1] == "*") * 2
             parts = text[index:close].split("\n")
-            spanned = len(parts) - 1
-            if blank or spanned:
+            if blank or len(parts) > 1:
                 found.update(enumerate(parts, line))
-            line += spanned
-            index, blank = close, False
-        elif (quote := string_start(text, index, suffix)) is not None:
-            raw = quote == "`" and suffix == ".go"
-            close = string_end(text, index + len(quote), quote, raw)
-            line += text.count("\n", index, close)
-            index, blank = close, False
+            index, line, blank = close, line + len(parts) - 1, False
+        elif (close := string_at(text, index, suffix)) is not None:
+            index, line, blank = close, line + text.count("\n", index, close), False
         else:
             literal = CHARACTER.match(text, index) if character == "'" else None
             index, blank = (literal.end() if literal else index + 1), False
     return found
 
 
+def shell_code(line: str, quote: str | None) -> tuple[str, set[int], str | None]:
+    """The line before any comment, its quoted positions and the quote still open."""
+    code, quoted, escaped = "", set(), False
+    for character in line:
+        if quote is None and character == "#" and (not code or code[-1].isspace()):
+            break
+        if escaped:
+            escaped = False
+        elif character == "\\" and quote != "'":
+            escaped = True
+        elif character in "\"'" and quote in {None, character}:
+            quote = None if quote else character
+        if quote is not None:
+            quoted.add(len(code))
+        code += character
+    return code, quoted, quote
+
+
 def hash_comment_lines(lines: list[str]) -> dict[int, str]:
     """Full-line `#` comments outside shell strings and heredocs."""
     found: dict[int, str] = {}
-    heredoc: str | None = None
+    heredoc: tuple[str, bool] | None = None
     quote: str | None = None
     for number, line in enumerate(lines, 1):
         if heredoc is not None:
-            heredoc = None if line.strip() == heredoc else heredoc
+            delimiter, tabs = heredoc
+            ended = (line.lstrip("\t") if tabs else line) == delimiter
+            heredoc = None if ended else heredoc
             continue
         if quote is None and line.lstrip().startswith("#"):
             found[number] = line
             continue
-        code, quoted = "", set()
-        for character in line:
-            if quote is None and character == "#" and (not code or code[-1].isspace()):
-                break
-            if character in "\"'" and (quote is None or quote == character):
-                quote = None if quote else character
-            elif quote is not None:
-                quoted.add(len(code))
-            code += character
+        code, quoted, quote = shell_code(line, quote)
         quoted |= {i for m in ARITHMETIC.finditer(code) for i in range(*m.span())}
         opened = next(
             (m for m in HEREDOC.finditer(code) if m.start() not in quoted), None
         )
-        heredoc = opened.group(2) if opened else None
+        heredoc = (opened.group(3), opened.group(1) == "-") if opened else None
     return found
 
 
