@@ -1,7 +1,6 @@
 ---
 name: writing-great-skills
 description: Author or review agent skills and SKILL.md packages; refine triggers, routing, metadata, consolidation and splits.
-disable-model-invocation: true
 ---
 
 # Writing Great Skills
