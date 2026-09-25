@@ -127,10 +127,14 @@ def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
     assert missing not in " ".join(passed)
     (tmp_path / "baseline").mkdir()
     root, base = case_fixture(tmp_path / "baseline", "failed-baseline")
-    never = "never ran the failing baseline check"
-    assert never in " ".join(judge_failed_baseline(Run(root, base, "", [], [])))
-    failing = BASELINE._replace(ok=False)
-    assert judge_failed_baseline(Run(root, base, "", [], [failing])) == []
+    never = "never ran the baseline tests or check"
+    reading = Action("command", "cat test_calc.py; ls .hooks", False)
+    assert never in " ".join(judge_failed_baseline(Run(root, base, "", [], [reading])))
+    tests = Action(
+        "command", "git show HEAD; python3 -m unittest -q | head; ls x", False
+    )
+    for ran in (BASELINE._replace(ok=False), tests):
+        assert judge_failed_baseline(Run(root, base, "", [], [ran])) == []
 
 
 def test_both_clients_record_commands_edits_and_results() -> None:
