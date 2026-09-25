@@ -32,12 +32,12 @@ NEUTRAL = re.compile(
 )
 
 
-def python_comment_lines(text: str) -> set[int] | None:
+def python_comment_lines(text: str) -> dict[int, str] | None:
     """Full-line comments by tokenizer, so `#` inside strings is not a comment."""
     try:
         tokens = tokenize.generate_tokens(io.StringIO(text).readline)
         return {
-            token.start[0]
+            token.start[0]: token.string
             for token in tokens
             if token.type == tokenize.COMMENT and token.line.strip().startswith("#")
         }
@@ -58,13 +58,14 @@ SINGLE_QUOTE_STRINGS = {
     ".php",
 }
 CHARACTER = re.compile(r"'(\\.[^']{0,8}|[^'\\\n])'")
+ARITHMETIC = re.compile(r"\$?\(\(.*?\)\)")
 HEREDOC = re.compile(r"(?<!<)<<(?!<)[-~]?\s*(['\"]?)([A-Za-z_]\w*)\1")
 
 
-def string_end(text: str, index: int, quote: str) -> int:
+def string_end(text: str, index: int, quote: str, raw: bool) -> int:
     """Index just past the string that opens at index with quote."""
     while index < len(text):
-        if text[index] == "\\" and quote != "`":
+        if text[index] == "\\" and not raw:
             index += 2
         elif text.startswith(quote, index):
             return index + len(quote)
@@ -83,9 +84,9 @@ def string_start(text: str, index: int, suffix: str) -> str | None:
     return None
 
 
-def slash_comment_lines(text: str, suffix: str) -> set[int]:
-    """Lines that open with a comment, or begin inside a block comment, outside strings."""
-    found: set[int] = set()
+def slash_comment_lines(text: str, suffix: str) -> dict[int, str]:
+    """Comment text of each line that opens with a comment or lies in a spanning block."""
+    found: dict[int, str] = {}
     index, line, blank = 0, 1, True
     while index < len(text):
         character = text[index]
@@ -96,13 +97,15 @@ def slash_comment_lines(text: str, suffix: str) -> set[int]:
         elif text.startswith(("//", "/*"), index):
             close = text.find("\n" if text[index + 1] == "/" else "*/", index + 2)
             close = len(text) if close < 0 else close + (text[index + 1] == "*") * 2
-            spanned = text.count("\n", index, close)
-            found |= {line} if blank or spanned else set()
-            found |= set(range(line + 1, line + 1 + spanned))
+            parts = text[index:close].split("\n")
+            spanned = len(parts) - 1
+            if blank or spanned:
+                found.update(enumerate(parts, line))
             line += spanned
             index, blank = close, False
         elif (quote := string_start(text, index, suffix)) is not None:
-            close = string_end(text, index + len(quote), quote)
+            raw = quote == "`" and suffix == ".go"
+            close = string_end(text, index + len(quote), quote, raw)
             line += text.count("\n", index, close)
             index, blank = close, False
         else:
@@ -111,9 +114,9 @@ def slash_comment_lines(text: str, suffix: str) -> set[int]:
     return found
 
 
-def hash_comment_lines(lines: list[str]) -> set[int]:
+def hash_comment_lines(lines: list[str]) -> dict[int, str]:
     """Full-line `#` comments outside shell strings and heredocs."""
-    found: set[int] = set()
+    found: dict[int, str] = {}
     heredoc: str | None = None
     quote: str | None = None
     for number, line in enumerate(lines, 1):
@@ -121,16 +124,21 @@ def hash_comment_lines(lines: list[str]) -> set[int]:
             heredoc = None if line.strip() == heredoc else heredoc
             continue
         if quote is None and line.lstrip().startswith("#"):
-            found.add(number)
+            found[number] = line
             continue
-        code = ""
+        code, quoted = "", set()
         for character in line:
             if quote is None and character == "#" and (not code or code[-1].isspace()):
                 break
             if character in "\"'" and (quote is None or quote == character):
                 quote = None if quote else character
+            elif quote is not None:
+                quoted.add(len(code))
             code += character
-        opened = HEREDOC.search(code) if quote is None else None
+        quoted |= {i for m in ARITHMETIC.finditer(code) for i in range(*m.span())}
+        opened = next(
+            (m for m in HEREDOC.finditer(code) if m.start() not in quoted), None
+        )
         heredoc = opened.group(2) if opened else None
     return found
 
@@ -148,9 +156,9 @@ def comment_blocks(path: Path) -> list[tuple[int, int]]:
         )
     blocks: list[tuple[int, int]] = []
     start, length = 0, 0
-    for number, line in enumerate([*lines, ""], 1):
+    for number in range(1, len(lines) + 2):
         if number in comments:
-            if not NEUTRAL.search(line.strip()):
+            if not NEUTRAL.search(comments[number].strip()):
                 start, length = (start, length + 1) if length else (number, 1)
             continue
         if length > 1:
