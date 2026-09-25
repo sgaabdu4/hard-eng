@@ -231,6 +231,28 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
     return notice, unfinished
 
 
+def build_in_progress(root: Path, changed: set[str]) -> bool:
+    """Ready plans with pending verification are mid-build, not finished."""
+    paths = [
+        path for path in repository_files(root) if is_plan_path(path.relative_to(root))
+    ]
+    selected = [path for path in paths if str(path.relative_to(root)) in changed]
+    try:
+        contents = [path.read_text() for path in selected or paths]
+        # Complete plans are validated as usual; the unfinished ones decide.
+        active = [text for text in contents if field(text, "Status") != "Complete"]
+        return bool(active) and all(
+            field(text, "Status") == "Ready"
+            and field(
+                plan_sections(text, allow_placeholders=True)["Verification"], "Result"
+            )
+            == "Pending"
+            for text in active
+        )
+    except (OSError, ValueError, KeyError):
+        return False
+
+
 def validate_plan(path: Path, *, changed: bool = True) -> str:
     """Unchanged Complete plans predate later rules such as the E2E field."""
     content = path.read_text()

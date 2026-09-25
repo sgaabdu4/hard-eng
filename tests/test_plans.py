@@ -288,6 +288,20 @@ def test_same_image_cannot_represent_a_visible_change(
         validate_plan(path)
 
 
+def install_native_hooks(repository: Path, check: str) -> None:
+    shutil.copytree(
+        SOURCE / ".hooks",
+        repository / ".hooks",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        shutil.copyfile(SOURCE / name, repository / name)
+    gate = {"name": "fixture-check", "command": [sys.executable, "-c", check]}
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [gate]})
+    )
+
+
 @pytest.mark.parametrize(
     "state",
     [
@@ -304,29 +318,8 @@ def test_native_stop_reports_incomplete_visual_planning(
     repository: Path, completed_plan: str, state: str
 ) -> None:
     question = state not in {"incomplete", "template"}
-    shutil.copytree(
-        SOURCE / ".hooks",
-        repository / ".hooks",
-        ignore=shutil.ignore_patterns("__pycache__"),
-    )
-    for name in ("PRODUCT.md", "DESIGN.md"):
-        shutil.copyfile(SOURCE / name, repository / name)
-    (repository / "hard-eng.gates.json").write_text(
-        json.dumps(
-            {
-                "packages": [],
-                "shared": [
-                    {
-                        "name": "fixture-check",
-                        "command": [
-                            sys.executable,
-                            "-c",
-                            "from pathlib import Path; Path('checked').touch()",
-                        ],
-                    }
-                ],
-            }
-        )
+    install_native_hooks(
+        repository, "from pathlib import Path; Path('checked').touch()"
     )
     git(repository, "add", ".")
     git(repository, "commit", "-qm", "native hooks")
@@ -693,3 +686,51 @@ def test_legacy_ux_reference_keeps_its_original_rules() -> None:
         ux_proof(legacy, legacy=True)
     with pytest.raises(ValueError, match="Result"):
         ux_proof(legacy.replace("Passed", "Pending") + "![A](a.png)\n", legacy=True)
+
+
+@pytest.mark.parametrize(
+    ("claim", "ship"),
+    [
+        ("Waiting for the background builder.", False),
+        ("Still building; not Ready for ship yet.", False),
+        ("Once gated, say `Ready for ship — local work complete`.", False),
+        ("Ready for ship — local implementation and verification complete.", True),
+        ("Summary.\n\n**Ready for ship** — done.", True),
+    ],
+)
+def test_stop_accepts_a_ready_plan_mid_build_until_ship_is_claimed(
+    repository: Path, completed_plan: str, claim: str, ship: bool
+) -> None:
+    install_native_hooks(repository, "")
+    git(repository, "add", ".")
+    git(repository, "commit", "-qm", "hooks")
+    # Both plans change: one task finished, the other still building.
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", "Status: Ready").replace(
+            "## Verification\nResult: Passed", "## Verification\nResult: Pending"
+        )
+    )
+    (repository / "app.py").write_text("print('first slice')\n")
+    (repository / "features/done").mkdir(parents=True)
+    (repository / "features/done/PLAN.md").write_text(completed_plan)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(repository / ".hooks/hard-eng.py"),
+            "stop",
+            "claude",
+        ],
+        cwd=repository,
+        input=json.dumps({"session_id": "build", "last_assistant_message": claim}),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    response = json.loads(result.stdout)
+    if ship:
+        assert response["decision"] == "block"
+        assert "plan is Ready; this check requires Complete" in response["reason"]
+    else:
+        assert "decision" not in response
+        assert response["systemMessage"].startswith("Hard Eng: build in progress")
