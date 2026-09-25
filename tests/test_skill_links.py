@@ -1,10 +1,11 @@
-"""Keep links, anchors and Mermaid routes in distributed skills resolvable."""
+"""Keep distributed skills loadable: frontmatter hosts can read, and resolvable links."""
 
 import os
 import re
 from collections.abc import Iterator
 from pathlib import Path
 
+import yaml
 from conftest import SOURCE
 
 FENCE = re.compile(r"^\s*(?:`{3,}|~{3,})\s*([\w-]*)")
@@ -90,6 +91,32 @@ def link_failures(root: Path) -> list[str]:
     return failures
 
 
+def frontmatter_failures(root: Path) -> list[str]:
+    """Hosts silently drop metadata they cannot read, so the skill stops triggering."""
+    failures: list[str] = []
+    for skill in sorted((root / ".agents/skills").iterdir()):
+        path = skill / "SKILL.md"
+        if not path.is_file():
+            continue
+        text = path.read_text()
+        head, marker, _ = text.removeprefix("---\n").partition("\n---\n")
+        if not text.startswith("---\n") or not marker:
+            failures.append(f"{skill.name}: frontmatter must open on line 1 and close")
+            continue
+        try:
+            loaded = yaml.safe_load(head)
+        except yaml.YAMLError as error:
+            failures.append(f"{skill.name}: invalid YAML: {str(error).splitlines()[0]}")
+            continue
+        fields: dict[object, object] = loaded if isinstance(loaded, dict) else {}
+        if fields.get("name") != skill.name:
+            failures.append(f"{skill.name}: name must match its directory")
+        description = fields.get("description")
+        if not isinstance(description, str) or not 0 < len(description.strip()) <= 1024:
+            failures.append(f"{skill.name}: description must be 1-1024 characters")
+    return failures
+
+
 def skill(root: Path, name: str, text: str) -> None:
     (root / name).mkdir(parents=True)
     (root / name / "SKILL.md").write_text(text)
@@ -136,4 +163,36 @@ def test_broken_links_fail_and_valid_equivalents_pass(tmp_path: Path) -> None:
             ".agents/skills/canonical/SKILL.md:17 ../local/references/guide.md#lost: "
             "missing section"
         ),
+    ]
+
+
+def test_distributed_skill_frontmatter_loads() -> None:
+    assert frontmatter_failures(SOURCE) == []
+
+
+def test_unreadable_frontmatter_fails_and_valid_equivalent_passes(
+    tmp_path: Path,
+) -> None:
+    skills = tmp_path / ".agents/skills"
+    skill(
+        skills,
+        "valid",
+        '---\nname: valid\ndescription: "Use when: quoted colon"\n---\n',
+    )
+    skill(
+        skills, "unquoted", "---\nname: unquoted\ndescription: Use when: colon\n---\n"
+    )
+    skill(skills, "late", "\n---\nname: late\ndescription: Late opener.\n---\n")
+    skill(skills, "unclosed", "---\nname: unclosed\ndescription: No closer.\n")
+    skill(skills, "renamed", "---\nname: other\ndescription: Wrong name.\n---\n")
+    skill(skills, "silent", "---\nname: silent\n---\n")
+    skill(skills, "long", f"---\nname: long\ndescription: {'x' * 1025}\n---\n")
+
+    assert frontmatter_failures(tmp_path) == [
+        "late: frontmatter must open on line 1 and close",
+        "long: description must be 1-1024 characters",
+        "renamed: name must match its directory",
+        "silent: description must be 1-1024 characters",
+        "unclosed: frontmatter must open on line 1 and close",
+        "unquoted: invalid YAML: mapping values are not allowed here",
     ]
