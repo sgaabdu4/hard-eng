@@ -5,7 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import runpy
+import shlex
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -229,30 +232,33 @@ def adopt_root_dart_gates(
     return [template_command, [value for value in template_command if value != "."]]
 
 
-def configure_dart(
-    root: Path, directory: Path, package: Group, changes: dict[str, str]
+def apply_dart_typing(
+    options: JsonObject,
+    required: dict[str, JsonObject],
+    directory: Path,
 ) -> None:
-    import yaml
     from gate_config import dart_rule_settings, validate_dart_exclusions
-    from project_setup import migrate_dart_plugins
 
-    target = directory / "analysis_options.yaml"
-    typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
-    options: JsonObject = typing["dart_options"](target) if target.exists() else {}
-    original = deepcopy(options)
-    existing = target.read_bytes().decode("utf-8") if target.exists() else ""
-    migrate_dart_plugins(options, SOURCE)
-    for section, groups in typing["DART_TYPING"].items():
-        section_options = options.setdefault(section, {})
+    for section, groups in required.items():
+        # A key holding only comments, as in `flutter create` output, parses as null.
+        if options.get(section) is None:
+            options[section] = {}
+        section_options = options[section]
         if not isinstance(section_options, dict):
             raise TypeError(f"Dart {section} settings must be an object")
         for group, settings in groups.items():
+            if section_options.get(group) is None and not isinstance(settings, list):
+                section_options[group] = {}
             current = (
-                section_options.get(group, [])
+                section_options.get(group) or []
                 if isinstance(settings, list)
-                else section_options.setdefault(group, {})
+                else section_options[group]
             )
-            if group == "rules" and isinstance(current, list):
+            if (
+                group == "rules"
+                and isinstance(current, list)
+                and isinstance(settings, dict)
+            ):
                 dart_rule_settings(current)
                 current.extend(rule for rule in settings if rule not in current)
                 continue
@@ -265,6 +271,21 @@ def configure_dart(
                 merge(current, settings, (section, group))
             else:
                 validate_dart_exclusions(directory, current)
+
+
+def configure_dart(
+    root: Path, directory: Path, package: Group, changes: dict[str, str]
+) -> None:
+    import yaml
+    from project_setup import migrate_dart_plugins
+
+    target = directory / "analysis_options.yaml"
+    typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
+    options: JsonObject = typing["dart_options"](target) if target.exists() else {}
+    original = deepcopy(options)
+    existing = target.read_bytes().decode("utf-8") if target.exists() else ""
+    migrate_dart_plugins(options, SOURCE)
+    apply_dart_typing(options, typing["DART_TYPING"], directory)
     content = (
         existing
         if target.exists() and options == original
@@ -279,6 +300,83 @@ def configure_dart(
     if content != existing:
         changes[str(target.relative_to(root))] = content
     configure_dart_scanner(root, directory, changes)
+    configure_dart_generated(root, directory, changes)
+
+
+LOCALE = re.compile(r"[a-z]{2,3}([_-][A-Z][a-z]{3})?([_-](?:[A-Z]{2}|\d{3}))?")
+
+
+def arb_language(arb: Path) -> str | None:
+    """Mirror gen-l10n: `@@locale`, else the first locale suffix of the file name."""
+    try:
+        resources = json.loads(arb.read_text())
+    except (OSError, ValueError):
+        resources = None
+    locale = resources.get("@@locale") if isinstance(resources, dict) else None
+    if not isinstance(locale, str):
+        stem = arb.stem
+        candidates = [stem, *(stem[i + 1 :] for i, c in enumerate(stem) if c == "_")]
+        locale = next((name for name in candidates if LOCALE.fullmatch(name)), None)
+    return re.split("[_-]", locale)[0] if locale else None
+
+
+def localization_outputs(root: Path, directory: Path) -> list[str]:
+    import yaml
+
+    localization = directory / "l10n.yaml"
+    if not localization.is_file():
+        return []
+    options = yaml.safe_load(localization.read_text()) or {}
+    if not isinstance(options, dict) or options.get("synthetic-package", False):
+        return []
+    arbs = directory / str(options.get("arb-dir", "lib/l10n"))
+    output = directory / str(
+        options.get("output-dir", options.get("arb-dir", "lib/l10n"))
+    )
+    name = Path(
+        str(options.get("output-localization-file", "app_localizations.dart"))
+    ).name
+    stem, _, extension = name.partition(".")  # gen-l10n splits at the first dot.
+    languages = {arb_language(arb) for arb in arbs.glob("*.arb")} - {None}
+    names = [name, *(f"{stem}_{language}.{extension}" for language in languages)]
+    relative = [os.path.relpath(output / name, root) for name in sorted(names)]
+    return [Path(name).as_posix() for name in relative if not name.startswith("..")]
+
+
+def configure_dart_generated(
+    root: Path, directory: Path, changes: dict[str, str]
+) -> None:
+    """Mark generator output so coverage and file-size gates skip it."""
+    path = root / ".gitattributes"
+    existing = path.read_text() if path.exists() else ""
+    attributes = changes.get(".gitattributes", existing)
+    declared = set()
+    for line in attributes.splitlines():
+        try:
+            fields = shlex.split(line, comments=True)
+        except ValueError:
+            fields = line.split()
+        if fields and any("linguist-generated" in field for field in fields[1:]):
+            declared.add(fields[0])
+    added = "".join(
+        # Git reads C-style double-quoted patterns, which may contain spaces.
+        (
+            json.dumps(pattern, ensure_ascii=False)
+            if any(c.isspace() for c in pattern)
+            else pattern
+        )
+        + " linguist-generated=true\n"
+        for pattern in [
+            "*.g.dart",
+            "*.freezed.dart",
+            "*.gr.dart",
+            *localization_outputs(root, directory),
+        ]
+        if pattern not in declared
+    )
+    # Prepend: later lines win, so existing project overrides keep precedence.
+    if added:
+        changes[".gitattributes"] = added + attributes
 
 
 def configure_dart_scanner(
@@ -336,8 +434,9 @@ def configure_javascript(
 def configure_python(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
-    from project_setup import import_configuration, parallel_pytest
+    from project_setup import dependency_command, import_configuration, parallel_pytest
 
+    dependency_command(directory, "python")  # Existing configurations need a lock too.
     parallel_pytest(package)
     native = directory / "pyrefly.toml"
     project = directory / "pyproject.toml"
@@ -598,6 +697,83 @@ def configure_ignores(root: Path, changes: dict[str, str]) -> None:
     changes[".gitignore"] = ignores
 
 
+INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl"}
+# Options whose operand is inline code or a module, then options that take a value.
+INLINE = {"-c", "-m", "-e", "-p", "--eval", "--print"}
+VALUED = {"-W", "-X", "-r", "--require", "--import", "--loader", "-o"}
+
+
+def script_operand(arguments: list[str]) -> str | None:
+    """Return the script an interpreter runs, or None for inline code or modules."""
+    options = iter(arguments[1:])
+    for argument in options:
+        if argument in INLINE:
+            return None
+        if argument == "--" or not argument.startswith("-"):
+            return next(options, None) if argument == "--" else argument
+        if argument in VALUED:
+            next(options, None)
+    return None
+
+
+def legacy_command_problem(root: Path, arguments: list[str]) -> str | None:
+    """Name why a retired family command cannot run, or None when it can."""
+    if not (shutil.which(arguments[0]) or (root / arguments[0]).is_file()):
+        return "program not found"
+    interpreter = Path(arguments[0]).name.rstrip("0123456789.") in INTERPRETERS
+    script = script_operand(arguments) if interpreter else None
+    if script is not None and not (root / script).is_file():
+        return "script not found"
+    return None
+
+
+def retired_config(root: Path) -> GateConfig | None:
+    """Regenerate a pre-rebuild families configuration, keeping runnable commands."""
+    from gate_config import validate_gate
+
+    legacy = json.loads((root / "hard-eng.gates.json").read_text())
+    if not isinstance(legacy, dict) or "families" not in legacy or "packages" in legacy:
+        return None
+    families: dict[str, object] = (
+        legacy["families"] if isinstance(legacy["families"], dict) else {}
+    )
+    config = gate_config(root)
+    # Families ran from the repository root; only root checks duplicate them.
+    covered = [gate["command"] for gate in config["shared"]] + [
+        gate["command"]
+        for group in config["packages"]
+        if Path(group["path"]) == Path(".")
+        for gate in group["checks"]
+    ]
+    dropped = []
+    for name, command in families.items():
+        values: list[object] = command if isinstance(command, list) else []
+        arguments = [value for value in values if isinstance(value, str)]
+        gate: Gate = {"name": f"legacy-{name}", "command": arguments}
+        reason = None
+        if not arguments or len(arguments) != len(values):
+            reason = "not an argument list"
+        else:
+            reason = legacy_command_problem(root, arguments)
+        if reason is None:
+            try:
+                validate_gate(gate, root, set())
+            except (OSError, ValueError, TypeError) as error:
+                reason = str(error)
+        if reason is not None:
+            dropped.append(f"{name} ({reason}): {command}")
+        elif arguments not in covered:
+            config["shared"].append(gate)
+    # stderr keeps --plan's JSON output parseable.
+    print(
+        "Regenerated hard-eng.gates.json from the current templates. Retired families "
+        "that still run and validate stay as legacy-<name> shared checks; remove any "
+        "the templates now cover. Dropped: " + ("; ".join(dropped) or "none"),
+        file=sys.stderr,
+    )
+    return config
+
+
 def plan_install(
     root: Path, previous: Path | None = None
 ) -> tuple[dict[str, str], dict[str, str], Path, str]:
@@ -626,8 +802,13 @@ def plan_install(
             ["git", "rev-parse", "HEAD"], cwd=SOURCE, text=True
         ).strip()
     changes[".hooks/hard-eng-source.json"] = json.dumps({"revision": revision}) + "\n"
-    if not (root / "hard-eng.gates.json").exists():
-        changes["hard-eng.gates.json"] = json.dumps(gate_config(root), indent=2) + "\n"
+    generated = (
+        retired_config(root)
+        if (root / "hard-eng.gates.json").exists()
+        else gate_config(root)
+    )
+    if generated is not None:
+        changes["hard-eng.gates.json"] = json.dumps(generated, indent=2) + "\n"
     from gate_config import parse_config, repository_files, typescript_packages
 
     config = parse_config(
@@ -675,8 +856,53 @@ def plan_install(
     return changes, links, hook, launcher
 
 
+def commit_install(root: Path, names: list[str], clean: bool) -> str:
+    from update import install_paths
+
+    reason = "these paths already had local changes"
+    if clean:
+        subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
+        if not subprocess.run(
+            ["git", "diff", "--cached", "--quiet", "--", *names], cwd=root, check=False
+        ).returncode:
+            return "Installed files already match the current commit."
+        result = subprocess.run(
+            ["git", "commit", "--only", "-m", "Install Hard Eng", "--", *names],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return "Committed the installed files locally without pushing."
+        subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
+        reason = " | ".join(result.stdout.strip().splitlines()[-3:])
+    return (
+        f"Installed files are not committed ({reason}). Commit them so updates and "
+        "worktrees include them: " + install_paths(names)
+    )
+
+
 def install(root: Path, previous: Path | None = None) -> None:
     changes, links, hook, launcher = plan_install(root, previous)
+    names = sorted({*changes, *links})
+    if hook.is_relative_to(root) and ".git" not in hook.relative_to(root).parts:
+        names.append(str(hook.relative_to(root)))  # A Husky launcher lives in the tree.
+    # Commit only paths without prior local state, so no project edit joins the commit.
+    clean = not subprocess.check_output(
+        [
+            "git",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignored",
+            "--",
+            *names,
+        ],
+        cwd=root,
+        text=True,
+    )
     for name, content in changes.items():
         target = root / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -699,6 +925,7 @@ def install(root: Path, previous: Path | None = None) -> None:
     if guidance is not None:
         print("Before using --base package selection, " + guidance)
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
+    print(commit_install(root, names, clean))
     print("Follow HE Plan to adapt the gates and configure shipping before delivery.")
     print(
         "Integration setup: .agents/skills/he/references/integrations.md — reuse existing choices; resolve only missing service targets and verify relevant real calls."

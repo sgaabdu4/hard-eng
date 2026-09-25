@@ -19,6 +19,7 @@ from project_setup import (
     FLUTTER_TESTS,
     adapt_performance,
     browser_test_coverage,
+    dependency_command,
     import_configuration,
     javascript_files,
     javascript_manager,
@@ -94,6 +95,46 @@ def test_missing_pnpm_lockfile_requires_migration(tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text("{}")
     with pytest.raises(ValueError, match="pnpm-lock.yaml is required"):
         javascript_manager(tmp_path)
+
+
+def test_python_requires_a_lockfile_unless_a_uv_workspace_member(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="app"\n[tool.uv.workspace]\nmembers=["packages/*"]\n'
+    )
+    for name in ("packages/lib", "tools/script"):
+        (tmp_path / name).mkdir(parents=True)
+        (tmp_path / name / "pyproject.toml").write_text('[project]\nname="part"\n')
+    for directory in (tmp_path, tmp_path / "packages/lib", tmp_path / "tools/script"):
+        with pytest.raises(ValueError, match=r"uv add -r requirements.txt"):
+            dependency_command(directory, "python")
+    (tmp_path / "poetry.lock").touch()
+    assert dependency_command(tmp_path, "python")[0] == "poetry"
+    (tmp_path / "poetry.lock").unlink()
+    (tmp_path / "uv.lock").touch()
+    assert dependency_command(tmp_path, "python")[2] == "uv.lock"
+    assert dependency_command(tmp_path / "packages/lib", "python")[0] == "uv"
+    with pytest.raises(ValueError, match="uv.lock or poetry.lock is required"):
+        dependency_command(tmp_path / "tools/script", "python")
+
+
+def test_existing_python_configuration_still_requires_a_lockfile(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\nversion="1"\n')
+    (tmp_path / "uv.lock").touch()
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    (tmp_path / "uv.lock").unlink()
+    with pytest.raises(ValueError, match="uv.lock or poetry.lock is required"):
+        validate_required_checks(tmp_path, config)
+    with pytest.raises(ValueError, match="uv.lock or poetry.lock is required"):
+        installer.install(tmp_path)
 
 
 def test_react_and_existing_project_scripts_are_gated(
@@ -231,6 +272,7 @@ def test_python_packages_receive_recursive_import_contract(
 ) -> None:
     repository(tmp_path)
     (tmp_path / "package.json").unlink()
+    (tmp_path / "uv.lock").touch()
     (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
     package = tmp_path / "src/example"
     package.mkdir(parents=True)
@@ -263,6 +305,7 @@ def test_python_tests_run_in_parallel_unless_a_project_opts_out(
 ) -> None:
     repository(tmp_path)
     (tmp_path / "package.json").unlink()
+    (tmp_path / "uv.lock").touch()
     (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
     (tmp_path / "app.py").write_text("value = 1\n")
     gates = tmp_path / "hard-eng.gates.json"
@@ -302,6 +345,7 @@ def test_standalone_python_does_not_invent_import_architecture(
 ) -> None:
     repository(tmp_path)
     (tmp_path / "package.json").unlink()
+    (tmp_path / "uv.lock").touch()
     (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
     (tmp_path / "main.py").write_text("value = 1\n")
     package = installer.gate_config(tmp_path)["packages"][0]
@@ -751,6 +795,7 @@ def test_conflicting_python_typing_is_not_overwritten(
 ) -> None:
     repository(tmp_path)
     (tmp_path / "package.json").unlink()
+    (tmp_path / "uv.lock").touch()
     content = (
         '[project]\nname = "fixture"\nversion = "1"\n[tool.pyrefly]\npreset="default"\n'
     )

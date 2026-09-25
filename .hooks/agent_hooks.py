@@ -181,6 +181,51 @@ def session_state(root: Path, payload: JsonObject) -> Path | None:
     return root / ".hard-eng/sessions" / (identifier + ".json")
 
 
+def gate_status(root: Path) -> str:
+    """Say whether `check` can start, so an install never looks active while broken."""
+    from gate_config import load_groups
+    from update import SOURCE_FILE, install_paths
+
+    try:
+        load_groups(root)
+        status = "Gates: configuration valid."
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        KeyError,
+        subprocess.SubprocessError,
+    ) as error:
+        status = "Gates: not runnable — " + " ".join(str(error).split())
+    try:
+        pending: list[str] = [
+            line[3:]
+            for line in subprocess.check_output(
+                [
+                    "git",
+                    "status",
+                    "--porcelain",
+                    "--untracked-files=all",
+                    "--",
+                    ".hooks",
+                    ".agents/skills",
+                    "hard-eng.gates.json",
+                    ".husky/pre-push",
+                ],
+                cwd=root,
+                text=True,
+            ).splitlines()
+        ]
+    except (OSError, subprocess.SubprocessError):
+        pending = []
+    if pending and (root / SOURCE_FILE).exists():
+        status += (
+            " Uncommitted Hard Eng paths stop updates and are missing from new "
+            "worktrees; commit them: " + install_paths(pending)
+        )
+    return status
+
+
 def session_context(root: Path, payload: JsonObject) -> str:
     from update import update
 
@@ -191,6 +236,7 @@ def session_context(root: Path, payload: JsonObject) -> str:
         messages.append(
             f"Hard Eng update failed: {error}. Continue with the existing scaffold; its gates remain required."
         )
+    messages.append(gate_status(root))
     state = session_state(root, payload)
     if state is not None:
         try:
@@ -365,7 +411,9 @@ def handle_event(root: Path, event: str, agent: str) -> int:
             )
             output = context_output(agent, native, message)
             if event == "session" and agent in {"claude", "codex"}:
-                output["systemMessage"] = "Hard Eng startup: " + message.splitlines()[0]
+                output["systemMessage"] = "Hard Eng startup: " + " ".join(
+                    message.splitlines()[:2]
+                )
     except (OSError, ValueError, TypeError) as error:
         message = f"Hard Eng hook input/setup failed: {error}. Continue with available tools; do not claim verification passed."
         output = (

@@ -12,6 +12,8 @@ import pytest
 import update
 from conftest import commit, git, init
 from shipping import ShippingError, ShippingPolicy
+from test_setup import repository as setup_repository
+from test_setup import snapshot
 
 
 def test_installer_preserves_native_mcp_settings_on_rerun(
@@ -271,6 +273,82 @@ def test_ignored_local_configuration_prevents_update(
     assert git(target, "diff", "--cached", "--name-only") == "staged.txt"
     assert (target / "project.txt").read_text() == "unrelated working edit\n"
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+@pytest.mark.parametrize("case", ["clean", "husky", "dirty", "rejected"])
+def test_install_commits_only_clean_installed_paths(
+    installer: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    case: str,
+) -> None:
+    tmp_path = tmp_path / "project"
+    init(tmp_path)
+    (tmp_path / "package.json").write_text('{"private":true}')
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    commit(tmp_path, "project")
+    if case == "dirty":
+        (tmp_path / "AGENTS.md").write_text("# Uncommitted project rules\n")
+    if case == "husky":
+        shim = tmp_path / ".husky/_/pre-push"
+        shim.parent.mkdir(parents=True)
+        shim.write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
+        (shim.parent / "h").write_text("#!/usr/bin/env sh\n")
+        (tmp_path / ".gitignore").write_text(".husky/_/\n")
+        commit(tmp_path, "husky")
+        git(tmp_path, "config", "core.hooksPath", ".husky/_")
+    if case == "rejected":
+        hook = tmp_path / ".git/hooks/pre-commit"
+        hook.write_text("#!/bin/sh\necho rejected by project hook\nexit 1\n")
+        hook.chmod(0o755)
+    installer.install(tmp_path)
+    output = capsys.readouterr().out
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    if case in {"clean", "husky"}:
+        assert "Committed the installed files locally without pushing." in output
+        assert status == []
+        assert (".husky/pre-push" in git(tmp_path, "ls-files")) == (case == "husky")
+        if case == "clean":
+            installer.install(tmp_path)
+            assert "Installed files already match the current commit." in (
+                capsys.readouterr().out
+            )
+        return
+    reason = {
+        "dirty": "these paths already had local changes",
+        "rejected": "rejected by project hook",
+    }[case]
+    assert f"Installed files are not committed ({reason})" in output
+    assert ".hooks/ " in output and ".agents/skills/he/ " in output
+    assert "?? AGENTS.md" in status and "?? .hooks/" in status
+    assert not subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
+def test_untracked_install_is_named_instead_of_local_edits(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, old = release
+    select_release(source, monkeypatch)
+    git(target, "rm", "-rq", "--cached", ".hooks", ".agents")
+    git(target, "commit", "-qm", "installed files left untracked")
+    with pytest.raises(
+        ValueError,
+        match=r"^Installed Hard Eng files are not committed: \.agents/skills/he/ \.hooks/; commit them",
+    ):
+        update.update(target)
+    assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
 
 
 @pytest.mark.parametrize("wrapped", [True, False])
@@ -729,3 +807,72 @@ def test_unverified_scaffold_update_fails(
     monkeypatch.setattr(update, "verified_revision", unverified)
     with pytest.raises(ValueError, match="successful upstream"):
         update.check_scaffold_update(target, base)
+
+
+def test_retired_families_config_is_regenerated_and_reported(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    setup_repository(tmp_path)
+    secrets = installer.gate_config(tmp_path)["shared"][0]["command"]
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "families": {
+                    "lint": ["node_modules/.bin/biome", "lint", "."],
+                    "contract": ["python3", "scripts/contract.py"],
+                    "skills": ["python3", "scripts/check-skill-contracts.py"],
+                    "inline": ["python3", "-c", "print(1)"],
+                    "flagged": ["python3", "-u", "-W", "error", "scripts/gone.py"],
+                    "audit": ["node_modules/.bin/fallow", "audit", "--format", "json"],
+                    "removed": ["node_modules/.bin/pnpm", "--dir", "gone", "run", "x"],
+                    "secrets": secrets,
+                },
+                "phases": {"push": ["lint", "contract", "audit", "removed"]},
+            }
+        )
+    )
+    for tool in (
+        "node_modules/.bin/fallow",
+        "node_modules/.bin/pnpm",
+        "scripts/contract.py",
+    ):
+        (tmp_path / tool).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / tool).touch()
+    installer.install(tmp_path)
+    notice = capsys.readouterr().err
+    assert "skills (script not found)" in notice and "inline (" not in notice
+    assert "flagged (script not found)" in notice
+    assert "lint (program not found): ['node_modules/.bin/biome'" in notice
+    assert "audit (Fallow audit gates require a native fallow report" in notice
+    assert "removed ([Errno 2] No such file or directory" in notice
+    config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    assert "families" not in config and "phases" not in config
+    assert [package["language"] for package in config["packages"]] == ["javascript"]
+    assert [gate["command"] for gate in config["shared"]].count(secrets) == 1
+    assert {
+        "name": "legacy-contract",
+        "command": ["python3", "scripts/contract.py"],
+    } in (config["shared"])
+    assert ["python3", "-c", "print(1)"] in [
+        gate["command"] for gate in config["shared"]
+    ]
+    before = snapshot(tmp_path)
+    installer.install(tmp_path)
+    assert "Regenerated" not in capsys.readouterr().err
+    assert snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    ("command", "script"),
+    [
+        (["node", "--require", "setup.js", "scripts/gone.mjs"], "scripts/gone.mjs"),
+        (["node", "--eval", "process.exit(0)"], None),
+        (["python3", "-m", "pytest"], None),
+        (["bash", "-o", "pipefail", "--", "scripts/check.sh"], "scripts/check.sh"),
+    ],
+)
+def test_retired_interpreter_script_is_found_past_options(
+    installer: ModuleType, command: list[str], script: str | None
+) -> None:
+    assert installer.script_operand(command) == script

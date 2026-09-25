@@ -20,6 +20,7 @@ def test_package_adaptation_reads_inventory_once(
         directory = tmp_path / str(index)
         directory.mkdir()
         (directory / "pyproject.toml").write_text('[project]\nname="example"\n')
+        (directory / "uv.lock").touch()
         files.append(directory / "app.py")
         config["packages"].append(
             {"path": str(index), "language": "python", "sources": ["src"], "checks": []}
@@ -63,6 +64,8 @@ def test_baseline_validation_does_not_rescan_siblings(
     for count in (8, 32):
         packages = PackageVisits()
         for index in range(count):
+            (tmp_path / str(index)).mkdir(exist_ok=True)
+            (tmp_path / str(index) / "uv.lock").touch()
             packages.append(
                 {
                     "path": str(index),

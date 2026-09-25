@@ -149,7 +149,10 @@ def line_coverage(
     missing = expected - files.keys()
     if missing:
         names = ", ".join(str(file.relative_to(directory)) for file in sorted(missing))
-        raise ValueError(f"Coverage report omits production files: {names}")
+        raise ValueError(
+            f"Coverage report omits production files: {names}. Cover them, or mark "
+            "generator output with `<pattern> linguist-generated=true` in .gitattributes"
+        )
     covered = sum(files[file][0] for file in expected)
     total = sum(files[file][1] for file in expected)
     if not total:
