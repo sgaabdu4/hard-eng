@@ -4,7 +4,7 @@ Status: Ready
 
 ## Outcome + scope
 
-`check` fails when any changed source file contains a comment block longer than one line, so Stop, pre-push and CI enforce the rule for every client and every edit path. Code comments are none by default, with at most one terse line of why. The whole changed file must comply, including blocks written before the change. Tooling directives (lint suppressions, type-checker pragmas, shebangs, build tags) are exempt and never join a block. Generated and vendored files, deleted files, symlinks and non-source files are skipped. Non-goals: judging whether a single line is necessary, docstrings and other string literals, and files the change does not touch.
+`check` fails when any changed source file contains a comment block longer than one line, so Stop, pre-push and CI enforce the rule for every client and every edit path. Code comments are none by default, with at most one terse line of why. The whole changed file must comply, including blocks written before the change. Tooling directives (lint suppressions, type-checker pragmas, shebangs, build tags) are exempt and never join a block. Generated and vendored files, installed agent skills under `.agents/` (vendored tooling copied into projects on every install), deleted files, symlinks and non-source files are skipped. Hard Eng's own `.hooks` ship into every project, so they comply too. Non-goals: judging whether a single line is necessary, docstrings and other string literals, and files the change does not touch.
 
 ## Repository context
 

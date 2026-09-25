@@ -1,4 +1,7 @@
-"""Code comments are none by default; a changed source file may hold one-line comments only."""
+"""Code comments are none by default; a changed source file may hold one-line comments only.
+
+Installed agent skills under .agents/ are vendored tooling and are not checked.
+"""
 
 import io
 import re
@@ -17,7 +20,7 @@ DIRECTIVE = re.compile(
     r"^(#!|#\s*-\*-|//\s*ignore(_for_file)?:|///\s*<reference|//go:|//\s*\+build"
     r"|//\s*#(region|endregion))|(eslint|prettier|biome|jscpd|istanbul|c8|coverage)[-:]"
     r"|@ts-|noqa|type:\s*ignore|pyright:|pylint:|mypy:|pragma|fmt:\s*(off|on|skip)"
-    r"|isort:|shellcheck|nolint|NOSONAR"
+    r"|isort:|shellcheck|nolint|NOSONAR|nosemgrep|nosec"
 )
 
 
@@ -78,6 +81,7 @@ def validate_comments(root: Path, base: str) -> None:
         name
         for name in names
         if Path(name).suffix in HASH | SLASH
+        and not name.startswith(".agents/")
         and (root / name).is_file()
         and not (root / name).is_symlink()
     )

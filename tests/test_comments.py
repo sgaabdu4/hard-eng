@@ -32,6 +32,7 @@ BLOCK = "Code comments are none by default"
         ("run.sh", "#!/bin/sh\n# one why\necho\n", None),
         ("run.sh", "echo\n# first\n# second\n", 2),
         ("NOTES.md", "# a\n# b\n", None),
+        (".agents/skills/tool/run.sh", "echo\n# vendored\n# skill script\n", None),
     ],
 )
 def test_changed_source_holds_one_line_comments_only(
