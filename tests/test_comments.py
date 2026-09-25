@@ -1,6 +1,7 @@
 """The comment rule: changed source files hold one-line comments at most."""
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -81,8 +82,9 @@ def test_changed_source_holds_one_line_comments_only(
     if line is None:
         validate_comments(root, "HEAD")
     else:
-        with pytest.raises(ValueError, match=rf"{BLOCK}.*{name}:{line} holds a"):
+        with pytest.raises(ValueError, match=BLOCK) as error:
             validate_comments(root, "HEAD")
+        assert re.findall(rf"{name}:(\d+) holds", str(error.value)) == [str(line)]
 
 
 def test_touched_files_answer_for_older_blocks_and_generated_output_is_skipped(
