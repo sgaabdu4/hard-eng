@@ -96,6 +96,7 @@ def test_planning_only_needs_a_usable_plan_for_the_request(
             "no input",
         ),
         (CONTROLS["denial"][0], {"asserts_defect": False}, "incomplete or denied"),
+        (CORRECT.replace("returns 1 ", "returns 99 "), {}, "no input"),
         (CORRECT, {}, None),
     ],
 )
@@ -150,12 +151,16 @@ def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
         "Hard Eng: verification failed",
     )
     shell_edit = Action("command", "sed -i '' 's/0/0.0/' calc.py", True)
+    chained = BASELINE._replace(
+        detail="python3 .hooks/hard-eng.py check && " + shell_edit.detail
+    )
     for actions in (
         [BASELINE, edit],
         [edit, ready],
         [edit, echoed],
         [edit, masked],
         [edit, BASELINE, shell_edit],
+        [edit, chained],
     ):
         assert missing in " ".join(judge_continue(Run(root, base, "", [], actions))), (
             actions

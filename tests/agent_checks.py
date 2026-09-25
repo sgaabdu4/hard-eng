@@ -327,6 +327,7 @@ def passed_checks(actions: list[Action], stage: str) -> list[int]:
         and "hard-eng.py" in action.detail
         and PASSED[stage].search(action.output)
         and not FAILED.search(action.output)
+        and not WRITES.search(action.detail)
     ]
 
 
@@ -381,20 +382,24 @@ def judge_continue(fixture: Run) -> list[str]:
     writes = [
         i
         for i, action in enumerate(fixture.actions)
-        if i not in passed and (action.kind == "edit" or WRITES.search(action.detail))
+        if action.kind == "edit" or WRITES.search(action.detail)
     ]
     if not any(i > max(writes, default=-1) for i in passed):
         failures.append("the agent ran no passing Complete check after its last edit")
     return failures
 
 
+EXAMPLE = re.compile(
+    r"(?P<values>\[\s*-?\d+(?:\s*,\s*-?\d+)+\s*\])\)?[^\[\n]{0,40}?"
+    r"(?:returns?|gives?|yields?|produces?|evaluates to|is|->|→|==?)\s*`?(?P<stated>-?\d+(?:\.\d+)?)"
+)
+
+
 def verified_examples(fixture: Run) -> list[str]:
-    """List inputs in the report whose defective result the report states and differs from the mean."""
+    """Inputs whose stated result matches the defective code's output and differs from the mean."""
     found = []
-    for literal in set(
-        re.findall(r"\[\s*-?\d+(?:\s*,\s*-?\d+)+\s*\]", fixture.message)
-    ):
-        values = json.loads(literal)
+    for example in EXAMPLE.finditer(fixture.message):
+        values = json.loads(example["values"])
         program = f"from calc import average; print(average({values}))"
         result = subprocess.run(
             [sys.executable, "-c", program],
@@ -403,11 +408,9 @@ def verified_examples(fixture: Run) -> list[str]:
             text=True,
             check=False,
         ).stdout.strip()
-        stated = re.search(
-            rf"(?<![\d.]){re.escape(result)}(?:\.0)?(?![\d.])", fixture.message
-        )
-        if result and float(result) != sum(values) / len(values) and stated:
-            found.append(f"{literal} -> {result}")
+        stated = float(example["stated"])
+        if result and stated == float(result) != sum(values) / len(values):
+            found.append(f"{example['values']} -> {result}")
     fixture.log.append(f"verified examples: {found}")
     return found
 
