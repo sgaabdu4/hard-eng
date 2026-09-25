@@ -516,6 +516,32 @@ def repair_current_hook(root: Path, previous: str) -> str:
     return "No newer CI-verified Hard Eng revision is available; installed the missing pre-push hook."
 
 
+def refuse_local_state(root: Path, names: list[str]) -> None:
+    status = subprocess.check_output(
+        [
+            "git",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignored",
+            "--",
+            *names,
+        ],
+        cwd=root,
+        text=True,
+    ).splitlines()
+    if status and all(line.startswith("?? ") for line in status):
+        raise ValueError(
+            "Installed Hard Eng files are not committed: "
+            + install_paths([line[3:].strip('"') for line in status])
+            + "; commit them, then rerun the update"
+        )
+    if status:
+        raise ValueError(
+            "The update overlaps local edits; preserve them and ask before updating"
+        )
+
+
 def update(root: Path) -> str:
     marker = root / SOURCE_FILE
     if not marker.exists():
@@ -536,29 +562,7 @@ def update(root: Path) -> str:
             install_planned_hook(root, hook)
             return "Hard Eng already matches the verified source."
         names = sorted({*changes, *links})
-        status = subprocess.check_output(
-            [
-                "git",
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--ignored",
-                "--",
-                *names,
-            ],
-            cwd=root,
-            text=True,
-        ).splitlines()
-        if status and all(line.startswith("?? ") for line in status):
-            raise ValueError(
-                "Installed Hard Eng files are not committed: "
-                + install_paths([line[3:].strip('"') for line in status])
-                + "; commit them, then rerun the update"
-            )
-        if status:
-            raise ValueError(
-                "The update overlaps local edits; preserve them and ask before updating"
-            )
+        refuse_local_state(root, names)
         before = {
             name: (root / name).read_bytes() if (root / name).exists() else None
             for name in changes

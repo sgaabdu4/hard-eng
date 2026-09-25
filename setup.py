@@ -638,7 +638,9 @@ def retired_config(root: Path) -> bool:
     legacy = json.loads((root / "hard-eng.gates.json").read_text())
     if not isinstance(legacy, dict) or "families" not in legacy or "packages" in legacy:
         return False
-    families = legacy["families"] if isinstance(legacy["families"], dict) else {}
+    families: dict[str, object] = (
+        legacy["families"] if isinstance(legacy["families"], dict) else {}
+    )
     commands = "; ".join(
         f"{name}: {' '.join(map(str, command)) if isinstance(command, list) else command}"
         for name, command in families.items()
