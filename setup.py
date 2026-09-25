@@ -684,6 +684,7 @@ def configure_ignores(root: Path, changes: dict[str, str]) -> None:
         ".git/",
         "__pycache__/",
         ".hard-eng/",
+        ".claude/worktrees/",
         ".codebase-memory/",
         ".context-mode/",
         "coverage/",
