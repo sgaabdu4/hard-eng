@@ -8,6 +8,7 @@ import os
 import re
 import runpy
 import shlex
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -680,26 +681,35 @@ def configure_ignores(root: Path, changes: dict[str, str]) -> None:
     changes[".gitignore"] = ignores
 
 
-def retired_config(root: Path) -> bool:
-    """Report a pre-rebuild families configuration so it is regenerated."""
+def retired_checks(root: Path) -> list[Gate] | None:
+    """Carry a pre-rebuild families configuration's runnable commands forward."""
     legacy = json.loads((root / "hard-eng.gates.json").read_text())
     if not isinstance(legacy, dict) or "families" not in legacy or "packages" in legacy:
-        return False
+        return None
     families: dict[str, object] = (
         legacy["families"] if isinstance(legacy["families"], dict) else {}
     )
-    commands = "; ".join(
-        f"{name}: {' '.join(map(str, command)) if isinstance(command, list) else command}"
-        for name, command in families.items()
-    )
+    kept: list[Gate] = []
+    dropped = []
+    for name, command in families.items():
+        if (
+            isinstance(command, list)
+            and command
+            and all(isinstance(argument, str) for argument in command)
+            and (shutil.which(command[0]) or (root / command[0]).is_file())
+        ):
+            kept.append({"name": f"legacy-{name}", "command": command})
+        else:
+            dropped.append(f"{name}: {command}")
     # stderr keeps --plan's JSON output parseable.
     print(
-        "Regenerated hard-eng.gates.json from the current templates; the retired "
-        "families format is not carried over. Re-add any family still needed as a "
-        f"package check (previous file stays in Git history): {commands or 'none'}",
+        "Regenerated hard-eng.gates.json from the current templates. Retired families "
+        "whose program exists stay as legacy-<name> shared checks; remove any the "
+        "templates now cover. Dropped (program not found): "
+        + ("; ".join(dropped) or "none"),
         file=sys.stderr,
     )
-    return True
+    return kept
 
 
 def plan_install(
@@ -730,8 +740,20 @@ def plan_install(
             ["git", "rev-parse", "HEAD"], cwd=SOURCE, text=True
         ).strip()
     changes[".hooks/hard-eng-source.json"] = json.dumps({"revision": revision}) + "\n"
-    if not (root / "hard-eng.gates.json").exists() or retired_config(root):
-        changes["hard-eng.gates.json"] = json.dumps(gate_config(root), indent=2) + "\n"
+    legacy: list[Gate] | None = (
+        retired_checks(root) if (root / "hard-eng.gates.json").exists() else []
+    )
+    if legacy is not None:
+        generated = gate_config(root)
+        commands = [gate["command"] for gate in generated["shared"]] + [
+            gate["command"]
+            for group in generated["packages"]
+            for gate in group["checks"]
+        ]
+        generated["shared"] += [
+            gate for gate in legacy if gate["command"] not in commands
+        ]
+        changes["hard-eng.gates.json"] = json.dumps(generated, indent=2) + "\n"
     from gate_config import parse_config, repository_files, typescript_packages
 
     config = parse_config(
