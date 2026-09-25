@@ -60,6 +60,21 @@ def test_uninitialized_skill_submodule_cannot_be_silently_omitted(
         update.scaffold_files(tmp_path)
 
 
+def test_installed_project_scans_skip_agent_worktrees(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / "package.json").write_text('{"private":true}')
+    (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    installer.install(root)
+    commit(root, "installed")
+    git(root, "worktree", "add", "-q", ".claude/worktrees/builder")
+    from gitleaks_scan import scan_paths
+
+    assert not [path for path in scan_paths(root) if "worktrees" in path.parts]
+
+
 def test_scaffold_distribution_excludes_ignored_runtime_files(tmp_path: Path) -> None:
     git(tmp_path, "init", "-q")
     (tmp_path / ".gitignore").write_text("node_modules/\n__pycache__/\n")
