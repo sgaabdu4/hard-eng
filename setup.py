@@ -279,6 +279,41 @@ def configure_dart(
     if content != existing:
         changes[str(target.relative_to(root))] = content
     configure_dart_scanner(root, directory, changes)
+    configure_dart_generated(root, directory, changes)
+
+
+def configure_dart_generated(
+    root: Path, directory: Path, changes: dict[str, str]
+) -> None:
+    """Mark generator output so coverage and file-size gates skip it."""
+    import yaml
+
+    patterns = ["*.g.dart", "*.freezed.dart", "*.gr.dart"]
+    localization = directory / "l10n.yaml"
+    options = (
+        yaml.safe_load(localization.read_text()) if localization.is_file() else None
+    )
+    if isinstance(options, dict) and not options.get("synthetic-package", False):
+        # gen-l10n writes beside the ARB files unless output-dir is set.
+        output = directory / str(
+            options.get("output-dir", options.get("arb-dir", "lib/l10n"))
+        )
+        stem = Path(
+            str(options.get("output-localization-file", "app_localizations.dart"))
+        ).stem
+        relative = os.path.relpath(output / f"{stem}*.dart", root)
+        if not relative.startswith(".."):
+            patterns.append(Path(relative).as_posix())
+    path = root / ".gitattributes"
+    existing = path.read_text() if path.exists() else ""
+    attributes = changes.get(".gitattributes", existing)
+    declared = {line.split()[0] for line in attributes.splitlines() if line.split()}
+    for pattern in patterns:
+        if pattern not in declared:
+            separator = "" if not attributes or attributes.endswith("\n") else "\n"
+            attributes += f"{separator}{pattern} linguist-generated=true\n"
+    if attributes != existing:
+        changes[".gitattributes"] = attributes
 
 
 def configure_dart_scanner(

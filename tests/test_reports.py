@@ -605,7 +605,10 @@ def test_dart_coverage_allows_export_barrels_but_requires_executable_files(
     expected = {tmp_path / "total.dart", barrel}
     assert reports.line_coverage(path, "dart-tests", tmp_path, expected) == (1, 1)
     barrel.write_text("export 'total.dart';\nint unused() => 1;\n")
-    with pytest.raises(ValueError, match="omits production files: api.dart"):
+    with pytest.raises(
+        ValueError,
+        match=r"omits production files: api.dart\. .*linguist-generated=true` in \.gitattributes",
+    ):
         reports.line_coverage(path, "dart-tests", tmp_path, expected)
 
 

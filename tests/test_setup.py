@@ -11,6 +11,7 @@ from gate_config import (
     Gate,
     GateConfig,
     Group,
+    generated_sources,
     parse_config,
     validate_dart_boundaries,
     validate_required_checks,
@@ -430,6 +431,37 @@ def test_root_dart_update_consolidates_duplicate_analyzers(
     assert package["checks"] == [
         {"name": name, "role": "types", "command": command if owner else explicit}
     ]
+
+
+def test_dart_generator_output_is_marked_generated_once(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    app = tmp_path / "apps/mobile"
+    (app / "lib/l10n").mkdir(parents=True)
+    (app / "l10n.yaml").write_text("arb-dir: lib/l10n\n")
+    (tmp_path / ".gitattributes").write_text(
+        "*.png binary\n*.gr.dart -linguist-generated"
+    )
+    changes: dict[str, str] = {}
+    installer.configure_dart_generated(tmp_path, app, changes)
+    installer.configure_dart_generated(tmp_path, app, changes)
+    assert changes[".gitattributes"] == (
+        "*.png binary\n*.gr.dart -linguist-generated\n"
+        "*.g.dart linguist-generated=true\n*.freezed.dart linguist-generated=true\n"
+        "apps/mobile/lib/l10n/app_localizations*.dart linguist-generated=true\n"
+    )
+    (tmp_path / ".gitattributes").write_text(changes[".gitattributes"])
+    names = [
+        "lib/claim.freezed.dart",
+        "lib/route.gr.dart",
+        "lib/l10n/app_localizations_en.dart",
+        "lib/claim.dart",
+    ]
+    assert generated_sources(app, names) == set(names[::2])
+    repeated: dict[str, str] = {}
+    installer.configure_dart_generated(tmp_path, app, repeated)
+    assert repeated == {}
 
 
 def test_plain_dart_uses_native_coverage_tool(
