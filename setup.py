@@ -694,35 +694,51 @@ def configure_ignores(root: Path, changes: dict[str, str]) -> None:
     changes[".gitignore"] = ignores
 
 
-def retired_checks(root: Path) -> list[Gate] | None:
-    """Carry a pre-rebuild families configuration's runnable commands forward."""
+def retired_config(root: Path) -> GateConfig | None:
+    """Regenerate a pre-rebuild families configuration, keeping runnable commands."""
+    from gate_config import validate_gate
+
     legacy = json.loads((root / "hard-eng.gates.json").read_text())
     if not isinstance(legacy, dict) or "families" not in legacy or "packages" in legacy:
         return None
     families: dict[str, object] = (
         legacy["families"] if isinstance(legacy["families"], dict) else {}
     )
-    kept: list[Gate] = []
+    config = gate_config(root)
+    # Families ran from the repository root; only root checks duplicate them.
+    covered = [gate["command"] for gate in config["shared"]] + [
+        gate["command"]
+        for group in config["packages"]
+        if Path(group["path"]) == Path(".")
+        for gate in group["checks"]
+    ]
     dropped = []
     for name, command in families.items():
-        if (
-            isinstance(command, list)
-            and command
-            and all(isinstance(argument, str) for argument in command)
-            and (shutil.which(command[0]) or (root / command[0]).is_file())
-        ):
-            kept.append({"name": f"legacy-{name}", "command": command})
+        values: list[object] = command if isinstance(command, list) else []
+        arguments = [value for value in values if isinstance(value, str)]
+        gate: Gate = {"name": f"legacy-{name}", "command": arguments}
+        reason = None
+        if not arguments or len(arguments) != len(values):
+            reason = "not an argument list"
+        elif not (shutil.which(arguments[0]) or (root / arguments[0]).is_file()):
+            reason = "program not found"
         else:
-            dropped.append(f"{name}: {command}")
+            try:
+                validate_gate(gate, root, set())
+            except (ValueError, TypeError) as error:
+                reason = str(error)
+        if reason is not None:
+            dropped.append(f"{name} ({reason}): {command}")
+        elif arguments not in covered:
+            config["shared"].append(gate)
     # stderr keeps --plan's JSON output parseable.
     print(
         "Regenerated hard-eng.gates.json from the current templates. Retired families "
-        "whose program exists stay as legacy-<name> shared checks; remove any the "
-        "templates now cover. Dropped (program not found): "
-        + ("; ".join(dropped) or "none"),
+        "that still run and validate stay as legacy-<name> shared checks; remove any "
+        "the templates now cover. Dropped: " + ("; ".join(dropped) or "none"),
         file=sys.stderr,
     )
-    return kept
+    return config
 
 
 def plan_install(
@@ -753,19 +769,12 @@ def plan_install(
             ["git", "rev-parse", "HEAD"], cwd=SOURCE, text=True
         ).strip()
     changes[".hooks/hard-eng-source.json"] = json.dumps({"revision": revision}) + "\n"
-    legacy: list[Gate] | None = (
-        retired_checks(root) if (root / "hard-eng.gates.json").exists() else []
+    generated = (
+        retired_config(root)
+        if (root / "hard-eng.gates.json").exists()
+        else gate_config(root)
     )
-    if legacy is not None:
-        generated = gate_config(root)
-        commands = [gate["command"] for gate in generated["shared"]] + [
-            gate["command"]
-            for group in generated["packages"]
-            for gate in group["checks"]
-        ]
-        generated["shared"] += [
-            gate for gate in legacy if gate["command"] not in commands
-        ]
+    if generated is not None:
         changes["hard-eng.gates.json"] = json.dumps(generated, indent=2) + "\n"
     from gate_config import parse_config, repository_files, typescript_packages
 
