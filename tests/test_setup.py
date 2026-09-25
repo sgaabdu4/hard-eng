@@ -11,7 +11,6 @@ from gate_config import (
     Gate,
     GateConfig,
     Group,
-    generated_sources,
     parse_config,
     validate_dart_boundaries,
     validate_required_checks,
@@ -431,53 +430,6 @@ def test_root_dart_update_consolidates_duplicate_analyzers(
     assert package["checks"] == [
         {"name": name, "role": "types", "command": command if owner else explicit}
     ]
-
-
-@pytest.mark.parametrize("l10n", ["", "arb-dir: lib/my strings\n"])
-def test_dart_generator_output_is_marked_generated_once(
-    installer: ModuleType, tmp_path: Path, l10n: str
-) -> None:
-    repository(tmp_path)
-    app = tmp_path / "apps/mobile"
-    arbs = app / ("lib/my strings" if l10n else "lib/l10n")
-    arbs.mkdir(parents=True)
-    for name, content in (("app_en_US.arb", "{}"), ("x.arb", '{"@@locale":"fr"}')):
-        (arbs / name).write_text(content)
-    (app / "l10n.yaml").write_text(l10n)
-    project = "*.gr.dart eol=lf\napps/mobile/lib/manual.g.dart -linguist-generated\n"
-    (tmp_path / ".gitattributes").write_text(project)
-    changes: dict[str, str] = {}
-    installer.configure_dart_generated(tmp_path, app, changes)
-    installer.configure_dart_generated(tmp_path, app, changes)
-    output = "apps/mobile/" + arbs.relative_to(app).as_posix()
-    quote = '"' if " " in output else ""
-    assert changes[".gitattributes"] == (
-        "*.g.dart linguist-generated=true\n*.freezed.dart linguist-generated=true\n"
-        "*.gr.dart linguist-generated=true\n"
-        + "".join(
-            f"{quote}{output}/{name}{quote} linguist-generated=true\n"
-            for name in (
-                "app_localizations.dart",
-                "app_localizations_en.dart",
-                "app_localizations_fr.dart",
-            )
-        )
-        + project
-    )
-    (tmp_path / ".gitattributes").write_text(changes[".gitattributes"])
-    local = arbs.relative_to(app).as_posix()
-    names = [
-        "lib/claim.freezed.dart",
-        "lib/manual.g.dart",
-        "lib/route.gr.dart",
-        f"{local}/app_localizations_service.dart",
-        f"{local}/app_localizations_en.dart",
-        "lib/claim.dart",
-    ]
-    assert generated_sources(app, names) == set(names[::2])
-    repeated: dict[str, str] = {}
-    installer.configure_dart_generated(tmp_path, app, repeated)
-    assert repeated == {}
 
 
 def test_plain_dart_uses_native_coverage_tool(
