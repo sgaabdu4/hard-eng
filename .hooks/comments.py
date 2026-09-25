@@ -44,9 +44,7 @@ def python_comment_lines(text: str) -> dict[int, str] | None:
 
 CHARACTER = re.compile(r"'(\\.[^']{0,8}|[^'\\\n])'")
 ARITHMETIC = re.compile(r"\$?\(\(.*?\)\)")
-HEREDOC = re.compile(
-    r"(?<!<)<<(?!<)(-?)\s*(?:'([^']*)'|\"([^\"]*)\"|([^\s<>|&;()'\"]+))"
-)
+HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)\s*((?:'[^']*'|\"[^\"]*\"|[^\s<>|&;()'\"])+)")
 RAW = {".rs": re.compile(r'b?r(#*)"'), ".dart": re.compile(r"r('''|\"\"\"|'|\")")}
 QUOTE = re.compile(r"'''|\"\"\"|['\"]")
 REGEX_BEFORE = re.compile(
@@ -80,8 +78,22 @@ def string_at(text: str, index: int, suffix: str) -> int | None:
     if quote is not None and (quote.group(0) != "'" or suffix != ".rs"):
         return string_end(text, quote.end(), quote.group(0), False)
     regex = REGEX.match(text, index) if suffix in JAVASCRIPT else None
-    before = text[max(0, index - 16) : index]
-    return regex.end() if regex and REGEX_BEFORE.search(before) else None
+    return regex.end() if regex and regex_allowed(text, index) else None
+
+
+def regex_allowed(text: str, index: int) -> bool:
+    """Whether `/` at index starts a regex: after an operator, keyword or control condition."""
+    before = text[max(0, index - 200) : index].rstrip()
+    if not before.endswith(")"):
+        return REGEX_BEFORE.search(before[-16:]) is not None
+    depth = 0
+    for position in range(len(before) - 1, -1, -1):
+        depth += {")": 1, "(": -1}.get(before[position], 0)
+        if depth == 0:
+            return (
+                re.search(r"\b(if|while|for|with)\s*$", before[:position]) is not None
+            )
+    return False
 
 
 def template_end(text: str, index: int) -> tuple[int, bool]:
@@ -162,28 +174,24 @@ def shell_code(line: str, quote: str | None) -> tuple[str, set[int], str | None]
 def hash_comment_lines(lines: list[str]) -> dict[int, str]:
     """Full-line `#` comments outside shell strings and heredocs."""
     found: dict[int, str] = {}
-    heredoc: tuple[str, bool] | None = None
+    heredocs: list[tuple[str, bool]] = []
     quote: str | None = None
     for number, line in enumerate(lines, 1):
-        if heredoc is not None:
-            delimiter, tabs = heredoc
-            ended = (line.lstrip("\t") if tabs else line) == delimiter
-            heredoc = None if ended else heredoc
+        if heredocs:
+            delimiter, tabs = heredocs[0]
+            if (line.lstrip("\t") if tabs else line) == delimiter:
+                heredocs.pop(0)
             continue
         if quote is None and line.lstrip().startswith("#"):
             found[number] = line
             continue
         code, quoted, quote = shell_code(line, quote)
         quoted |= {i for m in ARITHMETIC.finditer(code) for i in range(*m.span())}
-        opened = next(
-            (m for m in HEREDOC.finditer(code) if m.start() not in quoted), None
-        )
-        word = (
-            next((g for g in opened.groups()[1:] if g is not None), "")
-            if opened
-            else ""
-        )
-        heredoc = (word.replace("\\", ""), opened.group(1) == "-") if opened else None
+        heredocs = [
+            (re.sub(r"[\\'\"]", "", opened.group(2)), opened.group(1) == "-")
+            for opened in HEREDOC.finditer(code)
+            if opened.start() not in quoted
+        ]
     return found
 
 
