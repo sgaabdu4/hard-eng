@@ -823,6 +823,7 @@ def test_retired_families_config_is_regenerated_and_reported(
                     "contract": ["python3", "scripts/contract.py"],
                     "skills": ["python3", "scripts/check-skill-contracts.py"],
                     "inline": ["python3", "-c", "print(1)"],
+                    "flagged": ["python3", "-u", "-W", "error", "scripts/gone.py"],
                     "audit": ["node_modules/.bin/fallow", "audit", "--format", "json"],
                     "removed": ["node_modules/.bin/pnpm", "--dir", "gone", "run", "x"],
                     "secrets": secrets,
@@ -841,6 +842,7 @@ def test_retired_families_config_is_regenerated_and_reported(
     installer.install(tmp_path)
     notice = capsys.readouterr().err
     assert "skills (script not found)" in notice and "inline (" not in notice
+    assert "flagged (script not found)" in notice
     assert "lint (program not found): ['node_modules/.bin/biome'" in notice
     assert "audit (Fallow audit gates require a native fallow report" in notice
     assert "removed ([Errno 2] No such file or directory" in notice
@@ -859,3 +861,18 @@ def test_retired_families_config_is_regenerated_and_reported(
     installer.install(tmp_path)
     assert "Regenerated" not in capsys.readouterr().err
     assert snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    ("command", "script"),
+    [
+        (["node", "--require", "setup.js", "scripts/gone.mjs"], "scripts/gone.mjs"),
+        (["node", "--eval", "process.exit(0)"], None),
+        (["python3", "-m", "pytest"], None),
+        (["bash", "-o", "pipefail", "--", "scripts/check.sh"], "scripts/check.sh"),
+    ],
+)
+def test_retired_interpreter_script_is_found_past_options(
+    installer: ModuleType, command: list[str], script: str | None
+) -> None:
+    assert installer.script_operand(command) == script
