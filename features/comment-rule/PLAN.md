@@ -4,7 +4,7 @@ Status: Ready
 
 ## Outcome + scope
 
-`check` fails when any changed source file contains a comment block longer than one line, so Stop, pre-push and CI enforce the rule for every client and every edit path. Code comments are none by default, with at most one terse line of why. The whole changed file must comply, including blocks written before the change. Tooling directives (lint suppressions, type-checker pragmas, shebangs, build tags) are exempt and never join a block. Generated and vendored files, installed agent skills under `.agents/` (vendored tooling copied into projects on every install), deleted files, symlinks and non-source files are skipped. Hard Eng's own `.hooks` ship into every project, so they comply too. Non-goals: judging whether a single line is necessary, docstrings and other string literals, and files the change does not touch.
+`check` fails when any changed source file contains a comment block longer than one line, so Stop, pre-push and CI enforce the rule for every client and every edit path. Code comments are none by default, with at most one terse line of why. The whole changed file must comply, including blocks written before the change. Only narration lines count: delimiters, blank comment lines, tooling directives (lint suppressions, type-checker pragmas, shebangs, build tags), JSDoc type tags and rustdoc section headings do not. Doc comments count like any comment; the user chose this over exempting them, so projects whose linters demand longer docs turn those lints off. Detection tracks strings, heredocs and block comments, so comment-like text inside string data passes. Generated and vendored files, installed agent skills under `.agents/` (vendored tooling copied into projects on every install), deleted files, symlinks and non-source files are skipped. Hard Eng's own `.hooks` ship into every project, so they comply too. Non-goals: judging whether a single line is necessary, docstrings and other string literals, and files the change does not touch.
 
 ## Repository context
 
@@ -18,7 +18,7 @@ Authority: Autonomous. The user asked for comments to be banned by default with 
 
 ## Acceptance + steps
 
-- [ ] A changed Python, Dart, TypeScript/JavaScript or shell file with a two-line comment block fails `check` and names the file and line; single-line comments, trailing comments, tooling directives, `#` lines inside Python strings and Markdown files pass → `tests/test_comments.py`.
+- [ ] A changed Python, Dart, TypeScript/JavaScript, Rust or shell file with two narration lines in one comment block fails `check` and names the file and line, including a block that opens after code; single-line comments, trailing comments, directives, JSDoc type blocks, rustdoc headings, comment-like text in strings, templates and heredocs, and Markdown files pass → `tests/test_comments.py`.
 - [ ] An older block in a touched file fails; the same block in an untouched file does not; generated files are skipped → `tests/test_comments.py`.
 - [ ] Pre-push rejects a commit that adds a two-line comment block → real `git push` to a local bare remote in `tests/test_comments.py`.
 - [ ] AGENTS.md and gates.md state the rule.
@@ -32,7 +32,7 @@ Execution: One builder; the rule module and check call, tests, then the instruct
 
 ## Risks + recovery
 
-Projects whose touched files hold multi-line comments fail until those blocks are compressed or deleted; that is the requested behaviour. Line-based detection outside Python can misread `//` at the start of a line inside a multi-line string. Recovery: narrow detection for the affected language.
+Projects whose touched files hold multi-line comments fail until those blocks are compressed or deleted; that is the requested behaviour. The lexers do not parse regular-expression literals or shell escapes inside double quotes, so a rare string can be misread. Recovery: narrow detection for the affected language.
 
 ## ux_reference
 
