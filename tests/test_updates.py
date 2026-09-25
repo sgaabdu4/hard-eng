@@ -273,7 +273,7 @@ def test_ignored_local_configuration_prevents_update(
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
-@pytest.mark.parametrize("case", ["clean", "dirty", "rejected"])
+@pytest.mark.parametrize("case", ["clean", "husky", "dirty", "rejected"])
 def test_install_commits_only_clean_installed_paths(
     installer: ModuleType,
     tmp_path: Path,
@@ -284,8 +284,17 @@ def test_install_commits_only_clean_installed_paths(
     init(tmp_path)
     (tmp_path / "package.json").write_text('{"private":true}')
     (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    commit(tmp_path, "project")
     if case == "dirty":
         (tmp_path / "AGENTS.md").write_text("# Uncommitted project rules\n")
+    if case == "husky":
+        shim = tmp_path / ".husky/_/pre-push"
+        shim.parent.mkdir(parents=True)
+        shim.write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
+        (shim.parent / "h").write_text("#!/usr/bin/env sh\n")
+        (tmp_path / ".gitignore").write_text(".husky/_/\n")
+        commit(tmp_path, "husky")
+        git(tmp_path, "config", "core.hooksPath", ".husky/_")
     if case == "rejected":
         hook = tmp_path / ".git/hooks/pre-commit"
         hook.write_text("#!/bin/sh\necho rejected by project hook\nexit 1\n")
@@ -299,9 +308,15 @@ def test_install_commits_only_clean_installed_paths(
         text=True,
         check=True,
     ).stdout.splitlines()
-    if case == "clean":
+    if case in {"clean", "husky"}:
         assert "Committed the installed files locally without pushing." in output
-        assert sorted(status) == ["?? package.json", "?? pnpm-lock.yaml"]
+        assert status == []
+        assert (".husky/pre-push" in git(tmp_path, "ls-files")) == (case == "husky")
+        if case == "clean":
+            installer.install(tmp_path)
+            assert "Installed files already match the current commit." in (
+                capsys.readouterr().out
+            )
         return
     reason = {
         "dirty": "these paths already had local changes",

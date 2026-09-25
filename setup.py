@@ -784,6 +784,10 @@ def commit_install(root: Path, names: list[str], clean: bool) -> str:
     reason = "these paths already had local changes"
     if clean:
         subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
+        if not subprocess.run(
+            ["git", "diff", "--cached", "--quiet", "--", *names], cwd=root, check=False
+        ).returncode:
+            return "Installed files already match the current commit."
         result = subprocess.run(
             ["git", "commit", "--only", "-m", "Install Hard Eng", "--", *names],
             cwd=root,
@@ -805,6 +809,8 @@ def commit_install(root: Path, names: list[str], clean: bool) -> str:
 def install(root: Path, previous: Path | None = None) -> None:
     changes, links, hook, launcher = plan_install(root, previous)
     names = sorted({*changes, *links})
+    if hook.is_relative_to(root) and ".git" not in hook.relative_to(root).parts:
+        names.append(str(hook.relative_to(root)))  # A Husky launcher lives in the tree.
     # Commit only paths without prior local state, so no project edit joins the commit.
     clean = not subprocess.check_output(
         [
