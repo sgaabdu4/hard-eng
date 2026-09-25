@@ -391,7 +391,7 @@ def judge_continue(fixture: Run) -> list[str]:
 
 EXAMPLE = re.compile(
     r"(?P<values>\[\s*-?\d+(?:\s*,\s*-?\d+)+\s*\])\)?[^\[\n]{0,40}?"
-    r"(?:returns?|gives?|yields?|produces?|evaluates to|is|->|→|==?)\s*`?(?P<stated>-?\d+(?:\.\d+)?)"
+    r"(?:return(?:s|ed)?|gives?|gave|yield(?:s|ed)?|produce[sd]?|evaluates to|is|was|->|→|==?)\s*`?(?P<stated>-?\d+(?:\.\d+)?)"
 )
 
 

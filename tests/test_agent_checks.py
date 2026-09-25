@@ -98,6 +98,11 @@ def test_planning_only_needs_a_usable_plan_for_the_request(
         (CONTROLS["denial"][0], {"asserts_defect": False}, "incomplete or denied"),
         (CORRECT.replace("returns 1 ", "returns 99 "), {}, "no input"),
         (CORRECT, {}, None),
+        (
+            "`average` floors: when I ran it, `average([1, 2])` returned `1` instead of `1.5`.",
+            {},
+            None,
+        ),
     ],
 )
 def test_review_needs_a_confirmed_diagnosis_not_keywords(
