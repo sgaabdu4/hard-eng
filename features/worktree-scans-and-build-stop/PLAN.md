@@ -1,6 +1,6 @@
 # Keep gates usable while agent worktrees exist and a build spans several turns
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
