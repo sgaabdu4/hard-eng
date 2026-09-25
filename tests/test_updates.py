@@ -273,6 +273,21 @@ def test_ignored_local_configuration_prevents_update(
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
+def test_untracked_install_is_named_instead_of_local_edits(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, old = release
+    select_release(source, monkeypatch)
+    git(target, "rm", "-rq", "--cached", ".hooks", ".agents")
+    git(target, "commit", "-qm", "installed files left untracked")
+    with pytest.raises(
+        ValueError,
+        match=r"^Installed Hard Eng files are not committed: \.agents/skills/he/ \.hooks/; commit them",
+    ):
+        update.update(target)
+    assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
+
+
 @pytest.mark.parametrize("wrapped", [True, False])
 def test_scaffold_update_validates_retained_files_scanner(
     release: tuple[Path, Path, str],

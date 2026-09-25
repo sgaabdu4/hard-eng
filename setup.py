@@ -675,8 +675,47 @@ def plan_install(
     return changes, links, hook, launcher
 
 
+def commit_install(root: Path, names: list[str], clean: bool) -> str:
+    from update import install_paths
+
+    reason = "these paths already had local changes"
+    if clean:
+        subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
+        result = subprocess.run(
+            ["git", "commit", "--only", "-m", "Install Hard Eng", "--", *names],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return "Committed the installed files locally without pushing."
+        subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
+        reason = " | ".join(result.stdout.strip().splitlines()[-3:])
+    return (
+        f"Installed files are not committed ({reason}). Commit them so updates and "
+        "worktrees include them: " + install_paths(names)
+    )
+
+
 def install(root: Path, previous: Path | None = None) -> None:
     changes, links, hook, launcher = plan_install(root, previous)
+    names = sorted({*changes, *links})
+    # Commit only paths without prior local state, so no project edit joins the commit.
+    clean = not subprocess.check_output(
+        [
+            "git",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignored",
+            "--",
+            *names,
+        ],
+        cwd=root,
+        text=True,
+    )
     for name, content in changes.items():
         target = root / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -699,6 +738,7 @@ def install(root: Path, previous: Path | None = None) -> None:
     if guidance is not None:
         print("Before using --base package selection, " + guidance)
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
+    print(commit_install(root, names, clean))
     print("Follow HE Plan to adapt the gates and configure shipping before delivery.")
     print(
         "Integration setup: .agents/skills/he/references/integrations.md — reuse existing choices; resolve only missing service targets and verify relevant real calls."

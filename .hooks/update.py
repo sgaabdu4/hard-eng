@@ -178,6 +178,20 @@ def without_skills(files: set[str], skills: set[str]) -> set[str]:
     }
 
 
+def install_paths(names: list[str]) -> str:
+    """Name installed paths by scaffold directory rather than every file."""
+    paths = set()
+    for name in names:
+        parts = Path(name).parts
+        if parts[0] == ".hooks":
+            paths.add(".hooks/")
+        elif parts[:2] == (".agents", "skills") and len(parts) > 3:
+            paths.add("/".join(parts[:3]) + "/")
+        else:
+            paths.add(name)
+    return " ".join(sorted(paths))
+
+
 def pre_push_missing(root: Path) -> bool:
     from agent_hooks import project_pre_push
 
@@ -522,7 +536,7 @@ def update(root: Path) -> str:
             install_planned_hook(root, hook)
             return "Hard Eng already matches the verified source."
         names = sorted({*changes, *links})
-        if subprocess.check_output(
+        status = subprocess.check_output(
             [
                 "git",
                 "status",
@@ -534,7 +548,14 @@ def update(root: Path) -> str:
             ],
             cwd=root,
             text=True,
-        ):
+        ).splitlines()
+        if status and all(line.startswith("?? ") for line in status):
+            raise ValueError(
+                "Installed Hard Eng files are not committed: "
+                + install_paths([line[3:].strip('"') for line in status])
+                + "; commit them, then rerun the update"
+            )
+        if status:
             raise ValueError(
                 "The update overlaps local edits; preserve them and ask before updating"
             )
