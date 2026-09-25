@@ -681,19 +681,21 @@ def test_retired_families_config_is_regenerated_and_reported(
                     "lint": ["node_modules/.bin/biome", "lint", "."],
                     "contract": ["python3", "scripts/contract.py"],
                     "audit": ["node_modules/.bin/fallow", "audit", "--format", "json"],
+                    "removed": ["node_modules/.bin/pnpm", "--dir", "gone", "run", "x"],
                     "secrets": secrets,
                 },
-                "phases": {"push": ["lint", "contract", "audit", "secrets"]},
+                "phases": {"push": ["lint", "contract", "audit", "removed", "secrets"]},
             }
         )
     )
-    fallow = tmp_path / "node_modules/.bin/fallow"
-    fallow.parent.mkdir(parents=True)
-    fallow.touch()
+    for tool in ("fallow", "pnpm"):
+        (tmp_path / "node_modules/.bin").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "node_modules/.bin" / tool).touch()
     installer.install(tmp_path)
     notice = capsys.readouterr().err
     assert "lint (program not found): ['node_modules/.bin/biome'" in notice
     assert "audit (Fallow audit gates require a native fallow report" in notice
+    assert "removed ([Errno 2] No such file or directory" in notice
     config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
     assert "families" not in config and "phases" not in config
     assert [package["language"] for package in config["packages"]] == ["javascript"]
