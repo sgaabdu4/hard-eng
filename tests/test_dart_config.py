@@ -8,7 +8,7 @@ from types import ModuleType
 import pytest
 import yaml
 from conftest import git
-from gate_config import JsonObject, validate_dart_exclusions
+from gate_config import JsonObject, generated_sources, validate_dart_exclusions
 
 
 def dart_format_command(installer: ModuleType) -> list[str]:
@@ -259,6 +259,21 @@ def test_dart_without_exclusion_key_needs_no_rewrite(
     assert path.read_text() == content
 
 
+@pytest.mark.parametrize(
+    "content",
+    ["linter:\n  rules:\n    # avoid_print: false\n", "analyzer:\nlinter:\n"],
+)
+def test_dart_setup_fills_sections_that_hold_only_comments(
+    installer: ModuleType, runner: ModuleType, tmp_path: Path, content: str
+) -> None:
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(content)
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, changes)
+    path.write_text(changes["analysis_options.yaml"])
+    runner.validate_typing(tmp_path, "dart")
+
+
 @pytest.mark.parametrize("pattern", ["lib/**", "**/*.dart", "../**"])
 def test_dart_exclusions_reject_project_patterns(tmp_path: Path, pattern: str) -> None:
     with pytest.raises(ValueError, match="cannot exclude project files"):
@@ -472,3 +487,56 @@ def test_dart_format_skips_an_empty_inventory(
     monkeypatch.setenv("PATH", str(bin_directory) + ":/usr/bin:/bin")
     result = subprocess.run(command, cwd=tmp_path, check=False)
     assert result.returncode == 0
+
+
+@pytest.mark.parametrize(
+    "l10n",
+    ["", "arb-dir: lib/my strings\noutput-localization-file: messages.i18n.dart\n"],
+)
+def test_dart_generator_output_is_marked_generated_once(
+    installer: ModuleType, tmp_path: Path, l10n: str
+) -> None:
+    git(tmp_path, "init", "-q")
+    app = tmp_path / "apps/mobile"
+    arbs = app / ("lib/my strings" if l10n else "lib/l10n")
+    arbs.mkdir(parents=True)
+    for name, content in (("app_en-US.arb", "{}"), ("x.arb", '{"@@locale":"fr"}')):
+        (arbs / name).write_text(content)
+    (app / "l10n.yaml").write_text(l10n)
+    project = "*.gr.dart eol=lf\napps/mobile/lib/manual.g.dart -linguist-generated\n"
+    (tmp_path / ".gitattributes").write_text(project)
+    changes: dict[str, str] = {}
+    installer.configure_dart_generated(tmp_path, app, changes)
+    installer.configure_dart_generated(tmp_path, app, changes)
+    output = "apps/mobile/" + arbs.relative_to(app).as_posix()
+    quote = '"' if " " in output else ""
+    stem, extension = (
+        ("messages", "i18n.dart") if l10n else ("app_localizations", "dart")
+    )
+    assert changes[".gitattributes"] == (
+        "*.g.dart linguist-generated=true\n*.freezed.dart linguist-generated=true\n"
+        "*.gr.dart linguist-generated=true\n"
+        + "".join(
+            f"{quote}{output}/{name}{quote} linguist-generated=true\n"
+            for name in (
+                f"{stem}.{extension}",
+                f"{stem}_en.{extension}",
+                f"{stem}_fr.{extension}",
+            )
+        )
+        + project
+    )
+    (tmp_path / ".gitattributes").write_text(changes[".gitattributes"])
+    local = arbs.relative_to(app).as_posix()
+    names = [
+        "lib/claim.freezed.dart",
+        "lib/manual.g.dart",
+        "lib/route.gr.dart",
+        f"{local}/{stem}_service.{extension}",
+        f"{local}/{stem}_en.{extension}",
+        "lib/claim.dart",
+    ]
+    assert generated_sources(app, names) == set(names[::2])
+    repeated: dict[str, str] = {}
+    installer.configure_dart_generated(tmp_path, app, repeated)
+    assert repeated == {}

@@ -60,6 +60,7 @@ def native_gate_fixture(root: Path, installer: ModuleType, language: str) -> Gat
     }[language]
     (root / name).write_text(content)
     (root / "pnpm-lock.yaml").touch()
+    (root / "uv.lock").touch()
     (root / source).parent.mkdir(parents=True, exist_ok=True)
     (root / source).write_text("# fixture\n")
     config: GateConfig = installer.gate_config(root)
