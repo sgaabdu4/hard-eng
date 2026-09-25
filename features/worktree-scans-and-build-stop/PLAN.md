@@ -1,6 +1,6 @@
 # Keep gates usable while agent worktrees exist and a build spans several turns
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -18,11 +18,11 @@ Authority: Autonomous. The user asked to fix every open issue, file and fix the 
 
 ## Acceptance + steps
 
-- [ ] Stop with a Ready + Verification Pending plan and a code change passes at Ready with a "build in progress" notice; the same turn claiming `Ready for ship` still requires Complete → `tests/test_plans.py::test_stop_accepts_a_ready_plan_mid_build_until_ship_is_claimed`.
-- [ ] Pre-push and CI behaviour is unchanged: ordinary `check` still requires Complete → existing `tests/test_plans.py` stage tests.
-- [ ] An installed project with a worktree at `.claude/worktrees/<name>` has no worktree paths in the current-file scan inventory → `tests/test_updates.py::test_installed_project_scans_skip_agent_worktrees`.
-- [ ] dart-decimate stops discovering nested checkouts and ignored packages → upstream PR for #115.
-- [ ] Full gate passes; `/codex:adversarial-review` findings resolved.
+- [x] Stop with a Ready + Verification Pending plan and a code change passes at Ready with a "build in progress" notice; a turn whose line opens with the `Ready for ship —` handoff still requires Complete; negated or quoted mentions and a Complete plan changed alongside do not end the build → `tests/test_plans.py::test_stop_accepts_a_ready_plan_mid_build_until_ship_is_claimed`.
+- [x] Pre-push and CI behaviour is unchanged: ordinary `check` still requires Complete → existing `tests/test_plans.py` stage tests.
+- [x] An installed project with a worktree at `.claude/worktrees/<name>` has no worktree paths in the current-file scan inventory → `tests/test_updates.py::test_installed_project_scans_skip_agent_worktrees`.
+- [x] dart-decimate stops discovering nested checkouts and ignored packages → upstream PR for #115.
+- [x] Full gate passes; `/codex:adversarial-review` findings resolved.
 
 ## Baseline + execution
 
@@ -32,7 +32,7 @@ Execution: One builder in Hard Eng; one subagent fixes dart-decimate in an isola
 
 ## Risks + recovery
 
-A turn that finishes without the exact `Ready for ship` phrase is checked at Ready; the HE Build handoff still requires the Complete gate before that phrase, and pre-push/CI still require Complete. Recovery: tighten the claim detection. Hosts without `last_assistant_message` are treated as mid-build.
+A turn without a line opening `Ready for ship —` is checked at Ready; the HE Build handoff still requires the Complete gate before that phrase, and pre-push/CI still require Complete. Recovery: tighten the claim detection. Hosts without `last_assistant_message` are treated as mid-build.
 
 ## ux_reference
 
@@ -40,9 +40,9 @@ N/A — hook, gate and installer behaviour with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Required — native Stop hook through `hard-eng.py stop` on a fixture repository; real `git worktree add .claude/worktrees/<name>` in an installed project.
+Result: Passed
+Evidence: `check --plan-stage Ready` on 9651f87 → exit 0; 17/17 gates PASS, 833 tests passed (2m00s under load average ~59 from other builds, so not a timing baseline). `/codex:adversarial-review --base main` over both branches found four issues across two runs: a missing retired script kept (fixed in the #170 branch), a flag-prefixed script still hidden (fixed there too), a Complete plan beside a Ready one ending mid-build Stop, and negated or quoted `Ready for ship` counting as the handoff (both fixed in 9995b5c). The five Stop cases fail before 9995b5c where expected (3 mid-build cases blocked) and pass after. dart-decimate #115 is fixed in sgaabdu4/dart-decimate#116 with CI green; its E2E moved a `.claude/worktrees` checkout from 1 finding to 0.
+E2E: Passed — native Stop hook through `hard-eng.py stop` on a fixture repository; real `git worktree add .claude/worktrees/<name>` in an installed project; both run in the named tests with real processes and Git.
 
 Delivery target: Merge
 Delivery: Pending — PR checks green, squash merge to main, main CI green.
