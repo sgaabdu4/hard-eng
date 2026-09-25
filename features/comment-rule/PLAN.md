@@ -1,6 +1,6 @@
 # Enforce the comment rule in check
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -18,11 +18,11 @@ Authority: Autonomous. The user asked for comments to be banned by default with 
 
 ## Acceptance + steps
 
-- [ ] A changed Python, shell, JavaScript/TypeScript, Dart or Rust file with two narration lines in one comment block fails `check` and names the file and line, including a block that opens after code; single-line comments, trailing comments, directives, JSDoc type blocks, rustdoc headings, comment-like text in strings, templates and heredocs, and Markdown files pass → `tests/test_comments.py`.
-- [ ] An older block in a touched file fails; the same block in an untouched file does not; generated files are skipped → `tests/test_comments.py`.
-- [ ] Pre-push rejects a commit that adds a two-line comment block → real `git push` to a local bare remote in `tests/test_comments.py`.
-- [ ] AGENTS.md and gates.md state the rule.
-- [ ] Full gate passes; `/codex:adversarial-review` findings resolved.
+- [x] A changed Python, shell, JavaScript/TypeScript, Dart or Rust file with two narration lines in one comment block fails `check` and names the file and line, including a block that opens after code; single-line comments, trailing comments, directives, JSDoc type blocks, rustdoc headings, comment-like text in strings, templates and heredocs, and Markdown files pass → `tests/test_comments.py`.
+- [x] An older block in a touched file fails; the same block in an untouched file does not; generated files are skipped → `tests/test_comments.py`.
+- [x] Pre-push rejects a commit that adds a two-line comment block → real `git push` to a local bare remote in `tests/test_comments.py`.
+- [x] AGENTS.md and gates.md state the rule.
+- [x] Full gate passes; `/codex:adversarial-review` findings resolved.
 
 ## Baseline + execution
 
@@ -32,7 +32,7 @@ Execution: One builder; the rule module and check call, tests, then the instruct
 
 ## Risks + recovery
 
-Projects whose touched files hold multi-line comments fail until those blocks are compressed or deleted; that is the requested behaviour. The rule covers Python, shell, JavaScript/TypeScript, Dart and Rust; the lexers handle strings, raw strings, templates, regex literals, heredocs and shell escapes, but they are not full parsers, so an unusual literal can still be misread. Recovery: narrow detection for the affected language.
+Projects whose touched files hold multi-line comments fail until those blocks are compressed or deleted; that is the requested behaviour. The rule covers Python, shell, JavaScript/TypeScript, Dart and Rust; the lexers handle strings, raw strings, templates, regex literals, heredocs and shell escapes, but they are not full parsers, so an unusual literal can still be misread. Known limits after six adversarial reviews: rendered JSX text that starts a line with `//` is reported as a comment; a regex literal containing `/*` right after an inline block comment, and `<<` inside shell arithmetic spanning lines, can hide the comments that follow. Recovery: narrow detection for the affected language.
 
 ## ux_reference
 
@@ -40,9 +40,9 @@ N/A — gate and instruction change with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Required — real `git push` through the installed pre-push hook in a fixture repository.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Ready` on `a0886aa` → exit 0; 17/17 gates PASS, 887 tests passed; 1m51s. `tests/test_comments.py` 47 passed; each lexer regression failed on the code before its fix. `/codex:adversarial-review --base main` ran six rounds; every reproduced finding in real code was fixed with a regression, and the remaining contrived cases are listed under Risks.
+E2E: Passed — `test_pre_push_rejects_a_pushed_comment_block` pushes through a pre-push hook running `hard-eng.py pre-push` to a local bare remote: a two-line block is rejected naming the file and line, and the one-line version is accepted.
 
 Delivery target: Merge
 Delivery: Pending — PR checks green, squash merge to main, main CI green.
