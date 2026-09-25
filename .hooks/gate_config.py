@@ -700,7 +700,7 @@ def parse_config(content: str) -> GateConfig:
         or not isinstance(config.get("shared"), list)
     ):
         raise TypeError(
-            "Gate configuration must contain packages and shared lists; preserve existing checks and migrate to the current HE templates before reinstalling"
+            "Gate configuration must contain packages and shared lists; rerun the Hard Eng installer to regenerate a retired families configuration from the current templates"
         )
     return config
 

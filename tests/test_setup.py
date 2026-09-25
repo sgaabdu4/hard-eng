@@ -669,6 +669,33 @@ def test_install_commits_only_clean_installed_paths(
     ).stdout
 
 
+def test_retired_families_config_is_regenerated_and_reported(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "families": {"lint": ["node_modules/.bin/biome", "lint", "."]},
+                "phases": {"push": ["lint"]},
+            }
+        )
+    )
+    installer.install(tmp_path)
+    notice = capsys.readouterr().err
+    assert "retired families format" in notice
+    assert "lint: node_modules/.bin/biome lint ." in notice
+    config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    assert "families" not in config and "phases" not in config
+    assert [package["language"] for package in config["packages"]] == ["javascript"]
+    assert {gate["role"] for gate in config["shared"]} >= {"secrets-files"}
+    before = snapshot(tmp_path)
+    installer.install(tmp_path)
+    assert "retired families format" not in capsys.readouterr().err
+    assert snapshot(tmp_path) == before
+
+
 @pytest.mark.parametrize(
     "name", [".hooks/reports.py", ".agents/skills/he/SKILL.md", ".git/hooks/pre-push"]
 )

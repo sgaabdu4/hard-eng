@@ -598,6 +598,26 @@ def configure_ignores(root: Path, changes: dict[str, str]) -> None:
     changes[".gitignore"] = ignores
 
 
+def retired_config(root: Path) -> bool:
+    """Report a pre-rebuild families configuration so it is regenerated."""
+    legacy = json.loads((root / "hard-eng.gates.json").read_text())
+    if not isinstance(legacy, dict) or "families" not in legacy or "packages" in legacy:
+        return False
+    families = legacy["families"] if isinstance(legacy["families"], dict) else {}
+    commands = "; ".join(
+        f"{name}: {' '.join(map(str, command)) if isinstance(command, list) else command}"
+        for name, command in families.items()
+    )
+    # stderr keeps --plan's JSON output parseable.
+    print(
+        "Regenerated hard-eng.gates.json from the current templates; the retired "
+        "families format is not carried over. Re-add any family still needed as a "
+        f"package check (previous file stays in Git history): {commands or 'none'}",
+        file=sys.stderr,
+    )
+    return True
+
+
 def plan_install(
     root: Path, previous: Path | None = None
 ) -> tuple[dict[str, str], dict[str, str], Path, str]:
@@ -626,7 +646,7 @@ def plan_install(
             ["git", "rev-parse", "HEAD"], cwd=SOURCE, text=True
         ).strip()
     changes[".hooks/hard-eng-source.json"] = json.dumps({"revision": revision}) + "\n"
-    if not (root / "hard-eng.gates.json").exists():
+    if not (root / "hard-eng.gates.json").exists() or retired_config(root):
         changes["hard-eng.gates.json"] = json.dumps(gate_config(root), indent=2) + "\n"
     from gate_config import parse_config, repository_files, typescript_packages
 
