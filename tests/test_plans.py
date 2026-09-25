@@ -693,3 +693,57 @@ def test_legacy_ux_reference_keeps_its_original_rules() -> None:
         ux_proof(legacy, legacy=True)
     with pytest.raises(ValueError, match="Result"):
         ux_proof(legacy.replace("Passed", "Pending") + "![A](a.png)\n", legacy=True)
+
+
+@pytest.mark.parametrize(
+    "claim", ["Waiting for the background builder.", "Ready for ship — done."]
+)
+def test_stop_accepts_a_ready_plan_mid_build_until_ship_is_claimed(
+    repository: Path, completed_plan: str, claim: str
+) -> None:
+    shutil.copytree(
+        SOURCE / ".hooks",
+        repository / ".hooks",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        shutil.copyfile(SOURCE / name, repository / name)
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [],
+                "shared": [
+                    {"name": "fixture-check", "command": [sys.executable, "-c", ""]}
+                ],
+            }
+        )
+    )
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", "Status: Ready").replace(
+            "## Verification\nResult: Passed", "## Verification\nResult: Pending"
+        )
+    )
+    git(repository, "add", ".")
+    git(repository, "commit", "-qm", "ready plan")
+    (repository / "app.py").write_text("print('first slice')\n")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(repository / ".hooks/hard-eng.py"),
+            "stop",
+            "claude",
+        ],
+        cwd=repository,
+        input=json.dumps({"session_id": "build", "last_assistant_message": claim}),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    response = json.loads(result.stdout)
+    if claim.startswith("Ready for ship"):
+        assert response["decision"] == "block"
+        assert "plan is Ready; this check requires Complete" in response["reason"]
+    else:
+        assert "decision" not in response
+        assert response["systemMessage"].startswith("Hard Eng: build in progress")

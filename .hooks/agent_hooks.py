@@ -299,8 +299,41 @@ def integrated_services(root: Path) -> list[str]:
     return sorted(found)
 
 
+def passed_notice(
+    building: bool, notice: str, agent: str | None, output: str
+) -> JsonObject:
+    if building:
+        return {
+            "systemMessage": "Hard Eng: build in progress — checks passed with the "
+            "plan Ready; finishing still needs Complete and "
+            "`check --plan-stage Complete`."
+        }
+    return {"systemMessage": notice} if notice else completion_notice(agent, output)
+
+
+def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
+    with tempfile.TemporaryFile() as log:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(root / ".hooks/hard-eng.py"),
+                "check",
+                "--base",
+                base,
+                *(["--plan-stage", "Ready"] if building else []),
+            ],
+            cwd=root,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            check=False,
+            timeout=3500,
+        )
+        log.seek(max(0, log.tell() - 16000))
+        return result.returncode, log.read().decode("utf-8", errors="replace")
+
+
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
-    from plans import planning_feedback
+    from plans import build_in_progress, planning_feedback
 
     if payload.get("stop_hook_active") is True:
         return {
@@ -349,30 +382,17 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 "systemMessage": notice
                 or "No repository changes since this session's Git base; no code checks were run."
             }
-        with tempfile.TemporaryFile() as log:
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(root / ".hooks/hard-eng.py"),
-                    "check",
-                    "--base",
-                    base,
-                ],
-                cwd=root,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                check=False,
-                timeout=3500,
-            )
-            log.seek(max(0, log.tell() - 16000))
-            output = log.read().decode("utf-8", errors="replace")
-        if result.returncode == 0:
+        claim = str(
+            payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
+        )
+        # HE Build keeps a plan Ready until its final gate; only a ship claim needs Complete.
+        building = "Ready for ship" not in claim and build_in_progress(
+            root, set(changed.splitlines())
+        )
+        returncode, output = run_check(root, base, building)
+        if returncode == 0:
             require_current(root)
-            return (
-                {"systemMessage": notice}
-                if notice
-                else completion_notice(agent, output)
-            )
+            return passed_notice(building, notice, agent, output)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return {
             "decision": "block",
