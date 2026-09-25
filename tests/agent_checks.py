@@ -324,7 +324,7 @@ def passed_checks(actions: list[Action], stage: str) -> list[int]:
         index
         for index, action in enumerate(actions)
         if action.kind == "command"
-        and "hard-eng.py" in action.detail
+        and re.search(r"hard-eng\.py\s+check\b", action.detail)
         and PASSED[stage].search(action.output)
         and not FAILED.search(action.output)
         and not WRITES.search(action.detail)
@@ -353,8 +353,12 @@ def judge_plan_only(fixture: Run) -> list[str]:
     if run(fixture, sys.executable, *stage):
         failures.append("the plan fails the Draft stage check")
     texts = [path.read_text() for path in plans]
-    if not any("average" in plan_title_and_outcome(text) for text in texts):
-        failures.append("no plan addresses average([])")
+    if not any(
+        "average" in (scope := plan_title_and_outcome(text))
+        and re.search(r"\b0\.0\b", scope)
+        for text in texts
+    ):
+        failures.append("no plan addresses average([]) returning 0.0")
     succeeded = passed_checks(fixture.actions, "any")
     for path, text in zip(plans, texts, strict=True):
         status = re.search(r"(?m)^Status:\s*(\w+)", text)

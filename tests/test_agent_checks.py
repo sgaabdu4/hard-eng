@@ -65,6 +65,7 @@ def verdicts(report: dict[str, object]) -> Callable[[str, str], dict[str, object
         (DRAFT_PLAN.replace("average", "multiply"), [], "no plan addresses"),
         (READY_PLAN, [], "claims a passed check the agent never ran"),
         (DRAFT_PLAN, [], None),
+        (READY_PLAN.replace("0.0", "None"), [BASELINE], "no plan addresses"),
         (READY_PLAN, [BASELINE], None),
         (READY_PLAN, [BASELINE._replace(output="PASS tests (exit 0)\nexit=0")], None),
         (
@@ -166,6 +167,11 @@ def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
         [edit, masked],
         [edit, BASELINE, shell_edit],
         [edit, chained],
+        [
+            BASELINE,
+            edit,
+            Action("command", "cat /tmp/hard-eng.py-check.log", True, PASSED),
+        ],
     ):
         assert missing in " ".join(judge_continue(Run(root, base, "", [], actions))), (
             actions
