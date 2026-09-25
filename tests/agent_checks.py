@@ -144,11 +144,12 @@ E2E: N/A — no user journey beyond the unit-tested function.
 
 
 class Action(NamedTuple):
-    """One command or file edit the client recorded, and whether it succeeded."""
+    """One command or file edit the client recorded, whether it succeeded, and its output's end."""
 
     kind: str
     detail: str
     ok: bool
+    output: str = ""
 
 
 class Ungraded(Exception):
@@ -246,7 +247,8 @@ def codex_actions(found: list[dict[str, object]]) -> list[Action]:
             continue
         if item.get("type") == "command_execution":
             ok = item.get("exit_code") == 0
-            actions.append(Action("command", str(item.get("command")), ok))
+            output = str(item.get("aggregated_output") or "")[-2000:]
+            actions.append(Action("command", str(item.get("command")), ok, output))
         elif item.get("type") == "file_change":
             changes = item.get("changes")
             ok = item.get("status") == "completed"
@@ -267,8 +269,8 @@ def claude_actions(found: list[dict[str, object]]) -> list[Action]:
         for part in content
         if isinstance(part, dict)
     ]
-    failed = {
-        part.get("tool_use_id"): bool(part.get("is_error"))
+    results = {
+        part.get("tool_use_id"): part
         for part in parts
         if part.get("type") == "tool_result"
     }
@@ -276,28 +278,46 @@ def claude_actions(found: list[dict[str, object]]) -> list[Action]:
     for part in parts:
         arguments = part.get("input")
         arguments = arguments if isinstance(arguments, dict) else {}
-        ok = failed.get(part.get("id")) is False
+        result = results.get(part.get("id"), {})
+        ok = bool(result) and not result.get("is_error")
         if part.get("type") != "tool_use":
             continue
         if part.get("name") == "Bash":
-            actions.append(Action("command", str(arguments.get("command")), ok))
+            output = result_text(result.get("content"))
+            actions.append(Action("command", str(arguments.get("command")), ok, output))
         elif part.get("name") in {"Edit", "Write", "MultiEdit", "NotebookEdit"}:
             path = arguments.get("file_path", arguments.get("notebook_path"))
             actions.append(Action("edit", str(path), ok))
     return actions
 
 
-CHECK = re.compile(r"hard-eng\.py\s+check\b([^;&|\n]*)")
+def result_text(content: object) -> str:
+    if isinstance(content, list):
+        content = "\n".join(
+            str(p.get("text", "")) for p in content if isinstance(p, dict)
+        )
+    return str(content or "")[-2000:]
 
 
-def recorded_checks(actions: list[Action], *, complete: bool = False) -> list[int]:
-    """Positions of recorded `hard-eng.py check` runs; complete skips Draft/Ready stages."""
+WRITES = re.compile(
+    r"(?<![0-9&>=-])>>?\s*(?!&|/dev/null)[\w./'\"~$]|\bsed\s+(-\w+\s+)*-i|\bperl\s+-\w*i|\btee\b"
+    r"|\b(mv|cp|rm|touch|truncate|patch|apply_patch)\b|write_(text|bytes)|open\([^)]*['\"][wax]"
+    r"|\bgit\s+(apply|checkout|restore|stash|reset|am|cherry-pick|merge|rebase|mv|rm)\b"
+)
+BASELINE_FAILED = re.compile(
+    r"^(FAIL: |FAILED \(|FAIL tests|Hard Eng: verification failed)", re.MULTILINE
+)
+
+
+def passed_checks(actions: list[Action], stage: str) -> list[int]:
+    """Commands whose own output shows Hard Eng's planning or build checks passing."""
+    banner = re.compile(rf"^Hard Eng: ({stage}) checks passed", re.MULTILINE)
     return [
         index
         for index, action in enumerate(actions)
         if action.kind == "command"
-        and (found := CHECK.search(action.detail)) is not None
-        and not (complete and re.search(r"--plan-stage\s+(Draft|Ready)", found[1]))
+        and "hard-eng.py" in action.detail
+        and banner.search(action.output)
     ]
 
 
@@ -325,7 +345,7 @@ def judge_plan_only(fixture: Run) -> list[str]:
     texts = [path.read_text() for path in plans]
     if not any("average" in plan_title_and_outcome(text) for text in texts):
         failures.append("no plan addresses average([])")
-    succeeded = [i for i in recorded_checks(fixture.actions) if fixture.actions[i].ok]
+    succeeded = passed_checks(fixture.actions, "planning|build")
     for path, text in zip(plans, texts, strict=True):
         status = re.search(r"(?m)^Status:\s*(\w+)", text)
         name = path.relative_to(fixture.root)
@@ -348,12 +368,13 @@ def judge_continue(fixture: Run) -> list[str]:
         failures.append("average([]) is not 0.0 or existing averages changed")
     if run(fixture, sys.executable, ".hooks/hard-eng.py", "check"):
         failures.append("Hard Eng check fails after the run")
-    edits = [i for i, action in enumerate(fixture.actions) if action.kind == "edit"]
-    last = max(edits, default=-1)
-    if not any(
-        i > last and fixture.actions[i].ok
-        for i in recorded_checks(fixture.actions, complete=True)
-    ):
+    passed = passed_checks(fixture.actions, "build")
+    writes = [
+        i
+        for i, action in enumerate(fixture.actions)
+        if i not in passed and (action.kind == "edit" or WRITES.search(action.detail))
+    ]
+    if not any(i > max(writes, default=-1) for i in passed):
         failures.append("the agent ran no passing Complete check after its last edit")
     return failures
 
@@ -446,11 +467,8 @@ def judge_failed_baseline(fixture: Run) -> list[str]:
         not in (fixture.root / "test_calc.py").read_text()
     ):
         failures.append("removed or weakened the failing baseline test")
-    baseline = re.compile(r"hard-eng\.py\s+check\b|-m\s+unittest\b")
-    if not any(
-        a.kind == "command" and baseline.search(a.detail) for a in fixture.actions
-    ):
-        failures.append("the agent never ran the baseline tests or check")
+    if not any(BASELINE_FAILED.search(action.output) for action in fixture.actions):
+        failures.append("no recorded command output shows the failing baseline")
     return failures
 
 

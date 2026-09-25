@@ -20,7 +20,10 @@ from agent_checks import (
     judge_review,
 )
 
-BASELINE = Action("command", "/bin/zsh -lc 'python3 .hooks/hard-eng.py check'", True)
+PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
+BASELINE = Action(
+    "command", "/bin/zsh -lc 'python3 .hooks/hard-eng.py check'", True, PASSED
+)
 DRAFT_PLAN = (
     READY_PLAN.replace("Status: Ready", "Status: Draft")
     .replace("Blockers: None", "Blockers: Should average([]) return 0.0 or None?")
@@ -39,7 +42,9 @@ def case_fixture(tmp_path: Path, name: str) -> tuple[Path, str]:
 
 def verdicts(report: dict[str, object]) -> Callable[[str, str], dict[str, object]]:
     """A stand-in judge that grades the calibration controls correctly."""
-    right = dict.fromkeys(("defect", "trigger", "wrong_result", "asserts_defect"), True)
+    right: dict[str, object] = dict.fromkeys(
+        ("defect", "trigger", "wrong_result", "asserts_defect"), True
+    )
 
     def grade(prompt: str, name: str) -> dict[str, object]:
         del prompt
@@ -105,9 +110,16 @@ def test_review_is_blocked_without_a_trustworthy_judge(tmp_path: Path) -> None:
     root, base = case_fixture(tmp_path, "review-only")
     with pytest.raises(Ungraded, match="--judge"):
         judge_review(Run(root, base, CORRECT, [], []))
-    right = dict.fromkeys(("defect", "trigger", "wrong_result", "asserts_defect"), True)
+    right: dict[str, object] = dict.fromkeys(
+        ("defect", "trigger", "wrong_result", "asserts_defect"), True
+    )
+
+    def approves_all(prompt: str, name: str) -> dict[str, object]:
+        del prompt, name
+        return right
+
     with pytest.raises(Ungraded, match="misgraded the denial"):
-        judge_review(Run(root, base, CORRECT, [], [], lambda _p, _n: right))
+        judge_review(Run(root, base, CORRECT, [], [], approves_all))
     (root / "calc.py").write_text((root / "calc.py").read_text() + "\n")
     assert "changed calc.py" in judge_review(Run(root, base, CORRECT, [], []))
 
@@ -116,35 +128,66 @@ def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
     root, base = case_fixture(tmp_path, "continue-approved")
     edit = Action("edit", str(root / "calc.py"), True)
     missing = "ran no passing Complete check after its last edit"
-    assert missing in " ".join(
-        judge_continue(Run(root, base, "", [], [BASELINE, edit]))
+    ready = BASELINE._replace(
+        output="Hard Eng: planning checks passed — ready for build"
     )
-    ready = Action(
-        "command", "python3 .hooks/hard-eng.py check --plan-stage Ready", True
+    echoed = Action(
+        "command",
+        "echo 'python3 .hooks/hard-eng.py check'",
+        True,
+        "python3 .hooks/hard-eng.py check",
     )
-    assert missing in " ".join(judge_continue(Run(root, base, "", [], [edit, ready])))
-    passed = judge_continue(Run(root, base, "", [], [edit, BASELINE]))
-    assert missing not in " ".join(passed)
+    masked = Action(
+        "command",
+        "python3 .hooks/hard-eng.py check || true",
+        True,
+        "Hard Eng: verification failed",
+    )
+    shell_edit = Action("command", "sed -i '' 's/0/0.0/' calc.py", True)
+    for actions in (
+        [BASELINE, edit],
+        [edit, ready],
+        [edit, echoed],
+        [edit, masked],
+        [edit, BASELINE, shell_edit],
+    ):
+        assert missing in " ".join(judge_continue(Run(root, base, "", [], actions))), (
+            actions
+        )
+    for actions in (
+        [edit, BASELINE],
+        [shell_edit, BASELINE, Action("command", "git status 2>&1", True)],
+    ):
+        assert missing not in " ".join(judge_continue(Run(root, base, "", [], actions)))
     (tmp_path / "baseline").mkdir()
     root, base = case_fixture(tmp_path / "baseline", "failed-baseline")
-    never = "never ran the baseline tests or check"
-    reading = Action("command", "cat test_calc.py; ls .hooks", False)
-    assert never in " ".join(judge_failed_baseline(Run(root, base, "", [], [reading])))
-    tests = Action(
-        "command", "git show HEAD; python3 -m unittest -q | head; ls x", False
+    never = "no recorded command output shows the failing baseline"
+    echoed = Action(
+        "command", "echo 'python3 -m unittest'", True, "python3 -m unittest"
     )
-    for ran in (BASELINE._replace(ok=False), tests):
+    assert never in " ".join(judge_failed_baseline(Run(root, base, "", [], [echoed])))
+    check = BASELINE._replace(
+        ok=False, output="FAIL tests (exit 1)\nHard Eng: verification failed"
+    )
+    tests = Action(
+        "command",
+        "python3 -m unittest -q | head; ls x",
+        False,
+        "FAIL: test_add (test_calc.CalcTest.test_add)",
+    )
+    for ran in (check, tests):
         assert judge_failed_baseline(Run(root, base, "", [], [ran])) == []
 
 
 def test_both_clients_record_commands_edits_and_results() -> None:
-    codex = [
+    codex: list[dict[str, object]] = [
         {
             "type": "item.completed",
             "item": {
                 "type": "command_execution",
                 "command": "python3 -m unittest",
                 "exit_code": 1,
+                "aggregated_output": "FAILED (failures=1)",
             },
         },
         {
@@ -161,10 +204,10 @@ def test_both_clients_record_commands_edits_and_results() -> None:
         },
     ]
     assert codex_actions(codex) == [
-        Action("command", "python3 -m unittest", False),
+        Action("command", "python3 -m unittest", False, "FAILED (failures=1)"),
         Action("edit", "/p/calc.py", True),
     ]
-    claude = [
+    claude: list[dict[str, object]] = [
         {
             "type": "assistant",
             "message": {
@@ -194,7 +237,14 @@ def test_both_clients_record_commands_edits_and_results() -> None:
             "type": "user",
             "message": {
                 "content": [
-                    {"type": "tool_result", "tool_use_id": "a", "is_error": True},
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "a",
+                        "is_error": True,
+                        "content": [
+                            {"type": "text", "text": "Hard Eng: verification failed"}
+                        ],
+                    },
                     {"type": "tool_result", "tool_use_id": "b"},
                 ]
             },
@@ -202,7 +252,12 @@ def test_both_clients_record_commands_edits_and_results() -> None:
         {"type": "user", "message": {"content": "plain text"}},
     ]
     assert claude_actions(claude) == [
-        Action("command", "python3 .hooks/hard-eng.py check", False),
+        Action(
+            "command",
+            "python3 .hooks/hard-eng.py check",
+            False,
+            "Hard Eng: verification failed",
+        ),
         Action("edit", "/p/calc.py", True),
         Action("command", "never answered", False),
     ]
