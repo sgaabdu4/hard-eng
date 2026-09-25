@@ -1,6 +1,6 @@
 ---
 name: writing-great-skills
-description: Author or review agent skills and SKILL.md packages; refine triggers, routing, metadata, consolidation and splits.
+description: Write, revise or review an agent skill (SKILL.md package).
 ---
 
 # Writing Great Skills
