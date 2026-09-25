@@ -697,6 +697,20 @@ def configure_ignores(root: Path, changes: dict[str, str]) -> None:
     changes[".gitignore"] = ignores
 
 
+INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl"}
+
+
+def legacy_command_problem(root: Path, arguments: list[str]) -> str | None:
+    """Name why a retired family command cannot run, or None when it can."""
+    if not (shutil.which(arguments[0]) or (root / arguments[0]).is_file()):
+        return "program not found"
+    script = arguments[1] if len(arguments) > 1 else "-"
+    interpreter = Path(arguments[0]).name.rstrip("0123456789.") in INTERPRETERS
+    if interpreter and not script.startswith("-") and not (root / script).is_file():
+        return "script not found"
+    return None
+
+
 def retired_config(root: Path) -> GateConfig | None:
     """Regenerate a pre-rebuild families configuration, keeping runnable commands."""
     from gate_config import validate_gate
@@ -723,9 +737,9 @@ def retired_config(root: Path) -> GateConfig | None:
         reason = None
         if not arguments or len(arguments) != len(values):
             reason = "not an argument list"
-        elif not (shutil.which(arguments[0]) or (root / arguments[0]).is_file()):
-            reason = "program not found"
         else:
+            reason = legacy_command_problem(root, arguments)
+        if reason is None:
             try:
                 validate_gate(gate, root, set())
             except (OSError, ValueError, TypeError) as error:

@@ -12,6 +12,8 @@ import pytest
 import update
 from conftest import commit, git, init
 from shipping import ShippingError, ShippingPolicy
+from test_setup import repository as setup_repository
+from test_setup import snapshot
 
 
 def test_installer_preserves_native_mcp_settings_on_rerun(
@@ -805,3 +807,55 @@ def test_unverified_scaffold_update_fails(
     monkeypatch.setattr(update, "verified_revision", unverified)
     with pytest.raises(ValueError, match="successful upstream"):
         update.check_scaffold_update(target, base)
+
+
+def test_retired_families_config_is_regenerated_and_reported(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    setup_repository(tmp_path)
+    secrets = installer.gate_config(tmp_path)["shared"][0]["command"]
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "families": {
+                    "lint": ["node_modules/.bin/biome", "lint", "."],
+                    "contract": ["python3", "scripts/contract.py"],
+                    "skills": ["python3", "scripts/check-skill-contracts.py"],
+                    "inline": ["python3", "-c", "print(1)"],
+                    "audit": ["node_modules/.bin/fallow", "audit", "--format", "json"],
+                    "removed": ["node_modules/.bin/pnpm", "--dir", "gone", "run", "x"],
+                    "secrets": secrets,
+                },
+                "phases": {"push": ["lint", "contract", "audit", "removed"]},
+            }
+        )
+    )
+    for tool in (
+        "node_modules/.bin/fallow",
+        "node_modules/.bin/pnpm",
+        "scripts/contract.py",
+    ):
+        (tmp_path / tool).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / tool).touch()
+    installer.install(tmp_path)
+    notice = capsys.readouterr().err
+    assert "skills (script not found)" in notice and "inline (" not in notice
+    assert "lint (program not found): ['node_modules/.bin/biome'" in notice
+    assert "audit (Fallow audit gates require a native fallow report" in notice
+    assert "removed ([Errno 2] No such file or directory" in notice
+    config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    assert "families" not in config and "phases" not in config
+    assert [package["language"] for package in config["packages"]] == ["javascript"]
+    assert [gate["command"] for gate in config["shared"]].count(secrets) == 1
+    assert {
+        "name": "legacy-contract",
+        "command": ["python3", "scripts/contract.py"],
+    } in (config["shared"])
+    assert ["python3", "-c", "print(1)"] in [
+        gate["command"] for gate in config["shared"]
+    ]
+    before = snapshot(tmp_path)
+    installer.install(tmp_path)
+    assert "Regenerated" not in capsys.readouterr().err
+    assert snapshot(tmp_path) == before

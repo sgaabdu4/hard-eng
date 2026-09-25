@@ -668,48 +668,6 @@ def test_install_preserves_project_and_repeats(
     assert not (tmp_path / ".agents/skill-sources").exists()
 
 
-def test_retired_families_config_is_regenerated_and_reported(
-    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    repository(tmp_path)
-    secrets = installer.gate_config(tmp_path)["shared"][0]["command"]
-    (tmp_path / "hard-eng.gates.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "families": {
-                    "lint": ["node_modules/.bin/biome", "lint", "."],
-                    "contract": ["python3", "scripts/contract.py"],
-                    "audit": ["node_modules/.bin/fallow", "audit", "--format", "json"],
-                    "removed": ["node_modules/.bin/pnpm", "--dir", "gone", "run", "x"],
-                    "secrets": secrets,
-                },
-                "phases": {"push": ["lint", "contract", "audit", "removed", "secrets"]},
-            }
-        )
-    )
-    for tool in ("fallow", "pnpm"):
-        (tmp_path / "node_modules/.bin").mkdir(parents=True, exist_ok=True)
-        (tmp_path / "node_modules/.bin" / tool).touch()
-    installer.install(tmp_path)
-    notice = capsys.readouterr().err
-    assert "lint (program not found): ['node_modules/.bin/biome'" in notice
-    assert "audit (Fallow audit gates require a native fallow report" in notice
-    assert "removed ([Errno 2] No such file or directory" in notice
-    config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
-    assert "families" not in config and "phases" not in config
-    assert [package["language"] for package in config["packages"]] == ["javascript"]
-    assert [gate["command"] for gate in config["shared"]].count(secrets) == 1
-    assert {
-        "name": "legacy-contract",
-        "command": ["python3", "scripts/contract.py"],
-    } in (config["shared"])
-    before = snapshot(tmp_path)
-    installer.install(tmp_path)
-    assert "Regenerated" not in capsys.readouterr().err
-    assert snapshot(tmp_path) == before
-
-
 @pytest.mark.parametrize(
     "name", [".hooks/reports.py", ".agents/skills/he/SKILL.md", ".git/hooks/pre-push"]
 )
