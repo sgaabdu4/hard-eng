@@ -184,11 +184,21 @@ def session_state(root: Path, payload: JsonObject) -> Path | None:
 def gate_status(root: Path) -> str:
     """Say whether `check` can start, so an install never looks active while broken."""
     from gate_config import load_groups
-    from update import install_paths
+    from update import SOURCE_FILE, install_paths
 
     try:
         load_groups(root)
-        untracked = [
+        status = "Gates: configuration valid."
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        KeyError,
+        subprocess.SubprocessError,
+    ) as error:
+        status = "Gates: not runnable — " + " ".join(str(error).split())
+    try:
+        pending: list[str] = [
             line[3:]
             for line in subprocess.check_output(
                 [
@@ -200,26 +210,20 @@ def gate_status(root: Path) -> str:
                     ".hooks",
                     ".agents/skills",
                     "hard-eng.gates.json",
+                    ".husky/pre-push",
                 ],
                 cwd=root,
                 text=True,
             ).splitlines()
-            if line.startswith("?? ")
         ]
-    except (
-        OSError,
-        ValueError,
-        TypeError,
-        KeyError,
-        subprocess.SubprocessError,
-    ) as error:
-        return "Gates: not runnable — " + " ".join(str(error).split())
-    if untracked:
-        return (
-            "Gates: configuration valid, but these Hard Eng files are not committed, "
-            "so updates stop and worktrees lack them: " + install_paths(untracked)
+    except (OSError, subprocess.SubprocessError):
+        pending = []
+    if pending and (root / SOURCE_FILE).exists():
+        status += (
+            " Uncommitted Hard Eng paths stop updates and are missing from new "
+            "worktrees; commit them: " + install_paths(pending)
         )
-    return "Gates: configuration valid."
+    return status
 
 
 def session_context(root: Path, payload: JsonObject) -> str:

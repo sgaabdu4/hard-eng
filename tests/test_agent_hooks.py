@@ -319,10 +319,17 @@ def test_session_states_whether_gates_can_run(repository: Path) -> None:
     assert agent_hooks.gate_status(repository).startswith("Gates: not runnable — ")
     for name in ("PRODUCT.md", "DESIGN.md"):
         (repository / name).write_bytes((SOURCE / name).read_bytes())
+    (repository / ".hooks").mkdir()
+    (repository / update.SOURCE_FILE).write_text("{}\n")
     (repository / "hard-eng.gates.json").write_text(
         '{"families": {"lint": ["ruff", "check"]}}'
     )
-    assert "rerun the Hard Eng installer" in agent_hooks.gate_status(repository)
+    pending = (
+        " Uncommitted Hard Eng paths stop updates and are missing from new "
+        "worktrees; commit them: .hooks/ hard-eng.gates.json"
+    )
+    status = agent_hooks.gate_status(repository)
+    assert "rerun the Hard Eng installer" in status and status.endswith(pending)
     (repository / "hard-eng.gates.json").write_text(
         json.dumps(
             {
@@ -331,14 +338,14 @@ def test_session_states_whether_gates_can_run(repository: Path) -> None:
             }
         )
     )
-    (repository / ".hooks").mkdir()
-    (repository / ".hooks/hard-eng.py").write_text("# installed\n")
-    assert agent_hooks.gate_status(repository) == (
-        "Gates: configuration valid, but these Hard Eng files are not committed, "
-        "so updates stop and worktrees lack them: .hooks/ hard-eng.gates.json"
-    )
     commit(repository, "commit installed files")
     assert agent_hooks.gate_status(repository) == "Gates: configuration valid."
+    (repository / update.SOURCE_FILE).write_text('{"edited": true}\n')
+    git(repository, "add", update.SOURCE_FILE)
+    assert agent_hooks.gate_status(repository) == (
+        "Gates: configuration valid. Uncommitted Hard Eng paths stop updates and are "
+        "missing from new worktrees; commit them: .hooks/"
+    )
 
 
 @pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
