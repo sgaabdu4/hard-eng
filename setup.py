@@ -417,8 +417,9 @@ def configure_javascript(
 def configure_python(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
-    from project_setup import import_configuration, parallel_pytest
+    from project_setup import dependency_command, import_configuration, parallel_pytest
 
+    dependency_command(directory, "python")  # Existing configurations need a lock too.
     parallel_pytest(package)
     native = directory / "pyrefly.toml"
     project = directory / "pyproject.toml"

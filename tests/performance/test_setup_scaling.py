@@ -64,6 +64,8 @@ def test_baseline_validation_does_not_rescan_siblings(
     for count in (8, 32):
         packages = PackageVisits()
         for index in range(count):
+            (tmp_path / str(index)).mkdir(exist_ok=True)
+            (tmp_path / str(index) / "uv.lock").touch()
             packages.append(
                 {
                     "path": str(index),

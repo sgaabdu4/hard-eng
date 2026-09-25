@@ -118,6 +118,23 @@ def test_python_requires_a_lockfile_unless_a_uv_workspace_member(
     assert dependency_command(tmp_path, "python")[2] == "uv.lock"
 
 
+def test_existing_python_configuration_still_requires_a_lockfile(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\nversion="1"\n')
+    (tmp_path / "uv.lock").touch()
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    (tmp_path / "uv.lock").unlink()
+    with pytest.raises(ValueError, match="uv.lock or poetry.lock is required"):
+        validate_required_checks(tmp_path, config)
+    with pytest.raises(ValueError, match="uv.lock or poetry.lock is required"):
+        installer.install(tmp_path)
+
+
 def test_react_and_existing_project_scripts_are_gated(
     installer: ModuleType, tmp_path: Path
 ) -> None:

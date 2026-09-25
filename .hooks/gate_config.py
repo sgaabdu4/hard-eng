@@ -644,7 +644,12 @@ def validate_package_services(
     shared_roles: set[str],
     package_groups: list[Group] | None = None,
 ) -> None:
-    from project_setup import python_roots, workspace_matches, workspace_members
+    from project_setup import (
+        dependency_command,
+        python_roots,
+        workspace_matches,
+        workspace_members,
+    )
 
     directory = (root / group["path"]).resolve()
     language = group.get("language") or manifests.get(str(Path(group["path"])), "")
@@ -657,6 +662,8 @@ def validate_package_services(
         ):
             inherited.update(gate.get("role", "") for gate in parent["checks"])
     require_roles(group["path"], {"lockfiles", "vulnerabilities"}, roles | inherited)
+    if language == "python":
+        dependency_command(directory, language)  # Raises when no lockfile exists.
     if not group.get("language"):
         return
     require_roles(group["path"], {"security"}, roles | shared_roles)
