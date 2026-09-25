@@ -259,6 +259,21 @@ def test_dart_without_exclusion_key_needs_no_rewrite(
     assert path.read_text() == content
 
 
+@pytest.mark.parametrize(
+    "content",
+    ["linter:\n  rules:\n    # avoid_print: false\n", "analyzer:\nlinter:\n"],
+)
+def test_dart_setup_fills_sections_that_hold_only_comments(
+    installer: ModuleType, runner: ModuleType, tmp_path: Path, content: str
+) -> None:
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(content)
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, changes)
+    path.write_text(changes["analysis_options.yaml"])
+    runner.validate_typing(tmp_path, "dart")
+
+
 @pytest.mark.parametrize("pattern", ["lib/**", "**/*.dart", "../**"])
 def test_dart_exclusions_reject_project_patterns(tmp_path: Path, pattern: str) -> None:
     with pytest.raises(ValueError, match="cannot exclude project files"):

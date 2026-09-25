@@ -243,14 +243,19 @@ def configure_dart(
     existing = target.read_bytes().decode("utf-8") if target.exists() else ""
     migrate_dart_plugins(options, SOURCE)
     for section, groups in typing["DART_TYPING"].items():
-        section_options = options.setdefault(section, {})
+        # A key holding only comments, as in `flutter create` output, parses as null.
+        if options.get(section) is None:
+            options[section] = {}
+        section_options = options[section]
         if not isinstance(section_options, dict):
             raise TypeError(f"Dart {section} settings must be an object")
         for group, settings in groups.items():
+            if section_options.get(group) is None and not isinstance(settings, list):
+                section_options[group] = {}
             current = (
-                section_options.get(group, [])
+                section_options.get(group) or []
                 if isinstance(settings, list)
-                else section_options.setdefault(group, {})
+                else section_options[group]
             )
             if group == "rules" and isinstance(current, list):
                 dart_rule_settings(current)
