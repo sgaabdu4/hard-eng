@@ -1,5 +1,6 @@
 """The agent-case judges on controlled outcomes, without running an agent."""
 
+from argparse import Namespace
 from collections.abc import Callable
 from pathlib import Path
 
@@ -9,6 +10,9 @@ from agent_checks import (
     CONTROLS,
     READY_PLAN,
     Action,
+    Agent,
+    Client,
+    Ready,
     Run,
     Ungraded,
     claude_actions,
@@ -16,6 +20,7 @@ from agent_checks import (
     fixture,
     judge_continue,
     judge_failed_baseline,
+    judge_grade,
     judge_plan_only,
     judge_review,
 )
@@ -172,6 +177,15 @@ def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
             edit,
             Action("command", "cat /tmp/hard-eng.py-check.log", True, PASSED),
         ],
+        [
+            edit,
+            Action(
+                "command",
+                "printf '%s' 'python3 .hooks/hard-eng.py check'",
+                True,
+                PASSED,
+            ),
+        ],
     ):
         assert missing in " ".join(judge_continue(Run(root, base, "", [], actions))), (
             actions
@@ -283,3 +297,26 @@ def test_both_clients_record_commands_edits_and_results() -> None:
         Action("edit", "/p/calc.py", True),
         Action("command", "never answered", False),
     ]
+
+
+def test_a_grader_that_used_tools_gives_no_verdict(tmp_path: Path) -> None:
+    verdict = '{"defect": true, "trigger": true, "wrong_result": true, "asserts_defect": true}'
+
+    def client(actions: list[Action]) -> Client:
+        def run(
+            root: Path, evidence: Path, options: Namespace, prompt: str, tools: bool
+        ) -> Agent:
+            del root, evidence, options, prompt, tools
+            return Agent(True, verdict, {}, [], actions)
+
+        return Client("model", lambda: Ready("1", None), run, "none")
+
+    assert (
+        judge_grade(client([]), Namespace(), tmp_path / "a", "rubric", "report")
+        is not None
+    )
+    peeked = [Action("command", "cat /tmp/project/calc.py", True)]
+    assert (
+        judge_grade(client(peeked), Namespace(), tmp_path / "b", "rubric", "report")
+        is None
+    )

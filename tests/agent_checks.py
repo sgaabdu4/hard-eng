@@ -318,13 +318,18 @@ PASSED = {
 FAILED = re.compile(r"^(FAIL |Hard Eng: verification failed)", re.MULTILINE)
 
 
+CHECK_RUN = re.compile(
+    r"(?:\S*/(?:ba|z)?sh -\w*c [\'\"])?(?:cd \S+ && )?(?:\S*python3?|uv run) \S*hard-eng\.py\s+check\b"
+)
+
+
 def passed_checks(actions: list[Action], stage: str) -> list[int]:
     """Hard Eng checks whose own output shows passing gates, or the build banner, and no failure."""
     return [
         index
         for index, action in enumerate(actions)
         if action.kind == "command"
-        and re.search(r"hard-eng\.py\s+check\b", action.detail)
+        and CHECK_RUN.match(action.detail)
         and PASSED[stage].search(action.output)
         and not FAILED.search(action.output)
         and not WRITES.search(action.detail)
@@ -808,8 +813,9 @@ def judge_grade(
         empty.mkdir()
         agent = client.run(empty, folder, options, prompt, False)
     found = re.search(r"\{.*\}", agent.message, re.DOTALL)
+    usable = agent.completed and found and not agent.actions
     try:
-        verdict = json.loads(found[0]) if agent.completed and found else None
+        verdict = json.loads(found[0]) if usable else None
     except json.JSONDecodeError:
         verdict = None
     return verdict if isinstance(verdict, dict) else None
