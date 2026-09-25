@@ -294,7 +294,21 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
     if language == "python":
         if (directory / "poetry.lock").exists():
             return "poetry", ["poetry", "sync"], "poetry.lock"
-        return "uv", ["uv", "sync", "--locked"], "uv.lock"
+        uv = ("uv", ["uv", "sync", "--locked"], "uv.lock")
+        if (directory / "uv.lock").exists():
+            return uv
+        for parent in [] if (directory / ".git").exists() else directory.parents:
+            if (parent / "pyproject.toml").exists() and workspace_matches(
+                str(directory.relative_to(parent)), workspace_members(parent, "python")
+            ):
+                return uv  # A uv workspace member uses its root's lockfile.
+            if (parent / ".git").exists():
+                break
+        raise ValueError(
+            f"{directory}: uv.lock or poetry.lock is required; run `uv lock` after "
+            "declaring dependencies in pyproject.toml (`uv add -r requirements.txt` "
+            "imports a requirements file), then review and commit the lockfile"
+        )
     import yaml
 
     manifest = yaml.safe_load((directory / "pubspec.yaml").read_text())

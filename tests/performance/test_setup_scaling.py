@@ -20,6 +20,7 @@ def test_package_adaptation_reads_inventory_once(
         directory = tmp_path / str(index)
         directory.mkdir()
         (directory / "pyproject.toml").write_text('[project]\nname="example"\n')
+        (directory / "uv.lock").touch()
         files.append(directory / "app.py")
         config["packages"].append(
             {"path": str(index), "language": "python", "sources": ["src"], "checks": []}

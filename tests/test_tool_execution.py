@@ -92,6 +92,7 @@ def import_linter_project(tmp_path: Path) -> Path:
     (source / "__init__.py").write_text("value = 1\n")
     project = tmp_path / "pyproject.toml"
     project.write_text('[project]\nname = "fixture"\nversion = "1"\n')
+    (tmp_path / "uv.lock").touch()
     return project
 
 
@@ -482,7 +483,7 @@ def test_installer_rejects_old_manifest_without_partial_scaffold(
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname="existing-app"\nversion="1.0"\n'
     )
-    with pytest.raises(TypeError, match="preserve existing checks and migrate"):
+    with pytest.raises(TypeError, match="rerun the Hard Eng installer"):
         installer.install(tmp_path)
     assert manifest.read_text() == original
     assert not (tmp_path / ".hooks").exists()
