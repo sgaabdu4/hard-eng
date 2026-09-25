@@ -44,9 +44,11 @@ def python_comment_lines(text: str) -> dict[int, str] | None:
 
 CHARACTER = re.compile(r"'(\\.[^']{0,8}|[^'\\\n])'")
 ARITHMETIC = re.compile(r"\$?\(\(.*?\)\)")
-HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)\s*(['\"]?)([A-Za-z_]\w*)\2")
+HEREDOC = re.compile(
+    r"(?<!<)<<(?!<)(-?)\s*(?:'([^']*)'|\"([^\"]*)\"|([^\s<>|&;()'\"]+))"
+)
 RAW = {".rs": re.compile(r'b?r(#*)"'), ".dart": re.compile(r"r('''|\"\"\"|'|\")")}
-QUOTE = re.compile(r"'''|\"\"\"|['\"`]")
+QUOTE = re.compile(r"'''|\"\"\"|['\"]")
 REGEX_BEFORE = re.compile(
     r"(^|[(,=:\[!&|?{};+\-*%<>~^]"
     r"|\b(return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await))\s*$"
@@ -69,9 +71,7 @@ def string_end(text: str, index: int, quote: str, raw: bool) -> int:
 def string_at(text: str, index: int, suffix: str) -> int | None:
     """Index just past a string or regex literal starting at index, else None."""
     previous = text[index - 1 : index]
-    if previous.isalnum() or previous == "_":
-        return None
-    raw = RAW.get(suffix)
+    raw = None if previous.isalnum() or previous == "_" else RAW.get(suffix)
     opened = raw.match(text, index) if raw is not None else None
     if opened is not None:
         closing = '"' + opened.group(1) if suffix == ".rs" else opened.group(1)
@@ -84,10 +84,42 @@ def string_at(text: str, index: int, suffix: str) -> int | None:
     return regex.end() if regex and REGEX_BEFORE.search(before) else None
 
 
+def template_end(text: str, index: int) -> tuple[int, bool]:
+    """Index just past a template's text, and whether a ${ expression opened there."""
+    while index < len(text):
+        if text[index] == "\\":
+            index += 2
+        elif text[index] == "`":
+            return index + 1, False
+        elif text.startswith("${", index):
+            return index + 2, True
+        else:
+            index += 1
+    return len(text), False
+
+
+def code_step(text: str, index: int, suffix: str, depths: list[int]) -> int | None:
+    """Index past a template segment, interpolation brace or literal at index, else None."""
+    character = text[index]
+    if suffix in JAVASCRIPT and (
+        character == "`" or (character == "}" and depths[-1:] == [0])
+    ):
+        if character == "}":
+            depths.pop()
+        close, interpolating = template_end(text, index + 1)
+        depths.extend([0] if interpolating else [])
+        return close
+    if depths and character in "{}":
+        depths[-1] += 1 if character == "{" else -1
+        return index + 1
+    return string_at(text, index, suffix)
+
+
 def slash_comment_lines(text: str, suffix: str) -> dict[int, str]:
     """Comment text of each line that opens with a comment or lies in a spanning block."""
     found: dict[int, str] = {}
     index, line, blank = 0, 1, True
+    depths: list[int] = []
     while index < len(text):
         character = text[index]
         if character == "\n":
@@ -101,7 +133,7 @@ def slash_comment_lines(text: str, suffix: str) -> dict[int, str]:
             if blank or len(parts) > 1:
                 found.update(enumerate(parts, line))
             index, line, blank = close, line + len(parts) - 1, False
-        elif (close := string_at(text, index, suffix)) is not None:
+        elif (close := code_step(text, index, suffix, depths)) is not None:
             index, line, blank = close, line + text.count("\n", index, close), False
         else:
             literal = CHARACTER.match(text, index) if character == "'" else None
@@ -146,7 +178,12 @@ def hash_comment_lines(lines: list[str]) -> dict[int, str]:
         opened = next(
             (m for m in HEREDOC.finditer(code) if m.start() not in quoted), None
         )
-        heredoc = (opened.group(3), opened.group(1) == "-") if opened else None
+        word = (
+            next((g for g in opened.groups()[1:] if g is not None), "")
+            if opened
+            else ""
+        )
+        heredoc = (word.replace("\\", ""), opened.group(1) == "-") if opened else None
     return found
 
 
