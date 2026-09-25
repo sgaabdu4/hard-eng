@@ -66,6 +66,12 @@ def verdicts(report: dict[str, object]) -> Callable[[str, str], dict[str, object
         (READY_PLAN, [], "claims a passed check the agent never ran"),
         (DRAFT_PLAN, [], None),
         (READY_PLAN, [BASELINE], None),
+        (READY_PLAN, [BASELINE._replace(output="PASS tests (exit 0)\nexit=0")], None),
+        (
+            READY_PLAN,
+            [BASELINE._replace(output="PASS tests (exit 0)\nFAIL lint (exit 1)")],
+            "claims a passed check",
+        ),
     ],
 )
 def test_planning_only_needs_a_usable_plan_for_the_request(

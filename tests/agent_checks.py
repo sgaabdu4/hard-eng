@@ -309,15 +309,24 @@ BASELINE_FAILED = re.compile(
 )
 
 
+PASSED = {
+    "any": re.compile(
+        r"^(PASS \S+ \(exit 0\)|Hard Eng: \w+ checks passed)", re.MULTILINE
+    ),
+    "build": re.compile(r"^Hard Eng: build checks passed", re.MULTILINE),
+}
+FAILED = re.compile(r"^(FAIL |Hard Eng: verification failed)", re.MULTILINE)
+
+
 def passed_checks(actions: list[Action], stage: str) -> list[int]:
-    """Commands whose own output shows Hard Eng's planning or build checks passing."""
-    banner = re.compile(rf"^Hard Eng: ({stage}) checks passed", re.MULTILINE)
+    """Hard Eng checks whose own output shows passing gates, or the build banner, and no failure."""
     return [
         index
         for index, action in enumerate(actions)
         if action.kind == "command"
         and "hard-eng.py" in action.detail
-        and banner.search(action.output)
+        and PASSED[stage].search(action.output)
+        and not FAILED.search(action.output)
     ]
 
 
@@ -345,7 +354,7 @@ def judge_plan_only(fixture: Run) -> list[str]:
     texts = [path.read_text() for path in plans]
     if not any("average" in plan_title_and_outcome(text) for text in texts):
         failures.append("no plan addresses average([])")
-    succeeded = passed_checks(fixture.actions, "planning|build")
+    succeeded = passed_checks(fixture.actions, "any")
     for path, text in zip(plans, texts, strict=True):
         status = re.search(r"(?m)^Status:\s*(\w+)", text)
         name = path.relative_to(fixture.root)
