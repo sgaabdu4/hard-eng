@@ -35,6 +35,7 @@ BLOCK = "Code comments are none by default"
             None,
         ),
         ("src/app.ts", "const list = `\n* bullet\n* bullet\n`;\n", None),
+        ("src/app.tsx", "const v = <p>You're in.</p>;\n// first\n// second\n", 2),
         ("run.sh", "#!/bin/sh\n# one why\necho\n", None),
         ("run.sh", "echo\n# first\n# second\n", 2),
         ("NOTES.md", "# a\n# b\n", None),

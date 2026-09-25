@@ -54,13 +54,15 @@ REGEX_BEFORE = re.compile(
 REGEX = re.compile(r"/(?![/*])(\\.|\[(\\.|[^\]\\\n])*\]|[^/\\\[\n])+/")
 
 
-def string_end(text: str, index: int, quote: str, raw: bool) -> int:
-    """Index just past the string that opens at index with quote."""
+def string_end(text: str, index: int, quote: str, raw: bool, line: bool = False) -> int:
+    """Index just past the string that opens at index with quote; a line string stops at a newline."""
     while index < len(text):
         if text[index] == "\\" and not raw:
             index += 2
         elif text.startswith(quote, index):
             return index + len(quote)
+        elif line and text[index] == "\n":
+            return index
         else:
             index += 1
     return len(text)
@@ -76,7 +78,8 @@ def string_at(text: str, index: int, suffix: str) -> int | None:
         return string_end(text, opened.end(), closing, True)
     quote = QUOTE.match(text, index)
     if quote is not None and (quote.group(0) != "'" or suffix != ".rs"):
-        return string_end(text, quote.end(), quote.group(0), False)
+        line = len(quote.group(0)) == 1 and suffix != ".rs"
+        return string_end(text, quote.end(), quote.group(0), False, line)
     regex = REGEX.match(text, index) if suffix in JAVASCRIPT else None
     return regex.end() if regex and regex_allowed(text, index) else None
 
