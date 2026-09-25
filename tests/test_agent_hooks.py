@@ -12,7 +12,7 @@ from unittest.mock import Mock
 import agent_hooks
 import pytest
 import update
-from conftest import commit, git
+from conftest import SOURCE, commit, git
 from gate_config import Gate, Group, JsonObject, affected_groups
 from shipping import ShippingPolicy
 
@@ -308,8 +308,37 @@ def test_session_reports_updater_result_once(
     )
     assert context.startswith(expected)
     if agent != "copilot":
-        assert output["systemMessage"] == "Hard Eng startup: " + context.splitlines()[0]
+        assert output["systemMessage"] == "Hard Eng startup: " + " ".join(
+            context.splitlines()[:2]
+        )
+        assert "Gates: not runnable" in output["systemMessage"]
         assert "Use configured MCPs" not in output["systemMessage"]
+
+
+def test_session_states_whether_gates_can_run(repository: Path) -> None:
+    assert agent_hooks.gate_status(repository).startswith("Gates: not runnable — ")
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        (repository / name).write_bytes((SOURCE / name).read_bytes())
+    (repository / "hard-eng.gates.json").write_text(
+        '{"families": {"lint": ["ruff", "check"]}}'
+    )
+    assert "rerun the Hard Eng installer" in agent_hooks.gate_status(repository)
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [],
+                "shared": [{"name": "check", "command": ["python3", "-c", "pass"]}],
+            }
+        )
+    )
+    (repository / ".hooks").mkdir()
+    (repository / ".hooks/hard-eng.py").write_text("# installed\n")
+    assert agent_hooks.gate_status(repository) == (
+        "Gates: configuration valid, but these Hard Eng files are not committed, "
+        "so updates stop and worktrees lack them: .hooks/ hard-eng.gates.json"
+    )
+    commit(repository, "commit installed files")
+    assert agent_hooks.gate_status(repository) == "Gates: configuration valid."
 
 
 @pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])

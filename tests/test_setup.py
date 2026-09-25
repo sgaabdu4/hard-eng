@@ -649,51 +649,6 @@ def test_install_preserves_project_and_repeats(
     assert not (tmp_path / ".agents/skill-sources").exists()
 
 
-@pytest.mark.parametrize("case", ["clean", "dirty", "rejected"])
-def test_install_commits_only_clean_installed_paths(
-    installer: ModuleType,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    case: str,
-) -> None:
-    repository(tmp_path)
-    with (tmp_path / ".git/config").open("a") as config:
-        config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
-    if case == "dirty":
-        (tmp_path / "AGENTS.md").write_text("# Uncommitted project rules\n")
-    if case == "rejected":
-        hook = tmp_path / ".git/hooks/pre-commit"
-        hook.write_text("#!/bin/sh\necho rejected by project hook\nexit 1\n")
-        hook.chmod(0o755)
-    installer.install(tmp_path)
-    output = capsys.readouterr().out
-    status = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.splitlines()
-    if case == "clean":
-        assert "Committed the installed files locally without pushing." in output
-        assert sorted(status) == ["?? package.json", "?? pnpm-lock.yaml"]
-        return
-    reason = {
-        "dirty": "these paths already had local changes",
-        "rejected": "rejected by project hook",
-    }[case]
-    assert f"Installed files are not committed ({reason})" in output
-    assert ".hooks/ " in output and ".agents/skills/he/ " in output
-    assert "?? AGENTS.md" in status and "?? .hooks/" in status
-    assert not subprocess.run(
-        ["git", "diff", "--cached", "--name-only"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-
-
 def test_retired_families_config_is_regenerated_and_reported(
     installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

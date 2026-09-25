@@ -273,6 +273,52 @@ def test_ignored_local_configuration_prevents_update(
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
+@pytest.mark.parametrize("case", ["clean", "dirty", "rejected"])
+def test_install_commits_only_clean_installed_paths(
+    installer: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    case: str,
+) -> None:
+    tmp_path = tmp_path / "project"
+    init(tmp_path)
+    (tmp_path / "package.json").write_text('{"private":true}')
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    if case == "dirty":
+        (tmp_path / "AGENTS.md").write_text("# Uncommitted project rules\n")
+    if case == "rejected":
+        hook = tmp_path / ".git/hooks/pre-commit"
+        hook.write_text("#!/bin/sh\necho rejected by project hook\nexit 1\n")
+        hook.chmod(0o755)
+    installer.install(tmp_path)
+    output = capsys.readouterr().out
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    if case == "clean":
+        assert "Committed the installed files locally without pushing." in output
+        assert sorted(status) == ["?? package.json", "?? pnpm-lock.yaml"]
+        return
+    reason = {
+        "dirty": "these paths already had local changes",
+        "rejected": "rejected by project hook",
+    }[case]
+    assert f"Installed files are not committed ({reason})" in output
+    assert ".hooks/ " in output and ".agents/skills/he/ " in output
+    assert "?? AGENTS.md" in status and "?? .hooks/" in status
+    assert not subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
 def test_untracked_install_is_named_instead_of_local_edits(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
