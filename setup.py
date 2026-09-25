@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import runpy
+import shlex
 import subprocess
 import sys
 import tomllib
@@ -287,38 +289,77 @@ def configure_dart(
     configure_dart_generated(root, directory, changes)
 
 
+LOCALE = re.compile(r"[a-z]{2,3}(_[A-Z][a-z]{3})?(_(?:[A-Z]{2}|\d{3}))?")
+
+
+def arb_language(arb: Path) -> str | None:
+    """Mirror gen-l10n: `@@locale`, else the first locale suffix of the file name."""
+    try:
+        resources = json.loads(arb.read_text())
+    except (OSError, ValueError):
+        resources = None
+    locale = resources.get("@@locale") if isinstance(resources, dict) else None
+    if not isinstance(locale, str):
+        stem = arb.stem
+        candidates = [stem, *(stem[i + 1 :] for i, c in enumerate(stem) if c == "_")]
+        locale = next((name for name in candidates if LOCALE.fullmatch(name)), None)
+    return re.split("[_-]", locale)[0] if locale else None
+
+
+def localization_outputs(root: Path, directory: Path) -> list[str]:
+    import yaml
+
+    localization = directory / "l10n.yaml"
+    if not localization.is_file():
+        return []
+    options = yaml.safe_load(localization.read_text()) or {}
+    if not isinstance(options, dict) or options.get("synthetic-package", False):
+        return []
+    arbs = directory / str(options.get("arb-dir", "lib/l10n"))
+    output = directory / str(
+        options.get("output-dir", options.get("arb-dir", "lib/l10n"))
+    )
+    stem = Path(str(options.get("output-localization-file", "app_localizations.dart")))
+    languages = {arb_language(arb) for arb in arbs.glob("*.arb")} - {None}
+    names = [stem.name, *(f"{stem.stem}_{language}.dart" for language in languages)]
+    relative = [os.path.relpath(output / name, root) for name in sorted(names)]
+    return [Path(name).as_posix() for name in relative if not name.startswith("..")]
+
+
 def configure_dart_generated(
     root: Path, directory: Path, changes: dict[str, str]
 ) -> None:
     """Mark generator output so coverage and file-size gates skip it."""
-    import yaml
-
-    patterns = ["*.g.dart", "*.freezed.dart", "*.gr.dart"]
-    localization = directory / "l10n.yaml"
-    options = (
-        yaml.safe_load(localization.read_text()) if localization.is_file() else None
-    )
-    if isinstance(options, dict) and not options.get("synthetic-package", False):
-        # gen-l10n writes beside the ARB files unless output-dir is set.
-        output = directory / str(
-            options.get("output-dir", options.get("arb-dir", "lib/l10n"))
-        )
-        stem = Path(
-            str(options.get("output-localization-file", "app_localizations.dart"))
-        ).stem
-        relative = os.path.relpath(output / f"{stem}*.dart", root)
-        if not relative.startswith(".."):
-            patterns.append(Path(relative).as_posix())
     path = root / ".gitattributes"
     existing = path.read_text() if path.exists() else ""
     attributes = changes.get(".gitattributes", existing)
-    declared = {line.split()[0] for line in attributes.splitlines() if line.split()}
-    for pattern in patterns:
-        if pattern not in declared:
-            separator = "" if not attributes or attributes.endswith("\n") else "\n"
-            attributes += f"{separator}{pattern} linguist-generated=true\n"
-    if attributes != existing:
-        changes[".gitattributes"] = attributes
+    declared = set()
+    for line in attributes.splitlines():
+        try:
+            fields = shlex.split(line, comments=True)
+        except ValueError:
+            fields = line.split()
+        if fields and any("linguist-generated" in field for field in fields[1:]):
+            declared.add(fields[0])
+    added = "".join(
+        # Git reads C-style double-quoted patterns, which may contain spaces.
+        (
+            json.dumps(pattern, ensure_ascii=False)
+            if any(c.isspace() for c in pattern)
+            else pattern
+        )
+        + " linguist-generated=true\n"
+        for pattern in [
+            "*.g.dart",
+            "*.freezed.dart",
+            "*.gr.dart",
+            *localization_outputs(root, directory),
+        ]
+        if pattern not in declared
+    )
+    # Prepend: later lines win, so existing project overrides keep precedence.
+    if added:
+        changes[".gitattributes"] = added + attributes
 
 
 def configure_dart_scanner(
