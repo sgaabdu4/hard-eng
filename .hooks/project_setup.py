@@ -298,8 +298,13 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
         if (directory / "uv.lock").exists():
             return uv
         for parent in [] if (directory / ".git").exists() else directory.parents:
-            if (parent / "pyproject.toml").exists() and workspace_matches(
-                str(directory.relative_to(parent)), workspace_members(parent, "python")
+            if (
+                (parent / "pyproject.toml").exists()
+                and (parent / "uv.lock").exists()
+                and workspace_matches(
+                    str(directory.relative_to(parent)),
+                    workspace_members(parent, "python"),
+                )
             ):
                 return uv  # A uv workspace member uses its root's lockfile.
             if (parent / ".git").exists():

@@ -107,15 +107,17 @@ def test_python_requires_a_lockfile_unless_a_uv_workspace_member(
     for name in ("packages/lib", "tools/script"):
         (tmp_path / name).mkdir(parents=True)
         (tmp_path / name / "pyproject.toml").write_text('[project]\nname="part"\n')
-    for directory in (tmp_path, tmp_path / "tools/script"):
+    for directory in (tmp_path, tmp_path / "packages/lib", tmp_path / "tools/script"):
         with pytest.raises(ValueError, match=r"uv add -r requirements.txt"):
             dependency_command(directory, "python")
-    assert dependency_command(tmp_path / "packages/lib", "python")[0] == "uv"
     (tmp_path / "poetry.lock").touch()
     assert dependency_command(tmp_path, "python")[0] == "poetry"
     (tmp_path / "poetry.lock").unlink()
     (tmp_path / "uv.lock").touch()
     assert dependency_command(tmp_path, "python")[2] == "uv.lock"
+    assert dependency_command(tmp_path / "packages/lib", "python")[0] == "uv"
+    with pytest.raises(ValueError, match="uv.lock or poetry.lock is required"):
+        dependency_command(tmp_path / "tools/script", "python")
 
 
 def test_existing_python_configuration_still_requires_a_lockfile(

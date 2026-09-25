@@ -303,7 +303,7 @@ def configure_dart(
     configure_dart_generated(root, directory, changes)
 
 
-LOCALE = re.compile(r"[a-z]{2,3}(_[A-Z][a-z]{3})?(_(?:[A-Z]{2}|\d{3}))?")
+LOCALE = re.compile(r"[a-z]{2,3}([_-][A-Z][a-z]{3})?([_-](?:[A-Z]{2}|\d{3}))?")
 
 
 def arb_language(arb: Path) -> str | None:
@@ -333,9 +333,12 @@ def localization_outputs(root: Path, directory: Path) -> list[str]:
     output = directory / str(
         options.get("output-dir", options.get("arb-dir", "lib/l10n"))
     )
-    stem = Path(str(options.get("output-localization-file", "app_localizations.dart")))
+    name = Path(
+        str(options.get("output-localization-file", "app_localizations.dart"))
+    ).name
+    stem, _, extension = name.partition(".")  # gen-l10n splits at the first dot.
     languages = {arb_language(arb) for arb in arbs.glob("*.arb")} - {None}
-    names = [stem.name, *(f"{stem.stem}_{language}.dart" for language in languages)]
+    names = [name, *(f"{stem}_{language}.{extension}" for language in languages)]
     relative = [os.path.relpath(output / name, root) for name in sorted(names)]
     return [Path(name).as_posix() for name in relative if not name.startswith("..")]
 
