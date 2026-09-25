@@ -232,20 +232,14 @@ def adopt_root_dart_gates(
     return [template_command, [value for value in template_command if value != "."]]
 
 
-def configure_dart(
-    root: Path, directory: Path, package: Group, changes: dict[str, str]
+def apply_dart_typing(
+    options: JsonObject,
+    required: dict[str, JsonObject],
+    directory: Path,
 ) -> None:
-    import yaml
     from gate_config import dart_rule_settings, validate_dart_exclusions
-    from project_setup import migrate_dart_plugins
 
-    target = directory / "analysis_options.yaml"
-    typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
-    options: JsonObject = typing["dart_options"](target) if target.exists() else {}
-    original = deepcopy(options)
-    existing = target.read_bytes().decode("utf-8") if target.exists() else ""
-    migrate_dart_plugins(options, SOURCE)
-    for section, groups in typing["DART_TYPING"].items():
+    for section, groups in required.items():
         # A key holding only comments, as in `flutter create` output, parses as null.
         if options.get(section) is None:
             options[section] = {}
@@ -260,7 +254,11 @@ def configure_dart(
                 if isinstance(settings, list)
                 else section_options[group]
             )
-            if group == "rules" and isinstance(current, list):
+            if (
+                group == "rules"
+                and isinstance(current, list)
+                and isinstance(settings, dict)
+            ):
                 dart_rule_settings(current)
                 current.extend(rule for rule in settings if rule not in current)
                 continue
@@ -273,6 +271,21 @@ def configure_dart(
                 merge(current, settings, (section, group))
             else:
                 validate_dart_exclusions(directory, current)
+
+
+def configure_dart(
+    root: Path, directory: Path, package: Group, changes: dict[str, str]
+) -> None:
+    import yaml
+    from project_setup import migrate_dart_plugins
+
+    target = directory / "analysis_options.yaml"
+    typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
+    options: JsonObject = typing["dart_options"](target) if target.exists() else {}
+    original = deepcopy(options)
+    existing = target.read_bytes().decode("utf-8") if target.exists() else ""
+    migrate_dart_plugins(options, SOURCE)
+    apply_dart_typing(options, typing["DART_TYPING"], directory)
     content = (
         existing
         if target.exists() and options == original
