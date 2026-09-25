@@ -10,6 +10,9 @@ from pathlib import Path
 from gate_config import JsonObject, nonproduction_source, repository_files
 from update import require_current
 
+# The HE Build handoff line, not a quoted or negated mention of it.
+SHIP_CLAIM = re.compile(r"^[*_ ]*Ready for ship[*_]*\s*[—–-]", re.MULTILINE)
+
 
 def configure_instructions(
     root: Path, source: Path, previous: Path | None, changes: dict[str, str]
@@ -385,8 +388,8 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         claim = str(
             payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
         )
-        # HE Build keeps a plan Ready until its final gate; only a ship claim needs Complete.
-        building = "Ready for ship" not in claim and build_in_progress(
+        # HE Build keeps a plan Ready until its final gate; only its handoff needs Complete.
+        building = not SHIP_CLAIM.search(claim) and build_in_progress(
             root, set(changed.splitlines())
         )
         returncode, output = run_check(root, base, building)

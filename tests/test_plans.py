@@ -689,20 +689,30 @@ def test_legacy_ux_reference_keeps_its_original_rules() -> None:
 
 
 @pytest.mark.parametrize(
-    "claim", ["Waiting for the background builder.", "Ready for ship — done."]
+    ("claim", "ship"),
+    [
+        ("Waiting for the background builder.", False),
+        ("Still building; not Ready for ship yet.", False),
+        ("Once gated, say `Ready for ship — local work complete`.", False),
+        ("Ready for ship — local implementation and verification complete.", True),
+        ("Summary.\n\n**Ready for ship** — done.", True),
+    ],
 )
 def test_stop_accepts_a_ready_plan_mid_build_until_ship_is_claimed(
-    repository: Path, completed_plan: str, claim: str
+    repository: Path, completed_plan: str, claim: str, ship: bool
 ) -> None:
     install_native_hooks(repository, "")
+    git(repository, "add", ".")
+    git(repository, "commit", "-qm", "hooks")
+    # Both plans change: one task finished, the other still building.
     (repository / "PLAN.md").write_text(
         completed_plan.replace("Status: Complete", "Status: Ready").replace(
             "## Verification\nResult: Passed", "## Verification\nResult: Pending"
         )
     )
-    git(repository, "add", ".")
-    git(repository, "commit", "-qm", "ready plan")
     (repository / "app.py").write_text("print('first slice')\n")
+    (repository / "features/done").mkdir(parents=True)
+    (repository / "features/done/PLAN.md").write_text(completed_plan)
     result = subprocess.run(
         [
             sys.executable,
@@ -718,7 +728,7 @@ def test_stop_accepts_a_ready_plan_mid_build_until_ship_is_claimed(
         check=True,
     )
     response = json.loads(result.stdout)
-    if claim.startswith("Ready for ship"):
+    if ship:
         assert response["decision"] == "block"
         assert "plan is Ready; this check requires Complete" in response["reason"]
     else:

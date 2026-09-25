@@ -239,6 +239,7 @@ def build_in_progress(root: Path, changed: set[str]) -> bool:
     selected = [path for path in paths if str(path.relative_to(root)) in changed]
     try:
         contents = [path.read_text() for path in selected or paths]
+        # Complete plans are validated as usual; the unfinished ones decide.
         active = [text for text in contents if field(text, "Status") != "Complete"]
         return bool(active) and all(
             field(text, "Status") == "Ready"
@@ -246,7 +247,7 @@ def build_in_progress(root: Path, changed: set[str]) -> bool:
                 plan_sections(text, allow_placeholders=True)["Verification"], "Result"
             )
             == "Pending"
-            for text in (contents if selected else active)
+            for text in active
         )
     except (OSError, ValueError, KeyError):
         return False
