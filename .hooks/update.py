@@ -239,7 +239,7 @@ def planned_hook(root: Path, plan: object) -> tuple[str, str]:
 
 def update_plan(
     root: Path, source: Path, previous: Path
-) -> tuple[dict[str, str | None], dict[str, str | None], tuple[str, str]]:
+) -> tuple[dict[str, str | None], dict[str, str | None], tuple[str, str], list[str]]:
     output = subprocess.check_output(
         [
             "uv",
@@ -298,7 +298,18 @@ def update_plan(
             links[name] = None
         elif link.exists() or link.is_symlink():
             raise ValueError(f"Local skill link differs: {name}")
-    return changes, links, hook
+    return changes, links, hook, plan.get("retired", [])
+
+
+def retire_untracked(root: Path, retired: list[str]) -> list[str]:
+    """Delete untracked old-generation files; return tracked ones whose deletion needs a commit."""
+    if not retired:
+        return []
+    tracked = subprocess.check_output(
+        ["git", "ls-files", "-z", "--", *retired], cwd=root, text=True
+    ).split("\0")
+    write_changes(root, {name: None for name in retired if name not in tracked})
+    return [name for name in retired if name in tracked]
 
 
 def write_changes(root: Path, changes: dict[str, str | None]) -> None:
@@ -522,9 +533,68 @@ def repair_current_hook(root: Path, previous: str) -> str:
         return "No newer CI-verified Hard Eng revision is available."
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), previous, previous)
-        _, _, hook = update_plan(root, source, old)
+        _, _, hook, _ = update_plan(root, source, old)
         install_planned_hook(root, hook)
     return "No newer CI-verified Hard Eng revision is available; installed the missing pre-push hook."
+
+
+def repair_installation(root: Path, previous: str) -> str:
+    """Restore missing installed files and retire old-generation ones at the installed revision."""
+    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
+        source, old = fetch_sources(Path(temporary), previous, previous)
+        changes, links, hook, retired = update_plan(root, source, old)
+    from agent_hooks import OLD_GENERATION_SCRIPT
+
+    missing: dict[str, str | None] = {
+        name: content
+        for name, content in changes.items()
+        if content is not None
+        and (
+            not (root / name).exists()
+            or OLD_GENERATION_SCRIPT.search((root / name).read_text(errors="replace"))
+        )
+    }
+    missing.update(dict.fromkeys(retire_untracked(root, retired)))
+    added: dict[str, str | None] = {
+        name: link for name, link in links.items() if link is not None
+    }
+    status = "No newer CI-verified Hard Eng revision is available"
+    if install_planned_hook(root, hook):
+        status += "; installed the missing pre-push hook"
+    if not missing and not added:
+        return status + "."
+    names = sorted({*missing, *added})
+    write_changes(root, missing)
+    write_links(root, added)
+    return f"{status}; repaired {install_paths(names)}. " + commit_install(
+        root, names, clean=True
+    )
+
+
+def commit_install(root: Path, names: list[str], clean: bool) -> str:
+    reason = "these paths already had local changes"
+    if clean:
+        subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
+        if not subprocess.run(
+            ["git", "diff", "--cached", "--quiet", "--", *names], cwd=root, check=False
+        ).returncode:
+            return "Installed files already match the current commit."
+        result = subprocess.run(
+            ["git", "commit", "--only", "-m", "Install Hard Eng", "--", *names],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return "Committed the installed files locally without pushing."
+        subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
+        reason = " | ".join(result.stdout.strip().splitlines()[-3:])
+    return (
+        f"Installed files are not committed ({reason}). Commit them so updates and "
+        "worktrees include them: " + install_paths(names)
+    )
 
 
 def refuse_local_state(root: Path, names: list[str]) -> None:
@@ -553,7 +623,7 @@ def refuse_local_state(root: Path, names: list[str]) -> None:
         )
 
 
-def update(root: Path) -> str:
+def update(root: Path, repair: bool = False) -> str:
     marker = root / SOURCE_FILE
     if not marker.exists():
         return "Automatic update unavailable: this checkout has no installed source revision."
@@ -565,10 +635,13 @@ def update(root: Path) -> str:
         return "Installed from an uncommitted working copy; publish a verified source revision before automatic updates."
     revision = latest_verified(previous)
     if revision is None:
+        if repair:
+            return repair_installation(root, previous)
         return repair_current_hook(root, previous)
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
-        changes, links, hook = update_plan(root, source, old)
+        changes, links, hook, retired = update_plan(root, source, old)
+        changes.update(dict.fromkeys(retire_untracked(root, retired)))
         if not changes and not links:
             install_planned_hook(root, hook)
             return "Hard Eng already matches the verified source."
@@ -668,7 +741,7 @@ def check_scaffold_update(root: Path, base: str) -> bool:
             for path in (tree / ".agents/skills").iterdir()
             if path.is_dir()
         }
-        changes, links, _ = update_plan(root, source, source)
+        changes, links, _, _ = update_plan(root, source, source)
         if not names <= allowed or changes or links:
             return False
         if any(
@@ -697,6 +770,9 @@ def preserved_instructions(root: Path, base: str, names: set[str]) -> bool:
             capture_output=True,
             check=False,
         ).stdout
-        if original.split(end, 1)[-1] != (root / name).read_text().split(end, 1)[-1]:
+        if (
+            not (root / name).is_file()
+            or original.split(end, 1)[-1] != (root / name).read_text().split(end, 1)[-1]
+        ):
             return False
     return True

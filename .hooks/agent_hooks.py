@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from gate_config import JsonObject, nonproduction_source, repository_files
+from gate_config import JsonObject, JsonValue, nonproduction_source, repository_files
 from update import require_current
 
 # The HE Build handoff line, not a quoted or negated mention of it.
@@ -133,7 +133,7 @@ def _remove_owned_entry(hooks: JsonObject, native: str, owned: JsonObject) -> No
 
 
 def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
-    """Remove only the exact routine registrations previously installed by us."""
+    """Remove only registrations previously installed by us, including old-generation scripts."""
     hooks = current.get("hooks", {})
     if not isinstance(hooks, dict):
         raise TypeError("Conflicting hooks: expected an object")
@@ -155,6 +155,43 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
                 hook_events(agent)[event],
                 owned_hook_entry(agent, event, command, 3600),
             )
+    _remove_old_generation(hooks)
+
+
+OLD_GENERATION_SCRIPT = re.compile(r"/\.hard-eng/(?:bootstrap|hook)\.sh\b")
+
+
+def _old_generation(handler: JsonValue) -> bool:
+    return isinstance(handler, dict) and any(
+        isinstance(value := handler.get(key), str)
+        and OLD_GENERATION_SCRIPT.search(value) is not None
+        for key in ("command", "bash", "powershell")
+    )
+
+
+def _remove_old_generation(hooks: JsonObject) -> None:
+    for native, entries in list(hooks.items()):
+        if isinstance(entries, list):
+            kept = _without_old_generation(entries)
+            if not kept and entries:
+                del hooks[native]
+            elif kept != entries:
+                hooks[native] = kept
+
+
+def _without_old_generation(entries: list[JsonValue]) -> list[JsonValue]:
+    kept: list[JsonValue] = []
+    for entry in entries:
+        inner = entry.get("hooks") if isinstance(entry, dict) else None
+        if isinstance(entry, dict) and isinstance(inner, list):
+            handlers = [item for item in inner if not _old_generation(item)]
+            if handlers:
+                kept.append(
+                    entry if handlers == inner else {**entry, "hooks": handlers}
+                )
+        elif not _old_generation(entry):
+            kept.append(entry)
+    return kept
 
 
 def learning_context(event: str) -> str:

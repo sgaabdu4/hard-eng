@@ -8,14 +8,20 @@ import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import Mock
 
 import pytest
 import update
 from conftest import SOURCE, commit, git, init
 from gate_config import JsonObject, json_file
 from shipping import ShippingError, ShippingPolicy
+from test_setup import (
+    OLD_FILES,
+    assert_old_generation_retired,
+    snapshot,
+    write_old_generation,
+)
 from test_setup import repository as setup_repository
-from test_setup import snapshot
 
 
 def test_installer_preserves_native_mcp_settings_on_rerun(
@@ -707,6 +713,66 @@ def test_failed_commit_rolls_back_scaffold(
 def select_release(source: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     revision = commit(source, "verified update")
     monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
+
+
+@pytest.mark.parametrize("committed", [True, False])
+def test_setup_rerun_restores_missing_installed_files(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, committed: bool
+) -> None:
+    _, target, _ = release
+    gates = (target / "hard-eng.gates.json").read_bytes()
+    shutil.rmtree(target / ".agents")
+    if committed:
+        git(target, "commit", "-qam", "remove installed skills")
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    assert "available." in update.update(target)
+    assert not (target / ".agents").exists()
+    message = update.update(target, repair=True)
+    assert ".agents/skills/he/" in message
+    assert (target / ".claude/skills/he/SKILL.md").is_file()
+    assert (target / "hard-eng.gates.json").read_bytes() == gates
+    assert (target / "project.txt").read_text() == "original\n"
+    assert git(target, "status", "--porcelain") == ""
+
+
+def test_setup_rerun_retires_old_generation(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, target, _ = release
+    project = write_old_generation(target)
+    git(target, "add", "--force", *OLD_FILES)
+    commit(target, "old generation wiring")
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    update.update(target, repair=True)
+    assert not set(OLD_FILES) & set(git(target, "ls-files").splitlines())
+    assert_old_generation_retired(target, project)
+    assert git(target, "status", "--porcelain") == ""
+
+
+def test_update_retires_old_generation(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    project = write_old_generation(target)
+    gates = target / "hard-eng.gates.json"
+    config = json.loads(gates.read_text().replace("raise SystemExit(1)", "None"))
+    scripts = [".hard-eng/bootstrap.sh", ".hard-eng/hook.sh"]
+    config["shared"].append(
+        {
+            "name": "shellcheck",
+            "role": "shell",
+            "command": ["shellcheck", "--", *scripts],
+        }
+    )
+    gates.write_text(json.dumps(config))
+    (target / "package.json").unlink()
+    git(target, "add", "--force", *OLD_FILES)
+    commit(target, "old generation wiring")
+    select_release(source, monkeypatch)
+    update.update(target)
+    assert not set(OLD_FILES) & set(git(target, "ls-files").splitlines())
+    assert_old_generation_retired(target, project)
+    assert ".hard-eng/" not in gates.read_text()
 
 
 def test_development_install_does_not_fetch(
