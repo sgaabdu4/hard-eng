@@ -335,6 +335,73 @@ def old_generation(root: Path, changes: dict[str, str]) -> list[str]:
     return retired
 
 
+def retire_local_generation(root: Path) -> None:
+    """Remove the old per-checkout Hard Eng copy and the local files that pointed at it."""
+    from agent_hooks import remove_old_generation
+
+    cache = root / ".agents/hard-eng"
+    for folder in (
+        ".agents/skills",
+        ".claude/skills",
+        ".claude/agents",
+        ".codex/agents",
+        ".github/agents",
+    ):
+        for link in (root / folder).glob("*"):
+            if link.is_symlink() and ".agents/hard-eng/" in str(link.readlink()) + "/":
+                link.unlink()
+    if cache.is_symlink():
+        cache.unlink()
+    elif cache.is_dir():
+        shutil.rmtree(cache)
+    local = root / "CLAUDE.local.md"
+    if local.is_file() and not local.is_symlink():
+        kept = [
+            line
+            for line in local.read_text().splitlines(keepends=True)
+            if line.strip() != "@.agents/hard-eng/current/AGENTS.md"
+        ]
+        if not "".join(kept).strip():
+            local.unlink()
+        elif len(kept) < len(local.read_text().splitlines()):
+            local.write_text("".join(kept))
+    settings = root / ".claude/settings.local.json"
+    if settings.is_file() and not settings.is_symlink():
+        current = json.loads(settings.read_text())
+        before = json.dumps(current)
+        if isinstance(hooks := current.get("hooks"), dict):
+            remove_old_generation(hooks)
+            if not hooks:
+                del current["hooks"]
+        if current.get("outputStyle") == "Plain English":
+            del current["outputStyle"]
+        if json.dumps(current) != before:
+            settings.write_text(json.dumps(current, indent=2) + "\n")
+    exclude = Path(
+        subprocess.check_output(
+            [
+                "git",
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-path",
+                "info/exclude",
+            ],
+            cwd=root,
+            text=True,
+        ).strip()
+    )
+    text = exclude.read_text() if exclude.is_file() else ""
+    start, end = (
+        "# >>> hard-eng repository fallback >>>",
+        "# <<< hard-eng repository fallback <<<",
+    )
+    if start in text and end in text:
+        head, rest = text.split(start, 1)
+        exclude.write_text(
+            head.rstrip("\n") + "\n" + rest.split(end, 1)[1].lstrip("\n")
+        )
+
+
 def local_state(root: Path, names: list[str]) -> list[str]:
     return subprocess.check_output(
         [
@@ -663,6 +730,7 @@ def update(root: Path, repair: bool = False) -> str:
     previous = metadata.get("revision")
     if not isinstance(previous, str) or not re.fullmatch(r"[0-9a-f]{40}", previous):
         return "Installed from an uncommitted working copy; publish a verified source revision before automatic updates."
+    retire_local_generation(root)
     revision = latest_verified(previous)
     if revision is None:
         if repair:

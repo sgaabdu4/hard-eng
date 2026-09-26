@@ -177,6 +177,8 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
                 owned_hook_entry(agent, event, command, 3600),
             )
     remove_old_generation(hooks)
+    if current.get("outputStyle") == "Plain English":
+        del current["outputStyle"]
 
 
 HOOK_FILES = {
@@ -187,7 +189,7 @@ HOOK_FILES = {
 
 
 CLAUDE_IMPORT = "<!-- hard-eng:start -->\n@AGENTS.md\n<!-- hard-eng:end -->\n\n"
-OLD_GENERATION_SCRIPT = re.compile(r"\.hard-eng\b")
+OLD_GENERATION_SCRIPT = re.compile(r"\.hard-eng\b|\.agents/hard-eng/")
 
 
 def _old_generation(handler: JsonValue) -> bool:

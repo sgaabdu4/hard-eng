@@ -18,7 +18,7 @@ Authority: The user asked for every reported item to be fixed in one PR, without
 
 ## Acceptance + steps
 
-- [x] Every old-generation Hard Eng file carrying the generated mark and every hook command mentioning `.hard-eng` is removed on setup, rerun and update, edited or not; project-owned files stay → `tests/test_adoption.py` install, rerun and update tests. An automatic update refuses locally edited old files; rerunning setup removes them without committing the edits.
+- [x] Every old-generation Hard Eng file carrying the generated mark and every hook command mentioning `.hard-eng` is removed on setup, rerun and update, edited or not; the older per-checkout copy goes too (`.agents/hard-eng/`, links into it, its `CLAUDE.local.md` import, local-settings hooks and Plain English style, Codex doc-size line, Git exclude block); project-owned files and settings stay → `tests/test_adoption.py` install, rerun and update tests. An automatic update refuses locally edited old files; rerunning setup removes them without committing the edits.
 - [x] requirements.txt-only Python repositories get an exact instruction naming the directories and the uv commands → `test_requirements_only_project_is_told_how_to_declare_itself`.
 - [x] Installed `.hooks` survive a project ruff config targeting py314 with line-length 120 → `test_installed_hooks_survive_project_ruff_settings` (real ruff).
 - [x] Shipped `.agents` files and setup-written JSON pass a Biome project's own `biome ci .` → `test_setup_json_stays_in_the_project_biome_layout`, `test_written_json_matches_the_project_formatter_layout`; setup JSON follows the root Biome config's indent and line width.
