@@ -473,7 +473,9 @@ def test_plain_dart_uses_native_coverage_tool(
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    written = (tmp_path / "hard-eng.gates.json").read_text()
+    config = json.loads(written)
+    assert written == installer.gates_text(config) + "\n"
     checks = {gate["role"]: gate for gate in config["packages"][0]["checks"]}
     assert [
         gate["name"]
