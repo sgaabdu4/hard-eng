@@ -630,3 +630,29 @@ def test_install_refuses_linked_local_settings_that_run_the_old_copy(
     with pytest.raises(ValueError, match="settings.local.json"):
         installer.install(root)
     assert (root / ".agents/hard-eng/current").is_dir()
+
+
+def test_candidate_ignores_base_changes_the_branch_lacks(
+    release: tuple[Path, Path, str],
+) -> None:
+    source, target, _ = release
+    commit(source, "verified source candidate")
+    (target / "package.json").unlink()
+    config = json.loads((target / "hard-eng.gates.json").read_text())
+    config["shared"][0]["command"] = ["python3", "-c", "raise SystemExit(0)"]
+    (target / "hard-eng.gates.json").write_text(json.dumps(config))
+    shared = target / "shared.py"
+    shared.write_text("# one\n# two\n# three\nVALUE = 1\n")
+    git(target, "branch", "-M", "main")
+    commit(target, "remote baseline")
+    remote = target.parent / "remote.git"
+    git(target, "clone", "--bare", str(target), str(remote))
+    git(target, "remote", "add", "origin", str(remote))
+    git(target, "switch", "-c", "feature/update")
+    git(target, "switch", "main")
+    shared.write_text("VALUE = 2\n")
+    commit(target, "base moves on")
+    git(target, "push", "-q", "--no-verify", "origin", "main")
+    git(target, "switch", "feature/update")
+    changes: dict[str, str | None] = {"new-managed.mjs": "export const value = 1;\n"}
+    update.verify_candidate(target, source, changes, {}, target.parent / "candidate")

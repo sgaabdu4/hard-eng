@@ -660,9 +660,15 @@ raise SystemExit(not compileall.compile_dir('.hooks', quiet=1))
                     ["git", "remote"], cwd=candidate, text=True
                 ).splitlines()
             ):
-                command.append(
-                    remote_base(candidate, policy["base"] if policy else None) or "HEAD"
+                base = remote_base(candidate, policy["base"] if policy else None)
+                found = subprocess.run(
+                    ["git", "merge-base", base or "HEAD", "HEAD"],
+                    cwd=candidate,
+                    capture_output=True,
+                    text=True,
+                    check=False,
                 )
+                command.append(found.stdout.strip() or base or "HEAD")
             else:
                 command.append("HEAD")
         subprocess.run(
