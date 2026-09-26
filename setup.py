@@ -60,7 +60,8 @@ def gate_config(root: Path) -> GateConfig:
 
     packages: list[Group] = []
     shared: list[Gate] = []
-    for path, language in sorted(package_manifests(root, repository_files(root))):
+    files = repository_files(root)
+    for path, language in sorted(package_manifests(root, files)):
         template = json.loads(
             (
                 SOURCE / ".agents/skills/he/templates" / f"hard-eng.{language}.json"
@@ -75,6 +76,19 @@ def gate_config(root: Path) -> GateConfig:
                     shared.append(gate)
             else:
                 package["checks"].insert(0, gate)
+    requirements = sorted(
+        str(path.parent.relative_to(root))
+        for path in files
+        if path.name == "requirements.txt"
+        and ".agents" not in path.relative_to(root).parts
+    )
+    if not packages and requirements:
+        raise ValueError(
+            f"requirements.txt without pyproject.toml in {', '.join(requirements)}. "
+            "In each directory run `uv init --bare` (writes pyproject.toml with name, "
+            "version and requires-python) and `uv add -r requirements.txt` (declares "
+            "the dependencies and writes uv.lock), commit both, then rerun setup."
+        )
     if not packages:
         raise ValueError(
             "No supported project manifest found. New project: ask the user which type to create "
