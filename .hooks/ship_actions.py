@@ -22,7 +22,11 @@ from shipping import (
 from update import require_current
 
 
-def remote_base(root: Path, branch: str | None) -> str:
+def remote_base(root: Path, branch: str | None) -> str | None:
+    """The remote base revision, or None when the remote has no branches yet."""
+    destination = git(root, "remote", "get-url", "--push", "origin").strip()
+    if not git(root, "ls-remote", "--heads", destination).strip():
+        return None
     reference = f"refs/heads/{branch}" if branch else "HEAD"
     advertised = git(root, "ls-remote", "--exit-code", "origin", reference).split()
     if (
@@ -40,11 +44,11 @@ def interrupted(number: int, _frame: object) -> None:
     raise SystemExit(128 + number)
 
 
-def run_check(checkout: Path, base: str, environment: dict[str, str]) -> int:
+def run_check(checkout: Path, base: str | None, environment: dict[str, str]) -> int:
     """Run the snapshot's check in its own group so an interrupt stops every gate first."""
     command = [sys.executable, str(checkout / ".hooks/hard-eng.py"), "check"]
     check = subprocess.Popen(
-        [*command, "--base", base],
+        [*command, *(["--base", base] if base else [])],
         cwd=checkout,
         env=environment,
         start_new_session=True,
@@ -61,6 +65,24 @@ def run_check(checkout: Path, base: str, environment: dict[str, str]) -> int:
             check.wait()
 
 
+def push_base(root: Path, branch: str, target: str, remote: str) -> str | None:
+    """Diff base for one pushed ref; None checks everything on a remote's first push."""
+    if set(remote) != {"0"}:
+        if target == f"refs/heads/{branch}":
+            raise ValueError(
+                "Push a task branch and use a PR; direct base updates are blocked"
+            )
+        return remote
+    base = remote_base(root, branch)
+    if base is None:
+        print("The remote has no branches yet; checking everything for its first push.")
+    elif target == f"refs/heads/{branch}":
+        raise ValueError(
+            "Push a task branch and use a PR; direct base updates are blocked"
+        )
+    return base
+
+
 def pre_push(root: Path) -> int:
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGHUP, interrupted)
@@ -72,15 +94,9 @@ def pre_push(root: Path) -> int:
         if len(fields) != 4:
             raise ValueError("Invalid pre-push input")
         revision = fields[1]
-        if fields[2] == f"refs/heads/{policy['base']}":
-            raise ValueError(
-                "Push a task branch and use a PR; direct base updates are blocked"
-            )
+        base = push_base(root, policy["base"], fields[2], fields[3])
         if set(revision) == {"0"}:
             continue
-        base = fields[3]
-        if set(base) == {"0"}:
-            base = remote_base(root, policy["base"])
         environment = os.environ.copy()
         for name in git(root, "rev-parse", "--local-env-vars").splitlines():
             environment.pop(name, None)

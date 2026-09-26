@@ -340,12 +340,21 @@ def test_lock_setup_runs_first_and_blocks_on_failure(
 def test_parallel_checks_overlap_with_two_worker_bound(
     runner: ModuleType, tmp_path: Path
 ) -> None:
-    code = "from pathlib import Path;import time;Path('{name}.start').write_text(str(time.monotonic()));time.sleep({delay});Path('{name}.end').write_text(str(time.monotonic()))"
+    code = (
+        "from pathlib import Path;import time;Path('{name}.start').write_text(str(time.monotonic()))\n"
+        "deadline = time.monotonic() + 60\n"
+        "while {wait} and time.monotonic() < deadline: time.sleep(0.02)\n"
+        "Path('{name}.end').write_text(str(time.monotonic()))"
+    )
     configure(
         tmp_path,
         [
-            gate(name, code.format(name=name, delay=delay), parallel=True)
-            for name, delay in (("slow", 0.5), ("quick", 0.08), ("third", 0.08))
+            gate(name, code.format(name=name, wait=wait), parallel=True)
+            for name, wait in (
+                ("slow", "not Path('third.end').exists()"),
+                ("quick", "False"),
+                ("third", "False"),
+            )
         ],
     )
     assert runner.check() == 0
