@@ -65,7 +65,9 @@ def run_check(checkout: Path, base: str | None, environment: dict[str, str]) -> 
             check.wait()
 
 
-def push_base(root: Path, branch: str, target: str, remote: str) -> str | None:
+def push_base(
+    root: Path, branch: str, target: str, remote: str, revision: str
+) -> str | None:
     """Diff base for one pushed ref; None checks everything on a remote's first push."""
     if set(remote) != {"0"}:
         if target == f"refs/heads/{branch}":
@@ -80,6 +82,10 @@ def push_base(root: Path, branch: str, target: str, remote: str) -> str | None:
         raise ValueError(
             "Push a task branch and use a PR; direct base updates are blocked"
         )
+    else:
+        # A new branch owns only what it added since leaving the base, not later base edits.
+        with suppress(ShippingError):
+            base = git(root, "merge-base", base, revision).strip()
     return base
 
 
@@ -94,7 +100,7 @@ def pre_push(root: Path) -> int:
         if len(fields) != 4:
             raise ValueError("Invalid pre-push input")
         revision = fields[1]
-        base = push_base(root, policy["base"], fields[2], fields[3])
+        base = push_base(root, policy["base"], fields[2], fields[3], revision)
         if set(revision) == {"0"}:
             continue
         environment = os.environ.copy()
