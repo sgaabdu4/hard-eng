@@ -195,6 +195,27 @@ def test_invalid_completion(
         validate_plan(path)
 
 
+@pytest.mark.parametrize(
+    "blockers,resolved",
+    [
+        ("None. The scope question was settled in chat.", True),
+        ("None — the retry question was answered", True),
+        ("None of the questions are answered", False),
+        ("None yet", False),
+    ],
+)
+def test_blockers_none_may_carry_a_note(
+    tmp_path: Path, completed_plan: str, blockers: str, resolved: bool
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(completed_plan.replace("Blockers: None", f"Blockers: {blockers}"))
+    if resolved:
+        assert validate_plan(path) == "Complete"
+    else:
+        with pytest.raises(ValueError, match="unresolved Blockers"):
+            validate_plan(path)
+
+
 @pytest.mark.parametrize("status", ["Ready", "Complete"])
 def test_ready_requires_baseline_and_rendered_evidence(
     tmp_path: Path, completed_plan: str, visual_plan: str, status: str

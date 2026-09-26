@@ -200,6 +200,11 @@ def readiness_errors(
     return errors
 
 
+def no_blockers(text: str) -> bool:
+    """'None', optionally followed by a note such as 'None. Scope was settled in chat.'"""
+    return re.fullmatch(r"None(?:(?:[.;:]|\s+[—–-])\s.*)?", text) is not None
+
+
 def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, list[str]]:
     """Validate the declared Draft pause without treating it as authorization."""
     decisions = sections["Decisions + authorization"]
@@ -209,12 +214,12 @@ def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, lis
         blockers = field(decisions, "Blockers")
     except ValueError as error:
         return None, None, [str(error)]
-    question = blockers != "None" and re.search(PLACEHOLDERS, blockers) is None
+    question = not no_blockers(blockers) and re.search(PLACEHOLDERS, blockers) is None
     if handoff not in HANDOFFS:
         errors.append("Handoff must be Clarification or Approval")
     elif handoff == "Clarification" and not question:
         errors.append("Clarification needs concrete Blockers")
-    elif handoff == "Approval" and blockers != "None" and not question:
+    elif handoff == "Approval" and not no_blockers(blockers) and not question:
         errors.append("Approval Blockers must be None or a concrete decision")
     return handoff, blockers, errors
 
@@ -296,7 +301,7 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
         if errors:
             raise ValueError("; ".join(errors))
         return status
-    if field(sections["Decisions + authorization"], "Blockers") != "None":
+    if not no_blockers(field(sections["Decisions + authorization"], "Blockers")):
         raise ValueError("ready/complete plan has unresolved Blockers")
     errors = readiness_errors(
         sections, status, legacy=status == "Complete" and not changed
