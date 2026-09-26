@@ -620,3 +620,53 @@ def test_interrupted_pre_push_removes_its_snapshot(
     assert not Path(checkout).parent.exists()
     with pytest.raises(ProcessLookupError):
         os.kill(int(child), 0)
+
+
+@pytest.mark.parametrize("gate_passes", [True, False])
+def test_first_push_to_an_empty_remote_checks_everything(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+    gate_passes: bool,
+) -> None:
+    root = tmp_path
+    bare = tmp_path.parent / f"{tmp_path.name}-empty.git"
+    git(root, "init", "--bare", "-q", str(bare))
+    git(root, "config", "user.name", "Hook Fixture")
+    git(root, "config", "user.email", "hook@example.invalid")
+    git(root, "branch", "-M", "main")
+    (root / ".hooks").mkdir()
+    for source in (SOURCE / ".hooks").glob("*.py"):
+        (root / ".hooks" / source.name).write_bytes(source.read_bytes())
+    (root / ".gitignore").write_text("__pycache__/\n")
+    exit_code = 0 if gate_passes else 3
+    config = {
+        "packages": [],
+        "shipping": shipping_policy,
+        "shared": [
+            {
+                "name": "whole-project",
+                "command": [sys.executable, "-c", f"raise SystemExit({exit_code})"],
+            }
+        ],
+    }
+    (root / "hard-eng.gates.json").write_text(json.dumps(config))
+    git(root, "add", ".")
+    git(root, "commit", "-qm", "initial project")
+    git(root, "remote", "add", "origin", str(bare))
+    revision = git(root, "rev-parse", "HEAD").strip()
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(f"refs/heads/main {revision} refs/heads/main {'0' * 40}\n"),
+    )
+    assert (runner.pre_push() == 0) == gate_passes
+    git(root, "push", "-q", "--no-verify", "origin", "main")
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(f"refs/heads/main {revision} refs/heads/main {revision}\n"),
+    )
+    with pytest.raises(ValueError, match="direct base updates are blocked"):
+        runner.pre_push()
