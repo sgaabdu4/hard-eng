@@ -28,6 +28,7 @@ Authority: The user asked for every reported item to be fixed in one PR, without
 - [x] Plan `Evidence:` errors state the same-line rule → already true since #125; reproduced, no change.
 - [x] secrets-files ignores gitignored content reached through a tracked symlink; tracked secrets still fail → `test_tracked_link_to_an_ignored_local_secret_is_not_scanned`.
 - [x] ci-security passes when a repository has no workflows; uncollectable or malformed workflows still fail → `test_ci_security_passes_only_when_no_workflows_exist_to_collect` (real zizmor).
+- [x] Claude Code v2.1.277+ reads `AGENTS.md` directly, so setup writes the `CLAUDE.md` import only when a project `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` would replace `AGENTS.md`, and retires a committed `CLAUDE.md` that holds only that import; `.claude/skills` links stay because Claude Code loads skills only there → `test_native_instruction_paths_preserve_project_rules`, `test_install_retires_a_claude_md_that_only_imports_agents_md`.
 
 ## Baseline + execution
 
@@ -37,7 +38,7 @@ Execution: Four parallel builders in isolated worktrees (installer, Python, Biom
 
 ## Risks + recovery
 
-The SHA-1 fix replaces one registry semgrep rule with a Hard Eng rule that keeps flagging plain SHA-1. It covers gates passing `p/python` as a separate argument. Nested formatter configs (`.hooks/ruff.toml`, `.agents/biome.json`) are skipped by tools run with `--config` or `--isolated`. Existing installs pick everything up through the verified updater. Setup JSON reads only the root Biome config: `extends`, path `overrides` and Prettier options are not followed.
+The SHA-1 fix replaces one registry semgrep rule with a Hard Eng rule that keeps flagging plain SHA-1. It covers gates passing `p/python` as a separate argument. Nested formatter configs (`.hooks/ruff.toml`, `.agents/biome.json`) are skipped by tools run with `--config` or `--isolated`. Existing installs pick everything up through the verified updater. Claude Code before v2.1.277, its first session after upgrading from one, or with the `agents-md` plugin disabled reads no Hard Eng rules without a `CLAUDE.md`. Setup JSON reads only the root Biome config: `extends`, path `overrides` and Prettier options are not followed.
 
 ## ux_reference
 

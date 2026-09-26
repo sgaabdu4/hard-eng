@@ -346,3 +346,17 @@ def test_install_keeps_compound_project_hooks_and_the_script_they_run(
     assert (tmp_path / ".hard-eng/bootstrap.sh").is_file()
     assert not (tmp_path / "AGENTS.override.md").exists()
     assert ".hard-eng/bootstrap.sh" in capsys.readouterr().err
+
+
+def test_install_retires_a_claude_md_that_only_imports_agents_md(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text(
+        "<!-- hard-eng:start -->\n@AGENTS.md\n<!-- hard-eng:end -->\n\n"
+    )
+    git(tmp_path, "add", "CLAUDE.md")
+    commit(tmp_path, "Install Hard Eng")
+    installer.install(tmp_path)
+    assert not (tmp_path / "CLAUDE.md").exists()
+    assert "CLAUDE.md" not in git(tmp_path, "ls-files").splitlines()

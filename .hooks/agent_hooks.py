@@ -23,7 +23,12 @@ def configure_instructions(
         "AGENTS.md": (source / "AGENTS.md").read_text().rstrip(),
     }
     claude = root / "CLAUDE.md"
-    if not (claude.is_symlink() and claude.resolve() == root / "AGENTS.md"):
+    linked = claude.is_symlink() and claude.resolve() == root / "AGENTS.md"
+    text = claude.read_text() if claude.is_file() and not linked else ""
+    # Claude Code reads AGENTS.md itself unless one of these files replaces it.
+    if text.split(f"{end}\n\n", 1)[-1].strip() or any(
+        (root / name).exists() for name in (".claude/CLAUDE.md", "CLAUDE.local.md")
+    ):
         instructions["CLAUDE.md"] = "@AGENTS.md"
     if (root / "AGENTS.override.md").exists():
         instructions["AGENTS.override.md"] = (
@@ -165,6 +170,7 @@ HOOK_FILES = {
 }
 
 
+CLAUDE_IMPORT = "<!-- hard-eng:start -->\n@AGENTS.md\n<!-- hard-eng:end -->\n\n"
 OLD_GENERATION_SCRIPT = re.compile(r"/\.hard-eng/(?:bootstrap|hook)\.sh\b")
 OLD_GENERATION_COMMAND = re.compile(
     r'bash "\$\((?:env(?: -u \w+)+ )?git rev-parse --show-toplevel\)'
