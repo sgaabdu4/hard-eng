@@ -2,6 +2,7 @@
 
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -34,7 +35,30 @@ def remote_base(root: Path, branch: str | None) -> str:
     return revision
 
 
+def interrupted(number: int, _frame: object) -> None:
+    raise SystemExit(128 + number)
+
+
+def run_check(checkout: Path, base: str, environment: dict[str, str]) -> int:
+    """Run the snapshot's check in its own group so an interrupt stops every gate first."""
+    command = [sys.executable, str(checkout / ".hooks/hard-eng.py"), "check"]
+    check = subprocess.Popen(
+        [*command, "--base", base],
+        cwd=checkout,
+        env=environment,
+        start_new_session=True,
+    )
+    try:
+        return check.wait()
+    finally:
+        if check.poll() is None:
+            os.killpg(check.pid, signal.SIGTERM)
+            check.wait()
+
+
 def pre_push(root: Path) -> int:
+    for number in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(number, interrupted)
     policy = load_policy(root)
     assert policy is not None
     started = time.monotonic()
@@ -71,20 +95,9 @@ def pre_push(root: Path) -> int:
                         env=environment,
                         check=True,
                     )
-                result = subprocess.run(
-                    [
-                        sys.executable,
-                        str(checkout / ".hooks/hard-eng.py"),
-                        "check",
-                        "--base",
-                        base,
-                    ],
-                    cwd=checkout,
-                    env=environment,
-                    check=False,
-                )
-                if result.returncode:
-                    return result.returncode
+                returncode = run_check(checkout, base, environment)
+                if returncode:
+                    return returncode
             finally:
                 subprocess.run(
                     ["git", "worktree", "remove", "--force", str(checkout)],
