@@ -445,7 +445,10 @@ def test_install_removes_the_old_local_hard_eng_copy(
     codex = (tmp_path / ".codex/config.toml").read_text()
     assert codex.startswith('model = "o3"\n')
     assert "project_doc_max_bytes" not in codex
-    assert exclude.read_text() == "*.log\n/.claude/settings.local.json\n"
+    assert exclude.read_text() == (
+        "*.log\n\n/.agents/hard-eng/\n/.claude/settings.local.json\n"
+        "/.claude/output-styles/plain-english.md\n"
+    )
     assert not (tmp_path / "CLAUDE.md").exists()
 
 
@@ -606,7 +609,7 @@ def test_session_start_removes_untracked_fallback_files(
     update.update(target)
     assert not (target / "AGENTS.override.md").exists()
     assert not (target / "CLAUDE.local.md").exists()
-    assert exclude.read_text() == before
+    assert exclude.read_text() == before + "/AGENTS.override.md\n/CLAUDE.local.md\n"
     assert git(target, "status", "--porcelain") == ""
 
 

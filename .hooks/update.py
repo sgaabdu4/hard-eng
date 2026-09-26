@@ -494,7 +494,7 @@ def retired_settings(settings: Path) -> str | None:
 
 
 def exclude_block(root: Path) -> tuple[Path, str] | None:
-    """The private exclude file and its text without the old fallback block."""
+    """The shared exclude file without the old markers; worktrees may still need its patterns."""
     command = ["git", "rev-parse", "--path-format=absolute", "--git-path"]
     path = subprocess.check_output([*command, "info/exclude"], cwd=root, text=True)
     exclude = Path(path.strip())
@@ -505,12 +505,8 @@ def exclude_block(root: Path) -> tuple[Path, str] | None:
     )
     if start not in text or end not in text:
         return None
-    head, rest = text.split(start, 1)
-    block, tail = rest.split(end, 1)
-    kept = "".join(
-        f"{line}\n" for line in block.split() if os.path.lexists(root / line.strip("/"))
-    )
-    return exclude, head.rstrip("\n") + "\n" + kept + tail.lstrip("\n")
+    lines = text.splitlines(keepends=True)
+    return exclude, "".join(line for line in lines if line.strip() not in {start, end})
 
 
 def local_state(root: Path, names: list[str]) -> list[str]:
