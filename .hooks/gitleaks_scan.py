@@ -45,6 +45,18 @@ def is_gitlink(repository: Path, relative_path: Path) -> bool:
     )
 
 
+def is_tracked(path: Path) -> bool:
+    """Ask the repository owning the file, which may be a submodule."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--", path.name],
+        cwd=path.parent,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return bool(result.stdout)
+
+
 def validate_current_files_command(command: list[str]) -> None:
     """Limit snapshot wrapping to Gitleaks' native current-directory scan."""
     if (
@@ -87,6 +99,8 @@ def copy_scan_entry(
         raise ValueError(f"Gitleaks source escapes the repository: {relative_path}")
     target = destination / relative_path
     if entry.is_symlink():
+        if source.is_file() and not is_tracked(source):
+            return
         copy_link_target(source, target, ancestors)
         return
     if source.is_dir():

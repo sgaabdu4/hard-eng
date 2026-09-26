@@ -51,6 +51,7 @@ contents = {
         'untracked.txt',
         'deleted.txt',
         'inside-link.txt',
+        '.env',
         'skill-alias',
         'skills/submodule/submodule.txt',
         'generated/output.txt',
@@ -149,6 +150,30 @@ def test_current_files_include_authored_changes_and_exclude_ignored_output(
     }
     assert Path(observed["report"]) == project / "reports/gitleaks.sarif"
     assert Path(observed["cwd"]) != project
+
+
+def test_tracked_link_to_an_ignored_local_secret_is_not_scanned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = repository(tmp_path)
+    (project / ".gitignore").write_text(".env.local\n")
+    (project / ".env.local").write_text("TOKEN=local-only-fixture-secret\n")
+    (project / ".env").symlink_to(".env.local")
+    git(project, "add", ".gitignore", ".env")
+    git(project, "commit", "-qm", "local environment link")
+    result = tmp_path / "result.json"
+    monkeypatch.setenv("GITLEAKS_SCOPE_RESULT", str(result))
+
+    completed = run_current_files(
+        scan_command(scanner_script(tmp_path), monkeypatch),
+        project,
+        30,
+        None,
+        sys.stderr,
+    )
+
+    assert completed.returncode == 0
+    assert json.loads(result.read_text())["contents"] == {"tracked.txt": "committed\n"}
 
 
 def test_native_secrets_gate_uses_current_files_snapshot(
