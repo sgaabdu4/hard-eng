@@ -2,9 +2,14 @@
 
 import subprocess
 from pathlib import Path
+from types import ModuleType
 
 import pytest
-from gate_config import package_manifests, validate_manifest_groups
+from gate_config import (
+    package_manifests,
+    validate_manifest_groups,
+    validate_required_checks,
+)
 
 
 @pytest.mark.parametrize("manifest", ["pubspec.yaml", "package.json", "pyproject.toml"])
@@ -48,3 +53,39 @@ def test_fixture_manifest_ownership(tmp_path: Path) -> None:
     root.write_text("name: root\n")
     (fixture.parent / "pubspec.lock").touch()
     assert owners() == {".", "tests/fixtures/example"}
+
+
+def test_test_support_package_keeps_only_dependency_checks(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    """A committed test runner package is gated with its parent, not as a product."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/app.dart").write_text("int one() => 1;\n")
+    runner = tmp_path / "test/browser_runner"
+    runner.mkdir(parents=True)
+    for directory in (tmp_path, runner):
+        (directory / "pubspec.yaml").write_text(f"name: {directory.name}_fixture\n")
+        (directory / "pubspec.lock").touch()
+    config = installer.gate_config(tmp_path)
+    support = next(
+        group for group in config["packages"] if group["path"] == "test/browser_runner"
+    )
+    assert "language" not in support and "sources" not in support
+    assert [gate["role"] for gate in support["checks"]] == [
+        "vulnerabilities",
+        "lockfiles",
+    ]
+    assert support["checks"][1]["command"] == [
+        "dart",
+        "pub",
+        "get",
+        "--enforce-lockfile",
+    ]
+    validate_required_checks(tmp_path, config)
+    support["sources"] = ["lib"]
+    with pytest.raises(ValueError, match="package language must be dart"):
+        validate_required_checks(tmp_path, config)
+    config["packages"].remove(support)
+    with pytest.raises(ValueError, match="test-support package without language"):
+        validate_required_checks(tmp_path, config)
