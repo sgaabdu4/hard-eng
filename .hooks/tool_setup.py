@@ -23,6 +23,7 @@ NATIVE_SCANNERS = {
 }
 MANAGED_PYTHON_SCANNERS = {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "poetry"}
 MISE_PACKAGE = "@jdxcode/mise"
+MISE_LATEST = MISE_PACKAGE + "@latest"
 MISE_BINARY = Path("node_modules/@jdxcode/mise/bin/mise")
 
 
@@ -203,7 +204,7 @@ def mise_launcher(
     launchers.mkdir(parents=True, exist_ok=True)
     version = json.loads(
         subprocess.run(
-            ["pnpm", "view", f"{MISE_PACKAGE}@latest", "version", "--json"],
+            ["pnpm", "view", MISE_LATEST, "version", "--json"],
             cwd=launchers,
             env=environment,
             text=True,
