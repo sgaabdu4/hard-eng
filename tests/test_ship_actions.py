@@ -693,7 +693,11 @@ def test_new_branch_behind_its_base_is_judged_on_its_own_changes(
     )
     (root / ".gitignore").write_text("__pycache__/\n")
     noop = {"name": "noop", "command": [sys.executable, "-c", "pass"]}
-    gates = {"packages": [], "shipping": shipping_policy, "shared": [noop]}
+    gates: dict[str, object] = {
+        "packages": [],
+        "shipping": shipping_policy,
+        "shared": [noop],
+    }
     (root / "hard-eng.gates.json").write_text(json.dumps(gates))
     plan = root / "PLAN.md"
     plan.write_text(completed_plan.replace("Status: Complete", "Status: Ready"))
