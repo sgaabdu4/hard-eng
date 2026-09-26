@@ -256,6 +256,20 @@ def test_existing_quality_or_invalid_workflow_is_preserved(
     assert path.read_text() == content
 
 
+def test_integration_reminder_stops_once_existing_ci_runs_the_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / ".github/workflows/quality.yml"
+    path.parent.mkdir(parents=True)
+    job = "on: pull_request\njobs:\n  quality:\n    steps:\n      - run: {}\n"
+    path.write_text(job.format("make test"))
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
+    assert "Existing CI retained" in capsys.readouterr().err
+    path.write_text(job.format("python3 .hooks/hard-eng.py check --base main"))
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
+    assert "Existing CI retained" not in capsys.readouterr().err
+
+
 def test_unconfigured_maintenance_project_does_not_inherit_source_ci_budget(
     tmp_path: Path,
 ) -> None:
