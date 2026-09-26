@@ -11,6 +11,7 @@ from gate_config import (
     Gate,
     GateConfig,
     Group,
+    json_file,
     parse_config,
     validate_dart_boundaries,
     validate_required_checks,
@@ -488,7 +489,7 @@ def test_plain_dart_uses_native_coverage_tool(
     assert result.returncode == 0, result.stderr
     written = (tmp_path / "hard-eng.gates.json").read_text()
     config = json.loads(written)
-    assert written == installer.gates_text(config) + "\n"
+    assert written == json_file(tmp_path, config)
     checks = {gate["role"]: gate for gate in config["packages"][0]["checks"]}
     assert [
         gate["name"]
@@ -602,6 +603,8 @@ def test_javascript_file_scope_keeps_application_tests_and_declarations(
 
 def repository(root: Path) -> None:
     subprocess.run(["git", "init", "-q", str(root)], check=True)
+    with (root / ".git/config").open("a") as config:
+        config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
     (root / "package.json").write_text('{"private":true}')
     (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
 

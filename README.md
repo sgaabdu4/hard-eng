@@ -25,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | s
 | Existing project | Preserve custom instructions, skills, hooks, and configuration; report genuine conflicts. |
 | Hard Eng already installed | Select a newer CI-verified revision when available, verify an isolated candidate, then apply changes and create a local update commit. |
 
-Setup prepends rules to `AGENTS.md` and connects `CLAUDE.md`. It configures Context Mode, Codebase Memory, and applicable Appwrite, Sentry, Dart, and Marionette connections; Marionette is registered for every Flutter app, pinned to the `pubspec.lock` version of `marionette_flutter` when present. The Appwrite and Flutter skills install only when the project imports Appwrite or contains Dart; updates remove an unedited copy that no longer applies. Reuse known service and hosting choices; resolve missing choices and verify a real call before relying on an integration. The installer/updater never pushes.
+Setup prepends rules to `AGENTS.md`, which Claude Code v2.1.277+ reads directly; it imports them into `CLAUDE.md` only when a project `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` would otherwise replace `AGENTS.md`. It configures Context Mode, Codebase Memory, and applicable Appwrite, Sentry, Dart, and Marionette connections; Marionette is registered for every Flutter app, pinned to the `pubspec.lock` version of `marionette_flutter` when present. The Appwrite and Flutter skills install only when the project imports Appwrite or contains Dart; updates remove an unedited copy that no longer applies. Reuse known service and hosting choices; resolve missing choices and verify a real call before relying on an integration. The installer/updater never pushes.
 
 ```mermaid
 flowchart TD

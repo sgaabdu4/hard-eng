@@ -121,3 +121,20 @@ def test_test_support_needs_a_covering_dart_parent(
         "tests/runner": None,
         "tests/runner/packages/member": None,
     }
+
+
+def test_requirements_only_project_is_told_how_to_declare_itself(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    with pytest.raises(ValueError, match="New project"):
+        installer.gate_config(tmp_path)
+    (tmp_path / "functions/api").mkdir(parents=True)
+    (tmp_path / "functions/api/main.py").write_text("print('ok')\n")
+    (tmp_path / "functions/api/requirements.txt").write_text("pyyaml\n")
+    with pytest.raises(ValueError) as error:
+        installer.gate_config(tmp_path)
+    assert "functions/api" in str(error.value)
+    assert "uv init --bare" in str(error.value)
+    assert "uv add -r requirements.txt" in str(error.value)
+    assert "New project" not in str(error.value)

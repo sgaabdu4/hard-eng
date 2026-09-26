@@ -13,7 +13,7 @@ from types import ModuleType
 
 import pytest
 import tool_setup
-from conftest import SOURCE, use_installed_mise
+from conftest import SOURCE, default_policy, init, use_installed_mise
 from gate_config import (
     GateConfig,
     Group,
@@ -236,6 +236,32 @@ def configure(root: Path, checks: list[dict[str, object]]) -> None:
     (root / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": checks})
     )
+
+
+@pytest.mark.parametrize(("ci", "budget"), [("true", 2700.0), ("", 900.0)])
+def test_each_gate_may_use_the_configured_budget(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ci: str,
+    budget: float,
+) -> None:
+    policy = default_policy() | {"ci_seconds": 2700.0, "pre_push_seconds": 900.0}
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {"packages": [], "shared": [gate("tests", "pass")], "shipping": policy}
+        )
+    )
+    monkeypatch.setenv("CI", ci)
+    timeouts: list[float] = []
+
+    def run_gate(_group: object, _gate: object, timeout: float, _lock: object) -> bool:
+        timeouts.append(timeout)
+        return False
+
+    monkeypatch.setattr(runner, "run_gate", run_gate)
+    assert runner.check() == 0
+    assert timeouts == [budget]
 
 
 def test_command_failure_survives_later_pass(
@@ -749,6 +775,29 @@ def test_ci_security_gate_turns_off_only_the_self_repository_audit(
         rules = yaml.safe_load(log.read())["rules"]
     assert rules["self-repository"] == {"disable": True}
     assert ("unpinned-uses" in rules) == bool(project)
+
+
+@pytest.mark.parametrize("workflow", [False, True])
+def test_ci_security_passes_only_when_no_workflows_exist_to_collect(
+    tmp_path: Path, workflow: bool
+) -> None:
+    from gitleaks_scan import run_gate_command
+
+    project = tmp_path / "project"
+    init(project)
+    if workflow:
+        (project / ".github/workflows").mkdir(parents=True)
+        (project / ".github/workflows/ci.yml").write_text("on: push\n")
+    zizmor = tmp_path / "bin/zizmor"
+    zizmor.parent.mkdir()
+    zizmor.write_text(f"#!{sys.executable}\nraise SystemExit(3)\n")
+    zizmor.chmod(0o755)
+    with (tmp_path / "log").open("w+") as log:
+        result = run_gate_command("ci-security", [str(zizmor)], project, 30, log, log)
+        log.seek(0)
+        output = log.read()
+    assert result.returncode == (3 if workflow else 0)
+    assert ("No GitHub workflows to audit" in output) != workflow
 
 
 def test_check_output_survives_a_non_blocking_pipe(

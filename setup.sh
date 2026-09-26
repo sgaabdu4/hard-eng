@@ -8,7 +8,7 @@ git -C "$temporary/source" fetch --quiet --depth 1 origin "$revision"
 git -C "$temporary/source" checkout --quiet --detach "$revision"
 git -C "$temporary/source" submodule update --init --recursive --quiet
 if [ -f "$PWD/.hooks/hard-eng-source.json" ]; then
-    uv run --project "$temporary/source" --locked --no-dev python -I -c 'import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); from update import update; print(update(Path.cwd()))' "$temporary/source/.hooks"
+    uv run --project "$temporary/source" --locked --no-dev python -I -c 'import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); from update import update; print(update(Path.cwd(), repair=True))' "$temporary/source/.hooks"
 else
     uv run --project "$temporary/source" --locked --no-dev python "$temporary/source/setup.py" "$PWD"
 fi
