@@ -1,5 +1,6 @@
 """Native context/completion responses; Git records scope, never gate results."""
 
+import hashlib
 import json
 import re
 import subprocess
@@ -184,6 +185,22 @@ def session_state(root: Path, payload: JsonObject) -> Path | None:
     return root / ".hard-eng/sessions" / (identifier + ".json")
 
 
+def dirty_files(root: Path, base: str) -> dict[str, str]:
+    """Content hash of each file differing from base; absent files hash to ''."""
+    names = subprocess.check_output(
+        ["git", "diff", "--name-only", "-z", base, "--"], cwd=root, text=True
+    ).split("\0")
+    names += subprocess.check_output(
+        ["git", "ls-files", "-z", "--others", "--exclude-standard"], cwd=root, text=True
+    ).split("\0")
+    digests = dict.fromkeys(set(names) - {""}, "")
+    for name in digests:
+        if (root / name).is_file():
+            with (root / name).open("rb") as file:
+                digests[name] = hashlib.file_digest(file, "sha256").hexdigest()
+    return digests
+
+
 def gate_status(root: Path) -> str:
     """Say whether `check` can start, so an install never looks active while broken."""
     from gate_config import load_groups
@@ -248,7 +265,8 @@ def session_context(root: Path, payload: JsonObject) -> str:
             ).strip()
             state.parent.mkdir(parents=True, exist_ok=True)
             if not state.exists():
-                state.write_text(json.dumps({"base": revision}))
+                dirty = dirty_files(root, revision)
+                state.write_text(json.dumps({"base": revision, "dirty": dirty}))
         except (OSError, subprocess.SubprocessError):
             messages.append("Session revision unavailable; use full checks.")
     messages.append(
@@ -335,33 +353,38 @@ def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
         return result.returncode, log.read().decode("utf-8", errors="replace")
 
 
+def saved_session(state: Path | None) -> tuple[str, JsonObject]:
+    if state is None or not state.exists():
+        return "HEAD", {}
+    saved = json.loads(state.read_text())
+    if not isinstance(saved, dict):
+        raise TypeError("Invalid session state: expected an object")
+    base, before = saved.get("base"), saved.get("dirty", {})
+    if not isinstance(base, str) or not base.strip():
+        raise ValueError("Invalid session state: expected a nonempty Git base")
+    if not isinstance(before, dict):
+        raise TypeError("Invalid session state: expected a dirty-file object")
+    return base, before
+
+
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
-    from plans import build_in_progress, planning_feedback
+    from plans import build_in_progress, planning_feedback, planning_only
 
     if payload.get("stop_hook_active") is True:
         return {
             "systemMessage": "Report remaining verification blockers honestly. Do not claim a pass; no repeated stop-hook loop."
         }
     state = session_state(root, payload)
-    base = "HEAD"
-    if state is not None and state.exists():
-        saved = json.loads(state.read_text())
-        if not isinstance(saved, dict):
-            raise ValueError("Invalid session state: expected an object")
-        base = saved.get("base")
-        if not isinstance(base, str) or not base.strip():
-            raise ValueError("Invalid session state: expected a nonempty Git base")
+    base, before = saved_session(state)
     try:
         base = subprocess.check_output(
             ["git", "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}"],
             cwd=root,
             text=True,
         ).strip()
-        changed = subprocess.check_output(
-            ["git", "diff", "--name-only", base, "--"], cwd=root, text=True
-        )
-        changed += subprocess.check_output(
-            ["git", "ls-files", "--others", "--exclude-standard"], cwd=root, text=True
+        current = dirty_files(root, base).items()
+        changed = "".join(
+            f"{name}\n" for name, digest in current if before.get(name) != digest
         )
         notice, unfinished = planning_feedback(root, set(changed.splitlines()))
         if unfinished:
@@ -371,9 +394,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 "reason": notice
                 + ". Continue only authorized planning and verification. Ask genuine blocking questions when needed. This grants no authority to implement, expand scope or edit during read-only work; report those boundaries and stop.",
             }
-        if notice and all(
-            Path(name).suffix.lower() == ".md" for name in changed.splitlines()
-        ):
+        if notice and planning_only(root, set(changed.splitlines())):
             require_current(root)
             return {
                 "systemMessage": notice

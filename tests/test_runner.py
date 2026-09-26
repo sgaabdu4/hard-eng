@@ -1,15 +1,19 @@
 """Exercise real command exits, ordering, documents and coverage boundaries."""
 
+import fcntl
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 import tool_setup
+from conftest import SOURCE
 from gate_config import (
     GateConfig,
     Group,
@@ -712,3 +716,49 @@ def test_only_the_ci_security_gate_borrows_the_gh_token(
         run_gate_command(role, show, tmp_path, 30, log, log)
         log.seek(0)
         assert log.read().strip() == seen
+
+
+def test_check_output_survives_a_non_blocking_pipe(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    shutil.copytree(SOURCE / ".hooks", tmp_path / ".hooks")
+    (tmp_path / ".gitignore").write_text("__pycache__/\n")
+    configure(tmp_path, [gate("noisy", "print('x' * 2_000_000)")])
+    git(tmp_path, "add", ".")
+    git(
+        tmp_path,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.test",
+        "commit",
+        "-qm",
+        "fixture",
+    )
+    read, write = os.pipe()
+    os.set_blocking(write, False)
+    command = [sys.executable, str(tmp_path / ".hooks/hard-eng.py"), "check"]
+    check = subprocess.Popen(command, cwd=tmp_path, stdout=write, stderr=write)
+    os.close(write)
+    time.sleep(2)
+    with os.fdopen(read, "rb") as output:
+        lines = output.read().decode().splitlines()
+    assert check.wait() == 0
+    assert "PASS noisy (exit 0)" in lines
+
+
+def test_second_check_waits_for_the_first_in_the_same_checkout(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    configure(tmp_path, [gate("reports", "open('ran', 'w').close()")])
+    lock = tmp_path / ".git/hard-eng-check.lock"
+    results: list[int] = []
+    with lock.open("w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        second = threading.Thread(target=lambda: results.append(runner.check()))
+        second.start()
+        time.sleep(1)
+        assert not (tmp_path / "ran").exists()
+    second.join(timeout=60)
+    assert results == [0]
+    assert (tmp_path / "ran").is_file()

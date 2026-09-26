@@ -184,6 +184,20 @@ def test_unchanged_session_does_not_claim_checks_passed(repository: Path) -> Non
     assert "no code checks were run" in str(agent_hooks.completion(repository, payload))
 
 
+def test_work_from_before_the_session_is_not_session_work(repository: Path) -> None:
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    (repository / "tracked.py").write_text("value = 1\n")
+    git(repository, "add", "tracked.py")
+    git(repository, "commit", "-qm", "tracked")
+    (repository / "tracked.py").write_text("value = 2\n")
+    (repository / "draft café.py").write_text("print('draft')\n")
+    payload: JsonObject = {"session_id": "known"}
+    agent_hooks.session_context(repository, payload)
+    assert "no code checks were run" in str(agent_hooks.completion(repository, payload))
+    (repository / "draft café.py").write_text("print('session edit')\n")
+    assert agent_hooks.completion(repository, payload)["decision"] == "block"
+
+
 def test_missing_session_baseline_cannot_skip_verification(repository: Path) -> None:
     result = agent_hooks.completion(repository, {"session_id": "missing"})
     assert result["decision"] == "block"
@@ -200,7 +214,10 @@ def test_saved_git_option_cannot_hide_staged_changes(repository: Path) -> None:
     assert result.get("decision") == "block"
 
 
-@pytest.mark.parametrize("saved", ["[]", "null", '{"base": []}', '{"base": ""}'])
+@pytest.mark.parametrize(
+    "saved",
+    ["[]", "null", '{"base": []}', '{"base": ""}', '{"base": "HEAD", "dirty": []}'],
+)
 def test_malformed_session_state_returns_structured_blocker(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
