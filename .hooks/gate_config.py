@@ -568,11 +568,20 @@ def validate_manifest_groups(
         if (path, language) in declared:
             continue
         group = declared.get((path, None))
+        test_support = nonproduction_source(Path(path))
         if group is None:
             raise ValueError(
                 f"Supported {language} package is missing from gate configuration: {path}"
+                + (
+                    "; declare a test-support package without language or sources,"
+                    " with lockfile and vulnerability checks"
+                    if test_support
+                    else ""
+                )
             )
-        if group.get("sources") or not workspace_members(root / path, language):
+        if group.get("sources") or not (
+            test_support or workspace_members(root / path, language)
+        ):
             raise ValueError(f"{path}: package language must be {language}")
 
 

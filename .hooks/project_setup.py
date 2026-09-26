@@ -578,32 +578,46 @@ BROWSER_IMPORT = re.compile(
 SELECT_BROWSER_TESTS = (
     'tests=$(grep -rlE "^@TestOn\\([\'\\"] *(browser|chrome)" test || true); '
 )
-RUN_BROWSER_TESTS = (
-    'if [ -z "$tests" ]; then echo "Browser libraries need tests under test/ marked'
-    " @TestOn('browser') that import package:test/test.dart (not flutter_test);"
-    ' declare test as a dev dependency and provide Chrome." >&2; exit 0; fi; '
-    "dart test --platform=chrome --reporter=json --coverage-path=coverage/browser.lcov $tests; "
-    "cat coverage/browser.lcov >> coverage/lcov.info"
-)
+
+
+def run_browser_tests(options: str) -> str:
+    return (
+        'if [ -z "$tests" ]; then echo "Browser libraries need tests under test/ marked'
+        " @TestOn('browser') that import package:test/test.dart (not flutter_test);"
+        ' declare test as a dev dependency and provide Chrome." >&2; exit 0; fi; '
+        f"dart test --platform=chrome{options} --reporter=json"
+        " --coverage-path=coverage/browser.lcov $tests; "
+        "cat coverage/browser.lcov >> coverage/lcov.info"
+    )
+
+
+def browser_tests(options: str) -> list[str]:
+    return [
+        "sh",
+        "-c",
+        "set -e; rm -f coverage/browser.lcov coverage/lcov.info; "
+        + SELECT_BROWSER_TESTS
+        + 'if find test -name "*_test.dart" | grep -qvxF -e "$tests"; then '
+        + shlex.join(FLUTTER_TESTS)
+        + "; fi; "
+        + run_browser_tests(options),
+    ]
+
+
 PREVIOUS_BROWSER_TESTS = [
-    "sh",
-    "-c",
-    "set -e; rm -f coverage/browser.lcov; "
-    + shlex.join(FLUTTER_TESTS)
-    + "; "
-    + SELECT_BROWSER_TESTS
-    + RUN_BROWSER_TESTS,
+    [
+        "sh",
+        "-c",
+        "set -e; rm -f coverage/browser.lcov; "
+        + shlex.join(FLUTTER_TESTS)
+        + "; "
+        + SELECT_BROWSER_TESTS
+        + run_browser_tests(""),
+    ],
+    browser_tests(""),
 ]
-BROWSER_TESTS = [
-    "sh",
-    "-c",
-    "set -e; rm -f coverage/browser.lcov coverage/lcov.info; "
-    + SELECT_BROWSER_TESTS
-    + 'if find test -name "*_test.dart" | grep -qvxF -e "$tests"; then '
-    + shlex.join(FLUTTER_TESTS)
-    + "; fi; "
-    + RUN_BROWSER_TESTS,
-]
+# dart2js inlining leaves one-line forwarders without source-map coverage lines.
+BROWSER_TESTS = browser_tests(" --dart2js-args=--disable-inlining")
 
 
 def browser_test_coverage(directory: Path, package: Group) -> None:
@@ -622,7 +636,7 @@ def browser_test_coverage(directory: Path, package: Group) -> None:
     for gate in package["checks"]:
         if gate.get("role") == "tests" and gate["command"] in (
             FLUTTER_TESTS,
-            PREVIOUS_BROWSER_TESTS,
+            *PREVIOUS_BROWSER_TESTS,
         ):
             gate["command"] = list(BROWSER_TESTS)
 
