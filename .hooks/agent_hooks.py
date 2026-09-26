@@ -367,6 +367,19 @@ def saved_session(state: Path | None) -> tuple[str, JsonObject]:
     return base, before
 
 
+def unchanged_notice(root: Path, notice: str) -> str:
+    """A session that changed nothing here has nothing to verify, so staleness only warns."""
+    message = (
+        notice
+        or "No repository changes since this session's Git base; no code checks were run."
+    )
+    try:
+        require_current(root)
+    except ValueError as error:
+        return f"{message}\n{error}"
+    return message
+
+
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
     from plans import build_in_progress, planning_feedback, planning_only
 
@@ -401,11 +414,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 + ". No code checks were run for this planning-only handoff."
             }
         if not changed.strip() and state is not None and state.exists():
-            require_current(root)
-            return {
-                "systemMessage": notice
-                or "No repository changes since this session's Git base; no code checks were run."
-            }
+            return {"systemMessage": unchanged_notice(root, notice)}
         claim = str(
             payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
         )
