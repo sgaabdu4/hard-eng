@@ -27,6 +27,26 @@ def is_plan_path(path: Path) -> bool:
     )
 
 
+CAPTURES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".mp4", ".mov", ".webm"}
+
+
+def planning_only(root: Path, names: set[str]) -> bool:
+    """Markdown and captures, such as screenshots, kept in a feature plan's folder."""
+    folders = {
+        path.parent.relative_to(root)
+        for path in repository_files(root)
+        if is_plan_path(path.relative_to(root))
+    } - {Path(".")}
+    return all(
+        Path(name).suffix.lower() == ".md"
+        or (
+            Path(name).suffix.lower() in CAPTURES
+            and folders.intersection(Path(name).parents)
+        )
+        for name in names
+    )
+
+
 def is_documentation(path: Path) -> bool:
     """Plans and top-level Markdown, which only the secret scan reads."""
     top_level = path.parent == Path(".") and path.suffix.lower() == ".md"
@@ -55,6 +75,14 @@ def field(content: str, name: str) -> str:
             f"'{name}:' needs text on the label's line; a list may follow it"
         )
     return values[0].strip()
+
+
+def plan_status(content: str) -> str | None:
+    """Plans written before the Status field are historical, not active."""
+    try:
+        return field(content, "Status")
+    except ValueError:
+        return None
 
 
 def proof(content: str, allowed: set[str]) -> None:
@@ -200,7 +228,7 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
     unfinished = False
     for path in selected or paths:
         content = path.read_text()
-        if field(content, "Status") != "Draft":
+        if plan_status(content) != "Draft":
             continue
         try:
             sections = plan_sections(content, allow_placeholders=True)
@@ -240,7 +268,9 @@ def build_in_progress(root: Path, changed: set[str]) -> bool:
     try:
         contents = [path.read_text() for path in selected or paths]
         # Complete plans are validated as usual; the unfinished ones decide.
-        active = [text for text in contents if field(text, "Status") != "Complete"]
+        active = [
+            text for text in contents if plan_status(text) not in {None, "Complete"}
+        ]
         return bool(active) and all(
             field(text, "Status") == "Ready"
             and field(
@@ -311,18 +341,16 @@ def validate_plans(
     if changed is None:
         raise ValueError("Cannot verify plan scope; fetch or supply a valid Git --base")
     if stage is None:
-        stage = (
-            "Complete"
-            if any(Path(name).suffix.lower() != ".md" for name in changed)
-            else "Draft"
-        )
+        stage = "Draft" if planning_only(root, changed) else "Complete"
     paths = [
         path for path in repository_files(root) if is_plan_path(path.relative_to(root))
     ]
     applicable = [path for path in paths if str(path.relative_to(root)) in changed]
     if not applicable:
         applicable = [
-            path for path in paths if field(path.read_text(), "Status") != "Complete"
+            path
+            for path in paths
+            if plan_status(path.read_text()) not in {None, "Complete"}
         ]
     if not applicable and explicit_stage:
         applicable = paths
