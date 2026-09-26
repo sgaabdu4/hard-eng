@@ -1,6 +1,6 @@
 # Fix the remaining plan, CI and Stop defects seen in project sessions
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -38,7 +38,8 @@ Authority: Autonomous. The user asked to fix all the reported items.
 - [x] The reminder prints for unintegrated CI and stops once a workflow runs the check → `test_integration_reminder_stops_once_existing_ci_runs_the_check`.
 - [x] With no session changes, a newer verified revision warns without blocking; with changes it still blocks → `test_completion_checks_freshness_without_mutating_installation`.
 - [x] The ci-security gate's zizmor config disables `self-repository` and keeps project rules → `test_ci_security_gate_turns_off_only_the_self_repository_audit`.
-- [x] A package with only browser tests passes when `flutter test` finds none → `test_flutter_browser_library_coverage_comes_from_browser_tests`.
+- [x] A package with only browser tests passes when `flutter test` finds none, and installs holding the previous generated command migrate while custom commands stay → `test_flutter_browser_library_coverage_comes_from_browser_tests`.
+- [x] An unchanged session with a valid Draft plan keeps its planning notice and only warns about a stale install → `test_unchanged_draft_session_only_warns_about_a_stale_install`.
 
 ## Baseline + execution
 
@@ -56,9 +57,9 @@ N/A — hook and gate behaviour with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Required — real zizmor through the ci-security gate, and the generated browser gate on a real browser-only Flutter package with Chrome.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --base main --plan-stage Complete` → exit 0, 17/17 gates PASS. The first gate run also caught a race in `test_interrupted_pre_push_removes_its_snapshot`, which read the marker before its content was written; it is fixed in its own commit. `/codex:adversarial-review --base main` found two missed paths: installs holding the previously generated browser command never got the fix, and an unchanged session with a Draft plan still blocked on staleness. Both are fixed and covered by tests.
+E2E: Passed — real `zizmor@latest` (1.30.1) through `run_gate_command` on a workflow using `uses: ./.github/actions/hello` reports no self-repository finding; the generated browser gate ran on a real browser-only Flutter package: `flutter test` was skipped, and `dart test --platform=chrome` passed with `lib/web_adapter.dart` in the Chrome LCOV.
 
 Delivery target: Merge
 Delivery: Pending — PR checks green, squash merge, main CI green.

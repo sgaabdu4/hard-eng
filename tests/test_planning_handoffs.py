@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import agent_hooks
 import pytest
@@ -187,7 +188,7 @@ def test_unchanged_draft_session_only_warns_about_a_stale_install(
     (repository / ".git/info/exclude").write_text(".hard-eng/\n")
     payload: JsonObject = {"session_id": "known"}
     agent_hooks.session_context(repository, payload)
-    monkeypatch.setattr(update, "latest_verified", lambda _: "b" * 40)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
     response = agent_hooks.completion(repository, payload, "codex")
     assert response.get("decision") != "block"
     assert "approval handoff prepared" in str(response)
