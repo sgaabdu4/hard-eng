@@ -55,7 +55,7 @@ def merge(
 
 
 def gate_config(root: Path) -> GateConfig:
-    from gate_config import package_manifests, repository_files
+    from gate_config import dart_test_support, package_manifests, repository_files
     from project_setup import adapt_packages
 
     packages: list[Group] = []
@@ -84,6 +84,15 @@ def gate_config(root: Path) -> GateConfig:
         )
     config: GateConfig = {"version": 1, "packages": packages, "shared": shared}
     adapt_packages(root, config)
+    for package in packages:
+        if dart_test_support(package["path"], package.get("language"), packages):
+            # A test-support package's code is gated by its parent's checks.
+            del package["language"], package["sources"]
+            package["checks"] = [
+                gate
+                for gate in package["checks"]
+                if gate.get("role") in {"lockfiles", "vulnerabilities"}
+            ]
     return config
 
 
@@ -156,46 +165,27 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
     configure(root, changes)
 
 
-def configure_typing_checks(root: Path, package: Group) -> None:
+def configure_typing_checks(package: Group) -> None:
     template = (
         SOURCE
         / ".agents/skills/he/templates"
         / f"hard-eng.{package.get('language')}.json"
     )
     if template.exists():
-        root_dart_sources = list(
-            dict.fromkeys(
-                [
-                    *package.get("sources", ["lib"]),
-                    *(
-                        name
-                        for name in ("test", "tests", "integration_test", "test_driver")
-                        if (root / name).is_dir()
-                    ),
-                ]
-            )
-        )
         for required in json.loads(template.read_text())["packages"][0]["checks"]:
             if required["role"] not in {"types", "annotations", "typing-style"}:
                 continue
             root_dart = package.get("language") == "dart" and package.get("path") == "."
-            template_command = required["command"]
             required["command"] = [
                 value
-                for argument in template_command
+                for argument in required["command"]
                 for value in (
-                    package.get("sources", ["src"])
-                    if argument == "src"
-                    else root_dart_sources
-                    if argument == "." and root_dart
-                    else [argument]
+                    package.get("sources", ["src"]) if argument == "src" else [argument]
                 )
             ]
             accepted = [required["command"]]
-            if root_dart and "." in template_command:
-                accepted += adopt_root_dart_gates(
-                    package["checks"], required, template_command
-                )
+            if root_dart and "." in required["command"]:
+                accepted += adopt_root_dart_gates(package["checks"], required)
             matching = next(
                 (gate for gate in package["checks"] if gate["command"] in accepted),
                 None,
@@ -221,15 +211,19 @@ def configure_typing_checks(root: Path, package: Group) -> None:
             package["checks"].append(required)
 
 
-def adopt_root_dart_gates(
-    checks: list[Gate], required: Gate, template_command: list[str]
-) -> list[list[str]]:
+def adopt_root_dart_gates(checks: list[Gate], required: Gate) -> list[list[str]]:
+    analyzer = [value for value in required["command"] if value != "."]
     for gate in checks:
-        # Hard Eng's own unexpanded root gate follows the expanded template.
-        if gate["name"] == required["name"] and gate["command"] == template_command:
-            gate["command"] = required["command"]
-    # A project's package-root analyzer already covers the explicit directories.
-    return [template_command, [value for value in template_command if value != "."]]
+        paths = gate["command"][len(analyzer) :]
+        # Explicit paths skip analyzer plugins, so earlier directory scopes return to the root.
+        if (
+            gate["name"] in {required["name"], "strict-" + required["name"]}
+            and gate["command"][: len(analyzer)] == analyzer
+            and paths
+            and not any(path == "." or path.startswith("-") for path in paths)
+        ):
+            gate["command"] = list(required["command"])
+    return [analyzer]
 
 
 def apply_dart_typing(
@@ -859,7 +853,7 @@ def plan_install(
             changes[str(ignore)] = (
                 "# Include production and tests; replace Semgrep's default test exclusions.\n"
             )
-        configure_typing_checks(root, package)
+        configure_typing_checks(package)
         configure = {
             "python": configure_python,
             "dart": configure_dart,
