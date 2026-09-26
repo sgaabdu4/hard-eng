@@ -219,10 +219,11 @@ def zizmor_config(directory: Path, temporary: Path) -> str:
     """actionlint rejects `$/`, zizmor's only fix for self-repository, so that audit is off."""
     import yaml
 
-    config: object = {}
+    empty: dict[str, object] = {}
+    config: object = empty
     for name in ("zizmor.yml", ".github/zizmor.yml"):
         if (directory / name).is_file():
-            config = yaml.safe_load((directory / name).read_text()) or {}
+            config = yaml.safe_load((directory / name).read_text()) or empty
             break
     rules = config.setdefault("rules", {}) if isinstance(config, dict) else None
     if not isinstance(rules, dict):
