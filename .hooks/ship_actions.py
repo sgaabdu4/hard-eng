@@ -57,8 +57,8 @@ def run_check(checkout: Path, base: str, environment: dict[str, str]) -> int:
 
 
 def pre_push(root: Path) -> int:
-    for number in (signal.SIGTERM, signal.SIGHUP):
-        signal.signal(number, interrupted)
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGHUP, interrupted)
     policy = load_policy(root)
     assert policy is not None
     started = time.monotonic()
