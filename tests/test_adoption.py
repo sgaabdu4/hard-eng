@@ -532,3 +532,39 @@ def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
     assert (target / ".claude/skills/he/SKILL.md").is_file()
     assert not (target / ".agents/hard-eng").exists()
     assert git(target, "status", "--porcelain") == ""
+
+
+def test_install_replaces_older_skill_files_behind_an_old_link(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    old = tmp_path / ".agents/hard-eng/current/skills/he"
+    old.mkdir(parents=True)
+    (old / "SKILL.md").write_text("older release\n")
+    (tmp_path / ".agents/skills").mkdir()
+    (tmp_path / ".agents/skills/he").symlink_to("../hard-eng/current/skills/he")
+    installer.install(tmp_path)
+    skill = tmp_path / ".agents/skills/he/SKILL.md"
+    assert not skill.parent.is_symlink()
+    assert (
+        skill.read_text()
+        == (installer.SOURCE / ".agents/skills/he/SKILL.md").read_text()
+    )
+    assert not (tmp_path / ".agents/hard-eng").exists()
+
+
+def test_update_retries_old_copy_cleanup_after_a_failed_attempt(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    (target / ".agents/hard-eng/current").mkdir(parents=True)
+    settings = target / ".claude/settings.local.json"
+    settings.write_text("{")
+    select_release(source, monkeypatch)
+    with pytest.raises(ValueError):
+        update.update(target)
+    settings.write_text('{"outputStyle": "Plain English"}')
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    update.update(target)
+    assert not (target / ".agents/hard-eng").exists()
+    assert json.loads(settings.read_text()) == {}

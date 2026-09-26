@@ -707,6 +707,7 @@ def commit_update(
 
 
 def repair_current_hook(root: Path, previous: str) -> str:
+    retire_local_generation(root)
     if not pre_push_missing(root):
         return "No newer CI-verified Hard Eng revision is available."
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:

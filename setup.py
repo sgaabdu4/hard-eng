@@ -682,7 +682,7 @@ def unused_skills(root: Path) -> set[str]:
 def scaffold_changes(
     root: Path, previous: Path | None, unused: set[str]
 ) -> dict[str, str]:
-    from update import scaffold_files, without_skills
+    from update import retired_parent, scaffold_files, without_skills
 
     changes = {
         name: (SOURCE / name).read_text()
@@ -690,7 +690,9 @@ def scaffold_changes(
     }
     for name, content in changes.items():
         target = root / name
-        if target.exists() and target.read_text() != content:
+        if retired_parent(root, name) or not target.exists():
+            continue
+        if target.read_text() != content:
             old = previous / name if previous is not None else None
             if (
                 old is None
