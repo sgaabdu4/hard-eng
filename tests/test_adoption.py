@@ -309,8 +309,14 @@ def test_setup_rerun_leaves_local_settings_edits_uncommitted(
     assert "permissions" in settings.read_text()
 
 
+@pytest.mark.parametrize(
+    "local", [".claude/settings.local.json", ".github/hooks/project-policy.json"]
+)
 def test_install_keeps_compound_project_hooks_and_the_script_they_run(
-    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    installer: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    local: str,
 ) -> None:
     repository(tmp_path)
     write_old_generation(tmp_path)
@@ -330,8 +336,8 @@ def test_install_keeps_compound_project_hooks_and_the_script_they_run(
     }
     current["hooks"]["PreToolUse"][0]["hooks"] += [compound, generated]
     settings.write_text(json.dumps(current))
-    local = {"hooks": {"PreToolUse": [{"hooks": [relative]}]}}
-    (tmp_path / ".claude/settings.local.json").write_text(json.dumps(local))
+    policy = {"hooks": {"PreToolUse": [{"hooks": [relative]}]}}
+    (tmp_path / local).write_text(json.dumps(policy))
     copilot = tmp_path / ".github/hooks/hard-eng.json"
     wiring = json.loads(copilot.read_text())
     mixed = wiring["hooks"]["preToolUse"][0] | {"powershell": "./guard.ps1"}
