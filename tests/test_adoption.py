@@ -656,3 +656,31 @@ def test_candidate_ignores_base_changes_the_branch_lacks(
     git(target, "switch", "feature/update")
     changes: dict[str, str | None] = {"new-managed.mjs": "export const value = 1;\n"}
     update.verify_candidate(target, source, changes, {}, target.parent / "candidate")
+
+
+def test_setup_runs_the_verified_revisions_own_install_step(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    git(source, "branch", "-M", "main")
+    entry = (source / "setup.sh").read_text()
+    installer = source / ".hooks/update.py"
+    main_installer = installer.read_text()
+    (source / "setup.sh").write_text(entry.replace(", repair=True", ""))
+    installer.write_text(
+        "def latest_verified(previous: str) -> None:\n    return None\n\n\n"
+        "def update(root: object) -> str:\n    return 'Verified installer ran.'\n"
+    )
+    verified = commit(source, "verified installer without repair")
+    (source / "setup.sh").write_text(entry)
+    installer.write_text(
+        main_installer
+        + f"\n\ndef latest_verified(previous: str) -> str:\n    return {verified!r}\n"
+    )
+    commit(source, "main setup passes repair")
+    monkeypatch.setenv("UV_OFFLINE", "1")
+    result = subprocess.run(
+        ["sh"], input=entry, cwd=target, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Verified installer ran." in result.stdout
