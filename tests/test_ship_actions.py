@@ -609,7 +609,9 @@ def test_interrupted_pre_push_removes_its_snapshot(
     hook.stdin.write(f"refs/heads/task {revision} refs/heads/task {revision}\n")
     hook.stdin.close()
     deadline = time.monotonic() + 60
-    while not marker.exists() and time.monotonic() < deadline:
+    while " " not in (marker.read_text() if marker.exists() else "") and (
+        time.monotonic() < deadline
+    ):
         time.sleep(0.1)
     child, checkout = marker.read_text().split(" ", 1)
     hook.send_signal(signal_number)

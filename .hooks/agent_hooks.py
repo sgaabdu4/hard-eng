@@ -367,6 +367,20 @@ def saved_session(state: Path | None) -> tuple[str, JsonObject]:
     return base, before
 
 
+def unchanged_notice(root: Path, notice: str) -> str:
+    """A session that changed nothing here has nothing to verify, so staleness only warns."""
+    message = (
+        f"{notice}. No code checks were run for this planning-only handoff."
+        if notice
+        else "No repository changes since this session's Git base; no code checks were run."
+    )
+    try:
+        require_current(root)
+    except ValueError as error:
+        return f"{message}\n{error}"
+    return message
+
+
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
     from plans import build_in_progress, planning_feedback, planning_only
 
@@ -394,17 +408,13 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 "reason": notice
                 + ". Continue only authorized planning and verification. Ask genuine blocking questions when needed. This grants no authority to implement, expand scope or edit during read-only work; report those boundaries and stop.",
             }
+        if not changed.strip() and state is not None and state.exists():
+            return {"systemMessage": unchanged_notice(root, notice)}
         if notice and planning_only(root, set(changed.splitlines())):
             require_current(root)
             return {
                 "systemMessage": notice
                 + ". No code checks were run for this planning-only handoff."
-            }
-        if not changed.strip() and state is not None and state.exists():
-            require_current(root)
-            return {
-                "systemMessage": notice
-                or "No repository changes since this session's Git base; no code checks were run."
             }
         claim = str(
             payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
