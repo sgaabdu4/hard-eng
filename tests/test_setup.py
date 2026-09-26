@@ -603,6 +603,8 @@ def test_javascript_file_scope_keeps_application_tests_and_declarations(
 
 def repository(root: Path) -> None:
     subprocess.run(["git", "init", "-q", str(root)], check=True)
+    with (root / ".git/config").open("a") as config:
+        config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
     (root / "package.json").write_text('{"private":true}')
     (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
 
