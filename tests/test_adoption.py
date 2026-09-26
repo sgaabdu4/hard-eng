@@ -308,6 +308,7 @@ def test_setup_rerun_leaves_local_settings_edits_uncommitted(
     monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
     update.update(target, repair=True)
     assert override.read_text().endswith("Local deployment rule\n")
+    assert "[shared instructions](AGENTS.md)" in override.read_text()
     assert "permissions" not in git(target, "show", "HEAD:.claude/settings.json")
     assert "permissions" in settings.read_text()
 

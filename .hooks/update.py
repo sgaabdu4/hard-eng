@@ -636,6 +636,7 @@ def repair_installation(root: Path, previous: str) -> str:
         if content is not None
         and (
             not (root / name).exists()
+            or name in {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}
             or any(old in (root / name).read_text(errors="replace") for old in retired)
             or OLD_GENERATION_SCRIPT.search((root / name).read_text(errors="replace"))
         )
