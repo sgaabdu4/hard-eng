@@ -13,7 +13,7 @@ from types import ModuleType
 
 import pytest
 import tool_setup
-from conftest import SOURCE, use_installed_mise
+from conftest import SOURCE, init, use_installed_mise
 from gate_config import (
     GateConfig,
     Group,
@@ -749,6 +749,29 @@ def test_ci_security_gate_turns_off_only_the_self_repository_audit(
         rules = yaml.safe_load(log.read())["rules"]
     assert rules["self-repository"] == {"disable": True}
     assert ("unpinned-uses" in rules) == bool(project)
+
+
+@pytest.mark.parametrize("workflow", [False, True])
+def test_ci_security_passes_only_when_no_workflows_exist_to_collect(
+    tmp_path: Path, workflow: bool
+) -> None:
+    from gitleaks_scan import run_gate_command
+
+    project = tmp_path / "project"
+    init(project)
+    if workflow:
+        (project / ".github/workflows").mkdir(parents=True)
+        (project / ".github/workflows/ci.yml").write_text("on: push\n")
+    zizmor = tmp_path / "bin/zizmor"
+    zizmor.parent.mkdir()
+    zizmor.write_text(f"#!{sys.executable}\nraise SystemExit(3)\n")
+    zizmor.chmod(0o755)
+    with (tmp_path / "log").open("w+") as log:
+        result = run_gate_command("ci-security", [str(zizmor)], project, 30, log, log)
+        log.seek(0)
+        output = log.read()
+    assert result.returncode == (3 if workflow else 0)
+    assert ("No GitHub workflows to audit" in output) != workflow
 
 
 def test_check_output_survives_a_non_blocking_pipe(

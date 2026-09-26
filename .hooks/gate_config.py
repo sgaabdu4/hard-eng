@@ -599,6 +599,13 @@ def validate_manifest_groups(
             raise ValueError(f"{path}: package language must be {language}")
 
 
+def has_workflows(root: Path, files: list[Path]) -> bool:
+    return any(
+        path.parent == root / ".github/workflows" and path.suffix in {".yml", ".yaml"}
+        for path in files
+    )
+
+
 def validate_required_checks(root: Path, config: GateConfig) -> None:
     from project_setup import is_deployment_file, is_shell_script
 
@@ -611,10 +618,7 @@ def validate_required_checks(root: Path, config: GateConfig) -> None:
     required = {"secrets-files"}
     if config.get("scan_git_history", True):
         required.add("secrets-history")
-    if any(
-        path.parent == root / ".github/workflows" and path.suffix in {".yml", ".yaml"}
-        for path in files
-    ):
+    if has_workflows(root, files):
         required.update({"workflows", "ci-security"})
     if any(is_shell_script(path) for path in files):
         required.add("shell")
