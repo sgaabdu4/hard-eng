@@ -216,6 +216,16 @@ def test_blockers_none_may_carry_a_note(
             validate_plan(path)
 
 
+def test_slices_may_carry_their_own_status(tmp_path: Path, completed_plan: str) -> None:
+    path = tmp_path / "PLAN.md"
+    slices = "## Acceptance + steps\n\nStatus: In progress\n"
+    path.write_text(completed_plan.replace("## Acceptance + steps\n", slices, 1))
+    assert validate_plan(path) == "Complete"
+    path.write_text(path.read_text().replace("Status: Complete\n", "", 1))
+    with pytest.raises(ValueError, match="one 'Status:' field, found 0"):
+        validate_plan(path)
+
+
 @pytest.mark.parametrize("status", ["Ready", "Complete"])
 def test_ready_requires_baseline_and_rendered_evidence(
     tmp_path: Path, completed_plan: str, visual_plan: str, status: str
