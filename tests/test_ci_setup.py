@@ -82,6 +82,7 @@ def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
     assert captured[captured.index("pnpm") :] == [
         "pnpm",
         "dlx",
+        "--config.ignore-scripts=false",
         "--allow-build=@jdxcode/mise",
         "--package=@jdxcode/mise@latest",
         "mise",
@@ -302,6 +303,7 @@ jobs:
         in commands[1]
     )
     assert "flutter@latest pnpm@11.18.0" in commands[0]
+    assert all("dlx --config.ignore-scripts=false --allow-build" in c for c in commands)
     path.write_text(migrated)
     changes.clear()
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
@@ -597,3 +599,16 @@ def test_customised_workflow_names_missing_sdk(
     assert "Add flutter@latest to its mise install and exec tool lists." in (
         capsys.readouterr().err
     )
+
+
+def test_installed_launcher_gains_ignore_scripts_override(tmp_path: Path) -> None:
+    """A project's pnpm ignoreScripts must not skip mise's binary download in CI."""
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    installed = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    path.write_text(installed.replace("--config.ignore-scripts=false ", ""))
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    migrated = changes[str(path.relative_to(tmp_path))]
+    assert "pnpm dlx --allow-build" not in migrated
+    assert migrated.count("pnpm dlx --config.ignore-scripts=false --allow-build") == 4

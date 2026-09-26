@@ -54,8 +54,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}
         run: |
-          pnpm dlx --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config install uv@latest &&
-          pnpm dlx --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config exec uv@latest -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
+          pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config install uv@latest &&
+          pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config exec uv@latest -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
       - name: Run required checks
         if: steps.impact.outputs.docs_only != 'true'
         env:
@@ -72,5 +72,5 @@ jobs:
           MISE_USE_VERSIONS_HOST: 'false'
           MISE_MINIMUM_RELEASE_AGE: 0s
         run: |
-          pnpm dlx --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config install uv@latest python@3.12 node@latest dart@latest &&
-          MISE_FETCH_REMOTE_VERSIONS_CACHE=1h pnpm dlx --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config exec uv@latest python@3.12 node@latest dart@latest -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
+          pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config install uv@latest python@3.12 node@latest dart@latest &&
+          MISE_FETCH_REMOTE_VERSIONS_CACHE=1h pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --no-config exec uv@latest python@3.12 node@latest dart@latest -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
