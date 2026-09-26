@@ -316,11 +316,16 @@ def test_install_removes_every_old_hook_command(
     wiring = json.loads(copilot.read_text())
     wiring["hooks"]["preToolUse"][0]["powershell"] = "./guard.ps1"
     copilot.write_text(json.dumps(wiring))
+    policy = tmp_path / ".github/hooks/project-policy.json"
+    guard = {"type": "command", "bash": "./guard.sh"}
+    old = {"type": "command", "bash": "bash .hard-eng/hook.sh copilot"}
+    policy.write_text(json.dumps({"version": 1, "hooks": {"preToolUse": [old, guard]}}))
     git(tmp_path, "add", "--force", ".")
     commit(tmp_path, "old generation wiring")
     installer.install(tmp_path)
-    for name in (settings, copilot):
+    for name in (settings, copilot, policy):
         assert ".hard-eng" not in name.read_text()
+    assert json.loads(policy.read_text())["hooks"]["preToolUse"] == [guard]
     (group,) = json.loads(settings.read_text())["hooks"]["PreToolUse"]
     assert group["hooks"] == [{"type": "command", "command": "project-guard"}]
     assert not (tmp_path / ".hard-eng/hook.sh").exists()
@@ -360,3 +365,30 @@ def test_install_imports_agents_md_under_a_parent_claude_md(
     repository(root)
     installer.install(root)
     assert "\n@AGENTS.md\n" in (root / "CLAUDE.md").read_text()
+
+
+def test_install_leaves_old_scripts_behind_a_linked_directory(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "hook.sh").write_text(OLD_FILES[".hard-eng/hook.sh"])
+    root = tmp_path / "project"
+    root.mkdir()
+    repository(root)
+    (root / ".hard-eng").symlink_to(shared, target_is_directory=True)
+    installer.install(root)
+    assert (shared / "hook.sh").read_text() == OLD_FILES[".hard-eng/hook.sh"]
+
+
+def test_setup_rerun_imports_agents_md_into_a_new_project_claude_md(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, target, _ = release
+    (target / "CLAUDE.md").write_text("Project rules\n")
+    commit(target, "project rules")
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    update.update(target, repair=True)
+    text = (target / "CLAUDE.md").read_text()
+    assert "\n@AGENTS.md\n" in text
+    assert text.endswith("Project rules\n")

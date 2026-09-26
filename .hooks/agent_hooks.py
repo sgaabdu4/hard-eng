@@ -176,7 +176,7 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
                 hook_events(agent)[event],
                 owned_hook_entry(agent, event, command, 3600),
             )
-    _remove_old_generation(hooks)
+    remove_old_generation(hooks)
 
 
 HOOK_FILES = {
@@ -198,7 +198,7 @@ def _old_generation(handler: JsonValue) -> bool:
     )
 
 
-def _remove_old_generation(hooks: JsonObject) -> None:
+def remove_old_generation(hooks: JsonObject) -> None:
     for native, entries in list(hooks.items()):
         if isinstance(entries, list):
             kept = _without_old_generation(entries)

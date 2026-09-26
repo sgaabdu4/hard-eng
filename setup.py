@@ -167,6 +167,14 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
         merged = merge(current, additions)
         if merged != json.loads(text):
             changes[name] = json_file(root, merged)
+    for target in root.glob(".github/hooks/*.json"):
+        name = str(target.relative_to(root))
+        current = json.loads(target.read_text())
+        if name not in changes and isinstance(hooks := current.get("hooks"), dict):
+            before = json.dumps(hooks)
+            agent_hooks.remove_old_generation(hooks)
+            if json.dumps(hooks) != before:
+                changes[name] = json_file(root, current)
 
 
 def configure_mcp(root: Path, changes: dict[str, str]) -> None:
