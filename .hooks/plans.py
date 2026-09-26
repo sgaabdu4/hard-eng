@@ -57,6 +57,14 @@ def field(content: str, name: str) -> str:
     return values[0].strip()
 
 
+def plan_status(content: str) -> str | None:
+    """Plans written before the Status field are historical, not active."""
+    try:
+        return field(content, "Status")
+    except ValueError:
+        return None
+
+
 def proof(content: str, allowed: set[str]) -> None:
     result = field(content, "Result")
     if result not in allowed:
@@ -200,7 +208,7 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
     unfinished = False
     for path in selected or paths:
         content = path.read_text()
-        if field(content, "Status") != "Draft":
+        if plan_status(content) != "Draft":
             continue
         try:
             sections = plan_sections(content, allow_placeholders=True)
@@ -240,7 +248,9 @@ def build_in_progress(root: Path, changed: set[str]) -> bool:
     try:
         contents = [path.read_text() for path in selected or paths]
         # Complete plans are validated as usual; the unfinished ones decide.
-        active = [text for text in contents if field(text, "Status") != "Complete"]
+        active = [
+            text for text in contents if plan_status(text) not in {None, "Complete"}
+        ]
         return bool(active) and all(
             field(text, "Status") == "Ready"
             and field(
@@ -322,7 +332,9 @@ def validate_plans(
     applicable = [path for path in paths if str(path.relative_to(root)) in changed]
     if not applicable:
         applicable = [
-            path for path in paths if field(path.read_text(), "Status") != "Complete"
+            path
+            for path in paths
+            if plan_status(path.read_text()) not in {None, "Complete"}
         ]
     if not applicable and explicit_stage:
         applicable = paths

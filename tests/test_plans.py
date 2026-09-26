@@ -11,7 +11,7 @@ from types import ModuleType
 import pytest
 from conftest import SOURCE, git
 from gate_config import GateConfig
-from plans import ux_proof, validate_plan, validate_plans
+from plans import planning_feedback, ux_proof, validate_plan, validate_plans
 from shipping import ShippingPolicy
 
 
@@ -734,3 +734,31 @@ def test_stop_accepts_a_ready_plan_mid_build_until_ship_is_claimed(
     else:
         assert "decision" not in response
         assert response["systemMessage"].startswith("Hard Eng: build in progress")
+
+
+def test_plan_without_status_predates_the_status_field(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    legacy = tmp_path / "features/legacy/PLAN.md"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("# Legacy\n\n```hard-eng-state\nphase: build\n```\n")
+    git(tmp_path, "add", ".")
+    git(
+        tmp_path,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.test",
+        "commit",
+        "-qm",
+        "historical plans",
+    )
+    assert validate_plans(tmp_path) == "Draft"
+    assert planning_feedback(tmp_path, set()) == ("", False)
+    (tmp_path / "PLAN.md").unlink()
+    (tmp_path / "new.py").write_text("print('new work')\n")
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(tmp_path)
+    legacy.write_text(legacy.read_text() + "Reopened.\n")
+    with pytest.raises(ValueError, match="features/legacy/PLAN.md: plan needs one"):
+        validate_plans(tmp_path)
