@@ -678,3 +678,51 @@ def test_first_push_to_an_empty_remote_checks_everything(
     )
     with pytest.raises(ValueError, match="direct base updates are blocked"):
         runner.pre_push()
+
+
+def test_new_branch_behind_its_base_is_judged_on_its_own_changes(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    completed_plan: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, remote = tmp_path, tmp_path.parent / f"{tmp_path.name}-behind.git"
+    shutil.copytree(
+        SOURCE / ".hooks", root / ".hooks", ignore=shutil.ignore_patterns("__pycache__")
+    )
+    (root / ".gitignore").write_text("__pycache__/\n")
+    noop = {"name": "noop", "command": [sys.executable, "-c", "pass"]}
+    gates: dict[str, object] = {
+        "packages": [],
+        "shipping": shipping_policy,
+        "shared": [noop],
+    }
+    (root / "hard-eng.gates.json").write_text(json.dumps(gates))
+    plan = root / "PLAN.md"
+    plan.write_text(completed_plan.replace("Status: Complete", "Status: Ready"))
+    for key, value in (
+        ("user.name", "Hook Fixture"),
+        ("user.email", "hook@example.invalid"),
+    ):
+        git(root, "config", key, value)
+    git(root, "branch", "-M", "main")
+    commit(root, "base with a Ready plan")
+    git(root, "init", "--bare", "-q", str(remote))
+    git(root, "remote", "add", "origin", str(remote))
+    git(root, "switch", "-qc", "feature")
+    (root / "features/own").mkdir(parents=True)
+    (root / "features/own/PLAN.md").write_text(completed_plan)
+    (root / "app.py").write_text("print('own work')\n")
+    revision = commit(root, "own work").strip()
+    git(root, "switch", "-q", "main")
+    plan.write_text(plan.read_text() + "\nThe base moved on.\n")
+    commit(root, "base edit after branching")
+    git(root, "push", "-q", "--no-verify", "origin", "main")
+    git(root, "switch", "-q", "feature")
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(f"refs/heads/feature {revision} refs/heads/feature {'0' * 40}\n"),
+    )
+    assert runner.pre_push() == 0
