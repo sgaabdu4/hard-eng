@@ -15,6 +15,44 @@ type JsonValue = (
 type JsonObject = dict[str, JsonValue]
 
 
+def expanded(value: object) -> bool:
+    if isinstance(value, dict):
+        return bool(value)
+    return isinstance(value, list) and any(expanded(item) for item in value)
+
+
+def json_text(value: object, unit: str = "  ", indent: str = "", used: int = 0) -> str:
+    if isinstance(value, list) and not expanded(value):
+        flat = json.dumps(value, separators=(", ", ": "))
+        if used + len(flat) <= 80:
+            return flat
+    if not isinstance(value, (dict, list)) or not value:
+        return json.dumps(value)
+    inner = indent + unit
+    entries = (
+        [(f"{json.dumps(key)}: ", item) for key, item in value.items()]
+        if isinstance(value, dict)
+        else [("", item) for item in value]
+    )
+    last = len(entries) - 1
+    body = ",\n".join(
+        inner
+        + head
+        + json_text(
+            item, unit, inner, len((inner + head).expandtabs(2)) + (index < last)
+        )
+        for index, (head, item) in enumerate(entries)
+    )
+    opening, closing = "{}" if isinstance(value, dict) else "[]"
+    return f"{opening}\n{body}\n{indent}{closing}"
+
+
+def json_file(root: Path, value: object) -> str:
+    """Match Biome's tab default when the project formats with Biome, else Prettier's."""
+    biome = any((root / name).exists() for name in ("biome.json", "biome.jsonc"))
+    return json_text(value, "\t" if biome else "  ") + "\n"
+
+
 Report = TypedDict(
     "Report",
     {"type": str, "path": str, "tests": str, "coverage": str, "stdout": bool},

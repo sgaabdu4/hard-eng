@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 from urllib.parse import urlparse
 
-from gate_config import JsonObject
+from gate_config import JsonObject, json_file
 
 APPWRITE_CLOUD_MCP_URL = "https://mcp.appwrite.io/"
 
@@ -283,7 +283,7 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
             )
         if servers:
             existing.update(servers)
-            changes[name] = json.dumps(current, indent=2) + "\n"
+            changes[name] = json_file(root, current)
     target = root / ".codex/config.toml"
     codex_config = target.read_text() if target.exists() else ""
     parsed = tomllib.loads(codex_config)

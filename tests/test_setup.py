@@ -11,6 +11,7 @@ from gate_config import (
     Gate,
     GateConfig,
     Group,
+    json_file,
     parse_config,
     validate_dart_boundaries,
     validate_required_checks,
@@ -488,7 +489,7 @@ def test_plain_dart_uses_native_coverage_tool(
     assert result.returncode == 0, result.stderr
     written = (tmp_path / "hard-eng.gates.json").read_text()
     config = json.loads(written)
-    assert written == installer.gates_text(config) + "\n"
+    assert written == json_file(tmp_path, config)
     checks = {gate["role"]: gate for gate in config["packages"][0]["checks"]}
     assert [
         gate["name"]
@@ -612,6 +613,24 @@ def snapshot(root: Path) -> dict[str, bytes]:
         for path in root.rglob("*")
         if path.is_file() and ".git" not in path.parts
     }
+
+
+def test_setup_json_stays_in_the_project_biome_layout(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "index.js").write_text("export {};\n")
+    (tmp_path / "biome.json").write_text("{}\n")
+    changes = installer.plan_install(tmp_path.resolve())[0]
+    written = {
+        name: text
+        for name, text in changes.items()
+        if name.endswith(".json") and not name.startswith(".agents/")
+    }
+    assert {".mcp.json", ".hooks/hard-eng-source.json", "tsconfig.json"} <= set(written)
+    for text in written.values():
+        assert text == json_file(tmp_path, json.loads(text))
+        assert text.startswith("{\n\t")
 
 
 def test_install_preserves_project_and_repeats(

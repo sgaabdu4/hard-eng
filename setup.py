@@ -111,6 +111,7 @@ def gate_config(root: Path) -> GateConfig:
 
 def configure_hooks(root: Path, changes: dict[str, str]) -> None:
     import agent_hooks
+    from gate_config import json_file
 
     codex_config = root / ".codex/config.toml"
     if codex_config.exists():
@@ -169,7 +170,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
             )
         merged = merge(current, additions)
         if merged != json.loads(text):
-            changes[name] = json.dumps(merged, indent=2) + "\n"
+            changes[name] = json_file(root, merged)
 
 
 def configure_mcp(root: Path, changes: dict[str, str]) -> None:
@@ -389,6 +390,8 @@ def configure_dart_generated(
 def configure_dart_scanner(
     root: Path, directory: Path, changes: dict[str, str]
 ) -> None:
+    from gate_config import json_file
+
     scanner_names = (
         ".dart-decimaterc",
         ".dart-decimaterc.json",
@@ -399,31 +402,29 @@ def configure_dart_scanner(
     if not any((directory / name).exists() for name in scanner_names):
         scanner: dict[str, list[str]] = {"ignore_patterns": [".agents/**"]}
         path = directory / ".dart-decimaterc.json"
-        changes[str(path.relative_to(root))] = json.dumps(scanner, indent=2) + "\n"
+        changes[str(path.relative_to(root))] = json_file(root, scanner)
 
 
 def configure_javascript(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
+    from gate_config import json_file
     from project_setup import javascript_manager
 
     manager = javascript_manager(directory)[0]
     target = directory / "tsconfig.json"
     if not target.exists():
-        changes[str(target.relative_to(root))] = (
-            json.dumps(
-                {
-                    "compilerOptions": {
-                        "strict": True,
-                        "allowJs": True,
-                        "checkJs": True,
-                        "noEmit": True,
-                    },
-                    "include": [*package["sources"], "test", "tests"],
+        changes[str(target.relative_to(root))] = json_file(
+            root,
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "allowJs": True,
+                    "checkJs": True,
+                    "noEmit": True,
                 },
-                indent=2,
-            )
-            + "\n"
+                "include": [*package["sources"], "test", "tests"],
+            },
         )
     scripts = json.loads((directory / "package.json").read_text()).get("scripts", {})
     if "typecheck" in scripts and not any(
@@ -782,34 +783,6 @@ def retired_config(root: Path) -> GateConfig | None:
     return config
 
 
-def expanded(value: object) -> bool:
-    if isinstance(value, dict):
-        return bool(value)
-    return isinstance(value, list) and any(expanded(item) for item in value)
-
-
-def gates_text(value: object, indent: str = "", used: int = 0) -> str:
-    if isinstance(value, list) and not expanded(value):
-        flat = json.dumps(value, separators=(", ", ": "))
-        if used + len(flat) <= 80:
-            return flat
-    if not isinstance(value, (dict, list)) or not value:
-        return json.dumps(value)
-    inner = indent + "  "
-    entries = (
-        [(f"{json.dumps(key)}: ", item) for key, item in value.items()]
-        if isinstance(value, dict)
-        else [("", item) for item in value]
-    )
-    last = len(entries) - 1
-    body = ",\n".join(
-        inner + head + gates_text(item, inner, len(inner + head) + (index < last))
-        for index, (head, item) in enumerate(entries)
-    )
-    opening, closing = "{}" if isinstance(value, dict) else "[]"
-    return f"{opening}\n{body}\n{indent}{closing}"
-
-
 def plan_install(
     root: Path, previous: Path | None = None
 ) -> tuple[dict[str, str], dict[str, str], Path, str]:
@@ -837,16 +810,21 @@ def plan_install(
         revision = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=SOURCE, text=True
         ).strip()
-    changes[".hooks/hard-eng-source.json"] = json.dumps({"revision": revision}) + "\n"
+    from gate_config import (
+        json_file,
+        parse_config,
+        repository_files,
+        typescript_packages,
+    )
+
+    changes[".hooks/hard-eng-source.json"] = json_file(root, {"revision": revision})
     generated = (
         retired_config(root)
         if (root / "hard-eng.gates.json").exists()
         else gate_config(root)
     )
     if generated is not None:
-        changes["hard-eng.gates.json"] = gates_text(generated) + "\n"
-    from gate_config import parse_config, repository_files, typescript_packages
-
+        changes["hard-eng.gates.json"] = json_file(root, generated)
     config = parse_config(
         changes.get("hard-eng.gates.json") or (root / "hard-eng.gates.json").read_text()
     )
@@ -885,7 +863,7 @@ def plan_install(
     if "hard-eng.gates.json" in changes or config != json.loads(
         (root / "hard-eng.gates.json").read_text()
     ):
-        changes["hard-eng.gates.json"] = gates_text(config) + "\n"
+        changes["hard-eng.gates.json"] = json_file(root, config)
     hook, launcher = prepare_hook(root)
     links = prepare_skill_links(root, unused)
     validate_destinations(root, changes, hook)

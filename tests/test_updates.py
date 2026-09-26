@@ -12,7 +12,7 @@ from types import ModuleType
 import pytest
 import update
 from conftest import SOURCE, commit, git, init
-from gate_config import JsonObject
+from gate_config import JsonObject, json_file
 from shipping import ShippingError, ShippingPolicy
 from test_setup import repository as setup_repository
 from test_setup import snapshot
@@ -849,7 +849,7 @@ def test_unverified_scaffold_update_fails(
         update.check_scaffold_update(target, base)
 
 
-def test_gates_file_matches_biome_layout(installer: ModuleType) -> None:
+def test_written_json_matches_the_project_formatter_layout(tmp_path: Path) -> None:
     fits, wraps = "a" * 46, "a" * 47
     config: JsonObject = {
         "version": 1,
@@ -866,9 +866,7 @@ def test_gates_file_matches_biome_layout(installer: ModuleType) -> None:
             }
         ],
     }
-    assert (
-        installer.gates_text(config) + "\n"
-        == f"""{{
+    prettier = f"""{{
   "version": 1,
   "shipping": {{
     "base": "main",
@@ -897,6 +895,10 @@ def test_gates_file_matches_biome_layout(installer: ModuleType) -> None:
   ]
 }}
 """
+    assert json_file(tmp_path, config) == prettier
+    (tmp_path / "biome.json").write_text("{}\n")
+    assert json_file(tmp_path, config) == re.sub(
+        "(?m)^(?:  )+", lambda indent: "\t" * (len(indent[0]) // 2), prettier
     )
 
 
@@ -939,7 +941,7 @@ def test_retired_families_config_is_regenerated_and_reported(
     assert "removed ([Errno 2] No such file or directory" in notice
     written = (tmp_path / "hard-eng.gates.json").read_text()
     config = json.loads(written)
-    assert written == installer.gates_text(config) + "\n"
+    assert written == json_file(tmp_path, config)
     assert "families" not in config and "phases" not in config
     assert [package["language"] for package in config["packages"]] == ["javascript"]
     assert [gate["command"] for gate in config["shared"]].count(secrets) == 1
