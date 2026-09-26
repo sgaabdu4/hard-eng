@@ -311,11 +311,11 @@ def test_setup_rerun_leaves_local_settings_edits_uncommitted(
 
 
 def test_old_generation_removal_keeps_compound_project_hooks() -> None:
-    compound = {
+    compound: JsonObject = {
         "type": "command",
         "command": OLD_COMMAND.format("hook.sh", "claude pretooluse") + " && ./guard",
     }
-    generated = {
+    generated: JsonObject = {
         "type": "command",
         "command": 'bash "$(git rev-parse --show-toplevel)/.hard-eng/hook.sh" claude',
     }
