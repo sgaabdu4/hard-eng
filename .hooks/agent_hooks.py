@@ -25,10 +25,19 @@ def configure_instructions(
     claude = root / "CLAUDE.md"
     linked = claude.is_symlink() and claude.resolve() == root / "AGENTS.md"
     text = claude.read_text() if claude.is_file() and not linked else ""
-    # Claude Code reads AGENTS.md itself unless one of these files replaces it.
-    if text.split(f"{end}\n\n", 1)[-1].strip() or any(
-        (root / name).exists() for name in (".claude/CLAUDE.md", "CLAUDE.local.md")
-    ):
+    listed = subprocess.check_output(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=root,
+        text=True,
+    ).split("\0")
+    # Claude Code reads AGENTS.md itself unless a CLAUDE.md on the session's path replaces it.
+    replacing = [
+        name
+        for name in {*listed, ".claude/CLAUDE.md", "CLAUDE.local.md"} - {"CLAUDE.md"}
+        if Path(name).name in {"CLAUDE.md", "CLAUDE.local.md"}
+        and ((root / name).is_symlink() or (root / name).exists())
+    ]
+    if not linked and (text.split(f"{end}\n\n", 1)[-1].strip() or replacing):
         instructions["CLAUDE.md"] = "@AGENTS.md"
     if (root / "AGENTS.override.md").exists():
         instructions["AGENTS.override.md"] = (

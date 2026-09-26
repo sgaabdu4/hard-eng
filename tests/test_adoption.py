@@ -328,8 +328,10 @@ def test_install_keeps_compound_project_hooks_and_the_script_they_run(
         "type": "command",
         "command": "bash .hard-eng/bootstrap.sh claude && ./guard",
     }
-    current["hooks"]["PreToolUse"][0]["hooks"] += [compound, relative, generated]
+    current["hooks"]["PreToolUse"][0]["hooks"] += [compound, generated]
     settings.write_text(json.dumps(current))
+    local = {"hooks": {"PreToolUse": [{"hooks": [relative]}]}}
+    (tmp_path / ".claude/settings.local.json").write_text(json.dumps(local))
     copilot = tmp_path / ".github/hooks/hard-eng.json"
     wiring = json.loads(copilot.read_text())
     mixed = wiring["hooks"]["preToolUse"][0] | {"powershell": "./guard.ps1"}
@@ -341,7 +343,7 @@ def test_install_keeps_compound_project_hooks_and_the_script_they_run(
     assert mixed in json.loads(copilot.read_text())["hooks"]["preToolUse"]
     (group,) = json.loads(settings.read_text())["hooks"]["PreToolUse"]
     project = {"type": "command", "command": "project-guard"}
-    assert group["hooks"] == [project, compound, relative]
+    assert group["hooks"] == [project, compound]
     assert (tmp_path / ".hard-eng/hook.sh").is_file()
     assert (tmp_path / ".hard-eng/bootstrap.sh").is_file()
     assert not (tmp_path / "AGENTS.override.md").exists()

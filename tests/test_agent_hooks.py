@@ -17,7 +17,9 @@ from gate_config import Gate, Group, JsonObject, affected_groups
 from shipping import ShippingPolicy
 
 
-@pytest.mark.parametrize("existing", ["none", "files", "symlink", "local"])
+@pytest.mark.parametrize(
+    "existing", ["none", "files", "symlink", "local", "nested", "linked-local"]
+)
 def test_native_instruction_paths_preserve_project_rules(
     installer: ModuleType, tmp_path: Path, existing: str
 ) -> None:
@@ -27,11 +29,14 @@ def test_native_instruction_paths_preserve_project_rules(
     if existing == "files":
         for name in ("CLAUDE.md", "AGENTS.override.md"):
             (tmp_path / name).write_bytes(b"# Custom rules\r\nPreserve these.\r\n")
-    elif existing == "symlink":
+    elif existing in {"symlink", "linked-local"}:
         (tmp_path / "AGENTS.md").write_text("# Existing rules\nKeep these.\n")
         (tmp_path / "CLAUDE.md").symlink_to("AGENTS.md")
-    elif existing == "local":
+    if existing in {"local", "linked-local"}:
         (tmp_path / "CLAUDE.local.md").write_text("Personal notes\n")
+    elif existing == "nested":
+        (tmp_path / "apps/web").mkdir(parents=True)
+        (tmp_path / "apps/web/CLAUDE.md").write_text("Web rules\n")
     installer.install(tmp_path)
     names = (
         ["AGENTS.md"]
@@ -41,7 +46,7 @@ def test_native_instruction_paths_preserve_project_rules(
     before = {name: (tmp_path / name).read_bytes() for name in names}
     installer.install(tmp_path)
     assert before == {name: (tmp_path / name).read_bytes() for name in names}
-    if existing == "symlink":
+    if existing in {"symlink", "linked-local"}:
         assert (tmp_path / "CLAUDE.md").is_symlink()
         assert before["CLAUDE.md"] == before["AGENTS.md"]
         assert before["AGENTS.md"].endswith(b"# Existing rules\nKeep these.\n")

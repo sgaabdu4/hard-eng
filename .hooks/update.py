@@ -320,7 +320,7 @@ def old_generation(root: Path, changes: dict[str, str]) -> list[str]:
     wiring = "".join(
         changes.get(name)
         or ((root / name).read_text() if (root / name).exists() else "")
-        for name in HOOK_FILES.values()
+        for name in [*HOOK_FILES.values(), ".claude/settings.local.json"]
     )
     for name, header in OLD_GENERATION.items():
         path = root / name
