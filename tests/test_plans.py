@@ -819,3 +819,29 @@ def test_plan_screenshots_stay_planning_work(
         with pytest.raises(ValueError, match="requires Complete"):
             validate_plans(tmp_path)
         (tmp_path / name).unlink()
+
+
+def test_draft_plan_for_later_work_rides_along_with_finished_work(
+    runner: ModuleType, tmp_path: Path, completed_plan: str
+) -> None:
+    git(tmp_path, "add", ".")
+    git(
+        tmp_path,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.test",
+        "commit",
+        "-qm",
+        "baseline",
+    )
+    later = tmp_path / "features/later/PLAN.md"
+    later.parent.mkdir(parents=True)
+    later.write_text(completed_plan.replace("Status: Complete", "Status: Draft"))
+    (tmp_path / "app.py").write_text("print('finished work')\n")
+    with pytest.raises(ValueError, match="plan is Draft; this check requires Complete"):
+        validate_plans(tmp_path)
+    finished = tmp_path / "features/finished/PLAN.md"
+    finished.parent.mkdir(parents=True)
+    finished.write_text(completed_plan)
+    assert validate_plans(tmp_path) == "Complete"

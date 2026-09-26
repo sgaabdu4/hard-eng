@@ -343,6 +343,15 @@ def _validate_shipping(root: Path, path: Path, status: str) -> None:
             raise ValueError("Deploy target requires configured delivery checks")
 
 
+def plan_stage(root: Path, path: Path, changed: set[str]) -> str:
+    try:
+        status = validate_plan(path, changed=str(path.relative_to(root)) in changed)
+        _validate_shipping(root, path, status)
+    except ValueError as error:
+        raise ValueError(f"{path.relative_to(root)}: {error}") from error
+    return status
+
+
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
@@ -368,14 +377,18 @@ def validate_plans(
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"
         )
+    statuses = {path: plan_stage(root, path, changed) for path in applicable}
+    reached = any(
+        STAGES.index(status) >= STAGES.index(stage) for status in statuses.values()
+    )
     effective_stage = "Complete"
-    for path in applicable:
-        try:
-            status = validate_plan(path, changed=str(path.relative_to(root)) in changed)
-            _validate_shipping(root, path, status)
-            if STAGES.index(status) < STAGES.index(stage):
-                raise ValueError(f"plan is {status}; this check requires {stage}")
-            effective_stage = min(effective_stage, status, key=STAGES.index)
-        except ValueError as error:
-            raise ValueError(f"{path.relative_to(root)}: {error}") from error
+    for path, status in statuses.items():
+        if STAGES.index(status) < STAGES.index(stage):
+            # A Draft plan claims no implementation, so it may ride along with finished work.
+            if status == "Draft" and reached:
+                continue
+            raise ValueError(
+                f"{path.relative_to(root)}: plan is {status}; this check requires {stage}"
+            )
+        effective_stage = min(effective_stage, status, key=STAGES.index)
     return stage if explicit_stage or not applicable else effective_stage
