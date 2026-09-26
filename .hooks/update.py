@@ -332,9 +332,12 @@ def old_generation(root: Path, changes: dict[str, str]) -> list[str]:
     from agent_hooks import CLAUDE_IMPORT
 
     found = old_generation_files(root)
-    tracked = subprocess.check_output(
-        ["git", "ls-files", "--", *found], cwd=root, text=True
-    ).splitlines()
+    tracked = (
+        found
+        and subprocess.check_output(
+            ["git", "ls-files", "--", *found], cwd=root, text=True
+        ).splitlines()
+    )
     retired = [name for name in found if name in tracked]
     claude = root / "CLAUDE.md"
     if (
