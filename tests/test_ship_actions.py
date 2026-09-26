@@ -1,8 +1,11 @@
 """Exercise guarded cleanup against actual refs and linked Git worktrees."""
 
 import json
+import os
+import signal
 import subprocess
 import sys
+import time
 from dataclasses import replace
 from io import StringIO
 from pathlib import Path
@@ -12,6 +15,7 @@ from unittest.mock import Mock
 import pytest
 import ship_actions
 import update
+from conftest import SOURCE, commit, init
 from shipping import PendingCheck, Shipment, ShippingError, ShippingPolicy, git
 
 
@@ -575,5 +579,42 @@ def test_pre_push_budget_fails_even_when_commands_pass(
     monkeypatch.setattr(
         runner.subprocess, "run", Mock(return_value=subprocess.CompletedProcess([], 0))
     )
+    monkeypatch.setattr(ship_actions, "run_check", Mock(return_value=0))
     with pytest.raises(ValueError, match="time budget"):
         runner.pre_push()
+
+
+@pytest.mark.parametrize("signal_number", [signal.SIGTERM, signal.SIGHUP])
+def test_interrupted_pre_push_removes_its_snapshot(
+    tmp_path: Path, shipping_policy: ShippingPolicy, signal_number: int
+) -> None:
+    root, marker = tmp_path / "repo", tmp_path / "started"
+    init(root)
+    (root / "hard-eng.gates.json").write_text(json.dumps({"shipping": shipping_policy}))
+    (root / ".hooks").mkdir()
+    stubborn = "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); print(flush=True); time.sleep(60)"
+    sleeper = f"import os, pathlib, subprocess, sys, time\ngate = subprocess.Popen([sys.executable, '-c', {stubborn!r}], stdout=subprocess.PIPE)\ngate.stdout.readline()\npathlib.Path(os.environ['MARKER']).write_text(f'{{gate.pid}} {{os.getcwd()}}')\ntime.sleep(60)\n"
+    (root / ".hooks/hard-eng.py").write_text(sleeper)
+    revision = commit(root, "slow check").strip()
+    for source in (SOURCE / ".hooks").glob("*.py"):
+        (root / ".hooks" / source.name).write_bytes(source.read_bytes())
+    hook = subprocess.Popen(
+        [sys.executable, str(root / ".hooks/hard-eng.py"), "pre-push"],
+        cwd=root,
+        stdin=subprocess.PIPE,
+        text=True,
+        env={**os.environ, "MARKER": str(marker)},
+    )
+    assert hook.stdin is not None
+    hook.stdin.write(f"refs/heads/task {revision} refs/heads/task {revision}\n")
+    hook.stdin.close()
+    deadline = time.monotonic() + 60
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    child, checkout = marker.read_text().split(" ", 1)
+    hook.send_signal(signal_number)
+    assert hook.wait(timeout=30) != 0
+    assert len(ship_actions.worktrees(root)) == 1
+    assert not Path(checkout).parent.exists()
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(child), 0)

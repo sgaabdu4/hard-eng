@@ -681,3 +681,34 @@ def test_pre_push_tests_committed_code(
         )
         == 2
     )
+
+
+@pytest.mark.parametrize(
+    ("role", "existing", "seen"),
+    [
+        ("ci-security", None, "from-gh"),
+        ("ci-security", "set", "set"),
+        ("tests", None, ""),
+    ],
+)
+def test_only_the_ci_security_gate_borrows_the_gh_token(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
+    existing: str | None,
+    seen: str,
+) -> None:
+    from gitleaks_scan import run_gate_command
+
+    (tmp_path / "gh").write_text("#!/bin/sh\necho from-gh\n")
+    (tmp_path / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    if existing:
+        monkeypatch.setenv("GH_TOKEN", existing)
+    show = [sys.executable, "-c", "import os; print(os.environ.get('GH_TOKEN', ''))"]
+    with (tmp_path / "log").open("w+") as log:
+        run_gate_command(role, show, tmp_path, 30, log, log)
+        log.seek(0)
+        assert log.read().strip() == seen
