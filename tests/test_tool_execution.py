@@ -13,7 +13,7 @@ from types import ModuleType
 import pytest
 import tool_setup
 import update
-from conftest import commit, git
+from conftest import commit, git, use_installed_mise
 from gate_config import Gate, Group, validate_gate, validate_package_services
 from project_setup import import_configuration
 
@@ -276,6 +276,7 @@ def test_inherited_warning_suppression_blocks_before_command_execution(
 def test_native_tools_install_before_reading_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
 ) -> None:
+    use_installed_mise(tmp_path, monkeypatch)
     calls: list[list[str]] = []
 
     def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
