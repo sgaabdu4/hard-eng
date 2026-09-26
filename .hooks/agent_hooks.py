@@ -173,10 +173,13 @@ OLD_GENERATION_COMMAND = re.compile(
 
 
 def _old_generation(handler: JsonValue) -> bool:
-    return isinstance(handler, dict) and any(
-        isinstance(value := handler.get(key), str)
-        and OLD_GENERATION_COMMAND.fullmatch(value) is not None
-        for key in ("command", "bash", "powershell")
+    if not isinstance(handler, dict):
+        return False
+    commands = [handler.get(key) for key in ("command", "bash", "powershell")]
+    present = [command for command in commands if command is not None]
+    return bool(present) and all(
+        isinstance(command, str) and OLD_GENERATION_COMMAND.fullmatch(command)
+        for command in present
     )
 
 

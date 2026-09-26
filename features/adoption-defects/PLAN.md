@@ -1,6 +1,6 @@
 # Fix defects found while adopting Hard Eng in existing repositories
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -18,16 +18,16 @@ Authority: The user asked for every reported item to be fixed in one PR, without
 
 ## Acceptance + steps
 
-- [ ] Old-generation Hard Eng files and hook entries are removed or migrated on setup; project-owned files stay → installer tests.
-- [ ] requirements.txt-only Python repositories get an exact instruction naming the directories and the uv commands → `test_requirements_only_project_is_told_how_to_declare_itself`.
-- [ ] Installed `.hooks` survive a project ruff config targeting py314 with line-length 120 → `test_installed_hooks_survive_project_ruff_settings` (real ruff).
-- [ ] Shipped `.agents` files and setup-written JSON pass a Biome project's own `biome ci .` → install-level Biome test.
-- [ ] Re-running setup restores missing Hard Eng-owned files without overwriting project edits → installer tests.
-- [ ] `hashlib.sha1(..., usedforsecurity=False)` passes the Python security gate; plain `hashlib.sha1(...)` still fails → real semgrep test.
-- [ ] A pre-push over budget states elapsed time, budget, and how to fix it; a GitHub SSH origin gets an HTTPS recommendation before the checks → `test_pre_push_budget_fails_even_when_commands_pass`.
-- [ ] Plan `Evidence:` errors state the same-line rule → already true since #125; reproduced, no change.
-- [ ] secrets-files ignores gitignored content reached through a tracked symlink; tracked secrets still fail → gitleaks test.
-- [ ] ci-security passes when a repository has no workflows; uncollectable or malformed workflows still fail → real zizmor test.
+- [x] Old-generation Hard Eng files and hook entries are removed or migrated on setup; project-owned files stay → `tests/test_adoption.py` install, rerun and update tests. Untracked, locally edited and still-run old files are kept and reported; only exact old hook commands are removed.
+- [x] requirements.txt-only Python repositories get an exact instruction naming the directories and the uv commands → `test_requirements_only_project_is_told_how_to_declare_itself`.
+- [x] Installed `.hooks` survive a project ruff config targeting py314 with line-length 120 → `test_installed_hooks_survive_project_ruff_settings` (real ruff).
+- [x] Shipped `.agents` files and setup-written JSON pass a Biome project's own `biome ci .` → `test_setup_json_stays_in_the_project_biome_layout`, `test_written_json_matches_the_project_formatter_layout`; setup JSON follows the root Biome config's indent and line width.
+- [x] Re-running setup restores missing Hard Eng-owned files without overwriting project edits → `test_setup_rerun_restores_missing_installed_files`, `test_setup_rerun_leaves_local_settings_edits_uncommitted`.
+- [x] `hashlib.sha1(..., usedforsecurity=False)` passes the Python security gate; plain `hashlib.sha1(...)` still fails → `test_python_security_gate_replaces_only_the_registry_sha1_rule` (real semgrep).
+- [x] A pre-push over budget states elapsed time, budget, and how to fix it; a GitHub SSH origin gets an HTTPS recommendation before the checks → `test_pre_push_budget_fails_even_when_commands_pass`.
+- [x] Plan `Evidence:` errors state the same-line rule → already true since #125; reproduced, no change.
+- [x] secrets-files ignores gitignored content reached through a tracked symlink; tracked secrets still fail → `test_tracked_link_to_an_ignored_local_secret_is_not_scanned`.
+- [x] ci-security passes when a repository has no workflows; uncollectable or malformed workflows still fail → `test_ci_security_passes_only_when_no_workflows_exist_to_collect` (real zizmor).
 
 ## Baseline + execution
 
@@ -37,7 +37,7 @@ Execution: Four parallel builders in isolated worktrees (installer, Python, Biom
 
 ## Risks + recovery
 
-The SHA-1 fix replaces one registry semgrep rule with a Hard Eng rule that keeps flagging plain SHA-1. It covers gates passing `p/python` as a separate argument. Nested formatter configs (`.hooks/ruff.toml`, `.agents/biome.json`) are skipped by tools run with `--config` or `--isolated`. Existing installs pick everything up through the verified updater.
+The SHA-1 fix replaces one registry semgrep rule with a Hard Eng rule that keeps flagging plain SHA-1. It covers gates passing `p/python` as a separate argument. Nested formatter configs (`.hooks/ruff.toml`, `.agents/biome.json`) are skipped by tools run with `--config` or `--isolated`. Existing installs pick everything up through the verified updater. Setup JSON reads only the root Biome config: `extends`, path `overrides` and Prettier options are not followed.
 
 ## ux_reference
 
@@ -45,9 +45,9 @@ N/A — installer, gate and hook behaviour have no product UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Required — a fresh install into temporary Biome and Python projects, with their own formatters and gates, passes.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` → exit 0 at e677028. Each new regression failed on the code before its fix. Codex adversarial review ran to round 7; every finding was fixed except one accepted decision: an old file whose generated header is intact is retired even when committed text follows it, matching the old installer, which overwrote such files on reinstall; the deletion is committed, so Git keeps the text.
+E2E: Passed — fresh installs into temporary projects: a Biome project configured for spaces passes `biome ci .` (29 files); a Python project with ruff py314 and line-length 120 passes `ruff check` and `ruff format --check`, and Hard Eng's format, lint, types, annotations, security, dead-code, dependencies and both secrets gates pass there.
 
 Delivery target: Merge
 Delivery: Pending — PR, required CI and main verification.

@@ -945,10 +945,9 @@ if __name__ == "__main__":
             print(
                 json.dumps(
                     {
-                        "files": changes,
+                        "files": {**changes, **dict.fromkeys(retired)},
                         "links": links,
                         "hook": hook_plan,
-                        "retired": retired,
                     }
                 )
             )

@@ -298,7 +298,8 @@ def update_plan(
             links[name] = None
         elif link.exists() or link.is_symlink():
             raise ValueError(f"Local skill link differs: {name}")
-    return changes, links, hook, plan.get("retired", [])
+    retired = [name for name, content in plan["files"].items() if content is None]
+    return changes, links, hook, retired
 
 
 OLD_GENERATION = {
@@ -693,8 +694,7 @@ def update(root: Path, repair: bool = False) -> str:
         return repair_current_hook(root, previous)
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
-        changes, links, hook, retired = update_plan(root, source, old)
-        changes.update(dict.fromkeys(retired))
+        changes, links, hook, _ = update_plan(root, source, old)
         if not changes and not links:
             install_planned_hook(root, hook)
             return "Hard Eng already matches the verified source."

@@ -330,9 +330,15 @@ def test_install_keeps_compound_project_hooks_and_the_script_they_run(
     }
     current["hooks"]["PreToolUse"][0]["hooks"] += [compound, relative, generated]
     settings.write_text(json.dumps(current))
+    copilot = tmp_path / ".github/hooks/hard-eng.json"
+    wiring = json.loads(copilot.read_text())
+    mixed = wiring["hooks"]["preToolUse"][0] | {"powershell": "./guard.ps1"}
+    wiring["hooks"]["preToolUse"] = [mixed]
+    copilot.write_text(json.dumps(wiring))
     git(tmp_path, "add", "--force", ".")
     commit(tmp_path, "old generation wiring")
     installer.install(tmp_path)
+    assert mixed in json.loads(copilot.read_text())["hooks"]["preToolUse"]
     (group,) = json.loads(settings.read_text())["hooks"]["PreToolUse"]
     project = {"type": "command", "command": "project-guard"}
     assert group["hooks"] == [project, compound, relative]
