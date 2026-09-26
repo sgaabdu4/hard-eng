@@ -339,6 +339,16 @@ def production_files(
 
 def prepare_command(group: Group, gate: Gate, timeout: float) -> list[str]:
     command = managed_command(gate["command"], ROOT / group["path"])
+    if gate.get("role") == "security" and "p/python" in command:
+        index = command.index("p/python") + 1
+        command = [
+            *command[:index],
+            "--config",
+            str(ROOT / ".agents/skills/he/semgrep/python.yaml"),
+            "--exclude-rule",
+            "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
+            *command[index:],
+        ]
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 
