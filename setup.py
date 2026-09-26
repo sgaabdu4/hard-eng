@@ -913,27 +913,15 @@ def plan_install(
 
 
 def install(root: Path, previous: Path | None = None) -> None:
-    from update import commit_install, retire_untracked, write_changes
+    from update import commit_install, local_state, retire_tracked, write_changes
 
     changes, links, hook, launcher, retired = plan_install(root, previous)
-    deleted = retire_untracked(root, retired)
+    deleted = retire_tracked(root, retired)
     names = sorted({*changes, *links, *deleted})
     if hook.is_relative_to(root) and ".git" not in hook.relative_to(root).parts:
         names.append(str(hook.relative_to(root)))  # A Husky launcher lives in the tree.
     # Commit only paths without prior local state, so no project edit joins the commit.
-    clean = not subprocess.check_output(
-        [
-            "git",
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-            "--ignored",
-            "--",
-            *names,
-        ],
-        cwd=root,
-        text=True,
-    )
+    clean = not local_state(root, names)
     write_changes(root, {**changes, **dict.fromkeys(deleted)})
     for name, destination in links.items():
         link = root / name
@@ -952,8 +940,8 @@ def install(root: Path, previous: Path | None = None) -> None:
     guidance = dependency_review_guidance(config["packages"])
     if guidance is not None:
         print("Before using --base package selection, " + guidance)
-    if retired:
-        print("Removed old Hard Eng files: " + ", ".join(retired))
+    if deleted:
+        print("Removed old Hard Eng files: " + ", ".join(deleted))
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
     print(commit_install(root, names, clean))
     print("Follow HE Plan to adapt the gates and configure shipping before delivery.")

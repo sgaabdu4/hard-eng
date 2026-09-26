@@ -301,15 +301,36 @@ def update_plan(
     return changes, links, hook, plan.get("retired", [])
 
 
-def retire_untracked(root: Path, retired: list[str]) -> list[str]:
-    """Delete untracked old-generation files; return tracked ones whose deletion needs a commit."""
+def retire_tracked(root: Path, retired: list[str]) -> list[str]:
+    """Only a commit's history keeps edits in a removed file; untracked ones are reported."""
     if not retired:
         return []
     tracked = subprocess.check_output(
         ["git", "ls-files", "-z", "--", *retired], cwd=root, text=True
     ).split("\0")
-    write_changes(root, {name: None for name in retired if name not in tracked})
+    if kept := [name for name in retired if name not in tracked]:
+        print(
+            "Kept untracked old Hard Eng files; review and remove them: "
+            + ", ".join(kept),
+            file=sys.stderr,
+        )
     return [name for name in retired if name in tracked]
+
+
+def local_state(root: Path, names: list[str]) -> list[str]:
+    return subprocess.check_output(
+        [
+            "git",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignored",
+            "--",
+            *names,
+        ],
+        cwd=root,
+        text=True,
+    ).splitlines()
 
 
 def write_changes(root: Path, changes: dict[str, str | None]) -> None:
@@ -554,7 +575,7 @@ def repair_installation(root: Path, previous: str) -> str:
             or OLD_GENERATION_SCRIPT.search((root / name).read_text(errors="replace"))
         )
     }
-    missing.update(dict.fromkeys(retire_untracked(root, retired)))
+    missing.update(dict.fromkeys(retire_tracked(root, retired)))
     added: dict[str, str | None] = {
         name: link for name, link in links.items() if link is not None
     }
@@ -564,10 +585,11 @@ def repair_installation(root: Path, previous: str) -> str:
     if not missing and not added:
         return status + "."
     names = sorted({*missing, *added})
+    clean = not local_state(root, names)
     write_changes(root, missing)
     write_links(root, added)
     return f"{status}; repaired {install_paths(names)}. " + commit_install(
-        root, names, clean=True
+        root, names, clean
     )
 
 
@@ -598,19 +620,7 @@ def commit_install(root: Path, names: list[str], clean: bool) -> str:
 
 
 def refuse_local_state(root: Path, names: list[str]) -> None:
-    status = subprocess.check_output(
-        [
-            "git",
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-            "--ignored",
-            "--",
-            *names,
-        ],
-        cwd=root,
-        text=True,
-    ).splitlines()
+    status = local_state(root, names)
     if status and all(line.startswith("?? ") for line in status):
         raise ValueError(
             "Installed Hard Eng files are not committed: "
@@ -641,7 +651,7 @@ def update(root: Path, repair: bool = False) -> str:
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
         changes, links, hook, retired = update_plan(root, source, old)
-        changes.update(dict.fromkeys(retire_untracked(root, retired)))
+        changes.update(dict.fromkeys(retire_tracked(root, retired)))
         if not changes and not links:
             install_planned_hook(root, hook)
             return "Hard Eng already matches the verified source."
