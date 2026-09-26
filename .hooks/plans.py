@@ -77,10 +77,15 @@ def field(content: str, name: str) -> str:
     return values[0].strip()
 
 
+def header_status(content: str) -> str:
+    """The plan's own Status sits above its first section; slices may carry theirs."""
+    return field(content.split("\n## ", 1)[0], "Status")
+
+
 def plan_status(content: str) -> str | None:
     """Plans written before the Status field are historical, not active."""
     try:
-        return field(content, "Status")
+        return header_status(content)
     except ValueError:
         return None
 
@@ -250,7 +255,7 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
                 errors = [
                     "approval handoff prepared; authorization remains outside this plan"
                 ]
-                if blockers != "None":
+                if blockers and not no_blockers(blockers):
                     errors.append(f"decisions to resolve: {blockers}")
             else:
                 unfinished = True
@@ -277,7 +282,7 @@ def build_in_progress(root: Path, changed: set[str]) -> bool:
             text for text in contents if plan_status(text) not in {None, "Complete"}
         ]
         return bool(active) and all(
-            field(text, "Status") == "Ready"
+            header_status(text) == "Ready"
             and field(
                 plan_sections(text, allow_placeholders=True)["Verification"], "Result"
             )
@@ -292,7 +297,7 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     """Unchanged Complete plans predate later rules such as the E2E field."""
     content = path.read_text()
     sections = plan_sections(content)
-    status = field(content, "Status")
+    status = header_status(content)
     if status not in STAGES:
         raise ValueError("plan Status must be Draft, Ready or Complete")
     verification = sections["Verification"]
