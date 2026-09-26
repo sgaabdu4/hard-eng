@@ -430,7 +430,7 @@ raise SystemExit(not compileall.compile_dir('.hooks', quiet=1))
                 ).splitlines()
             ):
                 command.append(
-                    remote_base(candidate, policy["base"] if policy else None)
+                    remote_base(candidate, policy["base"] if policy else None) or "HEAD"
                 )
             else:
                 command.append("HEAD")

@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -620,3 +621,60 @@ def test_interrupted_pre_push_removes_its_snapshot(
     assert not Path(checkout).parent.exists()
     with pytest.raises(ProcessLookupError):
         os.kill(int(child), 0)
+
+
+@pytest.mark.parametrize("gate_passes", [True, False])
+def test_first_push_to_an_empty_remote_checks_everything(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+    gate_passes: bool,
+) -> None:
+    root = tmp_path
+    shutil.copytree(
+        SOURCE / ".hooks", root / ".hooks", ignore=shutil.ignore_patterns("__pycache__")
+    )
+    (root / ".gitignore").write_text("__pycache__/\n")
+    config: dict[str, object] = {
+        "packages": [],
+        "shipping": shipping_policy,
+        "shared": [
+            {
+                "name": "whole-project",
+                "command": [
+                    sys.executable,
+                    "-c",
+                    f"raise SystemExit({int(not gate_passes)})",
+                ],
+            }
+        ],
+    }
+    (root / "hard-eng.gates.json").write_text(json.dumps(config))
+    git(root, "config", "user.name", "Hook Fixture")
+    git(root, "config", "user.email", "hook@example.invalid")
+    git(root, "branch", "-M", "main")
+    commit(root, "initial project")
+    fetched, pushed = (
+        tmp_path.parent / f"{tmp_path.name}-{name}.git" for name in ("fetch", "push")
+    )
+    for bare in (fetched, pushed):
+        git(root, "init", "--bare", "-q", str(bare))
+    git(root, "push", "-q", "--no-verify", str(fetched), "main:other")
+    git(root, "remote", "add", "origin", str(fetched))
+    git(root, "remote", "set-url", "--push", "origin", str(pushed))
+    revision = git(root, "rev-parse", "HEAD").strip()
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(f"refs/heads/main {revision} refs/heads/main {'0' * 40}\n"),
+    )
+    assert (runner.pre_push() == 0) == gate_passes
+    git(root, "push", "-q", "--no-verify", "origin", "main")
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(f"refs/heads/main {revision} refs/heads/main {revision}\n"),
+    )
+    with pytest.raises(ValueError, match="direct base updates are blocked"):
+        runner.pre_push()

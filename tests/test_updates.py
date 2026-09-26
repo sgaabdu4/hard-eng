@@ -584,7 +584,9 @@ def test_candidate_uses_remote_task_plan_scope(
         handle.write("new-managed.mjs\n")
     (target / "unrelated.txt").write_text("staged local work\n")
     git(target, "add", "unrelated.txt")
-    if outcome not in {"application-failure", "missing-base"}:
+    if outcome != "application-failure" and (
+        outcome != "missing-base" or not configured_base
+    ):
         update.verify_candidate(target, source, changes, links, candidate)
     else:
         error = (
@@ -610,7 +612,7 @@ def test_candidate_uses_remote_task_plan_scope(
         "tracking": stale,
     }
     assert not candidate.exists()
-    if outcome != "missing-base":
+    if outcome != "missing-base" or not configured_base:
         assert "APPLICATION_SCOPE_CHECK" in capfd.readouterr().err
 
 
