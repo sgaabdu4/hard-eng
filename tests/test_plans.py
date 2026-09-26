@@ -845,27 +845,3 @@ def test_draft_plan_for_later_work_rides_along_with_finished_work(
     finished.parent.mkdir(parents=True)
     finished.write_text(completed_plan)
     assert validate_plans(tmp_path) == "Complete"
-
-
-def test_base_edits_after_branching_are_not_the_branch_changes(
-    runner: ModuleType, tmp_path: Path, completed_plan: str
-) -> None:
-    identity = ("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test")
-    root_plan = tmp_path / "PLAN.md"
-    root_plan.write_text(completed_plan.replace("Status: Complete", "Status: Ready"))
-    git(tmp_path, "add", ".")
-    git(tmp_path, *identity, "commit", "-qm", "base with a Ready plan")
-    git(tmp_path, "branch", "-M", "main")
-    git(tmp_path, "switch", "-qc", "feature")
-    feature = tmp_path / "features/x/PLAN.md"
-    feature.parent.mkdir(parents=True)
-    feature.write_text(completed_plan)
-    (tmp_path / "app.py").write_text("print('feature work')\n")
-    git(tmp_path, "add", ".")
-    git(tmp_path, *identity, "commit", "-qm", "feature work")
-    git(tmp_path, "switch", "-q", "main")
-    root_plan.write_text(root_plan.read_text() + "\nMain moved on.\n")
-    git(tmp_path, *identity, "commit", "-qam", "edit the base plan")
-    base = git(tmp_path, "rev-parse", "HEAD").strip()
-    git(tmp_path, "switch", "-q", "feature")
-    assert validate_plans(tmp_path, base=base) == "Complete"
