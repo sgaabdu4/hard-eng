@@ -24,7 +24,8 @@ from update import require_current
 
 def remote_base(root: Path, branch: str | None) -> str | None:
     """The remote base revision, or None when the remote has no branches yet."""
-    if not git(root, "ls-remote", "--heads", "origin").strip():
+    destination = git(root, "remote", "get-url", "--push", "origin").strip()
+    if not git(root, "ls-remote", "--heads", destination).strip():
         return None
     reference = f"refs/heads/{branch}" if branch else "HEAD"
     advertised = git(root, "ls-remote", "--exit-code", "origin", reference).split()

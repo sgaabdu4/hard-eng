@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -631,30 +632,37 @@ def test_first_push_to_an_empty_remote_checks_everything(
     gate_passes: bool,
 ) -> None:
     root = tmp_path
-    bare = tmp_path.parent / f"{tmp_path.name}-empty.git"
-    git(root, "init", "--bare", "-q", str(bare))
-    git(root, "config", "user.name", "Hook Fixture")
-    git(root, "config", "user.email", "hook@example.invalid")
-    git(root, "branch", "-M", "main")
-    (root / ".hooks").mkdir()
-    for source in (SOURCE / ".hooks").glob("*.py"):
-        (root / ".hooks" / source.name).write_bytes(source.read_bytes())
+    shutil.copytree(
+        SOURCE / ".hooks", root / ".hooks", ignore=shutil.ignore_patterns("__pycache__")
+    )
     (root / ".gitignore").write_text("__pycache__/\n")
-    exit_code = 0 if gate_passes else 3
-    config = {
+    config: dict[str, object] = {
         "packages": [],
         "shipping": shipping_policy,
         "shared": [
             {
                 "name": "whole-project",
-                "command": [sys.executable, "-c", f"raise SystemExit({exit_code})"],
+                "command": [
+                    sys.executable,
+                    "-c",
+                    f"raise SystemExit({int(not gate_passes)})",
+                ],
             }
         ],
     }
     (root / "hard-eng.gates.json").write_text(json.dumps(config))
-    git(root, "add", ".")
-    git(root, "commit", "-qm", "initial project")
-    git(root, "remote", "add", "origin", str(bare))
+    git(root, "config", "user.name", "Hook Fixture")
+    git(root, "config", "user.email", "hook@example.invalid")
+    git(root, "branch", "-M", "main")
+    commit(root, "initial project")
+    fetched, pushed = (
+        tmp_path.parent / f"{tmp_path.name}-{name}.git" for name in ("fetch", "push")
+    )
+    for bare in (fetched, pushed):
+        git(root, "init", "--bare", "-q", str(bare))
+    git(root, "push", "-q", "--no-verify", str(fetched), "main:other")
+    git(root, "remote", "add", "origin", str(fetched))
+    git(root, "remote", "set-url", "--push", "origin", str(pushed))
     revision = git(root, "rev-parse", "HEAD").strip()
     monkeypatch.setattr(
         sys,

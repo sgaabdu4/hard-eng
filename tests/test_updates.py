@@ -572,6 +572,7 @@ def test_candidate_uses_remote_task_plan_scope(
     stale = git(target, "rev-parse", "origin/main")
     (target / "project.txt").write_text("unrelated local edit\n")
     if outcome == "missing-base":
+        git(remote, "update-ref", "refs/heads/other", "refs/heads/main")
         git(remote, "update-ref", "-d", "refs/heads/main")
     candidate = target.parent / "candidate"
     changes: dict[str, str | None] = {
