@@ -8,11 +8,19 @@ import sys
 import tempfile
 from pathlib import Path
 
-from gate_config import JsonObject, nonproduction_source, repository_files
+from gate_config import JsonObject, JsonValue, nonproduction_source, repository_files
 from update import require_current
 
 # The HE Build handoff line, not a quoted or negated mention of it.
 SHIP_CLAIM = re.compile(r"^[*_ ]*Ready for ship[*_]*\s*[—–-]", re.MULTILINE)
+
+
+def replaces_agents(path: Path) -> bool:
+    """A file holding only the old Hard Eng import is retired before Claude reads it."""
+    legacy = path.is_file() and path.read_text(errors="replace").strip() == (
+        "@.agents/hard-eng/current/AGENTS.md"
+    )
+    return (path.is_symlink() or path.exists()) and not legacy
 
 
 def configure_instructions(
@@ -23,7 +31,28 @@ def configure_instructions(
         "AGENTS.md": (source / "AGENTS.md").read_text().rstrip(),
     }
     claude = root / "CLAUDE.md"
-    if not (claude.is_symlink() and claude.resolve() == root / "AGENTS.md"):
+    linked = claude.is_symlink() and claude.resolve() == root / "AGENTS.md"
+    text = claude.read_text() if claude.is_file() and not linked else ""
+    listed = subprocess.check_output(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=root,
+        text=True,
+    ).split("\0")
+    # Claude Code reads AGENTS.md itself unless a CLAUDE.md on the session's path replaces it.
+    replacing = [
+        name
+        for name in {*listed, ".claude/CLAUDE.md", "CLAUDE.local.md"} - {"CLAUDE.md"}
+        if Path(name).name in {"CLAUDE.md", "CLAUDE.local.md"}
+        and replaces_agents(root / name)
+    ]
+    replacing += [
+        parent / name
+        for parent in root.parents
+        for name in ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md")
+        if replaces_agents(parent / name)
+        and not (parent == Path.home() and name == ".claude/CLAUDE.md")
+    ]
+    if not linked and (text not in {"", CLAUDE_IMPORT} or replacing):
         instructions["CLAUDE.md"] = "@AGENTS.md"
     if (root / "AGENTS.override.md").exists():
         instructions["AGENTS.override.md"] = (
@@ -133,7 +162,7 @@ def _remove_owned_entry(hooks: JsonObject, native: str, owned: JsonObject) -> No
 
 
 def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
-    """Remove only the exact routine registrations previously installed by us."""
+    """Remove only registrations previously installed by us, including old-generation scripts."""
     hooks = current.get("hooks", {})
     if not isinstance(hooks, dict):
         raise TypeError("Conflicting hooks: expected an object")
@@ -155,6 +184,53 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
                 hook_events(agent)[event],
                 owned_hook_entry(agent, event, command, 3600),
             )
+    remove_old_generation(hooks)
+    if current.get("outputStyle") == "Plain English":
+        del current["outputStyle"]
+
+
+HOOK_FILES = {
+    "claude": ".claude/settings.json",
+    "codex": ".codex/hooks.json",
+    "copilot": ".github/hooks/hard-eng.json",
+}
+
+
+CLAUDE_IMPORT = "<!-- hard-eng:start -->\n@AGENTS.md\n<!-- hard-eng:end -->\n\n"
+OLD_GENERATION_SCRIPT = re.compile(r"\.hard-eng\b|\.agents/hard-eng/")
+
+
+def _old_generation(handler: JsonValue) -> bool:
+    return isinstance(handler, dict) and any(
+        isinstance(value := handler.get(key), str)
+        and OLD_GENERATION_SCRIPT.search(value) is not None
+        for key in ("command", "bash", "powershell")
+    )
+
+
+def remove_old_generation(hooks: JsonObject) -> None:
+    for native, entries in list(hooks.items()):
+        if isinstance(entries, list):
+            kept = _without_old_generation(entries)
+            if not kept and entries:
+                del hooks[native]
+            elif kept != entries:
+                hooks[native] = kept
+
+
+def _without_old_generation(entries: list[JsonValue]) -> list[JsonValue]:
+    kept: list[JsonValue] = []
+    for entry in entries:
+        inner = entry.get("hooks") if isinstance(entry, dict) else None
+        if isinstance(entry, dict) and isinstance(inner, list):
+            handlers = [item for item in inner if not _old_generation(item)]
+            if handlers:
+                kept.append(
+                    entry if handlers == inner else {**entry, "hooks": handlers}
+                )
+        elif not _old_generation(entry):
+            kept.append(entry)
+    return kept
 
 
 def learning_context(event: str) -> str:

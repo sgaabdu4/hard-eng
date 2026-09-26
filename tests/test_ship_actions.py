@@ -563,8 +563,20 @@ def test_shipping_rejects_stale_install_before_remote_action(
     remote.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("origin", "warned"),
+    [
+        ("git@github.com:owner/repo.git", True),
+        ("https://github.com/owner/repo.git", False),
+    ],
+)
 def test_pre_push_budget_fails_even_when_commands_pass(
-    runner: ModuleType, shipping_policy: ShippingPolicy, monkeypatch: pytest.MonkeyPatch
+    runner: ModuleType,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    origin: str,
+    warned: bool,
 ) -> None:
     shipping_policy["pre_push_seconds"] = 1.0
     (runner.ROOT / "hard-eng.gates.json").write_text(
@@ -576,13 +588,14 @@ def test_pre_push_budget_fails_even_when_commands_pass(
     )
     clock = iter([0.0, 2.0])
     monkeypatch.setattr(ship_actions.time, "monotonic", lambda: next(clock))
-    monkeypatch.setattr(ship_actions, "git", Mock(return_value=""))
+    monkeypatch.setattr(ship_actions, "git", Mock(return_value=origin))
     monkeypatch.setattr(
         runner.subprocess, "run", Mock(return_value=subprocess.CompletedProcess([], 0))
     )
     monkeypatch.setattr(ship_actions, "run_check", Mock(return_value=0))
-    with pytest.raises(ValueError, match="time budget"):
+    with pytest.raises(ValueError, match=r"passed but took 2s, over the 1s .*budget"):
         runner.pre_push()
+    assert ("Switch to HTTPS" in capsys.readouterr().out) is warned
 
 
 @pytest.mark.parametrize("signal_number", [signal.SIGTERM, signal.SIGHUP])

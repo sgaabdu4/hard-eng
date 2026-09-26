@@ -12,10 +12,12 @@ from types import ModuleType
 import pytest
 import update
 from conftest import SOURCE, commit, git, init
-from gate_config import JsonObject
+from gate_config import JsonObject, json_file
 from shipping import ShippingError, ShippingPolicy
 from test_setup import repository as setup_repository
-from test_setup import snapshot
+from test_setup import (
+    snapshot,
+)
 
 
 def test_installer_preserves_native_mcp_settings_on_rerun(
@@ -88,6 +90,27 @@ def test_scaffold_distribution_excludes_ignored_runtime_files(tmp_path: Path) ->
         binary.parent.mkdir()
         binary.write_bytes(b"\xff\x00")
     assert update.scaffold_files(tmp_path) == {".agents/skills/recorder/SKILL.md"}
+
+
+def test_installed_hooks_survive_project_ruff_settings(tmp_path: Path) -> None:
+    for name in update.scaffold_files(SOURCE):
+        if name.startswith(".hooks/"):
+            (tmp_path / name).parent.mkdir(exist_ok=True)
+            shutil.copy(SOURCE / name, tmp_path / name)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "app"\nversion = "1"\nrequires-python = ">=3.14"\n'
+        '[tool.ruff]\ntarget-version = "py314"\nline-length = 120\n'
+        '[tool.ruff.lint]\nselect = ["ALL"]\n'
+    )
+    for command in (["format", "--check", "."], ["check", "."]):
+        result = subprocess.run(
+            ["uvx", "ruff@latest", *command, "--no-cache"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
 
 
 def fixed_revision(revision: str) -> Callable[[str], str]:
@@ -828,7 +851,7 @@ def test_unverified_scaffold_update_fails(
         update.check_scaffold_update(target, base)
 
 
-def test_gates_file_matches_biome_layout(installer: ModuleType) -> None:
+def test_written_json_matches_the_project_formatter_layout(tmp_path: Path) -> None:
     fits, wraps = "a" * 46, "a" * 47
     config: JsonObject = {
         "version": 1,
@@ -845,9 +868,7 @@ def test_gates_file_matches_biome_layout(installer: ModuleType) -> None:
             }
         ],
     }
-    assert (
-        installer.gates_text(config) + "\n"
-        == f"""{{
+    prettier = f"""{{
   "version": 1,
   "shipping": {{
     "base": "main",
@@ -876,6 +897,10 @@ def test_gates_file_matches_biome_layout(installer: ModuleType) -> None:
   ]
 }}
 """
+    assert json_file(tmp_path, config) == prettier
+    (tmp_path / "biome.json").write_text("{}\n")
+    assert json_file(tmp_path, config) == re.sub(
+        "(?m)^(?:  )+", lambda indent: "\t" * (len(indent[0]) // 2), prettier
     )
 
 
@@ -918,7 +943,7 @@ def test_retired_families_config_is_regenerated_and_reported(
     assert "removed ([Errno 2] No such file or directory" in notice
     written = (tmp_path / "hard-eng.gates.json").read_text()
     config = json.loads(written)
-    assert written == installer.gates_text(config) + "\n"
+    assert written == json_file(tmp_path, config)
     assert "families" not in config and "phases" not in config
     assert [package["language"] for package in config["packages"]] == ["javascript"]
     assert [gate["command"] for gate in config["shared"]].count(secrets) == 1

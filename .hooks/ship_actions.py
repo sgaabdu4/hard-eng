@@ -103,6 +103,17 @@ def pre_push(root: Path) -> int:
         base = push_base(root, policy["base"], fields[2], fields[3], revision)
         if set(revision) == {"0"}:
             continue
+        with suppress(ShippingError):
+            if re.match(
+                r"(?:ssh://)?git@github\.com[:/]",
+                git(root, "remote", "get-url", "--push", "origin"),
+            ):
+                print(
+                    "Hard Eng: origin pushes to GitHub over SSH, which can drop the idle "
+                    "connection while these checks run (push exit 141 after they pass). "
+                    "Switch to HTTPS: git remote set-url origin https://github.com/<owner>/<repo>.git",
+                    flush=True,
+                )
         environment = os.environ.copy()
         for name in git(root, "rev-parse", "--local-env-vars").splitlines():
             environment.pop(name, None)
@@ -132,9 +143,13 @@ def pre_push(root: Path) -> int:
                     env=environment,
                     check=True,
                 )
-        if time.monotonic() - started > policy["pre_push_seconds"]:
+        elapsed = time.monotonic() - started
+        if elapsed > policy["pre_push_seconds"]:
             raise ValueError(
-                "Pre-push verification exceeded its configured time budget"
+                f"Pre-push checks passed but took {elapsed:.0f}s, over the "
+                f"{policy['pre_push_seconds']:.0f}s pre_push_seconds time budget in "
+                "hard-eng.gates.json; speed up the slowest gates or raise the budget, "
+                "then push again"
             )
     print(f"Pre-push verification: {time.monotonic() - started:.2f}s")
     return 0

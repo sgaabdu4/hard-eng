@@ -15,6 +15,70 @@ type JsonValue = (
 type JsonObject = dict[str, JsonValue]
 
 
+def expanded(value: object) -> bool:
+    if isinstance(value, dict):
+        return bool(value)
+    return isinstance(value, list) and any(expanded(item) for item in value)
+
+
+def json_text(
+    value: object, layout: tuple[str, int, int], indent: str = "", used: int = 0
+) -> str:
+    unit, tab, width = layout
+    if isinstance(value, list) and not expanded(value):
+        flat = json.dumps(value, separators=(", ", ": "))
+        if used + len(flat) <= width:
+            return flat
+    if not isinstance(value, (dict, list)) or not value:
+        return json.dumps(value)
+    inner = indent + unit
+    entries = (
+        [(f"{json.dumps(key)}: ", item) for key, item in value.items()]
+        if isinstance(value, dict)
+        else [("", item) for item in value]
+    )
+    last = len(entries) - 1
+    body = ",\n".join(
+        inner
+        + head
+        + json_text(
+            item,
+            layout,
+            inner,
+            len((inner + head).expandtabs(tab)) + (index < last),
+        )
+        for index, (head, item) in enumerate(entries)
+    )
+    opening, closing = "{}" if isinstance(value, dict) else "[]"
+    return f"{opening}\n{body}\n{indent}{closing}"
+
+
+JSONC = re.compile(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', re.DOTALL)
+
+
+def json_layout(root: Path) -> tuple[str, int, int]:
+    """Read the root Biome config's JSON formatting, else use Prettier's defaults."""
+    for name in ("biome.json", "biome.jsonc"):
+        if (root / name).is_file():
+            text = JSONC.sub(lambda match: match[1] or "", (root / name).read_text())
+            try:
+                config = json.loads(re.sub(r",(\s*[}\]])", r"\1", text))
+            except ValueError:
+                return "\t", 2, 80
+            options = {
+                **config.get("formatter", {}),
+                **config.get("json", {}).get("formatter", {}),
+            }
+            tab = options.get("indentWidth", 2)
+            unit = "\t" if options.get("indentStyle", "tab") == "tab" else " " * tab
+            return unit, tab, options.get("lineWidth", 80)
+    return "  ", 2, 80
+
+
+def json_file(root: Path, value: object) -> str:
+    return json_text(value, json_layout(root)) + "\n"
+
+
 Report = TypedDict(
     "Report",
     {"type": str, "path": str, "tests": str, "coverage": str, "stdout": bool},
@@ -599,6 +663,13 @@ def validate_manifest_groups(
             raise ValueError(f"{path}: package language must be {language}")
 
 
+def has_workflows(root: Path, files: list[Path]) -> bool:
+    return any(
+        path.parent == root / ".github/workflows" and path.suffix in {".yml", ".yaml"}
+        for path in files
+    )
+
+
 def validate_required_checks(root: Path, config: GateConfig) -> None:
     from project_setup import is_deployment_file, is_shell_script
 
@@ -611,10 +682,7 @@ def validate_required_checks(root: Path, config: GateConfig) -> None:
     required = {"secrets-files"}
     if config.get("scan_git_history", True):
         required.add("secrets-history")
-    if any(
-        path.parent == root / ".github/workflows" and path.suffix in {".yml", ".yaml"}
-        for path in files
-    ):
+    if has_workflows(root, files):
         required.update({"workflows", "ci-security"})
     if any(is_shell_script(path) for path in files):
         required.add("shell")

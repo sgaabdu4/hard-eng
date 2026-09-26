@@ -339,6 +339,16 @@ def production_files(
 
 def prepare_command(group: Group, gate: Gate, timeout: float) -> list[str]:
     command = managed_command(gate["command"], ROOT / group["path"])
+    if gate.get("role") == "security" and "p/python" in command:
+        index = command.index("p/python") + 1
+        command = [
+            *command[:index],
+            "--config",
+            str(ROOT / ".agents/skills/he/semgrep/python.yaml"),
+            "--exclude-rule",
+            "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
+            *command[index:],
+        ]
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 
@@ -600,8 +610,18 @@ def check_lock(root: Path) -> Generator[None]:
         yield
 
 
+def gate_timeout(root: Path) -> float:
+    """Each gate may use the whole configured budget: CI's in CI, pre-push's elsewhere."""
+    from shipping import load_policy
+
+    policy = load_policy(root, required=False)
+    if policy is None:
+        return 600
+    return policy["ci_seconds" if os.environ.get("CI") else "pre_push_seconds"]
+
+
 def check(
-    timeout: float = 600,
+    timeout: float | None = None,
     base: str | None = None,
     plan_stage: str | None = None,
     *,
@@ -615,6 +635,7 @@ def check(
 
     with check_lock(ROOT):
         groups = load_groups(ROOT, base)
+        timeout = timeout or gate_timeout(ROOT)
         from comments import validate_comments
         from plans import report_stage, validate_plans
 

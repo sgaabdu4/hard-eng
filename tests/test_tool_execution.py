@@ -13,7 +13,7 @@ from types import ModuleType
 import pytest
 import tool_setup
 import update
-from conftest import commit, git, use_installed_mise
+from conftest import SOURCE, commit, git, use_installed_mise
 from gate_config import Gate, Group, validate_gate, validate_package_services
 from project_setup import import_configuration
 
@@ -369,6 +369,44 @@ def test_package_script_scanner_executes_provisioned_native_executable(
         stale_local=stale_local,
         expected_use_npm=expected_use_npm,
     ) == ["managed", *arguments]
+
+
+def test_python_security_gate_replaces_only_the_registry_sha1_rule(
+    runner: ModuleType,
+) -> None:
+    import yaml
+
+    group: Group = {"path": ".", "checks": []}
+    scan = ["semgrep", "scan", "--config", "{}", "--error", "."]
+    python: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": [part.format("p/python") for part in scan],
+    }
+    javascript: Gate = {
+        **python,
+        "command": [part.format("p/javascript") for part in scan],
+    }
+    rules = runner.ROOT / ".agents/skills/he/semgrep/python.yaml"
+
+    assert runner.prepare_command(group, python, 5)[3:] == [
+        "--config",
+        "p/python",
+        "--config",
+        str(rules),
+        "--exclude-rule",
+        "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
+        "--error",
+        ".",
+    ]
+    assert "--exclude-rule" not in runner.prepare_command(group, javascript, 5)
+    (rule,) = yaml.safe_load(
+        (SOURCE / ".agents/skills/he/semgrep/python.yaml").read_text()
+    )["rules"]
+    assert rule["patterns"] == [
+        {"pattern": "hashlib.sha1(...)"},
+        {"pattern-not": "hashlib.sha1(..., usedforsecurity=False, ...)"},
+    ]
 
 
 def test_package_script_dart_boundary_gate_checks_native_configuration(

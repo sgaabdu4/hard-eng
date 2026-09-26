@@ -45,6 +45,18 @@ def is_gitlink(repository: Path, relative_path: Path) -> bool:
     )
 
 
+def is_tracked(path: Path) -> bool:
+    """Ask the repository owning the file, which may be a submodule."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--", path.name],
+        cwd=path.parent,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return bool(result.stdout)
+
+
 def validate_current_files_command(command: list[str]) -> None:
     """Limit snapshot wrapping to Gitleaks' native current-directory scan."""
     if (
@@ -87,6 +99,8 @@ def copy_scan_entry(
         raise ValueError(f"Gitleaks source escapes the repository: {relative_path}")
     target = destination / relative_path
     if entry.is_symlink():
+        if source.is_file() and not is_tracked(source):
+            return
         copy_link_target(source, target, ancestors)
         return
     if source.is_dir():
@@ -204,7 +218,7 @@ def run_gate_command(
             if token := github_token():
                 environment["GH_TOKEN"] = token
             environment["ZIZMOR_CONFIG"] = zizmor_config(directory, Path(temporary))
-        return subprocess.run(
+        result = subprocess.run(
             command,
             cwd=directory,
             check=False,
@@ -213,6 +227,16 @@ def run_gate_command(
             stdout=stdout,
             stderr=stderr,
         )
+    if role == "ci-security" and result.returncode == 3:
+        from gate_config import has_workflows, repository_files
+
+        zizmor = any(
+            Path(part).name.partition("@")[0] == "zizmor" for part in command[:2]
+        )
+        if zizmor and not has_workflows(directory, repository_files(directory)):
+            stderr.write("No GitHub workflows to audit: zizmor collected no inputs.\n")
+            result.returncode = 0
+    return result
 
 
 def zizmor_config(directory: Path, temporary: Path) -> str:
