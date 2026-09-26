@@ -30,7 +30,7 @@ Authority: Autonomous. The user asked to fix the Hard Eng issues found in their 
 
 - [x] With no plan changed, a plan without `Status:` is skipped; editing it still fails with its path → `test_plan_without_status_predates_the_status_field`.
 - [x] Files inside a plan's folder keep a Draft plan valid; other non-Markdown files still require Complete → `test_plan_screenshots_stay_planning_work`.
-- [ ] A second `check` in the same checkout waits for the first to finish.
+- [x] A second `check` in the same checkout waits for the first to finish → `test_second_check_waits_for_the_first_in_the_same_checkout`.
 - [x] `check` output to a non-blocking pipe with a slow reader completes without `Errno 35` → `test_check_output_survives_a_non_blocking_pipe`.
 - [ ] A session that changes nothing stops without checks even when files were dirty at SessionStart; editing one of those files still runs the check.
 

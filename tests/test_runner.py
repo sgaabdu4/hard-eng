@@ -1,5 +1,6 @@
 """Exercise real command exits, ordering, documents and coverage boundaries."""
 
+import fcntl
 import json
 import os
 import shutil
@@ -744,3 +745,20 @@ def test_check_output_survives_a_non_blocking_pipe(
         lines = output.read().decode().splitlines()
     assert check.wait() == 0
     assert "PASS noisy (exit 0)" in lines
+
+
+def test_second_check_waits_for_the_first_in_the_same_checkout(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    configure(tmp_path, [gate("reports", "open('ran', 'w').close()")])
+    lock = tmp_path / ".git/hard-eng-check.lock"
+    results: list[int] = []
+    with lock.open("w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        second = threading.Thread(target=lambda: results.append(runner.check()))
+        second.start()
+        time.sleep(1)
+        assert not (tmp_path / "ran").exists()
+    second.join(timeout=60)
+    assert results == [0]
+    assert (tmp_path / "ran").is_file()
