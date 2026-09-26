@@ -324,13 +324,19 @@ def test_install_keeps_compound_project_hooks_and_the_script_they_run(
         "type": "command",
         "command": 'bash "$(git rev-parse --show-toplevel)/.hard-eng/hook.sh" claude',
     }
-    current["hooks"]["PreToolUse"][0]["hooks"] += [compound, generated]
+    relative = {
+        "type": "command",
+        "command": "bash .hard-eng/bootstrap.sh claude && ./guard",
+    }
+    current["hooks"]["PreToolUse"][0]["hooks"] += [compound, relative, generated]
     settings.write_text(json.dumps(current))
     git(tmp_path, "add", "--force", ".")
     commit(tmp_path, "old generation wiring")
     installer.install(tmp_path)
     (group,) = json.loads(settings.read_text())["hooks"]["PreToolUse"]
-    assert group["hooks"] == [{"type": "command", "command": "project-guard"}, compound]
+    project = {"type": "command", "command": "project-guard"}
+    assert group["hooks"] == [project, compound, relative]
     assert (tmp_path / ".hard-eng/hook.sh").is_file()
-    assert not (tmp_path / ".hard-eng/bootstrap.sh").exists()
-    assert ".hard-eng/hook.sh" in capsys.readouterr().err
+    assert (tmp_path / ".hard-eng/bootstrap.sh").is_file()
+    assert not (tmp_path / "AGENTS.override.md").exists()
+    assert ".hard-eng/bootstrap.sh" in capsys.readouterr().err
