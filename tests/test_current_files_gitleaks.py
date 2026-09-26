@@ -212,6 +212,63 @@ def test_native_secrets_gate_uses_current_files_snapshot(
     assert "generated/output.txt" not in observed["contents"]
 
 
+def test_deployment_gate_scans_current_files_from_the_package_directory(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git(tmp_path, "config", "user.name", "Fixture")
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    (tmp_path / ".gitignore").write_text(".claude/worktrees/\n")
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-qm", "baseline")
+    (tmp_path / "infra").mkdir()
+    (tmp_path / "infra/Dockerfile").write_text("FROM scratch\n")
+    worktree = tmp_path / ".claude/worktrees/x"
+    worktree.mkdir(parents=True)
+    (worktree / "Dockerfile").write_text("FROM scratch\n")
+    tools = tmp_path.parent / f"{tmp_path.name}-tools"
+    tools.mkdir()
+    scanner = tools / "trivy"
+    scanner.write_text(
+        f"#!{sys.executable}\n"
+        + """import json
+import os
+import sys
+from pathlib import Path
+
+target = Path(sys.argv[-1])
+targets = sorted(str(path.relative_to(target)) for path in target.rglob('Dockerfile'))
+print('time\\tINFO\\t[misconfig] Misconfiguration scanning is enabled', file=sys.stderr)
+print(json.dumps({'SchemaVersion': 2, 'ArtifactType': 'filesystem', 'Results': [
+    {'Class': 'config', 'Target': name, 'Type': 'dockerfile',
+     'MisconfSummary': {'Successes': 1, 'Failures': 0}} for name in targets]}))
+Path(os.environ['TRIVY_SCOPE_RESULT']).write_text(os.getcwd())
+"""
+    )
+    scanner.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ['PATH']}")
+    result = tools / "cwd"
+    monkeypatch.setenv("TRIVY_SCOPE_RESULT", str(result))
+    gate = {
+        "name": "trivy-config",
+        "role": "deployment",
+        "command": ["trivy", "config", "--exit-code", "1", "--format", "json", "."],
+        "report": {"type": "trivy", "path": "coverage/trivy.json", "stdout": True},
+    }
+
+    assert (
+        runner.run_gate({"path": ".", "checks": []}, gate, 30, threading.Lock())
+        is False
+    )
+
+    report = json.loads((tmp_path / "coverage/trivy.json").read_text())
+    assert [item["Target"] for item in report["Results"]] == [
+        "Dockerfile",
+        "infra/Dockerfile",
+    ]
+    assert Path(result.read_text()).resolve() == tmp_path.resolve()
+
+
 def test_current_files_requires_an_initialized_gitlink_before_aliases(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
