@@ -209,9 +209,13 @@ def test_setup_rerun_retires_old_generation(
     assert git(target, "status", "--porcelain") == ""
 
 
+@pytest.mark.parametrize("options", [[], ["--external-sources"]])
 @pytest.mark.parametrize("repair", [False, True])
 def test_update_retires_old_generation(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, repair: bool
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    repair: bool,
+    options: list[str],
 ) -> None:
     source, target, _ = release
     project = write_old_generation(target)
@@ -222,7 +226,7 @@ def test_update_retires_old_generation(
         {
             "name": "shellcheck",
             "role": "shell",
-            "command": ["shellcheck", "--", *scripts],
+            "command": ["shellcheck", *options, "--", *scripts],
         }
     )
     gates.write_text(json.dumps(config))
@@ -237,6 +241,7 @@ def test_update_retires_old_generation(
     assert not set(OLD_FILES) & set(git(target, "ls-files").splitlines())
     assert_old_generation_retired(target, project)
     assert ".hard-eng/" not in gates.read_text()
+    assert "shellcheck" not in gates.read_text()
 
 
 def test_setup_json_stays_in_the_project_biome_layout(

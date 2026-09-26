@@ -579,11 +579,13 @@ def configure_shellcheck(
         or (gate.get("command") and Path(gate["command"][0]).name == "shellcheck")
     ]
     for gate in existing:
-        gate["command"] = [part for part in gate["command"] if part not in retired]
-    config["shared"] = [
-        gate for gate in config["shared"] if gate["command"] != ["shellcheck", "--"]
-    ]
-    if existing:
+        command = [part for part in gate["command"] if part not in retired]
+        if command != gate["command"] and not any(
+            (root / part).is_file() for part in command[1:]
+        ):
+            config["shared"].remove(gate)
+        gate["command"] = command
+    if any(gate in config["shared"] for gate in existing):
         return
     scripts = [
         str(path.relative_to(root))
