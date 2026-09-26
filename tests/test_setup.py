@@ -17,6 +17,7 @@ from gate_config import (
 )
 from project_setup import (
     FLUTTER_TESTS,
+    PREVIOUS_BROWSER_TESTS,
     adapt_performance,
     browser_test_coverage,
     dependency_command,
@@ -923,6 +924,14 @@ def test_flutter_browser_library_coverage_comes_from_browser_tests(
     command = package["checks"][0]["command"]
     browser_test_coverage(tmp_path, package)
     assert package["checks"][0]["command"] == command
+    for previous in (PREVIOUS_BROWSER_TESTS, ["sh", "-c", "custom"]):
+        installed: Group = {
+            **package,
+            "checks": [{"name": "tests", "role": "tests", "command": list(previous)}],
+        }
+        browser_test_coverage(tmp_path, installed)
+        expected_command = command if previous == PREVIOUS_BROWSER_TESTS else previous
+        assert installed["checks"][0]["command"] == expected_command
     tools = tmp_path / "bin"
     tools.mkdir()
     passed = '{"type":"testDone","result":"success","hidden":false,"skipped":false}'
