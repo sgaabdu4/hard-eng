@@ -27,6 +27,19 @@ def is_plan_path(path: Path) -> bool:
     )
 
 
+def planning_only(root: Path, names: set[str]) -> bool:
+    """Markdown and files in a feature plan's folder, such as its captures."""
+    folders = {
+        path.parent.relative_to(root)
+        for path in repository_files(root)
+        if is_plan_path(path.relative_to(root))
+    } - {Path(".")}
+    return all(
+        Path(name).suffix.lower() == ".md" or folders.intersection(Path(name).parents)
+        for name in names
+    )
+
+
 def is_documentation(path: Path) -> bool:
     """Plans and top-level Markdown, which only the secret scan reads."""
     top_level = path.parent == Path(".") and path.suffix.lower() == ".md"
@@ -321,11 +334,7 @@ def validate_plans(
     if changed is None:
         raise ValueError("Cannot verify plan scope; fetch or supply a valid Git --base")
     if stage is None:
-        stage = (
-            "Complete"
-            if any(Path(name).suffix.lower() != ".md" for name in changed)
-            else "Draft"
-        )
+        stage = "Draft" if planning_only(root, changed) else "Complete"
     paths = [
         path for path in repository_files(root) if is_plan_path(path.relative_to(root))
     ]

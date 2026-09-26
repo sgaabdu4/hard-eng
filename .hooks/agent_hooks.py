@@ -336,7 +336,7 @@ def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
 
 
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
-    from plans import build_in_progress, planning_feedback
+    from plans import build_in_progress, planning_feedback, planning_only
 
     if payload.get("stop_hook_active") is True:
         return {
@@ -371,9 +371,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 "reason": notice
                 + ". Continue only authorized planning and verification. Ask genuine blocking questions when needed. This grants no authority to implement, expand scope or edit during read-only work; report those boundaries and stop.",
             }
-        if notice and all(
-            Path(name).suffix.lower() == ".md" for name in changed.splitlines()
-        ):
+        if notice and planning_only(root, set(changed.splitlines())):
             require_current(root)
             return {
                 "systemMessage": notice

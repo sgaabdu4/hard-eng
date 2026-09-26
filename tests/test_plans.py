@@ -762,3 +762,27 @@ def test_plan_without_status_predates_the_status_field(
     legacy.write_text(legacy.read_text() + "Reopened.\n")
     with pytest.raises(ValueError, match="features/legacy/PLAN.md: plan needs one"):
         validate_plans(tmp_path)
+
+
+def test_plan_screenshots_stay_planning_work(
+    runner: ModuleType, tmp_path: Path, completed_plan: str
+) -> None:
+    git(tmp_path, "add", ".")
+    git(
+        tmp_path,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.test",
+        "commit",
+        "-qm",
+        "baseline",
+    )
+    plan = tmp_path / "features/screen/PLAN.md"
+    (plan.parent / "captures").mkdir(parents=True)
+    plan.write_text(completed_plan.replace("Status: Complete", "Status: Draft"))
+    (plan.parent / "captures/before.png").write_bytes(b"\x89PNG")
+    assert validate_plans(tmp_path) == "Draft"
+    (tmp_path / "logo.png").write_bytes(b"\x89PNG")
+    with pytest.raises(ValueError, match="requires Complete"):
+        validate_plans(tmp_path)
