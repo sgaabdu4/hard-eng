@@ -775,6 +775,34 @@ def retired_config(root: Path) -> GateConfig | None:
     return config
 
 
+def expanded(value: object) -> bool:
+    if isinstance(value, dict):
+        return bool(value)
+    return isinstance(value, list) and any(expanded(item) for item in value)
+
+
+def gates_text(value: object, indent: str = "", used: int = 0) -> str:
+    if isinstance(value, list) and not expanded(value):
+        flat = json.dumps(value, separators=(", ", ": "))
+        if used + len(flat) <= 80:
+            return flat
+    if not isinstance(value, (dict, list)) or not value:
+        return json.dumps(value)
+    inner = indent + "  "
+    entries = (
+        [(f"{json.dumps(key)}: ", item) for key, item in value.items()]
+        if isinstance(value, dict)
+        else [("", item) for item in value]
+    )
+    last = len(entries) - 1
+    body = ",\n".join(
+        inner + head + gates_text(item, inner, len(inner + head) + (index < last))
+        for index, (head, item) in enumerate(entries)
+    )
+    opening, closing = "{}" if isinstance(value, dict) else "[]"
+    return f"{opening}\n{body}\n{indent}{closing}"
+
+
 def plan_install(
     root: Path, previous: Path | None = None
 ) -> tuple[dict[str, str], dict[str, str], Path, str]:
@@ -809,7 +837,7 @@ def plan_install(
         else gate_config(root)
     )
     if generated is not None:
-        changes["hard-eng.gates.json"] = json.dumps(generated, indent=2) + "\n"
+        changes["hard-eng.gates.json"] = gates_text(generated) + "\n"
     from gate_config import parse_config, repository_files, typescript_packages
 
     config = parse_config(
@@ -850,7 +878,7 @@ def plan_install(
     if "hard-eng.gates.json" in changes or config != json.loads(
         (root / "hard-eng.gates.json").read_text()
     ):
-        changes["hard-eng.gates.json"] = json.dumps(config, indent=2) + "\n"
+        changes["hard-eng.gates.json"] = gates_text(config) + "\n"
     hook, launcher = prepare_hook(root)
     links = prepare_skill_links(root, unused)
     validate_destinations(root, changes, hook)

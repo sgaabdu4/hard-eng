@@ -11,6 +11,7 @@ from types import ModuleType
 import pytest
 import update
 from conftest import commit, git, init
+from gate_config import JsonObject
 from shipping import ShippingError, ShippingPolicy
 from test_setup import repository as setup_repository
 from test_setup import snapshot
@@ -824,6 +825,57 @@ def test_unverified_scaffold_update_fails(
         update.check_scaffold_update(target, base)
 
 
+def test_gates_file_matches_biome_layout(installer: ModuleType) -> None:
+    fits, wraps = "a" * 46, "a" * 47
+    config: JsonObject = {
+        "version": 1,
+        "shipping": {"base": "main", "checks": ["verify"], "ui_paths": []},
+        "packages": [
+            {
+                "path": ".",
+                "sources": ["lib"],
+                "report": {},
+                "checks": [
+                    {"command": ["dart", fits], "name": "fits"},
+                    {"command": ["dart", wraps], "name": "wraps"},
+                ],
+            }
+        ],
+    }
+    assert (
+        installer.gates_text(config) + "\n"
+        == f"""{{
+  "version": 1,
+  "shipping": {{
+    "base": "main",
+    "checks": ["verify"],
+    "ui_paths": []
+  }},
+  "packages": [
+    {{
+      "path": ".",
+      "sources": ["lib"],
+      "report": {{}},
+      "checks": [
+        {{
+          "command": ["dart", "{fits}"],
+          "name": "fits"
+        }},
+        {{
+          "command": [
+            "dart",
+            "{wraps}"
+          ],
+          "name": "wraps"
+        }}
+      ]
+    }}
+  ]
+}}
+"""
+    )
+
+
 def test_retired_families_config_is_regenerated_and_reported(
     installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -861,7 +913,9 @@ def test_retired_families_config_is_regenerated_and_reported(
     assert "lint (program not found): ['node_modules/.bin/biome'" in notice
     assert "audit (Fallow audit gates require a native fallow report" in notice
     assert "removed ([Errno 2] No such file or directory" in notice
-    config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    written = (tmp_path / "hard-eng.gates.json").read_text()
+    config = json.loads(written)
+    assert written == installer.gates_text(config) + "\n"
     assert "families" not in config and "phases" not in config
     assert [package["language"] for package in config["packages"]] == ["javascript"]
     assert [gate["command"] for gate in config["shared"]].count(secrets) == 1
