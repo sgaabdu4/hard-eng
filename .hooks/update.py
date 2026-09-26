@@ -286,7 +286,7 @@ def update_plan(
     links: dict[str, str | None] = {
         name: target
         for name, target in plan["links"].items()
-        if not (root / name).is_symlink()
+        if not (root / name).is_symlink() or retired_link(root, root / name)
     }
     removed_skills = {path.name for path in (previous / ".agents/skills").iterdir()} - (
         skills - unused
@@ -348,6 +348,15 @@ def legacy_link(path: Path) -> bool:
     return path.is_symlink() and ".agents/hard-eng/" in f"{path.readlink()}/"
 
 
+def retired_link(root: Path, path: Path) -> bool:
+    """An old per-checkout link directly inside a skills or agents folder of this checkout."""
+    return (
+        path.parent.relative_to(root).as_posix() in LEGACY_FOLDERS
+        and contained(root, path)
+        and legacy_link(path)
+    )
+
+
 def contained(root: Path, path: Path) -> bool:
     """Refuse paths reached through a linked directory, which may hold shared files."""
     return not any(
@@ -359,9 +368,11 @@ def contained(root: Path, path: Path) -> bool:
 
 def retire_local_generation(root: Path) -> None:
     """Remove the old per-checkout Hard Eng copy and the local files that pointed at it."""
+    settings = root / ".claude/settings.local.json"
+    kept_settings = retired_settings(settings)
     for folder in LEGACY_FOLDERS:
         for link in (root / folder).glob("*"):
-            if contained(root, link) and legacy_link(link):
+            if retired_link(root, link):
                 link.unlink()
     cache = root / ".agents/hard-eng"
     if contained(root, cache):
@@ -370,7 +381,8 @@ def retire_local_generation(root: Path) -> None:
         elif cache.is_dir():
             shutil.rmtree(cache)
     retire_local_import(root / "CLAUDE.local.md")
-    retire_local_settings(root / ".claude/settings.local.json")
+    if kept_settings is not None:
+        settings.write_text(kept_settings)
     retire_exclude_block(root)
 
 
@@ -387,11 +399,12 @@ def retire_local_import(local: Path) -> None:
         local.write_text("".join(kept))
 
 
-def retire_local_settings(settings: Path) -> None:
+def retired_settings(settings: Path) -> str | None:
+    """Local settings without old Hard Eng entries, or None when nothing changes."""
     from agent_hooks import remove_old_generation
 
     if not settings.is_file() or settings.is_symlink() or settings.parent.is_symlink():
-        return
+        return None
     current = json.loads(settings.read_text())
     before = json.dumps(current)
     if isinstance(hooks := current.get("hooks"), dict):
@@ -400,8 +413,9 @@ def retire_local_settings(settings: Path) -> None:
             del current["hooks"]
     if current.get("outputStyle") == "Plain English":
         del current["outputStyle"]
-    if json.dumps(current) != before:
-        settings.write_text(json.dumps(current, indent=2) + "\n")
+    return (
+        None if json.dumps(current) == before else json.dumps(current, indent=2) + "\n"
+    )
 
 
 def retire_exclude_block(root: Path) -> None:
@@ -467,6 +481,7 @@ def write_links(root: Path, links: dict[str, str | None]) -> None:
             link.unlink(missing_ok=True)
         else:
             link.parent.mkdir(parents=True, exist_ok=True)
+            link.unlink(missing_ok=True)
             link.symlink_to(target, target_is_directory=True)
 
 
@@ -697,11 +712,11 @@ def repair_installation(root: Path, previous: str) -> str:
     status = "No newer CI-verified Hard Eng revision is available"
     if install_planned_hook(root, hook):
         status += "; installed the missing pre-push hook"
+    retire_local_generation(root)
     if not missing and not added:
         return status + "."
     names = sorted({*missing, *added})
     clean = not local_state(root, names)
-    retire_local_generation(root)
     write_changes(root, missing)
     write_links(root, added)
     return f"{status}; repaired {install_paths(names)}. " + commit_install(
@@ -800,8 +815,8 @@ def update(root: Path, repair: bool = False) -> str:
             raise ValueError(
                 "The update paths changed during verification; nothing was applied"
             )
-        retire_local_generation(root)
         commit_update(root, changes, links, revision)
+        retire_local_generation(root)
         if hook[0] not in changes:
             install_planned_hook(root, hook)
     return f"Updated Hard Eng to {revision}; created an isolated local commit without pushing."

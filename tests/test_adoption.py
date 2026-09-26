@@ -458,3 +458,53 @@ def test_install_leaves_linked_legacy_folders_untouched(
         installer.install(root)
     assert (shared / "agents/hard-eng/current").is_dir()
     assert (shared / "claude/settings.local.json").read_text() == settings
+
+
+def test_install_refuses_a_skills_folder_linked_into_another_copy(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    shared = tmp_path / "other/.agents/hard-eng/current/skills"
+    shared.mkdir(parents=True)
+    root = tmp_path / "project"
+    root.mkdir()
+    repository(root)
+    (root / ".agents").mkdir()
+    (root / ".agents/skills").symlink_to(shared, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        installer.install(root)
+    assert not any(shared.iterdir())
+
+
+def test_install_keeps_the_old_copy_when_local_settings_are_malformed(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / ".agents/hard-eng/current").mkdir(parents=True)
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude/settings.local.json").write_text("{")
+    with pytest.raises(ValueError):
+        installer.install(tmp_path)
+    assert (tmp_path / ".agents/hard-eng/current").is_dir()
+
+
+def test_setup_rerun_replaces_old_skill_links_and_cleans_local_settings(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, target, _ = release
+    (target / ".agents/hard-eng/current/skills/he").mkdir(parents=True)
+    link = target / ".claude/skills/he"
+    link.unlink()
+    link.symlink_to("../../.agents/hard-eng/current/skills/he")
+    local = {
+        "hooks": {
+            "Stop": [
+                {"hooks": [{"type": "command", "command": "bash .hard-eng/hook.sh"}]}
+            ]
+        }
+    }
+    (target / ".claude/settings.local.json").write_text(json.dumps(local))
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    update.update(target, repair=True)
+    assert link.resolve() == (target / ".agents/skills/he").resolve()
+    assert not (target / ".agents/hard-eng").exists()
+    assert json.loads((target / ".claude/settings.local.json").read_text()) == {}

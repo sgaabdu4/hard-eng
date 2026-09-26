@@ -534,14 +534,14 @@ sys.exit(subprocess.call([sys.executable, root + "/.hooks/hard-eng.py", "pre-pus
 
 
 def validate_destinations(root: Path, changes: dict[str, str], hook: Path) -> None:
-    from update import legacy_link
+    from update import retired_link
 
     for name in (*changes, os.path.relpath(hook, root)):
         target = root / name
         for path in (target, *target.parents):
             if path == root:
                 break
-            if (path == hook and path.is_symlink()) or legacy_link(path):
+            if (path == hook and path.is_symlink()) or retired_link(root, path):
                 continue
             if path.is_symlink():
                 raise ValueError(
@@ -702,7 +702,7 @@ def scaffold_changes(
 
 
 def prepare_skill_links(root: Path, unused: set[str]) -> dict[str, str]:
-    from update import legacy_link
+    from update import retired_link
 
     links = {}
     for skill in (SOURCE / ".agents/skills").iterdir():
@@ -714,7 +714,7 @@ def prepare_skill_links(root: Path, unused: set[str]) -> dict[str, str]:
         if (
             (link.exists() or link.is_symlink())
             and not (link.is_symlink() and link.resolve() == target)
-            and not legacy_link(link)
+            and not retired_link(root, link)
         ):
             raise ValueError(
                 f"{name} already differs; preserve it and ask before replacing it"
