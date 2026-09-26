@@ -150,6 +150,9 @@ def test_install_retires_old_generation_and_keeps_project_files(
     if not tracked:
         assert all((tmp_path / name).exists() for name in OLD_FILES)
         assert "Kept uncommitted old Hard Eng files" in capsys.readouterr().err
+        override = (tmp_path / "AGENTS.override.md").read_text()
+        assert override.endswith(OLD_FILES["AGENTS.override.md"])
+        assert "[shared instructions](AGENTS.md)" in override
         return
     assert_old_generation_retired(tmp_path, project)
     tracked_names = subprocess.check_output(
@@ -310,6 +313,13 @@ def test_setup_rerun_leaves_local_settings_edits_uncommitted(
 
 
 @pytest.mark.parametrize(
+    "run",
+    [
+        "bash .hard-eng/bootstrap.sh claude && ./guard",
+        "cd .hard-eng && bash bootstrap.sh",
+    ],
+)
+@pytest.mark.parametrize(
     "local", [".claude/settings.local.json", ".github/hooks/project-policy.json"]
 )
 def test_install_keeps_compound_project_hooks_and_the_script_they_run(
@@ -317,6 +327,7 @@ def test_install_keeps_compound_project_hooks_and_the_script_they_run(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     local: str,
+    run: str,
 ) -> None:
     repository(tmp_path)
     write_old_generation(tmp_path)
@@ -330,10 +341,7 @@ def test_install_keeps_compound_project_hooks_and_the_script_they_run(
         "type": "command",
         "command": 'bash "$(git rev-parse --show-toplevel)/.hard-eng/hook.sh" claude',
     }
-    relative = {
-        "type": "command",
-        "command": "bash .hard-eng/bootstrap.sh claude && ./guard",
-    }
+    relative = {"type": "command", "command": run}
     current["hooks"]["PreToolUse"][0]["hooks"] += [compound, generated]
     settings.write_text(json.dumps(current))
     policy = {"hooks": {"PreToolUse": [{"hooks": [relative]}]}}
