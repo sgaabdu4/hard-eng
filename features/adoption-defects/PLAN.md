@@ -39,7 +39,7 @@ Execution: Four parallel builders in isolated worktrees (installer, Python, Biom
 
 ## Risks + recovery
 
-The SHA-1 fix replaces one registry semgrep rule with a Hard Eng rule that keeps flagging plain SHA-1. It covers gates passing `p/python` as a separate argument. Nested formatter configs (`.hooks/ruff.toml`, `.agents/biome.json`) are skipped by tools run with `--config` or `--isolated`. Existing installs pick everything up through the verified updater. Claude Code before v2.1.277, its first session after upgrading from one, or with the `agents-md` plugin disabled reads no Hard Eng rules without a `CLAUDE.md`. Parent-directory `CLAUDE.md` files are checked only on the machine running setup; another machine with one needs the **Project instructions** setting `claude-md-and-agents-md`. Setup JSON reads only the root Biome config: `extends`, path `overrides` and Prettier options are not followed.
+The SHA-1 fix replaces one registry semgrep rule with a Hard Eng rule that keeps flagging plain SHA-1. It covers gates passing `p/python` as a separate argument. Nested formatter configs (`.hooks/ruff.toml`, `.agents/biome.json`) are skipped by tools run with `--config` or `--isolated`. Existing installs pick everything up through the verified updater. Claude Code before v2.1.277, its first session after upgrading from one, or with the `agents-md` plugin disabled reads no Hard Eng rules without a `CLAUDE.md`. Parent-directory `CLAUDE.md` files are checked only on the machine running setup; another machine with one needs the **Project instructions** setting `claude-md-and-agents-md`. Setup JSON reads only the root Biome config: `extends`, path `overrides` and Prettier options are not followed. Removing the old per-checkout copy is not transactional; if a write fails partway, rerunning setup finishes it. Setup repair while a newer release exists still refuses unstaged deletions of installed files, as on main. The old fallback always kept its links out of Git and never linked over an existing folder, so tracked legacy links are not migrated.
 
 ## ux_reference
 
@@ -48,7 +48,7 @@ N/A — installer, gate and hook behaviour have no product UI.
 ## Verification
 
 Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check --base origin/main` → exit 0 on the final commit. Each new regression failed on the code before its fix. Codex adversarial review ran 15 rounds; its old-generation edge cases were settled by the user's decision to remove all old wiring outright rather than preserve partial legacy setups.
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` → exit 0 on the final commit. Each new regression failed on the code before its fix. Codex adversarial review ran 24 rounds; its old-generation edge cases were settled by the user's decision to remove all old wiring outright rather than preserve partial legacy setups. origin/main's updater applies this release on a checkout holding the old fallback copy, and the new updater removes the rest at the next session start, leaving `git status` clean.
 E2E: Passed — fresh installs into temporary projects: a Biome project configured for spaces passes `biome ci .` (29 files); a Python project with ruff py314 and line-length 120 passes `ruff check` and `ruff format --check`, and Hard Eng's format, lint, types, annotations, security, dead-code, dependencies and both secrets gates pass there.
 
 Delivery target: Merge

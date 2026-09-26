@@ -569,3 +569,53 @@ def test_update_checks_local_settings_before_committing(
     update.update(target)
     assert not (target / ".agents/hard-eng").exists()
     assert json.loads(settings.read_text()) == {}
+
+
+def test_update_plan_deletes_only_tracked_old_files(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    write_old_generation(tmp_path)
+    git(tmp_path, "add", "--force", "AGENTS.override.md")
+    git(tmp_path, "commit", "-qm", "tracked old file")
+    *_, retired = installer.plan_install(tmp_path)
+    assert retired == ["AGENTS.override.md"]
+
+
+def test_session_start_removes_untracked_fallback_files(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, target, _ = release
+    (target / "AGENTS.override.md").write_text(OLD_FILES["AGENTS.override.md"])
+    (target / "CLAUDE.local.md").write_text("@.agents/hard-eng/current/AGENTS.md\n")
+    exclude = target / ".git/info/exclude"
+    before = exclude.read_text()
+    exclude.write_text(
+        before + "# >>> hard-eng repository fallback >>>\n/AGENTS.override.md\n"
+        "/CLAUDE.local.md\n# <<< hard-eng repository fallback <<<\n"
+    )
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    update.update(target)
+    assert not (target / "AGENTS.override.md").exists()
+    assert not (target / "CLAUDE.local.md").exists()
+    assert exclude.read_text() == before
+    assert git(target, "status", "--porcelain") == ""
+
+
+def test_install_refuses_linked_local_settings_that_run_the_old_copy(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    repository(root)
+    (root / ".agents/hard-eng/current").mkdir(parents=True)
+    shared = tmp_path / "settings.local.json"
+    command = "bash .agents/hard-eng/current/scripts/hooks/agent-hook.sh"
+    shared.write_text(
+        json.dumps({"hooks": {"Stop": [{"hooks": [{"command": command}]}]}})
+    )
+    (root / ".claude").mkdir()
+    (root / ".claude/settings.local.json").symlink_to(shared)
+    with pytest.raises(ValueError, match="settings.local.json"):
+        installer.install(root)
+    assert (root / ".agents/hard-eng/current").is_dir()

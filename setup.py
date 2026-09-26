@@ -926,12 +926,12 @@ def install(root: Path, previous: Path | None = None) -> None:
     )
 
     changes, links, hook, launcher, deleted = plan_install(root, previous)
-    retire_local_generation(root)
     names = sorted({*changes, *links, *deleted})
     if hook.is_relative_to(root) and ".git" not in hook.relative_to(root).parts:
         names.append(str(hook.relative_to(root)))  # A Husky launcher lives in the tree.
     # Commit only paths without prior local state, so no project edit joins the commit.
     clean = not local_state(root, names)
+    retire_local_generation(root)
     write_changes(root, {**changes, **dict.fromkeys(deleted)})
     for name, destination in links.items():
         link = root / name
