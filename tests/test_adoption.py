@@ -7,11 +7,10 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock
 
-import agent_hooks
 import pytest
 import update
 from conftest import commit, git
-from gate_config import JsonObject, json_file
+from gate_config import json_file
 from test_setup import repository
 from test_updates import select_release
 
@@ -310,15 +309,28 @@ def test_setup_rerun_leaves_local_settings_edits_uncommitted(
     assert "permissions" in settings.read_text()
 
 
-def test_old_generation_removal_keeps_compound_project_hooks() -> None:
-    compound: JsonObject = {
+def test_install_keeps_compound_project_hooks_and_the_script_they_run(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository(tmp_path)
+    write_old_generation(tmp_path)
+    settings = tmp_path / ".claude/settings.json"
+    current = json.loads(settings.read_text())
+    compound = {
         "type": "command",
         "command": OLD_COMMAND.format("hook.sh", "claude pretooluse") + " && ./guard",
     }
-    generated: JsonObject = {
+    generated = {
         "type": "command",
         "command": 'bash "$(git rev-parse --show-toplevel)/.hard-eng/hook.sh" claude',
     }
-    current: JsonObject = {"hooks": {"PreToolUse": [{"hooks": [generated, compound]}]}}
-    agent_hooks.remove_routine_hooks(current, "claude", "unused")
-    assert current == {"hooks": {"PreToolUse": [{"hooks": [compound]}]}}
+    current["hooks"]["PreToolUse"][0]["hooks"] += [compound, generated]
+    settings.write_text(json.dumps(current))
+    git(tmp_path, "add", "--force", ".")
+    commit(tmp_path, "old generation wiring")
+    installer.install(tmp_path)
+    (group,) = json.loads(settings.read_text())["hooks"]["PreToolUse"]
+    assert group["hooks"] == [{"type": "command", "command": "project-guard"}, compound]
+    assert (tmp_path / ".hard-eng/hook.sh").is_file()
+    assert not (tmp_path / ".hard-eng/bootstrap.sh").exists()
+    assert ".hard-eng/hook.sh" in capsys.readouterr().err

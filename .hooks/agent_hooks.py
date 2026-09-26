@@ -158,6 +158,13 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
     _remove_old_generation(hooks)
 
 
+HOOK_FILES = {
+    "claude": ".claude/settings.json",
+    "codex": ".codex/hooks.json",
+    "copilot": ".github/hooks/hard-eng.json",
+}
+
+
 OLD_GENERATION_SCRIPT = re.compile(r"/\.hard-eng/(?:bootstrap|hook)\.sh\b")
 OLD_GENERATION_COMMAND = re.compile(
     r'bash "\$\((?:env(?: -u \w+)+ )?git rev-parse --show-toplevel\)'
