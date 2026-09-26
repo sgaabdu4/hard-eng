@@ -487,8 +487,9 @@ def test_install_keeps_the_old_copy_when_local_settings_are_malformed(
     assert (tmp_path / ".agents/hard-eng/current").is_dir()
 
 
-def test_setup_rerun_replaces_old_skill_links_and_cleans_local_settings(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("repair", [True, False])
+def test_update_replaces_old_skill_links_and_cleans_local_settings(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, repair: bool
 ) -> None:
     _, target, _ = release
     (target / ".agents/hard-eng/current/skills/he").mkdir(parents=True)
@@ -504,7 +505,7 @@ def test_setup_rerun_replaces_old_skill_links_and_cleans_local_settings(
     }
     (target / ".claude/settings.local.json").write_text(json.dumps(local))
     monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
-    update.update(target, repair=True)
+    update.update(target, repair=repair)
     assert link.resolve() == (target / ".agents/skills/he").resolve()
     assert not (target / ".agents/hard-eng").exists()
     assert json.loads((target / ".claude/settings.local.json").read_text()) == {}

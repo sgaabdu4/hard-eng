@@ -408,6 +408,19 @@ def retire_local_generation(root: Path) -> None:
     retire_exclude_block(root)
 
 
+def local_generation(root: Path) -> bool:
+    cache = root / ".agents/hard-eng"
+    return (
+        (contained(root, cache) and (cache.is_symlink() or cache.is_dir()))
+        or any(
+            retired_link(root, link)
+            for folder in LEGACY_FOLDERS
+            for link in (root / folder).glob("*")
+        )
+        or retired_settings(root / ".claude/settings.local.json") is not None
+    )
+
+
 def retire_local_import(local: Path) -> None:
     if not local.is_file() or local.is_symlink():
         return
@@ -806,7 +819,7 @@ def update(root: Path, repair: bool = False) -> str:
         return "Installed from an uncommitted working copy; publish a verified source revision before automatic updates."
     revision = latest_verified(previous)
     if revision is None:
-        if repair:
+        if repair or local_generation(root):
             return repair_installation(root, previous)
         return repair_current_hook(root, previous)
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
