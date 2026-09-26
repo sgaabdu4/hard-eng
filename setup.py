@@ -55,7 +55,7 @@ def merge(
 
 
 def gate_config(root: Path) -> GateConfig:
-    from gate_config import nonproduction_source, package_manifests, repository_files
+    from gate_config import dart_test_support, package_manifests, repository_files
     from project_setup import adapt_packages
 
     packages: list[Group] = []
@@ -85,7 +85,7 @@ def gate_config(root: Path) -> GateConfig:
     config: GateConfig = {"version": 1, "packages": packages, "shared": shared}
     adapt_packages(root, config)
     for package in packages:
-        if nonproduction_source(Path(package["path"])):
+        if dart_test_support(package["path"], package.get("language"), packages):
             # A test-support package's code is gated by its parent's checks.
             del package["language"], package["sources"]
             package["checks"] = [

@@ -89,3 +89,35 @@ def test_test_support_package_keeps_only_dependency_checks(
     config["packages"].remove(support)
     with pytest.raises(ValueError, match="test-support package without language"):
         validate_required_checks(tmp_path, config)
+
+
+def test_test_support_needs_a_covering_dart_parent(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    """Without a parent Dart package nothing else analyzes a test-path package."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    runner = tmp_path / "tests/runner"
+    member = tmp_path / "tests/runner/packages/member"
+    member.mkdir(parents=True)
+    (runner / "pubspec.yaml").write_text(
+        "name: runner_fixture\nworkspace: [packages/member]\n"
+    )
+    (runner / "pubspec.lock").touch()
+    (member / "pubspec.yaml").write_text(
+        "name: member_fixture\nresolution: workspace\n"
+    )
+    (member / "lib").mkdir()
+    (member / "lib/member.dart").write_text("int one() => 1;\n")
+    standalone = installer.gate_config(tmp_path)
+    assert {
+        group["path"]: group.get("language") for group in standalone["packages"]
+    } == {"tests/runner": None, "tests/runner/packages/member": "dart"}
+    (tmp_path / "pubspec.yaml").write_text("name: app_fixture\n")
+    (tmp_path / "pubspec.lock").touch()
+    nested = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, nested)
+    assert {group["path"]: group.get("language") for group in nested["packages"]} == {
+        ".": "dart",
+        "tests/runner": None,
+        "tests/runner/packages/member": None,
+    }
