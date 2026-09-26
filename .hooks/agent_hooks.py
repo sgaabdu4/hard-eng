@@ -359,12 +359,12 @@ def saved_session(state: Path | None) -> tuple[str, JsonObject]:
         return "HEAD", {}
     saved = json.loads(state.read_text())
     if not isinstance(saved, dict):
-        raise ValueError("Invalid session state: expected an object")
+        raise TypeError("Invalid session state: expected an object")
     base, before = saved.get("base"), saved.get("dirty", {})
     if not isinstance(base, str) or not base.strip():
         raise ValueError("Invalid session state: expected a nonempty Git base")
     if not isinstance(before, dict):
-        raise ValueError("Invalid session state: expected a dirty-file object")
+        raise TypeError("Invalid session state: expected a dirty-file object")
     return base, before
 
 

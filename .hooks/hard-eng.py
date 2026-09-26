@@ -13,7 +13,7 @@ import tempfile
 import threading
 import tomllib
 import xml.etree.ElementTree as ET
-from collections.abc import Iterator
+from collections.abc import Generator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
@@ -586,7 +586,7 @@ def run_gate(
 
 
 @contextmanager
-def check_lock(root: Path) -> Iterator[None]:
+def check_lock(root: Path) -> Generator[None]:
     """Gates write fixed report paths, so one check runs per checkout at a time."""
     name = subprocess.check_output(
         ["git", "rev-parse", "--git-path", "hard-eng-check.lock"], cwd=root, text=True
