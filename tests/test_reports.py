@@ -450,6 +450,23 @@ def test_trivy_repository_config_retains_failure_checks(tmp_path: Path) -> None:
         reports.validate_trivy(path)
 
 
+@pytest.mark.parametrize(
+    ("results", "message"),
+    [
+        ("", "no deployment configuration"),
+        (',"Results":[]', "no deployment configuration"),
+        (',"Results":{"Class":"config"}', "malformed"),
+    ],
+)
+def test_trivy_scan_without_configuration_names_the_cause(
+    tmp_path: Path, results: str, message: str
+) -> None:
+    path = tmp_path / "report.json"
+    path.write_text('{"SchemaVersion":2,"ArtifactType":"filesystem"' + results + "}")
+    with pytest.raises(ValueError, match=message):
+        reports.validate_trivy(path)
+
+
 @pytest.mark.parametrize("source_type", ["artifact", "lockfile"])
 def test_image_report_requires_valid_layer_origin(
     tmp_path: Path, source_type: str
