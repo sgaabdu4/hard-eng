@@ -1,6 +1,6 @@
 # Keep local checks as strict as CI
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -28,10 +28,10 @@ Authority: Autonomous. The user asked to fix all reported Hard Eng defects and t
 
 ## Acceptance + steps
 
-- [ ] SIGTERM or SIGHUP during pre-push leaves one worktree, no snapshot directory and no running check → `test_interrupted_pre_push_removes_its_snapshot`.
-- [ ] Without `GH_TOKEN`/`GITHUB_TOKEN`, the ci-security gate receives `gh auth token`; other gates and an existing token are untouched → `tests/test_runner.py`.
-- [ ] The mise launcher passes `--config.ignore-scripts=false` locally, in generated CI and when migrating installed workflows → `tests/test_ci_setup.py` and `tests/test_setup.py`, plus a real `pnpm dlx` under `ignoreScripts: true`.
-- [ ] With no base, a two-line block committed on a branch off the shipping base fails `validate_comments`; an explicit `HEAD` base keeps the old scope → `tests/test_comments.py`.
+- [x] SIGTERM or SIGHUP during pre-push leaves one worktree, no snapshot directory and no running gate, even one that ignores SIGTERM → `test_interrupted_pre_push_removes_its_snapshot`.
+- [x] Without `GH_TOKEN`/`GITHUB_TOKEN`, the ci-security gate receives `gh auth token`; other gates and an existing token are untouched → `tests/test_runner.py`.
+- [x] The mise launcher passes `--config.ignore-scripts=false` locally, in generated CI and when migrating installed workflows → `tests/test_ci_setup.py` and `tests/test_setup.py`, plus a real `pnpm dlx` under `ignoreScripts: true`.
+- [x] With no base, a two-line block committed on a branch off the shipping base fails `validate_comments`; an explicit `HEAD` base keeps the old scope → `tests/test_comments.py`.
 
 ## Baseline + execution
 
@@ -52,9 +52,13 @@ N/A — hook and gate behaviour with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Required — real interrupted pre-push, real `pnpm dlx` of mise under `ignoreScripts: true`, and a real local zizmor run using the `gh` token.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Ready` → exit 0, 17/17 gates PASS, 912 tests. Every new test failed on the code before its fix. `/codex:adversarial-review --base main` found that a gate ignoring SIGTERM outlived the snapshot. The fix waits up to 10s, then SIGKILLs the group, and the test covers that case.
+E2E: Passed:
+- `test_interrupted_pre_push_removes_its_snapshot` runs a real `hard-eng.py pre-push` against a snapshot worktree, with a check that starts a gate ignoring SIGTERM, and interrupts it with SIGTERM and SIGHUP.
+- `pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --version` exits 0 under `ignoreScripts: true`; without the flag it exits 126.
+- `GH_TOKEN=$(gh auth token) zizmor --strict-collection --persona=auditor .github` reports no findings for hard-eng's workflows.
+Limit: SIGKILL of the hook itself still cannot be intercepted.
 
 Delivery target: Merge
 Delivery: Pending — PR checks green, squash merge, main CI green.
