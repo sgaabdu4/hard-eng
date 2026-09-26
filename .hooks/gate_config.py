@@ -394,6 +394,15 @@ def changed_files(root: Path, base: str) -> set[str] | None:
             == 1
         ):
             base = initial_base(root)
+        found = subprocess.run(
+            ["git", "merge-base", base, "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        # Only the branch's own changes count, not edits made on the base since.
+        base = found.stdout.strip() if found.returncode == 0 else base
         changed = subprocess.check_output(
             ["git", "diff", "--name-only", "--no-renames", "-z", base, "--"],
             cwd=root,
