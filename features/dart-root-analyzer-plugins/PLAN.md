@@ -45,4 +45,4 @@ Evidence: `uv run pytest tests/test_setup.py tests/test_package_discovery.py` �
 E2E: Passed — synthetic Flutter package with the riverpod_lint plugin and a public Notifier field, installed from this revision: its types gate set to the earlier `dart analyze --fatal-infos lib test` → `PASS types-lint` with "No issues found!"; rerunning `setup.py` rewrote it to `dart analyze --fatal-infos .`, and Hard Eng's `run_gate` then reported `avoid_public_notifier_properties` and `FAIL types-lint`.
 
 Delivery target: Merge
-Delivery: Pending — PR checks green, squash merge, main CI green.
+Delivery: Passed — PR [#185](https://github.com/sgaabdu4/hard-eng/pull/185) checks green, squash-merged as `a2696f9`, main CI (Hard Eng, Dependency Graph) green on that commit; #183 and #184 closed.

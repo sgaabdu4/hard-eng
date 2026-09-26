@@ -47,4 +47,4 @@ Review: `/codex:adversarial-review --base main` found that the first version exe
 E2E: Passed — synthetic Flutter app with a forwarder-only `lib/web_adapter.dart`, a `@TestOn('browser')` test and a committed `test/browser_runner` package with a lockfile, installed from this revision with real `setup.py`. Setup wrote the root `dart analyze --fatal-infos .` gate and a runner group with only vulnerabilities + lockfile. Through Hard Eng's `run_gate`: runner and root lockfile gates PASS; root types gate PASS clean, then FAIL on a type error planted in the runner's `lib/`. The tests gate with real `flutter test` and `dart test` on Chrome → `Line coverage: 4/4 (100.00%)`, `PASS tests`; the previous generated command on the same package → `FAIL tests: Coverage report omits production files: lib/web_adapter.dart`; rerunning setup upgraded that command to the new one.
 
 Delivery target: Merge
-Delivery: Pending — PR checks green, squash merge, main CI green.
+Delivery: Passed — PR [#185](https://github.com/sgaabdu4/hard-eng/pull/185) checks green, squash-merged as `a2696f9`, main CI (Hard Eng, Dependency Graph) green on that commit; #183 and #184 closed.
