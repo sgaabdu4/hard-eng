@@ -126,6 +126,20 @@ def nonproduction_source(relative: Path) -> bool:
     )
 
 
+def dart_test_support(path: str, language: str | None, packages: list[Group]) -> bool:
+    """A parent Dart package's package-root analysis and formatting cover it."""
+    return (
+        language == "dart"
+        and nonproduction_source(Path(path))
+        and any(
+            group.get("language") == "dart"
+            and Path(path) != Path(group["path"])
+            and Path(path).is_relative_to(group["path"])
+            for group in packages
+        )
+    )
+
+
 def typescript_packages(root: Path, files: list[Path]) -> set[str]:
     manifests = {path.parent for path in files if path.name == "package.json"}
     packages = set()
@@ -568,11 +582,20 @@ def validate_manifest_groups(
         if (path, language) in declared:
             continue
         group = declared.get((path, None))
+        test_support = dart_test_support(path, language, config["packages"])
         if group is None:
             raise ValueError(
                 f"Supported {language} package is missing from gate configuration: {path}"
+                + (
+                    "; declare a test-support package without language or sources,"
+                    " with lockfile and vulnerability checks"
+                    if test_support
+                    else ""
+                )
             )
-        if group.get("sources") or not workspace_members(root / path, language):
+        if group.get("sources") or not (
+            test_support or workspace_members(root / path, language)
+        ):
             raise ValueError(f"{path}: package language must be {language}")
 
 

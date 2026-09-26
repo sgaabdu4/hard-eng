@@ -29,6 +29,8 @@ from project_setup import (
 from reports import completed_tests, line_coverage, parallel_hint
 from shipping import ShippingPolicy
 
+ROOT_ANALYZER = ["dart", "analyze", "--fatal-infos", "."]
+
 
 def test_existing_lighthouse_config_runs_after_build(tmp_path: Path) -> None:
     package: Group = {
@@ -354,8 +356,8 @@ def test_standalone_python_does_not_invent_import_architecture(
     assert "imports" not in {gate["role"] for gate in package["checks"]}
     tests = next(gate for gate in package["checks"] if gate["role"] == "tests")
     assert "--cov=main" in tests["command"]
-    installer.configure_typing_checks(tmp_path, package)
-    installer.configure_typing_checks(tmp_path, package)
+    installer.configure_typing_checks(package)
+    installer.configure_typing_checks(package)
     annotations = [gate for gate in package["checks"] if gate["role"] == "annotations"]
     assert len(annotations) == 1
     assert "main.py" in annotations[0]["command"]
@@ -374,7 +376,7 @@ def test_nested_dart_owner_keeps_native_analyzer_scope(
         "checks": [],
     }
 
-    installer.configure_typing_checks(tmp_path, function)
+    installer.configure_typing_checks(function)
     assert function["checks"][0]["command"] == ["dart", "analyze", "--fatal-infos", "."]
 
 
@@ -385,13 +387,12 @@ def test_nested_dart_owner_keeps_native_analyzer_scope(
         (["dart", "analyze", "--fatal-infos", "."], True),
         (["dart", "analyze"], False),
         (["dart", "analyze", "--fatal-infos", "lib"], False),
+        (["dart", "analyze", "--fatal-infos", "lib", "test"], False),
     ],
 )
 def test_root_dart_analyzer_is_reused_only_when_it_covers_the_package(
-    installer: ModuleType, tmp_path: Path, command: list[str], adequate: bool
+    installer: ModuleType, command: list[str], adequate: bool
 ) -> None:
-    for name in ("lib", "test"):
-        (tmp_path / name).mkdir()
     existing = {"name": "analyze", "role": "types", "command": list(command)}
     package: Group = {
         "path": ".",
@@ -400,21 +401,15 @@ def test_root_dart_analyzer_is_reused_only_when_it_covers_the_package(
         "checks": [existing],
     }
 
-    installer.configure_typing_checks(tmp_path, package)
-    installer.configure_typing_checks(tmp_path, package)
+    installer.configure_typing_checks(package)
+    installer.configure_typing_checks(package)
     types = [gate for gate in package["checks"] if gate["role"] == "types"]
     assert len(types) == 1
     assert existing["command"] == command
     assert (types[0] is existing) is adequate
     if not adequate:
         assert existing["role"] == "project-types"
-        assert types[0]["command"] == [
-            "dart",
-            "analyze",
-            "--fatal-infos",
-            "lib",
-            "test",
-        ]
+        assert types[0]["command"] == ["dart", "analyze", "--fatal-infos", "."]
 
 
 @pytest.mark.parametrize(
@@ -427,13 +422,10 @@ def test_root_dart_analyzer_is_reused_only_when_it_covers_the_package(
 )
 def test_root_dart_update_consolidates_duplicate_analyzers(
     installer: ModuleType,
-    tmp_path: Path,
     name: str,
     command: list[str],
     owner: bool | None,
 ) -> None:
-    for directory in ("lib", "test"):
-        (tmp_path / directory).mkdir()
     explicit = ["dart", "analyze", "--fatal-infos", "lib", "test"]
     package: Group = {
         "path": ".",
@@ -445,10 +437,30 @@ def test_root_dart_update_consolidates_duplicate_analyzers(
         ],
     }
 
-    installer.configure_typing_checks(tmp_path, package)
-    # None = Hard Eng's own template gate, which follows the explicit template.
+    installer.configure_typing_checks(package)
+    # None = Hard Eng's own template gate, which follows the package-root template.
     assert package["checks"] == [
-        {"name": name, "role": "types", "command": command if owner else explicit}
+        {"name": name, "role": "types", "command": command if owner else ROOT_ANALYZER}
+    ]
+
+
+@pytest.mark.parametrize("name", ["types-lint", "strict-types-lint"])
+def test_root_dart_directory_analyzer_returns_to_package_root(
+    installer: ModuleType, name: str
+) -> None:
+    """Explicit paths make `dart analyze` skip analyzer plugins."""
+    explicit = ["dart", "analyze", "--fatal-infos", "lib", "test"]
+    package: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [{"name": name, "role": "types", "command": explicit}],
+    }
+
+    installer.configure_typing_checks(package)
+    installer.configure_typing_checks(package)
+    assert package["checks"] == [
+        {"name": name, "role": "types", "command": ROOT_ANALYZER}
     ]
 
 
@@ -483,15 +495,7 @@ def test_plain_dart_uses_native_coverage_tool(
         for gate in config["packages"][0]["checks"]
         if gate["command"][:2] == ["dart", "analyze"]
     ] == ["types-lint"]
-    assert checks["types"]["command"][:3] == ["dart", "analyze", "--fatal-infos"]
-    assert set(checks["types"]["command"][3:]) == {
-        "lib",
-        "test",
-        "tests",
-        "integration_test",
-        "test_driver",
-    }
-    assert len(checks["types"]["command"][3:]) == 5
+    assert checks["types"]["command"] == ["dart", "analyze", "--fatal-infos", "."]
     assert checks["lockfiles"]["command"] == [
         "dart",
         "pub",
@@ -924,13 +928,13 @@ def test_flutter_browser_library_coverage_comes_from_browser_tests(
     command = package["checks"][0]["command"]
     browser_test_coverage(tmp_path, package)
     assert package["checks"][0]["command"] == command
-    for previous in (PREVIOUS_BROWSER_TESTS, ["sh", "-c", "custom"]):
+    for previous in (*PREVIOUS_BROWSER_TESTS, ["sh", "-c", "custom"]):
         installed: Group = {
             **package,
             "checks": [{"name": "tests", "role": "tests", "command": list(previous)}],
         }
         browser_test_coverage(tmp_path, installed)
-        expected_command = command if previous == PREVIOUS_BROWSER_TESTS else previous
+        expected_command = command if previous in PREVIOUS_BROWSER_TESTS else previous
         assert installed["checks"][0]["command"] == expected_command
     tools = tmp_path / "bin"
     tools.mkdir()
@@ -960,6 +964,7 @@ def test_flutter_browser_library_coverage_comes_from_browser_tests(
     assert [value for value in arguments if value.startswith("test/")] == [
         "test/web_test.dart"
     ]
+    assert "--dart2js-args=--disable-inlining" in arguments
     assert completed_tests(tmp_path / "tests.jsonl", "dart-tests") == 2
     expected = {(tmp_path / "lib/vm.dart").resolve(), web.resolve()}
     coverage = tmp_path / "coverage/lcov.info"
