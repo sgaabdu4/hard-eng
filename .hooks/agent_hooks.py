@@ -184,6 +184,24 @@ def session_state(root: Path, payload: JsonObject) -> Path | None:
     return root / ".hard-eng/sessions" / (identifier + ".json")
 
 
+def dirty_files(root: Path, base: str) -> dict[str, str]:
+    """Content hash of each file differing from base; absent files hash to ''."""
+    names = subprocess.check_output(
+        ["git", "diff", "--name-only", base, "--"], cwd=root, text=True
+    ).splitlines()
+    names += subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard"], cwd=root, text=True
+    ).splitlines()
+    present = [name for name in names if (root / name).is_file()]
+    hashes = subprocess.check_output(
+        ["git", "hash-object", "--stdin-paths"],
+        cwd=root,
+        input="\n".join(present),
+        text=True,
+    ).split()
+    return dict.fromkeys(names, "") | dict(zip(present, hashes, strict=True))
+
+
 def gate_status(root: Path) -> str:
     """Say whether `check` can start, so an install never looks active while broken."""
     from gate_config import load_groups
@@ -248,7 +266,8 @@ def session_context(root: Path, payload: JsonObject) -> str:
             ).strip()
             state.parent.mkdir(parents=True, exist_ok=True)
             if not state.exists():
-                state.write_text(json.dumps({"base": revision}))
+                dirty = dirty_files(root, revision)
+                state.write_text(json.dumps({"base": revision, "dirty": dirty}))
         except (OSError, subprocess.SubprocessError):
             messages.append("Session revision unavailable; use full checks.")
     messages.append(
@@ -335,6 +354,20 @@ def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
         return result.returncode, log.read().decode("utf-8", errors="replace")
 
 
+def saved_session(state: Path | None) -> tuple[str, JsonObject]:
+    if state is None or not state.exists():
+        return "HEAD", {}
+    saved = json.loads(state.read_text())
+    if not isinstance(saved, dict):
+        raise ValueError("Invalid session state: expected an object")
+    base, before = saved.get("base"), saved.get("dirty", {})
+    if not isinstance(base, str) or not base.strip():
+        raise ValueError("Invalid session state: expected a nonempty Git base")
+    if not isinstance(before, dict):
+        raise ValueError("Invalid session state: expected a dirty-file object")
+    return base, before
+
+
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
     from plans import build_in_progress, planning_feedback, planning_only
 
@@ -343,25 +376,16 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
             "systemMessage": "Report remaining verification blockers honestly. Do not claim a pass; no repeated stop-hook loop."
         }
     state = session_state(root, payload)
-    base = "HEAD"
-    if state is not None and state.exists():
-        saved = json.loads(state.read_text())
-        if not isinstance(saved, dict):
-            raise ValueError("Invalid session state: expected an object")
-        base = saved.get("base")
-        if not isinstance(base, str) or not base.strip():
-            raise ValueError("Invalid session state: expected a nonempty Git base")
+    base, before = saved_session(state)
     try:
         base = subprocess.check_output(
             ["git", "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}"],
             cwd=root,
             text=True,
         ).strip()
-        changed = subprocess.check_output(
-            ["git", "diff", "--name-only", base, "--"], cwd=root, text=True
-        )
-        changed += subprocess.check_output(
-            ["git", "ls-files", "--others", "--exclude-standard"], cwd=root, text=True
+        current = dirty_files(root, base).items()
+        changed = "".join(
+            f"{name}\n" for name, digest in current if before.get(name) != digest
         )
         notice, unfinished = planning_feedback(root, set(changed.splitlines()))
         if unfinished:
