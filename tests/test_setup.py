@@ -622,6 +622,8 @@ def test_setup_json_stays_in_the_project_biome_layout(
     (tmp_path / "index.js").write_text("export {};\n")
     (tmp_path / "biome.json").write_text("{}\n")
     changes = installer.plan_install(tmp_path.resolve())[0]
+    shipped = ".agents/biome.json"
+    assert changes[shipped] == (installer.SOURCE / shipped).read_text()
     written = {
         name: text
         for name, text in changes.items()

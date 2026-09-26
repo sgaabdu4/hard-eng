@@ -163,18 +163,22 @@ def scaffold_files(source: Path) -> set[str]:
         raise ValueError(
             "Unresolved skill link; run git submodule update --init --recursive"
         )
-    return {
-        str(path.relative_to(source))
-        for pattern in ("*.py", "ruff.toml")
-        for path in (source / ".hooks").glob(pattern)
-    } | {
-        str(path.relative_to(source))
-        for skill in [
-            source / ".agents/skills",
-            *(skill for skill in skills if skill.is_symlink()),
-        ]
-        for path in repository_files(skill)
-    }
+    return (
+        {
+            str(path.relative_to(source))
+            for pattern in ("*.py", "ruff.toml")
+            for path in (source / ".hooks").glob(pattern)
+        }
+        | {
+            str(path.relative_to(source))
+            for skill in [
+                source / ".agents/skills",
+                *(skill for skill in skills if skill.is_symlink()),
+            ]
+            for path in repository_files(skill)
+        }
+        | {str(path.relative_to(source)) for path in source.glob(".agents/biome.json")}
+    )
 
 
 def without_skills(files: set[str], skills: set[str]) -> set[str]:
