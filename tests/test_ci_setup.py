@@ -19,7 +19,7 @@ SOURCE = Path(__file__).resolve().parents[1]
 
 @pytest.mark.parametrize("wrapped", [False, True])
 @pytest.mark.parametrize("location", ["local", "runner", "configured"])
-def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
+def test_native_tool_bootstrap_preserves_ci_sdk_executables(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wrapped: bool, location: str
 ) -> None:
     use_installed_mise(tmp_path, monkeypatch)

@@ -283,4 +283,4 @@ def prune_launchers(launchers: Path, current: str) -> None:
                     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     continue
-                shutil.rmtree(path)
+                shutil.rmtree(path, ignore_errors=True)
