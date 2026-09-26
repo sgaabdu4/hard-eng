@@ -84,10 +84,9 @@ def gate_config(root: Path) -> GateConfig:
     )
     if not packages and requirements:
         raise ValueError(
-            f"requirements.txt without pyproject.toml in {', '.join(requirements)}. "
-            "In each directory run `uv init --bare` (writes pyproject.toml with name, "
-            "version and requires-python) and `uv add -r requirements.txt` (declares "
-            "the dependencies and writes uv.lock), commit both, then rerun setup."
+            f"requirements.txt without pyproject.toml in {', '.join(requirements)}: run "
+            "`uv init --bare` then `uv add -r requirements.txt` there (writes pyproject.toml "
+            "and uv.lock), commit both, then rerun setup."
         )
     if not packages:
         raise ValueError(

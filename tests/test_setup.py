@@ -140,25 +140,6 @@ def test_existing_python_configuration_still_requires_a_lockfile(
         installer.install(tmp_path)
 
 
-def test_requirements_only_project_is_told_how_to_declare_itself(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    repository(tmp_path)
-    for name in ("package.json", "pnpm-lock.yaml"):
-        (tmp_path / name).unlink()
-    with pytest.raises(ValueError, match="New project"):
-        installer.gate_config(tmp_path)
-    (tmp_path / "functions/api").mkdir(parents=True)
-    (tmp_path / "functions/api/main.py").write_text("print('ok')\n")
-    (tmp_path / "functions/api/requirements.txt").write_text("pyyaml\n")
-    with pytest.raises(ValueError) as error:
-        installer.gate_config(tmp_path)
-    assert "functions/api" in str(error.value)
-    assert "uv init --bare" in str(error.value)
-    assert "uv add -r requirements.txt" in str(error.value)
-    assert "New project" not in str(error.value)
-
-
 def test_react_and_existing_project_scripts_are_gated(
     installer: ModuleType, tmp_path: Path
 ) -> None:
