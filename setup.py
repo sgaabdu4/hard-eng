@@ -534,12 +534,14 @@ sys.exit(subprocess.call([sys.executable, root + "/.hooks/hard-eng.py", "pre-pus
 
 
 def validate_destinations(root: Path, changes: dict[str, str], hook: Path) -> None:
+    from update import legacy_link
+
     for name in (*changes, os.path.relpath(hook, root)):
         target = root / name
         for path in (target, *target.parents):
             if path == root:
                 break
-            if path == hook and path.is_symlink():
+            if (path == hook and path.is_symlink()) or legacy_link(path):
                 continue
             if path.is_symlink():
                 raise ValueError(
@@ -700,6 +702,8 @@ def scaffold_changes(
 
 
 def prepare_skill_links(root: Path, unused: set[str]) -> dict[str, str]:
+    from update import legacy_link
+
     links = {}
     for skill in (SOURCE / ".agents/skills").iterdir():
         if not skill.is_dir() or skill.name in unused:
@@ -707,8 +711,10 @@ def prepare_skill_links(root: Path, unused: set[str]) -> dict[str, str]:
         name = ".claude/skills/" + skill.name
         link = root / name
         target = root / ".agents/skills" / skill.name
-        if (link.exists() or link.is_symlink()) and not (
-            link.is_symlink() and link.resolve() == target
+        if (
+            (link.exists() or link.is_symlink())
+            and not (link.is_symlink() and link.resolve() == target)
+            and not legacy_link(link)
         ):
             raise ValueError(
                 f"{name} already differs; preserve it and ask before replacing it"
@@ -917,8 +923,8 @@ def install(root: Path, previous: Path | None = None) -> None:
         write_changes,
     )
 
-    retire_local_generation(root)
     changes, links, hook, launcher, deleted = plan_install(root, previous)
+    retire_local_generation(root)
     names = sorted({*changes, *links, *deleted})
     if hook.is_relative_to(root) and ".git" not in hook.relative_to(root).parts:
         names.append(str(hook.relative_to(root)))  # A Husky launcher lives in the tree.

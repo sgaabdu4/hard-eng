@@ -335,48 +335,76 @@ def old_generation(root: Path, changes: dict[str, str]) -> list[str]:
     return retired
 
 
+LEGACY_FOLDERS = (
+    ".agents/skills",
+    ".claude/skills",
+    ".claude/agents",
+    ".codex/agents",
+    ".github/agents",
+)
+
+
+def legacy_link(path: Path) -> bool:
+    return path.is_symlink() and ".agents/hard-eng/" in f"{path.readlink()}/"
+
+
+def contained(root: Path, path: Path) -> bool:
+    """Refuse paths reached through a linked directory, which may hold shared files."""
+    return not any(
+        parent.is_symlink()
+        for parent in path.parents
+        if parent.is_relative_to(root) and parent != root
+    )
+
+
 def retire_local_generation(root: Path) -> None:
     """Remove the old per-checkout Hard Eng copy and the local files that pointed at it."""
+    for folder in LEGACY_FOLDERS:
+        for link in (root / folder).glob("*"):
+            if contained(root, link) and legacy_link(link):
+                link.unlink()
+    cache = root / ".agents/hard-eng"
+    if contained(root, cache):
+        if cache.is_symlink():
+            cache.unlink()
+        elif cache.is_dir():
+            shutil.rmtree(cache)
+    retire_local_import(root / "CLAUDE.local.md")
+    retire_local_settings(root / ".claude/settings.local.json")
+    retire_exclude_block(root)
+
+
+def retire_local_import(local: Path) -> None:
+    if not local.is_file() or local.is_symlink():
+        return
+    lines = local.read_text().splitlines(keepends=True)
+    kept = [
+        line for line in lines if line.strip() != "@.agents/hard-eng/current/AGENTS.md"
+    ]
+    if not "".join(kept).strip():
+        local.unlink()
+    elif kept != lines:
+        local.write_text("".join(kept))
+
+
+def retire_local_settings(settings: Path) -> None:
     from agent_hooks import remove_old_generation
 
-    cache = root / ".agents/hard-eng"
-    for folder in (
-        ".agents/skills",
-        ".claude/skills",
-        ".claude/agents",
-        ".codex/agents",
-        ".github/agents",
-    ):
-        for link in (root / folder).glob("*"):
-            if link.is_symlink() and ".agents/hard-eng/" in str(link.readlink()) + "/":
-                link.unlink()
-    if cache.is_symlink():
-        cache.unlink()
-    elif cache.is_dir():
-        shutil.rmtree(cache)
-    local = root / "CLAUDE.local.md"
-    if local.is_file() and not local.is_symlink():
-        kept = [
-            line
-            for line in local.read_text().splitlines(keepends=True)
-            if line.strip() != "@.agents/hard-eng/current/AGENTS.md"
-        ]
-        if not "".join(kept).strip():
-            local.unlink()
-        elif len(kept) < len(local.read_text().splitlines()):
-            local.write_text("".join(kept))
-    settings = root / ".claude/settings.local.json"
-    if settings.is_file() and not settings.is_symlink():
-        current = json.loads(settings.read_text())
-        before = json.dumps(current)
-        if isinstance(hooks := current.get("hooks"), dict):
-            remove_old_generation(hooks)
-            if not hooks:
-                del current["hooks"]
-        if current.get("outputStyle") == "Plain English":
-            del current["outputStyle"]
-        if json.dumps(current) != before:
-            settings.write_text(json.dumps(current, indent=2) + "\n")
+    if not settings.is_file() or settings.is_symlink() or settings.parent.is_symlink():
+        return
+    current = json.loads(settings.read_text())
+    before = json.dumps(current)
+    if isinstance(hooks := current.get("hooks"), dict):
+        remove_old_generation(hooks)
+        if not hooks:
+            del current["hooks"]
+    if current.get("outputStyle") == "Plain English":
+        del current["outputStyle"]
+    if json.dumps(current) != before:
+        settings.write_text(json.dumps(current, indent=2) + "\n")
+
+
+def retire_exclude_block(root: Path) -> None:
     exclude = Path(
         subprocess.check_output(
             [
@@ -673,6 +701,7 @@ def repair_installation(root: Path, previous: str) -> str:
         return status + "."
     names = sorted({*missing, *added})
     clean = not local_state(root, names)
+    retire_local_generation(root)
     write_changes(root, missing)
     write_links(root, added)
     return f"{status}; repaired {install_paths(names)}. " + commit_install(
@@ -730,7 +759,6 @@ def update(root: Path, repair: bool = False) -> str:
     previous = metadata.get("revision")
     if not isinstance(previous, str) or not re.fullmatch(r"[0-9a-f]{40}", previous):
         return "Installed from an uncommitted working copy; publish a verified source revision before automatic updates."
-    retire_local_generation(root)
     revision = latest_verified(previous)
     if revision is None:
         if repair:
@@ -772,6 +800,7 @@ def update(root: Path, repair: bool = False) -> str:
             raise ValueError(
                 "The update paths changed during verification; nothing was applied"
             )
+        retire_local_generation(root)
         commit_update(root, changes, links, revision)
         if hook[0] not in changes:
             install_planned_hook(root, hook)

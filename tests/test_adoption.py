@@ -439,3 +439,22 @@ def test_install_removes_the_old_local_hard_eng_copy(
     assert "project_doc_max_bytes" not in codex
     assert exclude.read_text() == "*.log\n"
     assert not (tmp_path / "CLAUDE.md").exists()
+
+
+def test_install_leaves_linked_legacy_folders_untouched(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    shared = tmp_path / "shared"
+    (shared / "agents/hard-eng/current").mkdir(parents=True)
+    (shared / "claude").mkdir()
+    settings = '{"outputStyle": "Plain English"}'
+    (shared / "claude/settings.local.json").write_text(settings)
+    root = tmp_path / "project"
+    root.mkdir()
+    repository(root)
+    (root / ".agents").symlink_to(shared / "agents", target_is_directory=True)
+    (root / ".claude").symlink_to(shared / "claude", target_is_directory=True)
+    with pytest.raises(ValueError, match=r"\.agents|\.claude"):
+        installer.install(root)
+    assert (shared / "agents/hard-eng/current").is_dir()
+    assert (shared / "claude/settings.local.json").read_text() == settings

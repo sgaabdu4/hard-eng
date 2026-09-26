@@ -15,6 +15,14 @@ from update import require_current
 SHIP_CLAIM = re.compile(r"^[*_ ]*Ready for ship[*_]*\s*[—–-]", re.MULTILINE)
 
 
+def replaces_agents(path: Path) -> bool:
+    """A file holding only the old Hard Eng import is retired before Claude reads it."""
+    legacy = path.is_file() and path.read_text(errors="replace").strip() == (
+        "@.agents/hard-eng/current/AGENTS.md"
+    )
+    return (path.is_symlink() or path.exists()) and not legacy
+
+
 def configure_instructions(
     root: Path, source: Path, previous: Path | None, changes: dict[str, str]
 ) -> None:
@@ -35,13 +43,13 @@ def configure_instructions(
         name
         for name in {*listed, ".claude/CLAUDE.md", "CLAUDE.local.md"} - {"CLAUDE.md"}
         if Path(name).name in {"CLAUDE.md", "CLAUDE.local.md"}
-        and ((root / name).is_symlink() or (root / name).exists())
+        and replaces_agents(root / name)
     ]
     replacing += [
         parent / name
         for parent in root.parents
         for name in ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md")
-        if (parent / name).exists()
+        if replaces_agents(parent / name)
         and not (parent == Path.home() and name == ".claude/CLAUDE.md")
     ]
     if not linked and (text not in {"", CLAUDE_IMPORT} or replacing):
