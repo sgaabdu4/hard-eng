@@ -707,7 +707,6 @@ def commit_update(
 
 
 def repair_current_hook(root: Path, previous: str) -> str:
-    retire_local_generation(root)
     if not pre_push_missing(root):
         return "No newer CI-verified Hard Eng revision is available."
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
@@ -818,6 +817,7 @@ def update(root: Path, repair: bool = False) -> str:
             return "Hard Eng already matches the verified source."
         names = sorted({*changes, *links})
         refuse_local_state(root, names)
+        retired_settings(root / ".claude/settings.local.json")
         before = {
             name: (root / name).read_bytes() if (root / name).exists() else None
             for name in changes

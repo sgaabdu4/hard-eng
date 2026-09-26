@@ -553,7 +553,7 @@ def test_install_replaces_older_skill_files_behind_an_old_link(
     assert not (tmp_path / ".agents/hard-eng").exists()
 
 
-def test_update_retries_old_copy_cleanup_after_a_failed_attempt(
+def test_update_checks_local_settings_before_committing(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source, target, _ = release
@@ -563,8 +563,8 @@ def test_update_retries_old_copy_cleanup_after_a_failed_attempt(
     select_release(source, monkeypatch)
     with pytest.raises(ValueError):
         update.update(target)
+    assert (target / ".agents/hard-eng/current").is_dir()
     settings.write_text('{"outputStyle": "Plain English"}')
-    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
     update.update(target)
     assert not (target / ".agents/hard-eng").exists()
     assert json.loads(settings.read_text()) == {}
