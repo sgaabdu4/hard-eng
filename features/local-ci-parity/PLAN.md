@@ -54,11 +54,7 @@ N/A — hook and gate behaviour with no visual surface.
 
 Result: Passed
 Evidence: `python3 .hooks/hard-eng.py check --plan-stage Ready` → exit 0, 17/17 gates PASS, 912 tests. Every new test failed on the code before its fix. `/codex:adversarial-review --base main` found that a gate ignoring SIGTERM outlived the snapshot. The fix waits up to 10s, then SIGKILLs the group, and the test covers that case.
-E2E: Passed:
-- `test_interrupted_pre_push_removes_its_snapshot` runs a real `hard-eng.py pre-push` against a snapshot worktree, with a check that starts a gate ignoring SIGTERM, and interrupts it with SIGTERM and SIGHUP.
-- `pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --version` exits 0 under `ignoreScripts: true`; without the flag it exits 126.
-- `GH_TOKEN=$(gh auth token) zizmor --strict-collection --persona=auditor .github` reports no findings for hard-eng's workflows.
-Limit: SIGKILL of the hook itself still cannot be intercepted.
+E2E: Passed — `test_interrupted_pre_push_removes_its_snapshot` runs a real `hard-eng.py pre-push` against a snapshot worktree, with a check that starts a gate ignoring SIGTERM, and interrupts it with SIGTERM and SIGHUP; `pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise --package=@jdxcode/mise@latest mise --version` exits 0 under `ignoreScripts: true` (126 without the flag); `GH_TOKEN=$(gh auth token) zizmor --strict-collection --persona=auditor .github` reports no findings for hard-eng's workflows. SIGKILL of the hook itself still cannot be intercepted.
 
 Delivery target: Merge
 Delivery: Pending — PR checks green, squash merge, main CI green.
