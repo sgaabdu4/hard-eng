@@ -190,11 +190,11 @@ def test_work_from_before_the_session_is_not_session_work(repository: Path) -> N
     git(repository, "add", "tracked.py")
     git(repository, "commit", "-qm", "tracked")
     (repository / "tracked.py").write_text("value = 2\n")
-    (repository / "draft.py").write_text("print('draft')\n")
+    (repository / "draft café.py").write_text("print('draft')\n")
     payload: JsonObject = {"session_id": "known"}
     agent_hooks.session_context(repository, payload)
     assert "no code checks were run" in str(agent_hooks.completion(repository, payload))
-    (repository / "draft.py").write_text("print('session edit')\n")
+    (repository / "draft café.py").write_text("print('session edit')\n")
     assert agent_hooks.completion(repository, payload)["decision"] == "block"
 
 

@@ -1,5 +1,6 @@
 """Native context/completion responses; Git records scope, never gate results."""
 
+import hashlib
 import json
 import re
 import subprocess
@@ -187,19 +188,17 @@ def session_state(root: Path, payload: JsonObject) -> Path | None:
 def dirty_files(root: Path, base: str) -> dict[str, str]:
     """Content hash of each file differing from base; absent files hash to ''."""
     names = subprocess.check_output(
-        ["git", "diff", "--name-only", base, "--"], cwd=root, text=True
-    ).splitlines()
+        ["git", "diff", "--name-only", "-z", base, "--"], cwd=root, text=True
+    ).split("\0")
     names += subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard"], cwd=root, text=True
-    ).splitlines()
-    present = [name for name in names if (root / name).is_file()]
-    hashes = subprocess.check_output(
-        ["git", "hash-object", "--stdin-paths"],
-        cwd=root,
-        input="\n".join(present),
-        text=True,
-    ).split()
-    return dict.fromkeys(names, "") | dict(zip(present, hashes, strict=True))
+        ["git", "ls-files", "-z", "--others", "--exclude-standard"], cwd=root, text=True
+    ).split("\0")
+    digests = dict.fromkeys(set(names) - {""}, "")
+    for name in digests:
+        if (root / name).is_file():
+            with (root / name).open("rb") as file:
+                digests[name] = hashlib.file_digest(file, "sha256").hexdigest()
+    return digests
 
 
 def gate_status(root: Path) -> str:

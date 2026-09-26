@@ -783,6 +783,8 @@ def test_plan_screenshots_stay_planning_work(
     plan.write_text(completed_plan.replace("Status: Complete", "Status: Draft"))
     (plan.parent / "captures/before.png").write_bytes(b"\x89PNG")
     assert validate_plans(tmp_path) == "Draft"
-    (tmp_path / "logo.png").write_bytes(b"\x89PNG")
-    with pytest.raises(ValueError, match="requires Complete"):
-        validate_plans(tmp_path)
+    for name in ("logo.png", "features/screen/handler.py"):
+        (tmp_path / name).write_bytes(b"\x89PNG")
+        with pytest.raises(ValueError, match="requires Complete"):
+            validate_plans(tmp_path)
+        (tmp_path / name).unlink()
