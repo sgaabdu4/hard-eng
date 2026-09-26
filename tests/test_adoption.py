@@ -368,3 +368,14 @@ def test_install_retires_a_claude_md_that_only_imports_agents_md(
     installer.install(tmp_path)
     assert not (tmp_path / "CLAUDE.md").exists()
     assert "CLAUDE.md" not in git(tmp_path, "ls-files").splitlines()
+
+
+def test_install_rejects_an_edited_import_only_claude_md(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text(
+        "<!-- hard-eng:start -->\n@docs/rules.md\n<!-- hard-eng:end -->\n\n"
+    )
+    with pytest.raises(ValueError, match="CLAUDE.md"):
+        installer.install(tmp_path)
