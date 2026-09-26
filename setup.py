@@ -713,7 +713,7 @@ def prepare_skill_links(root: Path, unused: set[str]) -> dict[str, str]:
         target = root / ".agents/skills" / skill.name
         if (
             (link.exists() or link.is_symlink())
-            and not (link.is_symlink() and link.resolve() == target)
+            and not (link.is_symlink() and link.resolve() == target.resolve())
             and not retired_link(root, link)
         ):
             raise ValueError(

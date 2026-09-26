@@ -266,7 +266,9 @@ def update_plan(
     changes: dict[str, str | None] = {
         name: content
         for name, content in plan["files"].items()
-        if not (root / name).is_file() or (root / name).read_text() != content
+        if not (root / name).is_file()
+        or (root / name).read_text() != content
+        or retired_parent(root, name)
     }
     skills = {path.name for path in (source / ".agents/skills").iterdir()}
     unused = skills - {Path(name).name for name in plan["links"]}
@@ -288,6 +290,10 @@ def update_plan(
         for name, target in plan["links"].items()
         if not (root / name).is_symlink() or retired_link(root, root / name)
     }
+    for name in plan["files"]:
+        parent = retired_parent(root, name)
+        if parent is not None:
+            links[parent.relative_to(root).as_posix()] = None
     removed_skills = {path.name for path in (previous / ".agents/skills").iterdir()} - (
         skills - unused
     )
@@ -345,7 +351,10 @@ LEGACY_FOLDERS = (
 
 
 def legacy_link(path: Path) -> bool:
-    return path.is_symlink() and ".agents/hard-eng/" in f"{path.readlink()}/"
+    return (
+        path.is_symlink()
+        and ".agents/hard-eng/" in os.path.normpath(path.parent / path.readlink()) + "/"
+    )
 
 
 def retired_link(root: Path, path: Path) -> bool:
@@ -354,6 +363,19 @@ def retired_link(root: Path, path: Path) -> bool:
         path.parent.relative_to(root).as_posix() in LEGACY_FOLDERS
         and contained(root, path)
         and legacy_link(path)
+    )
+
+
+def retired_parent(root: Path, name: str) -> Path | None:
+    return next(
+        (
+            parent
+            for parent in (root / name).parents
+            if parent != root
+            and parent.is_relative_to(root)
+            and retired_link(root, parent)
+        ),
+        None,
     )
 
 
@@ -523,8 +545,8 @@ def verify_candidate(
                 cwd=candidate,
                 check=True,
             )
-        write_changes(candidate, changes)
         write_links(candidate, links)
+        write_changes(candidate, changes)
         names = sorted({*changes, *links})
         if names:
             subprocess.run(
@@ -627,8 +649,8 @@ def commit_update(
         for name in links
     }
     try:
-        write_changes(root, changes)
         write_links(root, links)
+        write_changes(root, changes)
         subprocess.run(
             ["git", "add", "--force", "--", *names],
             cwd=root,
@@ -643,7 +665,11 @@ def commit_update(
                 "-m",
                 message,
                 "--",
-                *names,
+                *(
+                    name
+                    for name in names
+                    if not any(other.startswith(f"{name}/") for other in changes)
+                ),
             ],
             cwd=root,
             stdout=subprocess.PIPE,
@@ -668,7 +694,10 @@ def commit_update(
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(content)
         for name, target in before_links.items():
-            (root / name).unlink(missing_ok=True)
+            if (root / name).is_dir() and not (root / name).is_symlink():
+                shutil.rmtree(root / name)
+            else:
+                (root / name).unlink(missing_ok=True)
             if target is not None:
                 (root / name).symlink_to(target, target_is_directory=True)
         subprocess.run(
@@ -700,6 +729,7 @@ def repair_installation(root: Path, previous: str) -> str:
         if content is not None
         and (
             not (root / name).exists()
+            or retired_parent(root, name)
             or name in {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}
             or any(old in (root / name).read_text(errors="replace") for old in retired)
             or OLD_GENERATION_SCRIPT.search((root / name).read_text(errors="replace"))

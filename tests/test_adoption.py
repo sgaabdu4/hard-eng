@@ -508,3 +508,27 @@ def test_setup_rerun_replaces_old_skill_links_and_cleans_local_settings(
     assert link.resolve() == (target / ".agents/skills/he").resolve()
     assert not (target / ".agents/hard-eng").exists()
     assert json.loads((target / ".claude/settings.local.json").read_text()) == {}
+
+
+@pytest.mark.parametrize("repair", [True, False])
+def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, repair: bool
+) -> None:
+    source, target, _ = release
+    skill = target / ".agents/skills/he"
+    (target / ".agents/hard-eng/current/skills").mkdir(parents=True)
+    skill.rename(target / ".agents/hard-eng/current/skills/he")
+    skill.symlink_to("../hard-eng/current/skills/he", target_is_directory=True)
+    with (target / ".git/info/exclude").open("a") as exclude:
+        exclude.write(".agents/hard-eng/\n")
+    git(target, "add", "--all", ".agents/skills")
+    commit(target, "old skill link")
+    if repair:
+        monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    else:
+        select_release(source, monkeypatch)
+    update.update(target, repair=repair)
+    assert not skill.is_symlink()
+    assert (target / ".claude/skills/he/SKILL.md").is_file()
+    assert not (target / ".agents/hard-eng").exists()
+    assert git(target, "status", "--porcelain") == ""
