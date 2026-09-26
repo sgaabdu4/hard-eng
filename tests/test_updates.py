@@ -1,6 +1,7 @@
 """Real Git update transactions preserve local work and obey check scope."""
 
 import json
+import re
 import shutil
 import subprocess
 import tomllib
@@ -10,7 +11,7 @@ from types import ModuleType
 
 import pytest
 import update
-from conftest import commit, git, init
+from conftest import SOURCE, commit, git, init
 from gate_config import JsonObject
 from shipping import ShippingError, ShippingPolicy
 from test_setup import repository as setup_repository
@@ -947,3 +948,23 @@ def test_retired_interpreter_script_is_found_past_options(
     installer: ModuleType, command: list[str], script: str | None
 ) -> None:
     assert installer.script_operand(command) == script
+
+
+REACT_DOCTOR_0_9_14_COMMAND_INPUT_RISK = re.compile(
+    r"(?:(?<![.\w$])(?:exec(?:Sync)?|system|passthru|proc_open|shell_exec)"
+    r"|\b(?:os\.system|subprocess\.(?:run|Popen|call)"
+    r"|(?:child_process|childProcess|cp)\.exec\w*))\s*\([^)]{0,220}"
+    r"(?:req\.|request\.|params\.|query\.|body\.|searchParams|\$_(?:GET|POST|REQUEST)"
+    r"|shell\s*=\s*true|f['\"`][^'\"`]*\{)",
+    re.IGNORECASE,
+)
+
+
+def test_installed_hooks_pass_react_doctor_command_input_rule() -> None:
+    findings = [
+        f"{path.relative_to(SOURCE)}:{source.count(chr(10), 0, match.start()) + 1}"
+        for path in sorted((SOURCE / ".hooks").rglob("*.py"))
+        for source in [path.read_text()]
+        for match in REACT_DOCTOR_0_9_14_COMMAND_INPUT_RISK.finditer(source)
+    ]
+    assert findings == []
