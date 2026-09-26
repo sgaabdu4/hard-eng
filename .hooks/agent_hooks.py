@@ -187,21 +187,14 @@ HOOK_FILES = {
 
 
 CLAUDE_IMPORT = "<!-- hard-eng:start -->\n@AGENTS.md\n<!-- hard-eng:end -->\n\n"
-OLD_GENERATION_SCRIPT = re.compile(r"/\.hard-eng/(?:bootstrap|hook)\.sh\b")
-OLD_GENERATION_COMMAND = re.compile(
-    r'bash "\$\((?:env(?: -u \w+)+ )?git rev-parse --show-toplevel\)'
-    r'/\.hard-eng/(?:bootstrap|hook)\.sh"(?: [a-z]+)*'
-)
+OLD_GENERATION_SCRIPT = re.compile(r"\.hard-eng\b")
 
 
 def _old_generation(handler: JsonValue) -> bool:
-    if not isinstance(handler, dict):
-        return False
-    commands = [handler.get(key) for key in ("command", "bash", "powershell")]
-    present = [command for command in commands if command is not None]
-    return bool(present) and all(
-        isinstance(command, str) and OLD_GENERATION_COMMAND.fullmatch(command)
-        for command in present
+    return isinstance(handler, dict) and any(
+        isinstance(value := handler.get(key), str)
+        and OLD_GENERATION_SCRIPT.search(value) is not None
+        for key in ("command", "bash", "powershell")
     )
 
 

@@ -121,10 +121,7 @@ def assert_old_generation_retired(root: Path, project: dict[str, str]) -> None:
 
 @pytest.mark.parametrize("tracked", [True, False])
 def test_install_retires_old_generation_and_keeps_project_files(
-    installer: ModuleType,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    tracked: bool,
+    installer: ModuleType, tmp_path: Path, tracked: bool
 ) -> None:
     repository(tmp_path)
     project = write_old_generation(tmp_path)
@@ -147,13 +144,6 @@ def test_install_retires_old_generation_and_keeps_project_files(
     else:
         (tmp_path / ".git/info/exclude").write_text("\n".join(OLD_FILES) + "\n")
     installer.install(tmp_path)
-    if not tracked:
-        assert all((tmp_path / name).exists() for name in OLD_FILES)
-        assert "Kept uncommitted old Hard Eng files" in capsys.readouterr().err
-        override = (tmp_path / "AGENTS.override.md").read_text()
-        assert override.endswith(OLD_FILES["AGENTS.override.md"])
-        assert "[shared instructions](AGENTS.md)" in override
-        return
     assert_old_generation_retired(tmp_path, project)
     tracked_names = subprocess.check_output(
         ["git", "ls-files"], cwd=tmp_path, text=True
@@ -162,8 +152,8 @@ def test_install_retires_old_generation_and_keeps_project_files(
     assert ".hard-eng/" not in (tmp_path / "hard-eng.gates.json").read_text()
 
 
-def test_install_keeps_edited_old_generation_files_and_reports_them(
-    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_install_removes_edited_old_generation_files(
+    installer: ModuleType, tmp_path: Path
 ) -> None:
     repository(tmp_path)
     edited = {name: "Local notes\n" + content for name, content in OLD_FILES.items()}
@@ -171,11 +161,8 @@ def test_install_keeps_edited_old_generation_files_and_reports_them(
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_text(content)
     installer.install(tmp_path)
-    for name, content in edited.items():
-        assert (tmp_path / name).read_text().endswith(content)
-    reported = capsys.readouterr().err
-    for name in OLD_FILES:
-        assert name in reported
+    for name in edited:
+        assert not (tmp_path / name).exists(), name
 
 
 @pytest.mark.parametrize("committed", [True, False])
@@ -213,9 +200,15 @@ def test_setup_rerun_retires_old_generation(
 
 
 @pytest.mark.parametrize(
-    ("options", "edited"), [([], False), (["--external-sources"], False), ([], True)]
+    ("repair", "options", "edited"),
+    [
+        (False, [], False),
+        (True, [], False),
+        (False, ["--external-sources"], False),
+        (True, ["--external-sources"], False),
+        (True, [], True),
+    ],
 )
-@pytest.mark.parametrize("repair", [False, True])
 def test_update_retires_old_generation(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
@@ -247,13 +240,8 @@ def test_update_retires_old_generation(
     else:
         select_release(source, monkeypatch)
     update.update(target, repair=repair)
-    if edited:
-        shell = [gate["command"] for gate in json.loads(gates.read_text())["shared"]]
-        assert ["shellcheck", "--", scripts[1]] in shell
-        assert (target / scripts[1]).read_text().endswith("echo local\n")
-        assert not (target / scripts[0]).exists()
-        return
-    assert not set(OLD_FILES) & set(git(target, "ls-files").splitlines())
+    tracked = set(git(target, "ls-files").splitlines())
+    assert edited or not set(OLD_FILES) & tracked
     assert_old_generation_retired(target, project)
     assert ".hard-eng/" not in gates.read_text()
     assert "shellcheck" not in gates.read_text()
@@ -307,62 +295,35 @@ def test_setup_rerun_leaves_local_settings_edits_uncommitted(
     override.write_text(override.read_text() + "Local deployment rule\n")
     monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
     update.update(target, repair=True)
-    assert override.read_text().endswith("Local deployment rule\n")
-    assert "[shared instructions](AGENTS.md)" in override.read_text()
+    assert not override.exists()
     assert "permissions" not in git(target, "show", "HEAD:.claude/settings.json")
     assert "permissions" in settings.read_text()
 
 
-@pytest.mark.parametrize(
-    "run",
-    [
-        "bash .hard-eng/bootstrap.sh claude && ./guard",
-        "cd .hard-eng && bash bootstrap.sh",
-    ],
-)
-@pytest.mark.parametrize(
-    "local", [".claude/settings.local.json", ".github/hooks/project-policy.json"]
-)
-def test_install_keeps_compound_project_hooks_and_the_script_they_run(
-    installer: ModuleType,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    local: str,
-    run: str,
+def test_install_removes_every_old_hook_command(
+    installer: ModuleType, tmp_path: Path
 ) -> None:
     repository(tmp_path)
     write_old_generation(tmp_path)
     settings = tmp_path / ".claude/settings.json"
     current = json.loads(settings.read_text())
-    compound = {
-        "type": "command",
-        "command": OLD_COMMAND.format("hook.sh", "claude pretooluse") + " && ./guard",
-    }
-    generated = {
-        "type": "command",
-        "command": 'bash "$(git rev-parse --show-toplevel)/.hard-eng/hook.sh" claude',
-    }
-    relative = {"type": "command", "command": run}
-    current["hooks"]["PreToolUse"][0]["hooks"] += [compound, generated]
+    current["hooks"]["PreToolUse"][0]["hooks"] += [
+        {"type": "command", "command": "cd .hard-eng && bash hook.sh && ./guard"},
+        {"type": "command", "command": "bash .hard-eng/bootstrap.sh claude"},
+    ]
     settings.write_text(json.dumps(current))
-    policy = {"hooks": {"PreToolUse": [{"hooks": [relative]}]}}
-    (tmp_path / local).write_text(json.dumps(policy))
     copilot = tmp_path / ".github/hooks/hard-eng.json"
     wiring = json.loads(copilot.read_text())
-    mixed = wiring["hooks"]["preToolUse"][0] | {"powershell": "./guard.ps1"}
-    wiring["hooks"]["preToolUse"] = [mixed]
+    wiring["hooks"]["preToolUse"][0]["powershell"] = "./guard.ps1"
     copilot.write_text(json.dumps(wiring))
     git(tmp_path, "add", "--force", ".")
     commit(tmp_path, "old generation wiring")
     installer.install(tmp_path)
-    assert mixed in json.loads(copilot.read_text())["hooks"]["preToolUse"]
+    for name in (settings, copilot):
+        assert ".hard-eng" not in name.read_text()
     (group,) = json.loads(settings.read_text())["hooks"]["PreToolUse"]
-    project = {"type": "command", "command": "project-guard"}
-    assert group["hooks"] == [project, compound]
-    assert (tmp_path / ".hard-eng/hook.sh").is_file()
-    assert (tmp_path / ".hard-eng/bootstrap.sh").is_file()
-    assert not (tmp_path / "AGENTS.override.md").exists()
-    assert ".hard-eng/bootstrap.sh" in capsys.readouterr().err
+    assert group["hooks"] == [{"type": "command", "command": "project-guard"}]
+    assert not (tmp_path / ".hard-eng/hook.sh").exists()
 
 
 def test_install_retires_a_claude_md_that_only_imports_agents_md(
