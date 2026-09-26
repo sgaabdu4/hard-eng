@@ -37,6 +37,13 @@ def configure_instructions(
         if Path(name).name in {"CLAUDE.md", "CLAUDE.local.md"}
         and ((root / name).is_symlink() or (root / name).exists())
     ]
+    replacing += [
+        parent / name
+        for parent in root.parents
+        for name in ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md")
+        if (parent / name).exists()
+        and not (parent == Path.home() and name == ".claude/CLAUDE.md")
+    ]
     if not linked and (text not in {"", CLAUDE_IMPORT} or replacing):
         instructions["CLAUDE.md"] = "@AGENTS.md"
     if (root / "AGENTS.override.md").exists():

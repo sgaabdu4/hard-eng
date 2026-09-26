@@ -379,3 +379,14 @@ def test_install_rejects_an_edited_import_only_claude_md(
     )
     with pytest.raises(ValueError, match="CLAUDE.md"):
         installer.install(tmp_path)
+
+
+def test_install_imports_agents_md_under_a_parent_claude_md(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "CLAUDE.md").write_text("Workspace rules\n")
+    root = tmp_path / "project"
+    root.mkdir()
+    repository(root)
+    installer.install(root)
+    assert "\n@AGENTS.md\n" in (root / "CLAUDE.md").read_text()

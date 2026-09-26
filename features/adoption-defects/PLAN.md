@@ -38,7 +38,7 @@ Execution: Four parallel builders in isolated worktrees (installer, Python, Biom
 
 ## Risks + recovery
 
-The SHA-1 fix replaces one registry semgrep rule with a Hard Eng rule that keeps flagging plain SHA-1. It covers gates passing `p/python` as a separate argument. Nested formatter configs (`.hooks/ruff.toml`, `.agents/biome.json`) are skipped by tools run with `--config` or `--isolated`. Existing installs pick everything up through the verified updater. Claude Code before v2.1.277, its first session after upgrading from one, or with the `agents-md` plugin disabled reads no Hard Eng rules without a `CLAUDE.md`. Setup JSON reads only the root Biome config: `extends`, path `overrides` and Prettier options are not followed.
+The SHA-1 fix replaces one registry semgrep rule with a Hard Eng rule that keeps flagging plain SHA-1. It covers gates passing `p/python` as a separate argument. Nested formatter configs (`.hooks/ruff.toml`, `.agents/biome.json`) are skipped by tools run with `--config` or `--isolated`. Existing installs pick everything up through the verified updater. Claude Code before v2.1.277, its first session after upgrading from one, or with the `agents-md` plugin disabled reads no Hard Eng rules without a `CLAUDE.md`. Parent-directory `CLAUDE.md` files are checked only on the machine running setup; another machine with one needs the **Project instructions** setting `claude-md-and-agents-md`. Setup JSON reads only the root Biome config: `extends`, path `overrides` and Prettier options are not followed.
 
 ## ux_reference
 
