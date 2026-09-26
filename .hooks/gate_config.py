@@ -64,7 +64,7 @@ def json_layout(root: Path) -> tuple[str, int, int]:
             try:
                 config = json.loads(re.sub(r",(\s*[}\]])", r"\1", text))
             except ValueError:
-                config = {}
+                return "\t", 2, 80
             options = {
                 **config.get("formatter", {}),
                 **config.get("json", {}).get("formatter", {}),

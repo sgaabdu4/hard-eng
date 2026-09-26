@@ -249,8 +249,10 @@ def test_update_retires_old_generation(
     [
         ("{}\n", "{\n\t"),
         (
-            '{\n  // project style\n  "formatter": {"indentStyle": "space",},\n'
-            '  "json": {"formatter": {"indentWidth": 4}}\n}\n',
+            (
+                '{\n  // project style\n  "formatter": {"indentStyle": "space",},\n'
+                '  "json": {"formatter": {"indentWidth": 4}}\n}\n'
+            ),
             "{\n    ",
         ),
     ],
