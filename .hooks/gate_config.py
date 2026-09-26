@@ -21,10 +21,13 @@ def expanded(value: object) -> bool:
     return isinstance(value, list) and any(expanded(item) for item in value)
 
 
-def json_text(value: object, unit: str = "  ", indent: str = "", used: int = 0) -> str:
+def json_text(
+    value: object, layout: tuple[str, int, int], indent: str = "", used: int = 0
+) -> str:
+    unit, tab, width = layout
     if isinstance(value, list) and not expanded(value):
         flat = json.dumps(value, separators=(", ", ": "))
-        if used + len(flat) <= 80:
+        if used + len(flat) <= width:
             return flat
     if not isinstance(value, (dict, list)) or not value:
         return json.dumps(value)
@@ -39,7 +42,10 @@ def json_text(value: object, unit: str = "  ", indent: str = "", used: int = 0) 
         inner
         + head
         + json_text(
-            item, unit, inner, len((inner + head).expandtabs(2)) + (index < last)
+            item,
+            layout,
+            inner,
+            len((inner + head).expandtabs(tab)) + (index < last),
         )
         for index, (head, item) in enumerate(entries)
     )
@@ -47,10 +53,30 @@ def json_text(value: object, unit: str = "  ", indent: str = "", used: int = 0) 
     return f"{opening}\n{body}\n{indent}{closing}"
 
 
+JSONC = re.compile(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', re.DOTALL)
+
+
+def json_layout(root: Path) -> tuple[str, int, int]:
+    """Read the root Biome config's JSON formatting, else use Prettier's defaults."""
+    for name in ("biome.json", "biome.jsonc"):
+        if (root / name).is_file():
+            text = JSONC.sub(lambda match: match[1] or "", (root / name).read_text())
+            try:
+                config = json.loads(re.sub(r",(\s*[}\]])", r"\1", text))
+            except ValueError:
+                config = {}
+            options = {
+                **config.get("formatter", {}),
+                **config.get("json", {}).get("formatter", {}),
+            }
+            tab = options.get("indentWidth", 2)
+            unit = "\t" if options.get("indentStyle", "tab") == "tab" else " " * tab
+            return unit, tab, options.get("lineWidth", 80)
+    return "  ", 2, 80
+
+
 def json_file(root: Path, value: object) -> str:
-    """Match Biome's tab default when the project formats with Biome, else Prettier's."""
-    biome = any((root / name).exists() for name in ("biome.json", "biome.jsonc"))
-    return json_text(value, "\t" if biome else "  ") + "\n"
+    return json_text(value, json_layout(root)) + "\n"
 
 
 Report = TypedDict(

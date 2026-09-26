@@ -244,12 +244,23 @@ def test_update_retires_old_generation(
     assert "shellcheck" not in gates.read_text()
 
 
+@pytest.mark.parametrize(
+    ("config", "opening"),
+    [
+        ("{}\n", "{\n\t"),
+        (
+            '{\n  // project style\n  "formatter": {"indentStyle": "space",},\n'
+            '  "json": {"formatter": {"indentWidth": 4}}\n}\n',
+            "{\n    ",
+        ),
+    ],
+)
 def test_setup_json_stays_in_the_project_biome_layout(
-    installer: ModuleType, tmp_path: Path
+    installer: ModuleType, tmp_path: Path, config: str, opening: str
 ) -> None:
     repository(tmp_path)
     (tmp_path / "index.js").write_text("export {};\n")
-    (tmp_path / "biome.json").write_text("{}\n")
+    (tmp_path / "biome.jsonc").write_text(config)
     changes = installer.plan_install(tmp_path.resolve())[0]
     shipped = ".agents/biome.json"
     assert changes[shipped] == (installer.SOURCE / shipped).read_text()
@@ -261,7 +272,7 @@ def test_setup_json_stays_in_the_project_biome_layout(
     assert {".mcp.json", ".hooks/hard-eng-source.json", "tsconfig.json"} <= set(written)
     for text in written.values():
         assert text == json_file(tmp_path, json.loads(text))
-        assert text.startswith("{\n\t")
+        assert text.startswith(opening)
 
 
 def test_setup_rerun_leaves_local_settings_edits_uncommitted(
