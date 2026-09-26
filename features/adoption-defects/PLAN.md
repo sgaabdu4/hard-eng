@@ -28,6 +28,7 @@ Authority: The user asked for every reported item to be fixed in one PR, without
 - [x] Plan `Evidence:` errors state the same-line rule → already true since #125; reproduced, no change.
 - [x] secrets-files ignores gitignored content reached through a tracked symlink; tracked secrets still fail → `test_tracked_link_to_an_ignored_local_secret_is_not_scanned`.
 - [x] ci-security passes when a repository has no workflows; uncollectable or malformed workflows still fail → `test_ci_security_passes_only_when_no_workflows_exist_to_collect` (real zizmor).
+- [x] A single gate may run for the configured budget (`ci_seconds` in CI, `pre_push_seconds` elsewhere) instead of a fixed 600s; non-parallel gates such as Flutter tests already run alone → `test_each_gate_may_use_the_configured_budget`.
 - [x] Claude Code v2.1.277+ reads `AGENTS.md` directly, so setup writes the `CLAUDE.md` import only when a project `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` would replace `AGENTS.md`, and retires a committed `CLAUDE.md` that holds only that import; `.claude/skills` links stay because Claude Code loads skills only there → `test_native_instruction_paths_preserve_project_rules`, `test_install_retires_a_claude_md_that_only_imports_agents_md`.
 
 ## Baseline + execution

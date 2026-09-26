@@ -610,8 +610,18 @@ def check_lock(root: Path) -> Generator[None]:
         yield
 
 
+def gate_timeout(root: Path) -> float:
+    """Each gate may use the whole configured budget: CI's in CI, pre-push's elsewhere."""
+    from shipping import load_policy
+
+    policy = load_policy(root, required=False)
+    if policy is None:
+        return 600
+    return policy["ci_seconds" if os.environ.get("CI") else "pre_push_seconds"]
+
+
 def check(
-    timeout: float = 600,
+    timeout: float | None = None,
     base: str | None = None,
     plan_stage: str | None = None,
     *,
@@ -625,6 +635,7 @@ def check(
 
     with check_lock(ROOT):
         groups = load_groups(ROOT, base)
+        timeout = timeout or gate_timeout(ROOT)
         from comments import validate_comments
         from plans import report_stage, validate_plans
 

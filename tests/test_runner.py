@@ -13,7 +13,7 @@ from types import ModuleType
 
 import pytest
 import tool_setup
-from conftest import SOURCE, init, use_installed_mise
+from conftest import SOURCE, default_policy, init, use_installed_mise
 from gate_config import (
     GateConfig,
     Group,
@@ -236,6 +236,32 @@ def configure(root: Path, checks: list[dict[str, object]]) -> None:
     (root / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": checks})
     )
+
+
+@pytest.mark.parametrize(("ci", "budget"), [("true", 2700.0), ("", 900.0)])
+def test_each_gate_may_use_the_configured_budget(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ci: str,
+    budget: float,
+) -> None:
+    policy = default_policy() | {"ci_seconds": 2700.0, "pre_push_seconds": 900.0}
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {"packages": [], "shared": [gate("tests", "pass")], "shipping": policy}
+        )
+    )
+    monkeypatch.setenv("CI", ci)
+    timeouts: list[float] = []
+
+    def run_gate(_group: object, _gate: object, timeout: float, _lock: object) -> bool:
+        timeouts.append(timeout)
+        return False
+
+    monkeypatch.setattr(runner, "run_gate", run_gate)
+    assert runner.check() == 0
+    assert timeouts == [budget]
 
 
 def test_command_failure_survives_later_pass(
