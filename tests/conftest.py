@@ -5,6 +5,8 @@ import json
 import shutil
 import subprocess
 import sys
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
@@ -114,6 +116,17 @@ def runner(tmp_path: Path, completed_plan: str) -> ModuleType:
     for name in ("PRODUCT.md", "DESIGN.md"):
         (tmp_path / name).write_text((SOURCE / name).read_text())
     return module
+
+
+def use_installed_mise(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stand in for the installed launcher when a test observes mise's own commands."""
+    import tool_setup
+
+    @contextmanager
+    def launcher(*_arguments: object) -> Generator[Path]:
+        yield tmp_path / "launcher/mise"
+
+    monkeypatch.setattr(tool_setup, "mise_launcher", launcher)
 
 
 def default_policy() -> "ShippingPolicy":

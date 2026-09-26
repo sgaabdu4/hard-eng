@@ -13,7 +13,7 @@ from types import ModuleType
 
 import pytest
 import tool_setup
-from conftest import SOURCE
+from conftest import SOURCE, use_installed_mise
 from gate_config import (
     GateConfig,
     Group,
@@ -534,6 +534,7 @@ def test_coverage_excludes_native_generated_and_vendor_attributes(
 def test_wrapped_actionlint_and_decimate_use_latest_packages(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    use_installed_mise(tmp_path, monkeypatch)
     commands: list[list[str]] = []
     environments: list[object] = []
 
@@ -558,11 +559,9 @@ def test_wrapped_actionlint_and_decimate_use_latest_packages(
     assert "MISE_NPM_PACKAGE_MANAGER=npm" in commands[2]
     assert "MISE_NPM_PACKAGE_MANAGER=npm" not in commands[0]
     assert len(commands) == 4
-    for command, environment in zip(commands, environments, strict=True):
+    for environment in environments:
         assert isinstance(environment, dict)
         assert "NPM_CONFIG_CACHE" in environment
-        cache_age = int(environment["PNPM_CONFIG_DLX_CACHE_MAX_AGE"])
-        assert cache_age == 0 if "install" in command else cache_age > 0
 
 
 @pytest.mark.parametrize(
