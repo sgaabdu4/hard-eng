@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import suppress
 from pathlib import Path
 
 from shipping import (
@@ -53,6 +54,10 @@ def run_check(checkout: Path, base: str, environment: dict[str, str]) -> int:
     finally:
         if check.poll() is None:
             os.killpg(check.pid, signal.SIGTERM)
+            with suppress(subprocess.TimeoutExpired):
+                check.wait(timeout=10)
+            with suppress(ProcessLookupError):
+                os.killpg(check.pid, signal.SIGKILL)
             check.wait()
 
 

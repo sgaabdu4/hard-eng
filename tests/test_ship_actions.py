@@ -592,7 +592,8 @@ def test_interrupted_pre_push_removes_its_snapshot(
     init(root)
     (root / "hard-eng.gates.json").write_text(json.dumps({"shipping": shipping_policy}))
     (root / ".hooks").mkdir()
-    sleeper = "import os, pathlib, time\npathlib.Path(os.environ['MARKER']).write_text(f'{os.getpid()} {os.getcwd()}')\ntime.sleep(60)\n"
+    stubborn = "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); print(flush=True); time.sleep(60)"
+    sleeper = f"import os, pathlib, subprocess, sys, time\ngate = subprocess.Popen([sys.executable, '-c', {stubborn!r}], stdout=subprocess.PIPE)\ngate.stdout.readline()\npathlib.Path(os.environ['MARKER']).write_text(f'{{gate.pid}} {{os.getcwd()}}')\ntime.sleep(60)\n"
     (root / ".hooks/hard-eng.py").write_text(sleeper)
     revision = commit(root, "slow check").strip()
     for source in (SOURCE / ".hooks").glob("*.py"):
