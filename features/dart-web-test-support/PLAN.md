@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-Fix [#184](https://github.com/sgaabdu4/hard-eng/issues/184). (1) The generated Flutter browser-test command compiles with `--dart2js-args=--disable-inlining`, so a web-only file made of one-line forwarders gets real LCOV lines instead of failing the coverage inventory; installed earlier forms upgrade. (2) A committed nested package under a test path (`test/`, `tests/`, `__tests__/`) with its own lockfile may be declared without `language` or `sources`; it then needs only lockfile and vulnerability checks, and fresh setup generates that group. Its Dart code is still formatted and analyzed by the parent's package-root gates. Non-goals: a "passing browser test counts as covered" exemption, running browser tests from a runner package automatically, lower thresholds.
+Fix [#184](https://github.com/sgaabdu4/hard-eng/issues/184). (1) The generated Flutter browser-test command compiles with `--dart2js-args=--disable-inlining`, so a web-only file made of one-line forwarders gets real LCOV lines instead of failing the coverage inventory; installed earlier forms upgrade. (2) A committed nested Dart package under a test path (`test/`, `tests/`, `__tests__/`) inside a parent Dart package, with its own lockfile, may be declared without `language` or `sources`; it then needs only lockfile and vulnerability checks, and fresh setup generates that group. Its Dart code is still formatted and analyzed by the parent's package-root gates. Non-goals: a "passing browser test counts as covered" exemption, running browser tests from a runner package automatically, lower thresholds.
 
 ## Repository context
 
@@ -22,6 +22,7 @@ Decisions: Reuse the existing language-less group rules (lockfiles + vulnerabili
 
 - [x] Generated browser command passes `--dart2js-args=--disable-inlining`; both earlier generated commands upgrade, custom commands stay → `test_flutter_browser_library_coverage_comes_from_browser_tests`.
 - [x] Nested `test/…` package with a lockfile → fresh setup emits a group with only vulnerabilities + lockfiles (`dart pub get --enforce-lockfile`) and no language or sources, and validation accepts it; adding `sources` is rejected; omitting the group names the test-support option → `test_test_support_package_keeps_only_dependency_checks`.
+- [x] No covering parent Dart package → the test-path package keeps its full product checks; a workspace-only root under `tests/` no longer aborts setup → `test_test_support_needs_a_covering_dart_parent`.
 - [x] Full gate passes → `python3 .hooks/hard-eng.py check --base main --plan-stage Complete` exits 0.
 
 ## Baseline + execution
@@ -41,7 +42,8 @@ N/A — gate and setup behavior with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: `uv run pytest tests/test_setup.py tests/test_package_discovery.py` → 78 passed; Ruff, Pyrefly, Vulture and complexity checks clean. `python3 .hooks/hard-eng.py check --base main --plan-stage Complete` → exit 0, all gates PASS.
+Evidence: `uv run pytest tests/test_setup.py tests/test_package_discovery.py` → 79 passed; Ruff, Pyrefly, Vulture and complexity checks clean. `python3 .hooks/hard-eng.py check --base main --plan-stage Complete` → exit 0, all gates PASS.
+Review: `/codex:adversarial-review --base main` found that the first version exempted any test-path package, even one with no parent to analyze it and in any language, and that a workspace-only root under a test path crashed setup with `KeyError: 'language'`. Both are repaired: test support now requires a covering parent Dart package, and the new regression fails on the earlier code with that `KeyError`.
 E2E: Passed — synthetic Flutter app with a forwarder-only `lib/web_adapter.dart`, a `@TestOn('browser')` test and a committed `test/browser_runner` package with a lockfile, installed from this revision with real `setup.py`. Setup wrote the root `dart analyze --fatal-infos .` gate and a runner group with only vulnerabilities + lockfile. Through Hard Eng's `run_gate`: runner and root lockfile gates PASS; root types gate PASS clean, then FAIL on a type error planted in the runner's `lib/`. The tests gate with real `flutter test` and `dart test` on Chrome → `Line coverage: 4/4 (100.00%)`, `PASS tests`; the previous generated command on the same package → `FAIL tests: Coverage report omits production files: lib/web_adapter.dart`; rerunning setup upgraded that command to the new one.
 
 Delivery target: Merge

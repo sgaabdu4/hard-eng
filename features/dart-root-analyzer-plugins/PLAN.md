@@ -41,7 +41,7 @@ N/A — setup behavior with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: `uv run pytest tests/test_setup.py tests/test_package_discovery.py` → 78 passed; Ruff, Pyrefly, Vulture and complexity checks clean. Full gate: see the combined result in [dart-web-test-support](../dart-web-test-support/PLAN.md#verification).
+Evidence: `uv run pytest tests/test_setup.py tests/test_package_discovery.py` → 79 passed; Ruff, Pyrefly, Vulture and complexity checks clean. Full gate: see the combined result in [dart-web-test-support](../dart-web-test-support/PLAN.md#verification).
 E2E: Passed — synthetic Flutter package with the riverpod_lint plugin and a public Notifier field, installed from this revision: its types gate set to the earlier `dart analyze --fatal-infos lib test` → `PASS types-lint` with "No issues found!"; rerunning `setup.py` rewrote it to `dart analyze --fatal-infos .`, and Hard Eng's `run_gate` then reported `avoid_public_notifier_properties` and `FAIL types-lint`.
 
 Delivery target: Merge
