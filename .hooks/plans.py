@@ -77,10 +77,15 @@ def field(content: str, name: str) -> str:
     return values[0].strip()
 
 
+def header_status(content: str) -> str:
+    """The plan's own Status sits above its first section; slices may carry theirs."""
+    return field(content.split("\n## ", 1)[0], "Status")
+
+
 def plan_status(content: str) -> str | None:
     """Plans written before the Status field are historical, not active."""
     try:
-        return field(content, "Status")
+        return header_status(content)
     except ValueError:
         return None
 
@@ -200,6 +205,11 @@ def readiness_errors(
     return errors
 
 
+def no_blockers(text: str) -> bool:
+    """'None', optionally followed by a note such as 'None. Scope was settled in chat.'"""
+    return re.fullmatch(r"None(?:(?:[.;:]|\s+[—–-])\s.*)?", text) is not None
+
+
 def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, list[str]]:
     """Validate the declared Draft pause without treating it as authorization."""
     decisions = sections["Decisions + authorization"]
@@ -209,12 +219,12 @@ def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, lis
         blockers = field(decisions, "Blockers")
     except ValueError as error:
         return None, None, [str(error)]
-    question = blockers != "None" and re.search(PLACEHOLDERS, blockers) is None
+    question = not no_blockers(blockers) and re.search(PLACEHOLDERS, blockers) is None
     if handoff not in HANDOFFS:
         errors.append("Handoff must be Clarification or Approval")
     elif handoff == "Clarification" and not question:
         errors.append("Clarification needs concrete Blockers")
-    elif handoff == "Approval" and blockers != "None" and not question:
+    elif handoff == "Approval" and not no_blockers(blockers) and not question:
         errors.append("Approval Blockers must be None or a concrete decision")
     return handoff, blockers, errors
 
@@ -245,7 +255,7 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
                 errors = [
                     "approval handoff prepared; authorization remains outside this plan"
                 ]
-                if blockers != "None":
+                if blockers and not no_blockers(blockers):
                     errors.append(f"decisions to resolve: {blockers}")
             else:
                 unfinished = True
@@ -272,7 +282,7 @@ def build_in_progress(root: Path, changed: set[str]) -> bool:
             text for text in contents if plan_status(text) not in {None, "Complete"}
         ]
         return bool(active) and all(
-            field(text, "Status") == "Ready"
+            header_status(text) == "Ready"
             and field(
                 plan_sections(text, allow_placeholders=True)["Verification"], "Result"
             )
@@ -287,7 +297,7 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     """Unchanged Complete plans predate later rules such as the E2E field."""
     content = path.read_text()
     sections = plan_sections(content)
-    status = field(content, "Status")
+    status = header_status(content)
     if status not in STAGES:
         raise ValueError("plan Status must be Draft, Ready or Complete")
     verification = sections["Verification"]
@@ -296,7 +306,7 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
         if errors:
             raise ValueError("; ".join(errors))
         return status
-    if field(sections["Decisions + authorization"], "Blockers") != "None":
+    if not no_blockers(field(sections["Decisions + authorization"], "Blockers")):
         raise ValueError("ready/complete plan has unresolved Blockers")
     errors = readiness_errors(
         sections, status, legacy=status == "Complete" and not changed
@@ -333,6 +343,15 @@ def _validate_shipping(root: Path, path: Path, status: str) -> None:
             raise ValueError("Deploy target requires configured delivery checks")
 
 
+def plan_stage(root: Path, path: Path, changed: set[str]) -> str:
+    try:
+        status = validate_plan(path, changed=str(path.relative_to(root)) in changed)
+        _validate_shipping(root, path, status)
+    except ValueError as error:
+        raise ValueError(f"{path.relative_to(root)}: {error}") from error
+    return status
+
+
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
@@ -358,14 +377,18 @@ def validate_plans(
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"
         )
+    statuses = {path: plan_stage(root, path, changed) for path in applicable}
+    reached = any(
+        STAGES.index(status) >= STAGES.index(stage) for status in statuses.values()
+    )
     effective_stage = "Complete"
-    for path in applicable:
-        try:
-            status = validate_plan(path, changed=str(path.relative_to(root)) in changed)
-            _validate_shipping(root, path, status)
-            if STAGES.index(status) < STAGES.index(stage):
-                raise ValueError(f"plan is {status}; this check requires {stage}")
-            effective_stage = min(effective_stage, status, key=STAGES.index)
-        except ValueError as error:
-            raise ValueError(f"{path.relative_to(root)}: {error}") from error
+    for path, status in statuses.items():
+        if STAGES.index(status) < STAGES.index(stage):
+            # A Draft plan claims no implementation, so it may ride along with finished work.
+            if status == "Draft" and reached:
+                continue
+            raise ValueError(
+                f"{path.relative_to(root)}: plan is {status}; this check requires {stage}"
+            )
+        effective_stage = min(effective_stage, status, key=STAGES.index)
     return stage if explicit_stage or not applicable else effective_stage

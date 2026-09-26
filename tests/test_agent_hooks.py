@@ -162,11 +162,11 @@ def test_completion_checks_freshness_without_mutating_installation(
     )
     monkeypatch.setattr(update, "latest_verified", query)
     result = agent_hooks.completion(repository, {"session_id": "known"})
-    if upstream is None:
+    if upstream is None or not changed:
         assert result.get("decision") != "block"
     else:
         assert result.get("decision") == "block"
-        assert "freshness" in str(result).lower()
+    assert ("freshness" in str(result).lower()) == (upstream is not None)
     query.assert_called_once_with("a" * 40)
     assert marker.read_text() == content
     assert (

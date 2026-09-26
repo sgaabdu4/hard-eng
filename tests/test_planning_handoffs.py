@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import agent_hooks
 import pytest
@@ -170,3 +171,25 @@ def test_clarification_cannot_exempt_an_invalid_approval_plan(
     response = agent_hooks.completion(repository, {}, "codex")
     assert response.get("decision") == "block"
     assert "features/approval/PLAN.md" in str(response["systemMessage"])
+
+
+def test_unchanged_draft_session_only_warns_about_a_stale_install(
+    repository: Path, completed_plan: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import update
+
+    plan = draft_plan(completed_plan, "Approval", "None", pending_ux=False)
+    (repository / "PLAN.md").write_text(plan)
+    (repository / ".hooks").mkdir()
+    marker = repository / ".hooks/hard-eng-source.json"
+    marker.write_text(json.dumps({"revision": "a" * 40}))
+    git(repository, "add", ".")
+    git(repository, "commit", "-qm", "draft")
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    payload: JsonObject = {"session_id": "known"}
+    agent_hooks.session_context(repository, payload)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
+    response = agent_hooks.completion(repository, payload, "codex")
+    assert response.get("decision") != "block"
+    assert "approval handoff prepared" in str(response)
+    assert "freshness" in str(response)

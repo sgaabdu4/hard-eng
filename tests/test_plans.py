@@ -195,6 +195,37 @@ def test_invalid_completion(
         validate_plan(path)
 
 
+@pytest.mark.parametrize(
+    "blockers,resolved",
+    [
+        ("None. The scope question was settled in chat.", True),
+        ("None — the retry question was answered", True),
+        ("None of the questions are answered", False),
+        ("None yet", False),
+    ],
+)
+def test_blockers_none_may_carry_a_note(
+    tmp_path: Path, completed_plan: str, blockers: str, resolved: bool
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(completed_plan.replace("Blockers: None", f"Blockers: {blockers}"))
+    if resolved:
+        assert validate_plan(path) == "Complete"
+    else:
+        with pytest.raises(ValueError, match="unresolved Blockers"):
+            validate_plan(path)
+
+
+def test_slices_may_carry_their_own_status(tmp_path: Path, completed_plan: str) -> None:
+    path = tmp_path / "PLAN.md"
+    slices = "## Acceptance + steps\n\nStatus: In progress\n"
+    path.write_text(completed_plan.replace("## Acceptance + steps\n", slices, 1))
+    assert validate_plan(path) == "Complete"
+    path.write_text(path.read_text().replace("Status: Complete\n", "", 1))
+    with pytest.raises(ValueError, match="one 'Status:' field, found 0"):
+        validate_plan(path)
+
+
 @pytest.mark.parametrize("status", ["Ready", "Complete"])
 def test_ready_requires_baseline_and_rendered_evidence(
     tmp_path: Path, completed_plan: str, visual_plan: str, status: str
@@ -788,3 +819,29 @@ def test_plan_screenshots_stay_planning_work(
         with pytest.raises(ValueError, match="requires Complete"):
             validate_plans(tmp_path)
         (tmp_path / name).unlink()
+
+
+def test_draft_plan_for_later_work_rides_along_with_finished_work(
+    runner: ModuleType, tmp_path: Path, completed_plan: str
+) -> None:
+    git(tmp_path, "add", ".")
+    git(
+        tmp_path,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.test",
+        "commit",
+        "-qm",
+        "baseline",
+    )
+    later = tmp_path / "features/later/PLAN.md"
+    later.parent.mkdir(parents=True)
+    later.write_text(completed_plan.replace("Status: Complete", "Status: Draft"))
+    (tmp_path / "app.py").write_text("print('finished work')\n")
+    with pytest.raises(ValueError, match="plan is Draft; this check requires Complete"):
+        validate_plans(tmp_path)
+    finished = tmp_path / "features/finished/PLAN.md"
+    finished.parent.mkdir(parents=True)
+    finished.write_text(completed_plan)
+    assert validate_plans(tmp_path) == "Complete"

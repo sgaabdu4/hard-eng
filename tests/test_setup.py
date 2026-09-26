@@ -17,6 +17,7 @@ from gate_config import (
 )
 from project_setup import (
     FLUTTER_TESTS,
+    PREVIOUS_BROWSER_TESTS,
     adapt_performance,
     browser_test_coverage,
     dependency_command,
@@ -923,6 +924,14 @@ def test_flutter_browser_library_coverage_comes_from_browser_tests(
     command = package["checks"][0]["command"]
     browser_test_coverage(tmp_path, package)
     assert package["checks"][0]["command"] == command
+    for previous in (PREVIOUS_BROWSER_TESTS, ["sh", "-c", "custom"]):
+        installed: Group = {
+            **package,
+            "checks": [{"name": "tests", "role": "tests", "command": list(previous)}],
+        }
+        browser_test_coverage(tmp_path, installed)
+        expected_command = command if previous == PREVIOUS_BROWSER_TESTS else previous
+        assert installed["checks"][0]["command"] == expected_command
     tools = tmp_path / "bin"
     tools.mkdir()
     passed = '{"type":"testDone","result":"success","hidden":false,"skipped":false}'
@@ -955,3 +964,20 @@ def test_flutter_browser_library_coverage_comes_from_browser_tests(
     expected = {(tmp_path / "lib/vm.dart").resolve(), web.resolve()}
     coverage = tmp_path / "coverage/lcov.info"
     assert line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected) == (2, 2)
+    for name in ("vm_test.dart", "io_test.dart"):
+        (tmp_path / "test" / name).unlink()
+    (tools / "flutter").write_text(
+        "#!/bin/sh\necho 'No tests were found.' >&2\nexit 1\n"
+    )
+    with (tmp_path / "tests.jsonl").open("w") as report:
+        subprocess.run(
+            command,
+            cwd=tmp_path,
+            stdout=report,
+            env={"PATH": f"{tools}:/usr/bin:/bin"},
+            check=True,
+        )
+    assert completed_tests(tmp_path / "tests.jsonl", "dart-tests") == 1
+    assert line_coverage(
+        coverage, "dart-tests", tmp_path.resolve(), {web.resolve()}
+    ) == (1, 1)
