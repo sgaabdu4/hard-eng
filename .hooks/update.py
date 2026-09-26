@@ -353,6 +353,7 @@ LEGACY_FOLDERS = (
     ".agents/skills",
     ".claude/skills",
     ".claude/agents",
+    ".claude/output-styles",
     ".codex/agents",
     ".github/agents",
 )
@@ -491,19 +492,9 @@ def retired_settings(settings: Path) -> str | None:
 
 def exclude_block(root: Path) -> tuple[Path, str] | None:
     """The private exclude file and its text without the old fallback block."""
-    exclude = Path(
-        subprocess.check_output(
-            [
-                "git",
-                "rev-parse",
-                "--path-format=absolute",
-                "--git-path",
-                "info/exclude",
-            ],
-            cwd=root,
-            text=True,
-        ).strip()
-    )
+    command = ["git", "rev-parse", "--path-format=absolute", "--git-path"]
+    path = subprocess.check_output([*command, "info/exclude"], cwd=root, text=True)
+    exclude = Path(path.strip())
     text = exclude.read_text() if exclude.is_file() else ""
     start, end = (
         "# >>> hard-eng repository fallback >>>",
@@ -512,7 +503,11 @@ def exclude_block(root: Path) -> tuple[Path, str] | None:
     if start not in text or end not in text:
         return None
     head, rest = text.split(start, 1)
-    return exclude, head.rstrip("\n") + "\n" + rest.split(end, 1)[1].lstrip("\n")
+    block, tail = rest.split(end, 1)
+    kept = "".join(
+        f"{line}\n" for line in block.split() if os.path.lexists(root / line.strip("/"))
+    )
+    return exclude, head.rstrip("\n") + "\n" + kept + tail.lstrip("\n")
 
 
 def local_state(root: Path, names: list[str]) -> list[str]:

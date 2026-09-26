@@ -405,6 +405,12 @@ def test_install_removes_the_old_local_hard_eng_copy(
     (tmp_path / ".claude/skills/plain-english").symlink_to(
         "../../.agents/hard-eng/current/skills/plain-english"
     )
+    (payload / "output-styles").mkdir()
+    (payload / "output-styles/plain-english.md").write_text("old\n")
+    (tmp_path / ".claude/output-styles").mkdir()
+    (tmp_path / ".claude/output-styles/plain-english.md").symlink_to(
+        "../../.agents/hard-eng/current/output-styles/plain-english.md"
+    )
     (tmp_path / "CLAUDE.local.md").write_text("@.agents/hard-eng/current/AGENTS.md\n")
     old = f"bash {payload}/scripts/hooks/agent-hook.sh claude pretooluse"
     local = {
@@ -424,12 +430,14 @@ def test_install_removes_the_old_local_hard_eng_copy(
     )
     exclude = tmp_path / ".git/info/exclude"
     exclude.write_text(
-        "*.log\n\n# >>> hard-eng repository fallback >>>\n.agents/hard-eng/\n"
+        "*.log\n\n# >>> hard-eng repository fallback >>>\n/.agents/hard-eng/\n"
+        "/.claude/settings.local.json\n/.claude/output-styles/plain-english.md\n"
         "# <<< hard-eng repository fallback <<<\n"
     )
     installer.install(tmp_path)
     assert not (tmp_path / ".agents/hard-eng").exists()
     assert not (tmp_path / ".claude/skills/plain-english").is_symlink()
+    assert not (tmp_path / ".claude/output-styles/plain-english.md").is_symlink()
     assert not (tmp_path / "CLAUDE.local.md").exists()
     assert json.loads((tmp_path / ".claude/settings.local.json").read_text()) == {
         "permissions": {"allow": ["Bash(ls)"]}
@@ -437,7 +445,7 @@ def test_install_removes_the_old_local_hard_eng_copy(
     codex = (tmp_path / ".codex/config.toml").read_text()
     assert codex.startswith('model = "o3"\n')
     assert "project_doc_max_bytes" not in codex
-    assert exclude.read_text() == "*.log\n"
+    assert exclude.read_text() == "*.log\n/.claude/settings.local.json\n"
     assert not (tmp_path / "CLAUDE.md").exists()
 
 
