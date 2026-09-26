@@ -45,7 +45,7 @@ N/A — gate behavior with no visual surface.
 Result: Pending
 Evidence: Pending
 Review: Pending
-E2E: Pending — synthetic repository with a tracked `main.tf` and a linked worktree under an ignored `.claude/worktrees/`, installed from this revision with real `setup.py` and real Trivy.
+E2E: Required — synthetic repository with a tracked `main.tf` and a linked worktree under an ignored `.claude/worktrees/`, installed from this revision with real `setup.py` and real Trivy.
 
 Delivery target: Merge
 Delivery: Pending

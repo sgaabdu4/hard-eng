@@ -455,7 +455,7 @@ def test_trivy_repository_config_retains_failure_checks(tmp_path: Path) -> None:
     [
         ("", "no deployment configuration"),
         (',"Results":[]', "no deployment configuration"),
-        (',"Results":{}', "malformed"),
+        (',"Results":{"Class":"config"}', "malformed"),
     ],
 )
 def test_trivy_scan_without_configuration_names_the_cause(

@@ -426,9 +426,7 @@ def validate_trivy(path: Path) -> None:
             "repository",
         ):
             raise ValueError("Expected a Trivy directory configuration report")
-        results = report.get("Results", [])
-        if not isinstance(results, list):
-            raise TypeError("Trivy results must be a list")
+        results = report.get("Results")
         if not results:
             raise ValueError(
                 "Trivy found no deployment configuration in current files; remove the deployment gate if the project has none"
