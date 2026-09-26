@@ -7,10 +7,11 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock
 
+import agent_hooks
 import pytest
 import update
 from conftest import commit, git
-from gate_config import json_file
+from gate_config import JsonObject, json_file
 from test_setup import repository
 from test_updates import select_release
 
@@ -209,13 +210,16 @@ def test_setup_rerun_retires_old_generation(
     assert git(target, "status", "--porcelain") == ""
 
 
-@pytest.mark.parametrize("options", [[], ["--external-sources"]])
+@pytest.mark.parametrize(
+    ("options", "edited"), [([], False), (["--external-sources"], False), ([], True)]
+)
 @pytest.mark.parametrize("repair", [False, True])
 def test_update_retires_old_generation(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
     repair: bool,
     options: list[str],
+    edited: bool,
 ) -> None:
     source, target, _ = release
     project = write_old_generation(target)
@@ -233,11 +237,20 @@ def test_update_retires_old_generation(
     (target / "package.json").unlink()
     git(target, "add", "--force", *OLD_FILES)
     commit(target, "old generation wiring")
+    if edited:
+        with (target / scripts[1]).open("a") as script:
+            script.write("echo local\n")
     if repair:
         monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
     else:
         select_release(source, monkeypatch)
     update.update(target, repair=repair)
+    if edited:
+        shell = [gate["command"] for gate in json.loads(gates.read_text())["shared"]]
+        assert ["shellcheck", "--", scripts[1]] in shell
+        assert (target / scripts[1]).read_text().endswith("echo local\n")
+        assert not (target / scripts[0]).exists()
+        return
     assert not set(OLD_FILES) & set(git(target, "ls-files").splitlines())
     assert_old_generation_retired(target, project)
     assert ".hard-eng/" not in gates.read_text()
@@ -295,3 +308,17 @@ def test_setup_rerun_leaves_local_settings_edits_uncommitted(
     assert override.read_text().endswith("Local deployment rule\n")
     assert "permissions" not in git(target, "show", "HEAD:.claude/settings.json")
     assert "permissions" in settings.read_text()
+
+
+def test_old_generation_removal_keeps_compound_project_hooks() -> None:
+    compound = {
+        "type": "command",
+        "command": OLD_COMMAND.format("hook.sh", "claude pretooluse") + " && ./guard",
+    }
+    generated = {
+        "type": "command",
+        "command": 'bash "$(git rev-parse --show-toplevel)/.hard-eng/hook.sh" claude',
+    }
+    current: JsonObject = {"hooks": {"PreToolUse": [{"hooks": [generated, compound]}]}}
+    agent_hooks.remove_routine_hooks(current, "claude", "unused")
+    assert current == {"hooks": {"PreToolUse": [{"hooks": [compound]}]}}

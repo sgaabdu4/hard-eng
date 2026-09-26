@@ -727,7 +727,9 @@ OLD_GENERATION = {
 
 
 def old_generation(root: Path, changes: dict[str, str]) -> list[str]:
-    """Name old-generation files still carrying their generated header; report edited ones."""
+    """Name committed old-generation files still carrying their generated header."""
+    from update import retire_tracked
+
     retired: list[str] = []
     kept: list[str] = []
     for name, header in OLD_GENERATION.items():
@@ -746,7 +748,7 @@ def old_generation(root: Path, changes: dict[str, str]) -> list[str]:
             + ", ".join(kept),
             file=sys.stderr,
         )
-    return retired
+    return retire_tracked(root, retired)
 
 
 INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl"}
@@ -915,10 +917,9 @@ def plan_install(
 
 
 def install(root: Path, previous: Path | None = None) -> None:
-    from update import commit_install, local_state, retire_tracked, write_changes
+    from update import commit_install, local_state, write_changes
 
-    changes, links, hook, launcher, retired = plan_install(root, previous)
-    deleted = retire_tracked(root, retired)
+    changes, links, hook, launcher, deleted = plan_install(root, previous)
     names = sorted({*changes, *links, *deleted})
     if hook.is_relative_to(root) and ".git" not in hook.relative_to(root).parts:
         names.append(str(hook.relative_to(root)))  # A Husky launcher lives in the tree.

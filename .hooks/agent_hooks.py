@@ -159,12 +159,16 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
 
 
 OLD_GENERATION_SCRIPT = re.compile(r"/\.hard-eng/(?:bootstrap|hook)\.sh\b")
+OLD_GENERATION_COMMAND = re.compile(
+    r'bash "\$\((?:env(?: -u \w+)+ )?git rev-parse --show-toplevel\)'
+    r'/\.hard-eng/(?:bootstrap|hook)\.sh"(?: [a-z]+)*'
+)
 
 
 def _old_generation(handler: JsonValue) -> bool:
     return isinstance(handler, dict) and any(
         isinstance(value := handler.get(key), str)
-        and OLD_GENERATION_SCRIPT.search(value) is not None
+        and OLD_GENERATION_COMMAND.fullmatch(value) is not None
         for key in ("command", "bash", "powershell")
     )
 

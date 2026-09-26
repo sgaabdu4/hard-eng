@@ -579,7 +579,7 @@ def repair_installation(root: Path, previous: str) -> str:
             or OLD_GENERATION_SCRIPT.search((root / name).read_text(errors="replace"))
         )
     }
-    missing.update(dict.fromkeys(retire_tracked(root, retired)))
+    missing.update(dict.fromkeys(retired))
     added: dict[str, str | None] = {
         name: link for name, link in links.items() if link is not None
     }
@@ -655,7 +655,7 @@ def update(root: Path, repair: bool = False) -> str:
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
         changes, links, hook, retired = update_plan(root, source, old)
-        changes.update(dict.fromkeys(retire_tracked(root, retired)))
+        changes.update(dict.fromkeys(retired))
         if not changes and not links:
             install_planned_hook(root, hook)
             return "Hard Eng already matches the verified source."
