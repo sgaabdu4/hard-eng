@@ -10,7 +10,7 @@ import pytest
 import tool_setup
 import yaml
 from ci_setup import configure_ci
-from conftest import commit, load_module
+from conftest import commit, load_module, use_installed_mise
 from gate_config import GateConfig, Group, parse_config
 from shipping import ShippingError, ShippingPolicy
 
@@ -22,6 +22,7 @@ SOURCE = Path(__file__).resolve().parents[1]
 def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wrapped: bool, location: str
 ) -> None:
+    use_installed_mise(tmp_path, monkeypatch)
     for name in (
         "RUNNER_TEMP",
         "MISE_DATA_DIR",
@@ -79,12 +80,7 @@ def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
     assert shutil.which("gitleaks") == str(scanner / "gitleaks")
     assert captured[0] == "env"
     assert not any(argument.startswith("MISE_DATA_DIR=") for argument in captured)
-    assert captured[captured.index("pnpm") :] == [
-        "pnpm",
-        "dlx",
-        "--config.ignore-scripts=false",
-        "--allow-build=@jdxcode/mise",
-        "--package=@jdxcode/mise@latest",
+    assert captured[captured.index("mise") :] == [
         "mise",
         "--no-config",
         "env",
@@ -96,6 +92,7 @@ def test_native_tool_bootstrap_uses_pnpm_and_preserves_ci_sdk_executables(
 def test_managed_python_scanner_provisions_project_local_uv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    use_installed_mise(tmp_path, monkeypatch)
     """A cold existing job receives uv before its managed scanner runs."""
     storage = tmp_path / "hard-eng-tools"
     uv_bin = storage / "mise/data/installs/uv/latest/bin"
