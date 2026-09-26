@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import yaml
+
 from gate_config import GateConfig
 from project_setup import dependency_command
 

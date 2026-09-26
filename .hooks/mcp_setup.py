@@ -193,6 +193,7 @@ def sentry_server(root: Path) -> JsonObject | None:
 def marionette_server(root: Path) -> JsonObject | None:
     """Register for any Flutter app; pin to the locked package when present."""
     import yaml
+
     from gate_config import nonproduction_source, repository_files
 
     for path in repository_files(root):

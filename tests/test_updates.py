@@ -90,6 +90,27 @@ def test_scaffold_distribution_excludes_ignored_runtime_files(tmp_path: Path) ->
     assert update.scaffold_files(tmp_path) == {".agents/skills/recorder/SKILL.md"}
 
 
+def test_installed_hooks_survive_project_ruff_settings(tmp_path: Path) -> None:
+    for name in update.scaffold_files(SOURCE):
+        if name.startswith(".hooks/"):
+            (tmp_path / name).parent.mkdir(exist_ok=True)
+            shutil.copy(SOURCE / name, tmp_path / name)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "app"\nversion = "1"\nrequires-python = ">=3.14"\n'
+        '[tool.ruff]\ntarget-version = "py314"\nline-length = 120\n'
+        '[tool.ruff.lint]\nselect = ["ALL"]\n'
+    )
+    for command in (["format", "--check", "."], ["check", "."]):
+        result = subprocess.run(
+            ["uvx", "ruff@latest", *command, "--no-cache"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+
 def fixed_revision(revision: str) -> Callable[[str], str]:
     def selected(_previous: str) -> str:
         return revision

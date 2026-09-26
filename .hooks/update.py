@@ -164,7 +164,9 @@ def scaffold_files(source: Path) -> set[str]:
             "Unresolved skill link; run git submodule update --init --recursive"
         )
     return {
-        str(path.relative_to(source)) for path in (source / ".hooks").glob("*.py")
+        str(path.relative_to(source))
+        for pattern in ("*.py", "ruff.toml")
+        for path in (source / ".hooks").glob(pattern)
     } | {
         str(path.relative_to(source))
         for skill in [
