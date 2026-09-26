@@ -593,9 +593,11 @@ def browser_test_coverage(directory: Path, package: Group) -> None:
             gate["command"] = [
                 "sh",
                 "-c",
-                "set -e; rm -f coverage/browser.lcov; "
+                "set -e; rm -f coverage/browser.lcov coverage/lcov.info; "
+                + 'tests=$(grep -rlE "^@TestOn\\([\'\\"] *(browser|chrome)" test || true); '
+                + 'if find test -name "*_test.dart" | grep -qvxF -e "$tests"; then '
                 + shlex.join(FLUTTER_TESTS)
-                + '; tests=$(grep -rlE "^@TestOn\\([\'\\"] *(browser|chrome)" test || true); '
+                + "; fi; "
                 + 'if [ -z "$tests" ]; then echo "Browser libraries need tests under test/ marked'
                 + " @TestOn('browser') that import package:test/test.dart (not flutter_test);"
                 + ' declare test as a dev dependency and provide Chrome." >&2; exit 0; fi; '

@@ -955,3 +955,20 @@ def test_flutter_browser_library_coverage_comes_from_browser_tests(
     expected = {(tmp_path / "lib/vm.dart").resolve(), web.resolve()}
     coverage = tmp_path / "coverage/lcov.info"
     assert line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected) == (2, 2)
+    for name in ("vm_test.dart", "io_test.dart"):
+        (tmp_path / "test" / name).unlink()
+    (tools / "flutter").write_text(
+        "#!/bin/sh\necho 'No tests were found.' >&2\nexit 1\n"
+    )
+    with (tmp_path / "tests.jsonl").open("w") as report:
+        subprocess.run(
+            command,
+            cwd=tmp_path,
+            stdout=report,
+            env={"PATH": f"{tools}:/usr/bin:/bin"},
+            check=True,
+        )
+    assert completed_tests(tmp_path / "tests.jsonl", "dart-tests") == 1
+    assert line_coverage(
+        coverage, "dart-tests", tmp_path.resolve(), {web.resolve()}
+    ) == (1, 1)
