@@ -1,10 +1,10 @@
 # Let a new empty repository receive its first push
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
-Pre-push accepts the first push to a remote with no branches, after a full `check` with no `--base`; a failing gate still refuses it. Once the remote has branches, direct base pushes stay blocked, and a base missing from a populated remote still fails. Fixes issue #178. Non-goals: other push rules.
+Pre-push accepts the first push to a remote whose push URL has no branches, after a full `check` with no `--base`; a failing gate still refuses it. Once the remote has branches, direct base pushes stay blocked, and a base missing from a populated remote still fails. Fixes issue #178. Non-goals: other push rules.
 
 ## Repository context
 
@@ -37,9 +37,9 @@ N/A — hook behaviour with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Required — a real pre-push against an empty bare remote.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --base main --plan-stage Complete` → exit 0, 17/17 gates PASS. `/codex:adversarial-review --base main` found the check read origin's fetch URL while Git pushes to its push URL; it now reads the push URL, and the test uses a populated fetch URL with an empty push URL. Pushes to a remote other than origin stay outside Hard Eng's origin-only push rules.
+E2E: Passed — a real `hard-eng.py pre-push` against empty bare remotes accepts the first `main` push when the gate passes, refuses it when the gate fails, and blocks the next direct `main` push.
 
 Delivery target: Merge
 Delivery: Pending — PR checks green, squash merge, main CI green.
