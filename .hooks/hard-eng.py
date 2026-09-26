@@ -708,6 +708,9 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
+        # ssh under `git push` shares this pipe and leaves it non-blocking.
+        for stream in (sys.stdout, sys.stderr):
+            os.set_blocking(stream.fileno(), True)
         raise SystemExit(main())
     except (
         ImportError,
