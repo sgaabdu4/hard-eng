@@ -149,7 +149,7 @@ def test_install_retires_old_generation_and_keeps_project_files(
     installer.install(tmp_path)
     if not tracked:
         assert all((tmp_path / name).exists() for name in OLD_FILES)
-        assert "Kept untracked old Hard Eng files" in capsys.readouterr().err
+        assert "Kept uncommitted old Hard Eng files" in capsys.readouterr().err
         return
     assert_old_generation_retired(tmp_path, project)
     tracked_names = subprocess.check_output(
@@ -209,8 +209,9 @@ def test_setup_rerun_retires_old_generation(
     assert git(target, "status", "--porcelain") == ""
 
 
+@pytest.mark.parametrize("repair", [False, True])
 def test_update_retires_old_generation(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, repair: bool
 ) -> None:
     source, target, _ = release
     project = write_old_generation(target)
@@ -228,8 +229,11 @@ def test_update_retires_old_generation(
     (target / "package.json").unlink()
     git(target, "add", "--force", *OLD_FILES)
     commit(target, "old generation wiring")
-    select_release(source, monkeypatch)
-    update.update(target)
+    if repair:
+        monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    else:
+        select_release(source, monkeypatch)
+    update.update(target, repair=repair)
     assert not set(OLD_FILES) & set(git(target, "ls-files").splitlines())
     assert_old_generation_retired(target, project)
     assert ".hard-eng/" not in gates.read_text()
@@ -266,7 +270,10 @@ def test_setup_rerun_leaves_local_settings_edits_uncommitted(
     edited = json.loads(settings.read_text())
     edited["permissions"] = {"allow": ["Bash(ls)"]}
     settings.write_text(json.dumps(edited))
+    override = target / "AGENTS.override.md"
+    override.write_text(override.read_text() + "Local deployment rule\n")
     monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
     update.update(target, repair=True)
+    assert override.read_text().endswith("Local deployment rule\n")
     assert "permissions" not in git(target, "show", "HEAD:.claude/settings.json")
     assert "permissions" in settings.read_text()

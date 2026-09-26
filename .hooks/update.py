@@ -302,19 +302,22 @@ def update_plan(
 
 
 def retire_tracked(root: Path, retired: list[str]) -> list[str]:
-    """Only a commit's history keeps edits in a removed file; untracked ones are reported."""
+    """Only a commit's history keeps a removed file, so untracked or edited ones stay."""
     if not retired:
         return []
     tracked = subprocess.check_output(
         ["git", "ls-files", "-z", "--", *retired], cwd=root, text=True
     ).split("\0")
-    if kept := [name for name in retired if name not in tracked]:
+    removable = [
+        name for name in retired if name in tracked and not local_state(root, [name])
+    ]
+    if kept := [name for name in retired if name not in removable]:
         print(
-            "Kept untracked old Hard Eng files; review and remove them: "
+            "Kept uncommitted old Hard Eng files; review and remove them: "
             + ", ".join(kept),
             file=sys.stderr,
         )
-    return [name for name in retired if name in tracked]
+    return removable
 
 
 def local_state(root: Path, names: list[str]) -> list[str]:
@@ -572,6 +575,7 @@ def repair_installation(root: Path, previous: str) -> str:
         if content is not None
         and (
             not (root / name).exists()
+            or any(old in (root / name).read_text(errors="replace") for old in retired)
             or OLD_GENERATION_SCRIPT.search((root / name).read_text(errors="replace"))
         )
     }
