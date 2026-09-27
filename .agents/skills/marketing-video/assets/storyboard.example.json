@@ -3,12 +3,12 @@
     "font": "brand/Display.ttf",
     "logos": { "a": "brand/acme.svg", "b": "brand/globex.svg" },
     "colors": {
-      "ink": "#14201a",
-      "accent": "#00845b",
-      "highlight": "#57cc99",
-      "dark": "#0b3b2b",
-      "tint": "#e6efe9",
-      "bg": "#f5f7f6"
+      "ink": "#111827",
+      "accent": "#2563eb",
+      "highlight": "#93c5fd",
+      "dark": "#1e3a8a",
+      "tint": "#e0e7ff",
+      "bg": "#f8fafc"
     }
   },
   "subtitles": false,
