@@ -28,7 +28,7 @@ uv tool install mlx-whisper
 
 ## Work folder
 
-Keep one folder per video, outside this skill and out of version control (it holds footage, audio and renders).
+Keep one folder per video, outside this skill and out of version control: outside the repository, or in a git-ignored folder (it holds footage, audio and renders).
 
 | Path | Owner | Content |
 | --- | --- | --- |
@@ -53,7 +53,7 @@ node scripts/audit.mjs <work>/out/final.mp4 <work>/audit
 node scripts/pick.mjs <work> <work>/out/final.mp4
 ```
 
-`clips.mjs` is only for the recordings route. `build.mjs` runs before any voice exists and times missing lines by estimate, so layout can be checked first. The last command transcribes only the voiced spans of the finished mix, so music-only stretches cannot produce invented text.
+`clips.mjs` is only for the recordings route; `build.mjs` refuses clips whose storyboard range changed since the last `clips.mjs` run. `build.mjs` runs before any voice exists and times missing lines by estimate, so layout can be checked first. The last command transcribes only the voiced spans of the finished mix, so music-only stretches cannot produce invented text.
 
 ## 1. Brief and inputs
 
@@ -83,7 +83,7 @@ Scene types:
 | `outro` | `title` + `kicker`, or logos; `text`, `cta` | Close |
 
 - Default marketing shape: intro → problem statement → offer → bridge title → 6–9 chapters → collage → outro. Explainer: intro → why → flow → one chapter per function, grouped under section titles → loop or recap → outro.
-- One voice line per non-app scene (key = `line` or scene id), ≤ 25 words. Clip chapters take one line; staged chapters take one line per group.
+- One voice line per non-app scene (key = `line` or scene id), ≤ 25 words. A text-only scene holds at most ~8 s; a longer thought gets `cards`, `bands` or a `flow` that reveals with the voice, or moves into a chapter (`build.mjs` prints `CHECK` for scenes over 8 s). Clip chapters take one line; staged chapters take one line per group.
 - Open on something specific, e.g. "Acme meets Globex." or "This is the Acme claims desk. It's where…". "A and B, working together" is filler.
 - Plain spoken English, like a colleague showing the product. No hype words (seamless, powerful, smarter, magic), no slogans, no rule-of-three taglines.
 - Name integrations and features exactly as the product ships them. Captions name the action ("Take this claim", "Plan published").
@@ -99,6 +99,7 @@ Per clip in an `app` scene's `clips`: `video`, `from`/`to` (source seconds), `sp
 - Speed: typing and scrolling 3–4.5×; decisions and confirmations 1.6–2.5×. A speed tag appears on screen from 3×.
 - End each chapter on a confirmation state; add `hold` (≈1.4 s) when the last clip ends too soon to read it.
 - `blankCrop` = the content region in source pixels, excluding persistent navigation, so loading frames are detected and dropped (`blankInk` threshold, default 0.012).
+- Tall phone recordings (width under 0.8 × height) play large on the right, with the chapter name and captions in a column on the left. Landscape recordings play centred and full width.
 - `focus`: `{ "from", "to", "box": [x, y, w, h] }` in source seconds + pixels, for the last 1–3 s of a payoff state. Zoom is capped at 1.45 and eased; everything else plays full frame.
 
 ### Staged screenshots
@@ -127,7 +128,7 @@ An `app` scene's `groups`: `[{ "line": "06-1", "shots": [{ "file", "caption", "c
 - `render.mjs` captures 30 fps deterministically from the paused GSAP timeline and fails on any page error or missing asset.
 - `mix.mjs` loops the music with crossfades, ducks it under the voice, fades in/out and normalises to −14 LUFS.
 
-Design defaults in the template: display type 800 weight at 96–184 px with a word-mask reveal; numbered chapter card that wipes up; dark caption slab with a clip-path wipe; screens in a rounded frame with depth; chapter pill on staged screens; diagrams that draw on with a travelling dot; four-shot collage; logo outro with a CTA pill. Colours and fonts come from `brand` in the storyboard.
+Design defaults in the template: display type 800 weight at 96–184 px with a word-mask reveal; numbered chapter card that wipes up; dark caption slab with a clip-path wipe; screens in a rounded frame with depth; chapter pill on staged screens; diagrams that draw on with a travelling dot; four-shot collage; logo outro with a CTA pill. Colours, fonts and `displayWeight` (default 800; lower it when the brand's display face is lighter) come from `brand` in the storyboard.
 
 ## 6. Review
 

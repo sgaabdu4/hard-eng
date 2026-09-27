@@ -80,10 +80,7 @@ function chapter(s, root) {
 function slab(root, box, n, caption, speed, at, out) {
   const fast = speed >= 3 ? `<span class="fast">${speed}×</span>` : '';
   const e = $('div', 'slab', root, `<span class="n">${n}</span><span class="t">${caption}</span>${fast}`);
-  gsap.set(e, {
-    left: Math.max(40, box.left - 56),
-    top: box.top + box.height - 80,
-  });
+  gsap.set(e, box.tall ? { left: 160, top: 640 } : { left: Math.max(40, box.left - 56), top: box.top + box.height - 80 });
   tl.fromTo(
     e,
     { clipPath: 'inset(0 100% 0 0 round 22px)' },
@@ -107,12 +104,29 @@ function fit([w, h], maxW, maxH) {
   return { width: w * k, height: h * k };
 }
 
+function screenBox(size, maxW, maxH, top) {
+  if (size[0] / size[1] >= 0.8) {
+    const f = fit(size, maxW, maxH);
+    return { left: (1920 - f.width) / 2, top, ...f, tall: false };
+  }
+  const f = fit(size, 760, 940);
+  return { left: 1920 - f.width - 280, top: 40, ...f, tall: true };
+}
+
+function side(s, root, box) {
+  if (!box.tall) return;
+  const e = $('div', 'side', root, `<div class="kick">${pad2(s.num)}${s.who ? ` — ${s.who}` : ''}</div><div class="big">${s.label}</div>`);
+  reveal(e.querySelector('.kick'), s.start + CARD + 0.1);
+  reveal(e.querySelector('.big'), s.start + CARD + 0.2, 0.06);
+}
+
 const players = [];
 function clipScene(s, root) {
   const [vw, vh] = s.clips[0].size;
-  const { width: W, height: H } = fit([vw, vh], 1504, 940);
+  const box = screenBox([vw, vh], 1504, 940, 26);
+  const { width: W, height: H } = box;
   const k = W / vw;
-  const box = { left: (1920 - W) / 2, top: 26, width: W, height: H };
+  side(s, root, box);
   const vp = $('div', 'viewport', root);
   gsap.set(vp, box);
   const screen = $('div', 'screen', vp);
@@ -131,14 +145,15 @@ function clipScene(s, root) {
 }
 
 function shotScene(s, root) {
-  const { width: CW, height: CH } = fit(s.shots[0].size, 1248, 780);
-  const box = { left: (1920 - CW) / 2, top: 118, width: CW, height: CH };
+  const box = screenBox(s.shots[0].size, 1248, 780, 118);
+  const { width: CW, height: CH } = box;
+  side(s, root, box);
   const card = $('div', 'screen', root);
   gsap.set(card, box);
   const cam = $('div', 'cam', card);
   gsap.set(cam, { width: CW, height: CH });
   const pill = $('div', 'pill', root, `<span class="n">${pad2(s.num)}</span><span class="t">${s.label}</span>`);
-  gsap.set(pill, { left: box.left, top: 30 });
+  gsap.set(pill, { left: box.left, top: 30, display: box.tall ? 'none' : 'flex' });
   tl.from(card, { scale: 0.94, y: 40, duration: 0.9, ease: 'expo.out' }, s.start + CARD - 0.05);
   tl.from(pill, { opacity: 0, x: -30, duration: 0.6, ease: 'expo.out' }, s.start + CARD + 0.25);
   const cursor = $(
@@ -516,6 +531,7 @@ function paintClips(t) {
 window.ready = (async () => {
   const root = document.documentElement.style;
   for (const [name, value] of Object.entries(B.colors ?? {})) root.setProperty(`--${name}`, value);
+  if (B.displayWeight) root.setProperty('--weight', B.displayWeight);
   for (const [family, file] of [
     ['Display', B.font],
     ['Body', B.bodyFont],

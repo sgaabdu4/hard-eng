@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { grayFrames, readJson, run, size } from './media.mjs';
+import { clipSource, grayFrames, readJson, run, size } from './media.mjs';
 
 const work = resolve(process.argv[2]);
 const board = readJson(work, 'storyboard.json');
@@ -74,6 +74,7 @@ for (const scene of board.scenes) {
       size: dims,
       cam: camera(clip, keep, dims),
       files: keep.map((f) => f + 1),
+      source: clipSource(board, clip),
     };
     console.log(
       id,
@@ -85,4 +86,5 @@ for (const scene of board.scenes) {
     );
   });
 }
+mkdirSync(join(work, 'clips'), { recursive: true });
 writeFileSync(join(work, 'clips/index.json'), JSON.stringify(out));

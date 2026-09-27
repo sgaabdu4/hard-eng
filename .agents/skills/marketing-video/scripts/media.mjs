@@ -15,6 +15,9 @@ export const size = (file) =>
     .slice(0, 2)
     .map(Number);
 
+export const clipSource = (board, clip) =>
+  JSON.stringify([clip.video, clip.from, clip.to, clip.speed ?? 1, clip.focus ?? null, board.blankCrop ?? null, board.blankInk ?? null]);
+
 export const readJson = (work, path, fallback) => {
   const file = join(work, path);
   if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8'));

@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
-import { readJson, seconds, size } from './media.mjs';
+import { clipSource, readJson, seconds, size } from './media.mjs';
 
 const work = resolve(process.argv[2]);
 const board = readJson(work, 'storyboard.json');
@@ -80,7 +80,7 @@ function clips(s) {
   let at = 1.15;
   return (s.clips ?? []).map((c, i) => {
     const x = clipIndex[`${s.id}-${i + 1}`];
-    if (!x) throw new Error(`clip ${s.id}-${i + 1} missing: run clips.mjs first`);
+    if (x?.source !== clipSource(board, c)) throw new Error(`clip ${s.id}-${i + 1} is missing or out of date: run clips.mjs`);
     const clip = {
       ...x,
       at,
@@ -146,3 +146,8 @@ console.log(
   estimated ? `${estimated} lines timed by estimate (no take yet)` : 'every line has a take',
 );
 for (const s of scenes) console.log(s.id, s.type.padEnd(10), s.start.toFixed(1).padStart(6), s.dur.toFixed(1).padStart(5), s.label ?? '');
+for (const s of scenes.filter((x) => !['app', 'flow', 'loop'].includes(x.type) && x.dur > 8)) {
+  console.log(
+    `CHECK scene ${s.id} holds one graphic for ${s.dur.toFixed(1)}s: shorten its line, or give it cards, bands or a flow to reveal`,
+  );
+}
