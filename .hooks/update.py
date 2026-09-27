@@ -1,5 +1,6 @@
 """Install a CI-verified upstream revision with an isolated local Git commit."""
 
+import http.client
 import json
 import os
 import re
@@ -32,15 +33,15 @@ def github_token() -> str | None:
 
 
 def github_json(endpoint: str) -> object:
-    token = github_token()
-    headers = {"Accept": "application/vnd.github+json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(
-        f"https://api.github.com/{endpoint}", headers=headers
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    auth = {"Authorization": f"Bearer {token}"} if (token := github_token()) else {}
+    headers = {"Accept": "application/vnd.github+json", **auth}
+    url = f"https://api.github.com/{endpoint}"
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except http.client.HTTPException as error:
+        raise OSError(f"GitHub response for {endpoint} was cut short") from error
 
 
 def verified_revision(revision: str) -> bool:
