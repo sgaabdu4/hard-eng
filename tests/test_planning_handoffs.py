@@ -187,6 +187,7 @@ def test_unchanged_draft_session_only_warns_about_a_stale_install(
     git(repository, "commit", "-qm", "draft")
     (repository / ".git/info/exclude").write_text(".hard-eng/\n")
     payload: JsonObject = {"session_id": "known"}
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
     agent_hooks.session_context(repository, payload)
     monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
     response = agent_hooks.completion(repository, payload, "codex")

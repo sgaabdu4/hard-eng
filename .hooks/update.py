@@ -1,5 +1,6 @@
 """Install a CI-verified upstream revision with an isolated local Git commit."""
 
+import http.client
 import json
 import os
 import re
@@ -40,7 +41,10 @@ def github_json(endpoint: str) -> object:
         f"https://api.github.com/{endpoint}", headers=headers
     )
     with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+        try:
+            return json.load(response)
+        except http.client.HTTPException as error:
+            raise OSError(f"GitHub response for {endpoint} was cut short") from error
 
 
 def verified_revision(revision: str) -> bool:
