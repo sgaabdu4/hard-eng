@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { chromium } from 'playwright';
 
@@ -19,23 +18,19 @@ const types = {
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
 };
-const server = createServer((req, res) => {
-  const path = normalize(join(work, decodeURIComponent(new URL(req.url, 'http://x').pathname)));
-  if (!path.startsWith(work) || !existsSync(path) || statSync(path).isDirectory()) return res.writeHead(404).end();
-  res.writeHead(200, {
-    'content-type': types[extname(path)] ?? 'application/octet-stream',
-  });
-  createReadStream(path).pipe(res);
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const browser = await chromium.launch();
 try {
   const page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
+  await page.route('http://video.local/**', (route) => {
+    const path = normalize(join(work, decodeURIComponent(new URL(route.request().url()).pathname)));
+    if (!path.startsWith(work) || !existsSync(path) || statSync(path).isDirectory()) return route.fulfill({ status: 404 });
+    return route.fulfill({ path, contentType: types[extname(path)] ?? 'application/octet-stream' });
+  });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('requestfailed', (r) => errors.push(`failed ${r.url()}`));
   page.on('response', (r) => r.status() >= 400 && errors.push(`${r.status()} ${r.url()}`));
-  await page.goto(`http://127.0.0.1:${server.address().port}/render/index.html`);
+  await page.goto('http://video.local/render/index.html');
   const total = await page.evaluate(() => window.ready);
   if (errors.length) throw new Error(errors.join('\n'));
   if (stills) {
@@ -86,5 +81,4 @@ try {
   }
 } finally {
   await browser.close();
-  server.close();
 }

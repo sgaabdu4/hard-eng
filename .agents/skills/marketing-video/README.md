@@ -24,6 +24,7 @@ uv tool install mlx-whisper
 
 - Chatterbox downloads its model weights from Hugging Face on first use. It runs on Apple GPU, CUDA or CPU.
 - `mlx-whisper` needs Apple Silicon. Elsewhere: `uv tool install openai-whisper` and `export WHISPER_BIN=whisper`. `WHISPER_BIN` may also point at an existing `mlx_whisper` executable.
+- Agent sandboxes that hide the GPU or block browser launch (for example Codex `workspace-write` on macOS) cannot run `takes.mjs`, `pick.mjs` or `render.mjs`. Request an unsandboxed run for those commands; with model weights already downloaded, also set `HF_HUB_OFFLINE=1`.
 
 ## Work folder
 

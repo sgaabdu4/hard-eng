@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { readJson } from './media.mjs';
 
 const work = resolve(process.argv[2]);
@@ -27,5 +27,8 @@ for key, text in json.load(open(f"{work}/lines.json")):
         ta.save(out, wav, model.sr)
         print(key, seed, round(wav.shape[-1] / model.sr, 2), flush=True)
 `;
-const result = spawnSync(python, ['-c', code, work, only, first, String(exaggeration), String(cfg)], { stdio: 'inherit' });
+const result = spawnSync(python, ['-c', code, work, only, first, String(exaggeration), String(cfg)], {
+  stdio: 'inherit',
+  env: { NUMBA_CACHE_DIR: join(work, 'vo/.numba'), ...process.env },
+});
 process.exit(result.status ?? 1);
