@@ -22,7 +22,7 @@ Authority: User asked for this skill in hard-eng, tested by Codex (`gpt-6-luna`,
 - [x] Staged-screenshot route runs end to end with groups, manifest targets, cursor clicks, zooms, flow and loop diagrams, subtitles, crossfades, backdrop and quiet music.
 - [x] Mix keeps quiet music quiet: linear gain to −14 LUFS instead of dynamic loudnorm (music-only gaps sat ~5 dB under the voice before, ~10 dB after, same track and volume).
 - [x] Guidance carries lessons from both videos without contradicting either: sample voice first, approved voice settings, plain name spelling, hand-placed zoom that keeps its box in frame, hard cuts or quick crossfades, sign-in only when access is the lesson, plain wording, private data never shown, real logos, copy approved designs, freeze approved parts, music licence stated.
-- [ ] Skill text holds no product, customer or backend names (`git grep` on the package is empty).
+- [x] Skill text holds no product, customer or backend names (`git grep` on the package is empty).
 - [ ] A fresh Codex `gpt-6-luna` run at max reasoning, given only the skill + a different product's footage, produces a video that passes the completion gate; failures feed back into the skill.
 - [ ] Biome, skill-link test and the full `hard-eng.py check` pass.
 

@@ -1,37 +1,57 @@
 ---
 name: marketing-video
-description: Make a polished, voiced product marketing or explainer video from real product screens. Script, cut walkthrough clips or stage app screenshots with a cursor, generate and pick voice takes, render branded motion graphics and diagrams, mix music and review every second before delivery.
+description: Make a voiced product marketing or explainer video from real product screens. Script, cut walkthrough clips or stage app screenshots with a cursor, pick voice takes, render branded motion graphics and diagrams, mix music and review every second before delivery.
 disable-model-invocation: true
 ---
 
 # Marketing Video
 
-Real product screens + big bold brand type + one calm voice. Commands run from this skill's directory; the video's work folder lives outside it. Screens come from one of two routes:
+Output = real product screens + big brand type + one calm voice → reviewed MP4. Commands run from this directory; each video's work folder lives outside it.
 
-- **Recordings**: [Product Walkthrough Video](../product-walkthrough-video/SKILL.md) takes or existing product videos, cut into clips.
-- **Staged screenshots**: app screens rendered over made-up data, with a drawn cursor, click ripple and zoom. Use it when real data is private or no recordings exist.
+## Routes
+
+Load only the routes the task reaches.
 
 ```mermaid
 flowchart LR
-  T{Task} -->|Missing runtime| S[README: Setup]
-  T -->|New video| B[README: Brief] --> SC[Script] --> F[Screens] --> V[Voice] --> R[Render + mix] --> Q[Review] --> D[Deliver]
-  T -->|Feedback on a draft| E[README: Revisions]
-  click S "README.md#setup"
-  click B "README.md#1-brief-and-inputs"
-  click F "README.md#3-screens"
-  click E "README.md#revisions"
+  T{Task} -->|Runtime / commands / work folder| S[setup]
+  T -->|New video| B[brief + script]
+  B -->|Recordings exist| RC[recordings]
+  B -->|Private data / no recordings| ST[staged screenshots]
+  RC --> V[voice]
+  ST --> V
+  V --> R[render, review, deliver]
+  T -->|Feedback on a draft| E[revisions]
+  E --> R
+  click S "references/setup.md"
+  click B "references/script.md"
+  click RC "references/recordings.md"
+  click ST "references/staged.md"
+  click V "references/voice.md"
+  click R "references/render.md"
+  click E "references/revisions.md"
 ```
+
+Recordings come from [Product Walkthrough Video](../product-walkthrough-video/SKILL.md) takes or existing product videos.
 
 ## Core rules
 
-- The agent cannot hear. Voice, pace and pronunciation are the human's call: send a short sample before generating every line, and never call audio "better" without their listen.
-- Real product only: screens, logos and fonts come from the product and brand owners. Never type a brand name where its logo belongs; never invent a screen or a feature.
-- Cut sign-in, invite-link, loading and empty screens. Show access behaviour only when the audience must learn it (a training video), and never a password being typed.
-- Zoom only on a hand-placed box around the thing the voice names, and keep that whole box in frame. No pointer-following or automatic zoom. A staged cursor moves to a named target; it never drives the camera.
-- Hard cuts between recorded clips. Quick crossfades (0.4 s) between staged screenshots or scenes are fine; no slow fades to or from black.
-- Explanatory graphics copy an approved design the brand already uses (deck slide, site section). Do not invent card, chip or panel styles.
-- Plain, specific words, like a colleague showing the product. No hype words, slogans or rule-of-three taglines; boldness comes from type size, layout and motion.
-- Private data never appears: recordings use demo accounts, staged screens use made-up records.
-- Once the human approves a part, freeze it. Change only what the latest feedback names; keep liked voice takes and regenerate only changed lines.
+- Agent cannot hear → voice, pace + pronunciation = human's call. One sample before every line is generated; never call audio "better" without their listen.
+- Real product only: screens, logos + fonts from the product and brand owners. Logo file, never a typed brand name; never an invented screen or feature.
+- Cut sign-in, invite, loading + empty screens. Access behaviour only when the audience must learn it (training); never a typed password.
+- Private data never appears: demo accounts or made-up records.
+- Zoom = hand-placed box on what the voice names, whole box in frame. No pointer-following or automatic zoom; a staged cursor never drives the camera.
+- Recorded clips → hard cuts. Staged shots/scenes → 0.4 s crossfades allowed. No slow fades to or from black.
+- Explanatory graphics copy an approved brand design (deck slide, site section) or the template defaults; no new card, chip or panel styles.
+- Plain, specific words, like a colleague showing the product. No hype, slogans or rule-of-three taglines; boldness = type size, layout, motion.
+- Human-approved part → frozen. Change only what the latest feedback names.
 
-Completion = [README: Completion gate](README.md#completion-gate) on the exact delivered file.
+## Completion gate
+
+All hold on the exact delivered file:
+
+- script approved by the human; every claim backed by product material;
+- `build.mjs` passes; `render.mjs` reported no page errors;
+- every audit sheet opened, flat runs explained, stills checked at clicks, zooms + graphic scenes;
+- mix transcript holds every line in order;
+- delivered with draft number + change summary; voice quality stated as the human's judgment; music licence status stated.

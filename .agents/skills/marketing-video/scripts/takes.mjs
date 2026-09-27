@@ -7,7 +7,7 @@ const only = process.argv[3] ?? '';
 const first = process.argv[4] ?? '1';
 const python = process.env.TTS_PYTHON;
 const { exaggeration = 0.7, cfg = 0.4 } = readJson(work, 'storyboard.json').voice ?? {};
-if (!python) throw new Error('Set TTS_PYTHON to the python of an environment with chatterbox-tts installed (README: Setup).');
+if (!python) throw new Error('Set TTS_PYTHON to the python of an environment with chatterbox-tts installed (references/setup.md).');
 const code = `
 import json, os, sys, torch, torchaudio as ta
 from chatterbox.tts import ChatterboxTTS
