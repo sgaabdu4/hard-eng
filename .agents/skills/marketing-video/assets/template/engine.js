@@ -227,7 +227,12 @@ const builders = {
   intro(s, root) {
     const c = $('div', 'center', root);
     if (s.title) {
-      const lk = $('div', 'lockup', c, `${logo('a', s.logoHeight ?? 250)}<div class="kick">${s.kicker ?? ''}</div><h1>${s.title}</h1>`);
+      const lk = $(
+        'div',
+        'lockup',
+        c,
+        `${logo('a', s.logoHeight ?? 250)}${s.kicker ? `<div class="kick">${s.kicker}</div>` : ''}<h1>${s.title}</h1>`,
+      );
       const mark = lk.querySelector('img');
       tl.from(
         mark,
@@ -240,7 +245,7 @@ const builders = {
         },
         s.start + 0.15,
       );
-      reveal(lk.querySelector('.kick'), s.start + 0.8);
+      if (s.kicker) reveal(lk.querySelector('.kick'), s.start + 0.8);
       reveal(lk.querySelector('h1'), s.start + 0.95, 0.09);
       tl.to(lk, { scale: 1.04, duration: s.dur, ease: 'none' }, s.start);
       return;

@@ -23,8 +23,9 @@ Authority: User asked for this skill in hard-eng, tested by Codex (`gpt-6-luna`,
 - [x] Mix keeps quiet music quiet: linear gain to −14 LUFS instead of dynamic loudnorm (music-only gaps sat ~5 dB under the voice before, ~10 dB after, same track and volume).
 - [x] Guidance carries lessons from both videos without contradicting either: sample voice first, approved voice settings, plain name spelling, hand-placed zoom that keeps its box in frame, hard cuts or quick crossfades, sign-in only when access is the lesson, plain wording, private data never shown, real logos, copy approved designs, freeze approved parts, music licence stated.
 - [x] Skill text holds no product, customer or backend names (`git grep` on the package is empty).
-- [ ] A fresh Codex `gpt-6-luna` run at max reasoning, given only the skill + a different product's footage, produces a video that passes the completion gate; failures feed back into the skill.
-- [ ] Biome, skill-link test and the full `hard-eng.py check` pass.
+- [x] A fresh Codex `gpt-6-luna` run at max reasoning, given only the skill + a different product's footage, produces a video that passes the completion gate; failures feed back into the skill.
+- [x] Routed layout: an agent given a recordings task loads `SKILL.md` + only the setup, script, recordings, voice and render references.
+- [x] Biome, skill-link test and the full `hard-eng.py check` pass.
 
 ## Baseline + execution
 
@@ -42,6 +43,6 @@ N/A — skill guidance and scripts; the rendered video is the user's product out
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: Three unattended Codex `gpt-6-luna` max-reasoning runs on a different product (a lettings portal), each delivering a draft with every machine-checkable gate item passed and human approval marked pending: (1) recordings route, 93 s; (2) staged screenshots from a running prototype, 122 s; (3) routed skill, recordings, 82 s, reading only the five matching references. Findings fixed in the skill: tall-phone layout, stale-clip refusal, long text scenes flagged, display weight, render template copied by `build.mjs`, capture waits for late images, kicker-less intro, scripts run from any directory, short-video shape, no repeated steps, unattended drafts never called complete. `hard-eng.py check --plan-stage Draft` exit 0, 18/18.
 E2E: Required — Codex full run on another product through the skill's commands, final MP4 audited.

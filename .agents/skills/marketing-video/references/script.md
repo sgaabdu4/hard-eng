@@ -31,6 +31,8 @@ Collect before writing:
 
 - Marketing = intro → problem → offer → bridge title → 6–9 chapters → collage → outro.
 - Explainer = intro → why → flow → one chapter per function under section titles → loop or recap → outro.
+- Short (≤ 90 s) = intro → flow → 3–4 chapters → outro; drop the problem statement and collage.
+- Each scene adds something new: statement, flow and voice never list the same steps twice.
 - One line per non-app scene (key = `line` or scene id), ≤ 25 words. Clip chapter = one line; staged chapter = one line per group.
 - Text-only scene ≤ ~8 s (`build.mjs` prints `CHECK` above). Longer thought → `cards`, `bands` or a `flow` revealing with the voice, or move it into a chapter.
 - Open on something specific ("This is the Acme claims desk. It's where…"); "A and B, working together" = filler.

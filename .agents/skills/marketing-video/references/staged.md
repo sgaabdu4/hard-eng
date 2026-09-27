@@ -8,6 +8,7 @@ Group shape in an `app` scene: `groups: [{ "line": "06-1", "shots": [{ "file", "
 
 - Render the real app over made-up records at 2×: a widget/component test that paints the whole app (e.g. Flutter `RepaintBoundary.toImage(pixelRatio: 2)` at 1440×900), or Playwright screenshots of a local build seeded with fake data.
 - Harness runs from a temporary copy; nothing stays in the repository.
+- Before each capture: wait for that step's own content to be visible, then `document.fonts.ready` + every `img` `complete && naturalWidth > 0`. Client-side steps render after `networkidle`, and an empty image list passes the check → photos captured blank.
 - Harness writes `shots/manifest.json` = `[{ "file", "targets": [{ "label", "x", "y", "w", "h" }] }]` in logical pixels. `shotFrame` = logical width (1440 for 2880-px PNGs).
 - Contact sheet of every shot before building: menu open, right tab, the state the caption names.
 

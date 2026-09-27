@@ -5,7 +5,7 @@ Load when the runtime is missing or before the first command. Reuse existing env
 ## Runtime
 
 ```bash
-cd /absolute/path/to/marketing-video
+cd <skill>
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm exec playwright install chromium
 brew install ffmpeg
@@ -38,21 +38,23 @@ One per video, outside this skill + out of version control (outside the reposito
 | `footage/` | recordings | Source MP4s (recordings route) |
 | `shots/` | staging | Screen PNGs + optional `manifest.json` (staged route) |
 | `music/` | human | Licensed track |
-| `render/` | template | `cp -R assets/template/. <work>/render/` once; customise only for approved designs |
+| `render/` | template | `build.mjs` copies the template on first run; customise only for approved designs |
 | `clips/ vo/ audio/ out/ stills/ audit/` | scripts | Generated |
 
 ## Commands
 
+`<skill>` = this package's path; any working directory.
+
 ```bash
-node scripts/clips.mjs <work>
-node scripts/takes.mjs <work> [ids] [first-seed]
-node scripts/pick.mjs <work>
-node scripts/build.mjs <work>
-node scripts/render.mjs <work> --stills 3 12.5
-node scripts/render.mjs <work> <work>/out/silent.mp4
-node scripts/mix.mjs <work> <work>/music/track.mp3 <work>/out/silent.mp4 <work>/out/final.mp4
-node scripts/audit.mjs <work>/out/final.mp4 <work>/audit
-node scripts/pick.mjs <work> <work>/out/final.mp4
+node <skill>/scripts/clips.mjs <work>
+node <skill>/scripts/takes.mjs <work> [ids] [first-seed]
+node <skill>/scripts/pick.mjs <work>
+node <skill>/scripts/build.mjs <work>
+node <skill>/scripts/render.mjs <work> --stills 3 12.5
+node <skill>/scripts/render.mjs <work> <work>/out/silent.mp4
+node <skill>/scripts/mix.mjs <work> <work>/music/track.mp3 <work>/out/silent.mp4 <work>/out/final.mp4
+node <skill>/scripts/audit.mjs <work>/out/final.mp4 <work>/audit
+node <skill>/scripts/pick.mjs <work> <work>/out/final.mp4
 ```
 
 - `clips.mjs` = recordings route only. `build.mjs` refuses clips whose storyboard range changed since the last `clips.mjs`.

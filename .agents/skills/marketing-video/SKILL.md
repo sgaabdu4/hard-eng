@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Marketing Video
 
-Output = real product screens + big brand type + one calm voice → reviewed MP4. Commands run from this directory; each video's work folder lives outside it.
+Output = real product screens + big brand type + one calm voice → reviewed MP4. Scripts run by path from any directory (`node <skill>/scripts/<name>.mjs <work>`); each video's work folder lives outside the skill.
 
 ## Routes
 
@@ -37,7 +37,7 @@ Recordings come from [Product Walkthrough Video](../product-walkthrough-video/SK
 ## Core rules
 
 - Agent cannot hear → voice, pace + pronunciation = human's call. One sample before every line is generated; never call audio "better" without their listen.
-- Real product only: screens, logos + fonts from the product and brand owners. Logo file, never a typed brand name; never an invented screen or feature.
+- Real product only: screens, logos + fonts from the product and brand owners. Screens keep their own colours; the brand palette dresses only the graphics around them. Logo file, never a typed brand name; never an invented screen or feature.
 - Cut sign-in, invite, loading + empty screens. Access behaviour only when the audience must learn it (training); never a typed password.
 - Private data never appears: demo accounts or made-up records.
 - Zoom = hand-placed box on what the voice names, whole box in frame. No pointer-following or automatic zoom; a staged cursor never drives the camera.
@@ -55,3 +55,5 @@ All hold on the exact delivered file:
 - every audit sheet opened, flat runs explained, stills checked at clicks, zooms + graphic scenes;
 - mix transcript holds every line in order;
 - delivered with draft number + change summary; voice quality stated as the human's judgment; music licence status stated.
+
+Human step not done (no script approval, no voice listen) → deliver as a draft that names each unmet item; never call it complete.

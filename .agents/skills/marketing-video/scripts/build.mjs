@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { clipSource, readJson, seconds, size } from './media.mjs';
@@ -123,7 +123,8 @@ placement.forEach((p, i) => {
   if (next && end > next.at - 0.1) throw new Error(`${p.key} runs into ${next.key} by ${(end - next.at).toFixed(2)}s`);
 });
 
-mkdirSync(join(work, 'render'), { recursive: true });
+if (!existsSync(join(work, 'render/index.html')))
+  cpSync(new URL('../assets/template/', import.meta.url), join(work, 'render'), { recursive: true });
 mkdirSync(join(work, 'audio'), { recursive: true });
 const require = createRequire(import.meta.url);
 copyFileSync(require.resolve('gsap/dist/gsap.min.js'), join(work, 'render/gsap.min.js'));
