@@ -1,5 +1,6 @@
 """Completion must block failed checks without trapping honest reports."""
 
+import http.client
 import io
 import json
 import subprocess
@@ -125,6 +126,11 @@ def test_release_lookup_supports_account_free_setup_and_existing_auth(
     assert auth.call_count == (0 if credentials == "environment" else 1)
     monkeypatch.setattr(urllib.request, "urlopen", Mock(side_effect=OSError("offline")))
     with pytest.raises(OSError, match="offline"):
+        update.github_json("repos/example/fixture/check-runs")
+    cut = io.BytesIO()
+    cut.read = Mock(side_effect=http.client.IncompleteRead(b"{", 10))
+    monkeypatch.setattr(urllib.request, "urlopen", Mock(return_value=cut))
+    with pytest.raises(OSError, match="cut short"):
         update.github_json("repos/example/fixture/check-runs")
 
 
