@@ -1,15 +1,17 @@
 """Generated job deadlines honor the consumer's existing shipping budget."""
 
 import json
+import os
 import shlex
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import tool_setup
 import yaml
-from ci_setup import configure_ci
+from ci_setup import configure_ci, impact_tools, workflow_tools
 from conftest import commit, load_module, use_installed_mise
 from gate_config import GateConfig, Group, parse_config
 from shipping import ShippingError, ShippingPolicy
@@ -157,11 +159,20 @@ def test_generated_ci_timeout(
     cache = next(
         step for step in steps if step.get("name") == "Cache native tool downloads"
     )
-    assert cache["with"]["path"] == "${{ runner.temp }}/hard-eng-tools"
+    storage = "${{ runner.temp }}/hard-eng-tools"
+    assert cache["with"]["path"].splitlines() == [
+        storage + "/mise/data/installs",
+        storage + "/mise-launcher",
+        storage + "/pnpm/store",
+    ]
     assert "runner.os" in cache["with"]["key"] and "runner.arch" in cache["with"]["key"]
     assert "hard-eng.gates.json" in cache["with"]["key"]
     checks = next(step for step in steps if step.get("name") == "Run required checks")
-    assert checks["env"]["MISE_DATA_DIR"].startswith(cache["with"]["path"] + "/")
+    environment = yaml.safe_load(workflow)["jobs"]["hard-eng"]["env"]
+    impact = next(step for step in steps if step.get("id") == "impact")
+    assert "MISE_DATA_DIR=$RUNNER_TEMP/hard-eng-tools/mise/data" in impact["run"]
+    assert environment["EXTRA_SDK_TOOLS"] == ""
+    assert "steps.impact.outputs.tools" in cache["with"]["restore-keys"]
     scan = next(step for step in steps if "secret scan" in step.get("name", ""))
     assert "if" not in yaml.safe_load(workflow)["jobs"]["hard-eng"]
     assert {checks["if"], scan["if"]} == {
@@ -253,18 +264,27 @@ def test_existing_quality_or_invalid_workflow_is_preserved(
     assert path.read_text() == content
 
 
+@pytest.mark.parametrize("name", ["quality.yml", "hard-eng.yml"])
 def test_integration_reminder_stops_once_existing_ci_runs_the_check(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], name: str
 ) -> None:
-    path = tmp_path / ".github/workflows/quality.yml"
+    path = tmp_path / ".github/workflows" / name
     path.parent.mkdir(parents=True)
     job = "on: pull_request\njobs:\n  quality:\n    steps:\n      - run: {}\n"
     path.write_text(job.format("make test"))
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
-    assert "Existing CI retained" in capsys.readouterr().err
+    pending = (
+        "Existing CI retained"
+        if name == "quality.yml"
+        else "Docs-only CI steps not added"
+    )
+    assert pending in capsys.readouterr().err
     path.write_text(job.format("python3 .hooks/hard-eng.py check --base main"))
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
     assert "Existing CI retained" not in capsys.readouterr().err
+    path.write_text(job.format("python3 .hooks/hard-eng.py check"))
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
+    assert "runs Hard Eng without --base" in capsys.readouterr().err
 
 
 def test_unconfigured_maintenance_project_does_not_inherit_source_ci_budget(
@@ -373,16 +393,31 @@ def test_invalid_shipping_budget_is_rejected(tmp_path: Path) -> None:
         configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
 
 
-def generated_tools(root: Path, config: GateConfig) -> tuple[str, list[str], list[str]]:
+def generated_tools(
+    root: Path, config: GateConfig, selected: list[Group] | None = None
+) -> tuple[str, list[str], list[str]]:
     """Run setup and return the workflow plus its mise install and exec tool lists."""
     changes: dict[str, str] = {}
     configure_ci(root, SOURCE, config, changes)
     workflow = changes[".github/workflows/hard-eng.yml"]
-    steps = yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"]
-    install, execute = map(shlex.split, steps[-1]["run"].splitlines())
+    job = yaml.safe_load(workflow)["jobs"]["hard-eng"]
+    checks = job["steps"][-1]
+    fallback = checks["env"]["SDK_TOOLS"].split(" || '", 1)[1].split("'", 1)[0]
+    output = subprocess.check_output(
+        ["bash", "-c", 'pnpm() { printf "%s\\n" "$*"; }\n' + checks["run"]],
+        env={
+            **os.environ,
+            "SDK_TOOLS": " ".join(impact_tools(root, selected))
+            if selected is not None
+            else fallback,
+            "EXTRA_SDK_TOOLS": job.get("env", {}).get("EXTRA_SDK_TOOLS", ""),
+        },
+        text=True,
+    )
+    install, execute = map(shlex.split, output.splitlines())
     return (
         workflow,
-        install[install.index("install") + 1 : -1],
+        install[install.index("install") + 1 :],
         execute[execute.index("exec") + 1 : execute.index("--")],
     )
 
@@ -400,7 +435,15 @@ def test_dart_workflow_uses_packaged_scanner_without_rust(
     config = parse_config(
         json.dumps(
             {
-                "packages": [{"path": ".", "language": "dart", "checks": []}],
+                "packages": [
+                    {
+                        "path": ".",
+                        "language": "dart",
+                        "checks": [
+                            {"name": "dependencies", "command": [manager, "pub", "get"]}
+                        ],
+                    }
+                ],
                 "shared": [],
                 "shipping": shipping_policy,
             }
@@ -560,7 +603,113 @@ def test_impact_reports_docs_only_before_tools(
     module = load_module("impact_runner", SOURCE / ".hooks/hard-eng.py")
     module.__dict__["ROOT"] = repository
     assert module.impact("HEAD") == 0
-    assert capsys.readouterr().out == f"docs_only={expected}\n"
+    assert capsys.readouterr().out == (
+        f"docs_only={expected}\ntools=uv@latest python@3.12 node@latest\n"
+    )
+
+
+def test_impact_provisions_selected_sdks_without_yaml_and_falls_back_to_all(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    groups: list[Group] = [
+        {"path": "web", "language": "javascript", "depends_on": [], "checks": []},
+        {
+            "path": "mobile",
+            "language": "dart",
+            "depends_on": [],
+            "checks": [{"name": "dependencies", "command": ["flutter", "pub", "get"]}],
+        },
+        {
+            "path": "function",
+            "language": "dart",
+            "depends_on": [],
+            "checks": [{"name": "dependencies", "command": ["dart", "pub", "get"]}],
+        },
+    ]
+    for group in groups:
+        (repository / group["path"]).mkdir()
+    (repository / "web/package.json").write_text('{"packageManager":"pnpm@12.4.1"}')
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": groups, "shared": []})
+    )
+    commit(repository, "packages")
+    (repository / "web/app.ts").write_text("export const value = 1;\n")
+    module = load_module("selected_impact_runner", SOURCE / ".hooks/hard-eng.py")
+    module.__dict__["ROOT"] = repository
+    assert module.impact("HEAD") == 0
+    assert (
+        "tools=uv@latest python@3.12 node@latest pnpm@12.4.1\n"
+        in capsys.readouterr().out
+    )
+    assert module.impact("missing-base") == 0
+    assert (
+        "tools=uv@latest python@3.12 node@latest pnpm@12.4.1 flutter@latest\n"
+        in capsys.readouterr().out
+    )
+    code = (
+        "import json,sys; from pathlib import Path; "
+        f"sys.path.insert(0, {str(SOURCE / '.hooks')!r}); "
+        "from ci_setup import impact_tools; "
+        "print(impact_tools(Path(sys.argv[1]), json.loads(sys.argv[2])))"
+    )
+    output = subprocess.check_output(
+        [sys.executable, "-S", "-c", code, str(repository), json.dumps(groups)],
+        text=True,
+    )
+    assert "flutter@latest" in output
+    support: Group = {"path": "function", "checks": groups[2]["checks"]}
+    assert impact_tools(repository, [support])[-1] == "dart@latest"
+    (repository / "web/package.json").write_text(
+        '{"packageManager":"pnpm@12.4.1;echo injected"}'
+    )
+    with pytest.raises(ValueError, match="valid pnpm"):
+        impact_tools(repository, groups)
+
+
+@pytest.mark.parametrize(
+    ("declared", "own_lock", "own_install", "expected"),
+    [
+        (None, False, False, ["pnpm@11.24.0"]),
+        ("pnpm@12.4.1", True, True, ["pnpm@11.24.0", "pnpm@12.4.1"]),
+        (None, True, True, ["pnpm@11.24.0", "pnpm@latest"]),
+        (None, False, True, ["pnpm@11.24.0", "pnpm@latest"]),
+    ],
+)
+def test_workspace_sdks_reuse_the_dependency_install_owners_pin(
+    tmp_path: Path,
+    declared: str | None,
+    own_lock: bool,
+    own_install: bool,
+    expected: list[str],
+) -> None:
+    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@11.24.0"}')
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: 9.0\n")
+    (tmp_path / "pnpm-workspace.yaml").write_text("packages: [packages/*]\n")
+    member = tmp_path / "packages/member"
+    member.mkdir(parents=True)
+    (member / "package.json").write_text(
+        json.dumps({"packageManager": declared} if declared else {})
+    )
+    if own_lock:
+        (member / "pnpm-lock.yaml").write_text("lockfileVersion: 9.0\n")
+    install = {
+        "name": "dependencies",
+        "role": "lockfiles",
+        "command": ["pnpm", "install", "--frozen-lockfile"],
+    }
+    groups: list[Group] = [
+        {"path": ".", "language": "javascript", "checks": [install]},
+        {
+            "path": "packages/member",
+            "language": "javascript",
+            "checks": [install] if own_install else [],
+        },
+    ]
+    config: GateConfig = {"packages": groups, "shared": []}
+    assert impact_tools(tmp_path, groups)[3:] == expected
+    assert workflow_tools(tmp_path, config)[3:] == expected
+    inherited = impact_tools(tmp_path, [{"path": ".", "checks": [install]}, groups[1]])
+    assert inherited[3:] == expected[-1:]
 
 
 def flutter_app_config(root: Path) -> GateConfig:
@@ -570,7 +719,15 @@ def flutter_app_config(root: Path) -> GateConfig:
         yaml.safe_dump({"name": "app", "dependencies": {"flutter": {"sdk": "flutter"}}})
     )
     return {
-        "packages": [{"path": "app", "language": "dart", "checks": []}],
+        "packages": [
+            {
+                "path": "app",
+                "language": "dart",
+                "checks": [
+                    {"name": "dependencies", "command": ["flutter", "pub", "get"]}
+                ],
+            }
+        ],
         "shared": [],
     }
 
@@ -578,20 +735,98 @@ def flutter_app_config(root: Path) -> GateConfig:
 def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> None:
     path = tmp_path / ".github/workflows/hard-eng.yml"
     path.parent.mkdir(parents=True)
-    old = (
-        (SOURCE / ".github/workflows/hard-eng.yml")
-        .read_text()
-        .replace(
-            "uv@latest python@3.12 node@latest dart@latest",
-            "uv@latest python@3.12 pnpm@12.4.1 dart@latest rust@latest",
-        )
+    old = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    start, end = old.index("    env:\n"), old.index("    steps:\n")
+    old = old[:start] + old[end:]
+    old = old.replace(
+        "          SDK_TOOLS: ${{ steps.impact.outputs.tools || 'uv@latest python@3.12 node@latest' }}\n",
+        "",
+    ).replace('          read -r -a tools <<< "$SDK_TOOLS ${EXTRA_SDK_TOOLS:-}"\n', "")
+    old = old.replace(
+        '"${tools[@]}"', "uv@latest python@3.12 pnpm@12.4.1 dart@latest rust@latest"
     )
+    start, end = (
+        old.index("          path: |\n"),
+        old.index("      - uses:", old.index("          path: |\n")),
+    )
+    old = (
+        old[:start]
+        + (
+            "          path: ${{ runner.temp }}/hard-eng-tools\n"
+            "          key: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-${{ hashFiles('hard-eng.gates.json') }}\n"
+            "          restore-keys: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-\n"
+        )
+        + old[end:]
+    )
+    before, checks = old.split("      - name: Run required checks\n", 1)
+    checks = checks.replace(
+        "        run: |\n", "        shell: bash\n        run: |\n", 1
+    )
+    old = before + "      - name: Run required checks\n" + checks
     path.write_text(old)
     config = flutter_app_config(tmp_path)
     workflow, installed, executed = generated_tools(tmp_path, config)
-    tools = ["uv@latest", "python@3.12", "pnpm@12.4.1", "rust@latest", "flutter@latest"]
+    tools = [
+        "uv@latest",
+        "python@3.12",
+        "node@latest",
+        "flutter@latest",
+        "pnpm@12.4.1",
+        "rust@latest",
+    ]
     assert installed == executed == tools
+    assert "hard-eng-tools-v2-${{ steps.impact.outputs.tools" in workflow
+    assert (
+        "hard-eng-tools/pnpm/cache"
+        not in yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"][2]["with"]["path"]
+    )
     path.write_text(workflow)
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, config, changes)
+    assert not changes
+    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@12.4.1"}')
+    (tmp_path / "pnpm-lock.yaml").touch()
+    config["packages"].insert(0, {"path": ".", "language": "javascript", "checks": []})
+    path.write_text(old.replace("pnpm@12.4.1", "pnpm@12.4.1 pnpm@latest"))
+    workflow, installed, executed = generated_tools(tmp_path, config)
+    assert installed == executed
+    assert [tool for tool in installed if tool.startswith("pnpm@")] == ["pnpm@12.4.1"]
+    assert "hard-eng-tools-v2-${{ steps.impact.outputs.tools" in workflow
+    path.write_text(old.replace("python@3.12", "python@3.11"))
+    configure_ci(tmp_path, SOURCE, config, changes)
+    assert "python@3.11" in changes[".github/workflows/hard-eng.yml"]
+    assert "SDK_TOOLS:" not in changes[".github/workflows/hard-eng.yml"]
+
+
+def test_custom_flutter_commands_keep_manifest_sdk(
+    tmp_path: Path, shipping_policy: ShippingPolicy
+) -> None:
+    config = parse_config(
+        json.dumps({**flutter_app_config(tmp_path), "shipping": shipping_policy})
+    )
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    original, _, _ = generated_tools(tmp_path, config)
+    config["packages"][0]["checks"] = [
+        {"name": "dependencies", "command": ["python3", "prepare_dependencies.py"]},
+        {"name": "tests", "command": ["python3", "run_tests.py"]},
+    ]
+    workflow, installed, executed = generated_tools(
+        tmp_path, config, config["packages"]
+    )
+    assert installed == executed
+    assert "flutter@latest" in installed
+    assert (
+        yaml.safe_load(workflow)["jobs"]["hard-eng"]["env"]["EXTRA_SDK_TOOLS"]
+        == "flutter@latest"
+    )
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(original)
+    migrated, installed, executed = generated_tools(
+        tmp_path, config, config["packages"]
+    )
+    assert installed == executed and "flutter@latest" in installed
+    path.write_text(migrated)
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, config, changes)
     assert not changes
