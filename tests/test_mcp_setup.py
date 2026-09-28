@@ -519,6 +519,94 @@ def test_installer_preserves_existing_service_mcp_configuration(
     )
 
 
+def test_installer_approves_its_claude_servers_and_keeps_existing_approvals(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "pubspec.yaml").write_text(
+        "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n"
+    )
+    (tmp_path / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"own": {"command": "own"}}})
+    )
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude/settings.json").write_text(
+        json.dumps({"enabledMcpjsonServers": ["own"]})
+    )
+    changes: dict[str, str] = {}
+    installer.configure_mcp(tmp_path, changes)
+    assert json.loads(changes[".claude/settings.json"])["enabledMcpjsonServers"] == [
+        "own",
+        "codebase-memory-mcp",
+        "dart",
+        "marionette",
+    ]
+    for name, content in changes.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(content)
+    repeated: dict[str, str] = {}
+    installer.configure_mcp(tmp_path, repeated)
+    assert ".claude/settings.json" not in repeated
+
+
+def test_codex_startup_timeout_upgrades_only_the_earlier_generated_entry(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    custom = {"command": "codebase-memory-mcp", "args": ["--project", "app"]}
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex/config.toml").write_text(
+        '[mcp_servers."context-mode"]\ncommand = "pnpm"\n'
+        'args = ["dlx", "context-mode@latest"]\n\n'
+        '[mcp_servers.codebase-memory-mcp]\ncommand = "codebase-memory-mcp"\n'
+        'args = ["--project", "app"]\n'
+    )
+    changes: dict[str, str] = {}
+    installer.configure_mcp(tmp_path, changes)
+    servers = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
+    assert servers["context-mode"] == {
+        "command": "pnpm",
+        "args": ["dlx", "context-mode@latest"],
+        "startup_timeout_sec": 60,
+    }
+    assert servers["codebase-memory-mcp"] == custom
+
+
+def test_installer_skips_default_servers_already_run_under_another_name(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    existing = {
+        "codebase-memory": {
+            "command": "pnpm",
+            "args": ["dlx", "codebase-memory-mcp@0.11.0"],
+        },
+        "ctx": {"command": "/usr/local/bin/context-mode"},
+    }
+    for name in (".mcp.json", ".github/mcp.json"):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"mcpServers": existing}))
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex/config.toml").write_text(
+        "".join(
+            f"[mcp_servers.{server}]\n"
+            + "".join(
+                f"{key} = {json.dumps(value)}\n" for key, value in settings.items()
+            )
+            for server, settings in existing.items()
+        )
+    )
+    changes: dict[str, str] = {}
+    installer.configure_mcp(tmp_path, changes)
+    for name in (".mcp.json", ".github/mcp.json"):
+        assert name not in changes
+    assert tomllib.loads(changes[".codex/config.toml"])["mcp_servers"] == existing
+    assert "codebase-memory-mcp" not in json.loads(
+        changes.get(".claude/settings.json", "{}")
+    ).get("enabledMcpjsonServers", [])
+
+
 def test_sentry_reuses_single_custom_launcher_without_copying_secrets(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

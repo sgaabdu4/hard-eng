@@ -26,7 +26,9 @@ flowchart TD
 | Dart/Flutter | Official SDK command `dart mcp-server`; verify native initialization and the tools needed for the operation. Existing package-command registrations require migration to the official command before claiming current setup. |
 | Marionette | Optional debug-only integration. Registration trigger = any Flutter app, pinned to the `pubspec.lock` version of `marionette_flutter` when locked and unpinned otherwise; detection runs only on install or an applied update, so a package added or upgraded between updates needs a manual pin edit. Registration alone does not configure or connect a running app; [Flutter recorded proof](../../e2e/references/flutter.md) owns the binding, connection and recording steps. |
 | Context Mode | Claude plugin or configured host MCP; verify an actual processing call when used. |
-| Codebase Memory | Verify the current repository/index before relying on retrieved code. |
+| Codebase Memory | Verify the current repository/index before relying on retrieved code. One daemon serves each user; a second entry launching another install of the package fails to connect, so keep one. |
+
+For Claude Code, setup approves the `.mcp.json` servers it writes through `enabledMcpjsonServers` in `.claude/settings.json`; Claude honors that only once the main repository's folder is trusted, so a worktree of an untrusted repository still shows `Pending approval`.
 
 For Codex, project trust controls loading; hook trust is separate. Inspect `codex mcp list` inside the target root. Use `codex mcp login <name>` for an unauthenticated OAuth server. A newly written entry may require reconnecting or starting a fresh task before tools appear. State that limitation; never claim installation failed solely because the current task cannot see newly configured tools. Do not change global trust/config or create a duplicate global server.
 
