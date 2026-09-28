@@ -393,7 +393,9 @@ def test_pre_push_snapshot_has_its_own_git_environment(
         git(module, "add", "contract.txt")
         git(module, "commit", "-qm", "module fixture")
         monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
-        git(tmp_path, "submodule", "add", "-q", str(module), "component")
+        git(tmp_path, "submodule", "add", "-q", module.as_uri(), "component")
+        (module / "contract.txt").write_text("newer unpinned revision")
+        commit(module, "unpublished module change")
     (tmp_path / ".hooks").mkdir()
     (tmp_path / ".hooks/hard-eng.py").write_text(
         "import os, subprocess\nfrom pathlib import Path\n"
@@ -402,6 +404,7 @@ def test_pre_push_snapshot_has_its_own_git_environment(
         "assert os.environ['HE_HOOK_TEST'] == 'preserved'\n"
         "if Path('.gitmodules').exists():\n"
         "    assert Path('component/contract.txt').read_text() == 'committed'\n"
+        "    assert subprocess.check_output(['git', '-C', 'component', 'rev-parse', '--is-shallow-repository'], text=True).strip() == 'true'\n"
     )
     git(tmp_path, "add", ".")
     git(tmp_path, "commit", "-qm", "snapshot fixture")

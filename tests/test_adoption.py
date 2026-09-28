@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 import update
-from conftest import commit, git
+from conftest import commit, git, init
 from gate_config import json_file
 from test_setup import repository, snapshot
 from test_updates import select_release
@@ -708,14 +708,100 @@ def test_install_refuses_linked_local_settings_that_run_the_old_copy(
     assert (root / ".agents/hard-eng/current").is_dir()
 
 
+def test_update_fetches_each_revisions_pinned_skill_submodule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canonical, upstream = tmp_path / "canonical", tmp_path / "upstream"
+    init(canonical)
+    dependency = tmp_path / "dependency"
+    init(dependency)
+    contract = dependency / "contract.txt"
+    contract.write_text("pinned dependency\n")
+    commit(dependency, "pinned dependency")
+    git(
+        canonical,
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        dependency.as_uri(),
+        "dependency",
+    )
+    contract.write_text("newer dependency\n")
+    commit(dependency, "unpinned dependency")
+    skill = canonical / "skills/canonical/SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("first revision\n")
+    commit(canonical, "first skill")
+    init(upstream)
+    git(
+        upstream,
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        canonical.as_uri(),
+        ".agents/skill-sources/canonical",
+    )
+    link = upstream / ".agents/skills/canonical"
+    link.parent.mkdir()
+    link.symlink_to("../skill-sources/canonical/skills/canonical")
+    previous = commit(upstream, "first pin")
+    skill.write_text("second revision\n")
+    revision = commit(canonical, "second skill")
+    module = upstream / ".agents/skill-sources/canonical"
+    git(module, "fetch", "origin")
+    git(module, "checkout", "--detach", revision)
+    current = commit(upstream, "second pin")
+    skill.write_text("unpublished revision\n")
+    commit(canonical, "unpinned skill")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{upstream.as_uri()}.insteadOf")
+    monkeypatch.setenv(
+        "GIT_CONFIG_VALUE_0", f"https://github.com/{update.UPSTREAM}.git"
+    )
+    monkeypatch.setenv("GIT_CONFIG_KEY_1", "protocol.file.allow")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_1", "always")
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    source, old = update.fetch_sources(checkout, current, previous)
+    name = ".agents/skills/canonical/SKILL.md"
+    assert (source / name).read_text() == "second revision\n"
+    assert (old / name).read_text() == "first revision\n"
+    assert name in update.scaffold_files(source)
+    for tree in (source, old):
+        module = tree / ".agents/skill-sources/canonical"
+        assert (module / "dependency/contract.txt").read_text() == "pinned dependency\n"
+        for checkout in (module, module / "dependency"):
+            assert git(checkout, "rev-parse", "--is-shallow-repository") == "true"
+            assert git(checkout, "rev-list", "--count", "HEAD") == "1"
+
+
 def test_candidate_ignores_base_changes_the_branch_lacks(
     release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source, target, _ = release
+    module = target.parent / "component"
+    init(module)
+    (module / "contract.txt").write_text("pinned")
+    commit(module, "pinned component")
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
+    git(target, "submodule", "add", module.as_uri(), "component")
+    (module / "contract.txt").write_text("unpinned")
+    commit(module, "later component")
     commit(source, "verified source candidate")
     (target / "package.json").unlink()
     config = json.loads((target / "hard-eng.gates.json").read_text())
-    config["shared"][0]["command"] = ["python3", "-c", "raise SystemExit(0)"]
+    config["shared"][0]["command"] = [
+        "python3",
+        "-c",
+        (
+            "import subprocess; from pathlib import Path; "
+            "assert Path('component/contract.txt').read_text() == 'pinned'; "
+            "assert subprocess.check_output(['git', '-C', 'component', 'rev-parse', '--is-shallow-repository'], text=True).strip() == 'true'"
+        ),
+    ]
     (target / "hard-eng.gates.json").write_text(json.dumps(config))
     shared = target / "shared.py"
     shared.write_text("# one\n# two\n# three\nVALUE = 1\n")
@@ -739,13 +825,26 @@ def test_setup_runs_the_verified_revisions_own_install_step(
 ) -> None:
     source, target, _ = release
     git(source, "branch", "-M", "main")
+    module = source.parent / "component"
+    init(module)
+    (module / "contract.txt").write_text("pinned")
+    commit(module, "pinned component")
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
+    git(source, "submodule", "add", module.as_uri(), "component")
+    (module / "contract.txt").write_text("unpinned")
+    commit(module, "later component")
     entry = (source / "setup.sh").read_text()
     installer = source / ".hooks/update.py"
     main_installer = installer.read_text()
     (source / "setup.sh").write_text(entry.replace(", repair=True", ""))
     installer.write_text(
+        "import subprocess\nfrom pathlib import Path\n\n"
         "def latest_verified(previous: str) -> None:\n    return None\n\n\n"
-        "def update(root: object) -> str:\n    return 'Verified installer ran.'\n"
+        "def update(root: object) -> str:\n"
+        "    module = Path(__file__).parents[1] / 'component'\n"
+        "    assert (module / 'contract.txt').read_text() == 'pinned'\n"
+        "    assert subprocess.check_output(['git', '-C', str(module), 'rev-parse', '--is-shallow-repository'], text=True).strip() == 'true'\n"
+        "    return 'Verified installer ran.'\n"
     )
     verified = commit(source, "verified installer without repair")
     (source / "setup.sh").write_text(entry)
