@@ -90,8 +90,12 @@ def test_removing_package_baseline_fails_before_execution(
 ) -> None:
     config = native_gate_fixture(tmp_path, installer, language)
     package = config["packages"][0]
+    if role != "performance":
+        package["performance_exception"] = "Reviewed fixture: no product workload."
     package["checks"] = [
-        check for check in package["checks"] if check.get("role") != role
+        check
+        for check in package["checks"]
+        if check.get("role") not in {role, "performance"}
     ]
     if language == "dart" and role == "boundaries":
         for check in package["checks"]:
@@ -100,6 +104,10 @@ def test_removing_package_baseline_fails_before_execution(
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
     with pytest.raises(ValueError, match=role):
         runner.check()
+    if role == "performance":
+        package["performance_exception"] = "Reviewed fixture: no product workload."
+        (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+        assert load_groups(tmp_path)[0] == package
 
 
 @pytest.mark.parametrize("role", ["secrets-files", "secrets-history"])
@@ -546,11 +554,17 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
     performance = group["checks"].pop()
     with pytest.raises(ValueError, match="mandatory performance"):
         validate_group(tmp_path, group, set())
+    group["performance_exception"] = "Reviewed fixture: no product workload."
+    assert validate_group(tmp_path, group, set()) == 6
     group["checks"].append(performance)
     performance["parallel"] = True
     with pytest.raises(ValueError, match="serially"):
         validate_group(tmp_path, group, set())
     performance["parallel"] = False
+    report = performance.pop("report")
+    with pytest.raises(ValueError, match="supported native report"):
+        validate_group(tmp_path, group, set())
+    performance["report"] = report
     (tmp_path / "package-lock.json").touch()
     with pytest.raises(ValueError, match="legacy lockfiles"):
         validate_group(tmp_path, group, set())
@@ -569,6 +583,61 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
     group["checks"][0]["command"] = ["pnpm", "run", "typecheck"]
     with pytest.raises(ValueError, match="must use pnpm, not: npx"):
         validate_group(tmp_path, group, set())
+
+
+@pytest.mark.parametrize("reason", [None, False, 0, [], {}, "", " \n "])
+def test_performance_exception_requires_a_nonblank_reason(
+    runner: ModuleType, tmp_path: Path, reason: object
+) -> None:
+    check = gate(
+        "performance",
+        "pass",
+        role="performance",
+        report={"type": "performance-junit", "path": "result.xml"},
+    )
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [
+                    {"path": ".", "performance_exception": reason, "checks": [check]}
+                ],
+                "shared": [],
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="performance_exception"):
+        runner.check()
+
+
+@pytest.mark.parametrize(
+    ("report", "exit_code", "expected"),
+    [
+        ("<testcase/>", 0, False),
+        ("<testcase/>", 2, True),
+        ("<testcase><failure/></testcase>", 0, True),
+    ],
+)
+def test_performance_exception_keeps_configured_native_failures(
+    runner: ModuleType, tmp_path: Path, report: str, exit_code: int, expected: bool
+) -> None:
+    check = gate(
+        "budget",
+        f"print('<testsuite>{report}</testsuite>');raise SystemExit({exit_code})",
+        role="performance",
+        report={"type": "performance-junit", "path": "result.xml", "stdout": True},
+    )
+    assert (
+        runner.run_gate(
+            {"path": ".", "performance_exception": "Reviewed fixture."},
+            check,
+            5,
+            threading.Lock(),
+        )
+        is expected
+    )
+    assert (
+        tmp_path / "result.xml"
+    ).read_text().strip() == f"<testsuite>{report}</testsuite>"
 
 
 def test_source_files_include_unexecuted_modules(
