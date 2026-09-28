@@ -54,6 +54,30 @@ def test_install_preserves_reviewed_performance_exception(
     assert snapshot(tmp_path) == before
 
 
+@pytest.mark.parametrize("suffix", ["", "\n", "\nKeep project instructions.\n"])
+def test_managed_instruction_update_preserves_native_scaffold_proof(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, suffix: str
+) -> None:
+    source, target, _ = release
+    instructions = target / "AGENTS.md"
+    instructions.write_text(instructions.read_text().rstrip("\n") + "\n" + suffix)
+    git(target, "add", "AGENTS.md")
+    git(target, "commit", "--allow-empty", "-qm", "existing instruction separator")
+    base = git(target, "rev-parse", "HEAD")
+    guide = source / "AGENTS.md"
+    guide.write_text(guide.read_text() + "\nUpdated managed fixture guidance.\n")
+    select_release(source, monkeypatch)
+    assert "Updated Hard Eng" in update.update(target)
+    git(target, "diff", "--check", base)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert update.check_scaffold_update(target, base)
+    if suffix.strip():
+        instructions.write_text(
+            instructions.read_text().replace("Keep project", "Edited project")
+        )
+        assert not update.preserved_instructions(target, base, {"AGENTS.md"})
+
+
 def write_old_generation(root: Path) -> dict[str, str]:
     """Write the previous generation's wiring beside project-owned files."""
     for name, content in OLD_FILES.items():

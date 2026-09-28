@@ -139,24 +139,30 @@ def test_native_instruction_conflicts_preserve_project_rules(
         assert (tmp_path / "CLAUDE.md").is_symlink()
 
 
-@pytest.mark.parametrize("change", ["trimmed", "edited", "duplicate"])
+@pytest.mark.parametrize("change", ["trimmed", "legacy", "edited", "duplicate"])
 def test_managed_instruction_separator_preserves_conflict_checks(
     repository: Path, change: str
 ) -> None:
     generated: dict[str, str] = {}
     agent_hooks.configure_instructions(repository, SOURCE, None, generated)
-    original = generated["AGENTS.md"]
+    original = generated["AGENTS.md"].rstrip("\n") + "\n\n"
     existing = {
         "trimmed": original.removesuffix("\n"),
+        "legacy": original,
         "edited": original.replace("\n", "\nLocal instruction\n", 1),
         "duplicate": original + "<!-- hard-eng:end -->\n",
     }[change]
     path = repository / "AGENTS.md"
     path.write_text(existing)
     planned: dict[str, str] = {}
-    if change == "trimmed":
+    if change in {"trimmed", "legacy"}:
+        commit(repository, "existing managed instructions")
         agent_hooks.configure_instructions(repository, SOURCE, SOURCE, planned)
-        assert planned["AGENTS.md"] == original
+        assert path.read_text() == existing
+        path.write_text(planned["AGENTS.md"])
+        git(repository, "diff", "--check")
+        assert planned["AGENTS.md"] == original.removesuffix("\n")
+        return
     else:
         with pytest.raises(ValueError, match="Local Hard Eng instructions differ"):
             agent_hooks.configure_instructions(repository, SOURCE, SOURCE, planned)
