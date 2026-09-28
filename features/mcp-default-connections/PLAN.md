@@ -1,6 +1,6 @@
 # Connect the default MCP servers in Claude Code and Codex
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -54,7 +54,7 @@ Evidence: `uv run --locked pytest -q tests/test_mcp_setup.py tests/test_updates.
 - [x] Setup approves its `.mcp.json` servers in the Claude project settings, keeps existing approvals and does not repeat a rerun.
 - [x] New Codex entries for Context Mode and Codebase Memory carry `startup_timeout_sec = 60`; an entry in the earlier generated shape gains it; a customised entry is unchanged.
 - [x] An existing server that runs `codebase-memory-mcp` or `context-mode` under another name prevents a duplicate in every config file.
-- [ ] The exact candidate passes the Complete check.
+- [x] The exact candidate passes the Complete check.
 
 ## Risks + recovery
 
@@ -68,8 +68,8 @@ N/A — installer configuration with no product UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: `uv run --locked pytest -q tests/test_mcp_setup.py tests/test_updates.py tests/test_setup.py` → 167 passed; the new and updated tests fail without the fix. Real Claude client: after approval, `codebase-memory-mcp` moved from `Pending approval` to starting in a trusted checkout and in a worktree of a trusted repository, and stayed pending in a worktree of an untrusted repository. Codex adversarial review (`gpt-6-astra`) approved with no findings.
 E2E: N/A — installer configuration; covered by setup tests against real files.
 
 Delivery target: Merge
