@@ -46,15 +46,15 @@ configuration.
 
 ## Baseline + execution
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: `uv run --locked pytest -q tests/test_mcp_setup.py tests/test_updates.py tests/test_setup.py` → 167 passed on `970c4f3`.
 
 ## Acceptance + steps
 
-- [ ] Fresh setup writes the launcher command for Codebase Memory in all three files, with the 60 s Codex timeout.
-- [ ] Setup replaces the earlier generated `pnpm dlx` Codebase Memory entries (with or without the Codex timeout) and leaves custom entries unchanged; a rerun changes nothing.
-- [ ] Launches from two repositories run the same installed binary, install only when it is missing, and keep stdout for the MCP protocol.
-- [ ] Real MCP clients started from two repositories against one isolated daemon both initialize; a client from a different install path does not.
+- [x] Fresh setup writes the launcher command for Codebase Memory in all three files, with the 60 s Codex timeout.
+- [x] Setup replaces the earlier generated `pnpm dlx` Codebase Memory entries (with or without the Codex timeout) and leaves custom entries unchanged; a rerun changes nothing.
+- [x] Launches from two repositories run the same installed binary, install only when it is missing, and keep stdout for the MCP protocol.
+- [x] Real MCP clients started from two repositories against one isolated daemon both initialize; a client from a different install path does not.
 - [ ] The exact candidate passes the Complete check.
 
 ## Risks + recovery

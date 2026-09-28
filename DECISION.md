@@ -5,7 +5,7 @@
 - This repository is the Hard Eng scaffold, added to existing projects so they can follow Hard Eng principles. Setup affects only the target repository.
 - The scaffold checks for Hard Eng changes at agent session start and updates its installed setup under the update rules below.
 - The scaffold adds gates for the entire project based on its actual tech stack.
-- The scaffold configures Codebase Memory and Context Mode locally: Claude uses the Context Mode plugin; Codex and Copilot use MCP configuration.
+- The scaffold configures Codebase Memory and Context Mode locally: Claude uses the Context Mode plugin; Codex and Copilot use MCP configuration. Until DeusData/codebase-memory-mcp#2398 is fixed, Codebase Memory runs from one pinned per-user install, because its daemon answers only clients from its own binary path.
 - The scaffold prepends its `AGENTS.md` instructions to the project's `AGENTS.md`. Updates replace the previously added Hard Eng section, keeping it once at the top and preserving the project's own content below.
 
 ## Current status
