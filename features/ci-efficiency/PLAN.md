@@ -30,6 +30,7 @@ Authority: The user authorized parallel investigation and implementation, model 
 - [x] Native tool provisioning and active bundled guidance use pnpm, retaining required install scripts and workspace package-manager ownership → isolated native provisioning, existing contracts and SDK-selection regressions.
 - [x] Timings and selection output make actual savings and scope observable without cached pass results → runner checks and measured native execution.
 - [x] Independent diff review and full local gates pass → complete-stage check before shipping.
+- [x] Generated pnpm bootstrap honors root package-manager declarations on fresh installation and update, preserving package-less repositories and custom action inputs → focused generation/migration regression and native checks. Hosted consumer verification follows the corrective source release.
 
 ## Baseline + execution
 
@@ -48,6 +49,7 @@ N/A — CLI checks, installer and CI configuration; no product UI changes.
 ## Verification
 
 Result: Passed
+Follow-up: Hosted consumer adoption exposed pnpm/setup rejecting generated `version: latest` against a declared root pnpm pin. The correction removes only that redundant input from the standard generated bootstrap when a root pnpm declaration exists. Forty-three focused CI tests pass, including fresh generation, update, idempotence and custom-input preservation. Final Complete verification passed 1055 tests in 54.84 seconds, four performance cases and all native gates after resolving two new type annotations and reusing existing fresh-generation test setup. Independent semantic review found no remaining defect. The corrective source release and hosted consumer verification remain required; earlier release evidence below is retained as history.
 Evidence: Final integrated Ready-stage checks passed after the MCP-only skill pin and guarded CLI-file retirement: 1052 tests in 49.07 seconds, four performance cases, configured strict format/lint/complexity/annotations/types, dependency, duplicate/dead-code, workflow, shell, secret, vulnerability and security checks. Native pnpm-only provisioning and package resolution passed; audited consumer pnpm declarations support the required build controls. Independent review found no remaining source defects, including an actual pre-write refusal for an installed guard caller. Both bundled skill revisions are published with successful current-head checks; their existing combined PRs remain pending source release. Complete-stage and committed-snapshot pre-push gates are required before publication.
 E2E: Passed — real old-to-new installer migration and repeated setup exited zero with no second-run file changes; unrelated MCP and scoped instruction preservation probes passed. Native Biome and Dart fixtures passed clean/restored and rejected relevant violations. A generated committed-snapshot pre-push completed a real docs-only local Git push in 5.63 seconds. Native Claude AGENTS loading is documented for the installed release, but the isolated model probe exited before returning its marker and remains unverified. Hosted checks remain pending for the published revision.
 

@@ -11,12 +11,45 @@ from pathlib import Path
 import pytest
 import tool_setup
 import yaml
-from ci_setup import configure_ci, impact_tools, workflow_tools
+from ci_setup import configure_ci, impact_tools, migrate_pnpm_bootstrap, workflow_tools
 from conftest import commit, load_module, use_installed_mise
 from gate_config import GateConfig, Group, parse_config
 from shipping import ShippingError, ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize(
+    "manifest,pinned",
+    [
+        ({}, False),
+        ({"packageManager": "pnpm@12.4.1+sha512.abc"}, True),
+        ({"devEngines": {"packageManager": {"name": "pnpm", "version": "^12"}}}, True),
+    ],
+)
+def test_pnpm_bootstrap_uses_root_declaration(
+    tmp_path: Path,
+    manifest: dict[str, object],
+    pinned: bool,
+) -> None:
+    original = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    assert migrate_pnpm_bootstrap(tmp_path, original) == original
+    (tmp_path / "package.json").write_text(json.dumps(manifest))
+    migrated = migrate_pnpm_bootstrap(tmp_path, original)
+    job = yaml.safe_load(migrated)["jobs"]["hard-eng"]
+    bootstrap = next(
+        step["with"] for step in job["steps"] if "pnpm/setup@" in step.get("uses", "")
+    )
+    assert bootstrap.get("version") == (None if pinned else "latest")
+    assert bootstrap["install"] is False
+    assert migrate_pnpm_bootstrap(tmp_path, migrated) == migrated
+    custom = original.replace("version: latest", "version: 11.24.0")
+    assert migrate_pnpm_bootstrap(tmp_path, custom) == custom
+    custom = original.replace(
+        "          install: false\n",
+        "          install: false\n          working-directory: web\n",
+    )
+    assert migrate_pnpm_bootstrap(tmp_path, custom) == custom
 
 
 @pytest.mark.parametrize("wrapped", [False, True])
@@ -140,6 +173,7 @@ def test_generated_ci_timeout(
     tmp_path: Path, seconds: int | None, minutes: int
 ) -> None:
     config: GateConfig = {"packages": [], "shared": []}
+    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@12.4.1"}')
     if seconds is not None:
         config["shipping"] = {
             "base": "main",
@@ -153,6 +187,7 @@ def test_generated_ci_timeout(
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, config, changes)
     workflow = changes[".github/workflows/hard-eng.yml"]
+    assert "          version: latest\n" not in workflow
     assert yaml.safe_load(workflow)["jobs"]["hard-eng"]["timeout-minutes"] == minutes
     assert '--base "$BASE_SHA"' in workflow
     steps = yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"]
@@ -791,6 +826,7 @@ def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> 
     workflow, installed, executed = generated_tools(tmp_path, config)
     assert installed == executed
     assert [tool for tool in installed if tool.startswith("pnpm@")] == ["pnpm@12.4.1"]
+    assert "          version: latest\n" not in workflow
     assert "hard-eng-tools-v2-${{ steps.impact.outputs.tools" in workflow
     path.write_text(old.replace("python@3.12", "python@3.11"))
     configure_ci(tmp_path, SOURCE, config, changes)
