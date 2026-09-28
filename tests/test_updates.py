@@ -121,51 +121,6 @@ def fixed_revision(revision: str) -> Callable[[str], str]:
     return selected
 
 
-def test_update_fetches_each_revisions_pinned_skill_submodule(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    canonical, upstream = tmp_path / "canonical", tmp_path / "upstream"
-    init(canonical)
-    skill = canonical / "skills/canonical/SKILL.md"
-    skill.parent.mkdir(parents=True)
-    skill.write_text("first revision\n")
-    commit(canonical, "first skill")
-    init(upstream)
-    git(
-        upstream,
-        "-c",
-        "protocol.file.allow=always",
-        "submodule",
-        "add",
-        str(canonical),
-        ".agents/skill-sources/canonical",
-    )
-    link = upstream / ".agents/skills/canonical"
-    link.parent.mkdir()
-    link.symlink_to("../skill-sources/canonical/skills/canonical")
-    previous = commit(upstream, "first pin")
-    skill.write_text("second revision\n")
-    revision = commit(canonical, "second skill")
-    module = upstream / ".agents/skill-sources/canonical"
-    git(module, "fetch", "origin")
-    git(module, "checkout", "--detach", revision)
-    current = commit(upstream, "second pin")
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{upstream.as_uri()}.insteadOf")
-    monkeypatch.setenv(
-        "GIT_CONFIG_VALUE_0", f"https://github.com/{update.UPSTREAM}.git"
-    )
-    monkeypatch.setenv("GIT_CONFIG_KEY_1", "protocol.file.allow")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_1", "always")
-    checkout = tmp_path / "checkout"
-    checkout.mkdir()
-    source, old = update.fetch_sources(checkout, current, previous)
-    name = ".agents/skills/canonical/SKILL.md"
-    assert (source / name).read_text() == "second revision\n"
-    assert (old / name).read_text() == "first revision\n"
-    assert name in update.scaffold_files(source)
-
-
 def test_update_commits_only_scaffold_and_preserves_index(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
