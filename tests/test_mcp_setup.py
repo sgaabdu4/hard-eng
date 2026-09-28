@@ -23,6 +23,17 @@ def executable_launcher(root: Path, relative: str) -> str:
     return "./" + relative
 
 
+def rerun_configure_mcp(
+    installer: ModuleType, root: Path, changes: dict[str, str]
+) -> dict[str, str]:
+    for name, content in changes.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(content)
+    repeated: dict[str, str] = {}
+    installer.configure_mcp(root, repeated)
+    return repeated
+
+
 def appwrite_project(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repository(root)
     (root / "app.py").write_text("import appwrite\n")
@@ -547,11 +558,7 @@ def test_installer_approves_its_claude_servers_and_keeps_existing_approvals(
         "dart",
         "marionette",
     ]
-    for name, content in changes.items():
-        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / name).write_text(content)
-    repeated: dict[str, str] = {}
-    installer.configure_mcp(tmp_path, repeated)
+    repeated = rerun_configure_mcp(installer, tmp_path, changes)
     assert ".claude/settings.json" not in repeated
 
 
@@ -605,11 +612,7 @@ def test_installer_moves_generated_codebase_memory_entries_to_the_launcher(
         "startup_timeout_sec": 60,
     }
     assert codex["own"] == {"command": "own"}
-    for name, content in changes.items():
-        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / name).write_text(content)
-    repeated: dict[str, str] = {}
-    installer.configure_mcp(tmp_path, repeated)
+    repeated = rerun_configure_mcp(installer, tmp_path, changes)
     assert repeated[".codex/config.toml"] == changes[".codex/config.toml"]
     assert ".mcp.json" not in repeated
     assert ".github/mcp.json" not in repeated
