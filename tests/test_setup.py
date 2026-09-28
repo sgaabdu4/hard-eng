@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import tomllib
 from pathlib import Path
 from types import ModuleType
 
@@ -654,9 +655,15 @@ def test_install_preserves_project_and_repeats(
     assert json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"][
         "codebase-memory-mcp"
     ] == {"command": "pnpm", "args": ["dlx", "codebase-memory-mcp@latest"]}
-    codex_mcp = (tmp_path / ".codex/config.toml").read_text()
-    assert 'command = "pnpm"' in codex_mcp
-    assert 'args = ["dlx", "context-mode@latest"]' in codex_mcp
+    codex = tomllib.loads((tmp_path / ".codex/config.toml").read_text())
+    for server in ("context-mode", "codebase-memory-mcp"):
+        assert codex["mcp_servers"][server] == {
+            "command": "pnpm",
+            "args": ["dlx", f"{server}@latest"],
+            "startup_timeout_sec": 60,
+        }
+    settings = json.loads((tmp_path / ".claude/settings.json").read_text())
+    assert "codebase-memory-mcp" in settings["enabledMcpjsonServers"]
     workflow = (tmp_path / ".github/workflows/hard-eng.yml").read_text()
     assert "pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b" in workflow
     assert (
