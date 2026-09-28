@@ -8,6 +8,7 @@ import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import Mock
 
 import pytest
 import update
@@ -811,9 +812,7 @@ def test_committed_scaffold_exemption_preserves_application_boundary(
     select_release(source, monkeypatch)
     update.update(target)
 
-    def verified(_revision: str) -> bool:
-        return True
-
+    verified = Mock(return_value=True)
     monkeypatch.setattr(update, "verified_revision", verified)
     if extra:
         path = target / ("project.txt" if extra == "local" else extra)
@@ -821,6 +820,7 @@ def test_committed_scaffold_exemption_preserves_application_boundary(
         if extra != "local":
             commit(target, "mixed application change")
     assert update.check_scaffold_update(target, base) is (extra is None)
+    assert verified.call_count == (extra is None)
     if extra is None:
         hook = target / ".git/hooks/pre-push"
         before = hook.read_bytes()
