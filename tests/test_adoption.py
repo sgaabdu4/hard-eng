@@ -24,6 +24,36 @@ OLD_FILES = {
 }
 
 
+@pytest.mark.parametrize("custom_suite", [False, True])
+def test_install_preserves_reviewed_performance_exception(
+    installer: ModuleType, tmp_path: Path, custom_suite: bool
+) -> None:
+    repository(tmp_path)
+    config = installer.gate_config(tmp_path)
+    package = config["packages"][0]
+    assert "performance_exception" not in package
+    performance = next(
+        gate for gate in package["checks"] if gate.get("role") == "performance"
+    )
+    if custom_suite:
+        performance["command"] = ["node", "project-budget.js"]
+    else:
+        package["checks"].remove(performance)
+    reason = "Reviewed scalar conversion owner; no justified workload budget. Revisit for bulk operations."
+    package["performance_exception"] = reason
+    target = tmp_path / "hard-eng.gates.json"
+    target.write_text(json.dumps(config))
+    installer.install(tmp_path)
+    installed = json.loads(target.read_text())["packages"][0]
+    assert installed["performance_exception"] == reason
+    assert [
+        gate for gate in installed["checks"] if gate.get("role") == "performance"
+    ] == ([performance] if custom_suite else [])
+    before = snapshot(tmp_path)
+    installer.install(tmp_path)
+    assert snapshot(tmp_path) == before
+
+
 def write_old_generation(root: Path) -> dict[str, str]:
     """Write the previous generation's wiring beside project-owned files."""
     for name, content in OLD_FILES.items():
