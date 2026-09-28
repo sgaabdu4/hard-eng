@@ -2,12 +2,10 @@
 
 import json
 import subprocess
-import tomllib
 from pathlib import Path
 from types import ModuleType
 
 import pytest
-from conftest import CODEBASE_MEMORY
 from fallow_report import Report, validate_scanner_command
 from gate_config import (
     Gate,
@@ -16,6 +14,7 @@ from gate_config import (
     json_file,
     parse_config,
     validate_dart_boundaries,
+    validate_group,
     validate_required_checks,
 )
 from project_setup import (
@@ -206,21 +205,12 @@ def test_typescript_packages_require_boundary_gate(
                 validate_required_checks(tmp_path, config)
 
 
-@pytest.mark.parametrize("language", ["typescript", "dart"])
 def test_existing_gate_config_gets_boundary_gate_once(
-    installer: ModuleType, tmp_path: Path, language: str
+    installer: ModuleType, tmp_path: Path
 ) -> None:
     repository(tmp_path)
-    if language == "dart":
-        (tmp_path / "package.json").unlink()
-        (tmp_path / "pubspec.yaml").write_text(
-            'name: fixture\nenvironment:\n  sdk: ">=3.10.0 <4.0.0"\n'
-        )
-        (tmp_path / "app.dart").write_text("const value = 1;\n")
-        command = ["dart-decimate", "check", ".", "--boundary-violations", "--strict"]
-    else:
-        (tmp_path / "app.ts").write_text("export const value = 1;\n")
-        command = ["pnpm", "run", "lint:boundaries"]
+    (tmp_path / "app.ts").write_text("export const value = 1;\n")
+    command = ["pnpm", "run", "lint:boundaries"]
     config = installer.gate_config(tmp_path)
     package = config["packages"][0]
     package["checks"] = [
@@ -239,6 +229,48 @@ def test_existing_gate_config_gets_boundary_gate_once(
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(installed))
     installer.install(tmp_path)
     assert json.loads((tmp_path / "hard-eng.gates.json").read_text()) == installed
+
+
+def test_dart_update_consolidates_generated_scans_and_preserves_custom_checks(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "pubspec.yaml").write_text(
+        'name: fixture\nenvironment:\n  sdk: ">=3.10.0 <4.0.0"\n'
+    )
+    (tmp_path / "app.dart").write_text("void main() {}\n")
+    config = installer.gate_config(tmp_path)
+    checks = config["packages"][0]["checks"]
+    scanner = next(
+        gate for gate in checks if gate.get("role") == "dead-code-duplicates"
+    )
+    assert not any(gate.get("role") == "boundaries" for gate in checks)
+    scanner["command"].remove("--strict")
+    command = ["dart-decimate", "check", ".", "--boundary-violations", "--strict"]
+    checks.extend(
+        {"name": name, "role": "boundaries", "command": list(command)}
+        for name in ("import-boundaries", "lint:boundaries", "project-architecture")
+    )
+    custom = checks[-1]
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    installer.install(tmp_path)
+    installed = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    installed_checks = installed["packages"][0]["checks"]
+    assert [gate for gate in installed_checks if gate.get("role") == "boundaries"] == [
+        custom
+    ]
+    assert (
+        sum(
+            gate["command"][:2] == ["dart-decimate", "check"]
+            for gate in installed_checks
+        )
+        == 2
+    )
+    installer.install(tmp_path)
+    assert json.loads((tmp_path / "hard-eng.gates.json").read_text()) == installed
+    installed_checks.remove(custom)
+    validate_group(tmp_path, installed["packages"][0], set())
 
 
 @pytest.mark.parametrize(
@@ -265,12 +297,26 @@ def test_dart_boundary_gate_requires_blocking_project_rules(
         "check_output",
         native_config,
     )
-    command = ["dart-decimate", "check", ".", "--boundary-violations", "--strict"]
-    if valid:
-        validate_dart_boundaries(command, tmp_path, 5)
-    else:
-        with pytest.raises(ValueError, match="nonempty project from/disallow prefixes"):
+    for command in (
+        ["dart-decimate", "check", ".", "--boundary-violations", "--strict"],
+        [
+            "dart-decimate",
+            "check",
+            ".",
+            "--threshold",
+            "0",
+            "--strict",
+            "--format",
+            "json",
+        ],
+    ):
+        if valid:
             validate_dart_boundaries(command, tmp_path, 5)
+        else:
+            with pytest.raises(
+                ValueError, match="nonempty project from/disallow prefixes"
+            ):
+                validate_dart_boundaries(command, tmp_path, 5)
 
 
 def test_python_packages_receive_recursive_import_contract(
@@ -632,11 +678,8 @@ def test_install_preserves_project_and_repeats(
     custom_skill.write_text("# Existing project skill\nKeep this too.\n")
     installer.install(tmp_path)
     for name in (
-        ".mcp.json",
-        ".github/mcp.json",
         ".claude/settings.json",
         ".codex/hooks.json",
-        ".github/hooks/hard-eng.json",
     ):
         formatted = tmp_path / name
         formatted.write_text(json.dumps(json.loads(formatted.read_text()), indent="\t"))
@@ -653,18 +696,9 @@ def test_install_preserves_project_and_repeats(
     assert (tmp_path / ".git/hooks/pre-push").stat().st_mode & 0o111
     for name in (".hooks/reports.py", ".hooks/plans.py", ".hooks/dependency_graph.py"):
         assert (tmp_path / name).is_file()
-    assert (tmp_path / ".hooks/codebase-memory-mcp.py").is_file()
-    servers = json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"]
-    assert servers["codebase-memory-mcp"] == CODEBASE_MEMORY
-    codex = tomllib.loads((tmp_path / ".codex/config.toml").read_text())["mcp_servers"]
-    dlx = {"command": "pnpm", "args": ["dlx", "context-mode@latest"]}
-    for server, settings in (
-        ("codebase-memory-mcp", CODEBASE_MEMORY),
-        ("context-mode", dlx),
-    ):
-        assert codex[server] == {**settings, "startup_timeout_sec": 60}
-    settings = json.loads((tmp_path / ".claude/settings.json").read_text())
-    assert "codebase-memory-mcp" in settings["enabledMcpjsonServers"]
+    assert not (tmp_path / ".hooks/codebase-memory-mcp.py").exists()
+    assert not (tmp_path / ".mcp.json").exists()
+    assert not (tmp_path / ".codex/config.toml").exists()
     workflow = (tmp_path / ".github/workflows/hard-eng.yml").read_text()
     assert "pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b" in workflow
     assert (
@@ -830,49 +864,6 @@ def test_missing_project_manifest_fails(installer: ModuleType, tmp_path: Path) -
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     with pytest.raises(ValueError, match="ask the user which type to create"):
         installer.install(tmp_path)
-
-
-def test_hook_registrations_invoke_shared_runner(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    root = tmp_path / "project with spaces"
-    root.mkdir()
-    repository(root)
-    installer.install(root)
-    (root / ".hooks/hard-eng.py").write_text(
-        "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"
-    )
-    for agent, path, events in (
-        ("claude", ".claude/settings.json", "SessionStart PostToolUseFailure Stop"),
-        ("codex", ".codex/hooks.json", "SessionStart Stop"),
-        (
-            "copilot",
-            ".github/hooks/hard-eng.json",
-            "sessionStart postToolUseFailure agentStop",
-        ),
-    ):
-        hooks = json.loads((root / path).read_text())["hooks"]
-        assert set(hooks) == set(events.split())
-        calls = {
-            "codex": ("session", "stop"),
-            "claude": ("session", "failure", "stop"),
-            "copilot": ("session", "failure", "stop"),
-        }[agent]
-        for event, native in zip(calls, events.split(), strict=True):
-            (registration,) = hooks[native]
-            if agent == "copilot":
-                command = registration["bash"]
-            else:
-                (handler,) = registration["hooks"]
-                command = handler["command"]
-            result = subprocess.run(
-                ["sh", "-c", command],
-                cwd=root / ".hooks",
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            assert json.loads(result.stdout) == [event, agent]
 
 
 @pytest.mark.parametrize(

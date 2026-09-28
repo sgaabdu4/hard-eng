@@ -16,6 +16,7 @@ from gate_config import (
     Group,
     JsonObject,
     Report,
+    dart_scan_includes_boundaries,
     generated_sources,
     nonproduction_source,
     repository_files,
@@ -359,6 +360,27 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
 
 
 def adapt_boundaries(package: Group, typescript: set[str]) -> None:
+    if package.get("language") == "dart" and any(
+        dart_scan_includes_boundaries(gate) for gate in package["checks"]
+    ):
+        generated = [
+            {
+                "name": name,
+                "role": "boundaries",
+                "command": [
+                    "dart-decimate",
+                    "check",
+                    ".",
+                    "--boundary-violations",
+                    "--strict",
+                ],
+            }
+            for name in ("import-boundaries", "lint:boundaries")
+        ]
+        package["checks"] = [
+            gate for gate in package["checks"] if gate not in generated
+        ]
+        return
     required = (
         str(Path(package["path"])) in typescript or package.get("language") == "dart"
     )
@@ -689,16 +711,19 @@ def python_interpreter(directory: Path, timeout: float) -> str:
     ).strip()
 
 
-def javascript_files(directory: Path) -> list[str]:
+def javascript_files(directory: Path, excluded: tuple[Path, ...] = ()) -> list[str]:
+    directory = directory.resolve()
+    excluded = tuple(owner.resolve() for owner in excluded)
     extensions = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"}
     files = [
         str(path.relative_to(directory))
         for path in repository_files(directory)
         if path.suffix in extensions
+        and not any(path.is_relative_to(owner) for owner in excluded)
         and not {"node_modules", "vendor", ".hooks", ".agents"}
         & set(path.relative_to(directory).parts)
     ]
-    if not files:
+    if not files and not excluded:
         raise ValueError("No JavaScript or TypeScript source files found")
     return files
 

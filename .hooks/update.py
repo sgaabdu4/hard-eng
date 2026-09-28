@@ -12,6 +12,8 @@ import urllib.request
 from operator import itemgetter
 from pathlib import Path
 
+from mcp_setup import retired_settings
+
 UPSTREAM = "sgaabdu4/hard-eng"
 REPOSITORY = f"https://github.com/{UPSTREAM}.git"
 SOURCE_FILE = ".hooks/hard-eng-source.json"
@@ -402,7 +404,6 @@ def contained(root: Path, path: Path) -> bool:
 
 
 def retire_local_generation(root: Path) -> None:
-    """Remove the old per-checkout Hard Eng copy and the local files that pointed at it."""
     settings = root / ".claude/settings.local.json"
     kept_settings = local_settings(root)
     write_changes(root, dict.fromkeys(old_generation_files(root)))
@@ -410,12 +411,13 @@ def retire_local_generation(root: Path) -> None:
         for link in (root / folder).glob("*"):
             if retired_link(root, link):
                 link.unlink()
-    cache = root / ".agents/hard-eng"
-    if contained(root, cache):
-        if cache.is_symlink():
-            cache.unlink()
-        elif cache.is_dir():
-            shutil.rmtree(cache)
+    for name in (".agents/hard-eng", ".context-mode", ".codebase-memory"):
+        cache = root / name
+        if contained(root, cache):
+            if cache.is_symlink():
+                cache.unlink()
+            elif cache.is_dir():
+                shutil.rmtree(cache)
     retire_local_import(root / "CLAUDE.local.md")
     if kept_settings is not None:
         settings.write_text(kept_settings)
@@ -424,25 +426,30 @@ def retire_local_generation(root: Path) -> None:
 
 
 def local_settings(root: Path) -> str | None:
-    """Refuse linked local files that still load the old copy; return cleaned settings."""
     settings = root / ".claude/settings.local.json"
     for local in (settings, root / "CLAUDE.local.md"):
         if (
             (local.is_symlink() or not contained(root, local))
             and local.is_file()
-            and ".agents/hard-eng/" in local.read_text(errors="replace")
+            and any(
+                name in local.read_text(errors="replace")
+                for name in (".agents/hard-eng/", "context-mode", "codebase-memory")
+            )
         ):
             raise ValueError(
-                f"{local.relative_to(root)} is linked and still loads the old Hard Eng "
+                f"{local.relative_to(root)} is linked and still loads retired integrations or the old Hard Eng "
                 "copy; remove those entries from its target, then rerun setup"
             )
     return retired_settings(settings)
 
 
 def local_generation(root: Path) -> bool:
-    cache = root / ".agents/hard-eng"
     return (
-        (contained(root, cache) and (cache.is_symlink() or cache.is_dir()))
+        any(
+            contained(root, root / name)
+            and ((root / name).is_symlink() or (root / name).is_dir())
+            for name in (".agents/hard-eng", ".context-mode", ".codebase-memory")
+        )
         or any(
             retired_link(root, link)
             for folder in LEGACY_FOLDERS
@@ -473,25 +480,6 @@ def retire_local_import(local: Path) -> None:
         local.unlink()
     elif kept != lines:
         local.write_text("".join(kept))
-
-
-def retired_settings(settings: Path) -> str | None:
-    """Local settings without old Hard Eng entries, or None when nothing changes."""
-    from agent_hooks import remove_old_generation
-
-    if not settings.is_file() or settings.is_symlink() or settings.parent.is_symlink():
-        return None
-    current = json.loads(settings.read_text())
-    before = json.dumps(current)
-    if isinstance(hooks := current.get("hooks"), dict):
-        remove_old_generation(hooks)
-        if not hooks:
-            del current["hooks"]
-    if current.get("outputStyle") == "Plain English":
-        del current["outputStyle"]
-    return (
-        None if json.dumps(current) == before else json.dumps(current, indent=2) + "\n"
-    )
 
 
 def exclude_block(root: Path) -> tuple[Path, str] | None:

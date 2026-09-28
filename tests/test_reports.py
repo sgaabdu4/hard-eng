@@ -76,7 +76,6 @@ def test_delegated_fallow_reuses_only_its_completed_coverage_owner(
         "fallow",
         "npm:fallow@latest",
         stale_local=True,
-        expected_use_npm=False,
     ) == [
         "managed",
         "audit",

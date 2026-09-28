@@ -15,9 +15,7 @@ from conftest import SOURCE, commit, git, init
 from gate_config import JsonObject, json_file
 from shipping import ShippingError, ShippingPolicy
 from test_setup import repository as setup_repository
-from test_setup import (
-    snapshot,
-)
+from test_setup import snapshot
 
 
 def test_installer_preserves_native_mcp_settings_on_rerun(
@@ -25,26 +23,28 @@ def test_installer_preserves_native_mcp_settings_on_rerun(
 ) -> None:
     git(tmp_path, "init", "-q")
     settings = {
-        "command": "codebase-memory-mcp",
+        "command": "project-mcp",
         "args": ["--project", "fitness"],
         "env": {"PROJECT_MODE": "local"},
         "enabled": False,
     }
     (tmp_path / ".mcp.json").write_text(
-        json.dumps({"mcpServers": {"codebase-memory-mcp": settings}})
+        json.dumps({"mcpServers": {"project-mcp": settings}})
     )
     (tmp_path / ".codex").mkdir()
     (tmp_path / ".codex/config.toml").write_text(
-        '[mcp_servers.codebase-memory-mcp]\ncommand = "codebase-memory-mcp"\n'
+        '[mcp_servers.project-mcp]\ncommand = "project-mcp"\n'
         'args = ["--project", "fitness"]\nenabled = false\n'
-        '[mcp_servers.codebase-memory-mcp.env]\nPROJECT_MODE = "local"\n'
+        '[mcp_servers.project-mcp.env]\nPROJECT_MODE = "local"\n'
     )
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
     assert ".mcp.json" not in changes
-    servers = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
-    assert servers["codebase-memory-mcp"] == settings
-    assert servers["context-mode"]["command"] == "pnpm"
+    servers = tomllib.loads(
+        changes.get(".codex/config.toml", (tmp_path / ".codex/config.toml").read_text())
+    )["mcp_servers"]
+    assert servers["project-mcp"] == settings
+    assert set(servers) == {"project-mcp"}
     for name, content in changes.items():
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -215,7 +215,6 @@ def test_update_commits_husky_launcher_and_runs_native_hook(
 [ "$HUSKY" = "2" ] && set -x
 n=$(basename "$0")
 s=$(dirname "$(dirname "$0")")/$n
-
 [ ! -f "$s" ] && exit 0
 
 if [ -f "$HOME/.huskyrc" ]; then
@@ -293,8 +292,14 @@ def test_ignored_local_configuration_prevents_update(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source, target, _ = release
-    select_release(source, monkeypatch)
     name = ".mcp.json"
+    monkeypatch.setenv("APPWRITE_ENDPOINT", "https://cloud.appwrite.io/v1")
+    (target / "app.js").write_text('import { Client } from "appwrite";\n')
+    (target / name).write_text(
+        '{"mcpServers":{"appwrite":{"url":"https://mcp.appwrite.io/"}}}\n'
+    )
+    commit(target, "configure applicable Appwrite integration")
+    select_release(source, monkeypatch)
     git(target, "rm", "--cached", name)
     git(target, "commit", "-qm", "keep integration configuration local")
     (target / ".git/info/exclude").write_text(name + "\n")

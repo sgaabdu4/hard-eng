@@ -7,7 +7,12 @@ import subprocess
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
-from dependency_graph import dependency_review_guidance, expand_dependents, secrets_only
+from dependency_graph import (
+    dependency_review_guidance,
+    expand_dependents,
+    impact_inputs,
+    secrets_only,
+)
 
 type JsonValue = (
     str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
@@ -103,6 +108,7 @@ Group = TypedDict(
         "language": NotRequired[str],
         "sources": NotRequired[list[str]],
         "depends_on": NotRequired[list[str]],
+        "impact_inputs": NotRequired[list[str]],
     },
 )
 GateConfig = TypedDict(
@@ -408,10 +414,25 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     validate_command_output(command, directory, report)
 
 
+def dart_scan_includes_boundaries(gate: Gate) -> bool:
+    command = ["dart-decimate", "check", ".", "--threshold", "0"]
+    report = gate.get("report", {})
+    return (
+        gate.get("role") == "dead-code-duplicates"
+        and gate["command"]
+        in (
+            [*command, "--strict", "--format", "json"],
+            [*command, "--format", "json", "--strict"],
+        )
+        and report.get("type") == "dart-decimate"
+        and report.get("stdout") is True
+    )
+
+
 def validate_dart_boundaries(
     command: list[str], directory: Path, timeout: float
 ) -> None:
-    if command[:4] != ["dart-decimate", "check", ".", "--boundary-violations"]:
+    if command[:3] != ["dart-decimate", "check", "."]:
         return
     from tool_setup import managed_command
 
@@ -493,20 +514,30 @@ def changed_packages(
 ) -> set[str] | None:
     from plans import is_documentation
 
+    inputs = {path: impact_inputs(group) for path, group in by_path.items()}
     names = changed_files(root, base)
     if names is None:
         return None
-    names = {name for name in names if not is_documentation(Path(name))}
     selected: set[str] = set()
     for name in names:
-        matches = [path for path in by_path if Path(name).is_relative_to(path)]
-        if (
-            not matches
-            or name.startswith((".hooks/", ".agents/", ".github/"))
-            or name in {"hard-eng.gates.json", "AGENTS.md"}
-        ):
+        if name.startswith((".hooks/", ".agents/", ".github/")) or name in {
+            "hard-eng.gates.json",
+            "AGENTS.md",
+        }:
             return None
-        selected.add(max(matches, key=len))
+        consumers = {
+            path
+            for path, prefixes in inputs.items()
+            if any(Path(name).is_relative_to(prefix) for prefix in prefixes)
+        }
+        if not consumers and is_documentation(Path(name)):
+            continue
+        matches = [path for path in by_path if Path(name).is_relative_to(path)]
+        if not matches and not consumers:
+            return None
+        selected.update(consumers)
+        if matches:
+            selected.add(max(matches, key=len))
     return selected
 
 
@@ -515,6 +546,8 @@ def affected_groups(root: Path, groups: list[Group], base: str | None) -> list[G
     if base is None or not packages:
         return groups
     by_path = {group["path"]: group for group in packages}
+    if len(by_path) != len(packages):
+        return groups
     selected = changed_packages(root, by_path, base)
     if selected is None:
         return groups
@@ -524,8 +557,6 @@ def affected_groups(root: Path, groups: list[Group], base: str | None) -> list[G
     if any("depends_on" not in group for group in packages):
         if guidance is not None:
             print("Package impact is unknown; checking all packages. " + guidance)
-        return groups
-    if len(by_path) != len(packages):
         return groups
     selected = expand_dependents(packages, by_path, selected)
     print("Affected packages and dependents: " + ", ".join(sorted(selected)))
@@ -581,6 +612,7 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         )
     if group.get("language") not in {None, *LANGUAGES.values()}:
         raise ValueError(f"Unsupported package language: {group.get('language')}")
+    impact_inputs(group)
     required = {
         "python": {
             "format",
@@ -604,6 +636,10 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         "dart": {"format", "types", "tests", "dead-code-duplicates", "boundaries"},
     }.get(group.get("language", ""), set())
     roles = {gate.get("role") for gate in group["checks"] if isinstance(gate, dict)}
+    if group.get("language") == "dart" and any(
+        dart_scan_includes_boundaries(gate) for gate in group["checks"]
+    ):
+        roles.add("boundaries")
     if required - roles:
         raise ValueError(
             f"{group['path']}: missing mandatory checks: {', '.join(sorted(required - roles))}"

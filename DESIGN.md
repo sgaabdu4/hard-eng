@@ -15,7 +15,7 @@ Visual Atomic Design does not apply. The interface consists of the installer, sk
 - `.hooks/hard-eng.py` is the shared hook entry point; client files only register calls.
 - `python3 .hooks/hard-eng.py ship --plan PLAN.md --pr <actual-PR-URL>` verifies delivery readiness using the project's `shipping` settings in the existing gate file. Merge/cleanup are explicit guarded stages; local plan Complete remains build completion, not publication.
 - Session hooks request updates and give conditional tool-readiness guidance; completion hooks invoke checks. Integration detection runs during setup, not every session. Git pre-push verifies the pushed commits; CI runs independently. Native host limitations are tracked in [DECISION](DECISION.md#current-status).
-- Session and supported failure checkpoints request HE Learn; ordinary prompts and successful tools have no Hard Eng callback. Claude/Copilot retain separate failure events. Failed completion checks retain a learning prompt and the existing loop guard. No recurrence database or test-result cache.
+- Session and supported failure checkpoints request HE Learn; ordinary prompts and successful tools have no Hard Eng callback. Claude retains its separate failure event. Failed completion checks retain a learning prompt and the existing loop guard. No recurrence database or test-result cache.
 - `docs/adr/` holds terse project decisions; Accepted records preserve authority and rationale, while their evidence distinguishes implemented behavior from pending proof. Source ADRs are not copied into consuming projects.
 - Output identifies passing checks, failures and incomplete verification in plain text. Failures retain a nonzero exit status.
 

@@ -11,7 +11,7 @@ import pytest
 import update
 from conftest import commit, git
 from gate_config import json_file
-from test_setup import repository
+from test_setup import repository, snapshot
 from test_updates import select_release
 
 OLD_COMMAND = 'bash "$(env -u GIT_DIR git rev-parse --show-toplevel)/.hard-eng/{}" {}'
@@ -108,11 +108,8 @@ def assert_old_generation_retired(root: Path, project: dict[str, str]) -> None:
     for name, content in project.items():
         assert (root / name).read_text() == content
     assert (root / ".hard-eng/sessions/current.json").is_file()
-    for name in (
-        ".claude/settings.json",
-        ".codex/hooks.json",
-        ".github/hooks/hard-eng.json",
-    ):
+    assert not (root / ".github/hooks/hard-eng.json").exists()
+    for name in (".claude/settings.json", ".codex/hooks.json"):
         assert ".hard-eng/" not in (root / name).read_text(), name
     for name in (".claude/settings.json", ".codex/hooks.json"):
         (group,) = json.loads((root / name).read_text())["hooks"]["PreToolUse"]
@@ -274,7 +271,7 @@ def test_setup_json_stays_in_the_project_biome_layout(
         for name, text in changes.items()
         if name.endswith(".json") and not name.startswith(".agents/")
     }
-    assert {".mcp.json", ".hooks/hard-eng-source.json", "tsconfig.json"} <= set(written)
+    assert {".hooks/hard-eng-source.json", "tsconfig.json"} <= set(written)
     for text in written.values():
         assert text == json_file(tmp_path, json.loads(text))
         assert text.startswith(opening)
@@ -300,7 +297,7 @@ def test_setup_rerun_leaves_local_settings_edits_uncommitted(
     assert "permissions" in settings.read_text()
 
 
-def test_install_removes_every_old_hook_command(
+def test_install_preserves_custom_retired_hooks_until_supported_migration(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     repository(tmp_path)
@@ -308,7 +305,6 @@ def test_install_removes_every_old_hook_command(
     settings = tmp_path / ".claude/settings.json"
     current = json.loads(settings.read_text())
     current["hooks"]["PreToolUse"][0]["hooks"] += [
-        {"type": "command", "command": "cd .hard-eng && bash hook.sh && ./guard"},
         {"type": "command", "command": "bash .hard-eng/bootstrap.sh claude"},
     ]
     settings.write_text(json.dumps(current))
@@ -322,12 +318,26 @@ def test_install_removes_every_old_hook_command(
     policy.write_text(json.dumps({"version": 1, "hooks": {"preToolUse": [old, guard]}}))
     git(tmp_path, "add", "--force", ".")
     commit(tmp_path, "old generation wiring")
+    original = {path: path.read_bytes() for path in (settings, copilot, policy)}
+    with pytest.raises(ValueError, match="Harness migration required"):
+        installer.install(tmp_path)
+    assert {path: path.read_bytes() for path in original} == original
+    assert not (tmp_path / ".hooks").exists()
+    migrated = [
+        {"type": "command", "command": "./guard.sh"},
+        {"type": "command", "command": "powershell -File ./guard.ps1"},
+    ]
+    current["hooks"]["PreToolUse"][0]["hooks"] += migrated
+    settings.write_text(json.dumps(current))
+    copilot.unlink()
+    policy.unlink()
     installer.install(tmp_path)
-    for name in (settings, copilot, policy):
-        assert ".hard-eng" not in name.read_text()
-    assert json.loads(policy.read_text())["hooks"]["preToolUse"] == [guard]
+    assert ".hard-eng" not in settings.read_text()
     (group,) = json.loads(settings.read_text())["hooks"]["PreToolUse"]
-    assert group["hooks"] == [{"type": "command", "command": "project-guard"}]
+    assert group["hooks"] == [
+        {"type": "command", "command": "project-guard"},
+        *migrated,
+    ]
     assert not (tmp_path / ".hard-eng/hook.sh").exists()
 
 
@@ -356,15 +366,21 @@ def test_install_rejects_an_edited_import_only_claude_md(
         installer.install(tmp_path)
 
 
-def test_install_imports_agents_md_under_a_parent_claude_md(
-    installer: ModuleType, tmp_path: Path
+@pytest.mark.parametrize("name", ["CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md"])
+def test_install_preserves_blocking_ancestor_instructions_without_a_fallback(
+    installer: ModuleType, tmp_path: Path, name: str
 ) -> None:
-    (tmp_path / "CLAUDE.md").write_text("Workspace rules\n")
+    ancestor = tmp_path / name
+    ancestor.parent.mkdir(parents=True, exist_ok=True)
+    ancestor.write_text("Workspace rules\n")
     root = tmp_path / "project"
     root.mkdir()
     repository(root)
-    installer.install(root)
-    assert "\n@AGENTS.md\n" in (root / "CLAUDE.md").read_text()
+    with pytest.raises(ValueError, match="Ancestor CLAUDE instructions"):
+        installer.install(root)
+    assert ancestor.read_text() == "Workspace rules\n"
+    assert not (root / "CLAUDE.md").exists()
+    assert not (root / ".hooks").exists()
 
 
 def test_install_leaves_old_scripts_behind_a_linked_directory(
@@ -381,17 +397,22 @@ def test_install_leaves_old_scripts_behind_a_linked_directory(
     assert (shared / "hook.sh").read_text() == OLD_FILES[".hard-eng/hook.sh"]
 
 
-def test_setup_rerun_imports_agents_md_into_a_new_project_claude_md(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+def test_setup_rerun_preserves_new_claude_rules_for_review(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
 ) -> None:
     _, target, _ = release
     (target / "CLAUDE.md").write_text("Project rules\n")
     commit(target, "project rules")
     monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
-    update.update(target, repair=True)
-    text = (target / "CLAUDE.md").read_text()
-    assert "\n@AGENTS.md\n" in text
-    assert text.endswith("Project rules\n")
+    with pytest.raises(subprocess.CalledProcessError):
+        update.update(target, repair=True)
+    assert (
+        "Repository CLAUDE instructions prevent native AGENTS.md loading"
+        in capfd.readouterr().err
+    )
+    assert (target / "CLAUDE.md").read_text() == "Project rules\n"
 
 
 def test_install_removes_the_old_local_hard_eng_copy(
@@ -573,9 +594,10 @@ def test_update_checks_local_settings_before_committing(
     settings = target / ".claude/settings.local.json"
     settings.write_text("{")
     select_release(source, monkeypatch)
-    with pytest.raises(ValueError):
+    with pytest.raises(subprocess.CalledProcessError):
         update.update(target)
     assert (target / ".agents/hard-eng/current").is_dir()
+    assert settings.read_text() == "{"
     settings.write_text('{"outputStyle": "Plain English"}')
     update.update(target)
     assert not (target / ".agents/hard-eng").exists()
@@ -590,7 +612,7 @@ def test_update_plan_deletes_only_tracked_old_files(
     git(tmp_path, "add", "--force", "AGENTS.override.md")
     git(tmp_path, "commit", "-qm", "tracked old file")
     *_, retired = installer.plan_install(tmp_path)
-    assert retired == ["AGENTS.override.md"]
+    assert set(retired) == {"AGENTS.override.md", ".github/hooks/hard-eng.json"}
 
 
 def test_session_start_removes_untracked_fallback_files(
@@ -684,3 +706,100 @@ def test_setup_runs_the_verified_revisions_own_install_step(
     )
     assert result.returncode == 0, result.stderr
     assert "Verified installer ran." in result.stdout
+
+
+@pytest.mark.parametrize("separator", [" && ", "\n"])
+@pytest.mark.parametrize(
+    "name",
+    [".claude/settings.json", ".codex/hooks.json", ".claude/settings.local.json"],
+)
+def test_plan_preserves_compound_legacy_checks_before_writes(
+    installer: ModuleType, tmp_path: Path, name: str, separator: str
+) -> None:
+    repository(tmp_path)
+    path = tmp_path / name
+    path.parent.mkdir()
+    original = json.dumps(
+        {
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "bash .hard-eng/hook.sh claude"
+                                + separator
+                                + "./project-guard",
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    )
+    path.write_text(original)
+    with pytest.raises(ValueError, match="preserve the separate project checks"):
+        installer.plan_install(tmp_path)
+    assert path.read_text() == original
+    assert not (tmp_path / ".hooks").exists()
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        '".agents/skills/appwrite-backend/scripts/appwrite-schema-guard.mjs"',
+        '".agents" / "skills" / "appwrite-backend" / "scripts" / "appwrite-schema-guard.mjs"',
+        '".claude/skills/appwrite-backend/scripts/appwrite-schema-guard.mjs"',
+    ],
+)
+def test_appwrite_cli_retirement_preserves_required_project_guard(
+    installer: ModuleType,
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    reference: str,
+) -> None:
+    from mcp_setup import APPWRITE_CLI_FILES
+
+    source, target, old = release
+    previous = target.parent / "previous"
+    shutil.copytree(source, previous, symlinks=True)
+    git(previous, "restore", "--source", old, "--", ".")
+    for name in APPWRITE_CLI_FILES:
+        (source / name).unlink(missing_ok=True)
+        for tree in (previous, target):
+            path = tree / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("// Previous source-owned file\n")
+    monkeypatch.setattr(installer, "SOURCE", source)
+    caller = target / "scripts/schema-check.py"
+    caller.parent.mkdir()
+    caller.write_text(f"from pathlib import Path\nGUARD = Path.cwd() / {reference}\n")
+    (target / "history.md").write_text(reference)
+    before = snapshot(target)
+    with pytest.raises(ValueError, match="schema-check.py references"):
+        installer.install(target, previous)
+    assert snapshot(target) == before
+    git(target, "add", "scripts/schema-check.py")
+    status = git(target, "status", "--porcelain")
+    with pytest.raises(subprocess.CalledProcessError):
+        update.update_plan(target, source, previous)
+    assert snapshot(target) == before
+    assert git(target, "status", "--porcelain") == status
+
+    producer = target / "scripts/appwrite-schema-guard.mjs"
+    producer.write_text("// Project-owned deployment guard\n")
+    caller.write_text(
+        'from pathlib import Path\nGUARD = Path.cwd() / "scripts" / "appwrite-schema-guard.mjs"\n'
+    )
+    old_guard = target / APPWRITE_CLI_FILES[1]
+    old_guard.write_text("// Local custom guard\n")
+    before = snapshot(target)
+    with pytest.raises(ValueError, match="Preserve local Appwrite CLI file"):
+        installer.install(target, previous)
+    assert snapshot(target) == before
+    old_guard.write_bytes((previous / APPWRITE_CLI_FILES[1]).read_bytes())
+    installer.install(target, previous)
+    assert all(not (target / name).exists() for name in APPWRITE_CLI_FILES)
+    assert producer.read_text() == "// Project-owned deployment guard\n"
+    assert '"scripts" / "appwrite-schema-guard.mjs"' in caller.read_text()
+    assert (target / "history.md").read_text() == reference

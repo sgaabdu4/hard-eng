@@ -1,0 +1,55 @@
+# Efficient affected checks and scaffold adoption
+
+Status: Complete
+
+## Outcome + scope
+
+Reduce repeated verification and setup cost while preserving required assertions, committed-snapshot pre-push checks, current tools and conservative unknown-impact handling. Support Claude and Codex only, retiring other harness integrations and Context Mode / Codebase Memory MCP during adoption. Release the source before migrating installed consumers. Consumer-specific mappings and deployment changes belong in their own repositories.
+
+## Repository context
+
+Owners: `.hooks/gate_config.py`, `.hooks/dependency_graph.py`, `.hooks/project_setup.py`, `.hooks/hard-eng.py`, `.hooks/ci_setup.py`, `.hooks/tool_setup.py`, language templates and setup/adoption guidance. Existing package selection expands dependents but does not model cross-package file contracts; root JavaScript enumeration includes child packages. CI integration detection accepts a check without a comparison base. Dart templates repeat analysis for boundaries and dead code.
+
+## Decisions + authorization
+
+Blockers: None
+Handoff: Approval
+Authority: The user authorized parallel investigation and implementation, model selection, source release followed by upgrades of all installed workspace repositories, removal of confirmed legacy tooling, independent review, PR creation and merge to origin/main. Subsequent instructions prioritize measured runtime and Actions cost, minimal complexity and meaningful tests, and remove all harness integrations except Claude and Codex. The user additionally authorized full Context Mode and Codebase Memory MCP retirement, machine-wide uninstallation and generated-state cleanup, with one combined PR per repository. Later steering retires redundant repository Claude instruction files in favor of shared AGENTS instructions and extends evidence-based legacy cleanup. The user also requires full migration from npm to pnpm where supported, with current official guidance and native edge-case verification. Appwrite Backend is additionally MCP-only for agent operations; its CLI guidance is retired in the same canonical dependency PR. Preserve unrelated work and project-specific assertions. No remote branch-protection changes are authorized.
+
+## Acceptance + steps
+
+- [x] Affected package selection retains transitive and cross-package contract impact, with full checks for uncertain changes → meaningful selection regressions and representative consumer probes.
+- [x] Root scans avoid repeating fully owned child-package work without omitting root or unowned sources → source-scope regressions and native command probes.
+- [x] Dart boundary/dead-code analysis avoids duplicate work while both failure classes remain enforced → real clean and violating fixtures plus report validation.
+- [x] CI setup identifies incomplete integration and generated workflows avoid unnecessary provisioning/cache work → setup regressions, workflow lint and native workflow proof.
+- [x] Adoption guidance detects duplicate legacy hook execution and duplicated CI ownership, preserving project-specific checks → installer/registration review and native consumer-shaped migration probes; hosted consumer rollout follows source release.
+- [x] Installation and updates retain only Claude and Codex harness integrations, preserving shared instructions and distinct assertions → lifecycle migration checks and source registration inventory.
+- [x] Context Mode and Codebase Memory MCP are no longer installed or registered; adoption removes their obsolete launchers and generated state while preserving unrelated integrations → native update and idempotence verification.
+- [x] Shared project instructions use AGENTS.md without redundant Claude wrappers; unique scoped/private rules are preserved during migration → installer retirement and pre-write preservation checks.
+- [x] The bundled Appwrite skill uses MCP for agent operations; retirement refuses to remove an installed CLI guard still used by project code, and accepts a project-owned replacement → prior-owner preservation and pre-write refusal/removal probes.
+- [x] Native tool provisioning and active bundled guidance use pnpm, retaining required install scripts and workspace package-manager ownership → isolated native provisioning, existing contracts and SDK-selection regressions.
+- [x] Timings and selection output make actual savings and scope observable without cached pass results → runner checks and measured native execution.
+- [x] Independent diff review and full local gates pass → complete-stage check before shipping.
+
+## Baseline + execution
+
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Draft` exited 0 on origin/main 80047129: 1001 tests passed in 110.41 seconds, four performance cases and all native checks passed. The first attempt failed because this new worktree lacked its pinned skill submodules; `git submodule update --init --recursive` restored the required checkout inputs before this passing run.
+Execution: Coordinator owns integration and Git. Parallel read-only inventory, consumer audit and official-source research precede independent source implementation slices. Integrated full check and fresh review follow worker checks. Consumer scaffold modifications wait for the verified source release. The canonical skill dependency documentation correction is published first without merging, so the source can pin corrected installed content; its combined adoption PR merges after this source release.
+
+## Risks + recovery
+
+Incorrect dependency mapping can omit checks; unknown inputs must keep full scope. Shared report paths and child-process workers constrain parallelism. Compare command flags and report thresholds before consolidating checks. Preserve latest-tool policy and snapshot isolation. Revert the source change or an individual consumer migration if equivalent enforcement cannot be demonstrated.
+
+## ux_reference
+
+N/A — CLI checks, installer and CI configuration; no product UI changes.
+
+## Verification
+
+Result: Passed
+Evidence: Final integrated Ready-stage checks passed after the MCP-only skill pin and guarded CLI-file retirement: 1052 tests in 49.07 seconds, four performance cases, configured strict format/lint/complexity/annotations/types, dependency, duplicate/dead-code, workflow, shell, secret, vulnerability and security checks. Native pnpm-only provisioning and package resolution passed; audited consumer pnpm declarations support the required build controls. Independent review found no remaining source defects, including an actual pre-write refusal for an installed guard caller. Both bundled skill revisions are published with successful current-head checks; their existing combined PRs remain pending source release. Complete-stage and committed-snapshot pre-push gates are required before publication.
+E2E: Passed — real old-to-new installer migration and repeated setup exited zero with no second-run file changes; unrelated MCP and scoped instruction preservation probes passed. Native Biome and Dart fixtures passed clean/restored and rejected relevant violations. A generated committed-snapshot pre-push completed a real docs-only local Git push in 5.63 seconds. Native Claude AGENTS loading is documented for the installed release, but the isolated model probe exited before returning its marker and remains unverified. Hosted checks remain pending for the published revision.
+
+Delivery target: Merge
+Delivery: Pending — PR, current-head CI, guarded merge, verified main CI and published source release before consumer rollout.

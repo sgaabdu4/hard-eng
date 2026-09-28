@@ -109,7 +109,7 @@ def gate_config(root: Path) -> GateConfig:
     return config
 
 
-def configure_hooks(root: Path, changes: dict[str, str]) -> None:
+def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
     import agent_hooks
     from gate_config import json_file
 
@@ -148,47 +148,20 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> None:
             raise ValueError(f"{agent} hooks are disabled; ask before changing that")
         agent_hooks.remove_routine_hooks(current, agent, command)
         additions: JsonObject = {"hooks": hooks}
-        if agent == "copilot":
-            additions["version"] = 1
         if agent == "claude":
-            additions.update(
-                {
-                    "extraKnownMarketplaces": {
-                        "context-mode": {
-                            "source": {
-                                "source": "github",
-                                "repo": "mksglu/context-mode",
-                            }
-                        }
-                    },
-                    "enabledPlugins": {"context-mode@context-mode": True},
-                }
-            )
+            from mcp_setup import retire_claude_integrations
+
+            retire_claude_integrations(current)
         merged = merge(current, additions)
         if merged != json.loads(text):
             changes[name] = json_file(root, merged)
-    clean_copilot_hooks(root, changes)
+    return agent_hooks.retire_copilot_hooks(root, command)
 
 
-def clean_copilot_hooks(root: Path, changes: dict[str, str]) -> None:
-    from agent_hooks import remove_old_generation
-    from gate_config import json_file
-
-    for target in root.glob(".github/hooks/*.json"):
-        name = str(target.relative_to(root))
-        current: JsonObject = json.loads(target.read_text())
-        wiring = current.get("hooks")
-        if name not in changes and isinstance(wiring, dict):
-            before = json.dumps(wiring)
-            remove_old_generation(wiring)
-            if json.dumps(wiring) != before:
-                changes[name] = json_file(root, current)
-
-
-def configure_mcp(root: Path, changes: dict[str, str]) -> None:
+def configure_mcp(root: Path, changes: dict[str, str]) -> list[str]:
     from mcp_setup import configure_mcp as configure
 
-    configure(root, changes)
+    retired = configure(root, changes)
     name = ".codex/config.toml"
     text = changes.get(name) or (
         (root / name).read_text() if (root / name).is_file() else ""
@@ -202,6 +175,7 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
     ]
     if "".join(kept) != text:
         changes[name] = "".join(kept)
+    return retired
 
 
 def configure_typing_checks(package: Group) -> None:
@@ -732,13 +706,16 @@ def configure_ignores(root: Path, changes: dict[str, str]) -> None:
     ignores = (
         (root / ".gitignore").read_text() if (root / ".gitignore").exists() else ""
     )
+    ignores = "".join(
+        line
+        for line in ignores.splitlines(keepends=True)
+        if line.strip().strip("/") not in {".codebase-memory", ".context-mode"}
+    )
     for pattern in (
         ".git/",
         "__pycache__/",
         ".hard-eng/",
         ".claude/worktrees/",
-        ".codebase-memory/",
-        ".context-mode/",
         "coverage/",
         ".coverage",
         ".coverage.*",
@@ -839,16 +816,20 @@ def plan_install(
     ).strip()
     if Path(git_root).resolve() != root:
         raise ValueError("Run setup from the target Git repository root")
+    from mcp_setup import retire_appwrite_cli
+
+    retired = retire_appwrite_cli(root, SOURCE, previous)
     unused = unused_skills(root)
     changes = scaffold_changes(root, previous, unused)
     from agent_hooks import configure_instructions
 
-    configure_instructions(root, SOURCE, previous, changes)
-    configure_hooks(root, changes)
-    from update import old_generation
+    retired += configure_instructions(root, SOURCE, previous, changes)
+    retired += configure_hooks(root, changes)
+    from update import local_settings, old_generation
 
-    retired = old_generation(root, changes)
-    configure_mcp(root, changes)
+    local_settings(root)
+    retired += old_generation(root, changes)
+    retired += configure_mcp(root, changes)
     configure_ignores(root, changes)
     revision = None
     if not subprocess.check_output(
@@ -883,8 +864,8 @@ def plan_install(
 
     typescript = typescript_packages(root, repository_files(root))
     for package in config.get("packages", []):
-        adapt_boundaries(package, typescript)
         strict_scanner_flags(package)
+        adapt_boundaries(package, typescript)
         browser_test_coverage(root / package["path"], package)
         ignore = Path(package["path"]) / ".semgrepignore"
         if not (root / ignore).exists():

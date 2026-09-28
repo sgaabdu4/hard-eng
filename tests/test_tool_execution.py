@@ -63,20 +63,22 @@ def execute_provisioned_scanner(
     package: str,
     *,
     stale_local: bool,
-    expected_use_npm: bool,
 ) -> list[str]:
     managed = tmp_path / "managed"
     executable(managed, scanner, "managed")
+    if scanner == "dart-decimate":
+        (managed / scanner).write_text(
+            '#!/bin/sh\nif [ "$1" = config ]; then\n'
+            'printf \'%s\\n\' \'{"config":{"boundaries":[{"from":"lib/domain","disallow":"lib/ui"}]}}\'\n'
+            "else\nprintf '%s\\n' managed \"$@\"\nfi\n"
+        )
     if stale_local:
         stale = tmp_path / "node_modules/.bin"
         executable(stale, scanner, "stale")
         monkeypatch.setenv("PATH", str(stale) + os.pathsep + os.environ["PATH"])
 
-    def provision(
-        _root: Path, batch: list[str], _timeout: float, *, use_npm: bool
-    ) -> None:
+    def provision(_root: Path, batch: list[str], _timeout: float) -> None:
         assert batch == [package]
-        assert use_npm == expected_use_npm
         monkeypatch.setenv("PATH", str(managed) + os.pathsep + os.environ["PATH"])
 
     monkeypatch.setattr(tool_setup, "provision_batch", provision)
@@ -214,7 +216,6 @@ def test_existing_fallow_audit_must_be_the_enforced_gate(
         "fallow",
         "npm:fallow@latest",
         stale_local=True,
-        expected_use_npm=False,
     ) == [
         "managed",
         "audit",
@@ -281,6 +282,7 @@ def test_native_tools_install_before_reading_environment(
 
     def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
+        assert "MISE_NPM_PACKAGE_MANAGER=pnpm" in command
         environment = kwargs["env"]
         assert isinstance(environment, dict)
         if "install" in command:
@@ -293,12 +295,21 @@ def test_native_tools_install_before_reading_environment(
             )
         assert len(calls) == 2 and "install" in calls[0]
         assert environment["MISE_FETCH_REMOTE_VERSIONS_CACHE"] == "1h"
-        assert command[-1] == "aqua:gitleaks/gitleaks@latest"
+        assert command[-2:] == [
+            "aqua:gitleaks/gitleaks@latest",
+            'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest',
+        ]
         return subprocess.CompletedProcess(command, 0, '{"PATH":""}', "")
 
     monkeypatch.setattr(subprocess, "run", run)
     groups: list[Group] = [
-        {"path": ".", "checks": [{"name": "scan", "command": ["gitleaks"]}]}
+        {
+            "path": ".",
+            "checks": [
+                {"name": "secrets", "command": ["gitleaks"]},
+                {"name": "scan", "command": ["dart-decimate", "check", "."]},
+            ],
+        }
     ]
     if failure:
         with pytest.raises((subprocess.CalledProcessError, ValueError)) as error:
@@ -315,20 +326,18 @@ def test_native_tools_install_before_reading_environment(
 
 
 @pytest.mark.parametrize(
-    ("scanner", "script", "package", "expected_use_npm", "arguments"),
+    ("scanner", "script", "package", "arguments"),
     [
         (
             "dart-decimate",
             "dart-decimate check . --threshold 0 --strict --format json",
             'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest',
-            True,
             ["check", ".", "--threshold", "0", "--strict", "--format", "json"],
         ),
         (
             "react-doctor",
             "react-doctor --scope full --blocking warning --no-respect-inline-disables --json --json-out coverage/react.json",
             "npm:react-doctor@latest",
-            False,
             [
                 "--scope",
                 "full",
@@ -350,7 +359,6 @@ def test_package_script_scanner_executes_provisioned_native_executable(
     scanner: str,
     script: str,
     package: str,
-    expected_use_npm: bool,
     arguments: list[str],
     stale_local: bool,
 ) -> None:
@@ -367,7 +375,6 @@ def test_package_script_scanner_executes_provisioned_native_executable(
         scanner,
         package,
         stale_local=stale_local,
-        expected_use_npm=expected_use_npm,
     ) == ["managed", *arguments]
 
 
@@ -407,6 +414,99 @@ def test_python_security_gate_replaces_only_the_registry_sha1_rule(
         {"pattern": "hashlib.sha1(...)"},
         {"pattern-not": "hashlib.sha1(..., usedforsecurity=False, ...)"},
     ]
+
+
+@pytest.mark.parametrize(
+    "child,root_files",
+    [
+        ("matching", ["root.js"]),
+        ("installed", ["generated.js", "root.js"]),
+        ("unselected", ["packages/child/child.js", "root.js"]),
+        ("flags", ["packages/child/child.js", "root.js"]),
+        ("role", ["packages/child/child.js", "root.js"]),
+        ("config", ["packages/child/child.js", "root.js"]),
+        ("scope", ["packages/child/child.js", "root.js"]),
+        ("all-covered", []),
+    ],
+)
+def test_root_biome_keeps_files_without_an_equivalent_selected_child(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    child: str,
+    root_files: list[str],
+) -> None:
+    import gate_config
+
+    nested = tmp_path / "packages/child"
+    nested.mkdir(parents=True)
+    (nested / "child.js").write_text("const child = 1;\n")
+    if child != "all-covered":
+        (tmp_path / "root.js").write_text("const root = 1;\n")
+    root_gate: Gate = {
+        "name": "format-lint",
+        "role": "format-lint",
+        "command": ["biome", "ci", ".", "--error-on-warnings"],
+    }
+    child_gate: Gate = {
+        **root_gate,
+        "role": "typing-style" if child == "role" else "format-lint",
+        "command": [
+            *root_gate["command"],
+            *{
+                "flags": ["--formatter-enabled=false"],
+                "config": ["--config-path=custom.json"],
+            }.get(child, []),
+        ],
+    }
+    if child == "config":
+        root_gate["command"].append("--config-path=custom.json")
+    elif child == "scope":
+        child_gate["command"][2] = "child.js"
+    groups: list[Group] = [
+        {"path": ".", "language": "javascript", "checks": [root_gate]},
+        {"path": "packages/child", "language": "javascript", "checks": [child_gate]},
+    ]
+    if child == "unselected":
+        groups.pop()
+    elif child == "installed":
+        groups[0]["checks"].append(
+            {
+                "name": "dependency-setup",
+                "role": "lockfiles",
+                "command": [
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path;Path('generated.js').write_text('const generated = 1;\\n')",
+                ],
+            }
+        )
+
+    def selected(*_args: object) -> list[Group]:
+        return groups
+
+    def provision(*_args: object) -> None:
+        return None
+
+    monkeypatch.setattr(gate_config, "load_groups", selected)
+    monkeypatch.setattr(runner, "provision_tools", provision)
+    binary = tmp_path / "bin/biome"
+    binary.parent.mkdir()
+    binary.write_text(
+        f"#!{sys.executable}\nimport json, sys\nfrom pathlib import Path\n"
+        "Path('scan.json').write_text(json.dumps(sys.argv[1:]))\n"
+    )
+    binary.chmod(0o755)
+    monkeypatch.setenv("PATH", str(binary.parent) + os.pathsep + os.environ["PATH"])
+    assert runner.check(verify_plan=False) == 0
+    scan = tmp_path / "scan.json"
+    if root_files:
+        actual = json.loads(scan.read_text())
+        assert sorted(arg for arg in actual if arg.endswith(".js")) == root_files
+    else:
+        assert not scan.exists()
+    if child != "unselected":
+        assert "child.js" in json.loads((nested / "scan.json").read_text())
 
 
 def test_package_script_dart_boundary_gate_checks_native_configuration(

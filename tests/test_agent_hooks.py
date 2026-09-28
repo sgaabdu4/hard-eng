@@ -19,9 +19,70 @@ from shipping import ShippingPolicy
 
 
 @pytest.mark.parametrize(
-    "existing", ["none", "files", "symlink", "local", "nested", "linked-local"]
+    "existing",
+    [
+        "none",
+        "symlink",
+        "nested-import",
+        "user-global",
+        "dependencies",
+    ],
 )
 def test_native_instruction_paths_preserve_project_rules(
+    installer: ModuleType,
+    tmp_path: Path,
+    existing: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if existing == "user-global":
+        (tmp_path / ".claude").mkdir()
+        (tmp_path / ".claude/CLAUDE.md").write_text("Personal rules\n")
+        user_home = tmp_path
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: user_home))
+        tmp_path = tmp_path / "project"
+        tmp_path.mkdir()
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "package.json").write_text('{"private":true}')
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    if existing == "symlink":
+        (tmp_path / "AGENTS.md").write_text("# Existing rules\nKeep these.\n")
+        (tmp_path / "CLAUDE.md").symlink_to("AGENTS.md")
+    elif existing == "nested-import":
+        (tmp_path / "apps/web").mkdir(parents=True)
+        (tmp_path / "apps/web/AGENTS.md").write_text("Web rules\n")
+        (tmp_path / "apps/web/CLAUDE.md").write_text(agent_hooks.CLAUDE_IMPORT)
+    elif existing == "dependencies":
+        (tmp_path / ".gitignore").write_text("node_modules/\n.venv/\n.hard-eng/\n")
+        for name in ("node_modules/fixture", ".venv/fixture", ".hard-eng/fixture"):
+            (tmp_path / name).mkdir(parents=True)
+            (tmp_path / name / "CLAUDE.md").write_text("Dependency guidance\n")
+    installer.install(tmp_path)
+    names = ["AGENTS.md"] + (
+        ["apps/web/AGENTS.md"] if existing == "nested-import" else []
+    )
+    before = {name: (tmp_path / name).read_bytes() for name in names}
+    installer.install(tmp_path)
+    assert before == {name: (tmp_path / name).read_bytes() for name in names}
+    if existing == "symlink":
+        assert before["AGENTS.md"].endswith(b"# Existing rules\nKeep these.\n")
+    assert not (tmp_path / "CLAUDE.md").exists()
+    assert not (tmp_path / "CLAUDE.md").is_symlink()
+    assert not (tmp_path / "apps/web/CLAUDE.md").exists()
+    assert not (tmp_path / "AGENTS.override.md").exists()
+    if existing == "user-global":
+        assert (tmp_path.parent / ".claude/CLAUDE.md").read_text() == "Personal rules\n"
+    if existing == "dependencies":
+        for name in ("node_modules/fixture", ".venv/fixture", ".hard-eng/fixture"):
+            assert (
+                tmp_path / name / "CLAUDE.md"
+            ).read_text() == "Dependency guidance\n"
+
+
+@pytest.mark.parametrize(
+    "existing",
+    ["files", "local", "nested", "linked-local", "ignored-local", "linked-directory"],
+)
+def test_native_instruction_conflicts_preserve_project_rules(
     installer: ModuleType, tmp_path: Path, existing: str
 ) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
@@ -30,40 +91,39 @@ def test_native_instruction_paths_preserve_project_rules(
     if existing == "files":
         for name in ("CLAUDE.md", "AGENTS.override.md"):
             (tmp_path / name).write_bytes(b"# Custom rules\r\nPreserve these.\r\n")
-    elif existing in {"symlink", "linked-local"}:
-        (tmp_path / "AGENTS.md").write_text("# Existing rules\nKeep these.\n")
-        (tmp_path / "CLAUDE.md").symlink_to("AGENTS.md")
-    if existing in {"local", "linked-local"}:
+    elif existing == "local":
         (tmp_path / "CLAUDE.local.md").write_text("Personal notes\n")
     elif existing == "nested":
         (tmp_path / "apps/web").mkdir(parents=True)
         (tmp_path / "apps/web/CLAUDE.md").write_text("Web rules\n")
-    installer.install(tmp_path)
-    names = (
-        ["AGENTS.md"]
-        + (["CLAUDE.md"] if existing != "none" else [])
-        + (["AGENTS.override.md"] if existing == "files" else [])
+    elif existing == "linked-local":
+        (tmp_path / "AGENTS.md").write_text("# Existing rules\nKeep these.\n")
+        (tmp_path / "CLAUDE.md").symlink_to("AGENTS.md")
+        (tmp_path / "CLAUDE.local.md").write_text("Personal notes\n")
+    elif existing == "ignored-local":
+        (tmp_path / "apps/web").mkdir(parents=True)
+        (tmp_path / ".gitignore").write_text("CLAUDE.local.md\n")
+        (tmp_path / "apps/web/CLAUDE.local.md").write_text("Personal notes\n")
+    elif existing == "linked-directory":
+        (tmp_path / "shared").mkdir()
+        (tmp_path / "shared/CLAUDE.md").write_text(agent_hooks.CLAUDE_IMPORT)
+        (tmp_path / ".claude").symlink_to("shared", target_is_directory=True)
+    before = {
+        path: path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    message = (
+        "linked directory"
+        if existing == "linked-directory"
+        else "review their rules and imports"
     )
-    before = {name: (tmp_path / name).read_bytes() for name in names}
-    installer.install(tmp_path)
-    assert before == {name: (tmp_path / name).read_bytes() for name in names}
-    if existing in {"symlink", "linked-local"}:
+    with pytest.raises(ValueError, match=message):
+        installer.install(tmp_path)
+    assert before == {path: path.read_bytes() for path in before}
+    assert not (tmp_path / ".hooks").exists()
+    if existing == "linked-local":
         assert (tmp_path / "CLAUDE.md").is_symlink()
-        assert before["CLAUDE.md"] == before["AGENTS.md"]
-        assert before["AGENTS.md"].endswith(b"# Existing rules\nKeep these.\n")
-    elif existing == "none":
-        assert not (tmp_path / "CLAUDE.md").exists()
-    else:
-        assert "\n@AGENTS.md\n" in (tmp_path / "CLAUDE.md").read_text()
-    if existing == "files":
-        for name in ("CLAUDE.md", "AGENTS.override.md"):
-            assert before[name].endswith(b"# Custom rules\r\nPreserve these.\r\n")
-        assert (
-            "[shared instructions](AGENTS.md)"
-            in (tmp_path / "AGENTS.override.md").read_text()
-        )
-    else:
-        assert not (tmp_path / "AGENTS.override.md").exists()
 
 
 def test_child_change_retains_parent_install_and_vulnerability_checks(
@@ -269,7 +329,7 @@ def test_completion_runs_real_command_and_bounds_failure_log(
         assert result == {}
 
 
-@pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
+@pytest.mark.parametrize("agent", ["claude", "codex"])
 def test_completion_surfaces_only_authoritative_stage_handoffs(
     repository: Path, agent: str
 ) -> None:
@@ -279,12 +339,9 @@ def test_completion_surfaces_only_authoritative_stage_handoffs(
         "print('Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check.')\n"
     )
     result = agent_hooks.completion(repository, {}, agent)
-    if agent == "copilot":
-        assert result == {}
-    else:
-        assert result == {
-            "systemMessage": "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."
-        }
+    assert result == {
+        "systemMessage": "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."
+    }
 
 
 def test_stop_retry_allows_honest_blocker_without_rerunning(repository: Path) -> None:
@@ -299,7 +356,7 @@ def test_string_false_cannot_activate_stop_retry_guard(repository: Path) -> None
     assert response.get("decision") == "block"
 
 
-def test_copilot_claude_compatibility_registration_does_not_repeat_checks(
+def test_claude_timestamp_does_not_skip_startup(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -308,11 +365,12 @@ def test_copilot_claude_compatibility_registration_does_not_repeat_checks(
         sys, "stdin", io.StringIO('{"timestamp":123,"sessionId":"native"}')
     )
     assert agent_hooks.handle_event(repository, "session", "claude") == 0
-    assert json.loads(capsys.readouterr().out) == {}
-    assert not (repository / ".hard-eng/sessions").exists()
+    output = json.loads(capsys.readouterr().out)
+    assert output["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert (repository / ".hard-eng/sessions/native.json").exists()
 
 
-@pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
+@pytest.mark.parametrize("agent", ["claude", "codex"])
 @pytest.mark.parametrize("offline", [False, True])
 def test_session_reports_updater_result_once(
     repository: Path,
@@ -330,23 +388,18 @@ def test_session_reports_updater_result_once(
     assert agent_hooks.handle_event(repository, "session", agent) == 0
     output = json.loads(capsys.readouterr().out)
     updater.assert_called_once_with(repository)
-    context = (
-        output["additionalContext"]
-        if agent == "copilot"
-        else output["hookSpecificOutput"]["additionalContext"]
-    )
+    context = output["hookSpecificOutput"]["additionalContext"]
     expected = (
         "Hard Eng update failed: offline"
         if offline
         else "Hard Eng update result: No newer CI-verified"
     )
     assert context.startswith(expected)
-    if agent != "copilot":
-        assert output["systemMessage"] == "Hard Eng startup: " + " ".join(
-            context.splitlines()[:2]
-        )
-        assert "Gates: not runnable" in output["systemMessage"]
-        assert "Use configured MCPs" not in output["systemMessage"]
+    assert output["systemMessage"] == "Hard Eng startup: " + " ".join(
+        context.splitlines()[:2]
+    )
+    assert "Gates: not runnable" in output["systemMessage"]
+    assert "Use configured MCPs" not in output["systemMessage"]
 
 
 def test_session_states_whether_gates_can_run(repository: Path) -> None:
@@ -382,7 +435,7 @@ def test_session_states_whether_gates_can_run(repository: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
+@pytest.mark.parametrize("agent", ["claude", "codex"])
 def test_failure_checkpoint_preserves_results_without_running_checks(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -412,8 +465,6 @@ def test_failure_checkpoint_preserves_results_without_running_checks(
     unsupported = agent == "codex"
     if unsupported:
         assert "Unsupported native hook event" in output["systemMessage"]
-    elif agent == "copilot":
-        assert set(output) == {"additionalContext"}
     else:
         assert set(output) == {"hookSpecificOutput"}
         context = output["hookSpecificOutput"]
@@ -423,12 +474,12 @@ def test_failure_checkpoint_preserves_results_without_running_checks(
     assert "he-learn/SKILL.md" in serialized or unsupported
 
 
-def test_learning_hook_compatibility_and_malformed_input_do_not_block_tools(
+def test_learning_hook_malformed_input_does_not_block_tools(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    for payload in ('{"timestamp":123}', "[]", "{"):
+    for payload in ("[]", "{"):
         monkeypatch.setattr(sys, "stdin", io.StringIO(payload))
         assert agent_hooks.handle_event(repository, "failure", "claude") == 0
         output = json.loads(capsys.readouterr().out)
@@ -524,6 +575,24 @@ def test_unknown_base_or_dependency_information_checks_every_package(
     assert "depends_on" in output
 
 
+def test_shared_package_paths_cannot_hide_a_declared_document_input(
+    repository: Path,
+) -> None:
+    groups: list[Group] = [
+        {
+            "path": ".",
+            "language": "python",
+            "checks": [],
+            "depends_on": [],
+            "impact_inputs": ["README.md"],
+        },
+        {"path": ".", "language": "javascript", "checks": [], "depends_on": []},
+        {"path": ".", "checks": []},
+    ]
+    (repository / "README.md").write_text("A build consumes this document.\n")
+    assert affected_groups(repository, groups, "HEAD") == groups
+
+
 @pytest.mark.parametrize(
     "docs", [[], ["PLAN.md", "features/task/PLAN.md"], ["README.md", "CHANGELOG.md"]]
 )
@@ -572,6 +641,95 @@ def test_root_lockfile_change_includes_reviewed_consumers(repository: Path) -> N
         ".",
         "packages/app",
         "packages/site",
+        ".",
+    ]
+
+
+@pytest.mark.parametrize(
+    "changed,expected",
+    [
+        ("contracts/schema.json", ["contracts", "app", "site", "."]),
+        ("shared/schema.json", ["app", "site", "."]),
+        ("CONTRACT.md", ["app", "site", "."]),
+        ("features/contracts/PLAN.md", ["app", "site", "."]),
+        ("README.md", ["."]),
+        ("shared/schema.json.old", ["contracts", "app", "site", "other", "."]),
+        (".github/workflows/check.yml", ["contracts", "app", "site", "other", "."]),
+    ],
+)
+def test_explicit_inputs_select_consumers_before_docs_filtering(
+    repository: Path,
+    runner: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    changed: str,
+    expected: list[str],
+) -> None:
+    groups: list[Group] = [
+        {"path": "contracts", "checks": [], "depends_on": []},
+        {
+            "path": "app",
+            "checks": [],
+            "depends_on": [],
+            "impact_inputs": [
+                "contracts/",
+                "shared/schema.json",
+                "CONTRACT.md",
+                "features/contracts/PLAN.md",
+                ".github/",
+            ],
+        },
+        {"path": "site", "checks": [], "depends_on": ["app"]},
+        {"path": "other", "checks": [], "depends_on": []},
+        {"path": ".", "checks": []},
+    ]
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": groups[:-1], "shared": []})
+    )
+    commit(repository, "input configuration")
+    path = repository / changed
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("change\n")
+    assert [
+        group["path"] for group in affected_groups(repository, groups, "HEAD")
+    ] == expected
+    runner.__dict__["ROOT"] = repository
+    assert runner.impact("HEAD") == 0
+    assert (
+        f"docs_only={str(changed == 'README.md').lower()}\n" in capsys.readouterr().out
+    )
+
+
+@pytest.mark.parametrize("change", ["deleted", "renamed", "staged", "untracked"])
+def test_input_selection_reads_native_git_paths(repository: Path, change: str) -> None:
+    groups: list[Group] = [
+        {"path": "contracts", "checks": [], "depends_on": []},
+        {
+            "path": "app",
+            "checks": [],
+            "depends_on": [],
+            "impact_inputs": ["contracts/old schema.json"],
+        },
+        {"path": "other", "checks": [], "depends_on": []},
+        {"path": ".", "checks": []},
+    ]
+    source = repository / "contracts/old schema.json"
+    source.parent.mkdir()
+    source.write_text("baseline\n")
+    if change != "untracked":
+        commit(repository, "shared contract")
+    if change == "deleted":
+        source.unlink()
+    elif change == "renamed":
+        (repository / "other").mkdir()
+        git(repository, "mv", str(source), "other/new schema.json")
+    elif change == "staged":
+        source.write_text("changed\n")
+        git(repository, "add", str(source))
+    expected = ["contracts", "app"]
+    if change == "renamed":
+        expected.append("other")
+    assert [group["path"] for group in affected_groups(repository, groups, "HEAD")] == [
+        *expected,
         ".",
     ]
 
@@ -636,7 +794,7 @@ def assert_rerun_keeps_written_hooks(
     assert repeated == {name: text for name, text in changes.items() if name != written}
 
 
-@pytest.mark.parametrize("agent", ["claude", "codex", "copilot"])
+@pytest.mark.parametrize("agent", ["claude", "codex"])
 def test_setup_removes_owned_routine_hooks_and_preserves_custom_hooks(
     repository: Path, installer: ModuleType, agent: str
 ) -> None:
@@ -645,7 +803,6 @@ def test_setup_removes_owned_routine_hooks_and_preserves_custom_hooks(
         / {
             "claude": ".claude/settings.json",
             "codex": ".codex/hooks.json",
-            "copilot": ".github/hooks/hard-eng.json",
         }[agent]
     )
     path.parent.mkdir(parents=True)
@@ -653,25 +810,12 @@ def test_setup_removes_owned_routine_hooks_and_preserves_custom_hooks(
     hooks: JsonObject = {}
     custom: JsonObject = {"type": "command", "command": "echo custom", "timeout": 10}
     for event, native in (("prompt", "UserPromptSubmit"), ("tool", "PostToolUse")):
-        if agent == "copilot" and event == "prompt":
-            continue
         handler: JsonObject = {
             "type": "command",
             "command": f"{command} {event} {agent}",
             "timeout": 10,
         }
         hooks[native] = [{"hooks": [handler]}, {"hooks": [custom]}]
-        if agent == "copilot":
-            hooks = {
-                "postToolUse": [
-                    {
-                        "type": "command",
-                        "bash": f"{command} tool copilot",
-                        "timeoutSec": 10,
-                    },
-                    {"type": "command", "bash": "echo custom", "timeoutSec": 10},
-                ]
-            }
     path.write_text(json.dumps({"hooks": hooks}))
     changes: dict[str, str] = {}
     installer.configure_hooks(repository, changes)
