@@ -75,7 +75,7 @@ N/A — MCP launcher with no product UI.
 
 Result: Passed
 Evidence: New migration and launcher tests fail without the change and pass with it; the fresh-install test checks the launcher entries and file. Real 0.11.0 package with an isolated daemon: a cold launch stopped with SIGTERM after 5 s still completed its install (65 s) with no staging leftovers.
-E2E: Passed — MCP `initialize` through the launcher from two repositories against one isolated daemon: 7.5 s (daemon start) and 1.9 s; a client from a different install path got the rendezvous error after 32 s.
+E2E: Passed — MCP `initialize` through the generated command from two repositories, one started in a subdirectory, against one isolated daemon both succeeded; a client from a different install path got the rendezvous error after 32–38 s. Codex adversarial review: round 1 found the subdirectory launch failure, fixed; round 2 approved with no findings.
 
 Delivery target: Merge
 Delivery: Pending — PR merge, main CI, and native Delivered verification.
