@@ -1,6 +1,6 @@
 # Launch Codebase Memory from one fixed path
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -55,7 +55,7 @@ Evidence: `uv run --locked pytest -q tests/test_mcp_setup.py tests/test_updates.
 - [x] Setup replaces the earlier generated `pnpm dlx` Codebase Memory entries (with or without the Codex timeout) and leaves custom entries unchanged; a rerun changes nothing.
 - [x] Launches from two repositories run the same installed binary, install only when it is missing, and keep stdout for the MCP protocol.
 - [x] Real MCP clients started from two repositories against one isolated daemon both initialize; a client from a different install path does not.
-- [ ] The exact candidate passes the Complete check.
+- [x] The exact candidate passes the Complete check.
 
 ## Risks + recovery
 
@@ -73,9 +73,9 @@ N/A — MCP launcher with no product UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Pending
+Result: Passed
+Evidence: New migration and launcher tests fail without the change and pass with it; the fresh-install test checks the launcher entries and file. Real 0.11.0 package with an isolated daemon: a cold launch stopped with SIGTERM after 5 s still completed its install (65 s) with no staging leftovers.
+E2E: Passed — MCP `initialize` through the launcher from two repositories against one isolated daemon: 7.5 s (daemon start) and 1.9 s; a client from a different install path got the rendezvous error after 32 s.
 
 Delivery target: Merge
 Delivery: Pending — PR merge, main CI, and native Delivered verification.
