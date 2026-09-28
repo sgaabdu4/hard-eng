@@ -73,4 +73,4 @@ Evidence: `uv run --locked pytest -q tests/test_mcp_setup.py tests/test_updates.
 E2E: N/A — installer configuration; covered by setup tests against real files.
 
 Delivery target: Merge
-Delivery: Pending — PR merge, main CI, and native Delivered verification.
+Delivery: Passed — PR [#199](https://github.com/sgaabdu4/hard-eng/pull/199) checks green, squash-merged as `970c4f3`, main CI green on that commit; `ship --stage delivered` passed.
