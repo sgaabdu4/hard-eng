@@ -13,6 +13,7 @@ from gate_config import JsonObject, json_file
 APPWRITE_CLOUD_MCP_URL = "https://mcp.appwrite.io/"
 DEFAULT_SERVERS = ("context-mode", "codebase-memory-mcp")
 CODEX_STARTUP_TIMEOUT_SEC = 60
+CODEBASE_MEMORY_LAUNCHER = ".hooks/codebase-memory-mcp.py"
 
 
 def repository_launcher(root: Path, command: object) -> str | None:
@@ -263,7 +264,7 @@ def runs_package(server: object, package: str) -> bool:
     args = server.get("args")
     tokens = [server.get("command"), *(args if isinstance(args, list) else [])]
     return any(
-        isinstance(token, str) and Path(token).name.split("@")[0] == package
+        isinstance(token, str) and Path(token).stem.split("@")[0] == package
         for token in tokens
     )
 
@@ -274,12 +275,55 @@ def configured_package(servers: JsonObject, package: str) -> bool:
     )
 
 
-def add_startup_timeout(config: str, server: str) -> str:
-    header = re.search(
+def dlx_server(plugin: str) -> JsonObject:
+    return {"command": "pnpm", "args": ["dlx", f"{plugin}@latest"]}
+
+
+def default_server(plugin: str) -> JsonObject:
+    if plugin == "codebase-memory-mcp":
+        return {"command": "python3", "args": [CODEBASE_MEMORY_LAUNCHER]}
+    return dlx_server(plugin)
+
+
+def replaces_generated(servers: JsonObject, plugin: str) -> bool:
+    earlier = dlx_server(plugin)
+    return plugin == "codebase-memory-mcp" and servers.get(plugin) in (
+        earlier,
+        {**earlier, "startup_timeout_sec": CODEX_STARTUP_TIMEOUT_SEC},
+    )
+
+
+def codex_header(config: str, server: str) -> re.Match[str] | None:
+    return re.search(
         rf'^\[mcp_servers\.(?:"{re.escape(server)}"|{re.escape(server)})\][ \t]*$',
         config,
         re.MULTILINE,
     )
+
+
+def codex_table(server: str, settings: JsonObject) -> str:
+    return f'\n[mcp_servers."{server}"]\n' + "".join(
+        f"{key} = {json.dumps(value)}\n" for key, value in settings.items()
+    )
+
+
+def replace_codex_table(config: str, server: str, table: str) -> str:
+    header = codex_header(config, server)
+    if header is None:
+        return config
+    following = re.compile(r"^\[", re.MULTILINE).search(config, header.end())
+    if following is None:
+        return config[: header.start()].rstrip("\n") + table
+    return (
+        config[: header.start()].rstrip("\n")
+        + table
+        + "\n"
+        + config[following.start() :]
+    )
+
+
+def add_startup_timeout(config: str, server: str) -> str:
+    header = codex_header(config, server)
     if header is None:
         return config
     return (
@@ -309,17 +353,19 @@ def approve_claude_servers(
 
 def add_codex_default_servers(config: str, configured: JsonObject) -> str:
     for plugin in DEFAULT_SERVERS:
-        if configured.get(plugin) == {
-            "command": "pnpm",
-            "args": ["dlx", f"{plugin}@latest"],
-        }:
+        table = codex_table(
+            plugin,
+            {
+                **default_server(plugin),
+                "startup_timeout_sec": CODEX_STARTUP_TIMEOUT_SEC,
+            },
+        )
+        if replaces_generated(configured, plugin):
+            config = replace_codex_table(config, plugin, table)
+        elif configured.get(plugin) == dlx_server(plugin):
             config = add_startup_timeout(config, plugin)
         elif not configured_package(configured, plugin):
-            config += (
-                f'\n[mcp_servers."{plugin}"]\ncommand = "pnpm"\n'
-                f'args = ["dlx", "{plugin}@latest"]\n'
-                f"startup_timeout_sec = {CODEX_STARTUP_TIMEOUT_SEC}\n"
-            )
+            config += table
     return config
 
 
@@ -331,17 +377,14 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
         plugins = (
             ["codebase-memory-mcp"] if name == ".mcp.json" else list(DEFAULT_SERVERS)
         )
-        servers: JsonObject = {
-            plugin: {"command": "pnpm", "args": ["dlx", f"{plugin}@latest"]}
-            for plugin in plugins
-        }
         existing = current.setdefault("mcpServers", {})
         if not isinstance(existing, dict):
             raise TypeError(f"Conflicting MCP servers in {name}; expected an object")
-        servers = {
-            plugin: settings
-            for plugin, settings in servers.items()
+        servers: JsonObject = {
+            plugin: default_server(plugin)
+            for plugin in plugins
             if not configured_package(existing, plugin)
+            or replaces_generated(existing, plugin)
         }
         for plugin in sorted(detected.keys() - existing.keys()):
             settings = detected[plugin]
@@ -369,8 +412,5 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
     )
     for plugin, settings in detected.items():
         if plugin not in parsed.get("mcp_servers", {}):
-            codex_config += f'\n[mcp_servers."{plugin}"]\n'
-            codex_config += "".join(
-                f"{key} = {json.dumps(value)}\n" for key, value in settings.items()
-            )
+            codex_config += codex_table(plugin, settings)
     changes[".codex/config.toml"] = codex_config
