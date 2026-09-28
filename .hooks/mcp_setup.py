@@ -307,6 +307,22 @@ def approve_claude_servers(
         changes[name] = json_file(root, settings)
 
 
+def add_codex_default_servers(config: str, configured: JsonObject) -> str:
+    for plugin in DEFAULT_SERVERS:
+        if configured.get(plugin) == {
+            "command": "pnpm",
+            "args": ["dlx", f"{plugin}@latest"],
+        }:
+            config = add_startup_timeout(config, plugin)
+        elif not configured_package(configured, plugin):
+            config += (
+                f'\n[mcp_servers."{plugin}"]\ncommand = "pnpm"\n'
+                f'args = ["dlx", "{plugin}@latest"]\n'
+                f"startup_timeout_sec = {CODEX_STARTUP_TIMEOUT_SEC}\n"
+            )
+    return config
+
+
 def configure_mcp(root: Path, changes: dict[str, str]) -> None:
     detected = detected_servers(root)
     for name in (".mcp.json", ".github/mcp.json"):
@@ -348,19 +364,9 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> None:
     target = root / ".codex/config.toml"
     codex_config = target.read_text() if target.exists() else ""
     parsed = tomllib.loads(codex_config)
-    configured = parsed.get("mcp_servers", {})
-    for plugin in DEFAULT_SERVERS:
-        if configured.get(plugin) == {
-            "command": "pnpm",
-            "args": ["dlx", f"{plugin}@latest"],
-        }:
-            codex_config = add_startup_timeout(codex_config, plugin)
-        elif not configured_package(configured, plugin):
-            codex_config += (
-                f'\n[mcp_servers."{plugin}"]\ncommand = "pnpm"\n'
-                f'args = ["dlx", "{plugin}@latest"]\n'
-                f"startup_timeout_sec = {CODEX_STARTUP_TIMEOUT_SEC}\n"
-            )
+    codex_config = add_codex_default_servers(
+        codex_config, parsed.get("mcp_servers", {})
+    )
     for plugin, settings in detected.items():
         if plugin not in parsed.get("mcp_servers", {}):
             codex_config += f'\n[mcp_servers."{plugin}"]\n'
