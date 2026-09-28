@@ -1,11 +1,14 @@
 """Service selection and preservation across native harness configuration."""
 
 import json
+import os
+import subprocess
 import tomllib
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+from conftest import CODEBASE_MEMORY, SOURCE, init
 from test_setup import repository
 
 
@@ -15,6 +18,17 @@ def executable_launcher(root: Path, relative: str) -> str:
     launcher.write_text("#!/bin/sh\nexit 0\n")
     launcher.chmod(0o755)
     return "./" + relative
+
+
+def rerun_configure_mcp(
+    installer: ModuleType, root: Path, changes: dict[str, str]
+) -> dict[str, str]:
+    for name, content in changes.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(content)
+    repeated: dict[str, str] = {}
+    installer.configure_mcp(root, repeated)
+    return repeated
 
 
 def appwrite_project(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -541,11 +555,7 @@ def test_installer_approves_its_claude_servers_and_keeps_existing_approvals(
         "dart",
         "marionette",
     ]
-    for name, content in changes.items():
-        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / name).write_text(content)
-    repeated: dict[str, str] = {}
-    installer.configure_mcp(tmp_path, repeated)
+    repeated = rerun_configure_mcp(installer, tmp_path, changes)
     assert ".claude/settings.json" not in repeated
 
 
@@ -570,6 +580,93 @@ def test_codex_startup_timeout_upgrades_only_the_earlier_generated_entry(
         "startup_timeout_sec": 60,
     }
     assert servers["codebase-memory-mcp"] == custom
+
+
+@pytest.mark.parametrize("timeout", ["", "startup_timeout_sec = 60\n"])
+def test_installer_moves_generated_codebase_memory_entries_to_the_launcher(
+    installer: ModuleType, tmp_path: Path, timeout: str
+) -> None:
+    repository(tmp_path)
+    earlier = {"command": "pnpm", "args": ["dlx", "codebase-memory-mcp@latest"]}
+    for name in (".mcp.json", ".github/mcp.json"):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"mcpServers": {"codebase-memory-mcp": earlier}}))
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex/config.toml").write_text(
+        '[mcp_servers."codebase-memory-mcp"]\ncommand = "pnpm"\n'
+        f'args = ["dlx", "codebase-memory-mcp@latest"]\n{timeout}\n'
+        '[mcp_servers.own]\ncommand = "own"\n'
+    )
+    changes: dict[str, str] = {}
+    installer.configure_mcp(tmp_path, changes)
+    for name in (".mcp.json", ".github/mcp.json"):
+        servers = json.loads(changes[name])["mcpServers"]
+        assert servers["codebase-memory-mcp"] == CODEBASE_MEMORY
+    codex = tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]
+    assert codex["codebase-memory-mcp"] == {
+        **CODEBASE_MEMORY,
+        "startup_timeout_sec": 60,
+    }
+    assert codex["own"] == {"command": "own"}
+    repeated = rerun_configure_mcp(installer, tmp_path, changes)
+    assert repeated[".codex/config.toml"] == changes[".codex/config.toml"]
+    assert ".mcp.json" not in repeated
+    assert ".github/mcp.json" not in repeated
+
+
+def test_codebase_memory_launcher_runs_one_shared_install(tmp_path: Path) -> None:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    calls = tmp_path / "pnpm-calls"
+    (tools / "pnpm").write_text(
+        f'#!/bin/sh\necho add >> "{calls}"\n'
+        'package="$3/node_modules/.pnpm/pkg/node_modules/codebase-memory-mcp"\n'
+        'mkdir -p "$package" && touch "$package/bin.js" && echo installed\n'
+        'ln -s .pnpm/pkg/node_modules/codebase-memory-mcp "$3/node_modules/"\n'
+    )
+    (tools / "node").write_text(
+        '#!/bin/sh\nbin="$(cd "$(dirname "$1")" && pwd -P)/bin"\nmkdir -p "$bin"\n'
+        'printf \'#!/bin/sh\\necho "$(cd "$(dirname "$0")" && pwd -P) $*"\\n\''
+        ' > "$bin/codebase-memory-mcp"\nchmod +x "$bin/codebase-memory-mcp"\n'
+        "echo codebase-memory-mcp 0.11.0\n"
+    )
+    for tool in tools.iterdir():
+        tool.chmod(0o755)
+    data = tmp_path / "data"
+    env = {
+        **os.environ,
+        "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}",
+        "XDG_DATA_HOME": str(data),
+    }
+    launcher = (SOURCE / ".hooks/codebase-memory-mcp.py").read_text()
+    repositories = [tmp_path / "one", tmp_path / "two"]
+    for root in repositories:
+        init(root)
+        (root / ".hooks").mkdir()
+        (root / ".hooks/codebase-memory-mcp.py").write_text(launcher)
+        (root / "src").mkdir()
+    command = [CODEBASE_MEMORY["command"], *CODEBASE_MEMORY["args"]]
+    runs = [
+        subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE, text=True)
+        for cwd in (repositories[0] / "src", repositories[1])
+    ]
+    binary = data / "hard-eng/codebase-memory-mcp/0.11.0/node_modules/.pnpm/pkg"
+    expected = f"{binary.resolve()}/node_modules/codebase-memory-mcp/bin \n"
+    assert [run.communicate()[0] for run in runs] == [expected, expected]
+    installs = calls.read_text()
+    again = subprocess.run(
+        command,
+        cwd=repositories[0],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert again.stdout == expected
+    assert calls.read_text() == installs
+    installed = data / "hard-eng/codebase-memory-mcp"
+    assert {path.name for path in installed.iterdir()} == {"0.11.0", "0.11.0.log"}
 
 
 def test_installer_skips_default_servers_already_run_under_another_name(

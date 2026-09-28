@@ -7,6 +7,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from conftest import CODEBASE_MEMORY
 from fallow_report import Report, validate_scanner_command
 from gate_config import (
     Gate,
@@ -652,16 +653,16 @@ def test_install_preserves_project_and_repeats(
     assert (tmp_path / ".git/hooks/pre-push").stat().st_mode & 0o111
     for name in (".hooks/reports.py", ".hooks/plans.py", ".hooks/dependency_graph.py"):
         assert (tmp_path / name).is_file()
-    assert json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"][
-        "codebase-memory-mcp"
-    ] == {"command": "pnpm", "args": ["dlx", "codebase-memory-mcp@latest"]}
-    codex = tomllib.loads((tmp_path / ".codex/config.toml").read_text())
-    for server in ("context-mode", "codebase-memory-mcp"):
-        assert codex["mcp_servers"][server] == {
-            "command": "pnpm",
-            "args": ["dlx", f"{server}@latest"],
-            "startup_timeout_sec": 60,
-        }
+    assert (tmp_path / ".hooks/codebase-memory-mcp.py").is_file()
+    servers = json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"]
+    assert servers["codebase-memory-mcp"] == CODEBASE_MEMORY
+    codex = tomllib.loads((tmp_path / ".codex/config.toml").read_text())["mcp_servers"]
+    dlx = {"command": "pnpm", "args": ["dlx", "context-mode@latest"]}
+    for server, settings in (
+        ("codebase-memory-mcp", CODEBASE_MEMORY),
+        ("context-mode", dlx),
+    ):
+        assert codex[server] == {**settings, "startup_timeout_sec": 60}
     settings = json.loads((tmp_path / ".claude/settings.json").read_text())
     assert "codebase-memory-mcp" in settings["enabledMcpjsonServers"]
     workflow = (tmp_path / ".github/workflows/hard-eng.yml").read_text()
