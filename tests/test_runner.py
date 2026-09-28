@@ -93,6 +93,10 @@ def test_removing_package_baseline_fails_before_execution(
     package["checks"] = [
         check for check in package["checks"] if check.get("role") != role
     ]
+    if language == "dart" and role == "boundaries":
+        for check in package["checks"]:
+            if check.get("role") == "dead-code-duplicates":
+                check["command"].append("--no-boundary-violations")
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
     with pytest.raises(ValueError, match=role):
         runner.check()
@@ -255,7 +259,9 @@ def test_each_gate_may_use_the_configured_budget(
     monkeypatch.setenv("CI", ci)
     timeouts: list[float] = []
 
-    def run_gate(_group: object, _gate: object, timeout: float, _lock: object) -> bool:
+    def run_gate(
+        _group: object, _gate: object, timeout: float, _lock: object, _groups: object
+    ) -> bool:
         timeouts.append(timeout)
         return False
 
@@ -265,7 +271,7 @@ def test_each_gate_may_use_the_configured_budget(
 
 
 def test_command_failure_survives_later_pass(
-    runner: ModuleType, tmp_path: Path
+    runner: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     configure(
         tmp_path, [gate("fails", "raise SystemExit(2)"), gate("passes", "print('ok')")]
@@ -273,6 +279,9 @@ def test_command_failure_survives_later_pass(
     assert runner.check() == 1
     configure(tmp_path, [gate("passes", "print('ok')")])
     assert runner.check() == 0
+    output = capsys.readouterr().out
+    assert "FAIL fails (exit 2; elapsed " in output
+    assert "PASS passes (exit 0; elapsed " in output
 
 
 def test_dart_test_failure_surfaces_machine_context(
@@ -306,7 +315,9 @@ def test_dart_test_failure_surfaces_machine_context(
     assert "Dart test failure: rejects malformed input: Expected valid input" in output
 
 
-def test_missing_command_and_timeout_fail(runner: ModuleType) -> None:
+def test_missing_command_and_timeout_fail(
+    runner: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
     missing = {"name": "missing", "command": ["/nonexistent/hard-eng-check"]}
     assert runner.run_gate({"path": "."}, missing, 1, threading.Lock()) is True
     assert (
@@ -318,6 +329,39 @@ def test_missing_command_and_timeout_fail(runner: ModuleType) -> None:
         )
         is True
     )
+    assert capsys.readouterr().out.count("; elapsed ") == 2
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        "schema.json",
+        [""],
+        ["."],
+        ["/schema"],
+        ["../schema"],
+        ["a/../b"],
+        ["a/*"],
+        ["a/[b]"],
+        ["a\\b"],
+        [4],
+    ],
+)
+def test_impact_inputs_reject_ambiguous_paths(
+    runner: ModuleType, tmp_path: Path, inputs: object
+) -> None:
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [{"path": ".", "checks": [], "impact_inputs": inputs}],
+                "shared": [gate("unreached", "raise SystemExit(8)")],
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="impact_inputs"):
+        runner.check()
+    with pytest.raises(ValueError, match="impact_inputs"):
+        runner.impact("HEAD")
 
 
 @pytest.mark.parametrize("response", ["raise SystemExit(2)", "print('{}')"])
@@ -581,13 +625,14 @@ def test_wrapped_actionlint_and_decimate_use_latest_packages(
     }
     tool_setup.provision_tools(tmp_path, [group], 30)
     assert "aqua:rhysd/actionlint@latest" in commands[0]
-    assert 'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest' in commands[2]
-    assert "MISE_NPM_PACKAGE_MANAGER=npm" in commands[2]
-    assert "MISE_NPM_PACKAGE_MANAGER=npm" not in commands[0]
-    assert len(commands) == 4
+    assert 'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest' in commands[0]
+    assert len(commands) == 2
+    assert "install" in commands[0] and "--json" in commands[1]
+    assert all("MISE_NPM_PACKAGE_MANAGER=pnpm" in command for command in commands)
     for environment in environments:
         assert isinstance(environment, dict)
-        assert "NPM_CONFIG_CACHE" in environment
+        assert "PNPM_CONFIG_STORE_DIR" in environment
+        assert "PNPM_CONFIG_CACHE_DIR" in environment
 
 
 @pytest.mark.parametrize(
@@ -826,7 +871,7 @@ def test_check_output_survives_a_non_blocking_pipe(
     with os.fdopen(read, "rb") as output:
         lines = output.read().decode().splitlines()
     assert check.wait() == 0
-    assert "PASS noisy (exit 0)" in lines
+    assert any(line.startswith("PASS noisy (exit 0; elapsed ") for line in lines)
 
 
 def test_second_check_waits_for_the_first_in_the_same_checkout(

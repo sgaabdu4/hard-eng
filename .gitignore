@@ -7,9 +7,7 @@ __pycache__/
 .import_linter_cache/
 .coverage*
 coverage/
-.codebase-memory/
 .hard-eng/
-.context-mode/
 node_modules/
 dist/
 build/

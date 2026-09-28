@@ -115,20 +115,11 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
     selected = sorted(
         packages[name] + "@latest" for name in executables & packages.keys()
     )
-    for use_npm in (False, True):
-        batch = [
-            item
-            for item in selected
-            if item.startswith("npm:dart-decimate[") == use_npm
-        ]
-        if not batch:
-            continue
-        provision_batch(root, batch, timeout, use_npm=use_npm)
+    if selected:
+        provision_batch(root, selected, timeout)
 
 
-def provision_batch(
-    root: Path, batch: list[str], timeout: float, *, use_npm: bool
-) -> None:
+def provision_batch(root: Path, batch: list[str], timeout: float) -> None:
     storage = (
         Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hard-eng-tools"
     )
@@ -139,7 +130,6 @@ def provision_batch(
         "MISE_STATE_DIR": "mise/state",
         "PNPM_CONFIG_STORE_DIR": "pnpm/store",
         "PNPM_CONFIG_CACHE_DIR": "pnpm/cache",
-        "NPM_CONFIG_CACHE": "npm/cache",
     }.items():
         environment.setdefault(name, str(storage / directory))
     data_directory = Path(environment["MISE_DATA_DIR"])
@@ -155,7 +145,7 @@ def provision_batch(
         )
         command = [
             "env",
-            *(["MISE_NPM_PACKAGE_MANAGER=npm"] if use_npm else []),
+            "MISE_NPM_PACKAGE_MANAGER=pnpm",
             "MISE_PREFER_OFFLINE=false",
             "MISE_USE_VERSIONS_HOST=false",
             "MISE_MINIMUM_RELEASE_AGE=0s",
