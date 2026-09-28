@@ -53,7 +53,7 @@ Evidence: `uv run --locked pytest -q tests/test_mcp_setup.py tests/test_updates.
 
 - [x] Fresh setup writes the launcher command for Codebase Memory in all three files, with the 60 s Codex timeout.
 - [x] Setup replaces the earlier generated `pnpm dlx` Codebase Memory entries (with or without the Codex timeout) and leaves custom entries unchanged; a rerun changes nothing.
-- [x] Launches from two repositories run the same installed binary, install only when it is missing, and keep stdout for the MCP protocol.
+- [x] Launches from two repositories, including from a subdirectory, run the same installed binary, install only when it is missing, and keep stdout for the MCP protocol.
 - [x] Real MCP clients started from two repositories against one isolated daemon both initialize; a client from a different install path does not.
 - [x] The exact candidate passes the Complete check.
 

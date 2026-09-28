@@ -3,16 +3,13 @@
 import json
 import os
 import subprocess
-import sys
 import tomllib
 from pathlib import Path
 from types import ModuleType
 
 import pytest
-from conftest import SOURCE
+from conftest import CODEBASE_MEMORY, SOURCE, init
 from test_setup import repository
-
-CODEBASE_MEMORY = {"command": "python3", "args": [".hooks/codebase-memory-mcp.py"]}
 
 
 def executable_launcher(root: Path, relative: str) -> str:
@@ -645,15 +642,17 @@ def test_codebase_memory_launcher_runs_one_shared_install(tmp_path: Path) -> Non
     launcher = (SOURCE / ".hooks/codebase-memory-mcp.py").read_text()
     repositories = [tmp_path / "one", tmp_path / "two"]
     for root in repositories:
-        (root / ".hooks").mkdir(parents=True)
+        init(root)
+        (root / ".hooks").mkdir()
         (root / ".hooks/codebase-memory-mcp.py").write_text(launcher)
-    command = [sys.executable, ".hooks/codebase-memory-mcp.py", "serve"]
+        (root / "src").mkdir()
+    command = [CODEBASE_MEMORY["command"], *CODEBASE_MEMORY["args"]]
     runs = [
-        subprocess.Popen(command, cwd=root, env=env, stdout=subprocess.PIPE, text=True)
-        for root in repositories
+        subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE, text=True)
+        for cwd in (repositories[0] / "src", repositories[1])
     ]
     binary = data / "hard-eng/codebase-memory-mcp/0.11.0/node_modules/.pnpm/pkg"
-    expected = f"{binary.resolve()}/node_modules/codebase-memory-mcp/bin serve\n"
+    expected = f"{binary.resolve()}/node_modules/codebase-memory-mcp/bin \n"
     assert [run.communicate()[0] for run in runs] == [expected, expected]
     installs = calls.read_text()
     again = subprocess.run(

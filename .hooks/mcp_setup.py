@@ -13,7 +13,9 @@ from gate_config import JsonObject, json_file
 APPWRITE_CLOUD_MCP_URL = "https://mcp.appwrite.io/"
 DEFAULT_SERVERS = ("context-mode", "codebase-memory-mcp")
 CODEX_STARTUP_TIMEOUT_SEC = 60
-CODEBASE_MEMORY_LAUNCHER = ".hooks/codebase-memory-mcp.py"
+CODEBASE_MEMORY_LAUNCHER = (
+    'exec python3 "$(git rev-parse --show-toplevel)/.hooks/codebase-memory-mcp.py"'
+)
 
 
 def repository_launcher(root: Path, command: object) -> str | None:
@@ -264,7 +266,7 @@ def runs_package(server: object, package: str) -> bool:
     args = server.get("args")
     tokens = [server.get("command"), *(args if isinstance(args, list) else [])]
     return any(
-        isinstance(token, str) and Path(token).stem.split("@")[0] == package
+        isinstance(token, str) and Path(token).name.split("@")[0] == package
         for token in tokens
     )
 
@@ -281,7 +283,7 @@ def dlx_server(plugin: str) -> JsonObject:
 
 def default_server(plugin: str) -> JsonObject:
     if plugin == "codebase-memory-mcp":
-        return {"command": "python3", "args": [CODEBASE_MEMORY_LAUNCHER]}
+        return {"command": "sh", "args": ["-c", CODEBASE_MEMORY_LAUNCHER]}
     return dlx_server(plugin)
 
 

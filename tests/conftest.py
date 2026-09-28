@@ -18,6 +18,13 @@ if TYPE_CHECKING:
 
 SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE / ".hooks"))
+CODEBASE_MEMORY = {
+    "command": "sh",
+    "args": [
+        "-c",
+        'exec python3 "$(git rev-parse --show-toplevel)/.hooks/codebase-memory-mcp.py"',
+    ],
+}
 
 import update
 
