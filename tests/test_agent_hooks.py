@@ -24,6 +24,8 @@ from shipping import ShippingPolicy
         "none",
         "symlink",
         "nested-import",
+        "plain-import",
+        "duplicate-import",
         "user-global",
         "dependencies",
     ],
@@ -47,10 +49,16 @@ def test_native_instruction_paths_preserve_project_rules(
     if existing == "symlink":
         (tmp_path / "AGENTS.md").write_text("# Existing rules\nKeep these.\n")
         (tmp_path / "CLAUDE.md").symlink_to("AGENTS.md")
-    elif existing == "nested-import":
-        (tmp_path / "apps/web").mkdir(parents=True)
-        (tmp_path / "apps/web/AGENTS.md").write_text("Web rules\n")
-        (tmp_path / "apps/web/CLAUDE.md").write_text(agent_hooks.CLAUDE_IMPORT)
+    elif existing in {"nested-import", "plain-import", "duplicate-import"}:
+        directory = tmp_path / ("apps/web" if existing == "nested-import" else ".")
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "AGENTS.md").write_text("Existing project rules\n")
+        imports = {
+            "nested-import": agent_hooks.CLAUDE_IMPORT,
+            "plain-import": "@AGENTS.md\n",
+            "duplicate-import": agent_hooks.CLAUDE_IMPORT + "@AGENTS.md\n",
+        }
+        (directory / "CLAUDE.md").write_text(imports[existing])
     elif existing == "dependencies":
         (tmp_path / ".gitignore").write_text("node_modules/\n.venv/\n.hard-eng/\n")
         for name in ("node_modules/fixture", ".venv/fixture", ".hard-eng/fixture"):
@@ -63,8 +71,13 @@ def test_native_instruction_paths_preserve_project_rules(
     before = {name: (tmp_path / name).read_bytes() for name in names}
     installer.install(tmp_path)
     assert before == {name: (tmp_path / name).read_bytes() for name in names}
-    if existing == "symlink":
-        assert before["AGENTS.md"].endswith(b"# Existing rules\nKeep these.\n")
+    expected = {
+        "symlink": b"# Existing rules\nKeep these.\n",
+        "nested-import": b"Existing project rules\n",
+        "plain-import": b"Existing project rules\n",
+        "duplicate-import": b"Existing project rules\n",
+    }.get(existing, b"")
+    assert before[names[-1]].endswith(expected)
     assert not (tmp_path / "CLAUDE.md").exists()
     assert not (tmp_path / "CLAUDE.md").is_symlink()
     assert not (tmp_path / "apps/web/CLAUDE.md").exists()
