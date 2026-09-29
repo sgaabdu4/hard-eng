@@ -589,123 +589,35 @@ def install_planned_hook(root: Path, hook: tuple[str, str]) -> bool:
     return True
 
 
-def verify_candidate(
-    root: Path,
-    source: Path,
-    changes: dict[str, str | None],
-    links: dict[str, str | None],
-    candidate: Path,
-) -> None:
-    # Both callers already verified upstream CI for this exact source revision.
-    owner = f"hard-eng-update {os.getpid()}"
-    subprocess.run(
-        ["git", "worktree", "add", "-q", "--detach", "--lock", "--reason", owner]
-        + [str(candidate), "HEAD"],
-        cwd=root,
-        check=True,
-        timeout=120,
-    )
-    try:
-        if (candidate / ".gitmodules").is_file():
-            subprocess.run(
-                ["git", "submodule", "update", "--init", "--recursive", "--depth=1"],
-                cwd=candidate,
-                check=True,
-                timeout=600,
-            )
-        write_links(candidate, links)
-        write_changes(candidate, changes)
-        names = sorted({*changes, *links})
-        if names:
-            subprocess.run(
-                ["git", "add", "--force", "--", *names],
-                cwd=candidate,
-                check=True,
-            )
-        subprocess.run(
-            ["git", "diff", "--cached", "--check"], cwd=candidate, check=True
-        )
-        only_scaffold = set(changes) <= scaffold_files(source) | scaffold_files(
-            root
-        ) | {
-            "AGENTS.md",
-            "CLAUDE.md",
-            "AGENTS.override.md",
-            SOURCE_FILE,
-            ".husky/pre-push",
-        }
-        command = (
-            [
-                sys.executable,
-                "-I",
-                "-c",
-                """import compileall, sys
-from pathlib import Path
+GATE_CHECK = """import sys
 sys.path.insert(0, sys.argv[1])
 from gate_config import parse_config
 from gitleaks_scan import validate_current_files_gate
-config = parse_config(Path('hard-eng.gates.json').read_text())
+config = parse_config(sys.stdin.read())
 gates = config['shared'] + [gate for group in config['packages'] for gate in group['checks']]
 for gate in gates:
     validate_current_files_gate(gate.get('role'), gate['command'])
-raise SystemExit(not compileall.compile_dir('.hooks', quiet=1))
-""",
-                str(source / ".hooks"),
-            ]
-            if only_scaffold
-            else [
-                "uv",
-                "run",
-                "--project",
-                str(source),
-                "--locked",
-                "--no-dev",
-                "--python",
-                sys.executable,
-                "python",
-                "-I",
-                "-c",
-                (
-                    "import runpy, sys; "
-                    "sys.path.insert(0, '.hooks'); "
-                    "raise SystemExit(runpy.run_path('.hooks/hard-eng.py')['check']("
-                    "base=sys.argv[1], verify_plan=False))"
-                ),
-            ]
-        )
-        if not only_scaffold:
-            from ship_actions import remote_base
-            from shipping import load_policy
+"""
 
-            policy = load_policy(candidate, required=False)
-            # An update candidate is verification input, not a completed task.
-            if (
-                "origin"
-                in subprocess.check_output(
-                    ["git", "remote"], cwd=candidate, text=True
-                ).splitlines()
-            ):
-                base = remote_base(candidate, policy["base"] if policy else None)
-                found = subprocess.run(
-                    ["git", "merge-base", base or "HEAD", "HEAD"],
-                    cwd=candidate,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                command.append(found.stdout.strip() or base or "HEAD")
-            else:
-                command.append("HEAD")
-        subprocess.run(
-            command, cwd=candidate, stdout=sys.stderr, check=True, timeout=3500
-        )
-    finally:
-        subprocess.run(
-            ["git", "worktree", "remove", "--force", "--force", str(candidate)],
-            cwd=root,
-            check=True,
-            timeout=120,
-        )
+
+def validate_gates(root: Path, source: Path, changes: dict[str, str | None]) -> None:
+    """Upstream CI proved the hooks; pre-push and CI run the project's gates on the commit."""
+    name = "hard-eng.gates.json"
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", GATE_CHECK, str(source / ".hooks")],
+        input=changes.get(name) or (root / name).read_text(),
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    if result.returncode:
+        sys.stderr.write(result.stderr)
+        reason = (result.stderr.strip().splitlines() or [f"exit {result.returncode}"])[
+            -1
+        ]
+        raise ValueError(f"the updated hooks reject {name}: {reason}")
 
 
 def repair_current_hook(root: Path, previous: str) -> str:
@@ -837,7 +749,7 @@ def update(root: Path, repair: bool = False) -> str:
         refuse_local_state(root, names)
         local_settings(root)
         before = snapshot(root, changes)
-        verify_candidate(root, source, changes, links, Path(temporary) / "candidate")
+        validate_gates(root, source, changes)
         if snapshot(root, changes) != before:
             raise ValueError(
                 "Files changed during verification; the update was not applied"
@@ -948,10 +860,10 @@ def check_scaffold_update(root: Path, base: str) -> bool:
         if not preserved_instructions(root, base, names):
             return False
         print(
-            "Scaffold-only update: source CI verified; checking installed Python hooks.",
+            "Scaffold-only update: source CI verified; checking the gate configuration.",
             flush=True,
         )
-        verify_candidate(root, source, {}, {}, Path(temporary) / "candidate")
+        validate_gates(root, source, {})
     return True
 
 

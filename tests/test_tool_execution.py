@@ -12,8 +12,7 @@ from types import ModuleType
 
 import pytest
 import tool_setup
-import update
-from conftest import SOURCE, commit, git, use_installed_mise
+from conftest import SOURCE, use_installed_mise
 from gate_config import Gate, Group, validate_gate, validate_package_services
 from project_setup import import_configuration
 
@@ -683,96 +682,6 @@ def test_installed_check_provisions_yaml_and_keeps_real_gate_failures(
     assert "No module named 'yaml'" not in result.stderr
     assert "missing" in result.stderr.lower() and "shared" in result.stderr.lower()
     assert subprocess.run(command, capture_output=True, check=False).returncode != 0
-
-
-def test_candidate_provisions_yaml_without_host_site_packages(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target = tmp_path / "source", tmp_path / "target"
-    original = Path(__file__).resolve().parents[1]
-    (source / ".agents/skills").mkdir(parents=True)
-    git(source, "init", "-q")
-    (target / ".agents/skills").mkdir(parents=True)
-    for name in ("pyproject.toml", "uv.lock"):
-        shutil.copyfile(original / name, source / name)
-    shutil.copytree(original / ".hooks", target / ".hooks")
-    (target / ".hooks/hard-eng.py").write_text(
-        "from pathlib import Path\n"
-        "from project_setup import workspace_members\n"
-        "def check(base, verify_plan):\n"
-        "    assert base and not verify_plan\n"
-        "    assert workspace_members(Path.cwd(), 'javascript') == ['apps/*']\n"
-        "    return 0\n"
-    )
-    (target / "pnpm-workspace.yaml").write_text("packages: ['apps/*']\n")
-    (target / "hard-eng.gates.json").write_text(json.dumps({"packages": []}))
-    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=target, check=True)
-    subprocess.run(["git", "add", "."], cwd=target, check=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=test@example.invalid",
-            "commit",
-            "-qm",
-            "synthetic workspace",
-        ],
-        cwd=target,
-        check=True,
-    )
-    remote = tmp_path / "remote.git"
-    subprocess.run(["git", "clone", "--bare", str(target), str(remote)], check=True)
-    subprocess.run(
-        ["git", "remote", "add", "origin", str(remote)], cwd=target, check=True
-    )
-    environment = tmp_path / "empty-python"
-    subprocess.run(
-        ["uv", "venv", "--python", sys.executable, str(environment)], check=True
-    )
-    python = str(environment / "bin/python")
-    probe = subprocess.run(
-        [python, "-I", "-c", "import yaml"], capture_output=True, check=False
-    )
-    assert probe.returncode != 0 and b"No module named 'yaml'" in probe.stderr
-    monkeypatch.setattr(update.sys, "executable", python)
-    update.verify_candidate(
-        target, source, {"project.txt": "candidate"}, {}, tmp_path / "candidate"
-    )
-    assert not (target / "project.txt").exists()
-    assert (source / "uv.lock").read_bytes() == (original / "uv.lock").read_bytes()
-    assert (
-        subprocess.run(
-            [python, "-I", "-c", "import yaml"], capture_output=True, check=False
-        ).returncode
-        != 0
-    )
-
-
-def test_configuration_candidate_without_origin_uses_head(
-    release: tuple[Path, Path, str], capfd: pytest.CaptureFixture[str]
-) -> None:
-    source, target, _ = release
-    (target / "package.json").unlink()
-    commit(target, "application without task plan")
-    config = json.loads((target / "hard-eng.gates.json").read_text())
-    config["shared"][0]["command"] = [
-        "python3",
-        "-c",
-        "print('APPLICATION_SCOPE_CHECK')",
-    ]
-
-    update.verify_candidate(
-        target,
-        source,
-        {"hard-eng.gates.json": json.dumps(config)},
-        {},
-        target.parent / "candidate",
-    )
-
-    assert git(target, "remote") == ""
-    assert "APPLICATION_SCOPE_CHECK" in capfd.readouterr().err
 
 
 @pytest.mark.parametrize("exit_code", [0, 7])

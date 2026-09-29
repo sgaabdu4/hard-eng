@@ -50,16 +50,6 @@ jobs:
             echo "PNPM_CONFIG_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/pnpm/cache"
           } >> "$GITHUB_ENV"
           python3 .hooks/hard-eng.py impact --base "$BASE_SHA" >> "$GITHUB_OUTPUT" || echo docs_only=false >> "$GITHUB_OUTPUT"
-      - name: Cache native tool downloads
-        if: steps.impact.outputs.docs_only != 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ${{ runner.temp }}/hard-eng-tools/mise/data/installs
-            ${{ runner.temp }}/hard-eng-tools/mise-launcher
-            ${{ runner.temp }}/hard-eng-tools/pnpm/store
-          key: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-v2-${{ steps.impact.outputs.tools || 'all' }}-${{ env.EXTRA_SDK_TOOLS }}-${{ hashFiles('.github/workflows/hard-eng.yml', '.hooks/tool_setup.py', 'hard-eng.gates.json', '**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-v2-${{ steps.impact.outputs.tools || 'all' }}-${{ env.EXTRA_SDK_TOOLS }}-
       - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
         with:
           version: latest

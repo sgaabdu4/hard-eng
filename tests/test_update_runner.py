@@ -117,7 +117,7 @@ def test_unavailable_update_is_reported_without_a_worker(
     )
 
 
-def test_update_removes_only_candidates_whose_update_exited(
+def test_update_removes_only_candidates_whose_update_ended(
     installed: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     finished = subprocess.Popen(["true"])
@@ -127,6 +127,7 @@ def test_update_removes_only_candidates_whose_update_exited(
         "hard-eng-update-vanished": f"hard-eng-update {finished.pid}",
         "hard-eng-update-running": f"hard-eng-update {os.getpid()}",
         "hard-eng-update-legacy": None,
+        "hard-eng-update-abandoned": None,
         "hard-eng-scaffold-check-running": f"hard-eng-update {finished.pid}",
     }
     for name, owner in owners.items():
@@ -141,10 +142,16 @@ def test_update_removes_only_candidates_whose_update_exited(
             str(tmp_path / name / "candidate"),
         )
     shutil.rmtree(tmp_path / "hard-eng-update-vanished")
+    hours_ago = time.time() - 7 * 3600
+    os.utime(tmp_path / "hard-eng-update-abandoned", (hours_ago, hours_ago))
     monkeypatch.setattr(update, "update", Mock(return_value="No newer revision."))
     assert update_runner.locked_update(installed) == "No newer revision."
     listing = git(installed, "worktree", "list", "--porcelain")
-    for name in ("hard-eng-update-killed", "hard-eng-update-vanished"):
+    for name in (
+        "hard-eng-update-killed",
+        "hard-eng-update-vanished",
+        "hard-eng-update-abandoned",
+    ):
         assert name not in listing and not (tmp_path / name).exists()
     for name in ("running", "legacy"):
         assert f"hard-eng-update-{name}" in listing
