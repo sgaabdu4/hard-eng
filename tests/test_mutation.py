@@ -106,15 +106,13 @@ def test_text_only_python_mutants_are_not_reported(
 
 
 def test_mutmut_statuses_count_only_checked_mutants_of_changed_functions() -> None:
-    results = "\n".join(
-        [
-            "    shop.price.x_discount__mutmut_1: killed",
-            "    shop.price.x_discount__mutmut_2: survived",
-            "    shop.price.x_discount__mutmut_3: no tests",
-            "    shop.price.x_discount__mutmut_4: not checked",
-            "    shop.price.xǁBasketǁlabel__mutmut_1: survived",
-        ]
-    )
+    results = """\
+    shop.price.x_discount__mutmut_1: killed
+    shop.price.x_discount__mutmut_2: survived
+    shop.price.x_discount__mutmut_3: no tests
+    shop.price.x_discount__mutmut_4: not checked
+    shop.price.xǁBasketǁlabel__mutmut_1: survived
+"""
     assert mutation.mutmut_statuses(results, ["shop.price.x_discount__mutmut_*"]) == {
         "shop.price.x_discount__mutmut_1": "killed",
         "shop.price.x_discount__mutmut_2": "survived",
