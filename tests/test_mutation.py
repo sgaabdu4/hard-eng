@@ -1,11 +1,16 @@
 import json
+import os
 import shutil
+import signal
+import subprocess
+import sys
 import textwrap
+import time
 from pathlib import Path
 
 import mutation
 import pytest
-from conftest import commit, init
+from conftest import SOURCE, commit, init
 from gate_config import Group
 
 PRICE = """\
@@ -188,6 +193,32 @@ def test_mutation_report_never_fails_when_a_tool_errors_or_hits_the_limit(
     assert "could not run for shop: mutmut did not finish" in output
     assert "stopped at its 180s limit before shop finished" in output
     assert "mutation --base HEAD~1` for the full result" in output
+
+
+def test_interrupted_mutation_stops_the_tool_it_started(tmp_path: Path) -> None:
+    root, marker = tmp_path / "repo", tmp_path / "tool.pid"
+    project(root, ["pytest"])
+    stubborn = f"import os, pathlib, signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); pathlib.Path({str(marker)!r}).write_text(str(os.getpid())); time.sleep(60)"
+    script = f"""
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(SOURCE / ".hooks")!r})
+import mutation, ship_actions
+def adapter(directory, files, tests, deadline, work):
+    mutation.run([sys.executable, "-c", {stubborn!r}], directory, None, work / "log")
+mutation.ADAPTERS["python"] = adapter
+production = lambda directory, group: set((directory / "src").rglob("*.py"))
+ship_actions.mutate(Path({str(root)!r}), "HEAD~1", None, True, production)
+"""
+    runner = subprocess.Popen([sys.executable, "-c", script], cwd=root)
+    deadline = time.monotonic() + 30
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    tool = int(marker.read_text())
+    runner.send_signal(signal.SIGTERM)
+    assert runner.wait(timeout=30) != 0
+    with pytest.raises(ProcessLookupError):
+        os.kill(tool, 0)
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="mutmut runs through uv")

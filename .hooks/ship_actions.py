@@ -120,6 +120,8 @@ def mutate(
     production: Callable[[Path, Group], set[Path]],
 ) -> int:
     """Mutate committed changes in a snapshot, since Dart mutates source in place."""
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGHUP, interrupted)
     if in_place:
         from mutation import report
 
