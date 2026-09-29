@@ -198,10 +198,16 @@ def test_invalid_completion(
 @pytest.mark.parametrize(
     "blockers,resolved",
     [
+        ("None", True),
+        ("None.", True),
+        ("None;", True),
+        ("None:", True),
         ("None. The scope question was settled in chat.", True),
         ("None — the retry question was answered", True),
         ("None of the questions are answered", False),
         ("None yet", False),
+        ("None blah", False),
+        ("choose the affected policy", False),
     ],
 )
 def test_blockers_none_may_carry_a_note(

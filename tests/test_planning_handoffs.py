@@ -63,6 +63,17 @@ def test_draft_handoff_requires_the_declared_boundary(
         validate_plan(path)
 
 
+def test_draft_and_complete_agree_that_none_period_has_no_blockers(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(draft_plan(completed_plan, "Clarification", "None."))
+    with pytest.raises(ValueError, match="Clarification needs concrete Blockers"):
+        validate_plan(path)
+    path.write_text(completed_plan.replace("Blockers: None", "Blockers: None."))
+    assert validate_plan(path) == "Complete"
+
+
 def test_draft_clarification_can_pause_without_ux(
     tmp_path: Path, completed_plan: str
 ) -> None:
