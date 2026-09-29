@@ -578,7 +578,7 @@ def add_workflow_checks(config: GateConfig) -> None:
 def configure_shellcheck(
     root: Path, config: GateConfig, retired: tuple[str, ...] = ()
 ) -> None:
-    from gate_config import repository_files
+    from gate_config import repository_files, unlisted_shell_scripts
     from project_setup import is_shell_script
 
     existing = [
@@ -594,7 +594,10 @@ def configure_shellcheck(
         ):
             config["shared"].remove(gate)
         gate["command"] = command
-    if any(gate in config["shared"] for gate in existing):
+    kept = [gate for gate in existing if gate in config["shared"]]
+    if kept:
+        unlisted = unlisted_shell_scripts(root, repository_files(root), kept)
+        kept[0]["command"].extend(name for name in unlisted if name not in retired)
         return
     scripts = [
         str(path.relative_to(root))

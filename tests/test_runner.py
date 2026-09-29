@@ -142,6 +142,19 @@ def test_new_repository_inputs_require_applicable_gates(
     path.write_text("fixture\n")
     with pytest.raises(ValueError, match=role):
         load_groups(tmp_path)
+    if role == "shell":
+        gates = tmp_path / "hard-eng.gates.json"
+        config = json.loads(gates.read_text())
+        installer.configure_shellcheck(tmp_path, config)
+        gates.write_text(json.dumps(config))
+        load_groups(tmp_path)
+        (tmp_path / "scripts").mkdir()
+        (tmp_path / "scripts/added.sh").write_text("echo added\n")
+        with pytest.raises(ValueError, match="shellcheck omits scripts/added.sh"):
+            load_groups(tmp_path)
+        installer.configure_shellcheck(tmp_path, config)
+        gates.write_text(json.dumps(config))
+        load_groups(tmp_path)
 
 
 def test_omitting_package_or_language_cannot_remove_baseline(
