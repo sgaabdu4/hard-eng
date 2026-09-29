@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager, suppress
@@ -21,6 +22,10 @@ LOG_FILE = ".hard-eng/update.log"
 FAILURE_FILE = ".hard-eng/update-failure.json"
 LOCAL_INPUTS = (".claude/settings.local.json", "CLAUDE.local.md")
 OWNER = re.compile(r"hard-eng-update (\d+)")
+TEMPORARY = re.compile(
+    r"hard-eng-(?:update|push|gate|gitleaks|dart-parser|scaffold-check)-[a-z0-9_]{8}"
+)
+WORKTREE = re.compile(r"hard-eng-(?:update-.+/candidate|push-.+/project)")
 
 
 class UpdateRunning(ValueError):
@@ -446,13 +451,27 @@ def alive(process: int) -> bool:
 
 
 def abandoned(path: Path, owner: re.Match[str] | None) -> bool:
-    """Updaters before the lock ran under a one-hour hook, so an unlocked candidate hours old is abandoned."""
+    """Updaters before the lock ran under a one-hour hook, and a push's checks end within a day."""
     if owner is not None:
         return not alive(int(owner[1]))
+    hours = 6 if path.name == "candidate" else 24
     try:
-        return time.time() - path.parent.stat().st_mtime > 6 * 3600
+        return time.time() - path.parent.stat().st_mtime > hours * 3600
     except FileNotFoundError:
         return False
+
+
+def sweep_temporary() -> None:
+    """Directories a killed Hard Eng process left behind; none of its runs lasts a day."""
+    for path in Path(tempfile.gettempdir()).iterdir():
+        with suppress(OSError):
+            if (
+                TEMPORARY.fullmatch(path.name)
+                and path.is_dir()
+                and not path.is_symlink()
+                and time.time() - path.stat().st_mtime > 24 * 3600
+            ):
+                shutil.rmtree(path)
 
 
 def remove_stale_candidates(root: Path) -> None:
@@ -467,10 +486,8 @@ def remove_stale_candidates(root: Path) -> None:
         }
         path = Path(fields.get("worktree", ""))
         owner = OWNER.fullmatch(fields.get("locked", ""))
-        if (
-            path.name != "candidate"
-            or not path.parent.name.startswith("hard-eng-update-")
-            or not abandoned(path, owner)
+        if not WORKTREE.fullmatch(f"{path.parent.name}/{path.name}") or not abandoned(
+            path, owner
         ):
             continue
         if owner is not None and not path.exists():
@@ -484,6 +501,7 @@ def remove_stale_candidates(root: Path) -> None:
             timeout=120,
         ).returncode:
             shutil.rmtree(path.parent, ignore_errors=True)
+    sweep_temporary()
     subprocess.run(["git", "worktree", "prune"], cwd=root, check=True, timeout=60)
 
 

@@ -7,6 +7,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
@@ -156,6 +157,39 @@ def test_update_removes_only_candidates_whose_update_ended(
     for name in ("running", "legacy"):
         assert f"hard-eng-update-{name}" in listing
     assert "hard-eng-scaffold-check-running" in listing
+
+
+def test_update_sweeps_day_old_hard_eng_temporary_directories(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    temporary = Path(tempfile.gettempdir())
+    day_ago = time.time() - 25 * 3600
+    for name in ("hard-eng-push-left0001", "hard-eng-push-fresh001"):
+        git(
+            installed,
+            "worktree",
+            "add",
+            "-q",
+            "--detach",
+            str(temporary / name / "project"),
+        )
+    names = ("hard-eng-gate-left0002", "hard-eng-gate-fresh002", "hard-eng-notes")
+    for name in names:
+        (temporary / name).mkdir()
+    for name in ("hard-eng-push-left0001", "hard-eng-gate-left0002", "hard-eng-notes"):
+        os.utime(temporary / name, (day_ago, day_ago))
+    monkeypatch.setattr(update, "update", Mock(return_value="No newer revision."))
+    update_runner.locked_update(installed)
+    listing = git(installed, "worktree", "list", "--porcelain")
+    assert "hard-eng-push-left0001" not in listing
+    assert "hard-eng-push-fresh001" in listing
+    assert {path.name for path in temporary.iterdir()} >= {
+        "hard-eng-push-fresh001",
+        "hard-eng-gate-fresh002",
+        "hard-eng-notes",
+    }
+    assert not (temporary / "hard-eng-gate-left0002").exists()
+    assert not (temporary / "hard-eng-push-left0001").exists()
 
 
 @pytest.mark.parametrize(

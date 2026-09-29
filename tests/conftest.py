@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -31,6 +32,13 @@ CODEBASE_MEMORY = {
 }
 
 import update
+
+
+@pytest.fixture(autouse=True, scope="session")
+def isolated_temporary(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Update cleanup sweeps the temporary directory; keep it off this machine's."""
+    os.environ["TMPDIR"] = str(tmp_path_factory.mktemp("tmp"))
+    tempfile.tempdir = None
 
 
 def load_module(name: str, path: Path) -> ModuleType:
