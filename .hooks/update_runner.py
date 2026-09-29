@@ -9,7 +9,7 @@ import signal
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager, suppress
 from functools import partial
 from pathlib import Path
@@ -193,7 +193,7 @@ def unstage_own(
 
 
 @contextmanager
-def deferred_sigterm() -> Iterator[None]:
+def deferred_sigterm() -> Generator[None]:
     """Hold SIGTERM, whichever thread receives it, and keep it from child git commands until the block ends."""
     received: list[int] = []
     previous = signal.signal(
