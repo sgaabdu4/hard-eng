@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from operator import itemgetter
@@ -47,16 +48,33 @@ def github_token() -> str | None:
     return token or None
 
 
-def github_json(endpoint: str) -> object:
+def github_response(endpoint: str, headers: dict[str, str]) -> bytes:
     auth = {"Authorization": f"Bearer {token}"} if (token := github_token()) else {}
-    headers = {"Accept": "application/vnd.github+json", **auth}
     url = f"https://api.github.com/{endpoint}"
-    request = urllib.request.Request(url, headers=headers)
+    request = urllib.request.Request(url, headers={**headers, **auth})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
+            return response.read()
     except http.client.HTTPException as error:
         raise OSError(f"GitHub response for {endpoint} was cut short") from error
+
+
+def github_json(endpoint: str) -> object:
+    return json.loads(
+        github_response(endpoint, {"Accept": "application/vnd.github+json"})
+    )
+
+
+def upstream_moved(previous: str) -> bool:
+    """One 40-byte request instead of a 100-commit page; an authenticated 304 is free."""
+    headers = {"Accept": "application/vnd.github.sha", "If-None-Match": f'"{previous}"'}
+    try:
+        head = github_response(f"repos/{UPSTREAM}/commits/main", headers)
+    except urllib.error.HTTPError as error:
+        if error.code == 304:
+            return False
+        raise
+    return head.decode().strip() != previous
 
 
 def verified_revision(revision: str) -> bool:
@@ -82,6 +100,8 @@ def verified_revision(revision: str) -> bool:
 
 
 def latest_verified(previous: str) -> str | None:
+    if not upstream_moved(previous):
+        return None
     page = 1
     while True:
         commits = github_json(
