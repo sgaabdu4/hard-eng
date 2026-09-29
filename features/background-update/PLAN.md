@@ -46,7 +46,7 @@ Execution: One branch, one commit per issue.
 
 ## Risks + recovery
 
-The update now commits while the agent may be working; it keeps its existing guards (clean update paths before and after verification, `git commit --only`) and rolls back only its own writes. A `SIGKILL` of the supervisor leaves the update running; the update keeps the lock until it exits. A `SIGKILL` of the update is cleaned up by the supervisor. Recovery is reverting this branch.
+The update now commits while the agent may be working; it keeps its existing guards (clean update paths before and after verification, `git commit --only`) and rolls back only its own writes. Rollback rechecks each path after preparing its replacement, just before the rename; an edit landing between that check and the rename is a filesystem limit shared with `git checkout` and editors, since there is no portable compare-and-swap rename. A `SIGKILL` of the supervisor leaves the update running; the update keeps the lock until it exits. A `SIGKILL` of the update is cleaned up by the supervisor. Recovery is reverting this branch.
 
 ## ux_reference
 

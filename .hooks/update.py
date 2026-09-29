@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.request
+from collections.abc import Callable
 from operator import itemgetter
 from pathlib import Path
 
@@ -531,20 +532,27 @@ def write_changes(root: Path, changes: dict[str, str | None]) -> None:
             replace_file(target, content.encode())
 
 
-def replace_file(target: Path, content: bytes) -> None:
-    """Swap in the whole file, so an interrupted write never leaves it truncated."""
+def replace_file(
+    target: Path, content: bytes, ready: Callable[[], bool] = lambda: True
+) -> bool:
+    """Swap in the whole file if `ready` holds just before, so a write is never partial."""
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.is_symlink():
+        if not ready():
+            return False
         target.write_bytes(content)
-        return
+        return True
     pending = target.with_name(target.name + ".hard-eng-pending")
     try:
         pending.write_bytes(content)
         if target.exists():
             shutil.copymode(target, pending)
+        if not ready():
+            return False
         pending.replace(target)
     finally:
         pending.unlink(missing_ok=True)
+    return True
 
 
 def write_links(root: Path, links: dict[str, str | None]) -> None:

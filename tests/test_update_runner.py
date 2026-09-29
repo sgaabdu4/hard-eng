@@ -334,6 +334,25 @@ def test_rollback_keeps_an_edit_made_to_an_already_checked_path(
     assert (installed / "second.md").read_text() == "original\n"
 
 
+def test_rollback_keeps_an_edit_made_while_restoring_that_path(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = installed / "first.md"
+    target.write_text("original\n")
+    changes: dict[str, str | None] = {"first.md": "new\n"}
+    update.write_changes(installed, changes)
+    copy = shutil.copymode
+
+    def edit_while_preparing(source: Path, destination: Path) -> None:
+        target.write_text("agent edit\n")
+        copy(source, destination)
+
+    monkeypatch.setattr(shutil, "copymode", edit_while_preparing)
+    before: dict[str, bytes | None] = {"first.md": b"original\n"}
+    assert update_runner.roll_back(installed, changes, {}, before, {}) == ["first.md"]
+    assert target.read_text() == "agent edit\n"
+
+
 def test_interrupted_write_keeps_the_original_file(
     installed: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

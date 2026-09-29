@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 from contextlib import suppress
+from functools import partial
 from pathlib import Path
 from typing import TextIO
 
@@ -143,13 +144,11 @@ def roll_back(
 
     kept = []
     for name, content in before.items():
-        target = root / name
-        if not written(root, name, changes[name], False):
+        unchanged = partial(written, root, name, changes[name], False)
+        if content is None and unchanged():
+            (root / name).unlink(missing_ok=True)
+        elif content is None or not replace_file(root / name, content, unchanged):
             kept.append(name)
-        elif content is None:
-            target.unlink(missing_ok=True)
-        else:
-            replace_file(target, content)
     for name, target in before_links.items():
         if not written(root, name, links[name], True):
             kept.append(name)
