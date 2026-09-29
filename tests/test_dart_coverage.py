@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pytest
 from dart_coverage import erased_dart
-from reports import lcov_coverage, line_coverage
+from gate_config import Group
+from project_setup import (
+    BROWSER_TESTS,
+    FLUTTER_TESTS,
+    browser_test_coverage,
+    outside_lib_coverage,
+)
+from reports import completed_tests, lcov_coverage, line_coverage
 
 
 def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
@@ -249,3 +256,96 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
     assert native[library / "runtime.dart"] == (1, 1)
     assert native[library / "uncovered.dart"] == (0, 1)
     assert line_coverage(report, "dart-tests", tmp_path, expected) == (1, 2)
+
+
+def flutter_tests(sources: list[str], command: list[str]) -> Group:
+    package: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": sources,
+        "checks": [{"name": "tests", "role": "tests", "command": list(command)}],
+    }
+    outside_lib_coverage(package)
+    return package
+
+
+def test_only_generated_flutter_commands_gain_dart_vm_coverage(tmp_path: Path) -> None:
+    lib_only = flutter_tests(["lib"], FLUTTER_TESTS)
+    assert lib_only["checks"][0]["command"] == FLUTTER_TESTS
+    custom = ["sh", "-c", "custom"]
+    assert flutter_tests(["lib", "scripts"], custom)["checks"][0]["command"] == custom
+    for previous in (BROWSER_TESTS, FLUTTER_TESTS):
+        package = flutter_tests(["lib", "scripts"], previous)
+        command = package["checks"][0]["command"]
+        assert command[:2] == ["sh", "-c"] and "--report-on=scripts" in command[2]
+        outside_lib_coverage(package)
+        browser_test_coverage(tmp_path, package)
+        assert package["checks"][0]["command"] == command
+    browser = flutter_tests(["lib", "scripts"], BROWSER_TESTS)["checks"][0]["command"]
+    vm_step = browser[2].index("dart test --coverage=coverage/vm")
+    assert vm_step < browser[2].index("dart test --platform=chrome")
+
+
+def test_flutter_dart_outside_lib_is_measured_on_the_dart_vm(tmp_path: Path) -> None:
+    """Flutter's LCOV keeps only package: URIs, so scripts/ needs dart test's."""
+    for directory in ("lib", "scripts", "test/scripts", "coverage/vm", "bin"):
+        (tmp_path / directory).mkdir(parents=True)
+    (tmp_path / "lib/app.dart").write_text("int one() => 1;\n")
+    script = tmp_path / "scripts/check.dart"
+    script.write_text("int two() => 2;\n")
+    (tmp_path / "test/app_test.dart").write_text("void main() {}\n")
+    (tmp_path / "test/helper.dart").write_text("import '../scripts/check.dart';\n")
+    script_test = tmp_path / "test/scripts/check_test.dart"
+    script_test.write_text('import "../../scripts/check.dart" as check;\n')
+    (tmp_path / "coverage/vm/deleted_test.json").write_text("{}")
+    command = flutter_tests(["lib", "scripts"], FLUTTER_TESTS)["checks"][0]["command"]
+    passed = '{"type":"testDone","result":"success","hidden":false,"skipped":false}'
+    done = '{"type":"done","success":true}'
+    tools = tmp_path / "bin"
+    (tools / "flutter").write_text(
+        "#!/bin/sh\nmkdir -p coverage\n"
+        "printf 'SF:lib/app.dart\\nDA:1,1\\nend_of_record\\n' > coverage/lcov.info\n"
+        f"echo '{passed}'; echo '{done}'\n"
+    )
+    (tools / "dart").write_text(
+        '#!/bin/sh\nif [ "$1" = test ]; then echo "$@" > test.args;'
+        " ls coverage/vm > vm.before 2>&1; mkdir -p coverage/vm;"
+        f" echo '{passed}'; echo '{done}'; exit 0; fi\n"
+        'echo "$@" > format.args\n'
+        "printf 'SF:scripts/check.dart\\nDA:1,1\\nend_of_record\\n' > coverage/vm.lcov\n"
+    )
+    for tool in tools.iterdir():
+        tool.chmod(0o755)
+    report = tmp_path / "tests.jsonl"
+    environment = {"PATH": f"{tools}:/usr/bin:/bin"}
+    with report.open("w") as output:
+        subprocess.run(
+            command, cwd=tmp_path, stdout=output, env=environment, check=True
+        )
+    arguments = (tmp_path / "test.args").read_text().split()
+    assert "--coverage=coverage/vm" in arguments
+    assert [value for value in arguments if value.startswith("test/")] == [
+        "test/scripts/check_test.dart"
+    ]
+    assert "No such file" in (tmp_path / "vm.before").read_text()
+    assert "--report-on=scripts" in (tmp_path / "format.args").read_text().split()
+    assert completed_tests(report, "dart-tests") == 2
+    coverage = tmp_path / "coverage/lcov.info"
+    expected = {(tmp_path / "lib/app.dart").resolve(), script.resolve()}
+    assert line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected) == (2, 2)
+    script_test.unlink()
+    with report.open("w") as output:
+        result = subprocess.run(
+            command,
+            cwd=tmp_path,
+            stdout=output,
+            stderr=subprocess.PIPE,
+            env=environment,
+            text=True,
+            check=True,
+        )
+    assert "import them by relative path and import package:test/test.dart" in (
+        result.stderr
+    )
+    with pytest.raises(ValueError, match="omits production files: scripts/check.dart"):
+        line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected)
