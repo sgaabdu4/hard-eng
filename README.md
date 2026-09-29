@@ -217,7 +217,7 @@ Semgrep or configured native rules check code; OSV checks selected lockfiles or 
 
 - **SessionStart:** reports the last update result and starts or reports a background update.
 - **Stop:** distinguishes declared prerequisite clarification from approval handoffs. Approval needs baseline, UX and E2E planning evidence; changed implementation runs native checks. Planning-only or known unchanged sessions may avoid expensive checks. Repeated stop loops are bounded.
-- **Pre-push:** verifies pushed revisions in isolated worktrees.
+- **Pre-push:** verifies pushed revisions in isolated worktrees, then reports mutants on changed production lines that the tests miss. The mutation report never blocks the push and stops after 180 seconds; `python3 .hooks/hard-eng.py mutation --base <ref>` gives the full result.
 - **CI:** runs configured checks and fails its job on failure.
 
 Explicit Draft/Ready/Complete commands normally run native checks too. Verified scaffold-only updates have a dedicated path that avoids unrelated product checks; when an update shares a branch with other work, the checks follow that other work. Completion and shipping check scaffold freshness. Host hooks work only when supported, trusted, and invoked; registration alone proves nothing.

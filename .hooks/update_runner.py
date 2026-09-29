@@ -23,7 +23,7 @@ FAILURE_FILE = ".hard-eng/update-failure.json"
 LOCAL_INPUTS = (".claude/settings.local.json", "CLAUDE.local.md")
 OWNER = re.compile(r"hard-eng-update (\d+)")
 TEMPORARY = re.compile(
-    r"hard-eng-(?:update|push|gate|gitleaks|dart-parser|scaffold-check)-[a-z0-9_]{8}"
+    r"hard-eng-(?:update|push|gate|gitleaks|dart-parser|scaffold-check|mutation)-[a-z0-9_]{8}"
 )
 WORKTREE = re.compile(r"hard-eng-(?:update-.+/candidate|push-.+/project)")
 

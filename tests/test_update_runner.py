@@ -173,10 +173,10 @@ def test_update_sweeps_day_old_hard_eng_temporary_directories(
             "--detach",
             str(temporary / name / "project"),
         )
-    names = ("hard-eng-gate-left0002", "hard-eng-gate-fresh002", "hard-eng-notes")
-    for name in names:
+    left = ("hard-eng-gate-left0002", "hard-eng-mutation-left0003")
+    for name in (*left, "hard-eng-gate-fresh002", "hard-eng-notes"):
         (temporary / name).mkdir()
-    for name in ("hard-eng-push-left0001", "hard-eng-gate-left0002", "hard-eng-notes"):
+    for name in ("hard-eng-push-left0001", *left, "hard-eng-notes"):
         os.utime(temporary / name, (day_ago, day_ago))
     monkeypatch.setattr(update, "update", Mock(return_value="No newer revision."))
     update_runner.locked_update(installed)
@@ -188,7 +188,7 @@ def test_update_sweeps_day_old_hard_eng_temporary_directories(
         "hard-eng-gate-fresh002",
         "hard-eng-notes",
     }
-    assert not (temporary / "hard-eng-gate-left0002").exists()
+    assert not any((temporary / name).exists() for name in left)
     assert not (temporary / "hard-eng-push-left0001").exists()
 
 

@@ -573,7 +573,7 @@ def test_shipping_rejects_stale_install_before_remote_action(
         ("https://github.com/owner/repo.git", False),
     ],
 )
-def test_pre_push_over_budget_warns_and_keeps_the_passed_push(
+def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
     runner: ModuleType,
     shipping_policy: ShippingPolicy,
     monkeypatch: pytest.MonkeyPatch,
@@ -589,14 +589,24 @@ def test_pre_push_over_budget_warns_and_keeps_the_passed_push(
         "sys.stdin",
         StringIO(f"refs/heads/task {'1' * 40} refs/heads/task {'2' * 40}\n"),
     )
-    clock = iter([0.0, 2.0, 2.0])
+    clock = iter([0.0, 2.0, 182.0, 182.0, 182.0])
     monkeypatch.setattr(ship_actions.time, "monotonic", lambda: next(clock))
     monkeypatch.setattr(ship_actions, "git", Mock(return_value=origin))
     monkeypatch.setattr(
         runner.subprocess, "run", Mock(return_value=subprocess.CompletedProcess([], 0))
     )
-    monkeypatch.setattr(ship_actions, "run_check", Mock(return_value=0))
+    hard_eng = Mock(side_effect=[0, 1])
+    monkeypatch.setattr(ship_actions, "run_hard_eng", hard_eng)
     assert runner.pre_push() == 0
+    mutating = hard_eng.call_args_list[1].args[1]
+    assert mutating == [
+        "mutation",
+        "--base",
+        "2" * 40,
+        "--seconds",
+        "180",
+        "--in-place",
+    ]
     output = capsys.readouterr().out
     assert "checks passed in 2s, over the 1s pre_push_seconds budget" in output
     assert ("Switch to HTTPS" in output) is warned
