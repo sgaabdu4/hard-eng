@@ -192,18 +192,25 @@ def roll_back(
     links: dict[str, str | None],
     before: dict[str, bytes | None],
     before_links: dict[str, str | None],
+    applied: list[str],
 ) -> list[str]:
-    """Restore each path only while it still holds the updater's write, checked just before."""
+    """Restore each applied path only while it still holds the updater's write, checked just before."""
     from update import replace_file
 
     kept = []
-    for name, content in before.items():
+    for name in applied:
+        if name not in changes:
+            continue
+        content = before[name]
         unchanged = partial(written, root, name, changes[name], False)
         if content is None and unchanged():
             (root / name).unlink(missing_ok=True)
         elif content is None or not replace_file(root / name, content, unchanged):
             kept.append(name)
-    for name, target in before_links.items():
+    for name in applied:
+        if name not in links:
+            continue
+        target = before_links[name]
         if links[name] is None and not (root / name).is_symlink():
             prune(root / name)
         if not written(root, name, links[name], True):
@@ -393,13 +400,7 @@ def commit_update(
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         if rebase_sessions(root, head, message, changes):
             raise
-        kept = roll_back(
-            root,
-            changes,
-            links,
-            {name: expected[name] for name in applied if name in changes},
-            {name: before_links[name] for name in applied if name in links},
-        )
+        kept = roll_back(root, changes, links, expected, before_links, applied)
         if staging is not None:
             unstage_own(root, names, staging)
         if kept:

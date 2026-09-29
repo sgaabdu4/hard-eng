@@ -462,7 +462,7 @@ def test_rollback_keeps_an_edit_made_to_an_already_checked_path(
 
     monkeypatch.setattr(update_runner, "written", edit_first_while_checking_second)
     before: dict[str, bytes | None] = dict.fromkeys(changes, b"original\n")
-    assert update_runner.roll_back(installed, changes, {}, before, {}) == []
+    assert update_runner.roll_back(installed, changes, {}, before, {}, [*changes]) == []
     assert (installed / "first.md").read_text() == "agent edit\n"
     assert (installed / "second.md").read_text() == "original\n"
 
@@ -482,7 +482,9 @@ def test_rollback_keeps_an_edit_made_while_restoring_that_path(
 
     monkeypatch.setattr(shutil, "copymode", edit_while_preparing)
     before: dict[str, bytes | None] = {"first.md": b"original\n"}
-    assert update_runner.roll_back(installed, changes, {}, before, {}) == ["first.md"]
+    assert update_runner.roll_back(installed, changes, {}, before, {}, [*changes]) == [
+        "first.md"
+    ]
     assert target.read_text() == "agent edit\n"
 
 
@@ -575,12 +577,16 @@ def test_failed_update_restores_the_skill_folder_link(
     assert git(target, "status", "--porcelain") == ""
 
 
+@pytest.mark.parametrize("newer", [True, False], ids=["update", "repair"])
 def test_migrating_a_skill_link_keeps_a_file_created_during_it(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, newer: bool
 ) -> None:
     source, target, _ = release
     skill = link_skill_into_old_copy(target)
-    select_release(source, monkeypatch)
+    if newer:
+        select_release(source, monkeypatch)
+    else:
+        monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
     head = git(target, "rev-parse", "HEAD")
     install = update.replace_file
     created: list[Path] = []
@@ -597,7 +603,7 @@ def test_migrating_a_skill_link_keeps_a_file_created_during_it(
 
     monkeypatch.setattr(update, "replace_file", agent_creates_a_planned_file)
     with pytest.raises(
-        subprocess.SubprocessError, match="workflow.md changed while the update"
+        (ValueError, subprocess.SubprocessError), match="workflow.md changed while"
     ):
         update.update(target)
     assert created[0].read_text() == "agent edit\n"

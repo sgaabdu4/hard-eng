@@ -17,10 +17,14 @@ from mcp_setup import retired_settings
 from update_runner import (
     commit_update,
     current_head,
+    link_state,
     rebase_sessions,
+    relink_verified,
+    roll_back,
     snapshot,
     stale_message,
     update_blocker,
+    write_verified,
 )
 
 UPSTREAM = "sgaabdu4/hard-eng"
@@ -742,17 +746,37 @@ def repair_installation(root: Path, previous: str) -> str:
         status += "; installed the missing pre-push hook"
     names = sorted({*missing, *added})
     clean = bool(names) and not local_state(root, names)
+    moved = {name for name in missing if retired_parent(root, name)}
     retire_local_generation(root)
     if not names:
         return status + "."
-    write_changes(root, missing)
-    write_links(root, added)
+    # Files beneath a retired link must still be absent when the repair writes them.
+    before = {
+        name: None if name in moved else content
+        for name, content in snapshot(root, missing).items()
+    }
+    before_links = link_state(root, added)
+    applied: list[str] = []
+    try:
+        write_verified(root, missing, before, (), applied)
+        relink_verified(root, added, before_links, applied)
+    except (OSError, ValueError) as error:
+        if kept := roll_back(root, missing, added, before, before_links, applied):
+            raise ValueError(
+                f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"
+            ) from error
+        raise
     return f"{status}; repaired {install_paths(names)}. " + commit_install(
-        root, names, clean
+        root, names, clean, missing
     )
 
 
-def commit_install(root: Path, names: list[str], clean: bool) -> str:
+def commit_install(
+    root: Path,
+    names: list[str],
+    clean: bool,
+    expected: dict[str, str | None] | None = None,
+) -> str:
     reason = "these paths already had local changes"
     if clean:
         subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
@@ -770,7 +794,7 @@ def commit_install(root: Path, names: list[str], clean: bool) -> str:
             check=False,
         )
         if result.returncode == 0:
-            rebase_sessions(root, head, "Install Hard Eng")
+            rebase_sessions(root, head, "Install Hard Eng", expected)
             return "Committed the installed files locally without pushing."
         subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
         reason = " | ".join(result.stdout.strip().splitlines()[-3:])
