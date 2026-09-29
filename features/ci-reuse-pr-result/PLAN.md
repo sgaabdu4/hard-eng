@@ -1,6 +1,6 @@
 # Reuse a passed PR check on main, drop the tool cache, measure CI minutes and stop rejecting slow passed pushes
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -33,9 +33,9 @@ Authority: Autonomous. The user approved implementing the push reuse, the measur
 - [x] `ci-usage` shows a job that ran under both push and pull_request events → `test_ci_usage_reports_jobs_repeated_on_push_and_pull_request`.
 - [x] The template has no tool cache; a generated copy with the cache step migrates to the template and a project-owned cache step is kept → `test_generated_tool_cache_is_removed_from_existing_workflows`, updated migration tests.
 - [x] gates.md tells agents to measure with `ci-usage` when adopting, updating or changing CI and names the measured waste patterns → review of the diff.
-- [ ] A pre-push run whose checks passed but exceeded `pre_push_seconds` in total prints a warning and returns success → `test_pre_push_over_budget_warns_and_keeps_the_passed_push`.
-- [ ] The squash fixture carries a commit body like GitHub's squash merges, so reading the whole message instead of the subject is caught → `test_push_reuses_passed_pull_request_tree[squash]`.
-- [ ] This repository's per-gate `pre_push_seconds` is 600, so its loaded tests gate (279s) is not killed near the old 300s limit → `hard-eng.gates.json`.
+- [x] A pre-push run whose checks passed but exceeded `pre_push_seconds` in total prints a warning and returns success → `test_pre_push_over_budget_warns_and_keeps_the_passed_push`.
+- [x] The squash fixture carries a commit body like GitHub's squash merges, so reading the whole message instead of the subject is caught → `test_push_reuses_passed_pull_request_tree[squash]`.
+- [x] This repository's per-gate `pre_push_seconds` is 600, so its loaded tests gate (279s) is not killed near the old 300s limit → `hard-eng.gates.json`.
 
 ## Baseline + execution
 
@@ -53,8 +53,8 @@ N/A — CI engine behaviour, a CLI report and guidance text; no product appearan
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1148 tests, 90.27% line coverage). The ancestry, cache-removal, over-budget and squash-body tests failed with their conditions removed. `hard-eng.py ci-usage --days 3` against this repository listed 242 billed minutes and the Hard Eng job on both push (110 min) and pull_request (122 min). Codex adversarial review (gpt-6-astra): round 1 found that a still-running job aborted `ci-usage`; running jobs are now reported separately (`test_ci_usage_bills_started_jobs_in_whole_minutes`); rounds 2 and 3, the latter covering the budget warning, approved with no findings.
 E2E: N/A — the journey is a GitHub push-to-main run, proven after merge by hard-eng's own main run printing the reuse line and `ship --stage delivered` accepting it.
 
 Delivery target: Merge
