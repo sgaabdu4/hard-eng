@@ -442,8 +442,18 @@ def alive(process: int) -> bool:
     return True
 
 
+def abandoned(path: Path, owner: re.Match[str] | None) -> bool:
+    """Updaters before the lock ran under a one-hour hook, so an unlocked candidate hours old is abandoned."""
+    if owner is not None:
+        return not alive(int(owner[1]))
+    try:
+        return time.time() - path.parent.stat().st_mtime > 6 * 3600
+    except FileNotFoundError:
+        return False
+
+
 def remove_stale_candidates(root: Path) -> None:
-    """Remove candidates whose owning update has exited; the caller holds the lock."""
+    """Remove candidates whose update has exited; the caller holds the lock."""
     listing = subprocess.check_output(
         ["git", "worktree", "list", "--porcelain"], cwd=root, text=True
     )
@@ -457,11 +467,10 @@ def remove_stale_candidates(root: Path) -> None:
         if (
             path.name != "candidate"
             or not path.parent.name.startswith("hard-eng-update-")
-            or owner is None
-            or alive(int(owner[1]))
+            or not abandoned(path, owner)
         ):
             continue
-        if not path.exists():
+        if owner is not None and not path.exists():
             subprocess.run(
                 ["git", "worktree", "unlock", str(path)], cwd=root, check=True
             )

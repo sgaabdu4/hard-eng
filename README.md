@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | s
 | Empty repository | Setup stops. The agent asks which project type to create (Python, Flutter, Next.js or OpenNext on Cloudflare) unless the request says, creates it, then reruns setup. New Flutter apps use Riverpod. |
 | New project | Install the scaffold; establish product/design context, checks, and intended integrations. |
 | Existing project | Preserve custom instructions, skills, hooks, and configuration; report genuine conflicts. |
-| Hard Eng already installed | Select a newer CI-verified revision when available, verify an isolated candidate, then apply changes and create a local update commit. |
+| Hard Eng already installed | Select a newer CI-verified revision when available, check the project's gate configuration against its hooks, then apply changes as a local update commit that pre-push and CI verify. |
 
 Setup prepends shared rules to `AGENTS.md`, which Codex and Claude Code v2.1.277+ read directly. It retires redundant Claude instruction files and requires unique project rules to be migrated to the appropriate `AGENTS.md` before adoption completes. It configures applicable Appwrite, Sentry, Dart, and Marionette connections; Marionette is registered for every Flutter app, pinned to the `pubspec.lock` version of `marionette_flutter` when present. The Appwrite and Flutter skills install only when the project imports Appwrite or contains Dart; updates remove an unedited copy that no longer applies. Reuse known service and hosting choices; resolve missing choices and verify a real call before relying on an integration. The installer/updater never pushes.
 
@@ -44,8 +44,8 @@ flowchart TD
   V -->|No| H[Reuse current installation]
   V -->|Yes| M{Managed paths clean?}
   M -->|No| X
-  M -->|Yes| T[Verify isolated update candidate]
-  T --> Q{Candidate passes?}
+  M -->|Yes| T[Check gate configuration with the new hooks]
+  T --> Q{Configuration accepted?}
   Q -->|No| X
   Q -->|Yes| U[Apply update and make local commit]
   R -->|No| X
@@ -57,7 +57,7 @@ flowchart TD
   Z --> W[Load project context and select task stage]
 ```
 
-Trusted SessionStart hooks report the last update result and start the update in the background, so starting, resuming or compacting a session never waits on it. One update runs per repository at a time; it writes `.hard-eng/update.log`, commits locally when its candidate passes, and the next session start reports its result. Without a status, agent instructions require the command above before work. Reuse a current status and never run setup while an update runs. A failed update does not waive existing checks.
+Trusted SessionStart hooks report the last update result and start the update in the background, so starting, resuming or compacting a session never waits on it. One update runs per repository at a time; it writes `.hard-eng/update.log`, commits locally once the new hooks accept the gate configuration, and the next session start reports its result. It does not rerun the project's gates; pre-push and CI run them on the update commit. Without a status, agent instructions require the command above before work. Reuse a current status and never run setup while an update runs. A failed update does not waive existing checks.
 
 In Codex CLI, use `codex --enable hooks`, trust the project, then `/hooks` to review and trust Hard Eng's hooks. Changed hook definitions need review again. `--yolo` disables sandbox/approval protections; it is not hook setup. A disabled SessionStart cannot warn you itself; Codex supplies the hook-trust warning. [Native hook instructions](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
 

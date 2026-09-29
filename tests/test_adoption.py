@@ -814,49 +814,6 @@ def test_update_fetches_each_revisions_pinned_skill_submodule(
             assert git(checkout, "rev-list", "--count", "HEAD") == "1"
 
 
-def test_candidate_ignores_base_changes_the_branch_lacks(
-    release: tuple[Path, Path, str],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source, target, _ = release
-    module = target.parent / "component"
-    init(module)
-    (module / "contract.txt").write_text("pinned")
-    commit(module, "pinned component")
-    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
-    git(target, "submodule", "add", module.as_uri(), "component")
-    (module / "contract.txt").write_text("unpinned")
-    commit(module, "later component")
-    commit(source, "verified source candidate")
-    (target / "package.json").unlink()
-    config = json.loads((target / "hard-eng.gates.json").read_text())
-    config["shared"][0]["command"] = [
-        "python3",
-        "-c",
-        (
-            "import subprocess; from pathlib import Path; "
-            "assert Path('component/contract.txt').read_text() == 'pinned'; "
-            "assert subprocess.check_output(['git', '-C', 'component', 'rev-parse', '--is-shallow-repository'], text=True).strip() == 'true'"
-        ),
-    ]
-    (target / "hard-eng.gates.json").write_text(json.dumps(config))
-    shared = target / "shared.py"
-    shared.write_text("# one\n# two\n# three\nVALUE = 1\n")
-    git(target, "branch", "-M", "main")
-    commit(target, "remote baseline")
-    remote = target.parent / "remote.git"
-    git(target, "clone", "--bare", str(target), str(remote))
-    git(target, "remote", "add", "origin", str(remote))
-    git(target, "switch", "-c", "feature/update")
-    git(target, "switch", "main")
-    shared.write_text("VALUE = 2\n")
-    commit(target, "base moves on")
-    git(target, "push", "-q", "--no-verify", "origin", "main")
-    git(target, "switch", "feature/update")
-    changes: dict[str, str | None] = {"new-managed.mjs": "export const value = 1;\n"}
-    update.verify_candidate(target, source, changes, {}, target.parent / "candidate")
-
-
 def test_setup_runs_the_verified_revisions_own_install_step(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
