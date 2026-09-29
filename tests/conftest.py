@@ -115,7 +115,11 @@ def visual_plan(completed_plan: str) -> str:
 
 
 @pytest.fixture
-def runner(tmp_path: Path, completed_plan: str) -> ModuleType:
+def runner(
+    tmp_path: Path, completed_plan: str, monkeypatch: pytest.MonkeyPatch
+) -> ModuleType:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITHUB_EVENT_NAME", raising=False)
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     module = load_module("runner", SOURCE / ".hooks/hard-eng.py")
     module.__dict__["ROOT"] = tmp_path

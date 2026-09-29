@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import tool_setup
@@ -320,6 +321,83 @@ def test_integration_reminder_stops_once_existing_ci_runs_the_check(
     path.write_text(job.format("python3 .hooks/hard-eng.py check"))
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
     assert "runs Hard Eng without --base" in capsys.readouterr().err
+    path.write_text(
+        job.format("python3 .hooks/hard-eng.py check --base main")
+        + "      - run: python3 .hooks/hard-eng.py check\n"
+    )
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
+    assert "runs Hard Eng without --base" in capsys.readouterr().err
+    path.write_text(job.format("python3 .hooks/hard-eng.py check --base main"))
+    other = path.with_name("other.yml")
+    other.write_text(job.format("python3 .hooks/hard-eng.py check"))
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
+    assert "other.yml runs Hard Eng without --base" in capsys.readouterr().err
+    other.write_text(other.read_text().replace("pull_request", "workflow_dispatch"))
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
+    assert "runs Hard Eng without --base" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "ci,event,base,rejected",
+    [
+        ("true", "push", None, True),
+        ("true", "pull_request", "", True),
+        ("true", "pull_request_target", "  ", True),
+        ("true", "push", "HEAD", False),
+        ("true", "workflow_dispatch", None, False),
+        ("true", "schedule", None, False),
+        ("", "push", None, False),
+    ],
+)
+def test_ci_comparison_is_required_before_project_execution(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ci: str,
+    event: str,
+    base: str | None,
+    rejected: bool,
+) -> None:
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [],
+                "shared": [
+                    {
+                        "name": "proof",
+                        "command": [sys.executable, "-c", "open('ran', 'w').close()"],
+                    }
+                ],
+            }
+        )
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+    monkeypatch.setenv("GITHUB_ACTIONS", ci)
+    monkeypatch.setenv("GITHUB_EVENT_NAME", event)
+    if rejected:
+        with pytest.raises(ValueError, match="require --base"):
+            runner.check(base=base)
+        with pytest.raises(ValueError, match="require --base"):
+            runner.impact(base or "")
+        assert not (tmp_path / "ran").exists()
+    else:
+        assert runner.impact(base or "") == 0
+        assert runner.check(base=base) == 0
+        assert (tmp_path / "ran").is_file()
 
 
 def test_unconfigured_maintenance_project_does_not_inherit_source_ci_budget(

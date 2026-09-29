@@ -854,7 +854,9 @@ def plan_install(
     if generated is not None:
         changes["hard-eng.gates.json"] = json_file(root, generated)
     config = parse_config(
-        changes.get("hard-eng.gates.json") or (root / "hard-eng.gates.json").read_text()
+        changes.get("hard-eng.gates.json")
+        or (root / "hard-eng.gates.json").read_text(),
+        require_impact_review=False,
     )
     from project_setup import (
         adapt_boundaries,
@@ -930,7 +932,7 @@ def install(root: Path, previous: Path | None = None) -> None:
     config = json.loads((root / "hard-eng.gates.json").read_text())
     guidance = dependency_review_guidance(config["packages"])
     if guidance is not None:
-        print("Before using --base package selection, " + guidance)
+        print("Before verification, " + guidance)
     if deleted:
         print("Removed old Hard Eng files: " + ", ".join(deleted))
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
