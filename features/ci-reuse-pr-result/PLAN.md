@@ -50,7 +50,7 @@ N/A — CI engine behaviour, a CLI report and guidance text; no product appearan
 ## Verification
 
 Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1148 tests, 90.26% line coverage). The ancestry and cache-removal tests failed with their conditions removed. `hard-eng.py ci-usage --days 3` against this repository listed 242 billed minutes and the Hard Eng job on both push (110 min) and pull_request (122 min).
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1148 tests, 90.26% line coverage). The ancestry and cache-removal tests failed with their conditions removed. `hard-eng.py ci-usage --days 3` against this repository listed 242 billed minutes and the Hard Eng job on both push (110 min) and pull_request (122 min). Codex adversarial review (gpt-6-astra): round 1 found that a still-running job aborted `ci-usage`; running jobs are now reported separately (`test_ci_usage_bills_started_jobs_in_whole_minutes`); round 2 approved with no findings.
 E2E: N/A — the journey is a GitHub push-to-main run, proven after merge by hard-eng's own main run printing the reuse line and `ship --stage delivered` accepting it.
 
 Delivery target: Merge
