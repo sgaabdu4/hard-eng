@@ -9,7 +9,8 @@ import signal
 import subprocess
 import sys
 import time
-from contextlib import suppress
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from functools import partial
 from pathlib import Path
 from typing import TextIO
@@ -191,6 +192,23 @@ def unstage_own(
         )
 
 
+@contextmanager
+def deferred_sigterm() -> Iterator[None]:
+    """Hold SIGTERM, whichever thread receives it, and keep it from child git commands until the block ends."""
+    received: list[int] = []
+    previous = signal.signal(
+        signal.SIGTERM, lambda signum, _frame: received.append(signum)
+    )
+    mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+        signal.signal(signal.SIGTERM, previous)
+        if received:
+            signal.raise_signal(signal.SIGTERM)
+
+
 def commit_update(
     root: Path,
     changes: dict[str, str | None],
@@ -214,16 +232,12 @@ def commit_update(
     try:
         write_links(root, links)
         write_changes(root, changes)
-        # A SIGTERM mid-staging waits until the staging it must undo is recorded.
-        mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
-        try:
+        with deferred_sigterm():
             index = index_entries(root, names)
             subprocess.run(
                 ["git", "add", "--force", "--", *names], cwd=root, check=True
             )
             staging = (index, index_entries(root, names))
-        finally:
-            signal.pthread_sigmask(signal.SIG_SETMASK, mask)
         result = subprocess.run(
             [
                 "git",
