@@ -103,12 +103,40 @@ def landed_commit(root: Path, head: str, message: str) -> tuple[str, str] | None
     return None
 
 
-def rebase_sessions(root: Path, head: str, message: str) -> bool:
+def committed_matches(root: Path, commit: str, expected: dict[str, str | None]) -> bool:
+    """Whether the commit holds exactly the planned files, so no other edit rode along."""
+    request = "".join(f"{commit}:{name}\n" for name in expected).encode()
+    output = subprocess.run(
+        ["git", "cat-file", "--batch"],
+        input=request,
+        cwd=root,
+        capture_output=True,
+        check=True,
+    ).stdout
+    for content in expected.values():
+        header, _, output = output.partition(b"\n")
+        fields = header.split()
+        found = None
+        if len(fields) == 3:
+            size = int(fields[2])
+            if fields[1] == b"blob":
+                found = output[:size]
+            output = output[size + 1 :]
+        if found != (None if content is None else content.encode()):
+            return False
+    return True
+
+
+def rebase_sessions(
+    root: Path, head: str, message: str, expected: dict[str, str | None] | None = None
+) -> bool:
     """Sessions based on the update commit's parent must not count that commit as their work."""
     landed = landed_commit(root, head, message)
     if landed is None:
         return False
     commit, parent = landed
+    if expected is not None and not committed_matches(root, commit, expected):
+        return True
     for state in (root / ".hard-eng/sessions").glob("*.json"):
         try:
             saved = json.loads(state.read_text())
@@ -277,6 +305,39 @@ def write_verified(
             raise ValueError(f"{name} changed while the update was being applied")
 
 
+def git_commit(
+    root: Path, names: list[str], changes: dict[str, str | None], message: str
+) -> None:
+    result = subprocess.run(
+        [
+            "git",
+            "commit",
+            "--only",
+            "-m",
+            message,
+            "--",
+            *(
+                name
+                for name in names
+                if not any(other.startswith(f"{name}/") for other in changes)
+            ),
+        ],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+        timeout=3500,
+    )
+    sys.stderr.write(result.stdout)
+    if result.returncode != 0:
+        # SessionStart stderr never reaches the agent, so the error carries the reason.
+        tail = " | ".join(result.stdout.strip().splitlines()[-5:])
+        raise subprocess.SubprocessError(
+            f"git commit exited {result.returncode}: {tail}".removesuffix(": ")
+        )
+
+
 def commit_update(
     root: Path,
     changes: dict[str, str | None],
@@ -301,36 +362,17 @@ def commit_update(
                 ["git", "add", "--force", "--", *names], cwd=root, check=True
             )
             staging = (index, index_entries(root, names))
-        result = subprocess.run(
-            [
-                "git",
-                "commit",
-                "--only",
-                "-m",
-                message,
-                "--",
-                *(
-                    name
-                    for name in names
-                    if not any(other.startswith(f"{name}/") for other in changes)
-                ),
-            ],
-            cwd=root,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            check=False,
-            timeout=3500,
-        )
-        sys.stderr.write(result.stdout)
-        if result.returncode != 0:
-            # SessionStart stderr never reaches the agent, so the error carries the reason.
-            tail = " | ".join(result.stdout.strip().splitlines()[-5:])
-            raise subprocess.SubprocessError(
-                f"git commit exited {result.returncode}: {tail}".removesuffix(": ")
+        if moved := [
+            name
+            for name in applied
+            if name in changes and not written(root, name, changes[name], False)
+        ]:
+            raise ValueError(
+                f"{', '.join(moved)} changed while the update was being applied"
             )
+        git_commit(root, names, changes, message)
     except (OSError, ValueError, subprocess.SubprocessError) as error:
-        if rebase_sessions(root, head, message):
+        if rebase_sessions(root, head, message, changes):
             raise
         kept = roll_back(
             root,
@@ -346,7 +388,7 @@ def commit_update(
                 f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"
             ) from error
         raise
-    rebase_sessions(root, head, message)
+    rebase_sessions(root, head, message, changes)
 
 
 def alive(process: int) -> bool:

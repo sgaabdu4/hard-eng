@@ -343,6 +343,48 @@ def test_failed_update_commit_restores_staging_made_before_it(
     assert (installed / "AGENTS.md").read_text() == "still editing\n"
 
 
+def test_update_commit_never_takes_an_edit_made_after_its_writes(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (installed / "AGENTS.md").write_text("original rules\n")
+    head = commit(installed, "managed files")
+    snapshot = update_runner.index_entries
+
+    def agent_edits_after_writes(root: Path, names: list[str]) -> dict[str, str]:
+        (root / "AGENTS.md").write_text("agent edit\n")
+        return snapshot(root, names)
+
+    monkeypatch.setattr(update_runner, "index_entries", agent_edits_after_writes)
+    with pytest.raises(subprocess.SubprocessError, match="kept later edits to AGENTS"):
+        commit_changes(installed, {"AGENTS.md": "updated rules\n"})
+    assert (installed / "AGENTS.md").read_text() == "agent edit\n"
+    assert git(installed, "rev-parse", "HEAD") == head
+    assert git(installed, "diff", "--cached", "--name-only") == ""
+
+
+def test_sessions_still_count_an_update_commit_holding_other_content(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (installed / "AGENTS.md").write_text("original rules\n")
+    head = commit(installed, "managed files")
+    state = installed / ".hard-eng/sessions/known.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"base": head, "dirty": {}}))
+    check = update_runner.written
+
+    def agent_edits_after_check(
+        root: Path, name: str, content: str | None, link: bool
+    ) -> bool:
+        found = check(root, name, content, link)
+        (root / name).write_text("agent edit\n")
+        return found
+
+    monkeypatch.setattr(update_runner, "written", agent_edits_after_check)
+    commit_changes(installed, {"AGENTS.md": "updated rules\n"})
+    assert git(installed, "show", "HEAD:AGENTS.md") == "agent edit"
+    assert json.loads(state.read_text())["base"] == head
+
+
 def test_interrupt_after_the_update_commit_keeps_the_update(installed: Path) -> None:
     (installed / ".hooks/update.py").write_text("old = True\n")
     head = commit(installed, "managed files")
