@@ -284,8 +284,9 @@ def configure_dart(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
     import yaml
-    from project_setup import migrate_dart_plugins
+    from project_setup import migrate_dart_plugins, outside_lib_coverage
 
+    outside_lib_coverage(package)
     target = directory / "analysis_options.yaml"
     typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
     options: JsonObject = typing["dart_options"](target) if target.exists() else {}
