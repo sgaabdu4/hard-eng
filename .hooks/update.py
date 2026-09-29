@@ -18,6 +18,7 @@ from update_runner import (
     commit_update,
     current_head,
     rebase_sessions,
+    snapshot,
     stale_message,
     update_blocker,
 )
@@ -811,15 +812,9 @@ def update(root: Path, repair: bool = False) -> str:
         names = sorted({*changes, *links})
         refuse_local_state(root, names)
         local_settings(root)
-        before = {
-            name: (root / name).read_bytes() if (root / name).exists() else None
-            for name in changes
-        }
+        before = snapshot(root, changes)
         verify_candidate(root, source, changes, links, Path(temporary) / "candidate")
-        if any(
-            ((root / name).read_bytes() if (root / name).exists() else None) != content
-            for name, content in before.items()
-        ):
+        if snapshot(root, changes) != before:
             raise ValueError(
                 "Files changed during verification; the update was not applied"
             )
@@ -839,7 +834,7 @@ def update(root: Path, repair: bool = False) -> str:
             raise ValueError(
                 "The update paths changed during verification; nothing was applied"
             )
-        commit_update(root, changes, links, revision)
+        commit_update(root, changes, links, revision, before)
         retire_local_generation(root)
         if hook[0] not in changes:
             install_planned_hook(root, hook)

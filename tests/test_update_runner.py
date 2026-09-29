@@ -8,7 +8,7 @@ import signal
 import subprocess
 import sys
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import Mock
@@ -225,6 +225,12 @@ def test_update_commit_is_not_counted_as_session_work(
     assert agent_hooks.completion(installed, before)["decision"] == "block"
 
 
+def commit_changes(root: Path, changes: dict[str, str | None]) -> None:
+    update_runner.commit_update(
+        root, changes, {}, "b" * 40, update_runner.snapshot(root, changes)
+    )
+
+
 def install_hook(root: Path, name: str, script: str) -> None:
     hook = root / ".git/hooks" / name
     hook.write_text("#!/bin/sh\n" + script)
@@ -243,9 +249,44 @@ def test_failed_update_commit_keeps_edits_made_while_it_ran(installed: Path) -> 
     with pytest.raises(
         subprocess.SubprocessError, match="kept later edits to AGENTS.md"
     ):
-        update_runner.commit_update(installed, changes, {}, "b" * 40)
+        commit_changes(installed, changes)
     assert (installed / "AGENTS.md").read_text() == "agent edit\n"
     assert (installed / ".hooks/update.py").read_text() == "old = True\n"
+    assert git(installed, "rev-parse", "HEAD") == head
+    assert git(installed, "diff", "--cached", "--name-only") == ""
+
+
+def test_update_keeps_an_edit_made_before_it_reached_that_path(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (installed / "AGENTS.md").write_text("original rules\n")
+    (installed / ".hooks/update.py").write_text("old = True\n")
+    (installed / "README.md").write_text("original readme\n")
+    head = commit(installed, "managed files")
+    changes: dict[str, str | None] = {
+        "AGENTS.md": "updated rules\n",
+        ".hooks/update.py": "new = True\n",
+        "README.md": "updated readme\n",
+    }
+    before = update_runner.snapshot(installed, changes)
+    install = update.replace_file
+
+    def agent_edits_next_path(
+        target: Path, content: bytes, ready: Callable[[], bool]
+    ) -> bool:
+        if target.name == "AGENTS.md":
+            (installed / ".hooks/update.py").write_text("agent = True\n")
+        return install(target, content, ready)
+
+    monkeypatch.setattr(update, "replace_file", agent_edits_next_path)
+    with pytest.raises(
+        subprocess.SubprocessError,
+        match=r"kept later edits to \.hooks/update\.py instead",
+    ):
+        update_runner.commit_update(installed, changes, {}, "b" * 40, before)
+    assert (installed / ".hooks/update.py").read_text() == "agent = True\n"
+    assert (installed / "AGENTS.md").read_text() == "original rules\n"
+    assert (installed / "README.md").read_text() == "original readme\n"
     assert git(installed, "rev-parse", "HEAD") == head
     assert git(installed, "diff", "--cached", "--name-only") == ""
 
@@ -258,9 +299,7 @@ def test_interrupt_after_the_update_commit_keeps_the_update(installed: Path) -> 
     state.write_text(json.dumps({"base": head, "dirty": {}}))
     install_hook(installed, "post-commit", "kill -TERM $PPID\n")
     with pytest.raises(subprocess.SubprocessError, match="git commit exited"):
-        update_runner.commit_update(
-            installed, {".hooks/update.py": "new = True\n"}, {}, "b" * 40
-        )
+        commit_changes(installed, {".hooks/update.py": "new = True\n"})
     assert (installed / ".hooks/update.py").read_text() == "new = True\n"
     assert (
         git(installed, "log", "-1", "--format=%s") == f"Update Hard Eng to {'b' * 40}"
@@ -289,20 +328,18 @@ def test_update_commit_landing_after_an_agent_commit_is_kept(
 ) -> None:
     (installed / ".hooks/update.py").write_text("old = True\n")
     commit(installed, "managed files")
-    install = update.write_changes
+    install = update.replace_file
 
-    def install_while_agent_commits(root: Path, changes: dict[str, str | None]) -> None:
-        (root / "app.py").write_text("print('agent')\n")
-        git(root, "add", "app.py")
-        git(root, "commit", "-qm", "agent work")
-        install_hook(root, "post-commit", "kill -TERM $PPID\n")
-        install(root, changes)
+    def install_while_agent_commits(
+        target: Path, content: bytes, ready: Callable[[], bool]
+    ) -> bool:
+        git(installed, "commit", "-qm", "agent work", "--allow-empty")
+        install_hook(installed, "post-commit", "kill -TERM $PPID\n")
+        return install(target, content, ready)
 
-    monkeypatch.setattr(update, "write_changes", install_while_agent_commits)
+    monkeypatch.setattr(update, "replace_file", install_while_agent_commits)
     with pytest.raises(subprocess.SubprocessError, match="git commit exited"):
-        update_runner.commit_update(
-            installed, {".hooks/update.py": "new = True\n"}, {}, "b" * 40
-        )
+        commit_changes(installed, {".hooks/update.py": "new = True\n"})
     assert (installed / ".hooks/update.py").read_text() == "new = True\n"
     assert git(installed, "log", "-2", "--format=%s").splitlines() == [
         f"Update Hard Eng to {'b' * 40}",
@@ -395,7 +432,7 @@ def test_failed_update_commit_keeps_staging_made_while_it_ran(
         ".hooks/update.py": "new = True\n",
     }
     with pytest.raises(subprocess.SubprocessError, match="git commit exited 1"):
-        update_runner.commit_update(installed, changes, {}, "b" * 40)
+        commit_changes(installed, changes)
     assert git(installed, "show", ":AGENTS.md") == "staged by agent"
     assert (installed / "AGENTS.md").read_text() == "still editing\n"
     assert (installed / ".hooks/update.py").read_text() == "old = True\n"
@@ -420,9 +457,7 @@ def test_interrupt_right_after_staging_still_unstages_the_update(
     previous = signal.signal(signal.SIGTERM, update_runner.interrupt_update)
     try:
         with pytest.raises(subprocess.SubprocessError, match="signal 15"):
-            update_runner.commit_update(
-                installed, {".hooks/update.py": "new = True\n"}, {}, "b" * 40
-            )
+            commit_changes(installed, {".hooks/update.py": "new = True\n"})
     finally:
         signal.signal(signal.SIGTERM, previous)
     assert git(installed, "diff", "--cached", "--name-only") == ""

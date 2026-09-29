@@ -9,7 +9,7 @@ import signal
 import subprocess
 import sys
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from contextlib import contextmanager, suppress
 from functools import partial
 from pathlib import Path
@@ -133,6 +133,24 @@ def written(root: Path, name: str, content: str | None, link: bool) -> bool:
     )
 
 
+def snapshot(root: Path, names: Iterable[str]) -> dict[str, bytes | None]:
+    return {
+        name: (root / name).read_bytes() if (root / name).exists() else None
+        for name in names
+    }
+
+
+def holds(root: Path, name: str, content: bytes | None) -> bool:
+    return snapshot(root, [name])[name] == content
+
+
+def link_state(root: Path, names: Iterable[str]) -> dict[str, str | None]:
+    return {
+        name: str((root / name).readlink()) if (root / name).is_symlink() else None
+        for name in names
+    }
+
+
 def roll_back(
     root: Path,
     changes: dict[str, str | None],
@@ -145,12 +163,16 @@ def roll_back(
 
     kept = []
     for name, content in before.items():
+        if holds(root, name, content):
+            continue
         unchanged = partial(written, root, name, changes[name], False)
         if content is None and unchanged():
             (root / name).unlink(missing_ok=True)
         elif content is None or not replace_file(root / name, content, unchanged):
             kept.append(name)
     for name, target in before_links.items():
+        if link_state(root, [name])[name] == target:
+            continue
         if not written(root, name, links[name], True):
             kept.append(name)
             continue
@@ -209,29 +231,46 @@ def deferred_sigterm() -> Generator[None]:
             signal.raise_signal(signal.SIGTERM)
 
 
+def write_verified(
+    root: Path,
+    changes: dict[str, str | None],
+    links: dict[str, str | None],
+    before: dict[str, bytes | None],
+    before_links: dict[str, str | None],
+) -> None:
+    """Write each path only while it still holds its verified content, checked just before."""
+    from update import replace_file, write_changes, write_links
+
+    for name, target in links.items():
+        if link_state(root, [name])[name] != before_links[name]:
+            raise ValueError(f"{name} changed while the update was being applied")
+        write_links(root, {name: target})
+    # Paths under a link the update just replaced no longer show their verified content.
+    relinked = tuple(f"{name}/" for name in links)
+    for name, content in changes.items():
+        verified = partial(holds, root, name, before[name])
+        if name.startswith(relinked) or (content is None and verified()):
+            write_changes(root, {name: content})
+        elif content is None or not replace_file(
+            root / name, content.encode(), verified
+        ):
+            raise ValueError(f"{name} changed while the update was being applied")
+
+
 def commit_update(
     root: Path,
     changes: dict[str, str | None],
     links: dict[str, str | None],
     revision: str,
+    before: dict[str, bytes | None],
 ) -> None:
-    from update import write_changes, write_links
-
     names = sorted({*changes, *links})
-    before = {
-        name: (root / name).read_bytes() if (root / name).exists() else None
-        for name in changes
-    }
-    before_links = {
-        name: str((root / name).readlink()) if (root / name).is_symlink() else None
-        for name in links
-    }
+    before_links = link_state(root, links)
     head = current_head(root)
     message = f"Update Hard Eng to {revision}"
     staging: tuple[dict[str, str], dict[str, str]] | None = None
     try:
-        write_links(root, links)
-        write_changes(root, changes)
+        write_verified(root, changes, links, before, before_links)
         with deferred_sigterm():
             index = index_entries(root, names)
             subprocess.run(
@@ -266,7 +305,7 @@ def commit_update(
             raise subprocess.SubprocessError(
                 f"git commit exited {result.returncode}: {tail}".removesuffix(": ")
             )
-    except (OSError, subprocess.SubprocessError) as error:
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
         if rebase_sessions(root, head, message):
             raise
         kept = roll_back(root, changes, links, before, before_links)
