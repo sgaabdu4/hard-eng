@@ -439,29 +439,35 @@ def gate_status(root: Path) -> str:
     return status
 
 
-def session_context(root: Path, payload: JsonObject) -> str:
-    from update import update
-
-    messages = []
-    try:
-        messages.append("Hard Eng update result: " + update(root))
-    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
-        messages.append(
-            f"Hard Eng update failed: {error}. Continue with the existing scaffold; its gates remain required."
-        )
-    messages.append(gate_status(root))
+def record_session(root: Path, payload: JsonObject) -> bool:
+    """Save the session's Git base before a background update can move HEAD."""
     state = session_state(root, payload)
-    if state is not None:
-        try:
-            revision = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], cwd=root, text=True
-            ).strip()
-            state.parent.mkdir(parents=True, exist_ok=True)
-            if not state.exists():
-                dirty = dirty_files(root, revision)
-                state.write_text(json.dumps({"base": revision, "dirty": dirty}))
-        except (OSError, subprocess.SubprocessError):
-            messages.append("Session revision unavailable; use full checks.")
+    if state is None:
+        return True
+    try:
+        revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=root, text=True
+        ).strip()
+        state.parent.mkdir(parents=True, exist_ok=True)
+        if not state.exists():
+            dirty = dirty_files(root, revision)
+            state.write_text(json.dumps({"base": revision, "dirty": dirty}))
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return True
+
+
+def session_context(root: Path, payload: JsonObject) -> str:
+    from update_runner import failed_update, start_update
+
+    recorded = record_session(root, payload)
+    try:
+        messages = [start_update(root)]
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        messages = [failed_update(error)]
+    messages.append(gate_status(root))
+    if not recorded:
+        messages.append("Session revision unavailable; use full checks.")
     messages.append(
         "Use configured MCPs when relevant to the task. Before relying on one, verify a real call against the intended repository/index, service project or running app/device; registration alone is not readiness. If unavailable, warn and continue with available tools."
     )

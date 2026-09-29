@@ -13,6 +13,7 @@ from operator import itemgetter
 from pathlib import Path
 
 from mcp_setup import retired_settings
+from update_runner import rebase_sessions, stale_message, update_blocker
 
 UPSTREAM = "sgaabdu4/hard-eng"
 REPOSITORY = f"https://github.com/{UPSTREAM}.git"
@@ -109,10 +110,7 @@ def require_current(root: Path) -> None:
             f"Hard Eng freshness could not be verified: {error}"
         ) from error
     if revision is not None:
-        raise ValueError(
-            f"Hard Eng freshness check found newer verified revision {revision}. "
-            "Use the supported updater, preserve local edits, then reverify before shipping or claiming completion."
-        )
+        raise ValueError(stale_message(root, revision))
 
 
 def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, Path]:
@@ -569,6 +567,7 @@ def verify_candidate(
         ["git", "worktree", "add", "--quiet", "--detach", str(candidate), "HEAD"],
         cwd=root,
         check=True,
+        timeout=120,
     )
     try:
         if (candidate / ".gitmodules").is_file():
@@ -576,6 +575,7 @@ def verify_candidate(
                 ["git", "submodule", "update", "--init", "--recursive", "--depth=1"],
                 cwd=candidate,
                 check=True,
+                timeout=600,
             )
         write_links(candidate, links)
         write_changes(candidate, changes)
@@ -668,6 +668,7 @@ raise SystemExit(not compileall.compile_dir('.hooks', quiet=1))
             ["git", "worktree", "remove", "--force", str(candidate)],
             cwd=root,
             check=True,
+            timeout=120,
         )
 
 
@@ -742,6 +743,7 @@ def commit_update(
             ["git", "reset", "--quiet", "HEAD", "--", *names], cwd=root, check=True
         )
         raise
+    rebase_sessions(root)
 
 
 def repair_current_hook(root: Path, previous: str) -> str:
@@ -809,6 +811,7 @@ def commit_install(root: Path, names: list[str], clean: bool) -> str:
             check=False,
         )
         if result.returncode == 0:
+            rebase_sessions(root)
             return "Committed the installed files locally without pushing."
         subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
         reason = " | ".join(result.stdout.strip().splitlines()[-3:])
@@ -833,15 +836,9 @@ def refuse_local_state(root: Path, names: list[str]) -> None:
 
 
 def update(root: Path, repair: bool = False) -> str:
-    marker = root / SOURCE_FILE
-    if not marker.exists():
-        return "Automatic update unavailable: this checkout has no installed source revision."
-    metadata = json.loads(marker.read_text())
-    if not isinstance(metadata, dict):
-        raise TypeError("Installed source metadata must be an object")
-    previous = metadata.get("revision")
-    if not isinstance(previous, str) or not re.fullmatch(r"[0-9a-f]{40}", previous):
-        return "Installed from an uncommitted working copy; publish a verified source revision before automatic updates."
+    if (blocker := update_blocker(root)) is not None:
+        return blocker
+    previous = json.loads((root / SOURCE_FILE).read_text())["revision"]
     revision = latest_verified(previous)
     if revision is None:
         if repair or local_generation(root):

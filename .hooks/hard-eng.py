@@ -776,6 +776,10 @@ def main() -> int:
     )
     impacts.add_argument("--base", required=True)
     commands.add_parser("pre-push", help="Verify the actual commits being pushed")
+    commands.add_parser(
+        "update",
+        help="Install the newest CI-verified Hard Eng revision and record the result",
+    )
     shipping = commands.add_parser(
         "ship", help="Verify PR delivery or perform guarded shipping actions"
     )
@@ -799,6 +803,10 @@ def main() -> int:
         return impact(args.base)
     if args.command == "pre-push":
         return pre_push()
+    if args.command == "update":
+        from update_runner import run_update
+
+        return run_update(ROOT)
     if args.command == "ship":
         from ship_actions import run
 

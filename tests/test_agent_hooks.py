@@ -13,6 +13,7 @@ from unittest.mock import Mock
 import agent_hooks
 import pytest
 import update
+import update_runner
 from conftest import SOURCE, commit, git
 from gate_config import Gate, Group, JsonObject, affected_groups, parse_config
 from shipping import ShippingPolicy
@@ -415,27 +416,30 @@ def test_claude_timestamp_does_not_skip_startup(
 
 @pytest.mark.parametrize("agent", ["claude", "codex"])
 @pytest.mark.parametrize("offline", [False, True])
-def test_session_reports_updater_result_once(
+def test_session_reports_update_status_without_running_update(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     agent: str,
     offline: bool,
 ) -> None:
-    updater = Mock(
+    starter = Mock(
         side_effect=OSError("offline") if offline else None,
-        return_value="No newer CI-verified Hard Eng revision is available.",
+        return_value="Hard Eng update started in the background (.hard-eng/update.log)",
     )
-    monkeypatch.setattr(update, "update", updater)
+    monkeypatch.setattr(update_runner, "start_update", starter)
+    monkeypatch.setattr(
+        update, "update", Mock(side_effect=AssertionError("startup waited on update"))
+    )
     monkeypatch.setattr(sys, "stdin", io.StringIO('{"session_id":"startup"}'))
     assert agent_hooks.handle_event(repository, "session", agent) == 0
     output = json.loads(capsys.readouterr().out)
-    updater.assert_called_once_with(repository)
+    starter.assert_called_once_with(repository)
     context = output["hookSpecificOutput"]["additionalContext"]
     expected = (
         "Hard Eng update failed: offline"
         if offline
-        else "Hard Eng update result: No newer CI-verified"
+        else "Hard Eng update started in the background"
     )
     assert context.startswith(expected)
     assert output["systemMessage"] == "Hard Eng startup: " + " ".join(
@@ -443,6 +447,7 @@ def test_session_reports_updater_result_once(
     )
     assert "Gates: not runnable" in output["systemMessage"]
     assert "Use configured MCPs" not in output["systemMessage"]
+    assert (repository / ".hard-eng/sessions/startup.json").exists()
 
 
 def test_session_states_whether_gates_can_run(repository: Path) -> None:
