@@ -621,7 +621,7 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
     assert tests["command"] == ["pnpm", "run", "test:coverage"]
     installer.install(tmp_path)
     output = capsys.readouterr().out
-    assert "Before using --base package selection" in output
+    assert "Before verification, Review `depends_on`" in output
 
 
 def test_javascript_file_scope_keeps_application_tests_and_declarations(

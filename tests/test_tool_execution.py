@@ -464,8 +464,18 @@ def test_root_biome_keeps_files_without_an_equivalent_selected_child(
     elif child == "scope":
         child_gate["command"][2] = "child.js"
     groups: list[Group] = [
-        {"path": ".", "language": "javascript", "checks": [root_gate]},
-        {"path": "packages/child", "language": "javascript", "checks": [child_gate]},
+        {
+            "path": ".",
+            "language": "javascript",
+            "depends_on": [],
+            "checks": [root_gate],
+        },
+        {
+            "path": "packages/child",
+            "language": "javascript",
+            "depends_on": ["."],
+            "checks": [child_gate],
+        },
     ]
     if child == "unselected":
         groups.pop()
@@ -481,6 +491,10 @@ def test_root_biome_keeps_files_without_an_equivalent_selected_child(
                 ],
             }
         )
+
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": groups, "shared": []})
+    )
 
     def selected(*_args: object) -> list[Group]:
         return groups

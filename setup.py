@@ -408,7 +408,7 @@ def configure_javascript(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
     from gate_config import json_file
-    from project_setup import javascript_manager
+    from project_setup import javascript_manager, native_typecheck
 
     manager = javascript_manager(directory)[0]
     target = directory / "tsconfig.json"
@@ -426,7 +426,15 @@ def configure_javascript(
             },
         )
     scripts = json.loads((directory / "package.json").read_text()).get("scripts", {})
-    if "typecheck" in scripts and not any(
+    if native_typecheck(scripts, package["checks"]):
+        wrapper = {"name": "project-typecheck", "role": "project-typecheck"}
+        package["checks"] = [
+            gate
+            for gate in package["checks"]
+            if {**gate, "command": gate["command"][1:]}
+            != {**wrapper, "command": ["run", "typecheck"]}
+        ]
+    elif "typecheck" in scripts and not any(
         gate["command"] == [manager, "run", "typecheck"] for gate in package["checks"]
     ):
         package["checks"].append(
@@ -854,7 +862,9 @@ def plan_install(
     if generated is not None:
         changes["hard-eng.gates.json"] = json_file(root, generated)
     config = parse_config(
-        changes.get("hard-eng.gates.json") or (root / "hard-eng.gates.json").read_text()
+        changes.get("hard-eng.gates.json")
+        or (root / "hard-eng.gates.json").read_text(),
+        require_impact_review=False,
     )
     from project_setup import (
         adapt_boundaries,
@@ -930,7 +940,7 @@ def install(root: Path, previous: Path | None = None) -> None:
     config = json.loads((root / "hard-eng.gates.json").read_text())
     guidance = dependency_review_guidance(config["packages"])
     if guidance is not None:
-        print("Before using --base package selection, " + guidance)
+        print("Before verification, " + guidance)
     if deleted:
         print("Removed old Hard Eng files: " + ", ".join(deleted))
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")

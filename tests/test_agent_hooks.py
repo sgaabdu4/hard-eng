@@ -14,7 +14,7 @@ import agent_hooks
 import pytest
 import update
 from conftest import SOURCE, commit, git
-from gate_config import Gate, Group, JsonObject, affected_groups
+from gate_config import Gate, Group, JsonObject, affected_groups, parse_config
 from shipping import ShippingPolicy
 
 
@@ -598,9 +598,10 @@ def test_cross_package_fallow_coverage_owner_must_be_selected_with_its_consumer(
     ]
 
 
-def test_unknown_base_or_dependency_information_checks_every_package(
+def test_unknown_base_checks_all_but_missing_dependency_review_fails(
     repository: Path,
-    capsys: pytest.CaptureFixture[str],
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     groups: list[Group] = [
         {"path": "a", "checks": [], "depends_on": []},
@@ -612,10 +613,22 @@ def test_unknown_base_or_dependency_information_checks_every_package(
     changed = repository / "a/change.py"
     changed.parent.mkdir()
     changed.write_text("change")
-    assert affected_groups(repository, groups, "HEAD") == groups
-    output = capsys.readouterr().out
-    assert "Package impact is unknown" in output
-    assert "depends_on" in output
+    config = json.dumps({"packages": groups[:-1], "shared": []})
+    with pytest.raises(ValueError, match="Review `depends_on`.*a"):
+        parse_config(config)
+    assert parse_config(config, require_impact_review=False)["packages"] == groups[:-1]
+    for base in (None, "HEAD", "missing-reference"):
+        with pytest.raises(ValueError, match="Review `depends_on`.*a"):
+            affected_groups(repository, groups, base)
+    (repository / "hard-eng.gates.json").write_text(config)
+    monkeypatch.setattr(runner, "ROOT", repository)
+
+    def verified(_root: Path, _base: str) -> bool:
+        return True
+
+    monkeypatch.setattr(update, "check_scaffold_update", verified)
+    with pytest.raises(ValueError, match="Review `depends_on`.*a"):
+        runner.check(base="HEAD")
 
 
 def test_shared_package_paths_cannot_hide_a_declared_document_input(
@@ -646,8 +659,8 @@ def test_docs_only_change_runs_only_the_secret_scan(
     secrets: Gate = {"name": "secrets", "role": "secrets-files", "command": ["x"]}
     workflows: Gate = {"name": "workflows", "role": "workflows", "command": ["x"]}
     groups: list[Group] = [
-        {"path": root, "checks": []},
-        {"path": "b", "checks": []},
+        {"path": root, "checks": [], "depends_on": []},
+        {"path": "b", "checks": [], "depends_on": []},
         {"path": ".", "checks": [secrets, workflows]},
     ]
     for name in docs:
