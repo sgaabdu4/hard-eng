@@ -196,7 +196,7 @@ def index_entries(root: Path, names: list[str]) -> dict[str, str]:
 def unstage_own(
     root: Path, names: list[str], staging: tuple[dict[str, str], dict[str, str]]
 ) -> None:
-    """Unstage only index entries the updater changed and that still hold its staging."""
+    """Restore only index entries the updater changed and that still hold its staging."""
     before, staged = staging
     current = index_entries(root, names)
     own = [
@@ -204,9 +204,21 @@ def unstage_own(
         for path in {*before, *staged, *current}
         if current.get(path) == staged.get(path) != before.get(path)
     ]
-    if own:
+    if restored := "".join(
+        f"{before[path]}\t{path}\0" for path in own if path in before
+    ):
         subprocess.run(
-            ["git", "reset", "--quiet", "HEAD", "--", *own], cwd=root, check=True
+            ["git", "update-index", "-z", "--index-info"],
+            input=restored,
+            cwd=root,
+            text=True,
+            check=True,
+        )
+    if added := [path for path in own if path not in before]:
+        subprocess.run(
+            ["git", "update-index", "--force-remove", "--", *added],
+            cwd=root,
+            check=True,
         )
 
 

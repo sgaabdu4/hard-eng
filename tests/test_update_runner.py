@@ -319,6 +319,30 @@ def test_rollback_leaves_paths_the_update_never_reached(
     assert not (installed / "old.md").exists()
 
 
+def test_failed_update_commit_restores_staging_made_before_it(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (installed / "AGENTS.md").write_text("original rules\n")
+    commit(installed, "managed files")
+    install_hook(installed, "pre-commit", "exit 1\n")
+    snapshot = update_runner.index_entries
+    calls: list[int] = []
+
+    def agent_stages_first(root: Path, names: list[str]) -> dict[str, str]:
+        calls.append(len(calls))
+        if len(calls) == 1:
+            (root / "AGENTS.md").write_text("staged by agent\n")
+            git(root, "add", "AGENTS.md")
+            (root / "AGENTS.md").write_text("still editing\n")
+        return snapshot(root, names)
+
+    monkeypatch.setattr(update_runner, "index_entries", agent_stages_first)
+    with pytest.raises(subprocess.SubprocessError, match="kept later edits"):
+        commit_changes(installed, {"AGENTS.md": "updated rules\n"})
+    assert git(installed, "show", ":AGENTS.md") == "staged by agent"
+    assert (installed / "AGENTS.md").read_text() == "still editing\n"
+
+
 def test_interrupt_after_the_update_commit_keeps_the_update(installed: Path) -> None:
     (installed / ".hooks/update.py").write_text("old = True\n")
     head = commit(installed, "managed files")
