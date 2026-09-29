@@ -425,7 +425,8 @@ def run_update(root: Path) -> int:
             try:
                 update.wait()
             finally:
-                stop_group(update)
+                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        stop_group(update)
         if update.returncode != 0:
             record_result(root, failed_update(f"update exited {update.returncode}"))
         with suppress(OSError, subprocess.SubprocessError):

@@ -148,10 +148,12 @@ def test_update_removes_only_candidates_whose_update_exited(
     assert "hard-eng-scaffold-check-running" in listing
 
 
+@pytest.mark.parametrize("still_running", [True, False], ids=["during-update", "during-cleanup"])
 def test_interrupted_update_stops_every_process_and_records_failure(
-    installed: Path, tmp_path: Path
+    installed: Path, tmp_path: Path, still_running: bool
 ) -> None:
     child = tmp_path / "child.pid"
+    work = f"sleep 60 & echo $! > {child}" + ("; wait" if still_running else "")
     setup = (
         "import subprocess, sys\n"
         "from pathlib import Path\n"
@@ -161,7 +163,7 @@ def test_interrupted_update_stops_every_process_and_records_failure(
     inner = tmp_path / "inner.py"
     inner.write_text(
         setup + "update.update = lambda root, repair=False: subprocess.run(\n"
-        f"    ['sh', '-c', \"trap '' TERM; sleep 60 & echo $! > {child}; wait\"],\n"
+        f"    ['sh', '-c', \"trap '' TERM; {work}\"],\n"
         "    check=True,\n"
         ")\n"
         "raise SystemExit(update_runner.apply_update(Path.cwd()))\n"
@@ -175,8 +177,9 @@ def test_interrupted_update_stops_every_process_and_records_failure(
     worker = subprocess.Popen(
         [sys.executable, str(supervisor)], cwd=installed, start_new_session=True
     )
+    ready = child if still_running else installed / update_runner.RESULT_FILE
     deadline = time.monotonic() + 30
-    while not child.is_file() or not child.read_text().strip():
+    while not ready.is_file() or not ready.read_text().strip():
         assert time.monotonic() < deadline and worker.poll() is None
         time.sleep(0.05)
     assert update_runner.update_running(installed)
@@ -185,7 +188,7 @@ def test_interrupted_update_stops_every_process_and_records_failure(
     sleeper = int(child.read_text())
     assert subprocess.run(["kill", "-0", str(sleeper)], check=False).returncode != 0
     result = (installed / update_runner.RESULT_FILE).read_text()
-    assert "Hard Eng update failed: interrupted by signal 15" in result
+    assert ("Hard Eng update failed: interrupted by signal 15" in result) == still_running
     assert not update_runner.update_running(installed)
 
 
