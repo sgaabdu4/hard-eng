@@ -142,6 +142,19 @@ def test_new_repository_inputs_require_applicable_gates(
     path.write_text("fixture\n")
     with pytest.raises(ValueError, match=role):
         load_groups(tmp_path)
+    if role == "shell":
+        gates = tmp_path / "hard-eng.gates.json"
+        config = json.loads(gates.read_text())
+        installer.configure_shellcheck(tmp_path, config)
+        gates.write_text(json.dumps(config))
+        load_groups(tmp_path)
+        (tmp_path / "scripts").mkdir()
+        (tmp_path / "scripts/added.sh").write_text("echo added\n")
+        with pytest.raises(ValueError, match="shellcheck omits scripts/added.sh"):
+            load_groups(tmp_path)
+        installer.configure_shellcheck(tmp_path, config)
+        gates.write_text(json.dumps(config))
+        load_groups(tmp_path)
 
 
 def test_omitting_package_or_language_cannot_remove_baseline(
@@ -656,6 +669,17 @@ def test_source_files_include_unexecuted_modules(
         tmp_path, {"language": "javascript", "sources": ["src"]}, include_tests=True
     )
     assert {path.name for path in typed} == {"used.ts", "unused.ts", "used.test.ts"}
+    for name in ("lib/app.dart", "integration_test/journey.dart"):
+        (tmp_path / name).parent.mkdir()
+        (tmp_path / name).write_text("void main() {}\n")
+    dart = {"language": "dart", "sources": ["lib", "integration_test"]}
+    assert {path.name for path in runner.production_files(tmp_path, dart)} == {
+        "app.dart"
+    }
+    assert {
+        path.name
+        for path in runner.production_files(tmp_path, dart, include_tests=True)
+    } == {"app.dart", "journey.dart"}
 
 
 def test_coverage_excludes_native_generated_and_vendor_attributes(
