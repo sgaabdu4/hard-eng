@@ -267,8 +267,9 @@ def python(
         return 0, []
     manager = "poetry" if tests[0] == "poetry" else "uv"
     output, listing = work / "log", work / "results"
-    run(mutmut(manager, "run", *globs), directory, deadline, output)
-    if run(mutmut(manager, "results", "--all", "true"), directory, deadline, listing):
+    if run(mutmut(manager, "run", *globs), directory, deadline, output) or run(
+        mutmut(manager, "results", "--all", "true"), directory, deadline, listing
+    ):
         raise failed("mutmut", output)
     statuses = mutmut_statuses(listing.read_text(), list(globs))
     survivors: list[Survivor] = []

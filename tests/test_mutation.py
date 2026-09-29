@@ -165,6 +165,28 @@ def test_each_python_survivor_is_read_from_its_own_diff(
     )
 
 
+def test_failed_mutmut_run_is_reported_instead_of_a_clean_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "src/shop").mkdir(parents=True)
+    (tmp_path / "src/shop/price.py").write_text(PRICE)
+
+    def run(
+        command: list[str], _directory: Path, _deadline: object, output: Path
+    ) -> int:
+        if "results" in command:
+            output.write_text("    shop.price.x_discount__mutmut_1: not checked\n")
+            return 0
+        output.write_text("ERROR: fixture 'client' not found\n")
+        return 1
+
+    monkeypatch.setattr(mutation, "run", run)
+    with pytest.raises(ValueError, match="fixture 'client' not found"):
+        mutation.python(
+            tmp_path, {"src/shop/price.py": {2}}, ["pytest"], None, tmp_path
+        )
+
+
 def test_stryker_patterns_match_route_files_literally(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
