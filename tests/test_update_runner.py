@@ -194,18 +194,27 @@ def test_update_commit_is_not_counted_as_session_work(
 ) -> None:
     monkeypatch.setattr(update_runner, "start_update", Mock(return_value="started"))
     monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
-    payload: JsonObject = {"session_id": "known"}
+    before: JsonObject = {"session_id": "before"}
+    after: JsonObject = {"session_id": "after"}
     other = installed / ".hard-eng/sessions/other.json"
     other.parent.mkdir(parents=True)
     other.write_text(json.dumps({"base": "c" * 40}))
-    agent_hooks.session_context(installed, payload)
+    agent_hooks.session_context(installed, before)
+    head = git(installed, "rev-parse", "HEAD")
     (installed / ".hooks/update.py").write_text("updated = True\n")
-    commit(installed, "Update Hard Eng")
-    update_runner.rebase_sessions(installed)
-    assert "no code checks were run" in str(agent_hooks.completion(installed, payload))
+    commit(installed, "Update Hard Eng to " + "b" * 40)
+    agent_hooks.session_context(installed, after)
+    (installed / "app.py").write_text("print('user work')\n")
+    commit(installed, "user work")
+    assert update_runner.rebase_sessions(
+        installed, head, "Update Hard Eng to " + "b" * 40
+    )
     assert json.loads(other.read_text())["base"] == "c" * 40
+    assert agent_hooks.completion(installed, after)["decision"] == "block"
+    git(installed, "reset", "-q", "--hard", "HEAD^")
+    assert "no code checks were run" in str(agent_hooks.completion(installed, before))
     os.remove(installed / ".hooks/update.py")
-    assert agent_hooks.completion(installed, payload)["decision"] == "block"
+    assert agent_hooks.completion(installed, before)["decision"] == "block"
 
 
 def install_hook(root: Path, name: str, script: str) -> None:
@@ -265,3 +274,53 @@ def test_interrupt_after_installing_reports_the_installed_revision(
     result = (installed / update_runner.RESULT_FILE).read_text()
     assert f"Updated Hard Eng to {'b' * 40} with a local commit" in result
     assert "failed" not in result
+
+
+def test_update_commit_landing_after_an_agent_commit_is_kept(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (installed / ".hooks/update.py").write_text("old = True\n")
+    commit(installed, "managed files")
+    install = update.write_changes
+
+    def install_while_agent_commits(root: Path, changes: dict[str, str | None]) -> None:
+        (root / "app.py").write_text("print('agent')\n")
+        git(root, "add", "app.py")
+        git(root, "commit", "-qm", "agent work")
+        install_hook(root, "post-commit", "kill -TERM $PPID\n")
+        install(root, changes)
+
+    monkeypatch.setattr(update, "write_changes", install_while_agent_commits)
+    with pytest.raises(subprocess.SubprocessError, match="git commit exited"):
+        update_runner.commit_update(
+            installed, {".hooks/update.py": "new = True\n"}, {}, "b" * 40
+        )
+    assert (installed / ".hooks/update.py").read_text() == "new = True\n"
+    assert git(installed, "log", "-2", "--format=%s").splitlines() == [
+        f"Update Hard Eng to {'b' * 40}",
+        "agent work",
+    ]
+    assert git(installed, "status", "--porcelain") == ""
+
+
+def test_rollback_keeps_an_edit_made_to_an_already_checked_path(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("first.md", "second.md"):
+        (installed / name).write_text("original\n")
+    changes: dict[str, str | None] = {"first.md": "new\n", "second.md": "new\n"}
+    update.write_changes(installed, changes)
+    check = update_runner.written
+
+    def edit_first_while_checking_second(
+        root: Path, name: str, content: str | None, link: bool
+    ) -> bool:
+        if name == "second.md":
+            (root / "first.md").write_text("agent edit\n")
+        return check(root, name, content, link)
+
+    monkeypatch.setattr(update_runner, "written", edit_first_while_checking_second)
+    before: dict[str, bytes | None] = dict.fromkeys(changes, b"original\n")
+    assert update_runner.roll_back(installed, changes, {}, before, {}) == []
+    assert (installed / "first.md").read_text() == "agent edit\n"
+    assert (installed / "second.md").read_text() == "original\n"

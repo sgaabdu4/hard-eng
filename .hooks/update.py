@@ -13,7 +13,13 @@ from operator import itemgetter
 from pathlib import Path
 
 from mcp_setup import retired_settings
-from update_runner import commit_update, rebase_sessions, stale_message, update_blocker
+from update_runner import (
+    commit_update,
+    current_head,
+    rebase_sessions,
+    stale_message,
+    update_blocker,
+)
 
 UPSTREAM = "sgaabdu4/hard-eng"
 REPOSITORY = f"https://github.com/{UPSTREAM}.git"
@@ -730,6 +736,7 @@ def commit_install(root: Path, names: list[str], clean: bool) -> str:
             ["git", "diff", "--cached", "--quiet", "--", *names], cwd=root, check=False
         ).returncode:
             return "Installed files already match the current commit."
+        head = current_head(root)
         result = subprocess.run(
             ["git", "commit", "--only", "-m", "Install Hard Eng", "--", *names],
             cwd=root,
@@ -739,7 +746,7 @@ def commit_install(root: Path, names: list[str], clean: bool) -> str:
             check=False,
         )
         if result.returncode == 0:
-            rebase_sessions(root)
+            rebase_sessions(root, head, "Install Hard Eng")
             return "Committed the installed files locally without pushing."
         subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
         reason = " | ".join(result.stdout.strip().splitlines()[-3:])

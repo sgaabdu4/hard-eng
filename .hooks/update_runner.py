@@ -72,25 +72,48 @@ def stale_message(root: Path, revision: str) -> str:
     )
 
 
-def rebase_sessions(root: Path) -> None:
-    """Sessions based on the parent of a just-made update commit must not count it as their work."""
+def current_head(root: Path) -> str:
     found = subprocess.run(
-        ["git", "rev-parse", "HEAD", "HEAD^"],
+        ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
         cwd=root,
         capture_output=True,
         text=True,
         check=False,
     )
-    if found.returncode != 0:
-        return
-    head, parent = found.stdout.split()
+    return found.stdout.strip()
+
+
+def landed_commit(root: Path, head: str, message: str) -> tuple[str, str] | None:
+    """The updater's own commit since head, found by its message because the agent may commit too."""
+    found = subprocess.run(
+        ["git", "log", "--format=%H %P%x1f%s", f"{head}..HEAD" if head else "-1"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    for line in found.stdout.splitlines():
+        identities, _, subject = line.partition("\x1f")
+        commit, *parents = identities.split()
+        if subject == message:
+            return commit, parents[0] if parents else ""
+    return None
+
+
+def rebase_sessions(root: Path, head: str, message: str) -> bool:
+    """Sessions based on the update commit's parent must not count that commit as their work."""
+    landed = landed_commit(root, head, message)
+    if landed is None:
+        return False
+    commit, parent = landed
     for state in (root / ".hard-eng/sessions").glob("*.json"):
         try:
             saved = json.loads(state.read_text())
         except (OSError, ValueError):
             continue
-        if isinstance(saved, dict) and saved.get("base") == parent:
-            state.write_text(json.dumps({**saved, "base": head}))
+        if isinstance(saved, dict) and parent and saved.get("base") == parent:
+            state.write_text(json.dumps({**saved, "base": commit}))
+    return True
 
 
 def written(root: Path, name: str, content: str | None, link: bool) -> bool:
@@ -114,19 +137,20 @@ def roll_back(
     before: dict[str, bytes | None],
     before_links: dict[str, str | None],
 ) -> list[str]:
-    kept = [name for name in changes if not written(root, name, changes[name], False)]
-    kept += [name for name in links if not written(root, name, links[name], True)]
+    """Restore each path only while it still holds the updater's write, checked just before."""
+    kept = []
     for name, content in before.items():
         target = root / name
-        if name in kept:
-            continue
-        if content is None:
+        if not written(root, name, changes[name], False):
+            kept.append(name)
+        elif content is None:
             target.unlink(missing_ok=True)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
     for name, target in before_links.items():
-        if name in kept:
+        if not written(root, name, links[name], True):
+            kept.append(name)
             continue
         if (root / name).is_dir() and not (root / name).is_symlink():
             shutil.rmtree(root / name)
@@ -135,17 +159,6 @@ def roll_back(
         if target is not None:
             (root / name).symlink_to(target, target_is_directory=True)
     return kept
-
-
-def committed(root: Path, head: str, message: str) -> bool:
-    found = subprocess.run(
-        ["git", "log", "-1", "--format=%P%n%s"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return found.stdout.splitlines() == [head, message]
 
 
 def commit_update(
@@ -165,9 +178,7 @@ def commit_update(
         name: str((root / name).readlink()) if (root / name).is_symlink() else None
         for name in links
     }
-    head = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=root, text=True
-    ).strip()
+    head = current_head(root)
     message = f"Update Hard Eng to {revision}"
     try:
         write_links(root, links)
@@ -202,8 +213,7 @@ def commit_update(
                 f"git commit exited {result.returncode}: {tail}".removesuffix(": ")
             )
     except (OSError, subprocess.SubprocessError) as error:
-        if committed(root, head, message):
-            rebase_sessions(root)
+        if rebase_sessions(root, head, message):
             raise
         kept = roll_back(root, changes, links, before, before_links)
         subprocess.run(
@@ -214,7 +224,7 @@ def commit_update(
                 f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"
             ) from error
         raise
-    rebase_sessions(root)
+    rebase_sessions(root, head, message)
 
 
 def alive(process: int) -> bool:
