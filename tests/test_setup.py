@@ -555,11 +555,11 @@ def test_plain_dart_uses_native_coverage_tool(
         "get",
         "--enforce-lockfile",
     ]
-    assert checks["tests"]["command"][:3] == [
-        "dart",
-        "run",
-        "coverage:test_with_coverage",
-    ]
+    assert checks["tests"]["command"][:2] == ["sh", "-c"]
+    assert checks["tests"]["command"][2].startswith(
+        "set -e; dart run coverage:test_with_coverage "
+    )
+    assert "--report-on=test_driver" in checks["tests"]["command"][2]
     assert checks["tests"]["report"]["stdout"] is False
     scanner = tmp_path / ".dart-decimaterc.json"
     assert json.loads(scanner.read_text()) == {

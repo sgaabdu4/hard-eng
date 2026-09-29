@@ -301,7 +301,8 @@ def configure_dart(
     )
     marker = "# Hard Eng test coverage uses dart run coverage:test_with_coverage.\n"
     if marker not in content and any(
-        "coverage:test_with_coverage" in gate["command"] for gate in package["checks"]
+        "coverage:test_with_coverage" in " ".join(gate["command"])
+        for gate in package["checks"]
     ):
         # Declare coverage tooling without hiding production-import checks.
         content = marker + content

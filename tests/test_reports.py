@@ -545,6 +545,31 @@ def test_dart_test_failure_keeps_one_bounded_failure_context(tmp_path: Path) -> 
     )
 
 
+def test_dart_report_skips_raw_test_output_and_keeps_failures(tmp_path: Path) -> None:
+    path = tmp_path / "tests.jsonl"
+    path.write_text(
+        "Shell: starting fixture\n"
+        '{"type":"testDone","testID":1,"hidden":false,"skipped":false,"result":"success"}\n'
+        "\n42\n"
+        '{"type":"done","success":true}\n'
+    )
+    assert reports.completed_tests(path, "dart-tests") == 1
+    path.write_text(
+        '{"type":"testStart","test":{"id":7,"name":"rejects an invalid payload"}}\n'
+        "Shell: starting fixture\n"
+        '{"type":"testDone","testID":7,"result":"failure"}\n'
+        '{"type":"done","success":false}\n'
+    )
+    with pytest.raises(ValueError, match="successful completed run"):
+        reports.completed_tests(path, "dart-tests")
+    assert (
+        reports.dart_test_failure(
+            subprocess.CompletedProcess([], 1), True, "dart-tests", path
+        )
+        == "Dart test failure: rejects an invalid payload"
+    )
+
+
 def test_coverage_requires_unexecuted_files_and_merges_lcov(tmp_path: Path) -> None:
     path = tmp_path / "lcov.info"
     path.write_text(
