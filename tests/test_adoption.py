@@ -629,11 +629,7 @@ def test_update_replaces_old_skill_links_and_cleans_local_settings(
     assert json.loads((target / ".claude/settings.local.json").read_text()) == {}
 
 
-@pytest.mark.parametrize("repair", [True, False])
-def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, repair: bool
-) -> None:
-    source, target, _ = release
+def link_skill_into_old_copy(target: Path) -> Path:
     skill = target / ".agents/skills/he"
     (target / ".agents/hard-eng/current/skills").mkdir(parents=True)
     skill.rename(target / ".agents/hard-eng/current/skills/he")
@@ -642,6 +638,15 @@ def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
         exclude.write(".agents/hard-eng/\n")
     git(target, "add", "--all", ".agents/skills")
     commit(target, "old skill link")
+    return skill
+
+
+@pytest.mark.parametrize("repair", [True, False])
+def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, repair: bool
+) -> None:
+    source, target, _ = release
+    skill = link_skill_into_old_copy(target)
     if repair:
         monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
     else:
@@ -871,8 +876,9 @@ def test_setup_runs_the_verified_revisions_own_install_step(
     (source / "setup.sh").write_text(entry.replace(", repair=True", ""))
     installer.write_text(
         "import subprocess\nfrom pathlib import Path\n\n"
+        "SOURCE_FILE = '.hooks/hard-eng-source.json'\n\n\n"
         "def latest_verified(previous: str) -> None:\n    return None\n\n\n"
-        "def update(root: object) -> str:\n"
+        "def update(root: object, repair: bool = False) -> str:\n"
         "    module = Path(__file__).parents[1] / 'component'\n"
         "    assert (module / 'contract.txt').read_text() == 'pinned'\n"
         "    assert subprocess.check_output(['git', '-C', str(module), 'rev-parse', '--is-shallow-repository'], text=True).strip() == 'true'\n"

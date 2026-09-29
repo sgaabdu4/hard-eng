@@ -29,7 +29,7 @@ Setup prepends shared rules to `AGENTS.md`, which Codex and Claude Code v2.1.277
 
 ```mermaid
 flowchart TD
-  A[Open target Git repository] --> B{Current session has an update result?}
+  A[Open target Git repository] --> B{Current session has an update status?}
   B -->|Yes| R{Result succeeded?}
   B -->|No| C[Run published setup command]
   C --> D{Managed installation exists?}
@@ -57,7 +57,7 @@ flowchart TD
   Z --> W[Load project context and select task stage]
 ```
 
-Trusted SessionStart hooks attempt the update; without a result, agent instructions require the command above before work. Reuse a current result and never run concurrent setup. A failed update does not waive existing checks.
+Trusted SessionStart hooks report the last update result and start the update in the background, so starting, resuming or compacting a session never waits on it. One update runs per repository at a time; it writes `.hard-eng/update.log`, commits locally when its candidate passes, and the next session start reports its result. Without a status, agent instructions require the command above before work. Reuse a current status and never run setup while an update runs. A failed update does not waive existing checks.
 
 In Codex CLI, use `codex --enable hooks`, trust the project, then `/hooks` to review and trust Hard Eng's hooks. Changed hook definitions need review again. `--yolo` disables sandbox/approval protections; it is not hook setup. A disabled SessionStart cannot warn you itself; Codex supplies the hook-trust warning. [Native hook instructions](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
 
@@ -215,7 +215,7 @@ Semgrep or configured native rules check code; OSV checks selected lockfiles or 
 
 **Skills guide reasoning; hooks and gates enforce executable checks.** Plan validation checks declared status, results, UX references, and E2E fields. It cannot authenticate screenshots, judge design quality, or prove that an agent followed every instruction.
 
-- **SessionStart:** attempts an update and reports the result or failure.
+- **SessionStart:** reports the last update result and starts or reports a background update.
 - **Stop:** distinguishes declared prerequisite clarification from approval handoffs. Approval needs baseline, UX and E2E planning evidence; changed implementation runs native checks. Planning-only or known unchanged sessions may avoid expensive checks. Repeated stop loops are bounded.
 - **Pre-push:** verifies pushed revisions in isolated worktrees.
 - **CI:** runs configured checks and fails its job on failure.
@@ -224,7 +224,7 @@ Explicit Draft/Ready/Complete commands normally run native checks too. Verified 
 
 ```mermaid
 flowchart TD
-  A[SessionStart] --> B[Attempt update and report result or failure]
+  A[SessionStart] --> B[Report last update result; start background update]
   C[Stop] --> D{Invalid Draft handoff or missing approval evidence?}
   D -->|Yes| F[Block completion and identify missing planning work]
   D -->|No| P{Planning-only handoff or known unchanged session?}
