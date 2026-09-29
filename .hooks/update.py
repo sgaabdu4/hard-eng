@@ -18,12 +18,15 @@ from mcp_setup import retired_settings
 from update_runner import (
     commit_update,
     current_head,
+    known_failure,
     link_state,
     rebase_sessions,
     relink_verified,
+    remember_failure,
     roll_back,
     snapshot,
     stale_message,
+    update_attempt,
     update_blocker,
     write_verified,
 )
@@ -750,7 +753,8 @@ def refuse_local_state(root: Path, names: list[str]) -> None:
         )
 
 
-def update(root: Path, repair: bool = False) -> str:
+def update(root: Path, repair: bool = False, *, remember: bool = False) -> str:
+    """The background run remembers a refusal; setup always retries."""
     if (blocker := update_blocker(root)) is not None:
         return blocker
     previous = json.loads((root / SOURCE_FILE).read_text())["revision"]
@@ -759,41 +763,53 @@ def update(root: Path, repair: bool = False) -> str:
         if repair or local_generation(root):
             return repair_installation(root, previous)
         return repair_current_hook(root, previous)
+    attempt = update_attempt(root, revision) if remember else None
+    if attempt is not None and (known := known_failure(root, attempt)):
+        return known
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
-        changes, links, hook, _ = update_plan(root, source, old)
-        if not changes and not links:
-            install_planned_hook(root, hook)
-            return "Hard Eng already matches the verified source."
-        names = sorted({*changes, *links})
-        refuse_local_state(root, names)
-        local_settings(root)
-        before = snapshot(root, changes)
-        validate_gates(root, source, changes)
-        if snapshot(root, changes) != before:
-            raise ValueError(
-                "Files changed during verification; the update was not applied"
-            )
-        if subprocess.check_output(
-            [
-                "git",
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--ignored",
-                "--",
-                *names,
-            ],
-            cwd=root,
-            text=True,
-        ):
-            raise ValueError(
-                "The update paths changed during verification; nothing was applied"
-            )
-        commit_update(root, changes, links, revision, before)
-        retire_local_generation(root)
-        if hook[0] not in changes:
-            install_planned_hook(root, hook)
+        try:
+            return install_revision(root, source, old, revision)
+        except (ValueError, TypeError, subprocess.CalledProcessError) as error:
+            if attempt is not None:
+                remember_failure(root, attempt, error)
+            raise
+
+
+def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
+    changes, links, hook, _ = update_plan(root, source, old)
+    if not changes and not links:
+        install_planned_hook(root, hook)
+        return "Hard Eng already matches the verified source."
+    names = sorted({*changes, *links})
+    refuse_local_state(root, names)
+    local_settings(root)
+    before = snapshot(root, changes)
+    validate_gates(root, source, changes)
+    if snapshot(root, changes) != before:
+        raise ValueError(
+            "Files changed during verification; the update was not applied"
+        )
+    if subprocess.check_output(
+        [
+            "git",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignored",
+            "--",
+            *names,
+        ],
+        cwd=root,
+        text=True,
+    ):
+        raise ValueError(
+            "The update paths changed during verification; nothing was applied"
+        )
+    commit_update(root, changes, links, revision, before)
+    retire_local_generation(root)
+    if hook[0] not in changes:
+        install_planned_hook(root, hook)
     return f"Updated Hard Eng to {revision}; created an isolated local commit without pushing."
 
 

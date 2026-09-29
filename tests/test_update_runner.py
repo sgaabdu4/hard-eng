@@ -174,7 +174,8 @@ def test_interrupted_update_stops_every_process_and_records_failure(
     )
     inner = tmp_path / "inner.py"
     inner.write_text(
-        setup + "update.update = lambda root, repair=False: subprocess.run(\n"
+        setup
+        + "update.update = lambda root, repair=False, remember=False: subprocess.run(\n"
         f"    ['sh', '-c', \"trap '' TERM; {work}\"],\n"
         "    check=True,\n"
         ")\n"
@@ -480,7 +481,7 @@ def test_interrupt_after_the_update_commit_keeps_the_update(installed: Path) -> 
 def test_interrupt_after_installing_reports_the_installed_revision(
     installed: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def interrupted(root: Path, repair: bool = False) -> str:
+    def interrupted(root: Path, repair: bool = False, *, remember: bool = False) -> str:
         (root / update.SOURCE_FILE).write_text(json.dumps({"revision": "b" * 40}))
         raise subprocess.SubprocessError("interrupted by signal 15")
 
@@ -490,6 +491,62 @@ def test_interrupt_after_installing_reports_the_installed_revision(
     result = (installed / update_runner.RESULT_FILE).read_text()
     assert f"Updated Hard Eng to {'b' * 40} with a local commit" in result
     assert "failed" not in result
+
+
+def refused_release(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Mock]:
+    source, target, _ = release
+    config_path = target / "hard-eng.gates.json"
+    config = json.loads(config_path.read_text())
+    scanner = ["node", "scan.mjs", "gitleaks", "dir", "--report-path", "files.sarif"]
+    config["shared"].append(
+        {"name": "files", "role": "secrets-files", "command": scanner}
+    )
+    config_path.write_text(json.dumps(config))
+    commit(target, "wrapped files scanner the new hooks reject")
+    select_release(source, monkeypatch)
+    fetch = Mock(side_effect=update.fetch_sources)
+    monkeypatch.setattr(update, "fetch_sources", fetch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    return target, fetch
+
+
+def test_background_update_does_not_repeat_a_refusal_until_inputs_change(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target, fetch = refused_release(release, monkeypatch)
+    result = target / update_runner.RESULT_FILE
+    assert update_runner.apply_update(target) == 0
+    assert "secrets-files requires native" in result.read_text()
+    assert update_runner.apply_update(target) == 0
+    assert "nothing changed since, so it was not retried" in result.read_text()
+    assert fetch.call_count == 1
+    with pytest.raises(ValueError, match="secrets-files requires native"):
+        update.update(target, repair=True)
+    assert fetch.call_count == 2
+    (target / "notes.txt").write_text("local work\n")
+    assert update_runner.apply_update(target) == 0
+    assert "not retried" not in result.read_text()
+    assert fetch.call_count == 3
+    failure = target / update_runner.FAILURE_FILE
+    saved = json.loads(failure.read_text())
+    failure.write_text(json.dumps({**saved, "at": time.time() - 25 * 3600}))
+    assert update_runner.apply_update(target) == 0
+    assert fetch.call_count == 4
+
+
+def test_background_update_retries_after_a_network_failure(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target, fetch = refused_release(release, monkeypatch)
+    fetches = fetch.side_effect
+    fetch.side_effect = subprocess.CalledProcessError(128, ["git", "clone"])
+    assert update_runner.apply_update(target) == 0
+    fetch.side_effect = fetches
+    assert update_runner.apply_update(target) == 0
+    assert fetch.call_count == 2
+    assert "not retried" not in (target / update_runner.RESULT_FILE).read_text()
 
 
 def test_update_commit_landing_after_an_agent_commit_is_kept(

@@ -1,6 +1,7 @@
 """Run the scaffold update detached from agent startup, one per repository."""
 
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -17,6 +18,8 @@ from typing import TextIO
 
 RESULT_FILE = ".hard-eng/update-result.txt"
 LOG_FILE = ".hard-eng/update.log"
+FAILURE_FILE = ".hard-eng/update-failure.json"
+LOCAL_INPUTS = (".claude/settings.local.json", "CLAUDE.local.md")
 OWNER = re.compile(r"hard-eng-update (\d+)")
 
 
@@ -507,6 +510,53 @@ def locked_update(root: Path, repair: bool = False) -> str:
         return update(root, repair)
 
 
+def update_attempt(root: Path, revision: str) -> str:
+    """What a refused update would see again: any commit or local edit changes it."""
+    digest = hashlib.sha256()
+    for command in (["rev-parse", "HEAD"], ["diff", "HEAD", "--binary"]):
+        digest.update(subprocess.check_output(["git", *command], cwd=root))
+    listing = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=root
+    )
+    names = [
+        os.fsdecode(name)
+        for name in listing.split(b"\0")
+        if name and not name.startswith(b".hard-eng/")
+    ]
+    for name in [*names, *LOCAL_INPUTS]:
+        path = root / name
+        if path.is_file():
+            digest.update(name.encode() + b"\0" + path.read_bytes())
+    return f"{revision} {digest.hexdigest()}"
+
+
+def known_failure(root: Path, attempt: str) -> str | None:
+    try:
+        saved = json.loads((root / FAILURE_FILE).read_text())
+    except (OSError, ValueError):
+        return None
+    if (
+        not isinstance(saved, dict)
+        or saved.get("attempt") != attempt
+        or not isinstance(saved.get("at"), (int, float))
+        or time.time() - saved["at"] > 24 * 3600
+    ):
+        return None
+    failed = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(saved["at"]))
+    return failed_update(
+        f"{saved.get('error')} (at {failed}; nothing changed since, so it was not "
+        "retried; fix the cause or run the published setup command to retry now)"
+    )
+
+
+def remember_failure(root: Path, attempt: str, error: Exception) -> None:
+    failure = root / FAILURE_FILE
+    failure.parent.mkdir(parents=True, exist_ok=True)
+    failure.write_text(
+        json.dumps({"attempt": attempt, "at": time.time(), "error": str(error)})
+    )
+
+
 def failed_update(error: Exception | str) -> str:
     return f"Hard Eng update failed: {error}. Continue with the existing scaffold; its gates remain required."
 
@@ -540,7 +590,7 @@ def apply_update(root: Path) -> int:
     signal.signal(signal.SIGTERM, interrupt_update)
     previous = installed_revision(root)
     try:
-        outcome = update(root)
+        outcome = update(root, remember=True)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         outcome = failed_update(error)
         if (revision := installed_revision(root)) != previous:
