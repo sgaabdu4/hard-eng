@@ -132,7 +132,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
     for agent, name in agent_hooks.HOOK_FILES.items():
         hooks: JsonObject = {}
         for event, native in agent_hooks.hook_events(agent).items():
-            timeout = 3600 if event in {"session", "stop"} else 10
+            timeout = agent_hooks.HOOK_TIMEOUTS.get(event, 10)
             status_message = (
                 agent_hooks.CODEX_HOOK_STATUS.get(event) if agent == "codex" else None
             )

@@ -1,6 +1,7 @@
 """Run the scaffold update detached from agent startup, one per repository."""
 
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -8,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager, suppress
@@ -17,7 +19,13 @@ from typing import TextIO
 
 RESULT_FILE = ".hard-eng/update-result.txt"
 LOG_FILE = ".hard-eng/update.log"
+FAILURE_FILE = ".hard-eng/update-failure.json"
+LOCAL_INPUTS = (".claude/settings.local.json", "CLAUDE.local.md")
 OWNER = re.compile(r"hard-eng-update (\d+)")
+TEMPORARY = re.compile(
+    r"hard-eng-(?:update|push|gate|gitleaks|dart-parser|scaffold-check|mutation)-[a-z0-9_]{8}"
+)
+WORKTREE = re.compile(r"hard-eng-(?:update-.+/candidate|push-.+/project)")
 
 
 class UpdateRunning(ValueError):
@@ -443,13 +451,27 @@ def alive(process: int) -> bool:
 
 
 def abandoned(path: Path, owner: re.Match[str] | None) -> bool:
-    """Updaters before the lock ran under a one-hour hook, so an unlocked candidate hours old is abandoned."""
+    """Updaters before the lock ran under a one-hour hook, and a push's checks end within a day."""
     if owner is not None:
         return not alive(int(owner[1]))
+    hours = 6 if path.name == "candidate" else 24
     try:
-        return time.time() - path.parent.stat().st_mtime > 6 * 3600
+        return time.time() - path.parent.stat().st_mtime > hours * 3600
     except FileNotFoundError:
         return False
+
+
+def sweep_temporary() -> None:
+    """Directories a killed Hard Eng process left behind; none of its runs lasts a day."""
+    for path in Path(tempfile.gettempdir()).iterdir():
+        with suppress(OSError):
+            if (
+                TEMPORARY.fullmatch(path.name)
+                and path.is_dir()
+                and not path.is_symlink()
+                and time.time() - path.stat().st_mtime > 24 * 3600
+            ):
+                shutil.rmtree(path)
 
 
 def remove_stale_candidates(root: Path) -> None:
@@ -464,10 +486,8 @@ def remove_stale_candidates(root: Path) -> None:
         }
         path = Path(fields.get("worktree", ""))
         owner = OWNER.fullmatch(fields.get("locked", ""))
-        if (
-            path.name != "candidate"
-            or not path.parent.name.startswith("hard-eng-update-")
-            or not abandoned(path, owner)
+        if not WORKTREE.fullmatch(f"{path.parent.name}/{path.name}") or not abandoned(
+            path, owner
         ):
             continue
         if owner is not None and not path.exists():
@@ -481,6 +501,7 @@ def remove_stale_candidates(root: Path) -> None:
             timeout=120,
         ).returncode:
             shutil.rmtree(path.parent, ignore_errors=True)
+    sweep_temporary()
     subprocess.run(["git", "worktree", "prune"], cwd=root, check=True, timeout=60)
 
 
@@ -505,6 +526,53 @@ def locked_update(root: Path, repair: bool = False) -> str:
             )
         remove_stale_candidates(root)
         return update(root, repair)
+
+
+def update_attempt(root: Path, revision: str) -> str:
+    """What a refused update would see again: any commit or local edit changes it."""
+    digest = hashlib.sha256()
+    for command in (["rev-parse", "HEAD"], ["diff", "HEAD", "--binary"]):
+        digest.update(subprocess.check_output(["git", *command], cwd=root))
+    listing = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=root
+    )
+    names = [
+        os.fsdecode(name)
+        for name in listing.split(b"\0")
+        if name and not name.startswith(b".hard-eng/")
+    ]
+    for name in [*names, *LOCAL_INPUTS]:
+        path = root / name
+        if path.is_file():
+            digest.update(name.encode() + b"\0" + path.read_bytes())
+    return f"{revision} {digest.hexdigest()}"
+
+
+def known_failure(root: Path, attempt: str) -> str | None:
+    try:
+        saved = json.loads((root / FAILURE_FILE).read_text())
+    except (OSError, ValueError):
+        return None
+    if (
+        not isinstance(saved, dict)
+        or saved.get("attempt") != attempt
+        or not isinstance(saved.get("at"), (int, float))
+        or time.time() - saved["at"] > 24 * 3600
+    ):
+        return None
+    failed = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(saved["at"]))
+    return failed_update(
+        f"{saved.get('error')} (at {failed}; nothing changed since, so it was not "
+        "retried; fix the cause or run the published setup command to retry now)"
+    )
+
+
+def remember_failure(root: Path, attempt: str, error: Exception) -> None:
+    failure = root / FAILURE_FILE
+    failure.parent.mkdir(parents=True, exist_ok=True)
+    failure.write_text(
+        json.dumps({"attempt": attempt, "at": time.time(), "error": str(error)})
+    )
 
 
 def failed_update(error: Exception | str) -> str:
@@ -540,7 +608,7 @@ def apply_update(root: Path) -> int:
     signal.signal(signal.SIGTERM, interrupt_update)
     previous = installed_revision(root)
     try:
-        outcome = update(root)
+        outcome = update(root, remember=True)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         outcome = failed_update(error)
         if (revision := installed_revision(root)) != previous:

@@ -797,6 +797,17 @@ def main() -> int:
     )
     usage.add_argument("--repo", help="owner/name; defaults to origin")
     usage.add_argument("--days", type=int, default=14)
+    mutating = commands.add_parser(
+        "mutation",
+        help="Report changed lines whose tests miss small deliberate bugs",
+    )
+    mutating.add_argument("--base", required=True)
+    mutating.add_argument("--seconds", type=float, help="Stop after this many seconds")
+    mutating.add_argument(
+        "--in-place",
+        action="store_true",
+        help="Mutate this checkout, which must be disposable, instead of a snapshot",
+    )
     updating = commands.add_parser(
         "update",
         help="Install the newest CI-verified Hard Eng revision and record the result",
@@ -831,6 +842,10 @@ def main() -> int:
         from ci_setup import ci_usage
 
         return ci_usage(ROOT, args.repo, args.days)
+    if args.command == "mutation":
+        from ship_actions import mutate
+
+        return mutate(ROOT, args.base, args.seconds, args.in_place, production_files)
     if args.command == "update":
         from update_runner import apply_update, run_update
 

@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -31,6 +32,14 @@ CODEBASE_MEMORY = {
 }
 
 import update
+
+
+def isolate_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Update cleanup sweeps the temporary directory; keep it off this machine's."""
+    directory = tmp_path / "tmp"
+    directory.mkdir()
+    monkeypatch.setenv("TMPDIR", str(directory))
+    monkeypatch.setattr(tempfile, "tempdir", None)
 
 
 def load_module(name: str, path: Path) -> ModuleType:
@@ -64,7 +73,8 @@ def installer() -> ModuleType:
 
 
 @pytest.fixture
-def repository(tmp_path: Path) -> Path:
+def repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    isolate_temporary(tmp_path, monkeypatch)
     root = tmp_path / "repository"
     init(root)
     git(root, "commit", "--allow-empty", "-qm", "baseline")
@@ -245,6 +255,7 @@ def release(
     monkeypatch: pytest.MonkeyPatch,
     release_template: tuple[Path, str],
 ) -> tuple[Path, Path, str]:
+    isolate_temporary(tmp_path, monkeypatch)
     template, old = release_template
     source, target = tmp_path / "source", tmp_path / "target"
     for name in ("source", "target"):

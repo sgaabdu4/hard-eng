@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from operator import itemgetter
@@ -17,12 +18,15 @@ from mcp_setup import retired_settings
 from update_runner import (
     commit_update,
     current_head,
+    known_failure,
     link_state,
     rebase_sessions,
     relink_verified,
+    remember_failure,
     roll_back,
     snapshot,
     stale_message,
+    update_attempt,
     update_blocker,
     write_verified,
 )
@@ -47,16 +51,33 @@ def github_token() -> str | None:
     return token or None
 
 
-def github_json(endpoint: str) -> object:
+def github_response(endpoint: str, headers: dict[str, str]) -> bytes:
     auth = {"Authorization": f"Bearer {token}"} if (token := github_token()) else {}
-    headers = {"Accept": "application/vnd.github+json", **auth}
     url = f"https://api.github.com/{endpoint}"
-    request = urllib.request.Request(url, headers=headers)
+    request = urllib.request.Request(url, headers={**headers, **auth})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
+            return response.read()
     except http.client.HTTPException as error:
         raise OSError(f"GitHub response for {endpoint} was cut short") from error
+
+
+def github_json(endpoint: str) -> object:
+    return json.loads(
+        github_response(endpoint, {"Accept": "application/vnd.github+json"})
+    )
+
+
+def upstream_moved(previous: str) -> bool:
+    """One 40-byte request instead of a 100-commit page; an authenticated 304 is free."""
+    headers = {"Accept": "application/vnd.github.sha", "If-None-Match": f'"{previous}"'}
+    try:
+        head = github_response(f"repos/{UPSTREAM}/commits/main", headers)
+    except urllib.error.HTTPError as error:
+        if error.code == 304:
+            return False
+        raise
+    return head.decode().strip() != previous
 
 
 def verified_revision(revision: str) -> bool:
@@ -82,6 +103,8 @@ def verified_revision(revision: str) -> bool:
 
 
 def latest_verified(previous: str) -> str | None:
+    if not upstream_moved(previous):
+        return None
     page = 1
     while True:
         commits = github_json(
@@ -730,7 +753,8 @@ def refuse_local_state(root: Path, names: list[str]) -> None:
         )
 
 
-def update(root: Path, repair: bool = False) -> str:
+def update(root: Path, repair: bool = False, *, remember: bool = False) -> str:
+    """The background run remembers a refusal; setup always retries."""
     if (blocker := update_blocker(root)) is not None:
         return blocker
     previous = json.loads((root / SOURCE_FILE).read_text())["revision"]
@@ -739,51 +763,80 @@ def update(root: Path, repair: bool = False) -> str:
         if repair or local_generation(root):
             return repair_installation(root, previous)
         return repair_current_hook(root, previous)
+    attempt = update_attempt(root, revision) if remember else None
+    if attempt is not None and (known := known_failure(root, attempt)):
+        return known
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
-        changes, links, hook, _ = update_plan(root, source, old)
-        if not changes and not links:
-            install_planned_hook(root, hook)
-            return "Hard Eng already matches the verified source."
-        names = sorted({*changes, *links})
-        refuse_local_state(root, names)
-        local_settings(root)
-        before = snapshot(root, changes)
-        validate_gates(root, source, changes)
-        if snapshot(root, changes) != before:
-            raise ValueError(
-                "Files changed during verification; the update was not applied"
-            )
-        if subprocess.check_output(
-            [
-                "git",
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--ignored",
-                "--",
-                *names,
-            ],
-            cwd=root,
-            text=True,
-        ):
-            raise ValueError(
-                "The update paths changed during verification; nothing was applied"
-            )
-        commit_update(root, changes, links, revision, before)
-        retire_local_generation(root)
-        if hook[0] not in changes:
-            install_planned_hook(root, hook)
+        try:
+            return install_revision(root, source, old, revision)
+        except (ValueError, TypeError, subprocess.CalledProcessError) as error:
+            if attempt is not None:
+                remember_failure(root, attempt, error)
+            raise
+
+
+def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
+    changes, links, hook, _ = update_plan(root, source, old)
+    if not changes and not links:
+        install_planned_hook(root, hook)
+        return "Hard Eng already matches the verified source."
+    names = sorted({*changes, *links})
+    refuse_local_state(root, names)
+    local_settings(root)
+    before = snapshot(root, changes)
+    validate_gates(root, source, changes)
+    if snapshot(root, changes) != before:
+        raise ValueError(
+            "Files changed during verification; the update was not applied"
+        )
+    if subprocess.check_output(
+        [
+            "git",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignored",
+            "--",
+            *names,
+        ],
+        cwd=root,
+        text=True,
+    ):
+        raise ValueError(
+            "The update paths changed during verification; nothing was applied"
+        )
+    commit_update(root, changes, links, revision, before)
+    retire_local_generation(root)
+    if hook[0] not in changes:
+        install_planned_hook(root, hook)
     return f"Updated Hard Eng to {revision}; created an isolated local commit without pushing."
 
 
-def check_scaffold_update(root: Path, base: str) -> bool:
+INSTALLED_FILES = {
+    SOURCE_FILE,
+    "AGENTS.md",
+    "CLAUDE.md",
+    "AGENTS.override.md",
+    ".husky/pre-push",
+}
+
+
+def maybe_installed(name: str) -> bool:
+    """A path a Hard Eng update can write, checked before any network proof."""
+    return name in INSTALLED_FILES | {".agents/biome.json"} or name.startswith(
+        (".hooks/", ".agents/skills/", ".claude/skills/")
+    )
+
+
+def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
+    """The installed and previous revisions and changed paths of a committed update."""
     marker = root / SOURCE_FILE
     if not marker.is_file():
-        return False
-    # Only a clean, committed installation update may skip the application checks.
+        return None
+    # Only a clean, committed installation update may narrow the application checks.
     if subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True):
-        return False
+        return None
     try:
         revision = json.loads(marker.read_text()).get("revision")
         previous = json.loads(
@@ -802,7 +855,7 @@ def check_scaffold_update(root: Path, base: str) -> bool:
             ).split("\0")
         ) - {""}
     except (subprocess.CalledProcessError, ValueError, AttributeError):
-        return False
+        return None
     if (
         SOURCE_FILE not in names
         or not isinstance(previous, str)
@@ -811,38 +864,17 @@ def check_scaffold_update(root: Path, base: str) -> bool:
         or not re.fullmatch(r"[0-9a-f]{40}", previous)
         or not re.fullmatch(r"[0-9a-f]{40}", revision)
     ):
-        return False
-    if any(
-        name
-        not in {
-            SOURCE_FILE,
-            "AGENTS.md",
-            "CLAUDE.md",
-            "AGENTS.override.md",
-            ".husky/pre-push",
-            ".agents/biome.json",
-        }
-        and not name.startswith((".hooks/", ".agents/skills/", ".claude/skills/"))
-        for name in names
-    ):
-        return False
-    if not verified_revision(revision):
-        raise ValueError(
-            "Scaffold update does not identify a successful upstream hard-eng check"
-        )
+        return None
+    return revision, previous, names
+
+
+def release_installed(
+    root: Path, base: str, names: set[str], revision: str, previous: str
+) -> bool:
+    """Whether these paths hold exactly what the verified release installs."""
     with tempfile.TemporaryDirectory(prefix="hard-eng-scaffold-check-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
-        allowed = (
-            scaffold_files(source)
-            | scaffold_files(old)
-            | {
-                SOURCE_FILE,
-                "AGENTS.md",
-                "CLAUDE.md",
-                "AGENTS.override.md",
-                ".husky/pre-push",
-            }
-        )
+        allowed = scaffold_files(source) | scaffold_files(old) | INSTALLED_FILES
         allowed |= {
             ".claude/skills/" + path.name
             for tree in (source, old)
@@ -850,21 +882,53 @@ def check_scaffold_update(root: Path, base: str) -> bool:
             if path.is_dir()
         }
         changes, links, _, _ = update_plan(root, source, source)
-        if not names <= allowed or changes or links:
-            return False
-        if any(
-            (root / name).exists()
-            for name in scaffold_files(old) - scaffold_files(source)
+        if (
+            not names <= allowed
+            or changes
+            or links
+            or any(
+                (root / name).exists()
+                for name in scaffold_files(old) - scaffold_files(source)
+            )
+            or not preserved_instructions(root, base, names)
         ):
             return False
-        if not preserved_instructions(root, base, names):
-            return False
-        print(
-            "Scaffold-only update: source CI verified; checking the gate configuration.",
-            flush=True,
-        )
         validate_gates(root, source, {})
     return True
+
+
+def check_scaffold_update(root: Path, base: str) -> bool:
+    found = update_in_diff(root, base)
+    if found is None or not all(maybe_installed(name) for name in found[2]):
+        return False
+    revision, previous, names = found
+    if not verified_revision(revision):
+        raise ValueError(
+            "Scaffold update does not identify a successful upstream hard-eng check"
+        )
+    if not release_installed(root, base, names, revision, previous):
+        return False
+    print(
+        "Scaffold-only update: source CI verified and the gate configuration accepted.",
+        flush=True,
+    )
+    return True
+
+
+def installed_update_paths(root: Path, base: str) -> set[str]:
+    """Changed paths a verified update installed exactly; they add no package scope."""
+    found = update_in_diff(root, base)
+    if found is None:
+        return set()
+    revision, previous, names = found
+    installed = {name for name in names if maybe_installed(name)}
+    try:
+        proven = verified_revision(revision) and release_installed(
+            root, base, installed, revision, previous
+        )
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        return set()
+    return installed if proven else set()
 
 
 def preserved_instructions(root: Path, base: str, names: set[str]) -> bool:
