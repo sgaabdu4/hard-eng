@@ -231,22 +231,27 @@ def deferred_sigterm() -> Generator[None]:
             signal.raise_signal(signal.SIGTERM)
 
 
-def write_verified(
-    root: Path,
-    changes: dict[str, str | None],
-    links: dict[str, str | None],
-    before: dict[str, bytes | None],
-    before_links: dict[str, str | None],
+def relink_verified(
+    root: Path, links: dict[str, str | None], before_links: dict[str, str | None]
 ) -> None:
-    """Write each path only while it still holds its verified content, checked just before."""
-    from update import replace_file, write_changes, write_links
+    """Replace each link only while it still holds its verified state, checked just before."""
+    from update import write_links
 
     for name, target in links.items():
         if link_state(root, [name])[name] != before_links[name]:
             raise ValueError(f"{name} changed while the update was being applied")
         write_links(root, {name: target})
-    # Paths under a link the update just replaced no longer show their verified content.
-    relinked = tuple(f"{name}/" for name in links)
+
+
+def write_verified(
+    root: Path,
+    changes: dict[str, str | None],
+    before: dict[str, bytes | None],
+    relinked: tuple[str, ...],
+) -> None:
+    """Write each file only while it still holds its verified content, checked just before."""
+    from update import replace_file, write_changes
+
     for name, content in changes.items():
         verified = partial(holds, root, name, before[name])
         if name.startswith(relinked) or (content is None and verified()):
@@ -270,7 +275,9 @@ def commit_update(
     message = f"Update Hard Eng to {revision}"
     staging: tuple[dict[str, str], dict[str, str]] | None = None
     try:
-        write_verified(root, changes, links, before, before_links)
+        relink_verified(root, links, before_links)
+        # Paths under a link the update just replaced no longer show their verified content.
+        write_verified(root, changes, before, tuple(f"{name}/" for name in links))
         with deferred_sigterm():
             index = index_entries(root, names)
             subprocess.run(
