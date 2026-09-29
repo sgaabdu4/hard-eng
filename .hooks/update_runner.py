@@ -210,17 +210,13 @@ def roll_back(
     for name in applied:
         if name not in links:
             continue
-        target = before_links[name]
         if links[name] is None and not (root / name).is_symlink():
             prune(root / name)
         if not written(root, name, links[name], True):
             kept.append(name)
             continue
-        if (root / name).is_dir() and not (root / name).is_symlink():
-            shutil.rmtree(root / name)
-        else:
-            (root / name).unlink(missing_ok=True)
-        if target is not None:
+        (root / name).unlink(missing_ok=True)
+        if (target := before_links[name]) is not None:
             (root / name).symlink_to(target, target_is_directory=True)
     return kept
 
