@@ -56,7 +56,7 @@ N/A — terminal report text; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check --base origin/main` passed every gate. On git fixtures with a boundary change on one line: Stryker 10.0.0 listed 2 of 6 mutants surviving (also as a pnpm workspace member), mutmut 3.8.0 2 of 5, mutation_test 1.8.1 2 of 9, and a Flutter package's single mutant was caught in 5.4s. A 2-second limit stopped Stryker, left no runner processes and exited 0. On this repository the report said mutmut cannot import `.hooks/hard-eng.py`.
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1155 tests, 89.71% line coverage). On git fixtures with a boundary change on one line: Stryker 10.0.0 listed 2 of 6 mutants surviving (also as a pnpm workspace member), mutmut 3.8.0 2 of 5, mutation_test 1.8.1 2 of 9, and a Flutter package's single mutant was caught in 5.4s. A 2-second limit stopped Stryker, left no runner processes and exited 0. On this repository the report said mutmut cannot import `.hooks/hard-eng.py`.
 E2E: Passed — the fixture runs above used the real tools through `hard-eng.py mutation --in-place`; the pushes of this branch show the pre-push report.
 
 Delivery target: Merge
