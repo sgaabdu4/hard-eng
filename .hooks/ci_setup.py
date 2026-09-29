@@ -615,9 +615,12 @@ def ci_usage(root: Path, repository: str | None, days: int) -> int:
     )
     count, rows = workflow_jobs(root, repository, days)
     billed: dict[tuple[str, str, str], list[tuple[int, float, int]]] = {}
-    totals = {"billed": 0, "cancelled": 0, "failure": 0, "unstarted": 0}
+    totals = {"billed": 0, "cancelled": 0, "failure": 0, "unstarted": 0, "running": 0}
     actual = 0.0
     for workflow, event, job in rows:
+        if job.get("status") != "completed":
+            totals["running"] += 1
+            continue
         usage = billed_job(job)
         if usage is None:
             totals["unstarted"] += 1
@@ -631,7 +634,8 @@ def ci_usage(root: Path, repository: str | None, days: int) -> int:
         f"{repository}, last {days} days: {count} runs, {len(rows)} jobs. "
         f"Billed {totals['billed']} min ({totals['billed'] - actual:.0f} rounding up to whole minutes); "
         f"cancelled {totals['cancelled']}, failed {totals['failure']}; "
-        f"{totals['unstarted']} jobs never got a runner and are not billed. "
+        f"{totals['unstarted']} jobs never got a runner and are not billed; "
+        f"{totals['running']} jobs still running are not counted. "
         "Standard runners on public repositories are free."
     )
     print("billed  runs  median s  p90 s  workflow / event / job")

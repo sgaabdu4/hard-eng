@@ -12,6 +12,7 @@ SOURCE = Path(__file__).resolve().parents[1]
 def _job(name: str, seconds: int, **changes: object) -> dict[str, object]:
     job: dict[str, object] = {
         "name": name,
+        "status": "completed",
         "conclusion": "success",
         "runner_name": "GitHub Actions 1",
         "labels": ["ubuntu-latest"],
@@ -73,14 +74,22 @@ def test_ci_usage_bills_started_jobs_in_whole_minutes(
                     _job("lint", 5, conclusion="cancelled"),
                     _job("build", 70, conclusion="failure"),
                     never_started,
+                    _job(
+                        "deploy",
+                        0,
+                        status="in_progress",
+                        conclusion=None,
+                        completed_at=None,
+                    ),
                 ],
             )
         ],
     )
-    assert "1 runs, 5 jobs. Billed 15 min (8 rounding" in output
+    assert "1 runs, 6 jobs. Billed 15 min (8 rounding" in output
     assert "cancelled 1, failed 2; 1 jobs never got a runner" in output
+    assert "1 jobs still running are not counted" in output
     assert "    10     1        30     30  CI / pull_request / mac" in output
-    assert "queued" not in output
+    assert "queued" not in output and "deploy" not in output
 
 
 def test_ci_usage_reports_jobs_repeated_on_push_and_pull_request(
