@@ -12,7 +12,7 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
     (tmp_path / "pubspec.yaml").write_text(
         "name: coverage_classifier_fixture\n"
         "environment:\n  sdk: '>=3.11.0 <4.0.0'\n"
-        "dev_dependencies:\n  analyzer: ^14.4.0\n"
+        "dev_dependencies:\n  analyzer: 12.1.0\n"
     )
     subprocess.run(
         ["dart", "pub", "get"],
@@ -72,7 +72,11 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
     for name, source in sources.items():
         (tmp_path / name).write_text(source)
     expected = {tmp_path / name for name in sources}
-    erased = erased_dart(expected, tmp_path)
+    assert (
+        '"name": "analyzer"'
+        in (tmp_path / ".dart_tool/package_config.json").read_text()
+    )
+    erased = erased_dart(expected)
     assert {path.name for path in erased} == {
         "barrel.dart",
         "constants.dart",
@@ -94,14 +98,25 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
         line_coverage(report, "dart-tests", tmp_path, erased)
 
 
-def test_missing_dart_parser_keeps_sources_required(tmp_path: Path) -> None:
-    source = tmp_path / "constants.dart"
-    source.write_text("const answer = 42;\n")
-    assert erased_dart({source}, tmp_path) == set()
+def test_missing_dart_parser_keeps_sources_required(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     registry = tmp_path / ".dart_tool/package_config.json"
     registry.parent.mkdir()
     registry.write_text('{"configVersion":2,"packages":[]}')
-    assert erased_dart({source}, tmp_path) == set()
+    declarations = tmp_path / "constants.dart"
+    declarations.write_text("const answer = 42;\n")
+    runtime = tmp_path / "runtime.dart"
+    runtime.write_text("int call() => 1;\n")
+    report = tmp_path / "lcov.info"
+    report.write_text("SF:covered.dart\nDA:1,1\nend_of_record\n")
+    expected = {declarations, runtime, tmp_path / "covered.dart"}
+    with pytest.raises(ValueError, match="omits production files: runtime.dart\\."):
+        line_coverage(report, "dart-tests", tmp_path, expected)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    with pytest.raises(ValueError, match="classifier failed at `dart pub get") as error:
+        line_coverage(report, "dart-tests", tmp_path, expected)
+    assert "linguist-generated" not in str(error.value)
 
 
 def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> None:
@@ -109,7 +124,6 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
         "name: native_dart_coverage_fixture\n"
         "environment:\n  sdk: '>=3.11.0 <4.0.0'\n"
         "dev_dependencies:\n"
-        "  analyzer: ^14.4.0\n"
         "  coverage: ^1.15.0\n"
         "  test: ^1.29.0\n"
     )
@@ -222,7 +236,7 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
             "uncovered.dart",
         )
     }
-    assert {path.name for path in erased_dart(expected, tmp_path)} == {
+    assert {path.name for path in erased_dart(expected)} == {
         "contract.dart",
         "state.dart",
         "shift.dart",

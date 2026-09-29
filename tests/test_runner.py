@@ -656,6 +656,17 @@ def test_source_files_include_unexecuted_modules(
         tmp_path, {"language": "javascript", "sources": ["src"]}, include_tests=True
     )
     assert {path.name for path in typed} == {"used.ts", "unused.ts", "used.test.ts"}
+    for name in ("lib/app.dart", "integration_test/journey.dart"):
+        (tmp_path / name).parent.mkdir()
+        (tmp_path / name).write_text("void main() {}\n")
+    dart = {"language": "dart", "sources": ["lib", "integration_test"]}
+    assert {path.name for path in runner.production_files(tmp_path, dart)} == {
+        "app.dart"
+    }
+    assert {
+        path.name
+        for path in runner.production_files(tmp_path, dart, include_tests=True)
+    } == {"app.dart", "journey.dart"}
 
 
 def test_coverage_excludes_native_generated_and_vendor_attributes(

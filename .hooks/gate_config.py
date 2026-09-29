@@ -190,7 +190,8 @@ def repository_files(root: Path) -> list[Path]:
 
 def nonproduction_source(relative: Path) -> bool:
     return bool(
-        {"test", "tests", "__tests__", "node_modules", "vendor"} & set(relative.parts)
+        {"test", "tests", "integration_test", "__tests__", "node_modules", "vendor"}
+        & set(relative.parts)
         or relative.name.startswith("test_")
         or relative.stem.endswith(("_test", ".test", ".spec"))
         or relative.name.endswith((".d.ts", ".d.mts", ".d.cts"))
