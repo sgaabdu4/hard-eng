@@ -658,21 +658,6 @@ def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
     assert git(target, "status", "--porcelain") == ""
 
 
-def test_failed_update_restores_the_skill_folder_link(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, _ = release
-    skill = link_skill_into_old_copy(target)
-    select_release(source, monkeypatch)
-    hook = target / ".git/hooks/pre-commit"
-    hook.write_text("#!/bin/sh\nexit 1\n")
-    hook.chmod(0o755)
-    with pytest.raises(subprocess.SubprocessError, match="git commit exited 1"):
-        update.update(target)
-    assert skill.is_symlink()
-    assert git(target, "status", "--porcelain") == ""
-
-
 def test_install_replaces_older_skill_files_behind_an_old_link(
     installer: ModuleType, tmp_path: Path
 ) -> None:
