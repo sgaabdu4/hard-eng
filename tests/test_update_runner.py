@@ -352,26 +352,22 @@ def test_failed_update_commit_keeps_staging_made_while_it_ran(
     (installed / ".hooks/update.py").write_text("old = True\n")
     commit(installed, "managed files")
     install_hook(installed, "pre-commit", "exit 1\n")
-    restore = update_runner.roll_back
+    unstage = update_runner.unstage_own
 
-    def agent_stages_then_rollback(
-        root: Path,
-        changes: dict[str, str | None],
-        links: dict[str, str | None],
-        before: dict[str, bytes | None],
-        before_links: dict[str, str | None],
-    ) -> list[str]:
+    def agent_stages_then_unstage(
+        root: Path, names: list[str], staging: tuple[dict[str, str], dict[str, str]]
+    ) -> None:
         (root / "AGENTS.md").write_text("staged by agent\n")
         git(root, "add", "AGENTS.md")
         (root / "AGENTS.md").write_text("still editing\n")
-        return restore(root, changes, links, before, before_links)
+        unstage(root, names, staging)
 
-    monkeypatch.setattr(update_runner, "roll_back", agent_stages_then_rollback)
+    monkeypatch.setattr(update_runner, "unstage_own", agent_stages_then_unstage)
     changes: dict[str, str | None] = {
         "AGENTS.md": "updated rules\n",
         ".hooks/update.py": "new = True\n",
     }
-    with pytest.raises(subprocess.SubprocessError, match="kept later edits"):
+    with pytest.raises(subprocess.SubprocessError, match="git commit exited 1"):
         update_runner.commit_update(installed, changes, {}, "b" * 40)
     assert git(installed, "show", ":AGENTS.md") == "staged by agent"
     assert (installed / "AGENTS.md").read_text() == "still editing\n"
