@@ -205,6 +205,7 @@ def owned_hook_entry(
     return {"hooks": [handler]}
 
 
+HOOK_TIMEOUTS = {"session": 60, "stop": 3600}
 CODEX_HOOK_STATUS = {
     "session": "Hard Eng: updating project setup",
     "stop": "Hard Eng: verifying changes",
@@ -239,6 +240,12 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
                 hook_events(agent)[event],
                 owned_hook_entry(agent, event, command, 3600),
             )
+    status = CODEX_HOOK_STATUS["session"] if agent == "codex" else None
+    _remove_owned_entry(
+        hooks,
+        hook_events(agent)["session"],
+        owned_hook_entry(agent, "session", command, 3600, status_message=status),
+    )
     remove_old_generation(hooks)
     if current.get("outputStyle") == "Plain English":
         del current["outputStyle"]
