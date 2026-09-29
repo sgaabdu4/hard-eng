@@ -42,7 +42,7 @@ N/A — check selection; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1157 tests, 89.68% line coverage); before this change `changed_packages` selected every package for the feature case.
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1160 tests, 89.84% line coverage); before this change `changed_packages` selected every package for the feature case.
 E2E: N/A — the test builds real Git histories with a fixture release; installed repositories take the change with their next update.
 
 Delivery target: Merge

@@ -31,7 +31,8 @@ Authority: Autonomous. The user asked for mutation testing on changed code in th
 
 - [x] Only new-side lines of added or modified files are mutated, as merged ranges → `test_changed_lines_become_the_ranges_the_tools_mutate`.
 - [x] Python selects the changed functions and methods, including decorated ones, and refuses a non-importable path with a named reason → `test_python_changes_select_the_functions_and_methods_that_hold_them`.
-- [x] Text and exception-message mutants are not reported; operator mutants are → `test_text_only_python_mutants_are_not_reported`.
+- [x] Text and exception-message mutants are not reported; operator mutants and other exception arguments, such as an HTTP status, are → `test_text_only_python_mutants_are_not_reported`.
+- [x] Route files with brackets or parentheses, such as `app/(shop)/[...slug]/route.ts`, are matched literally by Stryker's mutate patterns → `test_stryker_patterns_match_route_files_literally`.
 - [x] Only checked mutants of changed functions count → `test_mutmut_statuses_count_only_checked_mutants_of_changed_functions`.
 - [x] Stryker and mutation_test reports list each survivor with its mutated line → `test_stryker_and_mutation_test_reports_list_what_survived`.
 - [x] A tool error or the time limit prints its reason and returns 0 → `test_mutation_report_never_fails_when_a_tool_errors_or_hits_the_limit`.
@@ -58,7 +59,7 @@ N/A — terminal report text; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1157 tests, 89.68% line coverage). On git fixtures with a boundary change on one line: Stryker 10.0.0 listed 2 of 6 mutants surviving (also as a pnpm workspace member), mutmut 3.8.0 2 of 5, mutation_test 1.8.1 2 of 9, and a Flutter package's single mutant was caught in 5.4s. A 2-second limit stopped Stryker, left no runner processes and exited 0. On this repository the report said mutmut cannot import `.hooks/hard-eng.py`.
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1160 tests, 89.84% line coverage). On git fixtures with a boundary change on one line: Stryker 10.0.0 listed 2 of 6 mutants surviving (also as a pnpm workspace member, and for `src/[id]/route.ts` and `src/(group)/[...slug]/route.ts`), mutmut 3.8.0 2 of 5, mutation_test 1.8.1 2 of 9, and a Flutter package's single mutant was caught in 5.4s. A 2-second limit stopped Stryker, left no runner processes and exited 0. On this repository the report said mutmut cannot import `.hooks/hard-eng.py`.
 E2E: Passed — the fixture runs above used the real tools through `hard-eng.py mutation --in-place`. On this repository, `hard-eng.py mutation --base origin/main` checked a snapshot of HEAD (all gates passed), printed the mutmut import reason, exited 0 and removed the snapshot in 108s.
 
 Delivery target: Merge
