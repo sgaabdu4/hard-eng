@@ -408,7 +408,7 @@ def configure_javascript(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
     from gate_config import json_file
-    from project_setup import javascript_manager
+    from project_setup import javascript_manager, native_typecheck
 
     manager = javascript_manager(directory)[0]
     target = directory / "tsconfig.json"
@@ -426,7 +426,15 @@ def configure_javascript(
             },
         )
     scripts = json.loads((directory / "package.json").read_text()).get("scripts", {})
-    if "typecheck" in scripts and not any(
+    if native_typecheck(scripts, package["checks"]):
+        wrapper = {"name": "project-typecheck", "role": "project-typecheck"}
+        package["checks"] = [
+            gate
+            for gate in package["checks"]
+            if {**gate, "command": gate["command"][1:]}
+            != {**wrapper, "command": ["run", "typecheck"]}
+        ]
+    elif "typecheck" in scripts and not any(
         gate["command"] == [manager, "run", "typecheck"] for gate in package["checks"]
     ):
         package["checks"].append(
