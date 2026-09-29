@@ -103,6 +103,12 @@ def test_python_changes_select_the_functions_and_methods_that_hold_them() -> Non
         ('raise ValueError("too large")', "raise ValueError(None)", True),
         ('print(f"total {total}")', 'print(f"XXtotal XX{total}")', True),
         ("if total >= 100 and member:", "if total > 100 and member:", False),
+        ('raise ValueError("too large")', "raise ValueError()", True),
+        (
+            "raise HTTPException(status_code=403)",
+            "raise HTTPException(status_code=404)",
+            False,
+        ),
         ('return label("a")', 'return None("a")', False),
     ],
 )

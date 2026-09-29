@@ -225,10 +225,12 @@ def shape(line: str) -> list[str]:
 
 def text_only(original: str, mutated: str) -> bool:
     """A change to text or an exception message, which tests rarely pin."""
-    head, parenthesis, _ = original.partition("(")
-    if original.startswith("raise ") and parenthesis and mutated.startswith(head + "("):
-        return True
-    return bool(shape(original)) and shape(original) == shape(mutated)
+    before, after = shape(original), shape(mutated)
+    if not before or before == after:
+        return bool(before)
+    raising = original.startswith("raise ") and mutated.startswith("raise ")
+    kept = [token for token in before if token != "<text>"]
+    return raising and kept == [t for t in after if t not in {"<text>", "None"}]
 
 
 def mutmut_change(diff: str) -> tuple[str, str]:
