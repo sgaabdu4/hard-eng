@@ -677,6 +677,48 @@ def test_freshness_walks_commits_only_after_upstream_moves(
     assert walk.called is walks
 
 
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("feature", {"apps/web"}),
+        ("gate-config", None),
+        ("unverified", None),
+        ("edited-hook", None),
+        ("impact", None),
+    ],
+)
+def test_update_mixed_with_feature_work_checks_only_affected_packages(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    expected: set[str] | None,
+) -> None:
+    from gate_config import Group, changed_packages
+
+    source, target, _ = release
+    base = git(target, "rev-parse", "HEAD")
+    select_release(source, monkeypatch)
+    update.update(target)
+    page = target / "apps/web/page.ts"
+    page.parent.mkdir(parents=True)
+    page.write_text("export const page = 1;\n")
+    if case == "gate-config":
+        config = target / "hard-eng.gates.json"
+        config.write_text(config.read_text() + "\n")
+    if case == "edited-hook":
+        hook = target / ".hooks/update.py"
+        hook.write_text(hook.read_text() + "\n")
+    commit(target, "feature work on the updated branch")
+    verified = Mock(return_value=case != "unverified")
+    monkeypatch.setattr(update, "verified_revision", verified)
+    packages: dict[str, Group] = {
+        path: {"path": path, "checks": []} for path in ("apps/web", "apps/api")
+    }
+    selected = changed_packages(target, packages, base, prove_update=case != "impact")
+    assert selected == expected
+    assert verified.called is (case not in {"gate-config", "impact"})
+
+
 @pytest.mark.parametrize("extra", [None, "project.txt", "hard-eng.gates.json", "local"])
 def test_committed_scaffold_exemption_preserves_application_boundary(
     release: tuple[Path, Path, str],

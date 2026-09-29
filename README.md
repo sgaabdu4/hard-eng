@@ -220,7 +220,7 @@ Semgrep or configured native rules check code; OSV checks selected lockfiles or 
 - **Pre-push:** verifies pushed revisions in isolated worktrees.
 - **CI:** runs configured checks and fails its job on failure.
 
-Explicit Draft/Ready/Complete commands normally run native checks too. Verified scaffold-only updates have a dedicated path that avoids unrelated product checks. Completion and shipping check scaffold freshness. Host hooks work only when supported, trusted, and invoked; registration alone proves nothing.
+Explicit Draft/Ready/Complete commands normally run native checks too. Verified scaffold-only updates have a dedicated path that avoids unrelated product checks; when an update shares a branch with other work, the checks follow that other work. Completion and shipping check scaffold freshness. Host hooks work only when supported, trusted, and invoked; registration alone proves nothing.
 
 ```mermaid
 flowchart TD

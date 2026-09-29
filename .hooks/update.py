@@ -813,13 +813,30 @@ def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
     return f"Updated Hard Eng to {revision}; created an isolated local commit without pushing."
 
 
-def check_scaffold_update(root: Path, base: str) -> bool:
+INSTALLED_FILES = {
+    SOURCE_FILE,
+    "AGENTS.md",
+    "CLAUDE.md",
+    "AGENTS.override.md",
+    ".husky/pre-push",
+}
+
+
+def maybe_installed(name: str) -> bool:
+    """A path a Hard Eng update can write, checked before any network proof."""
+    return name in INSTALLED_FILES | {".agents/biome.json"} or name.startswith(
+        (".hooks/", ".agents/skills/", ".claude/skills/")
+    )
+
+
+def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
+    """The installed and previous revisions and changed paths of a committed update."""
     marker = root / SOURCE_FILE
     if not marker.is_file():
-        return False
-    # Only a clean, committed installation update may skip the application checks.
+        return None
+    # Only a clean, committed installation update may narrow the application checks.
     if subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True):
-        return False
+        return None
     try:
         revision = json.loads(marker.read_text()).get("revision")
         previous = json.loads(
@@ -838,7 +855,7 @@ def check_scaffold_update(root: Path, base: str) -> bool:
             ).split("\0")
         ) - {""}
     except (subprocess.CalledProcessError, ValueError, AttributeError):
-        return False
+        return None
     if (
         SOURCE_FILE not in names
         or not isinstance(previous, str)
@@ -847,38 +864,17 @@ def check_scaffold_update(root: Path, base: str) -> bool:
         or not re.fullmatch(r"[0-9a-f]{40}", previous)
         or not re.fullmatch(r"[0-9a-f]{40}", revision)
     ):
-        return False
-    if any(
-        name
-        not in {
-            SOURCE_FILE,
-            "AGENTS.md",
-            "CLAUDE.md",
-            "AGENTS.override.md",
-            ".husky/pre-push",
-            ".agents/biome.json",
-        }
-        and not name.startswith((".hooks/", ".agents/skills/", ".claude/skills/"))
-        for name in names
-    ):
-        return False
-    if not verified_revision(revision):
-        raise ValueError(
-            "Scaffold update does not identify a successful upstream hard-eng check"
-        )
+        return None
+    return revision, previous, names
+
+
+def release_installed(
+    root: Path, base: str, names: set[str], revision: str, previous: str
+) -> bool:
+    """Whether these paths hold exactly what the verified release installs."""
     with tempfile.TemporaryDirectory(prefix="hard-eng-scaffold-check-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
-        allowed = (
-            scaffold_files(source)
-            | scaffold_files(old)
-            | {
-                SOURCE_FILE,
-                "AGENTS.md",
-                "CLAUDE.md",
-                "AGENTS.override.md",
-                ".husky/pre-push",
-            }
-        )
+        allowed = scaffold_files(source) | scaffold_files(old) | INSTALLED_FILES
         allowed |= {
             ".claude/skills/" + path.name
             for tree in (source, old)
@@ -886,21 +882,53 @@ def check_scaffold_update(root: Path, base: str) -> bool:
             if path.is_dir()
         }
         changes, links, _, _ = update_plan(root, source, source)
-        if not names <= allowed or changes or links:
-            return False
-        if any(
-            (root / name).exists()
-            for name in scaffold_files(old) - scaffold_files(source)
+        if (
+            not names <= allowed
+            or changes
+            or links
+            or any(
+                (root / name).exists()
+                for name in scaffold_files(old) - scaffold_files(source)
+            )
+            or not preserved_instructions(root, base, names)
         ):
             return False
-        if not preserved_instructions(root, base, names):
-            return False
-        print(
-            "Scaffold-only update: source CI verified; checking the gate configuration.",
-            flush=True,
-        )
         validate_gates(root, source, {})
     return True
+
+
+def check_scaffold_update(root: Path, base: str) -> bool:
+    found = update_in_diff(root, base)
+    if found is None or not all(maybe_installed(name) for name in found[2]):
+        return False
+    revision, previous, names = found
+    if not verified_revision(revision):
+        raise ValueError(
+            "Scaffold update does not identify a successful upstream hard-eng check"
+        )
+    if not release_installed(root, base, names, revision, previous):
+        return False
+    print(
+        "Scaffold-only update: source CI verified and the gate configuration accepted.",
+        flush=True,
+    )
+    return True
+
+
+def installed_update_paths(root: Path, base: str) -> set[str]:
+    """Changed paths a verified update installed exactly; they add no package scope."""
+    found = update_in_diff(root, base)
+    if found is None:
+        return set()
+    revision, previous, names = found
+    installed = {name for name in names if maybe_installed(name)}
+    try:
+        proven = verified_revision(revision) and release_installed(
+            root, base, installed, revision, previous
+        )
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        return set()
+    return installed if proven else set()
 
 
 def preserved_instructions(root: Path, base: str, names: set[str]) -> bool:
