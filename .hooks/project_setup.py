@@ -206,7 +206,7 @@ def package_script_invocation(
     return arguments, directory
 
 
-def native_typecheck(scripts: dict[str, str], checks: list[Gate]) -> bool:
+def native_typecheck(scripts: JsonObject, checks: list[Gate]) -> bool:
     """A plain `tsc --noEmit` script repeats the native strict check on the same tsconfig."""
     selects = {"-p", "--project", "-b", "--build"}
     plain = str(scripts.get("typecheck", "")).split() == ["tsc", "--noEmit"]

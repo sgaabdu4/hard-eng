@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,9 @@ if TYPE_CHECKING:
     from shipping import ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
+# Local fixture commands must not inherit the hosting workflow's event.
+os.environ.pop("GITHUB_ACTIONS", None)
+os.environ.pop("GITHUB_EVENT_NAME", None)
 sys.path.insert(0, str(SOURCE / ".hooks"))
 CODEBASE_MEMORY = {
     "command": "sh",
@@ -57,13 +61,6 @@ def init(root: Path) -> None:
 @pytest.fixture
 def installer() -> ModuleType:
     return load_module("installer", SOURCE / "setup.py")
-
-
-@pytest.fixture(autouse=True)
-def local_execution(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Local fixture commands must not inherit the hosting workflow's event."""
-    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-    monkeypatch.delenv("GITHUB_EVENT_NAME", raising=False)
 
 
 @pytest.fixture
