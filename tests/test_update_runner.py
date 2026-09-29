@@ -280,8 +280,8 @@ def test_update_keeps_an_edit_made_before_it_reached_that_path(
 
     monkeypatch.setattr(update, "replace_file", agent_edits_next_path)
     with pytest.raises(
-        subprocess.SubprocessError,
-        match=r"kept later edits to \.hooks/update\.py instead",
+        ValueError,
+        match=r"^\.hooks/update\.py changed while the update was being applied$",
     ):
         update_runner.commit_update(installed, changes, {}, "b" * 40, before)
     assert (installed / ".hooks/update.py").read_text() == "agent = True\n"
@@ -289,6 +289,34 @@ def test_update_keeps_an_edit_made_before_it_reached_that_path(
     assert (installed / "README.md").read_text() == "original readme\n"
     assert git(installed, "rev-parse", "HEAD") == head
     assert git(installed, "diff", "--cached", "--name-only") == ""
+
+
+def test_rollback_leaves_paths_the_update_never_reached(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (installed / "AGENTS.md").write_text("original rules\n")
+    (installed / "old.md").write_text("retired\n")
+    commit(installed, "managed files")
+    changes: dict[str, str | None] = {
+        "AGENTS.md": "updated rules\n",
+        "new.md": "planned\n",
+        "old.md": None,
+    }
+    before = update_runner.snapshot(installed, changes)
+    head = update_runner.current_head
+
+    def agent_works_first(root: Path) -> str | None:
+        (root / "AGENTS.md").write_text("agent edit\n")
+        (root / "new.md").write_text("planned\n")
+        (root / "old.md").unlink()
+        return head(root)
+
+    monkeypatch.setattr(update_runner, "current_head", agent_works_first)
+    with pytest.raises(ValueError, match="^AGENTS.md changed"):
+        update_runner.commit_update(installed, changes, {}, "b" * 40, before)
+    assert (installed / "AGENTS.md").read_text() == "agent edit\n"
+    assert (installed / "new.md").read_text() == "planned\n"
+    assert not (installed / "old.md").exists()
 
 
 def test_interrupt_after_the_update_commit_keeps_the_update(installed: Path) -> None:

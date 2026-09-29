@@ -163,16 +163,12 @@ def roll_back(
 
     kept = []
     for name, content in before.items():
-        if holds(root, name, content):
-            continue
         unchanged = partial(written, root, name, changes[name], False)
         if content is None and unchanged():
             (root / name).unlink(missing_ok=True)
         elif content is None or not replace_file(root / name, content, unchanged):
             kept.append(name)
     for name, target in before_links.items():
-        if link_state(root, [name])[name] == target:
-            continue
         if not written(root, name, links[name], True):
             kept.append(name)
             continue
@@ -232,7 +228,10 @@ def deferred_sigterm() -> Generator[None]:
 
 
 def relink_verified(
-    root: Path, links: dict[str, str | None], before_links: dict[str, str | None]
+    root: Path,
+    links: dict[str, str | None],
+    before_links: dict[str, str | None],
+    applied: list[str],
 ) -> None:
     """Replace each link only while it still holds its verified state, checked just before."""
     from update import write_links
@@ -240,6 +239,7 @@ def relink_verified(
     for name, target in links.items():
         if link_state(root, [name])[name] != before_links[name]:
             raise ValueError(f"{name} changed while the update was being applied")
+        applied.append(name)
         write_links(root, {name: target})
 
 
@@ -248,17 +248,20 @@ def write_verified(
     changes: dict[str, str | None],
     before: dict[str, bytes | None],
     relinked: tuple[str, ...],
+    applied: list[str],
 ) -> None:
     """Write each file only while it still holds its verified content, checked just before."""
     from update import replace_file, write_changes
 
     for name, content in changes.items():
         verified = partial(holds, root, name, before[name])
+        applied.append(name)
         if name.startswith(relinked) or (content is None and verified()):
             write_changes(root, {name: content})
         elif content is None or not replace_file(
             root / name, content.encode(), verified
         ):
+            applied.pop()
             raise ValueError(f"{name} changed while the update was being applied")
 
 
@@ -274,10 +277,12 @@ def commit_update(
     head = current_head(root)
     message = f"Update Hard Eng to {revision}"
     staging: tuple[dict[str, str], dict[str, str]] | None = None
+    applied: list[str] = []
     try:
-        relink_verified(root, links, before_links)
+        relink_verified(root, links, before_links, applied)
         # Paths under a link the update just replaced no longer show their verified content.
-        write_verified(root, changes, before, tuple(f"{name}/" for name in links))
+        relinked = tuple(f"{name}/" for name in links)
+        write_verified(root, changes, before, relinked, applied)
         with deferred_sigterm():
             index = index_entries(root, names)
             subprocess.run(
@@ -315,7 +320,13 @@ def commit_update(
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         if rebase_sessions(root, head, message):
             raise
-        kept = roll_back(root, changes, links, before, before_links)
+        kept = roll_back(
+            root,
+            changes,
+            links,
+            {name: before[name] for name in applied if name in changes},
+            {name: before_links[name] for name in applied if name in links},
+        )
         if staging is not None:
             unstage_own(root, names, staging)
         if kept:
