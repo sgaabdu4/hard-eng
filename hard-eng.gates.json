@@ -6,7 +6,7 @@
     "checks": ["hard-eng"],
     "ui_paths": [],
     "ci_seconds": 300,
-    "pre_push_seconds": 300,
+    "pre_push_seconds": 600,
     "delivery": []
   },
   "packages": [{

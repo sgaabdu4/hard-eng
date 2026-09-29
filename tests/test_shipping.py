@@ -730,7 +730,7 @@ def _merged_push(
         _native(root, "merge", "-q", "--no-ff", "-m", "Merge feature", head)
     else:
         _native(root, "merge", "-q", "--squash", head)
-        _native(root, "commit", "-qm", "Change the source (#7)")
+        _native(root, "commit", "-qm", "Change the source (#7)", "-m", "* Change the source")
     responses: dict[str, object] = {
         "git/ref/pull/7/head": {"object": {"sha": head}},
         f"compare/{base}...{head}": {"status": "ahead"},
