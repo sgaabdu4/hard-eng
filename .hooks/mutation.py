@@ -267,10 +267,10 @@ def python(
         raise failed("mutmut", output)
     statuses = mutmut_statuses(listing.read_text(), list(globs))
     survivors: list[Survivor] = []
-    for mutant, status in statuses.items():
+    for index, (mutant, status) in enumerate(statuses.items()):
         if status not in {"survived", "no tests"}:
             continue
-        shown = work / f"show-{len(survivors)}"
+        shown = work / f"show-{index}"
         run(mutmut(manager, "show", mutant), directory, deadline, shown)
         original, mutated = mutmut_change(shown.read_text())
         file, content = next(

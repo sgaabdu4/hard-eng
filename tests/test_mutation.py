@@ -125,6 +125,38 @@ def test_mutmut_statuses_count_only_checked_mutants_of_changed_functions() -> No
     }
 
 
+def test_each_python_survivor_is_read_from_its_own_diff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "src/shop").mkdir(parents=True)
+    (tmp_path / "src/shop/price.py").write_text(PRICE)
+    boundary = ("if total >= 100 and member:", "if total > 100 and member:")
+    diffs = {
+        "shop.price.x_discount__mutmut_1": ("return total", "return None"),
+        "shop.price.x_discount__mutmut_2": boundary,
+    }
+
+    def run(
+        command: list[str], _directory: Path, _deadline: float | None, output: Path
+    ) -> int:
+        if "results" in command:
+            output.write_text("".join(f"    {name}: survived\n" for name in diffs))
+        elif "show" in command:
+            original, mutated = diffs[command[-1]]
+            with output.open("a") as log:
+                log.write(
+                    f"--- a\n+++ b\n@@ -1 +1 @@\n-    {original}\n+    {mutated}\n"
+                )
+        return 0
+
+    monkeypatch.setattr(mutation, "run", run)
+    changed = {"src/shop/price.py": {2}}
+    assert mutation.python(tmp_path, changed, ["pytest"], None, tmp_path) == (
+        2,
+        [("src/shop/price.py", 2, " → ".join(boundary))],
+    )
+
+
 def test_stryker_and_mutation_test_reports_list_what_survived() -> None:
     location = {"start": {"line": 2, "column": 7}, "end": {"line": 2, "column": 19}}
     stryker = {
