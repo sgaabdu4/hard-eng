@@ -10,8 +10,6 @@ from types import ModuleType
 
 import gitleaks_scan
 import pytest
-import update
-from conftest import commit, init
 from conftest import git as git_output
 from gate_config import validate_gate
 from gitleaks_scan import run_current_files, snapshot_command
@@ -291,65 +289,6 @@ def test_current_files_requires_an_initialized_gitlink_before_aliases(
         )
 
     assert not result.exists()
-
-
-@pytest.mark.parametrize("gate_fails", [False, True])
-def test_candidate_initializes_consumer_submodule_and_cleans_up(
-    release: tuple[Path, Path, str],
-    monkeypatch: pytest.MonkeyPatch,
-    capfd: pytest.CaptureFixture[str],
-    gate_fails: bool,
-) -> None:
-    source, target, _ = release
-    module = target.parent / "consumer-module"
-    init(module)
-    (module / "skill.txt").write_text("pinned skill\n")
-    commit(module, "consumer skill")
-    git(
-        target,
-        "-c",
-        "protocol.file.allow=always",
-        "submodule",
-        "add",
-        str(module),
-        ".skills",
-    )
-    (target / "skill-link").symlink_to(".skills/skill.txt")
-    (target / "package.json").unlink()
-    config_path = target / "hard-eng.gates.json"
-    config = json.loads(config_path.read_text())
-    config["shared"][0]["command"] = [
-        "python3",
-        "-c",
-        (
-            "from pathlib import Path; "
-            "assert Path('skill-link').read_text() == 'pinned skill\\n'; "
-            f"print('SUBMODULE_READ'); raise SystemExit({int(gate_fails)})"
-        ),
-    ]
-    config_path.write_text(json.dumps(config))
-    commit(target, "consumer with linked submodule")
-    config_before = (target / ".git/config").read_bytes()
-    (target / ".skills/skill.txt").write_text("local skill edit\n")
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
-    monkeypatch.setenv("GIT_CONFIG_KEY_1", "protocol.file.allow")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_1", "always")
-    candidate = target.parent / "candidate"
-    if gate_fails:
-        with pytest.raises(subprocess.CalledProcessError):
-            update.verify_candidate(
-                target, source, {"project.txt": "updated\n"}, {}, candidate
-            )
-    else:
-        update.verify_candidate(
-            target, source, {"project.txt": "updated\n"}, {}, candidate
-        )
-    assert "\nSUBMODULE_READ\n" in capfd.readouterr().err
-    assert not candidate.exists()
-    assert git_output(target, "worktree", "list", "--porcelain").count("worktree ") == 1
-    assert (target / "skill-link").read_text() == "local skill edit\n"
-    assert (target / ".git/config").read_bytes() == config_before
-    assert (target / "project.txt").read_text() == "original\n"
 
 
 def test_clean_checkout_requires_committed_skill_link_targets(

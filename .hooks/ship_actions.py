@@ -152,11 +152,11 @@ def pre_push(root: Path) -> int:
                 )
         elapsed = time.monotonic() - started
         if elapsed > policy["pre_push_seconds"]:
-            raise ValueError(
-                f"Pre-push checks passed but took {elapsed:.0f}s, over the "
-                f"{policy['pre_push_seconds']:.0f}s pre_push_seconds time budget in "
-                "hard-eng.gates.json; speed up the slowest gates or raise the budget, "
-                "then push again"
+            print(
+                f"Hard Eng warning: pre-push checks passed in {elapsed:.0f}s, over the "
+                f"{policy['pre_push_seconds']:.0f}s pre_push_seconds budget; the push "
+                "continues. The elapsed time of each gate above shows what to speed up.",
+                flush=True,
             )
     print(f"Pre-push verification: {time.monotonic() - started:.2f}s")
     return 0

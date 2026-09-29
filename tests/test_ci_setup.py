@@ -12,7 +12,12 @@ from types import ModuleType
 import pytest
 import tool_setup
 import yaml
-from ci_setup import configure_ci, impact_tools, migrate_pnpm_bootstrap, workflow_tools
+from ci_setup import (
+    configure_ci,
+    impact_tools,
+    migrate_pnpm_bootstrap,
+    workflow_tools,
+)
 from conftest import commit, load_module, use_installed_mise
 from gate_config import GateConfig, Group, parse_config
 from shipping import ShippingError, ShippingPolicy
@@ -192,23 +197,12 @@ def test_generated_ci_timeout(
     assert yaml.safe_load(workflow)["jobs"]["hard-eng"]["timeout-minutes"] == minutes
     assert '--base "$BASE_SHA"' in workflow
     steps = yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"]
-    cache = next(
-        step for step in steps if step.get("name") == "Cache native tool downloads"
-    )
-    storage = "${{ runner.temp }}/hard-eng-tools"
-    assert cache["with"]["path"].splitlines() == [
-        storage + "/mise/data/installs",
-        storage + "/mise-launcher",
-        storage + "/pnpm/store",
-    ]
-    assert "runner.os" in cache["with"]["key"] and "runner.arch" in cache["with"]["key"]
-    assert "hard-eng.gates.json" in cache["with"]["key"]
+    assert not any("actions/cache@" in step.get("uses", "") for step in steps)
     checks = next(step for step in steps if step.get("name") == "Run required checks")
     environment = yaml.safe_load(workflow)["jobs"]["hard-eng"]["env"]
     impact = next(step for step in steps if step.get("id") == "impact")
     assert "MISE_DATA_DIR=$RUNNER_TEMP/hard-eng-tools/mise/data" in impact["run"]
     assert environment["EXTRA_SDK_TOOLS"] == ""
-    assert "steps.impact.outputs.tools" in cache["with"]["restore-keys"]
     scan = next(step for step in steps if "secret scan" in step.get("name", ""))
     assert "if" not in yaml.safe_load(workflow)["jobs"]["hard-eng"]
     assert {checks["if"], scan["if"]} == {
@@ -665,7 +659,7 @@ def test_old_workflow_gains_docs_only_steps(
     template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
     impact = template[
         template.index("      - name: Find whether") : template.index(
-            "      - name: Cache native"
+            "      - uses: pnpm/setup@"
         )
     ]
     scan = template[
@@ -686,7 +680,7 @@ def test_old_workflow_gains_docs_only_steps(
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     assert changes == {}
     assert "Docs-only CI steps not added" not in capsys.readouterr().err
-    path.write_text(old.replace("Cache native tool downloads", "Cache project tools"))
+    path.write_text(old.replace("Run required checks", "Run project checks"))
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     assert changes == {}
     assert "Docs-only CI steps not added" in capsys.readouterr().err
@@ -858,18 +852,16 @@ def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> 
     old = old.replace(
         '"${tools[@]}"', "uv@latest python@3.12 pnpm@12.4.1 dart@latest rust@latest"
     )
-    start, end = (
-        old.index("          path: |\n"),
-        old.index("      - uses:", old.index("          path: |\n")),
-    )
-    old = (
-        old[:start]
-        + (
-            "          path: ${{ runner.temp }}/hard-eng-tools\n"
-            "          key: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-${{ hashFiles('hard-eng.gates.json') }}\n"
-            "          restore-keys: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-\n"
-        )
-        + old[end:]
+    old = old.replace(
+        "      - uses: pnpm/setup@",
+        "      - name: Cache native tool downloads\n"
+        "        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0\n"
+        "        with:\n"
+        "          path: ${{ runner.temp }}/hard-eng-tools\n"
+        "          key: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-${{ hashFiles('hard-eng.gates.json') }}\n"
+        "          restore-keys: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-\n"
+        "      - uses: pnpm/setup@",
+        1,
     )
     before, checks = old.split("      - name: Run required checks\n", 1)
     checks = checks.replace(
@@ -888,11 +880,7 @@ def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> 
         "rust@latest",
     ]
     assert installed == executed == tools
-    assert "hard-eng-tools-v2-${{ steps.impact.outputs.tools" in workflow
-    assert (
-        "hard-eng-tools/pnpm/cache"
-        not in yaml.safe_load(workflow)["jobs"]["hard-eng"]["steps"][2]["with"]["path"]
-    )
+    assert "actions/cache@" not in workflow
     path.write_text(workflow)
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, config, changes)
@@ -905,7 +893,7 @@ def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> 
     assert installed == executed
     assert [tool for tool in installed if tool.startswith("pnpm@")] == ["pnpm@12.4.1"]
     assert "          version: latest\n" not in workflow
-    assert "hard-eng-tools-v2-${{ steps.impact.outputs.tools" in workflow
+    assert "actions/cache@" not in workflow
     path.write_text(old.replace("python@3.12", "python@3.11"))
     configure_ci(tmp_path, SOURCE, config, changes)
     assert "python@3.11" in changes[".github/workflows/hard-eng.yml"]
@@ -972,3 +960,30 @@ def test_installed_launcher_gains_ignore_scripts_override(tmp_path: Path) -> Non
     migrated = changes[str(path.relative_to(tmp_path))]
     assert "pnpm dlx --allow-build" not in migrated
     assert migrated.count("pnpm dlx --config.ignore-scripts=false --allow-build") == 4
+
+
+def test_generated_tool_cache_is_removed_from_existing_workflows(
+    tmp_path: Path,
+) -> None:
+    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    setup = "      - uses: pnpm/setup@"
+    cache = (
+        "      - name: Cache native tool downloads\n"
+        "        if: steps.impact.outputs.docs_only != 'true'\n"
+        "        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0\n"
+        "        with:\n"
+        "          path: |\n"
+        "            ${{ runner.temp }}/hard-eng-tools/mise/data/installs\n"
+        "          key: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-v2-all\n"
+    )
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(template.replace(setup, cache + setup, 1))
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes[".github/workflows/hard-eng.yml"] == template
+    project_cache = cache.replace("hard-eng-tools", "project-tools")
+    path.write_text(template.replace(setup, project_cache + setup, 1))
+    changes.clear()
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes == {}

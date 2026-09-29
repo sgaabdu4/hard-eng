@@ -14,7 +14,7 @@ import pytest
 import update
 from conftest import SOURCE, commit, git, init
 from gate_config import JsonObject, json_file
-from shipping import ShippingError, ShippingPolicy
+from shipping import ShippingPolicy
 from test_setup import repository as setup_repository
 from test_setup import snapshot
 
@@ -380,11 +380,10 @@ def test_scaffold_update_validates_retained_files_scanner(
     select_release(source, monkeypatch)
 
     if wrapped:
-        with pytest.raises(subprocess.CalledProcessError):
+        with pytest.raises(
+            ValueError, match="secrets-files requires native `gitleaks dir .`"
+        ):
             update.update(target)
-        assert (
-            "secrets-files requires native `gitleaks dir .`" in capfd.readouterr().err
-        )
         assert git(target, "rev-parse", "HEAD") == before
         assert (target / update.SOURCE_FILE).read_bytes() == marker_before
     else:
@@ -469,12 +468,12 @@ def test_update_removes_unused_stack_skill_unless_edited(
     assert (target / ".claude/skills/he/SKILL.md").is_file()
 
 
-def test_project_configuration_update_runs_application_checks(
+def test_project_configuration_update_commits_without_rerunning_application_checks(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    source, target, old = release
+    source, target, _ = release
     remote = target.parent / "application-remote.git"
     git(target, "clone", "--bare", str(target), str(remote))
     git(target, "remote", "add", "origin", str(remote))
@@ -486,119 +485,12 @@ def test_project_configuration_update_runs_application_checks(
     )
     revision = commit(source, "configuration update")
     monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
-    with pytest.raises(subprocess.CalledProcessError):
-        update.update(target)
-    assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
-    assert "fixture-cache/" not in (target / ".gitignore").read_text()
+    assert revision in update.update(target)
+    assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == revision
+    assert "fixture-cache/" in git(target, "show", "HEAD:.gitignore")
     assert git(target, "status", "--porcelain") == ""
-    assert "FAIL application-check" in capfd.readouterr().err
-
-
-@pytest.mark.parametrize(
-    "outcome",
-    ["Draft", "Ready", "Complete", "absent", "application-failure", "missing-base"],
-)
-@pytest.mark.parametrize("configured_base", [True, False])
-def test_candidate_uses_remote_task_plan_scope(
-    release: tuple[Path, Path, str],
-    completed_plan: str,
-    outcome: str,
-    configured_base: bool,
-    capfd: pytest.CaptureFixture[str],
-) -> None:
-    source, target, _ = release
-    commit(source, "verified source candidate")
-    (target / "package.json").unlink()
-    config = json.loads((target / "hard-eng.gates.json").read_text())
-    policy: ShippingPolicy = {
-        "base": "main",
-        "checks": ["fixture"],
-        "ui_paths": [],
-        "ci_seconds": 180,
-        "pre_push_seconds": 180,
-        "delivery": [],
-    }
-    config["shipping"] = policy
-    if not configured_base:
-        del config["shipping"]
-    command = (
-        "import subprocess; print('APPLICATION_SCOPE_CHECK'); "
-        "staged=subprocess.check_output(['git','diff','--cached','--name-status'],text=True); "
-        "assert 'A\\tnew-managed.mjs' in staged; "
-        "assert 'D\\tremoved.txt' in staged; "
-        "assert 'M\\tproject.txt' in staged; "
-        "assert 'A\\tnew-link' in staged; raise SystemExit(0)"
-    )
-    if outcome == "application-failure":
-        command = command.replace("SystemExit(0)", "SystemExit(1)")
-    config["shared"][0]["command"] = ["python3", "-c", command]
-    (target / "hard-eng.gates.json").write_text(json.dumps(config))
-    (target / "removed.txt").write_text("old managed content\n")
-    git(target, "branch", "-M", "main")
-    commit(target, "remote baseline")
-    remote = target.parent / "remote.git"
-    git(target, "clone", "--bare", str(target), str(remote))
-    if configured_base:
-        git(remote, "branch", "default", "HEAD^")
-        git(remote, "symbolic-ref", "HEAD", "refs/heads/default")
-    git(target, "remote", "add", "origin", str(remote))
-    git(target, "switch", "-c", "feature/update")
-    plan = target / "features/current/PLAN.md"
-    if outcome != "absent":
-        plan.parent.mkdir(parents=True)
-        plan.write_text(
-            completed_plan.replace(
-                "Status: Complete",
-                f"Status: {outcome if outcome in ('Draft', 'Ready') else 'Complete'}",
-            )
-        )
-        commit(target, "task plan")
-    git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
-    stale = git(target, "rev-parse", "origin/main")
-    (target / "project.txt").write_text("unrelated local edit\n")
-    if outcome == "missing-base":
-        git(remote, "update-ref", "-d", "refs/heads/main")
-    candidate = target.parent / "candidate"
-    changes: dict[str, str | None] = {
-        "project.txt": "candidate update\n",
-        "new-managed.mjs": "export const value = 1;\n",
-        "removed.txt": None,
-    }
-    links: dict[str, str | None] = {"new-link": "project.txt"}
-    with (target / ".git/info/exclude").open("a") as handle:
-        handle.write("new-managed.mjs\n")
-    (target / "unrelated.txt").write_text("staged local work\n")
-    git(target, "add", "unrelated.txt")
-    if outcome != "application-failure" and (
-        outcome != "missing-base" or not configured_base
-    ):
-        update.verify_candidate(target, source, changes, links, candidate)
-    else:
-        error = (
-            ShippingError
-            if outcome == "missing-base"
-            else subprocess.CalledProcessError
-        )
-        with pytest.raises(error):
-            update.verify_candidate(target, source, changes, links, candidate)
-    assert {
-        "working": (target / "project.txt").read_text(),
-        "index": git(target, "diff", "--cached", "--name-only"),
-        "new_file": (target / "new-managed.mjs").exists(),
-        "new_link": (target / "new-link").is_symlink(),
-        "removed": (target / "removed.txt").read_text(),
-        "tracking": git(target, "rev-parse", "origin/main"),
-    } == {
-        "working": "unrelated local edit\n",
-        "index": "unrelated.txt",
-        "new_file": False,
-        "new_link": False,
-        "removed": "old managed content\n",
-        "tracking": stale,
-    }
-    assert not candidate.exists()
-    if outcome != "missing-base" or not configured_base:
-        assert "APPLICATION_SCOPE_CHECK" in capfd.readouterr().err
+    assert "application-check" not in capfd.readouterr().err
+    assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
 def test_supported_update_migrates_custom_workflow_pins(
