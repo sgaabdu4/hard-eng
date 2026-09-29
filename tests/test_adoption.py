@@ -629,11 +629,7 @@ def test_update_replaces_old_skill_links_and_cleans_local_settings(
     assert json.loads((target / ".claude/settings.local.json").read_text()) == {}
 
 
-@pytest.mark.parametrize("repair", [True, False])
-def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, repair: bool
-) -> None:
-    source, target, _ = release
+def link_skill_into_old_copy(target: Path) -> Path:
     skill = target / ".agents/skills/he"
     (target / ".agents/hard-eng/current/skills").mkdir(parents=True)
     skill.rename(target / ".agents/hard-eng/current/skills/he")
@@ -642,6 +638,15 @@ def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
         exclude.write(".agents/hard-eng/\n")
     git(target, "add", "--all", ".agents/skills")
     commit(target, "old skill link")
+    return skill
+
+
+@pytest.mark.parametrize("repair", [True, False])
+def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, repair: bool
+) -> None:
+    source, target, _ = release
+    skill = link_skill_into_old_copy(target)
     if repair:
         monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
     else:
@@ -650,6 +655,21 @@ def test_update_replaces_a_skill_folder_linked_into_the_old_copy(
     assert not skill.is_symlink()
     assert (target / ".claude/skills/he/SKILL.md").is_file()
     assert not (target / ".agents/hard-eng").exists()
+    assert git(target, "status", "--porcelain") == ""
+
+
+def test_failed_update_restores_the_skill_folder_link(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    skill = link_skill_into_old_copy(target)
+    select_release(source, monkeypatch)
+    hook = target / ".git/hooks/pre-commit"
+    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.chmod(0o755)
+    with pytest.raises(subprocess.SubprocessError, match="git commit exited 1"):
+        update.update(target)
+    assert skill.is_symlink()
     assert git(target, "status", "--porcelain") == ""
 
 

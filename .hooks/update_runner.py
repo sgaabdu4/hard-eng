@@ -179,6 +179,13 @@ def link_state(root: Path, names: Iterable[str]) -> dict[str, str | None]:
     }
 
 
+def prune(directory: Path) -> None:
+    """Remove the empty directories left beneath a path, deepest first."""
+    for path in [*sorted(directory.rglob("*"), reverse=True), directory]:
+        with suppress(OSError):
+            path.rmdir()
+
+
 def roll_back(
     root: Path,
     changes: dict[str, str | None],
@@ -197,6 +204,8 @@ def roll_back(
         elif content is None or not replace_file(root / name, content, unchanged):
             kept.append(name)
     for name, target in before_links.items():
+        if links[name] is None and not (root / name).is_symlink():
+            prune(root / name)
         if not written(root, name, links[name], True):
             kept.append(name)
             continue
@@ -374,11 +383,20 @@ def commit_update(
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         if rebase_sessions(root, head, message, changes):
             raise
+        retired = tuple(
+            f"{name}/"
+            for name, target in links.items()
+            if target is None and before_links[name] is not None
+        )
         kept = roll_back(
             root,
             changes,
             links,
-            {name: before[name] for name in applied if name in changes},
+            {
+                name: None if name.startswith(retired) else before[name]
+                for name in applied
+                if name in changes
+            },
             {name: before_links[name] for name in applied if name in links},
         )
         if staging is not None:
