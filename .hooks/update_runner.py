@@ -9,10 +9,13 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
+from typing import TextIO
 
 RESULT_FILE = ".hard-eng/update-result.txt"
 LOG_FILE = ".hard-eng/update.log"
+OWNER = re.compile(r"hard-eng-update (\d+)")
 
 
 class UpdateRunning(ValueError):
@@ -90,26 +93,179 @@ def rebase_sessions(root: Path) -> None:
             state.write_text(json.dumps({**saved, "base": head}))
 
 
+def written(root: Path, name: str, content: str | None, link: bool) -> bool:
+    """Whether a path still holds what the updater wrote, so rollback cannot erase a later edit."""
+    target = root / name
+    if content is None:
+        return not target.exists() and not target.is_symlink()
+    if link:
+        return target.is_symlink() and str(target.readlink()) == content
+    return (
+        target.is_file()
+        and not target.is_symlink()
+        and target.read_text(errors="replace") == content
+    )
+
+
+def roll_back(
+    root: Path,
+    changes: dict[str, str | None],
+    links: dict[str, str | None],
+    before: dict[str, bytes | None],
+    before_links: dict[str, str | None],
+) -> list[str]:
+    kept = [name for name in changes if not written(root, name, changes[name], False)]
+    kept += [name for name in links if not written(root, name, links[name], True)]
+    for name, content in before.items():
+        target = root / name
+        if name in kept:
+            continue
+        if content is None:
+            target.unlink(missing_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+    for name, target in before_links.items():
+        if name in kept:
+            continue
+        if (root / name).is_dir() and not (root / name).is_symlink():
+            shutil.rmtree(root / name)
+        else:
+            (root / name).unlink(missing_ok=True)
+        if target is not None:
+            (root / name).symlink_to(target, target_is_directory=True)
+    return kept
+
+
+def committed(root: Path, head: str, message: str) -> bool:
+    found = subprocess.run(
+        ["git", "log", "-1", "--format=%P%n%s"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return found.stdout.splitlines() == [head, message]
+
+
+def commit_update(
+    root: Path,
+    changes: dict[str, str | None],
+    links: dict[str, str | None],
+    revision: str,
+) -> None:
+    from update import write_changes, write_links
+
+    names = sorted({*changes, *links})
+    before = {
+        name: (root / name).read_bytes() if (root / name).exists() else None
+        for name in changes
+    }
+    before_links = {
+        name: str((root / name).readlink()) if (root / name).is_symlink() else None
+        for name in links
+    }
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    message = f"Update Hard Eng to {revision}"
+    try:
+        write_links(root, links)
+        write_changes(root, changes)
+        subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
+        result = subprocess.run(
+            [
+                "git",
+                "commit",
+                "--only",
+                "-m",
+                message,
+                "--",
+                *(
+                    name
+                    for name in names
+                    if not any(other.startswith(f"{name}/") for other in changes)
+                ),
+            ],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+            timeout=3500,
+        )
+        sys.stderr.write(result.stdout)
+        if result.returncode != 0:
+            # SessionStart stderr never reaches the agent, so the error carries the reason.
+            tail = " | ".join(result.stdout.strip().splitlines()[-5:])
+            raise subprocess.SubprocessError(
+                f"git commit exited {result.returncode}: {tail}".removesuffix(": ")
+            )
+    except (OSError, subprocess.SubprocessError) as error:
+        if committed(root, head, message):
+            rebase_sessions(root)
+            raise
+        kept = roll_back(root, changes, links, before, before_links)
+        subprocess.run(
+            ["git", "reset", "--quiet", "HEAD", "--", *names], cwd=root, check=True
+        )
+        if kept:
+            raise subprocess.SubprocessError(
+                f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"
+            ) from error
+        raise
+    rebase_sessions(root)
+
+
+def alive(process: int) -> bool:
+    try:
+        os.kill(process, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def remove_stale_candidates(root: Path) -> None:
-    """Remove candidates left by an update that was killed; the caller holds the lock."""
+    """Remove candidates whose owning update has exited; the caller holds the lock."""
     listing = subprocess.check_output(
         ["git", "worktree", "list", "--porcelain"], cwd=root, text=True
     )
-    for line in listing.splitlines():
-        path = Path(line.removeprefix("worktree "))
+    for block in listing.split("\n\n"):
+        fields = {
+            key: value
+            for key, _, value in (line.partition(" ") for line in block.splitlines())
+        }
+        path = Path(fields.get("worktree", ""))
+        owner = OWNER.fullmatch(fields.get("locked", ""))
         if (
-            line.startswith("worktree ")
-            and path.name == "candidate"
-            and path.parent.name.startswith("hard-eng-update-")
+            path.name != "candidate"
+            or not path.parent.name.startswith("hard-eng-update-")
+            or owner is None
+            or alive(int(owner[1]))
         ):
+            continue
+        if not path.exists():
             subprocess.run(
-                ["git", "worktree", "remove", "--force", str(path)],
-                cwd=root,
-                check=False,
-                timeout=120,
+                ["git", "worktree", "unlock", str(path)], cwd=root, check=True
             )
+        elif not subprocess.run(
+            ["git", "worktree", "remove", "--force", "--force", str(path)],
+            cwd=root,
+            check=False,
+            timeout=120,
+        ).returncode:
             shutil.rmtree(path.parent, ignore_errors=True)
     subprocess.run(["git", "worktree", "prune"], cwd=root, check=True, timeout=60)
+
+
+def exclusive(handle: TextIO) -> bool:
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
 
 
 def locked_update(root: Path, repair: bool = False) -> str:
@@ -118,52 +274,120 @@ def locked_update(root: Path, repair: bool = False) -> str:
     if (blocker := update_blocker(root)) is not None:
         return blocker
     with lock_file(root).open("a") as handle:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
+        if not exclusive(handle):
             raise UpdateRunning(
                 "Another Hard Eng update is already running for this repository; "
                 "wait for its result instead of starting another"
-            ) from error
+            )
         remove_stale_candidates(root)
         return update(root, repair)
 
 
-def failed_update(error: Exception) -> str:
+def failed_update(error: Exception | str) -> str:
     return f"Hard Eng update failed: {error}. Continue with the existing scaffold; its gates remain required."
 
 
-def stop_children() -> None:
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    os.killpg(0, signal.SIGTERM)
+def record_result(root: Path, outcome: str) -> None:
+    result = root / RESULT_FILE
+    result.parent.mkdir(parents=True, exist_ok=True)
+    pending = result.with_suffix(".tmp")
+    pending.write_text(f"{time.strftime('%Y-%m-%d %H:%M %Z')}: {outcome}\n")
+    pending.replace(result)
 
 
 def interrupt_update(signum: int, _frame: object) -> None:
-    stop_children()
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
     raise subprocess.SubprocessError(f"interrupted by signal {signum}")
 
 
-def run_update(root: Path) -> int:
-    """Run one update and record its outcome; a detached worker also stops everything it started."""
-    detached = os.getsid(0) == os.getpid()
-    if detached:
-        signal.signal(signal.SIGTERM, interrupt_update)
+def installed_revision(root: Path) -> object:
+    from update import SOURCE_FILE
+
     try:
-        try:
-            outcome = locked_update(root)
-        except UpdateRunning:
+        return json.loads((root / SOURCE_FILE).read_text()).get("revision")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def apply_update(root: Path) -> int:
+    """Install the update and record its outcome; the supervising process holds the lock."""
+    from update import update
+
+    signal.signal(signal.SIGTERM, interrupt_update)
+    previous = installed_revision(root)
+    try:
+        outcome = update(root)
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        outcome = failed_update(error)
+        if (revision := installed_revision(root)) != previous:
+            outcome = (
+                f"Updated Hard Eng to {revision} with a local commit, but it stopped before "
+                f"its final steps ({error}); the next update finishes them."
+            )
+    record_result(root, outcome)
+    return 0
+
+
+def update_command(*options: str) -> list[str]:
+    return [
+        sys.executable,
+        str(Path(__file__).with_name("hard-eng.py")),
+        "update",
+        *options,
+    ]
+
+
+def group_exists(group: int) -> bool:
+    try:
+        os.killpg(group, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # macOS refuses signals to a group holding only unreaped zombies.
+        return True
+    return True
+
+
+def stop_group(update: "subprocess.Popen[bytes]") -> None:
+    """Stop the update's whole process group, killing anything that ignores SIGTERM."""
+    for signum in (signal.SIGTERM, signal.SIGKILL):
+        with suppress(ProcessLookupError, PermissionError):
+            os.killpg(update.pid, signum)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            update.poll()
+            if not group_exists(update.pid):
+                return
+            time.sleep(0.1)
+
+
+def run_update(root: Path) -> int:
+    """Hold the repository's update lock while one update runs in its own process group."""
+    with lock_file(root).open("a") as handle:
+        if not exclusive(handle):
             return 0
-        except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
-            outcome = failed_update(error)
-        result = root / RESULT_FILE
-        result.parent.mkdir(parents=True, exist_ok=True)
-        pending = result.with_suffix(".tmp")
-        pending.write_text(f"{time.strftime('%Y-%m-%d %H:%M %Z')}: {outcome}\n")
-        pending.replace(result)
-        return 0
-    finally:
-        if detached:
-            stop_children()
+        try:
+            remove_stale_candidates(root)
+            update = subprocess.Popen(
+                update_command("--apply"),
+                cwd=root,
+                process_group=0,
+                pass_fds=(handle.fileno(),),
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            record_result(root, failed_update(error))
+            return 0
+        signal.signal(signal.SIGTERM, interrupt_update)
+        with suppress(subprocess.SubprocessError):
+            try:
+                update.wait()
+            finally:
+                stop_group(update)
+        if update.returncode != 0:
+            record_result(root, failed_update(f"update exited {update.returncode}"))
+        with suppress(OSError, subprocess.SubprocessError):
+            remove_stale_candidates(root)
+    return 0
 
 
 def start_update(root: Path) -> str:
@@ -177,11 +401,7 @@ def start_update(root: Path) -> str:
         log.parent.mkdir(parents=True, exist_ok=True)
         with log.open("w") as output:
             subprocess.Popen(
-                [
-                    sys.executable,
-                    str(Path(__file__).with_name("hard-eng.py")),
-                    "update",
-                ],
+                update_command(),
                 cwd=root,
                 stdin=subprocess.DEVNULL,
                 stdout=output,

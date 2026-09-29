@@ -13,7 +13,7 @@ from operator import itemgetter
 from pathlib import Path
 
 from mcp_setup import retired_settings
-from update_runner import rebase_sessions, stale_message, update_blocker
+from update_runner import commit_update, rebase_sessions, stale_message, update_blocker
 
 UPSTREAM = "sgaabdu4/hard-eng"
 REPOSITORY = f"https://github.com/{UPSTREAM}.git"
@@ -563,8 +563,10 @@ def verify_candidate(
     candidate: Path,
 ) -> None:
     # Both callers already verified upstream CI for this exact source revision.
+    owner = f"hard-eng-update {os.getpid()}"
     subprocess.run(
-        ["git", "worktree", "add", "--quiet", "--detach", str(candidate), "HEAD"],
+        ["git", "worktree", "add", "-q", "--detach", "--lock", "--reason", owner]
+        + [str(candidate), "HEAD"],
         cwd=root,
         check=True,
         timeout=120,
@@ -665,85 +667,11 @@ raise SystemExit(not compileall.compile_dir('.hooks', quiet=1))
         )
     finally:
         subprocess.run(
-            ["git", "worktree", "remove", "--force", str(candidate)],
+            ["git", "worktree", "remove", "--force", "--force", str(candidate)],
             cwd=root,
             check=True,
             timeout=120,
         )
-
-
-def commit_update(
-    root: Path,
-    changes: dict[str, str | None],
-    links: dict[str, str | None],
-    revision: str,
-) -> None:
-    names = sorted({*changes, *links})
-    before = {
-        name: (root / name).read_bytes() if (root / name).exists() else None
-        for name in changes
-    }
-    before_links = {
-        name: str((root / name).readlink()) if (root / name).is_symlink() else None
-        for name in links
-    }
-    try:
-        write_links(root, links)
-        write_changes(root, changes)
-        subprocess.run(
-            ["git", "add", "--force", "--", *names],
-            cwd=root,
-            check=True,
-        )
-        message = f"Update Hard Eng to {revision}"
-        result = subprocess.run(
-            [
-                "git",
-                "commit",
-                "--only",
-                "-m",
-                message,
-                "--",
-                *(
-                    name
-                    for name in names
-                    if not any(other.startswith(f"{name}/") for other in changes)
-                ),
-            ],
-            cwd=root,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            check=False,
-            timeout=3500,
-        )
-        sys.stderr.write(result.stdout)
-        if result.returncode != 0:
-            # SessionStart stderr never reaches the agent, so the error carries the reason.
-            tail = " | ".join(result.stdout.strip().splitlines()[-5:])
-            raise subprocess.SubprocessError(
-                f"git commit exited {result.returncode}: {tail}".removesuffix(": ")
-            )
-    except (OSError, subprocess.SubprocessError):
-        for name, content in before.items():
-            target = root / name
-            if content is None:
-                target.unlink(missing_ok=True)
-            else:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(content)
-        for name, target in before_links.items():
-            if (root / name).is_dir() and not (root / name).is_symlink():
-                shutil.rmtree(root / name)
-            else:
-                (root / name).unlink(missing_ok=True)
-            if target is not None:
-                (root / name).symlink_to(target, target_is_directory=True)
-        subprocess.run(
-            ["git", "reset", "--quiet", "HEAD", "--", *names], cwd=root, check=True
-        )
-        raise
-    rebase_sessions(root)
 
 
 def repair_current_hook(root: Path, previous: str) -> str:
