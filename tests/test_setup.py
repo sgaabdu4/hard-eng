@@ -538,6 +538,10 @@ def test_plain_dart_uses_native_coverage_tool(
     written = (tmp_path / "hard-eng.gates.json").read_text()
     config = json.loads(written)
     assert written == json_file(tmp_path, config)
+    assert "integration_test" not in config["packages"][0]["sources"]
+    for name in ("yaml", "lock"):
+        tool = f".hooks/dart_declarations.pubspec.{name}"
+        assert (tmp_path / tool).read_bytes() == (installer.SOURCE / tool).read_bytes()
     checks = {gate["role"]: gate for gate in config["packages"][0]["checks"]}
     assert [
         gate["name"]
