@@ -925,7 +925,7 @@ def test_setup_migrates_codex_hook_status_without_duplicate(
                 {
                     "type": "command",
                     "command": f"{command} {event} codex",
-                    "timeout": 3600,
+                    "timeout": agent_hooks.HOOK_TIMEOUTS[event],
                     "statusMessage": message,
                 }
             ]
@@ -933,6 +933,29 @@ def test_setup_migrates_codex_hook_status_without_duplicate(
     ]
 
     assert_rerun_keeps_written_hooks(repository, installer, path, changes)
+
+
+@pytest.mark.parametrize("agent", ["claude", "codex"])
+def test_setup_shortens_the_installed_session_hook_without_duplicate(
+    repository: Path, installer: ModuleType, agent: str
+) -> None:
+    command = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py"'
+    status = agent_hooks.CODEX_HOOK_STATUS["session"] if agent == "codex" else None
+    previous = agent_hooks.owned_hook_entry(
+        agent, "session", command, 3600, status_message=status
+    )
+    path = repository / agent_hooks.HOOK_FILES[agent]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"hooks": {"SessionStart": [previous]}}))
+
+    changes: dict[str, str] = {}
+    installer.configure_hooks(repository, changes)
+    result = json.loads(changes[str(path.relative_to(repository))])
+    assert result["hooks"]["SessionStart"] == [
+        agent_hooks.owned_hook_entry(
+            agent, "session", command, 60, status_message=status
+        )
+    ]
 
 
 def test_new_branch_zero_base_compares_with_default_branch(

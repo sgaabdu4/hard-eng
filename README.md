@@ -57,7 +57,7 @@ flowchart TD
   Z --> W[Load project context and select task stage]
 ```
 
-Trusted SessionStart hooks report the last update result and start the update in the background, so starting, resuming or compacting a session never waits on it. One update runs per repository at a time; it writes `.hard-eng/update.log`, commits locally once the new hooks accept the gate configuration, and the next session start reports its result. It does not rerun the project's gates; pre-push and CI run them on the update commit. Without a status, agent instructions require the command above before work. Reuse a current status and never run setup while an update runs. A failed update does not waive existing checks.
+Trusted SessionStart hooks report the last update result and start the update in the background, so starting, resuming or compacting a session never waits on it. One update runs per repository at a time; it writes `.hard-eng/update.log`, commits locally once the new hooks accept the gate configuration, and the next session start reports its result. It does not rerun the project's gates; pre-push and CI run them on the update commit. A refused update is not retried in the background until upstream moves, the checkout changes or 24 hours pass; the published setup command always retries. Without a status, agent instructions require the command above before work. Reuse a current status and never run setup while an update runs. A failed update does not waive existing checks.
 
 In Codex CLI, use `codex --enable hooks`, trust the project, then `/hooks` to review and trust Hard Eng's hooks. Changed hook definitions need review again. `--yolo` disables sandbox/approval protections; it is not hook setup. A disabled SessionStart cannot warn you itself; Codex supplies the hook-trust warning. [Native hook instructions](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
 
@@ -217,10 +217,10 @@ Semgrep or configured native rules check code; OSV checks selected lockfiles or 
 
 - **SessionStart:** reports the last update result and starts or reports a background update.
 - **Stop:** distinguishes declared prerequisite clarification from approval handoffs. Approval needs baseline, UX and E2E planning evidence; changed implementation runs native checks. Planning-only or known unchanged sessions may avoid expensive checks. Repeated stop loops are bounded.
-- **Pre-push:** verifies pushed revisions in isolated worktrees.
+- **Pre-push:** verifies pushed revisions in isolated worktrees, then reports mutants on changed production lines that the tests miss. The mutation report never blocks the push and stops after 180 seconds; `python3 .hooks/hard-eng.py mutation --base <ref>` gives the full result.
 - **CI:** runs configured checks and fails its job on failure.
 
-Explicit Draft/Ready/Complete commands normally run native checks too. Verified scaffold-only updates have a dedicated path that avoids unrelated product checks. Completion and shipping check scaffold freshness. Host hooks work only when supported, trusted, and invoked; registration alone proves nothing.
+Explicit Draft/Ready/Complete commands normally run native checks too. Verified scaffold-only updates have a dedicated path that avoids unrelated product checks; when an update shares a branch with other work, the checks follow that other work. Completion and shipping check scaffold freshness. Host hooks work only when supported, trusted, and invoked; registration alone proves nothing.
 
 ```mermaid
 flowchart TD

@@ -1,11 +1,15 @@
 """Real Git update transactions preserve local work and obey check scope."""
 
+import io
 import json
 import re
 import shutil
 import subprocess
 import tomllib
+import urllib.error
+import urllib.request
 from collections.abc import Callable
+from email.message import Message
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock
@@ -642,10 +646,77 @@ def test_update_selection_skips_failed_newer_revision(
     def verified(revision: str) -> bool:
         return revision == revisions[1]
 
+    monkeypatch.setattr(update, "upstream_moved", Mock(return_value=True))
     monkeypatch.setattr(update, "github_json", response)
     monkeypatch.setattr(update, "verified_revision", verified)
     assert update.latest_verified(revisions[2]) == revisions[1]
     assert update.latest_verified(revisions[1]) is None
+
+
+@pytest.mark.parametrize(
+    ("answer", "walks"),
+    [(304, False), ("a" * 40, False), ("b" * 40, True)],
+    ids=["not-modified", "same-head", "moved"],
+)
+def test_freshness_walks_commits_only_after_upstream_moves(
+    monkeypatch: pytest.MonkeyPatch, answer: int | str, walks: bool
+) -> None:
+    monkeypatch.setenv("GH_TOKEN", "fixture-token")
+
+    def respond(request: urllib.request.Request, timeout: float) -> io.BytesIO:
+        assert request.get_header("Accept") == "application/vnd.github.sha"
+        assert request.get_header("If-none-match") == f'"{"a" * 40}"'
+        if answer == 304:
+            raise urllib.error.HTTPError(request.full_url, 304, "", Message(), None)
+        return io.BytesIO(str(answer).encode())
+
+    walk = Mock(return_value=[{"sha": "a" * 40}])
+    monkeypatch.setattr(urllib.request, "urlopen", respond)
+    monkeypatch.setattr(update, "github_json", walk)
+    assert update.latest_verified("a" * 40) is None
+    assert walk.called is walks
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("feature", {"apps/web"}),
+        ("gate-config", None),
+        ("unverified", None),
+        ("edited-hook", None),
+        ("impact", None),
+    ],
+)
+def test_update_mixed_with_feature_work_checks_only_affected_packages(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    expected: set[str] | None,
+) -> None:
+    from gate_config import Group, changed_packages
+
+    source, target, _ = release
+    base = git(target, "rev-parse", "HEAD")
+    select_release(source, monkeypatch)
+    update.update(target)
+    page = target / "apps/web/page.ts"
+    page.parent.mkdir(parents=True)
+    page.write_text("export const page = 1;\n")
+    if case == "gate-config":
+        config = target / "hard-eng.gates.json"
+        config.write_text(config.read_text() + "\n")
+    if case == "edited-hook":
+        hook = target / ".hooks/update.py"
+        hook.write_text(hook.read_text() + "\n")
+    commit(target, "feature work on the updated branch")
+    verified = Mock(return_value=case != "unverified")
+    monkeypatch.setattr(update, "verified_revision", verified)
+    packages: dict[str, Group] = {
+        path: {"path": path, "checks": []} for path in ("apps/web", "apps/api")
+    }
+    selected = changed_packages(target, packages, base, prove_update=case != "impact")
+    assert selected == expected
+    assert verified.called is (case not in {"gate-config", "impact"})
 
 
 @pytest.mark.parametrize("extra", [None, "project.txt", "hard-eng.gates.json", "local"])

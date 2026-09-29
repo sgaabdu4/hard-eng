@@ -564,6 +564,7 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
         "pytest": ["pytest", "pytest-cov"],
         "deptry": ["deptry"],
         "lint-imports": ["import-linter"],
+        "mutmut": ["pytest", "mutmut"],
     }[command[0]]
     prefix = ["uv", "run", "--no-sync"]
     if manager == "poetry":
