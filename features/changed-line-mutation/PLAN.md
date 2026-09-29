@@ -35,6 +35,8 @@ Authority: Autonomous. The user asked for mutation testing on changed code in th
 - [x] Only checked mutants of changed functions count → `test_mutmut_statuses_count_only_checked_mutants_of_changed_functions`.
 - [x] Stryker and mutation_test reports list each survivor with its mutated line → `test_stryker_and_mutation_test_reports_list_what_survived`.
 - [x] A tool error or the time limit prints its reason and returns 0 → `test_mutation_report_never_fails_when_a_tool_errors_or_hits_the_limit`.
+- [x] Cancelling the push stops the tool's processes, not only the mutation command → `test_interrupted_mutation_stops_the_tool_it_started`.
+- [x] A filtered survivor does not hide the next one → `test_each_python_survivor_is_read_from_its_own_diff`.
 - [x] Real mutmut lists the boundary survivor on the changed line and nothing from the unchanged method → `test_python_mutation_reports_real_survivors_on_changed_lines`.
 - [x] Pre-push passes `--seconds 180 --in-place`, keeps the push when mutation fails, and leaves mutation time out of the budget warning → `test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails`.
 - [x] Leftover mutation temporary directories are swept → `test_update_sweeps_day_old_hard_eng_temporary_directories`.
@@ -57,7 +59,7 @@ N/A — terminal report text; no product appearance.
 
 Result: Passed
 Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1155 tests, 89.71% line coverage). On git fixtures with a boundary change on one line: Stryker 10.0.0 listed 2 of 6 mutants surviving (also as a pnpm workspace member), mutmut 3.8.0 2 of 5, mutation_test 1.8.1 2 of 9, and a Flutter package's single mutant was caught in 5.4s. A 2-second limit stopped Stryker, left no runner processes and exited 0. On this repository the report said mutmut cannot import `.hooks/hard-eng.py`.
-E2E: Passed — the fixture runs above used the real tools through `hard-eng.py mutation --in-place`; the pushes of this branch show the pre-push report.
+E2E: Passed — the fixture runs above used the real tools through `hard-eng.py mutation --in-place`. On this repository, `hard-eng.py mutation --base origin/main` checked a snapshot of HEAD (all gates passed), printed the mutmut import reason, exited 0 and removed the snapshot in 108s.
 
 Delivery target: Merge
 Delivery: Pending — PR checks and squash merge.
