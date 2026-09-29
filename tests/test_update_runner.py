@@ -573,3 +573,32 @@ def test_failed_update_restores_the_skill_folder_link(
         update.update(target)
     assert skill.is_symlink()
     assert git(target, "status", "--porcelain") == ""
+
+
+def test_migrating_a_skill_link_keeps_a_file_created_during_it(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    skill = link_skill_into_old_copy(target)
+    select_release(source, monkeypatch)
+    head = git(target, "rev-parse", "HEAD")
+    install = update.replace_file
+    created: list[Path] = []
+
+    def agent_creates_a_planned_file(
+        path: Path, content: bytes, ready: Callable[[], bool] = lambda: True
+    ) -> bool:
+        if not created and path.is_relative_to(skill):
+            other = skill / "references/workflow.md"
+            other.parent.mkdir(parents=True, exist_ok=True)
+            other.write_text("agent edit\n")
+            created.append(other)
+        return install(path, content, ready)
+
+    monkeypatch.setattr(update, "replace_file", agent_creates_a_planned_file)
+    with pytest.raises(
+        subprocess.SubprocessError, match="workflow.md changed while the update"
+    ):
+        update.update(target)
+    assert created[0].read_text() == "agent edit\n"
+    assert git(target, "rev-parse", "HEAD") == head

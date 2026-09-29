@@ -356,15 +356,25 @@ def commit_update(
 ) -> None:
     names = sorted({*changes, *links})
     before_links = link_state(root, links)
+    retired = tuple(
+        f"{name}/"
+        for name, target in links.items()
+        if target is None and before_links[name] is not None
+    )
+    # Files beneath a retired link must still be absent when the update writes them.
+    expected = {
+        name: None if name.startswith(retired) else content
+        for name, content in before.items()
+    }
     head = current_head(root)
     message = f"Update Hard Eng to {revision}"
     staging: tuple[dict[str, str], dict[str, str]] | None = None
     applied: list[str] = []
     try:
         relink_verified(root, links, before_links, applied)
-        # Paths under a link the update just replaced no longer show their verified content.
-        relinked = tuple(f"{name}/" for name in links)
-        write_verified(root, changes, before, relinked, applied)
+        # Paths under a link the update repointed no longer show their verified content.
+        relinked = tuple(f"{name}/" for name, target in links.items() if target)
+        write_verified(root, changes, expected, relinked, applied)
         with deferred_sigterm():
             index = index_entries(root, names)
             subprocess.run(
@@ -383,20 +393,11 @@ def commit_update(
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         if rebase_sessions(root, head, message, changes):
             raise
-        retired = tuple(
-            f"{name}/"
-            for name, target in links.items()
-            if target is None and before_links[name] is not None
-        )
         kept = roll_back(
             root,
             changes,
             links,
-            {
-                name: None if name.startswith(retired) else before[name]
-                for name in applied
-                if name in changes
-            },
+            {name: expected[name] for name in applied if name in changes},
             {name: before_links[name] for name in applied if name in links},
         )
         if staging is not None:
