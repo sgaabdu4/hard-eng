@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -148,7 +149,9 @@ def test_update_removes_only_candidates_whose_update_exited(
     assert "hard-eng-scaffold-check-running" in listing
 
 
-@pytest.mark.parametrize("still_running", [True, False], ids=["during-update", "during-cleanup"])
+@pytest.mark.parametrize(
+    "still_running", [True, False], ids=["during-update", "during-cleanup"]
+)
 def test_interrupted_update_stops_every_process_and_records_failure(
     installed: Path, tmp_path: Path, still_running: bool
 ) -> None:
@@ -188,7 +191,9 @@ def test_interrupted_update_stops_every_process_and_records_failure(
     sleeper = int(child.read_text())
     assert subprocess.run(["kill", "-0", str(sleeper)], check=False).returncode != 0
     result = (installed / update_runner.RESULT_FILE).read_text()
-    assert ("Hard Eng update failed: interrupted by signal 15" in result) == still_running
+    assert (
+        "Hard Eng update failed: interrupted by signal 15" in result
+    ) == still_running
     assert not update_runner.update_running(installed)
 
 
@@ -376,3 +381,30 @@ def test_failed_update_commit_keeps_staging_made_while_it_ran(
     assert (installed / "AGENTS.md").read_text() == "still editing\n"
     assert (installed / ".hooks/update.py").read_text() == "old = True\n"
     assert git(installed, "diff", "--cached", "--name-only") == "AGENTS.md"
+
+
+def test_interrupt_right_after_staging_still_unstages_the_update(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (installed / ".hooks/update.py").write_text("old = True\n")
+    commit(installed, "managed files")
+    snapshot = update_runner.index_entries
+    calls: list[int] = []
+
+    def interrupted_after_add(root: Path, names: list[str]) -> dict[str, str]:
+        calls.append(len(calls))
+        if len(calls) == 2:
+            os.kill(os.getpid(), signal.SIGTERM)
+        return snapshot(root, names)
+
+    monkeypatch.setattr(update_runner, "index_entries", interrupted_after_add)
+    previous = signal.signal(signal.SIGTERM, update_runner.interrupt_update)
+    try:
+        with pytest.raises(subprocess.SubprocessError, match="signal 15"):
+            update_runner.commit_update(
+                installed, {".hooks/update.py": "new = True\n"}, {}, "b" * 40
+            )
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+    assert git(installed, "diff", "--cached", "--name-only") == ""
+    assert (installed / ".hooks/update.py").read_text() == "old = True\n"

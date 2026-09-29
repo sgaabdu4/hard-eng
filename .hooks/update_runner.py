@@ -215,9 +215,16 @@ def commit_update(
     try:
         write_links(root, links)
         write_changes(root, changes)
-        index = index_entries(root, names)
-        subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
-        staging = (index, index_entries(root, names))
+        # A SIGTERM mid-staging waits until the staging it must undo is recorded.
+        mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        try:
+            index = index_entries(root, names)
+            subprocess.run(
+                ["git", "add", "--force", "--", *names], cwd=root, check=True
+            )
+            staging = (index, index_entries(root, names))
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, mask)
         result = subprocess.run(
             [
                 "git",
