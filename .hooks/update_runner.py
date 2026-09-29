@@ -85,8 +85,9 @@ def current_head(root: Path) -> str:
 
 def landed_commit(root: Path, head: str, message: str) -> tuple[str, str] | None:
     """The updater's own commit since head, found by its message because the agent may commit too."""
+    span = head + "..HEAD" if head else "-1"
     found = subprocess.run(
-        ["git", "log", "--format=%H %P%x1f%s", f"{head}..HEAD" if head else "-1"],
+        ["git", "log", "--format=%H %P%x1f%s", span],
         cwd=root,
         capture_output=True,
         text=True,
@@ -138,6 +139,8 @@ def roll_back(
     before_links: dict[str, str | None],
 ) -> list[str]:
     """Restore each path only while it still holds the updater's write, checked just before."""
+    from update import replace_file
+
     kept = []
     for name, content in before.items():
         target = root / name
@@ -146,8 +149,7 @@ def roll_back(
         elif content is None:
             target.unlink(missing_ok=True)
         else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(content)
+            replace_file(target, content)
     for name, target in before_links.items():
         if not written(root, name, links[name], True):
             kept.append(name)
@@ -159,6 +161,35 @@ def roll_back(
         if target is not None:
             (root / name).symlink_to(target, target_is_directory=True)
     return kept
+
+
+def index_entries(root: Path, names: list[str]) -> dict[str, str]:
+    listing = subprocess.check_output(
+        ["git", "ls-files", "--stage", "-z", "--", *names], cwd=root, text=True
+    )
+    return {
+        path: entry
+        for entry, _, path in (
+            line.partition("\t") for line in listing.split("\0") if line
+        )
+    }
+
+
+def unstage_own(
+    root: Path, names: list[str], staging: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """Unstage only index entries the updater changed and that still hold its staging."""
+    before, staged = staging
+    current = index_entries(root, names)
+    own = [
+        path
+        for path in {*before, *staged, *current}
+        if current.get(path) == staged.get(path) != before.get(path)
+    ]
+    if own:
+        subprocess.run(
+            ["git", "reset", "--quiet", "HEAD", "--", *own], cwd=root, check=True
+        )
 
 
 def commit_update(
@@ -180,10 +211,13 @@ def commit_update(
     }
     head = current_head(root)
     message = f"Update Hard Eng to {revision}"
+    staging: tuple[dict[str, str], dict[str, str]] | None = None
     try:
         write_links(root, links)
         write_changes(root, changes)
+        index = index_entries(root, names)
         subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
+        staging = (index, index_entries(root, names))
         result = subprocess.run(
             [
                 "git",
@@ -216,9 +250,8 @@ def commit_update(
         if rebase_sessions(root, head, message):
             raise
         kept = roll_back(root, changes, links, before, before_links)
-        subprocess.run(
-            ["git", "reset", "--quiet", "HEAD", "--", *names], cwd=root, check=True
-        )
+        if staging is not None:
+            unstage_own(root, names, staging)
         if kept:
             raise subprocess.SubprocessError(
                 f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"

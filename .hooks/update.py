@@ -528,8 +528,23 @@ def write_changes(root: Path, changes: dict[str, str | None]) -> None:
                     break
                 parent.rmdir()
         else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content)
+            replace_file(target, content.encode())
+
+
+def replace_file(target: Path, content: bytes) -> None:
+    """Swap in the whole file, so an interrupted write never leaves it truncated."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_symlink():
+        target.write_bytes(content)
+        return
+    pending = target.with_name(target.name + ".hard-eng-pending")
+    try:
+        pending.write_bytes(content)
+        if target.exists():
+            shutil.copymode(target, pending)
+        pending.replace(target)
+    finally:
+        pending.unlink(missing_ok=True)
 
 
 def write_links(root: Path, links: dict[str, str | None]) -> None:

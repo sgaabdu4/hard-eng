@@ -324,3 +324,56 @@ def test_rollback_keeps_an_edit_made_to_an_already_checked_path(
     assert update_runner.roll_back(installed, changes, {}, before, {}) == []
     assert (installed / "first.md").read_text() == "agent edit\n"
     assert (installed / "second.md").read_text() == "original\n"
+
+
+def test_interrupted_write_keeps_the_original_file(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = installed / ".hooks/update.py"
+    target.write_text("original = True\n")
+
+    def interrupted(_self: Path, _target: Path) -> Path:
+        raise subprocess.SubprocessError("interrupted by signal 15")
+
+    monkeypatch.setattr(Path, "replace", interrupted)
+    with pytest.raises(subprocess.SubprocessError):
+        update.write_changes(installed, {".hooks/update.py": "new = True\n"})
+    assert target.read_text() == "original = True\n"
+    assert sorted(path.name for path in target.parent.iterdir()) == [
+        "hard-eng-source.json",
+        "update.py",
+    ]
+
+
+def test_failed_update_commit_keeps_staging_made_while_it_ran(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (installed / "AGENTS.md").write_text("original rules\n")
+    (installed / ".hooks/update.py").write_text("old = True\n")
+    commit(installed, "managed files")
+    install_hook(installed, "pre-commit", "exit 1\n")
+    restore = update_runner.roll_back
+
+    def agent_stages_then_rollback(
+        root: Path,
+        changes: dict[str, str | None],
+        links: dict[str, str | None],
+        before: dict[str, bytes | None],
+        before_links: dict[str, str | None],
+    ) -> list[str]:
+        (root / "AGENTS.md").write_text("staged by agent\n")
+        git(root, "add", "AGENTS.md")
+        (root / "AGENTS.md").write_text("still editing\n")
+        return restore(root, changes, links, before, before_links)
+
+    monkeypatch.setattr(update_runner, "roll_back", agent_stages_then_rollback)
+    changes: dict[str, str | None] = {
+        "AGENTS.md": "updated rules\n",
+        ".hooks/update.py": "new = True\n",
+    }
+    with pytest.raises(subprocess.SubprocessError, match="kept later edits"):
+        update_runner.commit_update(installed, changes, {}, "b" * 40)
+    assert git(installed, "show", ":AGENTS.md") == "staged by agent"
+    assert (installed / "AGENTS.md").read_text() == "still editing\n"
+    assert (installed / ".hooks/update.py").read_text() == "old = True\n"
+    assert git(installed, "diff", "--cached", "--name-only") == "AGENTS.md"
