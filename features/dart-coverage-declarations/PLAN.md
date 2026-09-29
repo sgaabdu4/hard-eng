@@ -1,6 +1,6 @@
 # Classify Dart declarations with a pinned analyzer
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -20,13 +20,13 @@ Pin: analyzer 14.4.0 (pub.dev latest). It compiles the current classifier (`Form
 
 ## Acceptance + steps
 
-- [ ] A consumer resolved to analyzer 12 keeps declaration-only files waived and real-code files required → extended `test_native_dart_declarations_and_runtime_controls`.
-- [ ] A consumer without analyzer keeps the same classification; an unrunnable classifier fails with its real cause and without "cover or mark" advice → extended `test_missing_dart_parser_keeps_sources_required`.
-- [ ] Real `dart test --coverage` on a package without a direct analyzer dependency still omits declaration-only libraries → `test_native_dart_lcov_omits_declaration_only_libraries` without an analyzer dependency.
-- [ ] `integration_test/` is excluded from production sources and kept with tests → extended `test_source_files_include_unexecuted_modules`.
-- [ ] The pinned manifest and lock reach consumers through the managed-file manifest → Dart install in `test_plain_dart_uses_native_coverage_tool`; Hard Eng's vulnerability gate scans the lock.
-- [ ] A new script missing from an explicit shellcheck list fails the check by name, and rerunning setup appends it → extended `test_new_repository_inputs_require_applicable_gates`.
-- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --base origin/main`.
+- [x] A consumer resolved to analyzer 12 keeps declaration-only files waived and real-code files required → extended `test_native_dart_declarations_and_runtime_controls`.
+- [x] A consumer without analyzer keeps the same classification; an unrunnable classifier fails with its real cause and without "cover or mark" advice → extended `test_missing_dart_parser_keeps_sources_required`.
+- [x] Real `dart test --coverage` on a package without a direct analyzer dependency still omits declaration-only libraries → `test_native_dart_lcov_omits_declaration_only_libraries` without an analyzer dependency.
+- [x] `integration_test/` is excluded from production sources and kept with tests → extended `test_source_files_include_unexecuted_modules`.
+- [x] The pinned manifest and lock reach consumers through the managed-file manifest → Dart install in `test_plain_dart_uses_native_coverage_tool`; Hard Eng's vulnerability gate scans the lock.
+- [x] A new script missing from an explicit shellcheck list fails the check by name, and rerunning setup appends it → extended `test_new_repository_inputs_require_applicable_gates`.
+- [x] Full gate passes → `python3 .hooks/hard-eng.py check --base origin/main`.
 
 ## Baseline + execution
 
@@ -44,8 +44,8 @@ N/A — coverage validation has no product UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending focused tests and the integrated gate.
+Result: Passed
+Evidence: The pre-fix classifier returned no waiver for a consumer resolved to analyzer 12.1.0; the pinned classifier waived the same declaration-only file. Focused Dart coverage, report, runner, setup, update, adoption, package-discovery and Husky suites passed (293 and 312 tests, four workers); the native analyzer-12 fixture takes 53 s, including its own pub get. The integrated Ready run passed 1086 tests (90.52% line coverage) and every gate except one new complexity finding in `validate_required_checks`, repaired by extracting the shell-list check; Ruff and Pyrefly then passed with 0 diagnostics. osv-scanner parses the pinned lock (18 packages, 0 vulnerabilities). The final Complete `python3 .hooks/hard-eng.py check --base origin/main` passed all 17 gates in 2 min 17 s: 1086 tests in 99.8 s with four workers, 90.53% line coverage.
 E2E: N/A — no user journey; native `dart pub get`, `dart test --coverage` and the classifier run in the fixtures exercise the real command boundary.
 
 Delivery target: Merge
