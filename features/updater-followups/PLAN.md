@@ -51,7 +51,7 @@ N/A — updater and hook behaviour; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1155 tests, 89.71% line coverage). The freshness check took 0.76–0.84s against this repository, down from 1.6–2.2s.
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` passed all 18 gates (1157 tests, 89.68% line coverage). The freshness check took 0.76–0.84s against this repository, down from 1.6–2.2s.
 E2E: N/A — the updater tests run real Git updates against fixture releases; installed repositories take the change with their next update.
 
 Delivery target: Merge
