@@ -1,6 +1,6 @@
 # Efficient affected checks and scaffold adoption
 
-Status: Draft
+Status: Complete
 
 ## Outcome + scope
 
@@ -16,8 +16,8 @@ Owners: `.hooks/gate_config.py`, `.hooks/dependency_graph.py`, `.hooks/project_s
 
 ## Decisions + authorization
 
-Blockers: None for implementation; Complete-stage validation and remote delivery remain required.
-Handoff: Approval
+Blockers: None
+Handoff: Ready for ship
 Authority: The user authorized parallel investigation and implementation, model selection, source release followed by upgrades of all installed workspace repositories, removal of confirmed legacy tooling, independent review, PR creation and merge to origin/main. Subsequent instructions prioritize measured runtime and Actions cost, minimal complexity and meaningful tests, and remove all harness integrations except Claude and Codex. The user additionally authorized full Context Mode and Codebase Memory MCP retirement, machine-wide uninstallation and generated-state cleanup, with one combined PR per repository. Later steering retires redundant repository Claude instruction files in favor of shared AGENTS instructions and extends evidence-based legacy cleanup. The user also requires full migration from npm to pnpm where supported, with current official guidance and native edge-case verification. Appwrite Backend is additionally MCP-only for agent operations; its CLI guidance is retired in the same canonical dependency PR. Preserve unrelated work and project-specific assertions. No remote branch-protection changes are authorized.
 
 Current approval (2026-09-28): The user explicitly approved documented, reviewed performance exceptions. Add one package reason field at the existing configuration owner, preserve it through setup, and retain unit tests, coverage, strict profiles and all configured performance validation. Focused regressions are authorized; the coordinator reviews the diff and grants the shared heavy-check slot before integrated checks or publication.
@@ -26,9 +26,9 @@ Current approval (2026-09-29): The user requested the open issue affecting slow 
 
 ## Acceptance + steps
 
-- [ ] Missing multi-package dependency review fails normal checks, impact selection and scaffold-only verification; initial preparation still writes a reviewable incomplete configuration.
-- [ ] Automated push/PR check and impact entrypoints reject absent or blank comparison bases before project gates; local/manual full runs and unavailable nonblank-base fallback remain supported.
-- [ ] Setup inspects every workflow and every direct check call without treating one valid command as proof that all others are complete; manual maintenance checks remain supported.
+- [x] Missing multi-package dependency review fails normal checks, impact selection and scaffold-only verification; initial preparation still writes a reviewable incomplete configuration.
+- [x] Automated push/PR check and impact entrypoints reject absent or blank comparison bases before project gates; local/manual full runs and unavailable nonblank-base fallback remain supported.
+- [x] Setup inspects every workflow and every direct check call without treating one valid command as proof that all others are complete; manual maintenance checks remain supported.
 - [x] Fresh bootstrap, source-update, candidate and committed pre-push submodules fetch shallow pinned revisions, including older and nested pins, while preserving dirty original checkouts → existing native Git regressions and native object-size proof.
 - [x] Managed-only instruction files end with one newline; project-owned suffixes keep their separator and exact content, and both existing managed forms remain accepted → native Git whitespace and preservation regressions.
 - [x] Scaffold-only verification recognizes an empty instruction suffix across source revisions without hiding project-rule edits → real native update and committed-snapshot guard checks.
