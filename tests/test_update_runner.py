@@ -364,6 +364,31 @@ def test_update_commit_never_takes_an_edit_made_after_its_writes(
     assert git(installed, "diff", "--cached", "--name-only") == ""
 
 
+def test_update_commit_never_takes_a_link_repointed_after_its_writes(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("a", "b", "c"):
+        (installed / "skills" / name).mkdir(parents=True)
+        (installed / "skills" / name / "SKILL.md").write_text(name)
+    link = installed / ".claude/skills/he"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("../../skills/a", target_is_directory=True)
+    head = commit(installed, "linked skill")
+    snapshot = update_runner.index_entries
+
+    def agent_repoints_after_writes(root: Path, names: list[str]) -> dict[str, str]:
+        link.unlink()
+        link.symlink_to("../../skills/c", target_is_directory=True)
+        return snapshot(root, names)
+
+    monkeypatch.setattr(update_runner, "index_entries", agent_repoints_after_writes)
+    links: dict[str, str | None] = {".claude/skills/he": "../../skills/b"}
+    with pytest.raises(subprocess.SubprocessError, match="kept later edits to .claude"):
+        update_runner.commit_update(installed, {}, links, "b" * 40, {})
+    assert str(link.readlink()) == "../../skills/c"
+    assert git(installed, "rev-parse", "HEAD") == head
+
+
 def test_sessions_still_count_an_update_commit_holding_other_content(
     installed: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

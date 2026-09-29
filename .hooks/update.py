@@ -767,7 +767,7 @@ def repair_installation(root: Path, previous: str) -> str:
             ) from error
         raise
     return f"{status}; repaired {install_paths(names)}. " + commit_install(
-        root, names, clean, missing
+        root, names, clean, {**missing, **added}
     )
 
 

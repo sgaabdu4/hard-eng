@@ -104,7 +104,7 @@ def landed_commit(root: Path, head: str, message: str) -> tuple[str, str] | None
 
 
 def committed_matches(root: Path, commit: str, expected: dict[str, str | None]) -> bool:
-    """Whether the commit holds exactly the planned files, so no other edit rode along."""
+    """Whether the commit holds exactly the planned files and link targets, so no other edit rode along."""
     request = "".join(f"{commit}:{name}\n" for name in expected).encode()
     output = subprocess.run(
         ["git", "cat-file", "--batch"],
@@ -387,14 +387,15 @@ def commit_update(
         if moved := [
             name
             for name in applied
-            if name in changes and not written(root, name, changes[name], False)
+            if (name in changes and not written(root, name, changes[name], False))
+            or (links.get(name) and not written(root, name, links[name], True))
         ]:
             raise ValueError(
                 f"{', '.join(moved)} changed while the update was being applied"
             )
         git_commit(root, names, changes, message)
     except (OSError, ValueError, subprocess.SubprocessError) as error:
-        if rebase_sessions(root, head, message, changes):
+        if rebase_sessions(root, head, message, {**changes, **links}):
             raise
         kept = roll_back(root, changes, links, expected, before_links, applied)
         if staging is not None:
@@ -404,7 +405,7 @@ def commit_update(
                 f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"
             ) from error
         raise
-    rebase_sessions(root, head, message, changes)
+    rebase_sessions(root, head, message, {**changes, **links})
 
 
 def alive(process: int) -> bool:
