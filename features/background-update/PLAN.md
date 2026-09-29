@@ -4,15 +4,15 @@ Status: Complete
 
 ## Outcome + scope
 
-Starting, resuming or compacting an agent session no longer waits on the scaffold update (issue 213). SessionStart records the session's Git base, reports the last update result, and starts one detached update per repository; the update still verifies an isolated candidate and makes its own local commit. Interrupting the update stops everything it started, removes its candidate worktree and records the failure; a candidate left by a killed update is removed by the next one. The update commit does not count as the session's own work, and Stop says an update is still running instead of asking for another. The two video skills pin Playwright 1.63.0 with regenerated lockfiles (issue 196).
+Starting, resuming or compacting an agent session no longer waits on the scaffold update (issue 213). SessionStart records the session's Git base, reports the last update result, and starts one detached supervisor per repository. The supervisor holds the update lock and runs the update in its own process group; the update still verifies an isolated candidate and makes its own local commit. Interrupting it stops every process it started (SIGTERM, then SIGKILL after 10 seconds), removes its candidate worktree and records the outcome. Candidates are locked with their owner's PID, so only those whose owner exited are removed, never a live or legacy updater's. A failed update commit keeps any edit made while it ran instead of rolling it back, and an interruption after the commit keeps the commit. The update commit does not count as the session's own work, and Stop says an update is still running instead of asking for another. The two video skills pin Playwright 1.63.0 with regenerated lockfiles (issue 196).
 
-Non-goals: a shorter SessionStart registration timeout (the hook no longer does network or verification work, and changing the registered entry would need a Claude hook migration), a scheduled dependency updater for skill manifests (issue 196's optional suggestion; it is new infrastructure without an agreed requirement), and killing processes left behind by a `SIGKILL` of the update itself.
+Non-goals: a shorter SessionStart registration timeout (the hook no longer does network or verification work, and changing the registered entry would need a Claude hook migration), and a scheduled dependency updater for skill manifests (issue 196's optional suggestion; it is new infrastructure without an agreed requirement).
 
 ## Repository context
 
 Owners:
 - `.hooks/agent_hooks.py` `session_context`: called `update(root)` inline, so the SessionStart hook ran clone, submodule fetches and the full candidate check (up to 3500s) before the agent could start.
-- `.hooks/update.py` `verify_candidate`: the candidate `worktree add`, submodule update and `worktree remove` had no timeout, and cleanup relied on `finally`, which a signal skipped. `update.py` was already at the 1000-line file limit, so the new runner lives in `.hooks/update_runner.py`.
+- `.hooks/update.py` `verify_candidate` + `commit_update`: the candidate `worktree add`, submodule update and `worktree remove` had no timeout, cleanup relied on `finally`, which a signal skipped, and a failed commit restored every managed file unconditionally. `update.py` was already at the 1000-line file limit, so the runner and the commit transaction live in `.hooks/update_runner.py`.
 - `.hooks/update.py` `require_current`: Stop's freshness check, which told the agent to rerun the updater.
 - `setup.sh`: the fallback installer path, now serialized with the background update.
 - `AGENTS.md` and `README.md`: described a synchronous startup update.
@@ -29,8 +29,9 @@ Authority: Autonomous. The user asked to fix all open issues, review adversarial
 - [x] SessionStart starts the update as a detached process in its own session, with no inherited pipes, and reports the last result → `test_start_detaches_worker_without_inherited_pipes`, `test_session_reports_update_status_without_running_update`.
 - [x] A second session or `setup.sh` never starts a concurrent update → `test_running_update_is_reported_not_duplicated`.
 - [x] Stop reports a running update instead of asking for another → `test_stop_waits_for_running_update_instead_of_rerunning_setup`.
-- [x] A killed update's candidate worktree is removed by the next one, and the scaffold check's candidates are kept → `test_update_removes_candidates_left_by_a_killed_update`.
-- [x] `SIGTERM` stops the update's child processes and records the failure → `test_interrupted_update_stops_its_processes_and_records_failure`.
+- [x] Only candidates whose owning update exited are removed; running, legacy and scaffold-check candidates stay → `test_update_removes_only_candidates_whose_update_exited`.
+- [x] `SIGTERM` stops every process of the update, including one that ignores SIGTERM, and records the failure → `test_interrupted_update_stops_every_process_and_records_failure`.
+- [x] A failed update commit keeps an edit made while it ran; an interruption after the commit keeps the update and reports it as installed → `test_failed_update_commit_keeps_edits_made_while_it_ran`, `test_interrupt_after_the_update_commit_keeps_the_update`, `test_interrupt_after_installing_reports_the_installed_revision`.
 - [x] The update commit is not counted as the session's work; later session edits still are → `test_update_commit_is_not_counted_as_session_work`.
 - [x] Uninstalled checkouts still report why they cannot update, without a worker → `test_unavailable_update_is_reported_without_a_worker`.
 - [x] Both video skills pin `playwright` 1.63.0 with lockfiles regenerated by pnpm.
@@ -43,7 +44,7 @@ Execution: One branch, one commit per issue.
 
 ## Risks + recovery
 
-The update now commits while the agent may be working; it keeps its existing guards (clean update paths before and after verification, `git commit --only`, rollback on failure). A `SIGKILL` of the update leaves its children running until they finish; their output goes to `.hard-eng/update.log`, not the agent. Playwright 1.63.0 showed two capture-speed `non-smooth-gesture` findings in the walkthrough smoke test out of eight local runs, against none of eight on 1.62.1; see Verification. Recovery is reverting this branch.
+The update now commits while the agent may be working; it keeps its existing guards (clean update paths before and after verification, `git commit --only`) and rolls back only its own writes. A `SIGKILL` of the supervisor leaves the update running; the update keeps the lock until it exits. A `SIGKILL` of the update is cleaned up by the supervisor. Playwright 1.63.0 showed two capture-speed `non-smooth-gesture` findings in the walkthrough smoke test out of eight local runs, against none of eight on 1.62.1; see Verification. Recovery is reverting this branch.
 
 ## ux_reference
 
