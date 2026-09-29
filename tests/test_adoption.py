@@ -54,6 +54,38 @@ def test_install_preserves_reviewed_performance_exception(
     assert snapshot(tmp_path) == before
 
 
+@pytest.mark.parametrize(
+    ("scripts", "kept"),
+    [
+        ({"typecheck": "tsc --noEmit"}, False),
+        ({"typecheck": "tsc --noEmit", "pretypecheck": "node generate.js"}, True),
+        ({"typecheck": "tsc -p tsconfig.app.json --noEmit"}, True),
+    ],
+)
+def test_setup_keeps_only_a_distinct_project_typecheck(
+    installer: ModuleType, tmp_path: Path, scripts: dict[str, str], kept: bool
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").write_text(json.dumps({"scripts": scripts}))
+    wrapper = {"name": "project-typecheck", "role": "project-typecheck"}
+
+    def planned() -> list[object]:
+        config = json.loads(installer.plan_install(tmp_path)[0]["hard-eng.gates.json"])
+        return [
+            gate
+            for gate in config["packages"][0]["checks"]
+            if wrapper.items() <= gate.items()
+        ]
+
+    assert bool(planned()) is kept
+    config = installer.gate_config(tmp_path)
+    config["packages"][0]["checks"].append(
+        {**wrapper, "command": ["npm", "run", "typecheck"]}
+    )
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    assert bool(planned()) is kept
+
+
 @pytest.mark.parametrize("suffix", ["", "\n", "\nKeep project instructions.\n"])
 def test_managed_instruction_update_preserves_native_scaffold_proof(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, suffix: str

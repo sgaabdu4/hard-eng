@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,9 @@ if TYPE_CHECKING:
     from shipping import ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
+# Local fixture commands must not inherit the hosting workflow's event.
+os.environ.pop("GITHUB_ACTIONS", None)
+os.environ.pop("GITHUB_EVENT_NAME", None)
 sys.path.insert(0, str(SOURCE / ".hooks"))
 CODEBASE_MEMORY = {
     "command": "sh",

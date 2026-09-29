@@ -206,6 +206,8 @@ def test_workspace_cannot_cover_unrelated_packages_or_child_security(
     (child / "package.json").write_text((tmp_path / "package.json").read_text())
     (child / "src/app.js").write_text("export const value = 1;\n")
     config: GateConfig = installer.gate_config(tmp_path)
+    config["packages"][0]["depends_on"] = []
+    config["packages"][1]["depends_on"] = ["."]
     path = tmp_path / "hard-eng.gates.json"
     path.write_text(json.dumps(config))
     load_groups(tmp_path)
