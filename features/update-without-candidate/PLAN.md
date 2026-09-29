@@ -1,6 +1,6 @@
 # Update Hard Eng without rerunning the project's gates in a candidate worktree
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -32,10 +32,10 @@ Authority: Autonomous. The user asked to fix the open issues in this PR. #219 is
 
 ## Acceptance + steps
 
-- [ ] An update whose new hooks reject the project's gate configuration applies nothing and names the rejection → `test_scaffold_update_validates_retained_files_scanner[True]`.
-- [ ] An update that changes project configuration commits without running application checks or adding a worktree → `test_project_configuration_update_commits_without_rerunning_application_checks`.
-- [ ] Cleanup removes an unlocked candidate over six hours old and locked candidates whose update exited, and keeps a fresh unlocked candidate and a live locked one → `test_update_removes_only_candidates_whose_update_ended`.
-- [ ] README describes the new update verification → review of the diff.
+- [x] An update whose new hooks reject the project's gate configuration applies nothing and names the rejection → `test_scaffold_update_validates_retained_files_scanner[True]`.
+- [x] An update that changes project configuration commits without running application checks or adding a worktree → `test_project_configuration_update_commits_without_rerunning_application_checks`.
+- [x] Cleanup removes an unlocked candidate over six hours old and locked candidates whose update exited, and keeps a fresh unlocked candidate and a live locked one → `test_update_removes_only_candidates_whose_update_ended`.
+- [x] README describes the new update verification → review of the diff.
 
 Retired tests: `test_candidate_uses_remote_task_plan_scope`, `test_candidate_ignores_base_changes_the_branch_lacks`, `test_candidate_initializes_consumer_submodule_and_cleans_up`, `test_candidate_provisions_yaml_without_host_site_packages` and `test_configuration_candidate_without_origin_uses_head` proved the candidate's base selection, submodule initialisation, dependency provisioning and cleanup. No candidate exists any more; the replacement proof is a single `worktree list` entry after an update, plus pre-push and CI selecting every group for such commits.
 
@@ -55,8 +55,8 @@ N/A — updater behaviour; no product appearance.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` passed all 18 gates (1131 tests, 90.23% line coverage). The three acceptance tests failed against the previous `update.py` and `update_runner.py`. Codex adversarial review (gpt-6-astra) approved with no findings.
 E2E: N/A — the updater tests run real Git updates against fixture releases; a live consumer update follows the merge.
 
 Delivery target: Merge
