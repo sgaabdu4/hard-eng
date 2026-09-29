@@ -20,6 +20,7 @@ from pathlib import Path
 from gate_config import Group, parse_config
 from project_setup import python_gate_command
 
+GLOB = re.compile(r"[?*()[\]]")
 HUNK = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 LISTED = 20
 Survivor = tuple[str, int, str]
@@ -129,8 +130,10 @@ def javascript(
     remaining = 600 if deadline is None else max(deadline - time.monotonic(), 1)
     provision_batch(directory, ["npm:@stryker-mutator/core@latest"], remaining)
     report, config, output = work / "report.json", work / "stryker.json", work / "log"
+    # Stryker reads each path as a minimatch glob; brackets wrap its metacharacters.
+    literal = {name: GLOB.sub(r"[\g<0>]", name) for name in files}
     mutate = [
-        f"{name}:{a}-{b}" for name, lines in files.items() for a, b in ranges(lines)
+        f"{literal[name]}:{a}-{b}" for name in files for a, b in ranges(files[name])
     ]
     config.write_text(
         json.dumps(

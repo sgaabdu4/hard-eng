@@ -1,3 +1,4 @@
+import fnmatch
 import json
 import os
 import shutil
@@ -7,6 +8,7 @@ import sys
 import textwrap
 import time
 from pathlib import Path
+from unittest.mock import Mock
 
 import mutation
 import pytest
@@ -157,6 +159,27 @@ def test_each_python_survivor_is_read_from_its_own_diff(
     )
 
 
+def test_stryker_patterns_match_route_files_literally(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    monkeypatch.setattr(tool_setup, "provision_batch", Mock())
+
+    def run(_command: list[str], *_arguments: object) -> int:
+        (tmp_path / "report.json").write_text('{"files": {}}')
+        return 0
+
+    monkeypatch.setattr(mutation, "run", run)
+    route = "app/(shop)/[...slug]/route.ts"
+    mutation.javascript(tmp_path, {route: {2}}, ["pnpm", "test"], None, tmp_path)
+    [pattern] = json.loads((tmp_path / "stryker.json").read_text())["mutate"]
+    path, _, lines = pattern.rpartition(":")
+    assert lines == "2-2"
+    assert fnmatch.fnmatchcase(route, path)
+    assert not fnmatch.fnmatchcase("app/(shop)/s/route.ts", path)
+
+
 def test_stryker_and_mutation_test_reports_list_what_survived() -> None:
     location = {"start": {"line": 2, "column": 7}, "end": {"line": 2, "column": 19}}
     stryker = {
@@ -234,6 +257,7 @@ def test_interrupted_mutation_stops_the_tool_it_started(tmp_path: Path) -> None:
     script = f"""
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 sys.path.insert(0, {str(SOURCE / ".hooks")!r})
 import mutation, ship_actions
 def adapter(directory, files, tests, deadline, work):
