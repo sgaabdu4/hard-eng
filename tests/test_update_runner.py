@@ -389,6 +389,47 @@ def test_update_commit_never_takes_a_link_repointed_after_its_writes(
     assert git(installed, "rev-parse", "HEAD") == head
 
 
+def test_retiring_a_link_never_commits_a_folder_created_in_its_place(
+    installed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (installed / "skills/old").mkdir(parents=True)
+    (installed / "skills/old/SKILL.md").write_text("old")
+    link = installed / ".claude/skills/old"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("../../skills/old", target_is_directory=True)
+    head = commit(installed, "linked skill")
+    snapshot = update_runner.index_entries
+
+    def agent_fills_the_path(root: Path, names: list[str]) -> dict[str, str]:
+        (link / "agent.py").parent.mkdir(exist_ok=True)
+        (link / "agent.py").write_text("print('agent')\n")
+        return snapshot(root, names)
+
+    monkeypatch.setattr(update_runner, "index_entries", agent_fills_the_path)
+    links: dict[str, str | None] = {".claude/skills/old": None}
+    with pytest.raises(
+        subprocess.SubprocessError,
+        match="old changed while the update was being applied",
+    ):
+        update_runner.commit_update(installed, {}, links, "b" * 40, {})
+    assert (link / "agent.py").read_text() == "print('agent')\n"
+    assert git(installed, "rev-parse", "HEAD") == head
+
+
+def test_sessions_still_count_an_unplanned_file_under_a_planned_path(
+    installed: Path,
+) -> None:
+    (installed / "skills/he").mkdir(parents=True)
+    (installed / "skills/he/SKILL.md").write_text("planned")
+    (installed / "skills/he/agent.py").write_text("print('agent')\n")
+    commit(installed, "update with an extra file")
+    commit_id = git(installed, "rev-parse", "HEAD")
+    planned: dict[str, str | None] = {"skills/he/SKILL.md": "planned", "skills": None}
+    assert not update_runner.committed_matches(installed, commit_id, planned)
+    del planned["skills"]
+    assert update_runner.committed_matches(installed, commit_id, planned)
+
+
 def test_sessions_still_count_an_update_commit_holding_other_content(
     installed: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

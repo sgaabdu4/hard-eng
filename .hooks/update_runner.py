@@ -105,6 +105,16 @@ def landed_commit(root: Path, head: str, message: str) -> tuple[str, str] | None
 
 def committed_matches(root: Path, commit: str, expected: dict[str, str | None]) -> bool:
     """Whether the commit holds exactly the planned files and link targets, so no other edit rode along."""
+    listing = subprocess.run(
+        ["git", "ls-tree", "-r", "-z", "--name-only", commit, "--", *expected],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    planned = {name for name, content in expected.items() if content is not None}
+    if set(filter(None, listing.split("\0"))) - planned:
+        return False
     request = "".join(f"{commit}:{name}\n" for name in expected).encode()
     output = subprocess.run(
         ["git", "cat-file", "--batch"],
@@ -350,6 +360,25 @@ def git_commit(
         )
 
 
+def unwritten(
+    root: Path,
+    changes: dict[str, str | None],
+    links: dict[str, str | None],
+    applied: list[str],
+) -> list[str]:
+    """Applied paths that no longer hold the updater's write; a retired link's planned folder is checked by its files."""
+    return [
+        name
+        for name in applied
+        if (name in changes and not written(root, name, changes[name], False))
+        or (
+            name in links
+            and not any(other.startswith(f"{name}/") for other in changes)
+            and not written(root, name, links[name], True)
+        )
+    ]
+
+
 def commit_update(
     root: Path,
     changes: dict[str, str | None],
@@ -384,12 +413,7 @@ def commit_update(
                 ["git", "add", "--force", "--", *names], cwd=root, check=True
             )
             staging = (index, index_entries(root, names))
-        if moved := [
-            name
-            for name in applied
-            if (name in changes and not written(root, name, changes[name], False))
-            or (links.get(name) and not written(root, name, links[name], True))
-        ]:
+        if moved := unwritten(root, changes, links, applied):
             raise ValueError(
                 f"{', '.join(moved)} changed while the update was being applied"
             )
