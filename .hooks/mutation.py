@@ -147,6 +147,8 @@ def javascript(
                 "cleanTempDir": True,
                 # The checkout is disposable; in place skips the tsconfig rewrite that imports typescript.
                 "inPlace": True,
+                # Backups stay outside the package, where test runners cannot discover them.
+                "tempDirName": str(work / "stryker"),
             }
         )
     )

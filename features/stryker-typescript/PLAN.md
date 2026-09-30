@@ -22,6 +22,7 @@ Authority: The user asked to fix all open issues, test, run adversarial review a
 
 - [ ] Stryker runs in place, which skips its tsconfig rewrite → `test_stryker_patterns_match_route_files_literally` asserts `inPlace`; a real pnpm TypeScript package with `tsconfig.json` lists the survivors on its changed line.
 - [ ] A Node failure keeps its error line and `code:` above the frames → `test_node_failure_keeps_its_error_above_the_stack_frames`.
+- [ ] In-place backups go to the external work directory, so Vitest's dot-directory discovery cannot run a backed-up test whose relative fixture is missing → the same config test asserts `tempDirName` is outside the package; a real Vitest suite importing a JSON fixture mutates.
 - [ ] The sandbox-only pnpm `verify_deps_before_run` override is removed; in place, a package with `verifyDepsBeforeRun: error` still mutates → real pnpm fixture.
 
 ## Baseline + execution

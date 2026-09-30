@@ -210,15 +210,20 @@ def test_stryker_patterns_match_route_files_literally(
 
     monkeypatch.setattr(tool_setup, "provision_batch", Mock())
 
+    package, work = tmp_path / "package", tmp_path / "work"
+    package.mkdir()
+    work.mkdir()
+
     def run(_command: list[str], *_arguments: object) -> int:
-        (tmp_path / "report.json").write_text('{"files": {}}')
+        (work / "report.json").write_text('{"files": {}}')
         return 0
 
     monkeypatch.setattr(mutation, "run", run)
     route = "app/(shop)/[...slug]/route.ts"
-    mutation.javascript(tmp_path, {route: {2}}, ["pnpm", "test"], None, tmp_path)
-    config = json.loads((tmp_path / "stryker.json").read_text())
+    mutation.javascript(package, {route: {2}}, ["pnpm", "test"], None, work)
+    config = json.loads((work / "stryker.json").read_text())
     assert config["inPlace"] is True
+    assert not Path(config["tempDirName"]).is_relative_to(package)
     [pattern] = config["mutate"]
     path, _, lines = pattern.rpartition(":")
     assert lines == "2-2"
