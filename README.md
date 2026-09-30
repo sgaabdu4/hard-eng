@@ -57,7 +57,7 @@ flowchart TD
   Z --> W[Load project context and select task stage]
 ```
 
-Trusted SessionStart hooks report the last update result and start the update in the background, so starting, resuming or compacting a session never waits on it. One update runs per repository at a time; it writes `.hard-eng/update.log`, commits locally once the new hooks accept the gate configuration, and the next session start reports its result. It does not rerun the project's gates; pre-push and CI run them on the update commit. A refused update is not retried in the background until upstream moves, the checkout changes or 24 hours pass; the published setup command always retries. Each update also stops the Git file watcher (fsmonitor) of any other worktree of the repository unused for a day; Git starts it again on the next command there. Without a status, agent instructions require the command above before work. Reuse a current status and never run setup while an update runs. A failed update does not waive existing checks.
+Trusted SessionStart hooks report the last update result and start the update in the background, so starting, resuming or compacting a session never waits on it. One update runs per repository at a time; it writes `.hard-eng/update.log`, commits locally once the new hooks accept the gate configuration, and the next session start reports its result. It does not rerun the project's gates; pre-push and CI run them on the update commit. A refused update is not retried in the background until upstream moves, the checkout changes or 24 hours pass; the published setup command always retries. Each update also stops the Git file watcher (fsmonitor) of any other worktree of the repository unused for a day; Git starts it again on the next command there. Without a status, agent instructions require the command above before work. Reuse a current status and never run setup while an update runs. A failed update does not waive existing checks; the agent repairs its cause as its own commit before other repository work.
 
 In Codex CLI, use `codex --enable hooks`, trust the project, then `/hooks` to review and trust Hard Eng's hooks. Changed hook definitions need review again. `--yolo` disables sandbox/approval protections; it is not hook setup. A disabled SessionStart cannot warn you itself; Codex supplies the hook-trust warning. [Native hook instructions](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
 
@@ -216,7 +216,7 @@ Semgrep or configured native rules check code; OSV checks selected lockfiles or 
 **Skills guide reasoning; hooks and gates enforce executable checks.** Plan validation checks declared status, results, UX references, and E2E fields. It cannot authenticate screenshots, judge design quality, or prove that an agent followed every instruction.
 
 - **SessionStart:** reports the last update result and starts or reports a background update.
-- **Stop:** distinguishes declared prerequisite clarification from approval handoffs. Approval needs baseline, UX and E2E planning evidence; changed implementation runs native checks. Planning-only or known unchanged sessions may avoid expensive checks. Repeated stop loops are bounded.
+- **Stop:** distinguishes declared prerequisite clarification from approval handoffs. Approval needs baseline, UX and E2E planning evidence; changed implementation runs native checks. Planning-only or known unchanged sessions may avoid expensive checks, but a newer verified revision with no update running sends the agent to repair and rerun setup. Repeated stop loops are bounded.
 - **Pre-push:** verifies pushed revisions in isolated worktrees, then reports mutants on changed production lines that the tests miss. The mutation report never blocks the push and stops after 180 seconds; `python3 .hooks/hard-eng.py mutation --base <ref>` gives the full result.
 - **CI:** runs configured checks and fails its job on failure.
 
@@ -228,7 +228,7 @@ flowchart TD
   C[Stop] --> D{Invalid Draft handoff or missing approval evidence?}
   D -->|Yes| F[Block completion and identify missing planning work]
   D -->|No| P{Planning-only handoff or known unchanged session?}
-  P -->|Yes| E[Check freshness and return notice]
+  P -->|Yes| E[Check freshness; send the agent to update when none is running]
   P -->|No| G[Native check]
   H[Manual check] --> G
   I[Git pre-push] --> J[Isolated pushed-change check]

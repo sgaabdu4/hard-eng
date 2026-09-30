@@ -100,9 +100,10 @@ def test_stop_waits_for_running_update_instead_of_rerunning_setup(
     installed: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
-    with held_lock(installed), pytest.raises(ValueError, match="still running"):
+    with held_lock(installed), pytest.raises(ValueError, match="still running") as running:
         update.require_current(installed)
-    with pytest.raises(ValueError, match="Use the supported updater"):
+    assert not isinstance(running.value, update_runner.UpdateNeeded)
+    with pytest.raises(update_runner.UpdateNeeded, match="Use the supported updater"):
         update.require_current(installed)
 
 
