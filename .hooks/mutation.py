@@ -22,6 +22,7 @@ from project_setup import python_gate_command
 
 GLOB = re.compile(r"[?*()[\]]")
 HUNK = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+STACK_FRAME = re.compile(r"\s+at ")
 LISTED = 20
 Survivor = tuple[str, int, str]
 Result = tuple[int, list[Survivor]]
@@ -60,7 +61,6 @@ def run(
     directory: Path,
     deadline: float | None,
     output: Path,
-    environment: dict[str, str] | None = None,
 ) -> int:
     """Run in its own group so the cap stops every runner the tool started."""
     with output.open("a") as log:
@@ -69,7 +69,6 @@ def run(
             cwd=directory,
             stdout=log,
             stderr=subprocess.STDOUT,
-            env=environment,
             start_new_session=True,
         )
         try:
@@ -85,7 +84,8 @@ def run(
 
 
 def failed(tool: str, output: Path) -> ValueError:
-    tail = output.read_text(errors="replace").strip().splitlines()[-15:]
+    lines = output.read_text(errors="replace").strip().splitlines()
+    tail = [line for line in lines if not STACK_FRAME.match(line)][-15:]
     return ValueError(f"{tool} did not finish:\n" + "\n".join(tail))
 
 
@@ -145,16 +145,12 @@ def javascript(
                 "reporters": ["json"],
                 "jsonReporter": {"fileName": str(report)},
                 "cleanTempDir": True,
+                # The checkout is disposable; in place skips the tsconfig rewrite that imports typescript.
+                "inPlace": True,
             }
         )
     )
-    # Stryker's sandbox links node_modules, which pnpm would otherwise reinstall first.
-    environment = {
-        **os.environ,
-        "pnpm_config_verify_deps_before_run": "false",
-        "npm_config_verify_deps_before_run": "false",
-    }
-    run(["stryker", "run", str(config)], directory, deadline, output, environment)
+    run(["stryker", "run", str(config)], directory, deadline, output)
     if not report.is_file():
         raise failed("Stryker", output)
     return stryker_survivors(json.loads(report.read_text()))
