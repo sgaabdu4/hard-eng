@@ -32,6 +32,10 @@ class UpdateRunning(ValueError):
     pass
 
 
+class UpdateNeeded(ValueError):
+    pass
+
+
 def update_blocker(root: Path) -> str | None:
     from update import SOURCE_FILE
 
@@ -69,15 +73,21 @@ def update_running(root: Path) -> bool:
     return False
 
 
-def stale_message(root: Path, revision: str) -> str:
+def last_result(root: Path) -> str:
+    result = root / RESULT_FILE
+    return result.read_text().strip() if result.is_file() else "none recorded yet"
+
+
+def stale_error(root: Path, revision: str) -> ValueError:
     if update_running(root):
-        return (
+        return ValueError(
             f"Hard Eng update to newer verified revision {revision} is still running in the "
             f"background ({LOG_FILE}). Wait for it to finish without starting another update, "
             "then reverify before shipping or claiming completion."
         )
-    return (
+    return UpdateNeeded(
         f"Hard Eng freshness check found newer verified revision {revision}. "
+        f"Last update result: {last_result(root)}. "
         "Use the supported updater, preserve local edits, then reverify before shipping or claiming completion."
     )
 
@@ -597,7 +607,10 @@ def remember_failure(root: Path, attempt: str, error: Exception) -> None:
 
 
 def failed_update(error: Exception | str) -> str:
-    return f"Hard Eng update failed: {error}. Continue with the existing scaffold; its gates remain required."
+    return (
+        f"Hard Eng update failed: {error}. Before other repository work, repair its cause as its own "
+        "commit; report a cause outside this repository to the user. The installed scaffold's gates remain required."
+    )
 
 
 def record_result(root: Path, outcome: str) -> None:
@@ -723,10 +736,8 @@ def start_update(root: Path) -> str:
                 start_new_session=True,
             )
         status = "Hard Eng update started in the background"
-    result = root / RESULT_FILE
-    last = result.read_text().strip() if result.is_file() else "none recorded yet"
     return (
         f"{status} ({LOG_FILE}); this session keeps the installed scaffold and its gates until "
         "it finishes, and the next session start reports its result. Do not run setup meanwhile. "
-        f"Last update result: {last}"
+        f"Last update result: {last_result(root)}"
     )
