@@ -4,7 +4,7 @@ Status: Ready
 
 ## Outcome + scope
 
-Skill references state what the code does today: the Draft/Ready/Complete check exceptions, the storyboard-level blank-frame settings, `build.mjs` failure cases and the Playwright pin. Found by the Claude + Codex skill audit.
+Skill references state what the code does today: the Draft/Ready/Complete check exceptions, the storyboard-level blank-frame settings, `build.mjs` failure cases and the Playwright pin. Found by the Claude + Codex skill audit. The native skills also meet `writing-great-skills`: each rule has one owner and every reference is routed.
 
 Non-goals: code changes, the `AGENTS.override.md` commit rule (awaits the user's decision), and the Appwrite/Flutter skill fixes, which ship in their own repositories.
 
@@ -25,6 +25,10 @@ Authority: Autonomous. The user asked to make every recommended audit change, re
 - [ ] `recordings.md` documents `blankCrop`/`blankInk` at storyboard level → matches `clips.mjs` and `media.mjs`, which read `board.*`.
 - [ ] `render.md` lists the failures `build.mjs` actually throws and the silent unvoiced case.
 - [ ] The Playwright README defers the pinned version to `package.json`.
+- [ ] `he` routes setup/update/MCP failures to `integrations.md`.
+- [ ] One owner each: cleanup safety (`he-ship` checks), Marionette registration (`e2e` Flutter), Stop-check scope (`gates.md`), recurrence (`research` troubleshooting), `pointer: false` + `allowedHttpResponses` (walkthrough README); `testing.md`/`gates.md` defer to AGENTS.md instead of restating it.
+- [ ] Pointer-free recorded E2E states the drag limit on its own route.
+- [ ] Every relative, `#anchor` and Mermaid `click` link in the native skills resolves.
 
 ## Baseline + execution
 
