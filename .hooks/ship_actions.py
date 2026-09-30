@@ -77,6 +77,29 @@ def snapshot_environment(root: Path) -> dict[str, str]:
     return environment
 
 
+def link_env_files(root: Path, checkout: Path, environment: dict[str, str]) -> None:
+    """Builds read ignored local .env* files; link them without reading them."""
+    ignored = subprocess.run(
+        ["git", "ls-files", "-z", "--others", "--ignored", "--exclude-standard"]
+        + ["--directory"],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    for name in filter(None, ignored.split("\0")):
+        source = root / name
+        target = checkout / name
+        if (
+            Path(name).name.startswith(".env")
+            and source.is_file()
+            and target.parent.is_dir()
+            and not target.exists()
+        ):
+            target.symlink_to(source)
+
+
 @contextmanager
 def snapshot(root: Path, revision: str, environment: dict[str, str]) -> Generator[Path]:
     with tempfile.TemporaryDirectory(prefix="hard-eng-push-") as temporary:
@@ -88,6 +111,7 @@ def snapshot(root: Path, revision: str, environment: dict[str, str]) -> Generato
             check=True,
         )
         try:
+            link_env_files(root, checkout, environment)
             if (checkout / ".gitmodules").is_file():
                 subprocess.run(
                     [

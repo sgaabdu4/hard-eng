@@ -402,13 +402,22 @@ def test_pre_push_snapshot_has_its_own_git_environment(
         "actual = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip()\n"
         "assert Path(actual) == Path.cwd()\n"
         "assert os.environ['HE_HOOK_TEST'] == 'preserved'\n"
+        "assert Path('.env').is_symlink() and Path('app/.env.local').is_symlink()\n"
+        "assert Path('app/.env.local').resolve().parent.parent != Path.cwd().resolve()\n"
+        "assert Path('app/page.txt').read_text() == 'committed'\n"
         "if Path('.gitmodules').exists():\n"
         "    assert Path('component/contract.txt').read_text() == 'committed'\n"
         "    assert subprocess.check_output(['git', '-C', 'component', 'rev-parse', '--is-shallow-repository'], text=True).strip() == 'true'\n"
     )
+    (tmp_path / ".gitignore").write_text(".env*\n")
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app/page.txt").write_text("committed")
     git(tmp_path, "add", ".")
     git(tmp_path, "commit", "-qm", "snapshot fixture")
     revision = git(tmp_path, "rev-parse", "HEAD").strip()
+    (tmp_path / ".env").write_text("LOCAL_SETTING=1\n")
+    (tmp_path / "app/.env.local").write_text("LOCAL_SETTING=2\n")
+    (tmp_path / "app/page.txt").write_text("uncommitted")
     if with_submodule:
         (tmp_path / "component/contract.txt").write_text("local edits")
     monkeypatch.setenv("GIT_DIR", str(tmp_path / ".git"))
@@ -421,6 +430,7 @@ def test_pre_push_snapshot_has_its_own_git_environment(
     )
     assert runner.pre_push() == 0
     assert len(ship_actions.worktrees(tmp_path)) == 1
+    assert (tmp_path / ".env").read_text() == "LOCAL_SETTING=1\n"
     if with_submodule:
         assert (tmp_path / "component/contract.txt").read_text() == "local edits"
 
