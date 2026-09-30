@@ -41,7 +41,7 @@ N/A — pre-push behaviour; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: GATE_EVIDENCE
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` passed all 18 gates in 118s (1162 tests, 89.94% line coverage).
 E2E: N/A — the test runs the real pre-push path on a Git fixture; the affected site's push proves it end to end once it takes this update.
 
 Delivery target: Merge
