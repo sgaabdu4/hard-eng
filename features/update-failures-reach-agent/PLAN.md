@@ -1,6 +1,6 @@
 # Send update failures and stale-scaffold notices to the agent
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -31,7 +31,8 @@ Authority: The user asked for these fixes in one PR after asking why an agent ca
 
 - [x] An unchanged session with a newer revision and no running update blocks, and its reason includes the last update result; an unchanged session whose freshness cannot be verified does not block → `test_completion_checks_freshness_without_mutating_installation`.
 - [x] A running update stays a plain notice, and only a missing update is an `UpdateNeeded` → `test_stop_waits_for_running_update_instead_of_rerunning_setup`.
-- [ ] Full check passes on the branch.
+- [x] AGENTS.md does not grow, so installed projects with an AGENTS.md token budget still fit the update → cl100k count 886 against main's 887.
+- [x] Full check passes on the branch → `check --base origin/main --plan-stage Ready`.
 
 ## Baseline + execution
 
@@ -49,8 +50,8 @@ N/A — hook messages only; no product appearance.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — full check on the branch.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Ready` passed every gate (89.97% line coverage). The two acceptance tests failed without the change: the unchanged session with a newer revision did not block. GPT-6 Astra adversarial review: round 1 found two issues, now fixed (the startup rule forbade the setup retry; the edits-not-allowed exception was lost). Round 2 approved with no material findings.
 E2E: N/A — the Stop hook is exercised through `completion` against a real Git repository; installed projects take the change with their next update.
 
 Delivery target: Merge
