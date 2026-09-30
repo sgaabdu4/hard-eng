@@ -620,8 +620,8 @@ def unchanged_notice(root: Path, notice: str) -> JsonObject:
             "decision": "block",
             "systemMessage": f"{message}\n{error}",
             "reason": f"{error} Before other repository work, repair a failed update's cause as its own "
-            "commit, then run the published setup command. If the cause is outside this repository, "
-            "report it to the user and stop.",
+            "commit, then run the published setup command. If the cause is outside this repository or "
+            "the user has not allowed edits here, report it to the user and stop.",
         }
     except ValueError as error:
         return {"systemMessage": f"{message}\n{error}"}
@@ -691,7 +691,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         }
     return {
         "decision": "block",
-        "reason": "Verification failed; do not claim completion. Repair every reported finding in code, including findings unrelated to the task, as its own commit before the task continues, then reverify. "
+        "reason": "Verification failed; do not claim completion. Repair every reported finding in code, including findings unrelated to the task, as its own commit before the task continues, then reverify. If the user has not allowed edits or commits here, report the findings and stop. "
         + learning_context("failed verification")
         + "\n"
         + output,
