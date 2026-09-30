@@ -345,11 +345,34 @@ def test_flutter_dart_outside_lib_is_measured_on_the_dart_vm(tmp_path: Path) -> 
             text=True,
             check=True,
         )
-    assert "import them by relative path and import package:test/test.dart" in (
-        result.stderr
-    )
-    with pytest.raises(ValueError, match="omits production files: scripts/check.dart"):
+    assert "relative" not in result.stderr
+    with pytest.raises(
+        ValueError,
+        match="omits production files: scripts/check.dart.*import it by relative path",
+    ):
         line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected)
+    script.write_text("export '../lib/app.dart';\n")
+    assert line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected) == (1, 1)
+
+
+def test_update_regenerates_an_installed_dart_vm_coverage_command() -> None:
+    """Installed gate files keep the generated command, so updates must rewrite it."""
+    installed = (
+        "set -e; " + " ".join(FLUTTER_TESTS) + "; rm -rf coverage/vm coverage/vm.lcov;"
+        " vm_tests=$(grep -rlE --include='*_test.dart' '^import +x' test || true);"
+        ' if [ -z "$vm_tests" ]; then echo \'Dart sources outside lib/ (scripts)'
+        " need tests under test/' >&2; else dart test $vm_tests;"
+        " cat coverage/vm.lcov >> coverage/lcov.info; fi; "
+    )
+    package = dart_tests(["lib", "scripts"], ["sh", "-c", installed])
+    assert (
+        package["checks"][0]["command"]
+        == dart_tests(["lib", "scripts"], FLUTTER_TESTS)["checks"][0]["command"]
+    )
+    assert "need tests" not in package["checks"][0]["command"][2]
+    assert dart_tests(["lib"], ["sh", "-c", installed])["checks"][0]["command"] == (
+        FLUTTER_TESTS
+    )
 
 
 def test_pure_dart_outside_lib_is_measured_after_test_with_coverage(
