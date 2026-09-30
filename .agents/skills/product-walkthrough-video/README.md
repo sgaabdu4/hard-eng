@@ -13,7 +13,7 @@ brew install ffmpeg
 
 On Linux, install FFmpeg with `sudo apt-get install -y ffmpeg` instead of Homebrew.
 
-The skill is pinned to Playwright 1.62.1, which provides `page.screencast`, persistent user overlays, and exact recording start/stop control.
+The skill pins Playwright in `package.json`; 1.62+ provides `page.screencast`, persistent user overlays, and exact recording start/stop control.
 
 ## Workflow
 
