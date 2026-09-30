@@ -28,6 +28,7 @@ Authority: Autonomous. The user asked to make every recommended audit change, re
 - [ ] `he` routes setup/update/MCP failures to `integrations.md`.
 - [ ] One owner each: cleanup safety (`he-ship` checks), Marionette registration (`e2e` Flutter), Stop-check scope (`gates.md`), recurrence (`research` troubleshooting), `pointer: false` + `allowedHttpResponses` (walkthrough README); `testing.md`/`gates.md` defer to AGENTS.md instead of restating it.
 - [ ] Pointer-free recorded E2E states the drag limit on its own route.
+- [ ] The e2e Flutter Marionette guard skips web and integration-test runs, matching the building-flutter-apps skill.
 - [ ] Every relative, `#anchor` and Mermaid `click` link in the native skills resolves.
 
 ## Baseline + execution
