@@ -187,6 +187,22 @@ def test_failed_mutmut_run_is_reported_instead_of_a_clean_result(
         )
 
 
+def test_node_failure_keeps_its_error_above_the_stack_frames(tmp_path: Path) -> None:
+    log = tmp_path / "log"
+    frames = [
+        f"    at frame{index} (file:///stryker/core.js:{index}:1)"
+        for index in range(20)
+    ]
+    log.write_text(
+        "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'typescript'\n"
+        + "\n".join(frames)
+        + " {\n  code: 'ERR_MODULE_NOT_FOUND'\n}\n\nNode.js v26.10.0\n"
+    )
+    message = str(mutation.failed("Stryker", log))
+    assert "Cannot find package 'typescript'" in message
+    assert "code: 'ERR_MODULE_NOT_FOUND'" in message
+
+
 def test_stryker_patterns_match_route_files_literally(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -194,14 +210,21 @@ def test_stryker_patterns_match_route_files_literally(
 
     monkeypatch.setattr(tool_setup, "provision_batch", Mock())
 
+    package, work = tmp_path / "package", tmp_path / "work"
+    package.mkdir()
+    work.mkdir()
+
     def run(_command: list[str], *_arguments: object) -> int:
-        (tmp_path / "report.json").write_text('{"files": {}}')
+        (work / "report.json").write_text('{"files": {}}')
         return 0
 
     monkeypatch.setattr(mutation, "run", run)
     route = "app/(shop)/[...slug]/route.ts"
-    mutation.javascript(tmp_path, {route: {2}}, ["pnpm", "test"], None, tmp_path)
-    [pattern] = json.loads((tmp_path / "stryker.json").read_text())["mutate"]
+    mutation.javascript(package, {route: {2}}, ["pnpm", "test"], None, work)
+    config = json.loads((work / "stryker.json").read_text())
+    assert config["inPlace"] is True
+    assert not Path(config["tempDirName"]).is_relative_to(package)
+    [pattern] = config["mutate"]
     path, _, lines = pattern.rpartition(":")
     assert lines == "2-2"
     assert fnmatch.fnmatchcase(route, path)
