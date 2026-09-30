@@ -192,6 +192,43 @@ def test_update_sweeps_day_old_hard_eng_temporary_directories(
     assert not (temporary / "hard-eng-push-left0001").exists()
 
 
+def test_update_cleanup_stops_file_watchers_of_worktrees_idle_for_a_day(
+    installed: Path, tmp_path: Path
+) -> None:
+    git(installed, "config", "core.fsmonitor", "true")
+    idle, active = tmp_path / "idle", tmp_path / "active"
+    for worktree in (idle, active):
+        git(installed, "worktree", "add", "-q", "--detach", str(worktree))
+    watched = (installed, idle, active)
+
+    def running() -> dict[Path, bool]:
+        return {
+            worktree: not subprocess.run(
+                ["git", "fsmonitor--daemon", "status"], cwd=worktree, check=False
+            ).returncode
+            for worktree in watched
+        }
+
+    try:
+        for worktree in watched:
+            git(worktree, "status")
+        if not all(running().values()):
+            pytest.skip("this Git build has no file watcher")
+        day_ago = time.time() - 25 * 3600
+        for worktree in (installed, idle):
+            index = git(
+                worktree, "rev-parse", "--path-format=absolute", "--git-path", "index"
+            )
+            os.utime(index, (day_ago, day_ago))
+        update_runner.remove_stale_candidates(installed)
+        assert running() == {installed: True, idle: False, active: True}
+    finally:
+        for worktree in watched:
+            subprocess.run(
+                ["git", "fsmonitor--daemon", "stop"], cwd=worktree, check=False
+            )
+
+
 @pytest.mark.parametrize(
     "still_running", [True, False], ids=["during-update", "during-cleanup"]
 )

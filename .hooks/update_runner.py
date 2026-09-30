@@ -474,6 +474,25 @@ def sweep_temporary() -> None:
                 shutil.rmtree(path)
 
 
+def stop_idle_watcher(worktree: Path) -> None:
+    """Git restarts a file watcher on the next command, so stopping an idle one loses nothing."""
+    with suppress(OSError, subprocess.SubprocessError):
+        index = subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-path", "index"],
+            cwd=worktree,
+            text=True,
+            timeout=30,
+        ).strip()
+        if time.time() - Path(index).stat().st_mtime > 24 * 3600:
+            subprocess.run(
+                ["git", "fsmonitor--daemon", "stop"],
+                cwd=worktree,
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+
+
 def remove_stale_candidates(root: Path) -> None:
     """Remove candidates whose update has exited; the caller holds the lock."""
     listing = subprocess.check_output(
@@ -486,9 +505,11 @@ def remove_stale_candidates(root: Path) -> None:
         }
         path = Path(fields.get("worktree", ""))
         owner = OWNER.fullmatch(fields.get("locked", ""))
-        if not WORKTREE.fullmatch(f"{path.parent.name}/{path.name}") or not abandoned(
-            path, owner
-        ):
+        if not WORKTREE.fullmatch(f"{path.parent.name}/{path.name}"):
+            if path.is_dir() and path.resolve() != root.resolve():
+                stop_idle_watcher(path)
+            continue
+        if not abandoned(path, owner):
             continue
         if owner is not None and not path.exists():
             subprocess.run(
