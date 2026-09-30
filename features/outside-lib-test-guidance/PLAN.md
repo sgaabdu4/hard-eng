@@ -44,7 +44,7 @@ N/A — gate output only; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: GATE_EVIDENCE
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` passed all 18 gates in 122s (1162 tests, 89.93% line coverage).
 E2E: N/A — gate command generation; installed repositories take the change with their next update.
 
 Delivery target: Merge
