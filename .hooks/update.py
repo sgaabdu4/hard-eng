@@ -25,7 +25,7 @@ from update_runner import (
     remember_failure,
     roll_back,
     snapshot,
-    stale_message,
+    stale_error,
     update_attempt,
     update_blocker,
     write_verified,
@@ -145,7 +145,7 @@ def require_current(root: Path) -> None:
             f"Hard Eng freshness could not be verified: {error}"
         ) from error
     if revision is not None:
-        raise ValueError(stale_message(root, revision))
+        raise stale_error(root, revision)
 
 
 def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, Path]:

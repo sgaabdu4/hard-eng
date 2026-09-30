@@ -184,7 +184,7 @@ def test_clarification_cannot_exempt_an_invalid_approval_plan(
     assert "features/approval/PLAN.md" in str(response["systemMessage"])
 
 
-def test_unchanged_draft_session_only_warns_about_a_stale_install(
+def test_unchanged_draft_session_is_sent_to_update_a_stale_install(
     repository: Path, completed_plan: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import update
@@ -202,6 +202,6 @@ def test_unchanged_draft_session_only_warns_about_a_stale_install(
     agent_hooks.session_context(repository, payload)
     monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
     response = agent_hooks.completion(repository, payload, "codex")
-    assert response.get("decision") != "block"
-    assert "approval handoff prepared" in str(response)
-    assert "freshness" in str(response)
+    assert response["decision"] == "block"
+    assert "approval handoff prepared" in str(response["systemMessage"])
+    assert "freshness" in str(response["reason"])

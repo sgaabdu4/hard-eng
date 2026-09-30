@@ -274,6 +274,9 @@ def test_completion_checks_freshness_without_mutating_installation(
     state = repository / ".hard-eng/sessions/known.json"
     state.parent.mkdir(parents=True)
     state.write_text(json.dumps({"base": head}))
+    (repository / ".hard-eng/update-result.txt").write_text(
+        "earlier: Hard Eng update failed: fixture cause\n"
+    )
     if changed:
         (repository / "change.txt").write_text("local work")
     query = (
@@ -283,10 +286,12 @@ def test_completion_checks_freshness_without_mutating_installation(
     )
     monkeypatch.setattr(update, "latest_verified", query)
     result = agent_hooks.completion(repository, {"session_id": "known"})
-    if upstream is None or not changed:
+    if upstream is None or (not changed and isinstance(upstream, OSError)):
         assert result.get("decision") != "block"
     else:
         assert result.get("decision") == "block"
+    if isinstance(upstream, str):
+        assert "Hard Eng update failed: fixture cause" in str(result["reason"])
     assert ("freshness" in str(result).lower()) == (upstream is not None)
     query.assert_called_once_with("a" * 40)
     assert marker.read_text() == content
