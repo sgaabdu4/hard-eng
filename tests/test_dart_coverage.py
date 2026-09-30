@@ -360,14 +360,15 @@ def test_update_regenerates_an_installed_dart_vm_coverage_command() -> None:
     installed = (
         "set -e; " + " ".join(FLUTTER_TESTS) + "; rm -rf coverage/vm coverage/vm.lcov;"
         " vm_tests=$(grep -rlE --include='*_test.dart' '^import +x' test || true);"
-        " if [ -z \"$vm_tests\" ]; then echo 'Dart sources outside lib/ (scripts)"
+        ' if [ -z "$vm_tests" ]; then echo \'Dart sources outside lib/ (scripts)'
         " need tests under test/' >&2; else dart test $vm_tests;"
         " cat coverage/vm.lcov >> coverage/lcov.info; fi; "
     )
     package = dart_tests(["lib", "scripts"], ["sh", "-c", installed])
-    assert package["checks"][0]["command"] == dart_tests(
-        ["lib", "scripts"], FLUTTER_TESTS
-    )["checks"][0]["command"]
+    assert (
+        package["checks"][0]["command"]
+        == dart_tests(["lib", "scripts"], FLUTTER_TESTS)["checks"][0]["command"]
+    )
     assert "need tests" not in package["checks"][0]["command"][2]
     assert dart_tests(["lib"], ["sh", "-c", installed])["checks"][0]["command"] == (
         FLUTTER_TESTS
