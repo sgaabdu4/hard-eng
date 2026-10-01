@@ -34,7 +34,7 @@ Execution: Single session on `fix/narrow-full-scope-ci`: selection change first,
 
 ## Risks + recovery
 
-A workflow that runs the checks indirectly without naming `hard-eng.py`, such as a local composite action, would no longer check every package; the PR's own CI still runs that workflow. Projects with an outside edge into a cycle fail check and update until their mapping is fixed, which is why their fixes ship first. Recovery is reverting this change.
+A workflow that runs the checks indirectly without naming `hard-eng.py`, such as a local composite action, would no longer check every package; the PR's own CI still runs that workflow. Projects with an outside edge into a cycle fail check and update until their mapping is fixed, which is why their fixes ship first. A deleted `.github/` file is read from the raw base, so a first push of a new branch that deletes a non-check workflow still checks every package. Full-scope runs are rarer, not shorter: packages still run one after another. Recovery is reverting this change.
 
 ## ux_reference
 
