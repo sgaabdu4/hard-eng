@@ -693,7 +693,7 @@ def test_update_mixed_with_feature_work_checks_only_affected_packages(
     case: str,
     expected: set[str] | None,
 ) -> None:
-    from gate_config import Group, changed_packages
+    from gate_config import Group, changed_files, changed_packages
 
     source, target, _ = release
     base = git(target, "rev-parse", "HEAD")
@@ -714,8 +714,15 @@ def test_update_mixed_with_feature_work_checks_only_affected_packages(
     packages: dict[str, Group] = {
         path: {"path": path, "checks": []} for path in ("apps/web", "apps/api")
     }
-    selected = changed_packages(target, packages, base, prove_update=case != "impact")
-    assert selected == expected
+    names = changed_files(target, base)
+    assert names is not None
+    selected = changed_packages(
+        target, packages, base, names, prove_update=case != "impact"
+    )
+    if expected is None:
+        assert isinstance(selected, str)
+    else:
+        assert selected == expected
     assert verified.called is (case not in {"gate-config", "impact"})
 
 
