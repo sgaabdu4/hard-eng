@@ -119,7 +119,7 @@ Set:
 
 Use a local safe proxy when an open-source demo references analytics, remote fonts, avatars, or other unrelated third-party assets. Replace those assets locally rather than allowlisting the internet.
 
-An expected failed-auth or validation request must remain visible in evidence: the runner records a matched `allowedHttpResponses` entry as `expected-http-response` at informational severity. If Chromium emits a matching generic console error, allowlist that exact message separately with `allowedConsoleMessageSubstrings`. Never use broad status-only suppression; unmatched 4xx responses remain warnings and unmatched 5xx responses remain errors.
+An expected failed-auth or validation request must remain visible in evidence: the runner records a matched `allowedHttpResponses` entry as `expected-http-response` at informational severity. If Chromium emits a matching generic console error, allowlist its narrowest text with `allowedConsoleMessageSubstrings`; that match is a global substring, so it also downgrades the same message from any other request → review every remaining 4xx warning in the run report as unexpected. Never use broad status-only suppression; unmatched 4xx responses remain warnings and unmatched 5xx responses remain errors.
 
 Use `textFromEnv` only for a browser-masked password field. A visible field must reject environment text unless `allowVisibleEnvText: true` explicitly marks known non-sensitive fixture copy. Never expose credentials, tokens, customer data, or private payloads in a visible field.
 
