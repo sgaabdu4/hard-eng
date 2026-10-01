@@ -6,7 +6,7 @@ Status: Complete
 
 Skill references state what the code does today: the Draft/Ready/Complete check exceptions, the storyboard-level blank-frame settings, `build.mjs` failure cases and the Playwright pin. Found by the Claude + Codex skill audit. The native skills also meet `writing-great-skills`: each rule has one owner and every reference is routed.
 
-Non-goals: code changes, the `AGENTS.override.md` commit rule (awaits the user's decision), and the Appwrite/Flutter skill fixes, which ship in their own repositories.
+Non-goals: code changes, the `AGENTS.override.md` commit rule (awaits the user's decision), and the Appwrite/Flutter skill fixes themselves, which ship in their own repositories; this PR only advances their submodules to the merged fixes.
 
 ## Repository context
 
@@ -30,6 +30,7 @@ Authority: Autonomous. The user asked to make every recommended audit change, re
 - [x] Pointer-free recorded E2E states the drag limit on its own route.
 - [x] The e2e Flutter Marionette guard skips web and integration-test runs, matching the building-flutter-apps skill.
 - [x] Every relative, `#anchor` and Mermaid `click` link in the native skills resolves.
+- [x] `.agents/skill-sources/appwrite-backend` and `building-flutter-apps` point at their merged audit PRs (fast-forward) → `check --base origin/main` (skill links) passes.
 
 ## Baseline + execution
 
