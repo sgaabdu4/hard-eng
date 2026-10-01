@@ -16,7 +16,7 @@ Owners: `.agents/skills/he/references/gates.md` against `.hooks/hard-eng.py` `ch
 
 Blockers: None
 Handoff: Approval
-Authority: Autonomous. The user asked to make every recommended audit change, review it, run adversarial review with GPT-6 Astra, test with GPT-6 Luna and Sonnet 5.5, and open a PR.
+Authority: Autonomous. The user asked to make every recommended audit change, review it, run adversarial review with GPT-6 Astra, test with GPT-6 Luna and Sonnet 5.5, and open a PR; after the PR opened, the user approved merging it.
 
 ## Acceptance + steps
 
@@ -51,5 +51,5 @@ Result: Passed
 Evidence: `python3 .hooks/hard-eng.py check --base origin/main` passed. GPT-6 Astra adversarial review approved rounds 1–3 and a confirmation pass on `ea57ced4`. GPT-6 Luna (max) found the console allowlist described as exact-match, fixed in `ea57ced4`; Sonnet 5.5 (high) passed. Every relative, `#anchor` and Mermaid `click` link in the native skills resolves.
 E2E: N/A — documentation-only change with no runtime journey; each statement is checked against the code it describes.
 
-Delivery target: PR
-Delivery: Pending — PR checks.
+Delivery target: Merge
+Delivery: Pending — squash merge and post-merge CI on the base branch.
