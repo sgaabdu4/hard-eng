@@ -6,7 +6,7 @@ Status: Complete
 
 Skill references state what the code does today: the Draft/Ready/Complete check exceptions, the storyboard-level blank-frame settings, `build.mjs` failure cases and the Playwright pin. Found by the Claude + Codex skill audit. The native skills also meet `writing-great-skills`: each rule has one owner and every reference is routed.
 
-Non-goals: code changes, the `AGENTS.override.md` commit rule (awaits the user's decision), and the Appwrite/Flutter skill fixes themselves, which ship in their own repositories; this PR only advances their submodules to the merged fixes.
+Non-goals: code changes and the Appwrite/Flutter skill fixes themselves, which ship in their own repositories; this PR only advances their submodules to the merged fixes.
 
 ## Repository context
 
