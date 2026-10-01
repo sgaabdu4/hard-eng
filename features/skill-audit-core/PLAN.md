@@ -1,6 +1,6 @@
 # Correct skill text that no longer matches the code
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -20,16 +20,16 @@ Authority: Autonomous. The user asked to make every recommended audit change, re
 
 ## Acceptance + steps
 
-- [ ] `gates.md` names both cases in which `check --base` skips native checks → matches `proven_elsewhere` in `.hooks/hard-eng.py`.
-- [ ] `gates.md` states the `E2E:` requirement without migration-relative wording.
-- [ ] `recordings.md` documents `blankCrop`/`blankInk` at storyboard level → matches `clips.mjs` and `media.mjs`, which read `board.*`.
-- [ ] `render.md` lists the failures `build.mjs` actually throws and the silent unvoiced case.
-- [ ] The Playwright README defers the pinned version to `package.json`.
-- [ ] `he` routes setup/update/MCP failures to `integrations.md`.
-- [ ] One owner each: cleanup safety (`he-ship` checks), Marionette registration (`e2e` Flutter), Stop-check scope (`gates.md`), recurrence (`research` troubleshooting), `pointer: false` + `allowedHttpResponses` (walkthrough README); `testing.md`/`gates.md` defer to AGENTS.md instead of restating it.
-- [ ] Pointer-free recorded E2E states the drag limit on its own route.
-- [ ] The e2e Flutter Marionette guard skips web and integration-test runs, matching the building-flutter-apps skill.
-- [ ] Every relative, `#anchor` and Mermaid `click` link in the native skills resolves.
+- [x] `gates.md` names both cases in which `check --base` skips native checks → matches `proven_elsewhere` in `.hooks/hard-eng.py`.
+- [x] `gates.md` states the `E2E:` requirement without migration-relative wording.
+- [x] `recordings.md` documents `blankCrop`/`blankInk` at storyboard level → matches `clips.mjs` and `media.mjs`, which read `board.*`.
+- [x] `render.md` lists the failures `build.mjs` actually throws and the silent unvoiced case.
+- [x] The Playwright README defers the pinned version to `package.json`.
+- [x] `he` routes setup/update/MCP failures to `integrations.md`.
+- [x] One owner each: cleanup safety (`he-ship` checks), Marionette registration (`e2e` Flutter), Stop-check scope (`gates.md`), recurrence (`research` troubleshooting), `pointer: false` + `allowedHttpResponses` (walkthrough README); `testing.md`/`gates.md` defer to AGENTS.md instead of restating it.
+- [x] Pointer-free recorded E2E states the drag limit on its own route.
+- [x] The e2e Flutter Marionette guard skips web and integration-test runs, matching the building-flutter-apps skill.
+- [x] Every relative, `#anchor` and Mermaid `click` link in the native skills resolves.
 
 ## Baseline + execution
 
@@ -47,8 +47,8 @@ N/A — agent skill text; no product appearance.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — `python3 .hooks/hard-eng.py check --base origin/main`, adversarial review and model tests.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` passed. GPT-6 Astra adversarial review approved rounds 1–3 and a confirmation pass on `ea57ced4`. GPT-6 Luna (max) found the console allowlist described as exact-match, fixed in `ea57ced4`; Sonnet 5.5 (high) passed. Every relative, `#anchor` and Mermaid `click` link in the native skills resolves.
 E2E: N/A — documentation-only change with no runtime journey; each statement is checked against the code it describes.
 
 Delivery target: PR
