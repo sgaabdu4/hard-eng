@@ -21,7 +21,7 @@ from gate_config import Gate, Group, affected_groups, parse_config
         ("CLAUDE.md", ["."]),
         (".agents/skills/x.md", ["."]),
         (".agents/skills/he/x.md", ["lib", "app", "site", "other", "."]),
-        (".github/dependabot.yml", ["."]),
+        (".github/dependabot.yml", ["lib", "app", "site", "other", "."]),
         (".github/workflows/x.yml", ["."]),
         ("lib/README.md", ["lib", "app", "site", "."]),
         (".hooks/a.py", ["lib", "app", "site", "other", "."]),
@@ -148,7 +148,7 @@ def test_docs_only_change_runs_only_the_secret_scan(
     ]
 
 
-@pytest.mark.parametrize("change", ["edited", "deleted"])
+@pytest.mark.parametrize("change", ["edited", "deleted", "replaced"])
 @pytest.mark.parametrize("runs_checks", [False, True])
 def test_only_workflows_that_run_the_checks_select_every_package(
     repository: Path,
@@ -176,6 +176,8 @@ def test_only_workflows_that_run_the_checks_select_every_package(
     commit(repository, "workflow")
     if change == "deleted":
         workflow.unlink()
+    elif change == "replaced":
+        workflow.write_text("jobs:\n  deploy:\n    steps:\n      - run: echo moved\n")
     else:
         workflow.write_text(workflow.read_text() + "# reviewed\n")
     selected = affected_groups(repository, groups, "HEAD")
@@ -188,6 +190,19 @@ def test_only_workflows_that_run_the_checks_select_every_package(
     runner.__dict__["ROOT"] = repository
     assert runner.impact("HEAD") == 0
     assert f"docs_only={str(not runs_checks).lower()}\n" in capsys.readouterr().out
+
+
+def test_ci_scripts_keep_their_owner_checks(repository: Path) -> None:
+    shell: Gate = {"name": "shell", "role": "shell", "command": ["x"]}
+    groups: list[Group] = [
+        {"path": ".", "checks": [], "depends_on": []},
+        {"path": "b", "checks": [], "depends_on": []},
+        {"path": ".", "checks": [shell]},
+    ]
+    script = repository / ".github/scripts/deploy.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text("echo deploy\n")
+    assert affected_groups(repository, groups, "HEAD") == [groups[0], groups[-1]]
 
 
 @pytest.mark.parametrize(

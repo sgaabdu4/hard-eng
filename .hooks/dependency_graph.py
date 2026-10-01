@@ -97,7 +97,7 @@ def expand_dependents(
 def shared_only(shared: Group, names: set[str]) -> Group:
     """No package reads the change; workflow edits still need workflow linting."""
     roles = {"secrets-files", "secrets-history"}
-    if any(name.startswith(".github/") for name in names):
+    if any(name.startswith(".github/workflows/") for name in names):
         print("No package reads this change; running workflow and secret checks.")
         roles |= {"workflows", "ci-security"}
     else:

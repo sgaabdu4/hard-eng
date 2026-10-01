@@ -4,7 +4,7 @@ import json
 import os
 import re
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import NotRequired, TypedDict, cast
 
 from dependency_graph import (
@@ -542,25 +542,33 @@ def changed_packages(
 
 
 def runs_checks(root: Path, base: str, name: str) -> bool:
-    """Hard Eng's runner, rules and gate list, or a workflow that runs them."""
+    """Hard Eng's runner, rules and gate list, or CI that runs or ran them."""
     if name == "hard-eng.gates.json" or name.startswith(
         (".hooks/", ".agents/skills/he/")
     ):
         return True
     if not name.startswith(".github/"):
         return False
-    if (root / name).is_file():
-        return "hard-eng.py" in (root / name).read_text(errors="replace")
     blob = f"{base}:{name}"
-    shown = subprocess.run(
+    text = subprocess.run(
         ["git", "show", blob],
         cwd=root,
         capture_output=True,
         text=True,
         errors="replace",
         check=False,
-    )
-    return shown.returncode != 0 or "hard-eng.py" in shown.stdout
+    ).stdout
+    if (root / name).is_file():
+        text += (root / name).read_text(errors="replace")
+    return not text or "hard-eng.py" in text
+
+
+def is_workflow(name: str) -> bool:
+    path = PurePosixPath(name)
+    return path.parent == PurePosixPath(".github/workflows") and path.suffix in {
+        ".yml",
+        ".yaml",
+    }
 
 
 def packages_for(
@@ -580,7 +588,8 @@ def packages_for(
         }
         if not consumers and (
             is_documentation(Path(name))
-            or name.startswith((".agents/", ".github/"))
+            or name.startswith(".agents/")
+            or is_workflow(name)
             or name in {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}
         ):
             continue
