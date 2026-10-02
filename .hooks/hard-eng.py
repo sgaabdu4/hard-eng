@@ -34,7 +34,7 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from tool_setup import managed_command, provision_tools
-from untrusted_input import DECLARATIONS
+from untrusted_input import DECLARATIONS, reject_jsdoc_casts
 
 DartAnalyzer = TypedDict(
     "DartAnalyzer",
@@ -361,6 +361,8 @@ def prepare_command(
         )
         if not files:
             return []
+        if gate.get("role") == "typing-style":
+            reject_jsdoc_casts(ROOT / group["path"], files)
         command = [
             value
             for argument in command

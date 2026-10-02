@@ -38,8 +38,6 @@ def json_listed(
     """Add value to a top-level list in JSON(C) text, keeping comments and layout; None when present."""
     config = jsonc_config(name, text)
     advice = f"{name}: add {value!r} to {key}, then rerun setup"
-    if "extends" in config and key not in config:
-        raise ValueError(f"{name} inherits {key}; {advice}")
     current = config.get(key, default)
     if not isinstance(current, list):
         raise TypeError(advice)
@@ -74,15 +72,83 @@ def fallow_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
         changes[".fallowrc.json"] = json_file(root, {"ignorePatterns": [pattern]})
         return
     text = changes.get(name) or (root / name).read_text()
+    advice = f"{name}: add {pattern!r} to ignorePatterns, then rerun setup"
     if name.endswith(".toml"):
         if pattern not in text:
-            raise ValueError(
-                f"{name}: add {pattern!r} to ignorePatterns, then rerun setup"
-            )
+            raise ValueError(advice)
         return
+    config = jsonc_config(name, text)
+    if "extends" in config and "ignorePatterns" not in config:
+        raise ValueError(f"{advice}; a local list replaces the inherited one")
     updated = json_listed(name, text, "ignorePatterns", pattern, [])
     if updated is not None:
         changes[name] = updated
+
+
+def extended(directory: Path, value: object) -> list[Path] | None:
+    """The config files a tsconfig extends, or None when one is missing."""
+    found: list[Path] = []
+    for name in value if isinstance(value, list) else [value]:
+        if not isinstance(name, str):
+            return None
+        bases = (
+            [directory / name]
+            if name.startswith((".", "/"))
+            else [
+                folder / "node_modules" / name
+                for folder in (directory, *directory.parents)
+            ]
+        )
+        candidates = [
+            path
+            for base in bases
+            for path in (
+                base,
+                base.with_name(base.name + ".json"),
+                base / "tsconfig.json",
+            )
+        ]
+        match = next((path for path in candidates if path.is_file()), None)
+        if match is None:
+            return None
+        found.append(match)
+    return found
+
+
+def inherited_lists(path: Path, seen: frozenset[Path] = frozenset()) -> set[str] | None:
+    """The file-list keys a tsconfig's extends chain defines, or None when unresolvable."""
+    config = jsonc_config(str(path), path.read_text())
+    bases = extended(path.parent, config["extends"]) if "extends" in config else []
+    if bases is None or path in seen:
+        return None
+    keys: set[str] = set()
+    for base in bases:
+        inherited = inherited_lists(base, seen | {path})
+        if inherited is None:
+            return None
+        base_config = jsonc_config(str(base), base.read_text())
+        keys |= inherited | {"include", "files"} & base_config.keys()
+    return keys
+
+
+JSDOC_CAST = re.compile(r"/\*\*\s*@type\s*\{((?:(?!\*/).)*?)\}\s*\*/\s*\(", re.DOTALL)
+
+
+def reject_jsdoc_casts(directory: Path, files: list[str]) -> None:
+    """Fail JavaScript `/** @type {T} */ (value)` assertions, which Biome's cast rule cannot see."""
+    found = [
+        f"{name}:{text.count(chr(10), 0, match.start()) + 1}"
+        for name in files
+        if Path(name).suffix in {".js", ".jsx", ".mjs", ".cjs"}
+        for text in [(directory / name).read_text(errors="replace")]
+        for match in JSDOC_CAST.finditer(text)
+        if match[1].strip() != "const"
+    ]
+    if found:
+        raise ValueError(
+            "JSDoc type assertions skip validation; parse with a schema or narrow with a type guard: "
+            + ", ".join(found)
+        )
 
 
 def typescript_config(
@@ -96,6 +162,13 @@ def typescript_config(
         text = changes.get(name) or target.read_text()
         config = jsonc_config(name, text)
         key = "files" if "files" in config and "include" not in config else "include"
+        if "extends" in config and not {"include", "files"} & config.keys():
+            inherited = inherited_lists(target)
+            if inherited is None or "files" in inherited:
+                raise ValueError(
+                    f"{name} inherits a file list setup cannot extend; add {declarations!r} beside it"
+                )
+            key = "files" if inherited else "include"
         default = ["**/*"] if key == "include" else []
         updated = json_listed(name, text, key, declarations, default)
         if updated is not None:

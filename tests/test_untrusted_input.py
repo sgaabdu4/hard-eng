@@ -7,7 +7,12 @@ from types import ModuleType
 
 import pytest
 from gate_config import Group
-from untrusted_input import fallow_ignores_hooks, jsonc_config, typescript_config
+from untrusted_input import (
+    fallow_ignores_hooks,
+    jsonc_config,
+    reject_jsdoc_casts,
+    typescript_config,
+)
 
 UNTRUSTED = ".hooks/untrusted-input.d.ts"
 
@@ -87,12 +92,63 @@ def test_nested_package_tsconfig_reaches_the_root_declarations(tmp_path: Path) -
     assert ".fallowrc.json" not in changes
 
 
-def test_inherited_file_list_names_the_line_to_add(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("base", "location", "expected"),
+    [
+        ({"include": ["src"]}, "base.json", {"files": [UNTRUSTED]}),
+        ({"compilerOptions": {}}, "base.json", {"include": ["**/*", UNTRUSTED]}),
+        (
+            {"compilerOptions": {}},
+            "node_modules/@acme/tsconfig/tsconfig.json",
+            {"include": ["**/*", UNTRUSTED]},
+        ),
+    ],
+)
+def test_extended_tsconfig_keeps_the_files_typescript_inherits(
+    tmp_path: Path, base: dict[str, object], location: str, expected: dict[str, object]
+) -> None:
+    path = tmp_path / location
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(base))
+    extends = "./base.json" if location == "base.json" else "@acme/tsconfig"
+    (tmp_path / "tsconfig.json").write_text(json.dumps({"extends": extends}))
+    (tmp_path / ".fallowrc.json").write_text('{"ignorePatterns": [".hooks/**"]}')
+    changes: dict[str, str] = {}
+    typescript_config(tmp_path, tmp_path, ["src"], changes)
+    assert jsonc_config("tsconfig.json", changes["tsconfig.json"]) == {
+        "extends": extends,
+        **expected,
+    }
+
+
+@pytest.mark.parametrize("base", [None, {"files": ["src/main.ts"]}])
+def test_inherited_file_list_setup_cannot_extend_names_the_line_to_add(
+    tmp_path: Path, base: dict[str, object] | None
+) -> None:
+    if base is not None:
+        (tmp_path / "base.json").write_text(json.dumps(base))
     text = '{"extends": "./base.json"}'
     (tmp_path / "tsconfig.json").write_text(text)
-    with pytest.raises(ValueError, match=f"inherits include; .*add '{UNTRUSTED}'"):
+    with pytest.raises(ValueError, match=f"cannot extend; add '{UNTRUSTED}'"):
         typescript_config(tmp_path, tmp_path, ["src"], {})
     assert (tmp_path / "tsconfig.json").read_text() == text
+
+
+def test_javascript_type_assertions_fail_like_typescript_casts(tmp_path: Path) -> None:
+    (tmp_path / "cast.mjs").write_text(
+        "const raw = '{}';\n"
+        "export const user = /** @type {{name: string}} */ (JSON.parse(raw));\n"
+    )
+    (tmp_path / "valid.mjs").write_text(
+        "/** @type {unknown} */\n"
+        "const parsed = JSON.parse('{}');\n"
+        "export const modes = /** @type {const} */ (['a', 'b']);\n"
+        "export { parsed };\n"
+    )
+    (tmp_path / "types.ts").write_text("/** @type {X} */ (value);\n")
+    reject_jsdoc_casts(tmp_path, ["valid.mjs", "types.ts"])
+    with pytest.raises(ValueError, match=r"type guard: cast\.mjs:2$"):
+        reject_jsdoc_casts(tmp_path, ["cast.mjs", "valid.mjs", "types.ts"])
 
 
 @pytest.mark.parametrize(
