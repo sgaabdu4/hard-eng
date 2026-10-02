@@ -118,7 +118,8 @@ def extended(directory: Path, value: object) -> list[Path] | None:
 def inherited_lists(path: Path, seen: frozenset[Path] = frozenset()) -> set[str] | None:
     """The file-list keys a tsconfig's extends chain defines, or None when unresolvable."""
     config = jsonc_config(str(path), path.read_text())
-    bases = extended(path.parent, config["extends"]) if "extends" in config else []
+    none: list[Path] = []
+    bases = extended(path.parent, config["extends"]) if "extends" in config else none
     if bases is None or path in seen:
         return None
     keys: set[str] = set()
