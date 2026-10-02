@@ -131,7 +131,9 @@ def inherited_lists(path: Path, seen: frozenset[Path] = frozenset()) -> set[str]
     return keys
 
 
-JSDOC_CAST = re.compile(r"/\*\*\s*@type\s*\{((?:(?!\*/).)*?)\}\s*\*/\s*\(", re.DOTALL)
+JSDOC_CAST = re.compile(
+    r"/\*\*(?:(?!\*/).)*?@type\s*\{((?:(?!\*/).)*?)\}(?:(?!\*/).)*?\*/\s*\(", re.DOTALL
+)
 
 
 def reject_jsdoc_casts(directory: Path, files: list[str]) -> None:

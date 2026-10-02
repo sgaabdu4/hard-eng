@@ -47,6 +47,8 @@ The user approved this plan on 2026-10-02 and asked for the README tables to be 
 - [x] The declaration ships to installed projects → the fresh-install test asserts the shipped bytes; `scaffold_files` owns refresh and retirement.
 - [x] A Node-only package (`lib: ["es2022"]`, `@types/node` 26.6.3) type-checks with the declaration, and `JSON.parse` stays `unknown`, including with typed and untyped revivers → scratch `tsc` run.
 - [x] `dead-code-duplicates` passes with the declaration installed → `test_fallow_config_skips_the_hidden_hard_eng_declarations` (new, tab-indented JSON, JSONC with comments, `{}`; idempotent), `test_fallow_config_setup_cannot_edit_names_the_line_to_add` (TOML, `extends`), and fixture `dead-code-duplicates` PASS.
+- [x] JavaScript JSDoc casts (`/** @type {T} */ (value)`, single- or multi-line) fail `typing-style` like TypeScript casts; `/** @type {const} */` and `@type` annotations pass → `test_javascript_type_assertions_fail_like_typescript_casts`, and the real-project update below.
+- [x] A tsconfig that `extends` a base keeps the files TypeScript inherits. Base `include` → child `files: [decl]`; nothing inherited → `include: ["**/*", decl]`; inherited `files` or a missing base → error naming the line. Covers local and `node_modules` bases → `test_extended_tsconfig_keeps_the_files_typescript_inherits`, `test_inherited_file_list_setup_cannot_extend_names_the_line_to_add`. Scratch `tsc --showConfig` confirmed each inheritance rule.
 - [x] DECISION.md, gates.md and the README gate table state the gate and the Zod-first fix route → reviewed in the diff.
 
 ## Baseline + execution
@@ -60,6 +62,10 @@ Execution: one builder, then a fresh verifier reviewed the diff. The verifier's 
 - A missing assertion for the Fallow config call; the fresh-install test now checks it.
 
 Solution-style tsconfig files (`files: []` plus `references`) already fail the existing production-files check, so they are unchanged.
+
+Codex adversarial review (`gpt-6.1-sol`):
+- Round 1 found two problems, both fixed: JSDoc casts bypassed the gate, and `extends` tsconfigs aborted the update with advice that would drop inherited files.
+- Round 2 found multi-line JSDoc casts. None appeared in a real-code sample, but the broader pattern matched the same set there, so it was adopted.
 
 ## Risks + recovery
 
@@ -79,6 +85,10 @@ Result: Passed
 Evidence: Hard Eng and a disposable fixture, as below.
 - Hard Eng: `uv run pytest -q` → 1193 passed on `bcf5655`; after the review fixes and the module split, `tests/test_untrusted_input.py` → 16 passed. `python3 .hooks/hard-eng.py check --plan-stage Complete` runs every gate on the final commit.
 - Fixture: TypeScript 7.0.2, Biome and Fallow 3.29.0 run by the installed runner. The fixture's `tests` and `performance` scripts are stubs that write no reports, so those two gates FAIL there; they are not evidence for this change.
+Real projects: updating local clones of two installed projects (a Next.js site, and a monorepo with three Next.js apps, a root scripts package and Dart functions) from their installed revisions to this branch:
+- Edits: one tsconfig line per package, `.hooks/**` added to `.fallowrc.json`/`.jsonc` with comments kept, and the cast rule added in place to every `typing-style` gate.
+- Unchanged gates: format-lint, tests, dead-code-duplicates, react-doctor, security, boundaries, performance and the Dart gates kept their baseline results.
+- New failures, all from the new rules: `typing-style` (JSDoc casts in scripts), `types`, and the Next.js `build` type-check (unknown JSON reads, mostly tests reading their own route responses).
 E2E: Passed — this branch installed into a fresh fixture with a commented `tsconfig.json` and unchecked, cast, Zod-validated and hand-guarded routes.
 - Before migration: `types` failed only on line 5 and `typing-style` only on line 9; format-lint, focused-tests and dead-code-duplicates passed.
 - After Zod migration: `types`, `typing-style`, format-lint and dead-code-duplicates all passed.

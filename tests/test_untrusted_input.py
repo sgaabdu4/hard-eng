@@ -138,6 +138,9 @@ def test_javascript_type_assertions_fail_like_typescript_casts(tmp_path: Path) -
     (tmp_path / "cast.mjs").write_text(
         "const raw = '{}';\n"
         "export const user = /** @type {{name: string}} */ (JSON.parse(raw));\n"
+        "export const admin =\n"
+        "  /**\n   * The signed-in admin.\n   * @type {{name: string}}\n   */ (\n"
+        "    JSON.parse(raw)\n  );\n"
     )
     (tmp_path / "valid.mjs").write_text(
         "/** @type {unknown} */\n"
@@ -147,7 +150,7 @@ def test_javascript_type_assertions_fail_like_typescript_casts(tmp_path: Path) -
     )
     (tmp_path / "types.ts").write_text("/** @type {X} */ (value);\n")
     reject_jsdoc_casts(tmp_path, ["valid.mjs", "types.ts"])
-    with pytest.raises(ValueError, match=r"type guard: cast\.mjs:2$"):
+    with pytest.raises(ValueError, match=r"type guard: cast\.mjs:2, cast\.mjs:4$"):
         reject_jsdoc_casts(tmp_path, ["cast.mjs", "valid.mjs", "types.ts"])
 
 
