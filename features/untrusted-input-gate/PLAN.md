@@ -65,7 +65,10 @@ Solution-style tsconfig files (`files: []` plus `references`) already fail the e
 
 Codex adversarial review (`gpt-6.1-sol`):
 - Round 1 found two problems, both fixed: JSDoc casts bypassed the gate, and `extends` tsconfigs aborted the update with advice that would drop inherited files.
-- Round 3 found that `Array.isArray` narrowed `unknown` JSON to `any[]`. The declaration now narrows it to `readonly unknown[]`, after round 4 showed that a mutable/readonly union stopped `.every(isString)` validation from narrowing. In a scratch `tsc` run, typed `string | string[]`, `readonly string[] | string`, `unknown[] | string` (with `push`) and `Set` unions still narrow, and `.every()` guards narrow validated arrays. On five real packages it added two errors, both reads of unvalidated parsed arrays, and no false failures; the plain `unknown[]` form ts-reset uses broke readonly unions.
+- Rounds 3–5 found that `Array.isArray`, `Object.values` and `Object.entries` handed unvalidated JSON back as `any`.
+  - The declaration now narrows open values (`unknown`, `{}`, `object`) to `unknown[]` and unknown values, keeps array members of typed unions (readonly or mutable), and keeps TypeScript's own `any[]` for typed values with no array member, such as React's `ReactNode`.
+  - Interim versions failed correct code: readonly unions, `.every()` narrowing, mutable returns after validation, and `HeadersInit`/`ReactNode` children walkers.
+  - A scratch case matrix and seven real packages (about 2,000 source files) now show no false failures. The only new errors are three reads of unvalidated parsed arrays, one of them a correct `!some(...)` check that needs `every(isX)` to type-check.
 - Round 2 found multi-line JSDoc casts. None appeared in a real-code sample, but the broader pattern matched the same set there, so it was adopted.
 
 ## Risks + recovery
