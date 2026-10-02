@@ -179,6 +179,9 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> list[str]:
 
 
 def configure_typing_checks(package: Group) -> None:
+    from untrusted_input import strict_typing_rules
+
+    strict_typing_rules(package)
     template = (
         SOURCE
         / ".agents/skills/he/templates"
@@ -409,24 +412,11 @@ def configure_dart_scanner(
 def configure_javascript(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
-    from gate_config import json_file
     from project_setup import javascript_manager, native_typecheck
+    from untrusted_input import typescript_config
 
     manager = javascript_manager(directory)[0]
-    target = directory / "tsconfig.json"
-    if not target.exists():
-        changes[str(target.relative_to(root))] = json_file(
-            root,
-            {
-                "compilerOptions": {
-                    "strict": True,
-                    "allowJs": True,
-                    "checkJs": True,
-                    "noEmit": True,
-                },
-                "include": [*package["sources"], "test", "tests"],
-            },
-        )
+    typescript_config(root, directory, package["sources"], changes)
     scripts = json.loads((directory / "package.json").read_text()).get("scripts", {})
     if native_typecheck(scripts, package["checks"]):
         wrapper = {"name": "project-typecheck", "role": "project-typecheck"}
