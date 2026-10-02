@@ -65,6 +65,7 @@ Solution-style tsconfig files (`files: []` plus `references`) already fail the e
 
 Codex adversarial review (`gpt-6.1-sol`):
 - Round 1 found two problems, both fixed: JSDoc casts bypassed the gate, and `extends` tsconfigs aborted the update with advice that would drop inherited files.
+- Round 3 found that `Array.isArray` narrowed `unknown` JSON to `any[]`. The declaration now narrows it to `unknown[] | readonly unknown[]`. Typed `string | string[]`, `readonly string[] | string` and `Set` unions still narrow correctly in a scratch `tsc` run. On five real packages it added two errors, both reads of unvalidated parsed arrays, and no false failures; the plain `unknown[]` form ts-reset uses broke readonly unions.
 - Round 2 found multi-line JSDoc casts. None appeared in a real-code sample, but the broader pattern matched the same set there, so it was adopted.
 
 ## Risks + recovery
