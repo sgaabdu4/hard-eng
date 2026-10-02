@@ -69,6 +69,7 @@ Codex adversarial review (`gpt-6.1-sol`):
   - The declaration now narrows open values (`unknown`, `{}`, `object`) to `unknown[]` and unknown values, keeps array members of typed unions (readonly or mutable), and keeps TypeScript's own `any[]` for typed values with no array member, such as React's `ReactNode`.
   - Interim versions failed correct code: readonly unions, `.every()` narrowing, mutable returns after validation, and `HeadersInit`/`ReactNode` children walkers.
   - A scratch case matrix and seven real packages (about 2,000 source files) now show no false failures. The only new errors are three reads of unvalidated parsed arrays, one of them a correct `!some(...)` check that needs `every(isX)` to type-check.
+- Round 6: approve, with no material findings.
 - Round 2 found multi-line JSDoc casts. None appeared in a real-code sample, but the broader pattern matched the same set there, so it was adopted.
 
 ## Risks + recovery
