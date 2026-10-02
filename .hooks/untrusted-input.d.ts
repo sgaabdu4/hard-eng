@@ -12,5 +12,5 @@ interface JSON {
 }
 
 interface ArrayConstructor {
-  isArray(arg: unknown): arg is unknown[] | readonly unknown[];
+  isArray(arg: unknown): arg is readonly unknown[];
 }
