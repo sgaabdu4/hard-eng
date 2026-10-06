@@ -472,6 +472,65 @@ def test_update_removes_unused_stack_skill_unless_edited(
     assert (target / ".claude/skills/he/SKILL.md").is_file()
 
 
+@pytest.mark.parametrize("name", ["team.md", "model-roles.md"])
+def test_install_adds_claude_rules_and_keeps_project_rules(
+    installer: ModuleType, tmp_path: Path, name: str
+) -> None:
+    setup_repository(tmp_path)
+    project_rule = tmp_path / ".claude/rules" / name
+    project_rule.parent.mkdir(parents=True)
+    project_rule.write_text("Project Claude rule\n")
+    before = snapshot(tmp_path)
+    if name == "model-roles.md":
+        with pytest.raises(ValueError, match="already differs"):
+            installer.install(tmp_path)
+        assert snapshot(tmp_path) == before
+        return
+    installer.install(tmp_path)
+    assert project_rule.read_text() == "Project Claude rule\n"
+    for rule in (installer.SOURCE / ".claude/rules").glob("*.md"):
+        assert (project_rule.parent / rule.name).read_bytes() == rule.read_bytes()
+    installed = snapshot(tmp_path)
+    installer.install(tmp_path)
+    assert snapshot(tmp_path) == installed
+
+
+@pytest.mark.parametrize("edited", [False, True])
+def test_update_refreshes_claude_rules_and_keeps_project_rules(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, edited: bool
+) -> None:
+    source, target, old = release
+    rules = target / ".claude/rules"
+    (rules / "team.md").write_text("Project Claude rule\n")
+    if edited:
+        (rules / "subagents.md").write_text("Local subagent rule\n")
+    base = commit(target, "project rules")
+    (source / ".claude/rules/model-roles.md").write_text("Updated model roles\n")
+    (source / ".claude/rules/review.md").write_text("New review rule\n")
+    (source / ".claude/rules/subagents.md").unlink()
+    select_release(source, monkeypatch)
+    if edited:
+        with pytest.raises(ValueError, match="Local scaffold edit"):
+            update.update(target)
+        assert (rules / "subagents.md").read_text() == "Local subagent rule\n"
+        assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
+        return
+    update.update(target)
+    changed = git(
+        target, "diff-tree", "--no-commit-id", "--name-status", "-r", "HEAD"
+    ).splitlines()
+    assert {
+        "M\t.claude/rules/model-roles.md",
+        "A\t.claude/rules/review.md",
+        "D\t.claude/rules/subagents.md",
+    } <= set(changed)
+    assert (rules / "model-roles.md").read_text() == "Updated model roles\n"
+    assert (rules / "team.md").read_text() == "Project Claude rule\n"
+    assert not (rules / "subagents.md").exists()
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert update.check_scaffold_update(target, base)
+
+
 def test_project_configuration_update_commits_without_rerunning_application_checks(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
