@@ -359,6 +359,35 @@ def cleanup(coordinator: Path, shipment: Shipment) -> None:
     print(f"Removed local task branch {shipment.branch}", flush=True)
 
 
+def merge(target: Path, plan: Path, shipment: Shipment, method: str) -> Shipment:
+    """Merge the verified head, then prove the merged revision."""
+    if shipment.delivery_target == "PR":
+        raise ValueError("The plan authorizes PR delivery, not merging")
+    gh(
+        target,
+        "pr",
+        "merge",
+        shipment.pr_url,
+        f"--{method}",
+        *(["--admin"] if shipment.review_bypass else []),
+        "--match-head-commit",
+        shipment.head_sha,
+    )
+    try:
+        return verify(target, plan, shipment.pr_url, "delivered")
+    except PendingCheck as error:
+        raise ShippingError(
+            f"Merged; base-branch CI has not finished ({error}). Run ship "
+            "--stage delivered once it completes; do not retry the merge."
+        ) from error
+    except ShippingError as error:
+        raise ShippingError(
+            "Merge command succeeded; post-merge delivery verification is pending "
+            f"or failed: {error}. Inspect the PR before retrying and do not claim "
+            "that the merge was undone."
+        ) from error
+
+
 def run(
     coordinator: Path,
     plan: str,
@@ -380,33 +409,16 @@ def run(
     proof_stage = "ready" if stage in {"ready", "merge"} else "delivered"
     require_current(target)
     shipment = verify(target, plan_path, pr_url, proof_stage)
+    bypassed = shipment.review_bypass
     if stage == "merge":
-        if shipment.delivery_target == "PR":
-            raise ValueError("The plan authorizes PR delivery, not merging")
-        gh(
-            target,
-            "pr",
-            "merge",
-            pr_url,
-            f"--{merge_method}",
-            "--match-head-commit",
-            shipment.head_sha,
-        )
-        try:
-            shipment = verify(target, plan_path, pr_url, "delivered")
-        except PendingCheck as error:
-            raise ShippingError(
-                f"Merged; base-branch CI has not finished ({error}). Run ship "
-                "--stage delivered once it completes; do not retry the merge."
-            ) from error
-        except ShippingError as error:
-            raise ShippingError(
-                "Merge command succeeded; post-merge delivery verification is pending "
-                f"or failed: {error}. Inspect the PR before retrying and do not claim "
-                "that the merge was undone."
-            ) from error
+        shipment = merge(target, plan_path, shipment, str(merge_method))
     if stage == "cleanup":
         cleanup(coordinator, shipment)
     revision = shipment.merged_sha or shipment.head_sha
+    if bypassed:
+        print(
+            "Review bypass: only the author can give the required review, so the "
+            "merge uses admin rights once every other requirement passes."
+        )
     print(f"PASS ship {stage}: {pr_url} at {revision}")
     return 0
