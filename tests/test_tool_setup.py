@@ -169,3 +169,30 @@ def test_interrupted_installation_is_replaced_cleanly(
     ]
     assert provision(tmp_path).returncode == 0
     assert [path.name for path in storage.iterdir() if path.is_dir()] == ["2026.9.13"]
+
+
+def test_tools_are_provisioned_outside_a_project_that_pins_pnpm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+
+    import tool_setup
+    from conftest import use_installed_mise
+
+    use_installed_mise(tmp_path, monkeypatch)
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"packageManager": "pnpm@11.8.0"}')
+    directories: list[Path] = []
+
+    def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        directories.append(Path(str(kwargs["cwd"])))
+        return subprocess.CompletedProcess(command, 0, json.dumps({"PATH": ""}), "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setenv("PATH", "")
+    group = {"path": ".", "checks": [{"name": "react", "command": ["react-doctor"]}]}
+    tool_setup.provision_tools(project, [group], 30)
+    assert len(directories) == 2
+    assert all(not path.is_relative_to(project) for path in directories)
