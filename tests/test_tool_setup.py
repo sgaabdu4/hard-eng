@@ -174,25 +174,23 @@ def test_interrupted_installation_is_replaced_cleanly(
 def test_tools_are_provisioned_outside_a_project_that_pins_pnpm(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import json
+    from unittest.mock import Mock
 
     import tool_setup
     from conftest import use_installed_mise
+    from gate_config import Group
 
-    use_installed_mise(tmp_path, monkeypatch)
     project = tmp_path / "project"
     project.mkdir()
     (project / "package.json").write_text('{"packageManager": "pnpm@11.8.0"}')
-    directories: list[Path] = []
-
-    def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        directories.append(Path(str(kwargs["cwd"])))
-        return subprocess.CompletedProcess(command, 0, json.dumps({"PATH": ""}), "")
-
-    monkeypatch.setattr(subprocess, "run", run)
-    monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
-    monkeypatch.setenv("PATH", "")
-    group = {"path": ".", "checks": [{"name": "react", "command": ["react-doctor"]}]}
-    tool_setup.provision_tools(project, [group], 30)
-    assert len(directories) == 2
-    assert all(not path.is_relative_to(project) for path in directories)
+    use_installed_mise(tmp_path, monkeypatch)
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
+    native = Mock(return_value=subprocess.CompletedProcess([], 0, '{"PATH": ""}', ""))
+    monkeypatch.setattr(subprocess, "run", native)
+    react: Group = {
+        "path": ".",
+        "checks": [{"name": "doctor", "command": ["react-doctor"]}],
+    }
+    tool_setup.provision_tools(project, [react], 30)
+    directories = [Path(call.kwargs["cwd"]) for call in native.call_args_list]
+    assert directories == [tmp_path / "runner/hard-eng-tools"] * 2
