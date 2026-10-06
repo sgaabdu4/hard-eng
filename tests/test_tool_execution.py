@@ -76,7 +76,7 @@ def execute_provisioned_scanner(
         executable(stale, scanner, "stale")
         monkeypatch.setenv("PATH", str(stale) + os.pathsep + os.environ["PATH"])
 
-    def provision(_root: Path, batch: list[str], _timeout: float) -> None:
+    def provision(batch: list[str], _timeout: float) -> None:
         assert batch == [package]
         monkeypatch.setenv("PATH", str(managed) + os.pathsep + os.environ["PATH"])
 

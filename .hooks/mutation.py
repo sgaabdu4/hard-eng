@@ -128,7 +128,7 @@ def javascript(
     from tool_setup import provision_batch
 
     remaining = 600 if deadline is None else max(deadline - time.monotonic(), 1)
-    provision_batch(directory, ["npm:@stryker-mutator/core@latest"], remaining)
+    provision_batch(["npm:@stryker-mutator/core@latest"], remaining)
     report, config, output = work / "report.json", work / "stryker.json", work / "log"
     # Stryker reads each path as a minimatch glob; brackets wrap its metacharacters.
     literal = {name: GLOB.sub(r"[\g<0>]", name) for name in files}

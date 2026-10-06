@@ -116,10 +116,10 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         packages[name] + "@latest" for name in executables & packages.keys()
     )
     if selected:
-        provision_batch(root, selected, timeout)
+        provision_batch(selected, timeout)
 
 
-def provision_batch(root: Path, batch: list[str], timeout: float) -> None:
+def provision_batch(batch: list[str], timeout: float) -> None:
     storage = (
         Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hard-eng-tools"
     )
@@ -155,7 +155,8 @@ def provision_batch(root: Path, batch: list[str], timeout: float) -> None:
         for arguments in (["install", *batch], ["env", "--json", *batch]):
             result = subprocess.run(
                 [*command, *arguments],
-                cwd=root,
+                # The project's packageManager pin would otherwise pick the pnpm mise drives.
+                cwd=storage,
                 text=True,
                 timeout=timeout,
                 capture_output=True,

@@ -169,3 +169,28 @@ def test_interrupted_installation_is_replaced_cleanly(
     ]
     assert provision(tmp_path).returncode == 0
     assert [path.name for path in storage.iterdir() if path.is_dir()] == ["2026.9.13"]
+
+
+def test_tools_are_provisioned_outside_a_project_that_pins_pnpm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock
+
+    import tool_setup
+    from conftest import use_installed_mise
+    from gate_config import Group
+
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text('{"packageManager": "pnpm@11.8.0"}')
+    use_installed_mise(tmp_path, monkeypatch)
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
+    native = Mock(return_value=subprocess.CompletedProcess([], 0, '{"PATH": ""}', ""))
+    monkeypatch.setattr(subprocess, "run", native)
+    react: Group = {
+        "path": ".",
+        "checks": [{"name": "doctor", "command": ["react-doctor"]}],
+    }
+    tool_setup.provision_tools(project, [react], 30)
+    directories = [Path(call.kwargs["cwd"]) for call in native.call_args_list]
+    assert directories == [tmp_path / "runner/hard-eng-tools"] * 2
