@@ -300,7 +300,9 @@ def test_ship_routes_refuse_wrong_plan_and_unselected_merge(
 
 
 def test_ship_merge_matches_verified_head_and_checks_result(
-    delivered_worktree: tuple[Path, Shipment], monkeypatch: pytest.MonkeyPatch
+    delivered_worktree: tuple[Path, Shipment],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     root, shipment = delivered_worktree
     verified = Mock(return_value=shipment)
@@ -315,6 +317,18 @@ def test_ship_merge_matches_verified_head_and_checks_result(
     )
     assert verified.call_args_list[-1].args[-1] == "delivered"
     assert remote.call_args.args[-2:] == ("--match-head-commit", shipment.head_sha)
+    assert "--admin" not in remote.call_args.args
+    assert "Review bypass" not in capsys.readouterr().out
+    verified.side_effect = [replace(shipment, review_bypass=True), shipment]
+    ship_actions.run(
+        root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "squash"
+    )
+    assert remote.call_args.args[-3:] == (
+        "--admin",
+        "--match-head-commit",
+        shipment.head_sha,
+    )
+    assert "Review bypass" in capsys.readouterr().out
     monkeypatch.setattr(
         ship_actions,
         "verify",

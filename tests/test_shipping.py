@@ -106,6 +106,22 @@ def _check(revision: str, **changes: object) -> dict[str, object]:
     return result
 
 
+_OWNER = {"login": "owner", "permissions": {"push": True}}
+
+
+def _review(head: str, rollup: object = "SUCCESS", **changes: object) -> object:
+    pull: dict[str, object] = {
+        "viewerDidAuthor": True,
+        "viewerCanMergeAsAdmin": True,
+        "reviewDecision": "REVIEW_REQUIRED",
+        "commits": {
+            "nodes": [{"commit": {"oid": head, "statusCheckRollup": {"state": rollup}}}]
+        },
+    }
+    pull.update(changes)
+    return {"data": {"viewer": {"login": "owner"}, "repository": {"pullRequest": pull}}}
+
+
 class FakeGitHub:
     def __init__(
         self,
@@ -118,6 +134,8 @@ class FakeGitHub:
             {"total_count": len(checks), "check_runs": checks}
         ]
         self.file_payload: object = [files or []]
+        self.review: object = _review("0" * 40, viewerDidAuthor=False)
+        self.collaborators: object = [[_OWNER]]
         self.calls: list[tuple[str, ...]] = []
         self.attachment_response = (
             "HTTP/2 206 Partial Content\ncontent-type: image/png\n"
@@ -128,6 +146,8 @@ class FakeGitHub:
         self.calls.append(args)
         if args[0] != "api":
             raise AssertionError(args)
+        if args[1] == "graphql":
+            return json.dumps(self.review)
         if "--method" in args:
             if "HEAD" in args:
                 raise shipping.ShippingError("gh query failed")
@@ -140,6 +160,8 @@ class FakeGitHub:
             return json.dumps(self.file_payload)
         if "/check-runs?" in endpoint:
             return json.dumps(self.check_payload)
+        if "/collaborators?" in endpoint:
+            return json.dumps(self.collaborators)
         raise AssertionError(endpoint)
 
 
@@ -363,6 +385,44 @@ def test_ready_rejects_pr_identity_and_mergeability(
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError):
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+
+
+@pytest.mark.parametrize(
+    ("state", "review", "others", "message"),
+    [
+        ("blocked", {}, [{"login": "reader", "permissions": {"push": False}}], None),
+        ("clean", {}, [], None),
+        ("blocked", {}, [{"login": "peer", "permissions": {"push": True}}], "another"),
+        ("blocked", {"viewerDidAuthor": False}, [], "did not author"),
+        ("blocked", {"viewerCanMergeAsAdmin": False}, [], "cannot bypass"),
+        ("blocked", {"reviewDecision": "CHANGES_REQUESTED"}, [], "required review"),
+        ("blocked", {"reviewDecision": None}, [], "required review"),
+        ("blocked", {"rollup": "FAILURE"}, [], "head check"),
+        ("blocked", {"rollup": "PENDING"}, [], "head check"),
+        ("dirty", {}, [], "not clean"),
+    ],
+)
+def test_ready_bypasses_only_a_review_nobody_but_the_author_can_give(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+    review: dict[str, object],
+    others: list[object],
+    message: str | None,
+) -> None:
+    fixture = _fixture(tmp_path)
+    pull = _pull(fixture, mergeable_state=state, mergeable=state != "dirty")
+    fake = FakeGitHub(pull, [_check(fixture.head)])
+    fake.review = _review(fixture.head, **review)
+    fake.collaborators = [[_OWNER, *others]]
+    _patch_gh(monkeypatch, fake)
+    if message is not None:
+        with pytest.raises(shipping.ShippingError, match=message):
+            shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+        return
+    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert shipment.review_bypass is (state == "blocked")
+    assert any(call[1] == "graphql" for call in fake.calls) is (state == "blocked")
 
 
 @pytest.mark.parametrize(

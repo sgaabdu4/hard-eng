@@ -44,6 +44,7 @@ class Shipment:
     base: str
     merged_sha: str | None
     delivery_target: str
+    review_bypass: bool = False
 
 
 class ShippingError(ValueError):
@@ -72,6 +73,12 @@ _PR_SUBJECT = re.compile(r"\(#([1-9][0-9]*)\)$")
 _GH_TIMEOUT = 30.0
 _GIT_TIMEOUT = 30.0
 _DELIVERY_TIMEOUT = 120.0
+_REVIEW_QUERY = (
+    "query($owner:String!,$name:String!,$number:Int!){viewer{login} "
+    "repository(owner:$owner,name:$name){pullRequest(number:$number){"
+    "viewerDidAuthor viewerCanMergeAsAdmin reviewDecision "
+    "commits(last:1){nodes{commit{oid statusCheckRollup{state}}}}}}}"
+)
 
 
 @dataclass(frozen=True)
@@ -659,23 +666,88 @@ def _delivered(root: Path, pull: _PullRequest, base: str, remote_url: str) -> st
     return pull.merge_commit_sha
 
 
+def _review_bypass_problem(
+    root: Path, owner: str, name: str, number: int, head_sha: str
+) -> str | None:
+    """Why a blocked PR is not blocked solely by a review only its author could give."""
+    value = _json(
+        gh(
+            root,
+            "api",
+            "graphql",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+            "-F",
+            f"number={number}",
+            "-f",
+            f"query={_REVIEW_QUERY}",
+        ),
+        "review query",
+    )
+    data = _object(_object(value, "review response").get("data"), "review data")
+    viewer = _text(_object(data.get("viewer"), "viewer"), "login", "viewer")
+    repository = _object(data.get("repository"), "review repository")
+    pull = _object(repository.get("pullRequest"), "review PR")
+    nodes = _object(pull.get("commits"), "review commits").get("nodes")
+    commit = (
+        _object(_object(nodes[0], "review commit").get("commit"), "review commit")
+        if isinstance(nodes, list) and len(nodes) == 1
+        else {}
+    )
+    rollup = commit.get("statusCheckRollup")
+    if pull.get("viewerDidAuthor") is not True:
+        return "the viewer did not author the PR"
+    if pull.get("viewerCanMergeAsAdmin") is not True:
+        return "the author cannot bypass the review requirement"
+    if pull.get("reviewDecision") != "REVIEW_REQUIRED":
+        return "the block is not an outstanding required review"
+    if commit.get("oid") != head_sha or not (
+        isinstance(rollup, dict) and rollup.get("state") == "SUCCESS"
+    ):
+        return "not every head check succeeded"
+    collaborators = _api_items(
+        root,
+        f"repos/{owner}/{name}/collaborators?per_page=100",
+        "collaborators",
+        "collaborators query",
+    )
+    pushers = {
+        item.get("login")
+        for item in collaborators
+        if isinstance(item.get("permissions"), dict)
+        and cast(dict[str, JsonValue], item["permissions"]).get("push") is True
+    }
+    if pushers != {viewer}:
+        return "another collaborator can give the review"
+    return None
+
+
 def _ready_state(
     root: Path,
     pull: _PullRequest,
     policy: ShippingPolicy,
     branch: str,
     local_head: str,
-) -> tuple[str, None]:
+    identity: tuple[str, str, int],
+) -> bool:
+    """Verify the open PR; True when only an author-unsatisfiable review blocks it."""
     if pull.state != "open" or pull.draft:
         raise ShippingError("PR must be open and ready for review")
     if branch != pull.head_ref or local_head != pull.head_sha:
         raise ShippingError("local task branch or HEAD does not match PR")
     if branch == policy["base"]:
         raise ShippingError("shipping requires a task branch distinct from base")
-    if pull.mergeable is not True or pull.mergeable_state != "clean":
+    bypass = pull.mergeable is True and pull.mergeable_state == "blocked"
+    if bypass:
+        problem = _review_bypass_problem(root, *identity, pull.head_sha)
+        if problem is not None:
+            raise ShippingError(f"PR mergeability is not clean: {problem}")
+    elif pull.mergeable is not True or pull.mergeable_state != "clean":
         raise ShippingError("PR mergeability is not clean")
     _clean(root)
-    return pull.head_sha, None
+    return bypass
 
 
 def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) -> None:
@@ -714,10 +786,12 @@ def verify(root: Path, plan: Path, pr_url: str, stage: str) -> Shipment:
         raise ShippingError("PR base branch does not match shipping policy")
     if pull.base_repository != repository or pull.head_repository != repository:
         raise ShippingError("PR repository or head repository does not match origin")
+    review_bypass = False
     if stage == "ready":
-        revision, merged_sha = _ready_state(
-            resolved_root, pull, policy, branch, local_head
+        review_bypass = _ready_state(
+            resolved_root, pull, policy, branch, local_head, (owner, name, number)
         )
+        revision, merged_sha = pull.head_sha, None
     else:
         _clean(resolved_root)
         revision = _delivered(resolved_root, pull, policy["base"], origin_url)
@@ -743,4 +817,5 @@ def verify(root: Path, plan: Path, pr_url: str, stage: str) -> Shipment:
         base=policy["base"],
         merged_sha=merged_sha,
         delivery_target=target,
+        review_bypass=review_bypass,
     )
