@@ -8,17 +8,17 @@
   - Rerun setup only after failed or no status; never mid-update.
 - Before editing: state the single change, files touched + verification.
 - Scope = user request + accepted constraints; preserve unrelated work.
-- Legacy `CLAUDE.md` → move unique scoped rules to the matching `AGENTS.md` (Claude + Codex) before retiring it; never recreate import wrappers or publish private local instructions.
+- Project rules live in `AGENTS.md` (Claude + Codex); move unique scoped legacy `CLAUDE.md` rules to the matching one before retiring it; never recreate import wrappers or publish private local instructions.
 - Before recording tracked content or publishing → apply [publication privacy](.agents/skills/he-ship/references/checks.md#publication-privacy) for the audience.
 - YAGNI = ultra unless user changes it. Understand the real flow; reuse existing files, code, stdlib, native commands/features + installed deps before adding code.
 - New file/dep/wrapper/abstraction/config/stored state → needs a current agreed requirement + why existing code or a direct command can't do it; else omit. Explain in normal updates; no justification files.
 - Comments: none by default; max 1 terse why-line for a needed non-obvious constraint names/types/structure/tests can't carry. `check` fails changed source files with longer comment blocks (old ones too).
 - Fix causes at their existing owner. Optional improvements + extra infra only on explicit user request; never as robustness/best practice/future needs.
 - Tests: each proves a named required outcome or catches a specific meaningful failure; reuse first; no implementation mirrors/padding. Name outcomes + failure modes first; tests may follow code. Affected journeys need real E2E proof where applicable; keep focused tests adding coverage/speed/diagnosis. Deleting one → state what it protects + replacement proof or why unneeded; E2E overlap alone ≠ enough. [testing](.agents/skills/he/references/testing.md)
-- Verification: run applicable gates + prove affected behavior; never hide findings, weaken checks or claim unrun checks passed. Repair every reported finding in code, unrelated too, as its own commit before continuing; never baseline/tolerate/suppress.
+- Verification: run applicable gates + prove affected behavior; never hide findings, weaken checks or claim unrun checks passed. Repair every reported finding in code, unrelated too, as its own commit before continuing; never baseline/tolerate/suppress. Gates stay required even when Hard Eng or its updater fails.
 - Before done: review the diff vs the latest request, remove unsupported additions + report remaining expansion. Passing tools/metrics never prove necessity or test quality.
 - Reuse settled approvals; ask only when missing info changes the result or an unapproved consequential action is needed.
 - Report concisely in plain English: actual changes, proof, gaps.
 - Setup prints `Gap:` (missing check/language) → file without asking: `python3 .hooks/hard-eng.py gap-issue "<missing check, generic>"` (dedupes, refuses project detail); never include project names, code, paths or data.
-- Reproduced fault in Hard Eng's own `.hooks/`, `.agents/skills/he*` or setup → tell user, check [issues](https://github.com/sgaabdu4/hard-eng/issues) for duplicates, then with approval file a terse one: Problem, Reproduction, installed revision, Suggestion.
+- Reproduced fault in Hard Eng's own `.hooks/`, `.agents/skills/he*` or setup → tell user, check [issues](https://github.com/sgaabdu4/hard-eng/issues) for duplicates, then with approval file a terse one: Problem, Reproduction, installed revision, Suggestion; apply publication privacy.
 - Follow `.agents/skills/he/SKILL.md`; commands: `python3 .hooks/hard-eng.py --help`.
