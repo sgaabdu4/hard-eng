@@ -480,38 +480,25 @@ def configure_python(
 
 
 def prepare_hook(root: Path) -> tuple[Path, str]:
-    from agent_hooks import project_pre_push
+    import hook_chain
 
-    hook = Path(
-        subprocess.check_output(
-            ["git", "rev-parse", "--git-path", "hooks/pre-push"], cwd=root, text=True
-        ).strip()
-    )
-    hook = hook if hook.is_absolute() else root / hook
-    target = project_pre_push(root, hook)
-    launcher = """#!/usr/bin/env python3
-import subprocess
-import sys
-
-root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
-sys.exit(subprocess.call([sys.executable, root + "/.hooks/hard-eng.py", "pre-push"]))
-"""
-    previous = launcher
-    if target != hook:
-        launcher = '#!/usr/bin/env sh\nexec python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py" pre-push\n'
-    hook = target
-    if (hook.exists() or hook.is_symlink()) and not (
-        (hook.is_symlink() and hook.resolve() == root / ".hooks/hard-eng.py")
-        or (
-            not hook.is_symlink()
-            and hook.is_file()
-            and hook.read_text() in {launcher, previous}
-        )
-    ):
+    hook, target = hook_chain.locate(root)
+    shell = target != hook
+    foreign = hook_chain.foreign_hook(root, target)
+    if foreign and shell:
         raise ValueError(
             "Existing pre-push hook must be preserved; ask before changing it"
         )
-    return hook, launcher
+    hook_chain.check_free(root, target)
+    chained = not shell and (foreign or hook_chain.project_copy(target).exists())
+    launcher = (
+        hook_chain.SHELL_LAUNCHER
+        if shell
+        else hook_chain.CHAINED_LAUNCHER
+        if chained
+        else hook_chain.PYTHON_LAUNCHER
+    )
+    return target, launcher
 
 
 def validate_destinations(root: Path, changes: dict[str, str], hook: Path) -> None:
@@ -911,6 +898,7 @@ def plan_install(
 
 
 def install(root: Path, previous: Path | None = None) -> None:
+    import hook_chain
     from update import (
         commit_install,
         local_state,
@@ -922,6 +910,8 @@ def install(root: Path, previous: Path | None = None) -> None:
     names = sorted({*changes, *links, *deleted})
     if hook.is_relative_to(root) and ".git" not in hook.relative_to(root).parts:
         names.append(str(hook.relative_to(root)))  # A Husky launcher lives in the tree.
+        if launcher == hook_chain.CHAINED_LAUNCHER:
+            names.append(str(hook_chain.project_copy(hook).relative_to(root)))
     # Commit only paths without prior local state, so no project edit joins the commit.
     clean = not local_state(root, names)
     retire_local_generation(root)
@@ -932,11 +922,14 @@ def install(root: Path, previous: Path | None = None) -> None:
             link.parent.mkdir(parents=True, exist_ok=True)
             link.symlink_to(destination, target_is_directory=True)
     (root / ".hooks/hard-eng.py").chmod(0o755)
+    kept = hook_chain.preserve(root, hook)
     if hook.is_symlink():
         hook.unlink()
     hook.parent.mkdir(parents=True, exist_ok=True)
     hook.write_text(launcher)
     hook.chmod(0o755)
+    if kept:
+        print(hook_chain.KEPT)
     from dependency_graph import dependency_review_guidance
 
     config = json.loads((root / "hard-eng.gates.json").read_text())
