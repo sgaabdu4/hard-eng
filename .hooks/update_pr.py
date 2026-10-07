@@ -7,9 +7,11 @@ from pathlib import Path
 
 from gate_config import JsonValue
 from shipping import ShippingError, gh, load_policy
+from update import revision_follows
 from update_runner import (
     UPDATE_BRANCH,
     UPDATE_COMMAND,
+    branch_current,
     branch_worktree,
     fetch_base,
     installed_revision,
@@ -17,6 +19,7 @@ from update_runner import (
     last_result,
     locked_update,
     revision_at,
+    unfinished_update,
     update_base,
 )
 
@@ -182,6 +185,15 @@ def replaceable_remote(root: Path, base: str) -> str | None:
         f"origin/{base}...{remote}",
     )
     if subjects is not None and all(GENERATED.fullmatch(s) for s in subjects):
+        theirs = revision_at(root, remote)
+        ours = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
+        if theirs and ours and revision_follows(theirs, ours):
+            print(
+                f"origin/{UPDATE_BRANCH} holds a newer Hard Eng update than this branch, so it was "
+                f"not replaced. Run `{UPDATE_COMMAND}` after `git fetch origin {UPDATE_BRANCH}` "
+                "to rebuild this branch from the newer release."
+            )
+            return None
         return tip[0]
     if landed(root, f"origin/{base}", remote):
         return tip[0]
@@ -195,11 +207,20 @@ def replaceable_remote(root: Path, base: str) -> str | None:
 
 def publish(root: Path) -> int:
     base = update_base(root)
-    landed = revision_at(root, fetch_base(root, base))
+    tip = fetch_base(root, base)
+    landed = revision_at(root, tip)
     revision = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
-    if revision is None:
+    if revision is None or (
+        revision != landed
+        and not unfinished_update(root, tip)
+        and not branch_current(root, tip)
+    ):
         print(locked_update(root))
         revision = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
+        if revision is not None and not (
+            unfinished_update(root, tip) or branch_current(root, tip)
+        ):
+            revision = None
     if revision is None or revision == landed:
         print(
             f"Nothing to publish: Hard Eng is current on {base}. Last update result: {last_result(root)}"
