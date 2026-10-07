@@ -86,18 +86,17 @@ def check_state(pull: dict[str, JsonValue], required: list[str] | None = None) -
             entries.append(item)
     if any((e.get("conclusion") or e.get("state")) in FAILED for e in entries):
         return "failing"
+    named = entries
+    pending = not entries
     if required:
         named = [e for e in entries if (e.get("name") or e.get("context")) in required]
         pending = len({e.get("name") or e.get("context") for e in named}) < len(
             set(required)
         )
-        entries = named
-    else:
-        pending = not entries
+        if any((e.get("conclusion") or e.get("state")) in SKIPPED for e in named):
+            return "failing"
     for entry in entries:
         outcome = entry.get("conclusion") or entry.get("state")
-        if required and outcome in SKIPPED:
-            return "failing"
         if entry.get("status", "COMPLETED") != "COMPLETED" or outcome in {
             None,
             "",
@@ -106,7 +105,7 @@ def check_state(pull: dict[str, JsonValue], required: list[str] | None = None) -
         }:
             pending = True
     if not pending and not any(
-        (e.get("conclusion") or e.get("state")) == "SUCCESS" for e in entries
+        (e.get("conclusion") or e.get("state")) == "SUCCESS" for e in named
     ):
         return "pending"
     return "pending" if pending else "passing"
