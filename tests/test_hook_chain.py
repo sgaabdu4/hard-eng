@@ -130,6 +130,14 @@ def test_setup_chains_a_husky_projects_own_pre_push_script(
         repository / "project.stdin"
     ).read_text() == "refs/heads/a 1 refs/heads/a 0\n"
     assert (repository / "stub.stdin").read_text() == "refs/heads/a 1 refs/heads/a 0\n"
+    (repository / "stub.args").unlink()
+    kept.write_text("false\necho later > later.txt\n")
+    result = subprocess.run(
+        arguments, cwd=repository, input="", capture_output=True, check=False
+    )
+    assert result.returncode != 0
+    assert not (repository / "later.txt").exists()
+    assert not (repository / "stub.args").exists()
 
 
 def test_session_notes_a_replaced_launcher_and_says_how_to_restore(
