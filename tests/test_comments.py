@@ -301,21 +301,23 @@ def test_removed_assertion_outside_tests_passes(tmp_path: Path) -> None:
     validate_suppressions(root, "HEAD")
 
 
-def test_quick_check_runs_the_switch_off_guard(runner: ModuleType) -> None:
+def noop_gates_root(runner: ModuleType) -> Path:
     root = runner.ROOT
     (root / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": [{"name": "noop", "command": ["true"]}]})
     )
+    return root
+
+
+def test_quick_check_runs_the_switch_off_guard(runner: ModuleType) -> None:
+    root = noop_gates_root(runner)
     (root / "app.py").write_text("x = 1  # no" + "qa\n")
     with pytest.raises(ValueError, match=OFF):
         runner.check(quick=True, base="HEAD")
 
 
 def test_quick_check_runs_the_decision_staleness_guard(runner: ModuleType) -> None:
-    root = runner.ROOT
-    (root / "hard-eng.gates.json").write_text(
-        json.dumps({"packages": [], "shared": [{"name": "noop", "command": ["true"]}]})
-    )
+    root = noop_gates_root(runner)
     (root / "docs/adr").mkdir(parents=True)
     (root / "docs/adr/0001-x.md").write_text("# 0001\n\nStatus: Accepted\n")
     with pytest.raises(ValueError, match="needs an 'Applies to:'"):
