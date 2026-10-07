@@ -117,19 +117,32 @@ def restore_note(root: Path) -> str:
     return "" if is_own(root, target) else RESTORE
 
 
-def use_own_hooks(candidate: Path) -> None:
-    """Drop an absolute hooks path `git worktree add` copied from the calling worktree."""
-    where = ["git", "rev-parse", "--git-path", "config.worktree"]
-    config = subprocess.check_output(where, cwd=candidate, text=True).strip()
+def use_own_hooks(root: Path, candidate: Path) -> None:
+    """Make a hooks path `git worktree add` copied from `root` name the candidate's own files."""
+    where = [
+        "--path-format=absolute",
+        "--git-path",
+        "config.worktree",
+        "--git-common-dir",
+    ]
+    config, common = subprocess.check_output(
+        ["git", "rev-parse", *where], cwd=candidate, text=True
+    ).splitlines()
     setting = ["git", "config", "--file", config]
     found = subprocess.run(
-        [*setting, "--get-all", "core.hooksPath"],
+        [*setting, "core.hooksPath"],
         cwd=candidate,
         capture_output=True,
         text=True,
         check=False,
-    ).stdout.splitlines()
-    if any(Path(path).expanduser().is_absolute() for path in found):
-        subprocess.run(
-            [*setting, "--unset-all", "core.hooksPath"], cwd=candidate, check=True
-        )
+    ).stdout.strip()
+    path = Path(found).expanduser()
+    if not found or not path.is_absolute():
+        return
+    checkouts = [root, Path(common).parent] if Path(common).name == ".git" else [root]
+    for checkout in checkouts:
+        if path.resolve().is_relative_to(checkout.resolve()):
+            own = path.resolve().relative_to(checkout.resolve()).as_posix()
+            replace = [*setting, "--replace-all", "core.hooksPath", own]
+            subprocess.run(replace, cwd=candidate, check=True)
+            return
