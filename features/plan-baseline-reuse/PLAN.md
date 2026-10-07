@@ -38,7 +38,7 @@ Execution: One builder in this worktree.
 
 ## Risks + recovery
 
-A local tool or environment change since main's CI run is not caught by a plan-only baseline; pre-push and CI still run the affected checks. Recovery is reverting this branch.
+A local tool or environment change since main's CI run, such as a newer `@latest` tool release, is not caught by a plan-only baseline; it surfaces when the feature's code first runs its package checks. Recovery is reverting this branch.
 
 ## ux_reference
 
@@ -47,7 +47,7 @@ N/A — check behaviour; no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: `test_plan_stage_check_skips_packages_unchanged_since_a_passed_branch_point` runs a failing package check through `check`: a Draft check with a passed branch point skips it and exits 0; without a passed branch point, or without a plan stage, it runs and fails. `test_branch_point_is_reused_only_after_its_checks_passed` returns the main commit only when its required check run succeeded. A live call from this branch returned main `8f7f8fac` from GitHub. Codex adversarial review (gpt-6-astra) round 1 found no code issues; its only finding was this plan still being Draft.
+Evidence: `test_plan_stage_check_skips_packages_unchanged_since_a_passed_branch_point` runs a failing package check through `check`: a Draft check with a passed branch point skips it and exits 0; without a passed branch point, or without a plan stage, it runs and fails. `test_branch_point_is_reused_only_after_its_checks_passed` returns the main commit only when its required check run succeeded. A live call from this branch returned main `8f7f8fac` from GitHub. Codex adversarial review (gpt-6-astra): round 1 found no code issues, only this plan still being Draft; round 2 approved with no findings.
 Gate: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` → exit 0 (1240 tests, 90.31% line coverage).
 E2E: N/A — command-line check behaviour proven through the runner in tests.
 
