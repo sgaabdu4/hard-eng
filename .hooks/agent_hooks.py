@@ -14,6 +14,7 @@ from pathlib import Path
 from gate_config import JsonObject, JsonValue, nonproduction_source, repository_files
 
 # The HE Build handoff line, not a quoted or negated mention of it.
+GATE_OUTPUT_LIMIT = 8000
 SHIP_CLAIM = re.compile(r"^[*_ ]*Ready for ship[*_]*\s*[—–-]", re.MULTILINE)
 
 
@@ -540,6 +541,23 @@ def passed_notice(
     return {"systemMessage": notice} if notice else completion_notice(agent, output)
 
 
+def failure_summary(log: str) -> str:
+    """Failed gate names, then the first failing gate's output from its start."""
+    failed = re.findall(r"FAIL (\S+?)(?: \(exit \d+;|: [^\n]*; elapsed)", log)
+    if not failed:
+        return log[-GATE_OUTPUT_LIMIT:]
+    heading = "Failed gates: " + ", ".join(dict.fromkeys(failed)) + "\n"
+    name = re.escape(failed[0])
+    start = re.search(rf"OUTPUT (?:\S*/)?{name}[^\n]*\n", log)
+    if start is None:
+        return heading + log[-GATE_OUTPUT_LIMIT:]
+    body = log[start.end() :]
+    end = re.search(
+        rf"(?m)^(?:CHECK|OUTPUT) \S*/\S+|(?:PASS|FAIL) {name}(?: \(exit|:)", body
+    )
+    return heading + body[: end.start() if end else None][:GATE_OUTPUT_LIMIT]
+
+
 def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
     with tempfile.TemporaryFile() as log:
         check = subprocess.Popen(
@@ -547,6 +565,7 @@ def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
                 sys.executable,
                 str(root / ".hooks/hard-eng.py"),
                 "check",
+                "--quick",
                 "--base",
                 base,
                 *(["--plan-stage", "Ready"] if building else []),
@@ -571,8 +590,9 @@ def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
             raise
         finally:
             signal.signal(signal.SIGTERM, previous)
-        log.seek(max(0, log.tell() - 16000))
-        return returncode, log.read().decode("utf-8", errors="replace")
+        log.seek(0)
+        text = log.read().decode("utf-8", errors="replace")
+        return returncode, text if returncode == 0 else failure_summary(text)
 
 
 def last_pass(state: Path | None) -> JsonValue:

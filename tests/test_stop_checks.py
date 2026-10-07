@@ -82,3 +82,40 @@ def test_interrupted_stop_hook_stops_every_check_process(
     while subprocess.run(["kill", "-0", tool.read_text()], check=False).returncode == 0:
         assert time.monotonic() < deadline
         time.sleep(0.05)
+
+
+def test_stop_hook_runs_the_quick_check(repository: Path) -> None:
+    seen = repository.parent / "argv.txt"
+    install_check(
+        repository,
+        f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv))\n",
+    )
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "work.py").write_text("value = 1\n")
+    agent_hooks.completion(repository, payload)
+    assert "check --quick --base" in seen.read_text()
+
+
+def test_failure_reason_lists_failed_gates_and_starts_at_the_first_error(
+    repository: Path,
+) -> None:
+    install_check(
+        repository,
+        "print('OUTPUT ./lint')\n"
+        "print('FIRST ERROR')\n"
+        "print('x' * 30000)\n"
+        "print('FAIL lint (exit 1; elapsed 1.0s)')\n"
+        "print('OUTPUT ./types')\n"
+        "print('second error')\n"
+        "print('FAIL types (exit 1; elapsed 1.0s)')\n"
+        "raise SystemExit(1)\n",
+    )
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "work.py").write_text("value = 1\n")
+    reason = str(agent_hooks.completion(repository, payload)["reason"])
+    assert "Failed gates: lint, types" in reason
+    assert "FIRST ERROR" in reason
+    assert "second error" not in reason
+    assert len(reason) < 10000
