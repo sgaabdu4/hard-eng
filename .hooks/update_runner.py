@@ -752,8 +752,9 @@ def unfinished_update(root: Path, tip: str) -> bool:
         check=False,
     )
     names = [name for name in changed.stdout.split("\0") if name]
+    branch = f"refs/heads/{UPDATE_BRANCH}"
     landed = subprocess.run(
-        ["git", "diff", "--quiet", tip, f"refs/heads/{UPDATE_BRANCH}", "--", *names],
+        ["git", "diff", "--quiet", tip, branch, "--", *names],
         cwd=root,
         check=False,
     )
