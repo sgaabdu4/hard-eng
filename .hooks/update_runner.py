@@ -744,21 +744,25 @@ def unfinished_update(root: Path, tip: str) -> bool:
     )
     if ahead.returncode != 0 or int(ahead.stdout) <= 1:
         return False
+    return not landed(root, tip, f"refs/heads/{UPDATE_BRANCH}")
+
+
+def landed(root: Path, base: str, branch: str) -> bool:
+    """Every file the branch changed already matches the base, as after a squash merge."""
     changed = subprocess.run(
-        ["git", "diff", "--name-only", "-z", span],
+        ["git", "diff", "--name-only", "-z", f"{base}...{branch}"],
         cwd=root,
         capture_output=True,
         text=True,
         check=False,
     )
     names = [name for name in changed.stdout.split("\0") if name]
-    branch = f"refs/heads/{UPDATE_BRANCH}"
-    landed = subprocess.run(
-        ["git", "diff", "--quiet", tip, branch, "--", *names],
-        cwd=root,
-        check=False,
+    if changed.returncode != 0 or not names:
+        return False
+    same = subprocess.run(
+        ["git", "diff", "--quiet", base, branch, "--", *names], cwd=root, check=False
     )
-    return changed.returncode != 0 or not names or landed.returncode != 0
+    return same.returncode == 0
 
 
 def set_update_branch(root: Path, commit: str) -> None:
