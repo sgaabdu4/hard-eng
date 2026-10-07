@@ -1,6 +1,6 @@
 # Check one tree once, keep notes out of package scope, run more checks at once, lighten pre-push and merge by rebase only
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -33,15 +33,15 @@ Authority: The user asked to fix the open issues, chose these changes on 2026-10
 
 ## Acceptance + steps
 
-- [ ] A base-branch push of several rebased commits whose tree equals the merged PR head's tree, with passed required checks, reuses that result → new rebase case in `tests/test_shipping.py`; squash and merge cases keep passing.
-- [ ] A different tree, no merged PR, more than one merged PR, a PR into another base, or a failed or missing required check runs the gates → existing and updated refusal cases.
-- [ ] `docs/notes/x.md` alone selects only the secret scan; the same file under a package's `impact_inputs` selects that package; `site/content/post.md` in a JavaScript package selects it → `tests/test_affected_selection.py`.
-- [ ] `check` keeps up to `os.cpu_count()` parallel checks in flight → runner test.
-- [ ] Pre-push passes the owner-only scope; `check` with it selects changed packages without dependents while ancestor installs and shared checks stay → `tests/test_ship_actions.py`, `tests/test_affected_selection.py`.
-- [ ] A Decimate gate with `--format json --threshold 0 --strict` covers boundaries; one with an extra `--no-boundary-violations` does not → `tests/test_setup.py`.
-- [ ] An installed workflow without `pull-requests: read` gains it on update and then matches the template → `tests/test_ci_setup.py`.
-- [ ] `ship --stage merge` calls `gh pr merge --rebase`; `squash` or `merge` is refused before any GitHub call → `tests/test_ship_actions.py`.
-- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
+- [x] A base-branch push of several rebased commits whose tree equals the merged PR head's tree, with passed required checks, reuses that result → new rebase case in `tests/test_shipping.py`; squash and merge cases keep passing.
+- [x] A different tree, no merged PR, more than one merged PR, a PR into another base, or a failed or missing required check runs the gates → existing and updated refusal cases.
+- [x] `docs/notes/x.md` alone selects only the secret scan; the same file under a package's `impact_inputs` selects that package; `site/content/post.md` in a JavaScript package selects it → `tests/test_affected_selection.py`.
+- [x] `check` keeps up to `os.cpu_count()` parallel checks in flight → runner test.
+- [x] Pre-push passes the owner-only scope; `check` with it selects changed packages without dependents while ancestor installs and shared checks stay → `tests/test_ship_actions.py`, `tests/test_affected_selection.py`.
+- [x] A Decimate gate with `--format json --threshold 0 --strict` covers boundaries; one with an extra `--no-boundary-violations` does not → `tests/test_setup.py`.
+- [x] An installed workflow without `pull-requests: read` gains it on update and then matches the template → `tests/test_ci_setup.py`.
+- [x] `ship --stage merge` calls `gh pr merge --rebase`; `squash` or `merge` is refused before any GitHub call → `tests/test_ship_actions.py`.
+- [x] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
 ## Baseline + execution
 
@@ -51,7 +51,7 @@ Execution: One builder in this worktree.
 
 ## Risks + recovery
 
-A change that breaks a dependent package now fails in CI instead of pre-push, costing one CI round. A non-JavaScript package whose Markdown is build input must list that folder in `impact_inputs`. More parallel checks use more memory at once. A failed GitHub query falls back to the full run. Another workflow that calls the Hard Eng workflow must also grant `pull-requests: read`, or it fails to start. Recovery is reverting this branch.
+A change that breaks a dependent package now fails in CI instead of pre-push, costing one CI round. A non-JavaScript package whose Markdown is build input must list that folder in `impact_inputs`. A JavaScript workspace whose root `.` is itself a package still checks that root for nested notes such as `docs/adr/x.md`. More parallel checks use more memory at once. A failed GitHub query falls back to the full run. Another workflow that calls the Hard Eng workflow must also grant `pull-requests: read`, or it fails to start. Recovery is reverting this branch.
 
 ## ux_reference
 
@@ -59,9 +59,9 @@ N/A — check selection and CI behaviour; no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-Gate: Pending
+Result: Passed
+Evidence: Focused suites for shipping, selection, runner, pre-push, CI setup and Dart config pass. Failure of the new tests against the old code was reasoned from the old conditions, not run. `gh api repos/<repo>/commits/<sha>/pulls` returned the merged PR with `head.sha`, `base.ref` and `merged_at` for a squash merge here and for the tip of a rebase-only repository, whose PR head tree matched. Codex adversarial review (gpt-6-astra), five rounds: round 1 found owner-only pre-push dropping a Fallow cycle partner and older pushed runners rejecting the new flag (both fixed, `test_cross_package_fallow_coverage_owner_must_be_selected_with_its_consumer`, `test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails`); round 2 found Markdown site content losing its build check (user chose to keep nested Markdown in JavaScript packages selecting them); round 3 found the PR lookup needs `pull-requests: read` in private repositories (user approved adding it with a migration); round 4 found the migration could duplicate an existing grant (fixed, `test_workflow_holds_one_pr_permission`); round 5 found no code defect.
+Gate: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` → exit 0, 1226 tests passed, 90.24% line coverage.
 E2E: N/A — the main-branch reuse is a GitHub push run, proven after merge when main prints the reuse line; the pre-push journey is covered by `test_pre_push_tests_committed_code`, which pushes through the real hook.
 
 Delivery target: Merge
