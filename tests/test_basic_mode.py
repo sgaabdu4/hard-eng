@@ -130,6 +130,8 @@ def test_basic_mode_check_impact_and_mutation_run_without_packages(
         ({"CMakeLists.txt": ""}, "C/C++"),
         ({"main.go": "package main\n"}, "Go"),
         ({"deploy.sh": "echo hi\n"}, "this language"),
+        ({"build.sbt": "", "Main.scala": ""}, "this language"),
+        ({"App.fsproj": "", "Program.fs": ""}, "this language"),
     ],
 )
 def test_language_label_comes_from_manifest_or_extension(
@@ -140,6 +142,16 @@ def test_language_label_comes_from_manifest_or_extension(
     for name, content in files.items():
         (root / name).write_text(content)
     assert language_label(root, repository_files(root)) == label
+
+
+def test_scala_project_installs_in_basic_mode_instead_of_asking_for_a_type(
+    installer: ModuleType, repository: Path
+) -> None:
+    (repository / "build.sbt").write_text('name := "app"\n')
+    (repository / "Main.scala").write_text("object Main\n")
+    config = installer.gate_config(repository)
+    assert config["packages"] == []
+    assert roles(config) == ["secrets-files", "secrets-history", "security"]
 
 
 def test_vulnerability_scan_is_omitted_without_an_understood_lockfile(
