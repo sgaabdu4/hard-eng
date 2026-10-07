@@ -932,8 +932,8 @@ def validate_package_services(
                 "Wire check:fallow into this package's gate with a native fallow report; a separate combined scan does not verify that audit"
             )
         dependencies = {
-            **manifest.get("dependencies", {}),
-            **manifest.get("devDependencies", {}),
+            **(manifest.get("dependencies") or {}),
+            **(manifest.get("devDependencies") or {}),
         }
         required = {"react"} if "react" in dependencies else set()
         required.update(

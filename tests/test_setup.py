@@ -125,6 +125,15 @@ def test_python_requires_a_lockfile_unless_a_uv_workspace_member(
         dependency_command(tmp_path / "tools/script", "python")
 
 
+def test_dart_package_with_comment_only_dependencies_is_accepted(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text(
+        "name: stock\ndependencies:\n  # none yet\ndev_dependencies:\n  lints: ^6.0.0\n"
+    )
+    assert dependency_command(tmp_path, "dart")[0] == "dart"
+
+
 def test_existing_python_configuration_still_requires_a_lockfile(
     installer: ModuleType, tmp_path: Path
 ) -> None:
