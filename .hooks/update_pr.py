@@ -182,14 +182,9 @@ def publish(root: Path) -> int:
     lease = replaceable_remote(root, base)
     if lease is None:
         return 1
+    expected = f"--force-with-lease=refs/heads/{UPDATE_BRANCH}:{lease}"
     subprocess.run(
-        [
-            "git",
-            "push",
-            f"--force-with-lease=refs/heads/{UPDATE_BRANCH}:{lease}",
-            "origin",
-            UPDATE_BRANCH,
-        ],
+        ["git", "push", expected, "origin", UPDATE_BRANCH],
         cwd=root,
         check=True,
     )
