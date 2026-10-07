@@ -118,9 +118,18 @@ def restore_note(root: Path) -> str:
 
 
 def use_own_hooks(candidate: Path) -> None:
-    """Drop the hooks path `git worktree add` copied from the calling worktree."""
+    """Drop an absolute hooks path `git worktree add` copied from the calling worktree."""
     where = ["git", "rev-parse", "--git-path", "config.worktree"]
     config = subprocess.check_output(where, cwd=candidate, text=True).strip()
-    unset = ["git", "config", "--file", config, "--unset-all", "core.hooksPath"]
-    if subprocess.run(unset, cwd=candidate, check=False).returncode not in {0, 5}:
-        raise subprocess.SubprocessError("could not clear the candidate's hooks path")
+    setting = ["git", "config", "--file", config]
+    found = subprocess.run(
+        [*setting, "--get-all", "core.hooksPath"],
+        cwd=candidate,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.splitlines()
+    if any(Path(path).expanduser().is_absolute() for path in found):
+        subprocess.run(
+            [*setting, "--unset-all", "core.hooksPath"], cwd=candidate, check=True
+        )
