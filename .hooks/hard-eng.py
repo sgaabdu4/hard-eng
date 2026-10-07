@@ -722,6 +722,36 @@ def plan_base(base: str | None, plan_stage: str | None) -> str | None:
     return point
 
 
+QUICK_ROLES = frozenset(
+    {
+        "format",
+        "lint",
+        "format-lint",
+        "types",
+        "annotations",
+        "typing-style",
+        "imports",
+        "tests",
+        "focused-tests",
+        "secrets-files",
+    }
+)
+
+
+def quick_groups(groups: list[Group], quick: bool = True) -> list[Group]:
+    if not quick:
+        return groups
+    return [
+        {
+            **group,
+            "checks": [
+                gate for gate in group["checks"] if gate.get("role") in QUICK_ROLES
+            ],
+        }
+        for group in groups
+    ]
+
+
 def check(
     timeout: float | None = None,
     base: str | None = None,
@@ -730,6 +760,7 @@ def check(
     verify_plan: bool = True,
     dependents: bool = True,
     related_tests: bool = False,
+    quick: bool = False,
 ) -> int:
     from gate_config import load_groups, parse_config
 
@@ -740,6 +771,7 @@ def check(
 
     with check_lock(ROOT):
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
+        groups = quick_groups(groups, quick)
         timeout = timeout or gate_timeout(ROOT)
         from comments import validate_comments
         from plans import report_stage, validate_plans
@@ -836,6 +868,11 @@ def main() -> int:
         action="store_true",
         help="Run only JavaScript tests related to the change; CI runs them all",
     )
+    checks.add_argument(
+        "--quick",
+        action="store_true",
+        help="Run only format, lint, types, tests and the file secret scan, with related JavaScript tests; the Stop hook uses it",
+    )
     impacts = commands.add_parser(
         "impact", help="Print docs_only=true when only the secret scan applies"
     )
@@ -886,7 +923,8 @@ def main() -> int:
             base=args.base,
             plan_stage=args.plan_stage,
             dependents=not args.without_dependents,
-            related_tests=args.related_tests,
+            related_tests=args.related_tests or args.quick,
+            quick=args.quick,
         )
     if args.command == "impact":
         return impact(args.base)
