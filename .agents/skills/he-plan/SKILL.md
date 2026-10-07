@@ -31,6 +31,7 @@ flowchart TD
 ## Plan + questions
 
 - Tracked evidence = apply [publication privacy](../he-ship/references/checks.md#publication-privacy) before writing plans or attaching evidence.
+- Small = `check` decides by script, from the whole branch against its merge base (see README, Plan); a small change needs no plan, but a plan you write is still validated. Never mark a change small yourself.
 - Both sizes = [PLAN.md](templates/PLAN.md); one plan per effort at root or `features/<slug>/PLAN.md` (filename case-insensitive). Reuse it. Write brief fields + `behavior → proof` checkboxes, not narrative paragraphs; link detailed evidence instead of copying it. Fill every section; `N/A — reason` must follow repository facts. Unavailable tools, failed checks + missing proof are blockers, never N/A.
 - Questions = inspect repository facts first; ask only user-dependent choices that can change outcome, UX, scope or material risk. Resolve prerequisite choices first; batch independent questions with a recommendation + consequences. Never supply the human's answer or treat silence as approval. Clear request → no ritual interview.
 - Setup/adoption/update = follow [integration setup](../he/references/integrations.md) for intended services, hosting, existing choices and real host readiness; greenfield imports alone cannot identify future integrations. New Flutter app = Riverpod per [Building Flutter Apps](../building-flutter-apps/SKILL.md).

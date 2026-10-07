@@ -5,11 +5,13 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from types import ModuleType
 
 import pytest
-from conftest import SOURCE, git
+from conftest import SOURCE, commit, git
 from gate_config import GateConfig
 from plans import planning_feedback, ux_proof, validate_plan, validate_plans
 from shipping import ShippingPolicy
@@ -851,3 +853,115 @@ def test_draft_plan_for_later_work_rides_along_with_finished_work(
     finished.parent.mkdir(parents=True)
     finished.write_text(completed_plan)
     assert validate_plans(tmp_path) == "Complete"
+
+
+def sized_branch(root: Path) -> None:
+    git(root, "branch", "-M", "main")
+    (root / ".github/workflows").mkdir(parents=True)
+    (root / "tests").mkdir()
+    for name in ("a.py", "b.py", "c.py", "d.py", "tests/test_a.py", "uv.lock"):
+        (root / name).write_text("".join(f"line {n}\n" for n in range(30)))
+    (root / ".github/workflows/ci.yml").write_text("name: ci\n")
+    (root / "image.bin").write_bytes(b"\x00\x01\x02")
+    commit(root, "base")
+    git(root, "switch", "-qc", "work")
+
+
+def edit(root: Path, name: str, count: int) -> None:
+    lines = (root / name).read_text().splitlines()
+    lines[:count] = [f"changed {n}" for n in range(count)]
+    (root / name).write_text("\n".join(lines) + "\n")
+
+
+def test_small_change_needs_no_plan(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    edit(repository, "a.py", 2)
+    validate_plans(repository)
+    assert "Size: small (1 file, 4 changed lines); no plan needed." in (
+        capsys.readouterr().out
+    )
+
+
+def test_documentation_only_change_needs_no_plan(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    (repository / "notes.md").write_text("notes\n" * 50)
+    validate_plans(repository)
+    assert "Size: small (documentation only)" in capsys.readouterr().out
+
+
+def two_commits_then_edit(root: Path) -> None:
+    edit(root, "a.py", 6)
+    commit(root, "first half")
+    edit(root, "b.py", 6)
+
+
+def new_file(root: Path) -> None:
+    (root / "new.py").write_text("x = 1\n")
+
+
+def deleted_file(root: Path) -> None:
+    (root / "d.py").unlink()
+
+
+def binary_file(root: Path) -> None:
+    (root / "image.bin").write_bytes(b"\x00\x03\x04")
+
+
+def removed_test_line(root: Path) -> None:
+    edit(root, "tests/test_a.py", 1)
+
+
+def four_files(root: Path) -> None:
+    for name in ("a.py", "b.py", "c.py", "d.py"):
+        edit(root, name, 1)
+
+
+BIG_CHANGES = [
+    (partial(edit, name="a.py", count=11), "it changes 22 lines"),
+    (four_files, "it changes 4 files"),
+    (new_file, "it adds, deletes or renames a file"),
+    (deleted_file, "it adds, deletes or renames a file"),
+    (binary_file, "it changes the binary file image.bin"),
+    (
+        partial(edit, name="uv.lock", count=1),
+        "it changes uv.lock, which always needs a plan",
+    ),
+    (
+        partial(edit, name=".github/workflows/ci.yml", count=1),
+        "it changes .github/workflows/ci.yml, which always needs a plan",
+    ),
+    (removed_test_line, "it removes lines from the test file tests/test_a.py"),
+    (two_commits_then_edit, "it changes 24 lines"),
+]
+
+
+@pytest.mark.parametrize(("change", "reason"), BIG_CHANGES)
+def test_big_change_still_needs_a_plan_and_names_why(
+    repository: Path,
+    capsys: pytest.CaptureFixture[str],
+    change: Callable[[Path], object],
+    reason: str,
+) -> None:
+    sized_branch(repository)
+    change(repository)
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+    assert f"Size: big, because {reason}" in capsys.readouterr().out
+
+
+def test_unknown_branch_point_is_big(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    git(repository, "branch", "-m", "work", "other")
+    git(repository, "branch", "-D", "main")
+    edit(repository, "a.py", 1)
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+    assert "the branch point with the default branch cannot be found" in (
+        capsys.readouterr().out
+    )
