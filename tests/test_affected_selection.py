@@ -1,12 +1,15 @@
 """Affected selection checks the packages a change reaches and nothing else."""
 
 import json
+import sys
 from pathlib import Path
 from types import ModuleType
 
+import gate_config
 import pytest
+import shipping
 import update
-from conftest import commit, git
+from conftest import commit, git, plan_document
 from gate_config import Gate, Group, affected_groups, parse_config
 
 
@@ -394,3 +397,48 @@ def test_input_selection_reads_native_git_paths(repository: Path, change: str) -
         *expected,
         ".",
     ]
+
+
+def _no_requirements(_root: Path, _config: object) -> None:
+    return None
+
+
+@pytest.mark.parametrize(
+    ("plan_stage", "point", "failed"),
+    [("Draft", True, False), ("Draft", False, True), (None, True, True)],
+)
+def test_plan_stage_check_skips_packages_unchanged_since_a_passed_branch_point(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    plan_stage: str | None,
+    point: bool,
+    failed: bool,
+) -> None:
+    failing = {
+        "name": "fails",
+        "command": [sys.executable, "-c", "raise SystemExit(2)"],
+    }
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg/source.py").write_text("value = 1\n")
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [{"path": "pkg", "checks": [failing], "depends_on": []}],
+                "shared": [],
+            }
+        )
+    )
+    monkeypatch.setattr(gate_config, "validate_required_checks", _no_requirements)
+    git(tmp_path, "config", "user.name", "Fixture")
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    head = commit(tmp_path, "main")
+    (tmp_path / "PLAN.md").write_text(plan_document().replace("Complete", "Draft", 1))
+
+    def passed(_root: Path) -> str | None:
+        return head if point else None
+
+    monkeypatch.setattr(shipping, "passed_branch_point", passed)
+    assert runner.check(plan_stage=plan_stage) == int(failed)
+    assert ("FAIL fails" in capsys.readouterr().out) is failed
