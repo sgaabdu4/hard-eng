@@ -596,7 +596,12 @@ def test_shipping_rejects_stale_install_before_remote_action(
 @pytest.mark.parametrize(
     ("origin", "warned", "scope"),
     [
-        ("git@github.com:owner/repo.git", True, ["--without-dependents"]),
+        (
+            "git@github.com:owner/repo.git",
+            True,
+            ["--without-dependents", "--related-tests"],
+        ),
+        ("https://github.com/owner/repo.git", False, ["--without-dependents"]),
         ("https://github.com/owner/repo.git", False, []),
     ],
 )

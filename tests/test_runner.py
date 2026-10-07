@@ -282,9 +282,7 @@ def test_each_gate_may_use_the_configured_budget(
     monkeypatch.setenv("CI", ci)
     timeouts: list[float] = []
 
-    def run_gate(
-        _group: object, _gate: object, timeout: float, _lock: object, _groups: object
-    ) -> bool:
+    def run_gate(_group: object, _gate: object, timeout: float, *_rest: object) -> bool:
         timeouts.append(timeout)
         return False
 
