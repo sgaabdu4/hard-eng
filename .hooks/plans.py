@@ -428,44 +428,59 @@ def default_branch_point(root: Path) -> str | None:
     return None
 
 
-def size_verdict(root: Path) -> tuple[bool, str]:
-    """Whether the whole branch change, not just this session's, is small, and the first reason."""
-    point = default_branch_point(root)
-    if point is None:
-        return False, "the branch point with the default branch cannot be found"
-    try:
-        status = _git_output(
-            root, "diff", "--name-status", "--no-renames", "-z", point, "--"
-        ).split("\0")
-        counts = _git_output(
-            root, "diff", "--numstat", "--no-renames", "-z", point, "--"
-        ).split("\0")
-        untracked = _git_output(
-            root, "ls-files", "--others", "--exclude-standard", "-z"
-        ).split("\0")
-    except (subprocess.CalledProcessError, OSError):
-        return False, "the change cannot be measured"
-    names = {name for name in status[1::2] + untracked if name}
-    if all(is_documentation(Path(name)) for name in names):
-        return True, "documentation only"
+def _branch_change(root: Path, point: str) -> tuple[list[str], list[str], list[str]]:
+    status = _git_output(
+        root, "diff", "--name-status", "--no-renames", "-z", point, "--"
+    ).split("\0")
+    counts = _git_output(
+        root, "diff", "--numstat", "--no-renames", "-z", point, "--"
+    ).split("\0")
+    untracked = _git_output(
+        root, "ls-files", "--others", "--exclude-standard", "-z"
+    ).split("\0")
+    return status, counts, untracked
 
-    def counted(name: str) -> bool:
-        return not is_documentation(Path(name)) or _is_protected(PurePosixPath(name))
 
-    names = {name for name in names if counted(name)}
-    if any(
-        kind[:1] in {"A", "D", "T"} and name in names
-        for kind, name in zip(status[0::2], status[1::2], strict=False)
-    ) or any(name in names for name in untracked):
-        return False, "it adds, deletes or renames a file"
+def _counted_lines(counts: list[str], names: set[str]) -> int | str:
+    """Changed lines in the counted files, or the first reason one of them needs a plan."""
     total = 0
     for entry in filter(None, counts):
         added, removed, name = entry.split("\t", 2)
         if name not in names:
             continue
         if reason := _file_reason(name, added, removed):
-            return False, reason
+            return reason
         total += int(added) + int(removed)
+    return total
+
+
+def size_verdict(root: Path) -> tuple[bool, str]:
+    """Whether the whole branch change, not just this session's, is small, and the first reason."""
+    point = default_branch_point(root)
+    if point is None:
+        return False, "the branch point with the default branch cannot be found"
+    try:
+        status, counts, untracked = _branch_change(root, point)
+    except (subprocess.CalledProcessError, OSError):
+        return False, "the change cannot be measured"
+    names = {name for name in status[1::2] + untracked if name}
+    if all(is_documentation(Path(name)) for name in names):
+        return True, "documentation only"
+
+    names = {
+        name
+        for name in names
+        if not is_documentation(Path(name)) or _is_protected(PurePosixPath(name))
+    }
+    if any(
+        kind[:1] in {"A", "D", "T"} and name in names
+        for kind, name in zip(status[0::2], status[1::2], strict=False)
+    ) or any(name in names for name in untracked):
+        return False, "it adds, deletes or renames a file"
+    counted = _counted_lines(counts, names)
+    if isinstance(counted, str):
+        return False, counted
+    total = counted
     if len(names) > MAX_SMALL_FILES:
         return False, f"it changes {len(names)} files, more than {MAX_SMALL_FILES}"
     if total > MAX_SMALL_LINES:
