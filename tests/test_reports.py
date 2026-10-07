@@ -2,8 +2,10 @@
 
 import io
 import json
+import os
 import subprocess
 import sys
+import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from types import ModuleType
@@ -735,3 +737,90 @@ def test_gate_rejects_tolerated_or_suppressed_findings(
 )
 def test_gate_accepts_strict_scanner_commands(tmp_path: Path, command: str) -> None:
     validate_gate({"name": "scan", "command": command.split()}, tmp_path, set())
+
+
+@pytest.mark.parametrize(
+    ("script", "kind", "expected"),
+    [
+        (
+            "vitest run --coverage",
+            "lcov-tests",
+            ["--changed", "b", "--coverage.enabled=false", "--passWithNoTests"],
+        ),
+        (
+            "jest --coverage",
+            "lcov-tests",
+            ["--changedSince=b", "--coverage=false", "--passWithNoTests"],
+        ),
+        ("vitest run && node check.js", "lcov-tests", []),
+        ("node --test", "lcov-tests", []),
+        ("vitest run --coverage", "python-tests", []),
+    ],
+)
+def test_related_test_flags_follow_the_native_runner(
+    tmp_path: Path, script: str, kind: str, expected: list[str]
+) -> None:
+    (tmp_path / "package.json").write_text(
+        json.dumps({"scripts": {"test:coverage": script}})
+    )
+    tests: Gate = {
+        "name": "tests",
+        "role": "tests",
+        "command": ["pnpm", "run", "test:coverage"],
+        "report": {"type": kind},
+    }
+    group: Group = {"path": ".", "checks": [tests]}
+    assert reports.related_test_flags(tests, [group], tmp_path, "b") == expected
+    scan: Gate = {
+        "name": "scan",
+        "command": ["pnpm", "run", "check:fallow"],
+        "report": {"type": "fallow", "path": "coverage/fallow.json"},
+    }
+    other: Group = {"path": "web", "checks": [scan]}
+    assert reports.related_test_flags(tests, [group, other], tmp_path, "b") == []
+
+
+@pytest.mark.parametrize(
+    ("related", "fails", "failed"), [("b", 0, False), ("b", 1, True), (None, 0, True)]
+)
+def test_related_tests_skip_coverage_but_keep_failures(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    related: str | None,
+    fails: int,
+    failed: bool,
+) -> None:
+    tool = tmp_path / "bin/vitest"
+    tool.parent.mkdir()
+    tool.write_text(
+        f"#!{sys.executable}\nimport sys, pathlib\n"
+        "pathlib.Path('args.txt').write_text(' '.join(sys.argv[1:]))\n"
+        "pathlib.Path('coverage').mkdir(exist_ok=True)\n"
+        "pathlib.Path('coverage/junit.xml').write_text('<testsuites tests=\"0\"/>')\n"
+        f"raise SystemExit({fails})\n"
+    )
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool.parent}:{os.environ['PATH']}")
+    tests: Gate = {
+        "name": "tests",
+        "role": "tests",
+        "command": ["vitest", "run", "--coverage"],
+        "report": {
+            "type": "lcov-tests",
+            "tests": "coverage/junit.xml",
+            "coverage": "coverage/lcov.info",
+        },
+    }
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/a.js").write_text("export const a = 1;\n")
+    group: Group = {
+        "path": ".",
+        "language": "javascript",
+        "sources": ["src"],
+        "checks": [tests],
+    }
+    lock = threading.Lock()
+    assert runner.run_gate(group, tests, 30, lock, [group], related) is failed
+    flags = "--changed b --coverage.enabled=false --passWithNoTests"
+    assert (flags in (tmp_path / "args.txt").read_text()) is (related is not None)

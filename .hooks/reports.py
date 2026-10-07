@@ -12,7 +12,8 @@ from coverage_sources import erased_typescript
 from dart_coverage import erased_dart
 from dart_test_report import dart_events, failure_summary
 from fallow_report import validate_fallow
-from gate_config import JsonObject
+from gate_config import Gate, Group, JsonObject
+from project_setup import package_script_arguments
 
 
 def dart_test_failure(
@@ -43,6 +44,46 @@ def parallel_hint(code: int, tests: bool, command: list[str]) -> str:
         "\nThese tests ran in parallel (-n auto). If they pass serially, isolate "
         "the state they share, or set -n 0 in this gate's command."
     )
+
+
+def related_test_flags(
+    gate: Gate, groups: list[Group], directory: Path, base: str
+) -> list[str]:
+    """Native related-test flags for a pre-push JavaScript test gate, else none."""
+    if gate.get("report", {}).get("type") != "lcov-tests":
+        return []
+    # A Fallow gate run through a package script may read this run's coverage.
+    if any(
+        other.get("report", {}).get("type") == "fallow"
+        and other["command"][:2] == ["pnpm", "run"]
+        for selected in groups
+        for other in selected["checks"]
+    ):
+        return []
+    arguments = package_script_arguments(gate["command"], directory)
+    if any(re.search(r"[;&|]", argument) for argument in arguments):
+        return []
+    runner = Path(arguments[0]).name
+    if runner == "vitest":
+        return ["--changed", base, "--coverage.enabled=false", "--passWithNoTests"]
+    if runner == "jest":
+        return [f"--changedSince={base}", "--coverage=false", "--passWithNoTests"]
+    return []
+
+
+def related_command(
+    command: list[str],
+    coverage: Path | None,
+    gate: Gate,
+    groups: list[Group],
+    directory: Path,
+    base: str | None,
+) -> tuple[list[str], Path | None]:
+    flags: list[str] = related_test_flags(gate, groups, directory, base) if base else []
+    if not flags:
+        return command, coverage
+    print("Related tests only; CI runs the full suite and coverage.")
+    return [*command, *flags], None
 
 
 def validate_scanner_log(scanner: str | None, log: TextIO) -> None:

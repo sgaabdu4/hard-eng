@@ -495,6 +495,7 @@ def run_gate(
     timeout: float,
     output_lock: AbstractContextManager[object],
     groups: list[Group] | None = None,
+    related_base: str | None = None,
 ) -> bool:
     started = time.monotonic()
     print(f"CHECK {group['path']}/{gate['name']}", flush=True)
@@ -508,7 +509,12 @@ def run_gate(
                 f"COVERED {gate['name']} by selected child checks; elapsed {time.monotonic() - started:.3f}s"
             )
             return False
-        from reports import SCANNERS, emit_dart_test_failure, validate_scanner_log
+        from reports import (
+            SCANNERS,
+            emit_dart_test_failure,
+            related_command,
+            validate_scanner_log,
+        )
 
         report = gate.get("report", {})
         kind = report.get("type", "")
@@ -533,6 +539,9 @@ def run_gate(
             report_path, coverage_path, directory, expected_sources = prepare_reports(
                 group, report, kind, tests, scanner, command
             )
+        command, coverage_path = related_command(
+            command, coverage_path, gate, groups or [group], directory, related_base
+        )
         capture = (tests and kind == "dart-tests" and report.get("stdout", True)) or (
             scanner and report.get("stdout") is True
         )
@@ -580,6 +589,7 @@ def run_gate(
         if (
             result.returncode == 0
             and tests
+            and coverage_path is not None
             and report_path is not None
             and not completed_tests(report_path, kind)
         ):
@@ -705,6 +715,7 @@ def check(
     *,
     verify_plan: bool = True,
     dependents: bool = True,
+    related_tests: bool = False,
 ) -> int:
     from gate_config import load_groups, parse_config
 
@@ -724,6 +735,7 @@ def check(
         validate_comments(ROOT, base)
         provision_tools(ROOT, groups, timeout)
         output_lock = threading.Lock()
+        related = base if related_tests else None
 
         failed = False
         pending: set[Future[bool]] = set()
@@ -739,13 +751,17 @@ def check(
                         for future in done:
                             failed |= future.result()
                     pending.add(
-                        pool.submit(run_gate, group, gate, timeout, output_lock, groups)
+                        pool.submit(
+                            run_gate, group, gate, timeout, output_lock, groups, related
+                        )
                     )
                 else:
                     for future in pending:
                         failed |= future.result()
                     pending.clear()
-                    result = run_gate(group, gate, timeout, output_lock, groups)
+                    result = run_gate(
+                        group, gate, timeout, output_lock, groups, related
+                    )
                     failed |= result
                     if result and gate.get("role") == "lockfiles":
                         print("Dependency setup failed; remaining checks were not run.")
@@ -801,6 +817,11 @@ def main() -> int:
         action="store_true",
         help="Check changed packages only; CI checks their dependents",
     )
+    checks.add_argument(
+        "--related-tests",
+        action="store_true",
+        help="Run only JavaScript tests related to the change; CI runs them all",
+    )
     impacts = commands.add_parser(
         "impact", help="Print docs_only=true when only the secret scan applies"
     )
@@ -851,6 +872,7 @@ def main() -> int:
             base=args.base,
             plan_stage=args.plan_stage,
             dependents=not args.without_dependents,
+            related_tests=args.related_tests,
         )
     if args.command == "impact":
         return impact(args.base)
