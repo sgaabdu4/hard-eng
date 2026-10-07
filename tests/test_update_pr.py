@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -137,29 +138,22 @@ def test_background_update_keeps_an_update_branch_being_fixed(
     assert "unfinished work" in (target / update_runner.RESULT_FILE).read_text()
 
 
-def test_update_after_a_rebase_merged_fix_prepares_the_next_release(
-    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, _ = feature
-    newer_release(source, monkeypatch, "first update")
-    assert update_runner.apply_update(target) == 0
-    fix_update_branch(target)
-    git(target, "worktree", "remove", "--force", str(target.parent / "fixing"))
-    landing = target.parent / "landing"
-    git(target, "worktree", "add", "-q", "--detach", str(landing), "origin/main")
+def rebase_merge(landing: Path) -> None:
     (landing / "moved.txt").write_text("base moved\n")
     commit(landing, "base moved")
     git(landing, "cherry-pick", f"{BRANCH}~1", BRANCH)
-    git(landing, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", "HEAD:main")
-    git(target, "worktree", "remove", "--force", str(landing))
-    second = newer_release(source, monkeypatch, "second update")
-    assert update_runner.apply_update(target) == 0
-    assert "unfinished work" not in (target / update_runner.RESULT_FILE).read_text()
-    assert second in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
 
 
-def test_update_after_a_squash_merged_fix_prepares_the_next_release(
-    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+def squash_merge(landing: Path) -> None:
+    git(landing, "merge", "-q", "--squash", BRANCH)
+    commit(landing, "Update Hard Eng (#1)")
+
+
+@pytest.mark.parametrize("merge", [rebase_merge, squash_merge])
+def test_update_after_a_merged_fix_prepares_the_next_release(
+    feature: tuple[Path, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    merge: Callable[[Path], None],
 ) -> None:
     source, target, _ = feature
     newer_release(source, monkeypatch, "first update")
@@ -168,8 +162,7 @@ def test_update_after_a_squash_merged_fix_prepares_the_next_release(
     git(target, "worktree", "remove", "--force", str(target.parent / "fixing"))
     landing = target.parent / "landing"
     git(target, "worktree", "add", "-q", "--detach", str(landing), "origin/main")
-    git(landing, "merge", "-q", "--squash", BRANCH)
-    commit(landing, "Update Hard Eng (#1)")
+    merge(landing)
     git(landing, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", "HEAD:main")
     git(target, "worktree", "remove", "--force", str(landing))
     second = newer_release(source, monkeypatch, "second update")
