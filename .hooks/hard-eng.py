@@ -903,6 +903,10 @@ def main() -> int:
     updating.add_argument(
         "--apply", action="store_true", help="Run inside the supervising update process"
     )
+    commands.add_parser(
+        "update-pr",
+        help="Push the prepared Hard Eng update branch, open its PR and turn on auto-merge",
+    ).set_defaults(apply=False)
     shipping = commands.add_parser(
         "ship", help="Verify PR delivery or perform guarded shipping actions"
     )
@@ -940,10 +944,10 @@ def main() -> int:
         from ship_actions import mutate
 
         return mutate(ROOT, args.base, args.seconds, args.in_place, production_files)
-    if args.command == "update":
-        from update_runner import apply_update, run_update
+    if args.command in {"update", "update-pr"}:
+        from update_runner import update_main
 
-        return apply_update(ROOT) if args.apply else run_update(ROOT)
+        return update_main(ROOT, args.command == "update-pr", args.apply)
     if args.command == "ship":
         from ship_actions import run
 
