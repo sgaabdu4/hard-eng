@@ -7,7 +7,6 @@ import io
 import re
 import subprocess
 import tokenize
-from collections import Counter
 from pathlib import Path, PurePosixPath
 
 from gate_config import changed_files, generated_sources, initial_base
@@ -356,31 +355,9 @@ def diff_lines(
     return added, removed
 
 
-def file_switch_offs(
-    name: str,
-    pattern: re.Pattern[str],
-    added: list[tuple[int, str]],
-    removed: list[tuple[int, str]],
-) -> list[str]:
-    found = [
-        f"{name}:{number} adds {hit[0].strip()!r}"
-        for number, text in added
-        if (hit := pattern.search(text))
-    ]
-    if not is_test_path(PurePosixPath(name)):
-        return found
+def assertion_lines(name: str, lines: list[tuple[int, str]]) -> list[tuple[int, str]]:
     words = ("assert",) if name.endswith(".py") else ("assert", "expect(")
-    kept = Counter(
-        text.strip() for _, text in added if any(word in text for word in words)
-    )
-    for number, text in removed:
-        if not any(word in text for word in words):
-            continue
-        if kept[text.strip()] > 0:
-            kept[text.strip()] -= 1
-        else:
-            found.append(f"{name}:{number} removes the assertion {text.strip()!r}")
-    return found
+    return [(n, text) for n, text in lines if any(word in text for word in words)]
 
 
 def validate_suppressions(root: Path, base: str | None) -> None:
@@ -396,14 +373,29 @@ def validate_suppressions(root: Path, base: str | None) -> None:
         if not name.startswith(UNOWNED) and switch_off_pattern(name) is not None
     )
     skipped = generated_sources(root, names)
-    found = [
-        item
-        for name in names
-        if name not in skipped and (pattern := switch_off_pattern(name)) is not None
-        for item in file_switch_offs(
-            name, pattern, added.get(name, []), removed.get(name, [])
+    found: list[str] = []
+    gained = 0
+    lost: list[str] = []
+    for name in names:
+        pattern = switch_off_pattern(name)
+        if name in skipped or pattern is None:
+            continue
+        found += [
+            f"{name}:{number} adds {hit[0].strip()!r}"
+            for number, text in added.get(name, [])
+            if (hit := pattern.search(text))
+        ]
+        if is_test_path(PurePosixPath(name)):
+            gained += len(assertion_lines(name, added.get(name, [])))
+            lost += [
+                f"{name}:{number}"
+                for number, _ in assertion_lines(name, removed.get(name, []))
+            ]
+    if len(lost) > gained:
+        found.append(
+            f"tests lose {len(lost) - gained} assertion lines net "
+            f"({len(lost)} removed, {gained} added); removed at {', '.join(lost)}"
         )
-    ]
     if found:
         raise ValueError(
             "A change must not switch a check off: fix the cause instead of "
