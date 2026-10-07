@@ -177,6 +177,8 @@ flowchart TD
 
 Prefer fixing the existing invariant, test, checker, or hook. A skill change is a last resort when executable prevention cannot cover the problem. A failed or unavailable prevention test remains an explicit gap.
 
+Each decision record in `docs/adr/` carries an `Applies to:` line of path prefixes. When a session changes a file under an Accepted record's prefix, the Stop hook shows that record's Decision once and asks the agent to confirm the change follows it; `check` flags records without the line and records whose last file a change deletes.
+
 ## The gate contract
 
 Hard Eng discovers supported packages, including monorepos. Each project's `hard-eng.gates.json` supplies commands, reports, budgets, and package relationships. Missing required roles fail configuration; conditional checks apply when the relevant capability is present.

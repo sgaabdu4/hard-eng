@@ -1,6 +1,7 @@
 # 0001 — Learning checkpoints and durable decisions
 
 Status: Accepted
+Applies to: `.agents/skills/he-learn/`, `.hooks/agent_hooks.py`
 
 ## Context
 

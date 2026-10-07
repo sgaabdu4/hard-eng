@@ -774,12 +774,13 @@ def check(
         groups = quick_groups(groups, quick)
         timeout = timeout or gate_timeout(ROOT)
         from comments import validate_comments, validate_suppressions
-        from plans import report_stage, validate_plans
+        from plans import report_stage, validate_decisions, validate_plans
 
         if verify_plan:
             plan_stage = validate_plans(ROOT, base, plan_stage)
         validate_comments(ROOT, base)
         validate_suppressions(ROOT, base)
+        validate_decisions(ROOT, base)
         provision_tools(ROOT, groups, timeout)
         output_lock = threading.Lock()
         related = base if related_tests else None
