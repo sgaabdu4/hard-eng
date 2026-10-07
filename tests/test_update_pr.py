@@ -158,6 +158,11 @@ def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
     target = apply_first_update(feature, monkeypatch)
     assert publish(target, monkeypatch) == 0
     gh.pulls[0]["statusCheckRollup"] = [
+        {"name": "a", "status": "COMPLETED", "conclusion": "SKIPPED"}
+    ]
+    assert publish(target, monkeypatch) == 0
+    assert "pr merge" not in gh.verbs()
+    gh.pulls[0]["statusCheckRollup"] = [
         {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"},
         {"name": "b", "status": "IN_PROGRESS", "conclusion": ""},
     ]
@@ -199,8 +204,11 @@ def test_update_pr_waits_for_the_configured_shipping_checks(
     assert publish(target, monkeypatch) == 0
     assert "pr merge" not in gh.verbs()
     gh.pulls[0]["statusCheckRollup"].append(
-        {"name": "gate", "status": "COMPLETED", "conclusion": "SUCCESS"}
+        {"name": "gate", "status": "COMPLETED", "conclusion": "SKIPPED"}
     )
+    assert publish(target, monkeypatch) == 1
+    assert "pr merge" not in gh.verbs()
+    gh.pulls[0]["statusCheckRollup"][-1]["conclusion"] = "SUCCESS"
     assert publish(target, monkeypatch) == 0
     assert "pr merge" in gh.verbs()
 
