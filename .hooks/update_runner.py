@@ -749,8 +749,9 @@ def unfinished_update(root: Path, tip: str) -> bool:
 
 def landed(root: Path, base: str, branch: str) -> bool:
     """Every file the branch changed already matches the base, as after a squash merge."""
+    span = f"{base}...{branch}"
     changed = subprocess.run(
-        ["git", "diff", "--name-only", "-z", f"{base}...{branch}"],
+        ["git", "diff", "--name-only", "-z", span],
         cwd=root,
         capture_output=True,
         text=True,
