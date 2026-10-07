@@ -187,8 +187,11 @@ def test_update_pr_waits_for_the_configured_shipping_checks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     target = apply_first_update(feature, monkeypatch)
-    policy = {"shipping": {"base": "main", "checks": ["gate"], "ui_paths": []}}
-    monkeypatch.setattr(update_pr, "load_policy", lambda *_a, **_k: policy["shipping"])
+    monkeypatch.setattr(
+        update_pr,
+        "load_policy",
+        Mock(return_value={"base": "main", "checks": ["gate"]}),
+    )
     assert publish(target, monkeypatch) == 0
     gh.pulls[0]["statusCheckRollup"] = [
         {"name": "other", "status": "COMPLETED", "conclusion": "SUCCESS"}
