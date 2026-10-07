@@ -613,8 +613,6 @@ def exclusive(handle: TextIO) -> bool:
 
 
 def locked_update(root: Path, repair: bool = False) -> str:
-    from update import update
-
     if (blocker := update_blocker(root)) is not None:
         return blocker
     with lock_file(root).open("a") as handle:
@@ -624,7 +622,7 @@ def locked_update(root: Path, repair: bool = False) -> str:
                 "wait for its result instead of starting another"
             )
         remove_stale_candidates(root)
-        return update(root, repair)
+        return prepare_update(root, repair)
 
 
 def update_attempt(root: Path, revision: str) -> str:
@@ -760,7 +758,7 @@ def set_update_branch(root: Path, commit: str) -> None:
     )
 
 
-def prepare_update(root: Path) -> str:
+def prepare_update(root: Path, repair: bool = False) -> str:
     """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
     from update import latest_verified, update
 
@@ -795,7 +793,7 @@ def prepare_update(root: Path) -> str:
             check=True,
         )
         try:
-            outcome = update(candidate, remember=root)
+            outcome = update(candidate, repair, remember=root)
             revision = installed_revision(candidate)
             landed = landed_commit(candidate, tip, f"Update Hard Eng to {revision}")
         finally:
