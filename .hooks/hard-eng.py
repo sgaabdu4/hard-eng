@@ -609,7 +609,7 @@ def run_gate(
         print(
             f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} "
             f"(exit {result.returncode}; elapsed {time.monotonic() - started:.3f}s)"
-            + parallel_hint(result.returncode, tests, command),
+            f" @ {group['path']}" + parallel_hint(result.returncode, tests, command),
             flush=True,
         )
         return result.returncode != 0
@@ -624,6 +624,7 @@ def run_gate(
     ) as error:
         print(
             f"FAIL {gate['name']}: {error}; elapsed {time.monotonic() - started:.3f}s"
+            f" @ {group['path']}"
         )
         return True
 
