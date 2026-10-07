@@ -29,10 +29,27 @@ FAILED = {
 }
 SKIPPED = {"SKIPPED", "NEUTRAL", "STALE"}
 BODY = (
-    "Prepared by Hard Eng. It merges by rebase once its checks pass, when update-pr is run "
+    "Prepared by Hard Eng. It merges once its checks pass, when update-pr is run "
     "again; a failing check is fixed on this branch before other shipping."
 )
+MERGE_METHODS = (
+    ("rebaseMergeAllowed", "--rebase"),
+    ("squashMergeAllowed", "--squash"),
+    ("mergeCommitAllowed", "--merge"),
+)
 GENERATED = re.compile(r"Update Hard Eng to [0-9a-f]+")
+
+
+def merge_method(root: Path) -> str:
+    allowed = json.loads(
+        gh(root, "repo", "view", "--json", ",".join(name for name, _ in MERGE_METHODS))
+    )
+    if not isinstance(allowed, dict):
+        raise ShippingError("repository merge settings must be an object")
+    for name, flag in MERGE_METHODS:
+        if allowed.get(name) is True:
+            return flag
+    raise ShippingError("the repository allows no merge method")
 
 
 def open_pull(root: Path) -> dict[str, JsonValue] | None:
@@ -229,7 +246,7 @@ def publish(root: Path) -> int:
             "merge",
             url,
             "--auto",
-            "--rebase",
+            merge_method(root),
             "--match-head-commit",
             head,
         )

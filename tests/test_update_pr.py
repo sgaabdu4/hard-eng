@@ -20,6 +20,11 @@ class FakeGh:
     def __init__(self) -> None:
         self.pulls: list[dict[str, object]] = []
         self.calls: list[tuple[str, ...]] = []
+        self.merging = {
+            "rebaseMergeAllowed": True,
+            "squashMergeAllowed": True,
+            "mergeCommitAllowed": True,
+        }
 
     def __call__(self, root: Path, *args: str) -> str:
         self.calls.append(args)
@@ -27,6 +32,8 @@ class FakeGh:
             for pull in self.pulls:
                 pull["headRefOid"] = git(root, "rev-parse", f"refs/heads/{BRANCH}")
             return json.dumps(self.pulls)
+        if args[:2] == ("repo", "view"):
+            return json.dumps(self.merging)
         if args[:2] == ("pr", "create"):
             title = args[args.index("--title") + 1]
             self.pulls = [{"url": PULL, "title": title, "statusCheckRollup": []}]
@@ -205,6 +212,44 @@ def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
         PULL,
         "--auto",
         "--rebase",
+        "--match-head-commit",
+        head,
+    ) in gh.calls
+
+
+@pytest.mark.parametrize(
+    ("allowed", "flag"),
+    [
+        ({"squashMergeAllowed": True, "mergeCommitAllowed": True}, "--squash"),
+        ({"mergeCommitAllowed": True}, "--merge"),
+    ],
+)
+def test_update_pr_uses_a_merge_method_the_repository_allows(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    allowed: dict[str, bool],
+    flag: str,
+) -> None:
+    target = apply_first_update(feature, monkeypatch)
+    gh.merging = {
+        "rebaseMergeAllowed": False,
+        "squashMergeAllowed": False,
+        "mergeCommitAllowed": False,
+        **allowed,
+    }
+    assert publish(target, monkeypatch) == 0
+    gh.pulls[0]["statusCheckRollup"] = [
+        {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"}
+    ]
+    assert publish(target, monkeypatch) == 0
+    head = git(target, "rev-parse", BRANCH)
+    assert (
+        "pr",
+        "merge",
+        PULL,
+        "--auto",
+        flag,
         "--match-head-commit",
         head,
     ) in gh.calls
