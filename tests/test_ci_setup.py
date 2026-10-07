@@ -963,14 +963,14 @@ def test_installed_launcher_gains_ignore_scripts_override(tmp_path: Path) -> Non
     assert migrated.count("pnpm dlx --config.ignore-scripts=false --allow-build") == 4
 
 
-def test_installed_workflow_gains_pull_request_read_permission(tmp_path: Path) -> None:
-    path = tmp_path / ".github/workflows/hard-eng.yml"
-    path.parent.mkdir(parents=True)
+@pytest.mark.parametrize("existing", ["", "  pull-requests: write\n"])
+def test_workflow_holds_one_pr_permission(tmp_path: Path, existing: str) -> None:
+    (path := tmp_path / ".github/workflows/hard-eng.yml").parent.mkdir(parents=True)
     template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
-    path.write_text(template.replace(PERMISSIONS, ""))
+    path.write_text(template.replace(PERMISSIONS, existing))
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes[".github/workflows/hard-eng.yml"] == template
+    assert changes == ({} if existing else {".github/workflows/hard-eng.yml": template})
 
 
 def test_generated_tool_cache_is_removed_from_existing_workflows(
