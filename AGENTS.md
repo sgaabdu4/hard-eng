@@ -8,7 +8,7 @@
   - Rerun setup only after a failed status or with no status; never while an update runs.
 - Before editing, state the single change, the files it touches + how it will be verified.
 - Scope = the user's request + accepted constraints; preserve unrelated work.
-- Project instructions = `AGENTS.md` for Claude + Codex. Move unique scoped rules here before retiring legacy `CLAUDE.md` files; never recreate import wrappers or publish private local instructions.
+- Project instructions = `AGENTS.md` for Claude + Codex. Move unique scoped rules to the matching `AGENTS.md` before retiring legacy `CLAUDE.md` files; never recreate import wrappers or publish private local instructions.
 - Publication = before recording tracked content or publishing, apply [publication privacy](.agents/skills/he-ship/references/checks.md#publication-privacy) for the destination's audience.
 - YAGNI = ultra always unless the user changes it. Understand the real flow first; reuse existing files, code, stdlib, native commands/features + installed dependencies before adding code.
 - Additions = each new file, dependency, wrapper, abstraction, configuration or stored state needs the current agreed requirement it serves + why existing code or a direct command can't satisfy it; missing either → leave it out. Give this reasoning in normal updates; no justification files.
