@@ -300,6 +300,26 @@ def test_update_pr_waits_for_the_configured_shipping_checks(
     assert "pr merge" in gh.verbs()
 
 
+def test_update_pr_does_not_merge_when_an_unconfigured_check_fails(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = apply_first_update(feature, monkeypatch)
+    monkeypatch.setattr(
+        update_pr,
+        "load_policy",
+        Mock(return_value={"base": "main", "checks": ["gate"]}),
+    )
+    assert publish(target, monkeypatch) == 0
+    gh.pulls[0]["statusCheckRollup"] = [
+        {"name": "gate", "status": "COMPLETED", "conclusion": "SUCCESS"},
+        {"name": "other", "status": "COMPLETED", "conclusion": "FAILURE"},
+    ]
+    assert publish(target, monkeypatch) == 1
+    assert "pr merge" not in gh.verbs()
+
+
 def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
     feature: tuple[Path, Path, Path],
     gh: FakeGh,
