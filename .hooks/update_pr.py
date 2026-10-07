@@ -27,6 +27,7 @@ FAILED = {
     "STARTUP_FAILURE",
     "ERROR",
 }
+SKIPPED = {"SKIPPED", "NEUTRAL", "STALE"}
 BODY = (
     "Prepared by Hard Eng. It merges by rebase once its checks pass, when update-pr is run "
     "again; a failing check is fixed on this branch before other shipping."
@@ -75,7 +76,7 @@ def check_state(pull: dict[str, JsonValue], required: list[str] | None = None) -
         pending = not entries
     for entry in entries:
         outcome = entry.get("conclusion") or entry.get("state")
-        if outcome in FAILED:
+        if outcome in FAILED or (required and outcome in SKIPPED):
             return "failing"
         if entry.get("status", "COMPLETED") != "COMPLETED" or outcome in {
             None,
@@ -84,6 +85,10 @@ def check_state(pull: dict[str, JsonValue], required: list[str] | None = None) -
             "EXPECTED",
         }:
             pending = True
+    if not pending and not any(
+        (e.get("conclusion") or e.get("state")) == "SUCCESS" for e in entries
+    ):
+        return "pending"
     return "pending" if pending else "passing"
 
 
