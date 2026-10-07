@@ -397,6 +397,49 @@ def test_setup_rerun_restores_a_missing_pre_push_hook_before_the_first_push(
     assert hook.is_file()
 
 
+def test_setup_rerun_restores_the_checkouts_missing_pre_push_hook_when_published(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, target, _ = feature
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    hook = target / ".git/hooks/pre-push"
+    hook.unlink(missing_ok=True)
+    update_runner.locked_update(target, repair=True)
+    assert hook.is_file()
+
+
+def test_setup_rerun_restores_a_huskys_missing_launcher_in_the_checkout(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    shim = target / ".husky/_/pre-push"
+    shim.parent.mkdir(parents=True)
+    shim.write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
+    (shim.parent / "h").write_text(
+        'n=$(basename "$0")\ns=$(dirname "$(dirname "$0")")/$n\nsh -e "$s" "$@"\n'
+    )
+    (shim.parent / ".gitignore").write_text("*\n")
+    git(target, "config", "core.hooksPath", ".husky/_")
+    config_path = target / "hard-eng.gates.json"
+    config = json.loads(config_path.read_text())
+    config["shared"].append(
+        {"name": "shell", "role": "shell", "command": ["python3", "-c", "pass"]}
+    )
+    config_path.write_text(json.dumps(config))
+    commit(target, "Husky hooks")
+    select_release(source, monkeypatch)
+    update.update(target)
+    launcher = target / ".husky/pre-push"
+    assert launcher.is_file()
+    add_origin(target)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    launcher.unlink()
+    update_runner.locked_update(target, repair=True)
+    assert launcher.is_file()
+    assert 'hard-eng.py" pre-push' in launcher.read_text()
+
+
 def test_update_waits_quietly_until_origin_has_the_base_branch(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
