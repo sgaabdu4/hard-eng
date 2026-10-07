@@ -158,6 +158,26 @@ def test_update_after_a_rebase_merged_fix_prepares_the_next_release(
     assert second in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
 
 
+def test_update_after_a_squash_merged_fix_prepares_the_next_release(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    newer_release(source, monkeypatch, "first update")
+    assert update_runner.apply_update(target) == 0
+    fix_update_branch(target)
+    git(target, "worktree", "remove", "--force", str(target.parent / "fixing"))
+    landing = target.parent / "landing"
+    git(target, "worktree", "add", "-q", "--detach", str(landing), "origin/main")
+    git(landing, "merge", "-q", "--squash", BRANCH)
+    commit(landing, "Update Hard Eng (#1)")
+    git(landing, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", "HEAD:main")
+    git(target, "worktree", "remove", "--force", str(landing))
+    second = newer_release(source, monkeypatch, "second update")
+    assert update_runner.apply_update(target) == 0
+    assert "unfinished work" not in (target / update_runner.RESULT_FILE).read_text()
+    assert second in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
+
+
 def test_update_pr_pushes_opens_one_pr_and_turns_on_auto_merge(
     feature: tuple[Path, Path, Path],
     gh: FakeGh,

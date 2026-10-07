@@ -742,7 +742,22 @@ def unfinished_update(root: Path, tip: str) -> bool:
         text=True,
         check=False,
     )
-    return ahead.returncode == 0 and int(ahead.stdout) > 1
+    if ahead.returncode != 0 or int(ahead.stdout) <= 1:
+        return False
+    changed = subprocess.run(
+        ["git", "diff", "--name-only", "-z", span],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    names = [name for name in changed.stdout.split("\0") if name]
+    landed = subprocess.run(
+        ["git", "diff", "--quiet", tip, f"refs/heads/{UPDATE_BRANCH}", "--", *names],
+        cwd=root,
+        check=False,
+    )
+    return changed.returncode != 0 or not names or landed.returncode != 0
 
 
 def set_update_branch(root: Path, commit: str) -> None:
