@@ -194,3 +194,24 @@ def test_manual_setup_rerun_prepares_the_branch_instead_of_committing(
     assert (target / "project.txt").read_text() == "working edit\n"
     assert revision in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
     assert git(target, "rev-list", "--count", f"origin/main..{BRANCH}") == "1"
+
+
+def test_update_waits_quietly_until_origin_has_the_base_branch(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    newer_release(source, monkeypatch, "early update")
+    for remote in (None, "empty"):
+        if remote:
+            empty = target.parent / "empty.git"
+            git(target.parent, "init", "-q", "--bare", str(empty))
+            git(target, "remote", "add", "origin", str(empty))
+        assert update_runner.apply_update(target) == 0
+        result = (target / update_runner.RESULT_FILE).read_text()
+        assert update_runner.NOT_PUBLISHED in result
+        assert "failed" not in result
+        assert update_runner.freshness_note(target) == update_runner.NOT_PUBLISHED
+    git(target, "remote", "set-url", "origin", str(target.parent / "missing.git"))
+    assert update_runner.apply_update(target) == 0
+    assert "Hard Eng update failed" in (target / update_runner.RESULT_FILE).read_text()
