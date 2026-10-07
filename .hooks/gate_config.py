@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import NotRequired, TypedDict, cast
 
 from dependency_graph import (
+    cycle_members,
     dependency_review_guidance,
     expand_dependents,
     impact_inputs,
@@ -631,6 +632,7 @@ def affected_groups(
         return [shared_only(groups[-1], names)]
     if not dependents:
         print("Pre-push leaves dependents of changed packages to CI.")
+        selected = cycle_members(packages, by_path, selected)
     elif any("depends_on" not in group for group in packages):
         return groups
     else:

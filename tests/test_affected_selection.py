@@ -97,6 +97,10 @@ def test_cross_package_fallow_coverage_owner_must_be_selected_with_its_consumer(
         "packages/api",
         ".",
     ]
+    assert [
+        group["path"]
+        for group in affected_groups(repository, groups, "HEAD", dependents=False)
+    ] == ["packages/website", "packages/api", "."]
     groups[0]["depends_on"] = []
     assert [group["path"] for group in affected_groups(repository, groups, "HEAD")] == [
         "packages/api",

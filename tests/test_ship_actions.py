@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import nullcontext
 from dataclasses import replace
 from io import StringIO
 from pathlib import Path
@@ -593,10 +594,10 @@ def test_shipping_rejects_stale_install_before_remote_action(
 
 
 @pytest.mark.parametrize(
-    ("origin", "warned"),
+    ("origin", "warned", "scope"),
     [
-        ("git@github.com:owner/repo.git", True),
-        ("https://github.com/owner/repo.git", False),
+        ("git@github.com:owner/repo.git", True, ["--without-dependents"]),
+        ("https://github.com/owner/repo.git", False, []),
     ],
 )
 def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
@@ -606,7 +607,12 @@ def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
     capsys: pytest.CaptureFixture[str],
     origin: str,
     warned: bool,
+    scope: list[str],
 ) -> None:
+    checkout = runner.ROOT / "snapshot"
+    (checkout / ".hooks").mkdir(parents=True)
+    (checkout / ".hooks/hard-eng.py").write_text(" ".join(scope))
+    monkeypatch.setattr(ship_actions, "snapshot", lambda *_args: nullcontext(checkout))
     shipping_policy["pre_push_seconds"] = 1.0
     (runner.ROOT / "hard-eng.gates.json").write_text(
         json.dumps({"shipping": shipping_policy})
@@ -624,12 +630,7 @@ def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
     hard_eng = Mock(side_effect=[0, 1])
     monkeypatch.setattr(ship_actions, "run_hard_eng", hard_eng)
     assert runner.pre_push() == 0
-    assert hard_eng.call_args_list[0].args[1] == [
-        "check",
-        "--base",
-        "2" * 40,
-        "--without-dependents",
-    ]
+    assert hard_eng.call_args_list[0].args[1] == ["check", "--base", "2" * 40, *scope]
     mutating = hard_eng.call_args_list[1].args[1]
     assert mutating == [
         "mutation",

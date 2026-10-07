@@ -94,6 +94,20 @@ def expand_dependents(
     return selected
 
 
+def cycle_members(
+    packages: list[Group], by_path: dict[str, Group], selected: set[str]
+) -> set[str]:
+    """Selected packages plus the ones they share a cycle with, as Fallow coverage needs."""
+    if any("depends_on" not in group for group in packages):
+        return selected
+    reached = expand_dependents(packages, by_path, set(selected))
+    return {
+        path
+        for path in reached
+        if selected & expand_dependents(packages, by_path, {path})
+    }
+
+
 def shared_only(shared: Group, names: set[str]) -> Group:
     """No package reads the change; workflow edits still need workflow linting."""
     roles = {"secrets-files", "secrets-history"}
