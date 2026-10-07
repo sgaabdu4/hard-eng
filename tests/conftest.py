@@ -267,3 +267,13 @@ def release(
         "GIT_CONFIG_VALUE_0", f"https://github.com/{update.UPSTREAM}.git"
     )
     return source, target, old
+
+
+def gate(name: str, code: str, **options: object) -> dict[str, object]:
+    return {"name": name, "command": [sys.executable, "-c", code], **options}
+
+
+def configure(root: Path, checks: list[dict[str, object]]) -> None:
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": checks})
+    )
