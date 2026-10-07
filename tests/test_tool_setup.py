@@ -194,3 +194,22 @@ def test_tools_are_provisioned_outside_a_project_that_pins_pnpm(
     tool_setup.provision_tools(project, [react], 30)
     directories = [Path(call.kwargs["cwd"]) for call in native.call_args_list]
     assert directories == [tmp_path / "runner/hard-eng-tools"] * 2
+
+
+def test_dead_code_gate_treats_console_script_targets_as_used(tmp_path: Path) -> None:
+    import tool_setup
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\n[project.scripts]\ndemo = "demo:main"\n'
+        'other = "demo.cli:run_app"\n'
+    )
+    command = ["vulture", "src", "--min-confidence", "60"]
+    assert tool_setup.managed_command(command, tmp_path) == [
+        "uvx",
+        "vulture@latest",
+        *command[1:],
+        "--ignore-names",
+        "main,run_app",
+    ]
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    assert tool_setup.managed_command(command, tmp_path)[2:] == command[1:]
