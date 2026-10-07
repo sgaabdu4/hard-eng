@@ -440,6 +440,8 @@ def git_commit(
         tail = " | ".join(result.stdout.strip().splitlines()[-5:])
         raise subprocess.SubprocessError(
             f"git commit exited {result.returncode}: {tail}".removesuffix(": ")
+            + ". The project's commit hook failed in a fresh checkout with no package install; "
+            "fix that hook in the project, not Hard Eng, and leave verification to the pre-push gate"
         )
 
 
@@ -823,6 +825,7 @@ def prepare_update(root: Path, repair: bool = False) -> str:
 
 
 def build_update(root: Path, base: str, repair: bool) -> str:
+    from hook_chain import use_own_hooks
     from update import update
 
     tip = fetch_base(root, base)
@@ -848,6 +851,7 @@ def build_update(root: Path, base: str, repair: bool) -> str:
             check=True,
         )
         try:
+            use_own_hooks(candidate)
             outcome = update(candidate, repair, remember=root)
             revision = installed_revision(candidate)
             landed = landed_commit(candidate, tip, f"Update Hard Eng to {revision}")
