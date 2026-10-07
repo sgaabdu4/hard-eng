@@ -11,6 +11,7 @@ import update
 import update_pr
 import update_runner
 from conftest import add_origin, commit, git
+from test_husky_setup import husky_project
 from test_updates import select_release
 
 PULL = "https://github.com/fixture/project/pull/9"
@@ -299,7 +300,7 @@ def test_update_pr_waits_for_the_configured_shipping_checks(
     gh.pulls[0]["statusCheckRollup"][0]["conclusion"] = "FAILURE"
     assert publish(target, monkeypatch) == 1
     assert "pr merge" not in gh.verbs()
-    gh.pulls[0]["statusCheckRollup"][0].update(status="IN_PROGRESS", conclusion=None)
+    gh.pulls[0]["statusCheckRollup"][0].update(status="IN_PROGRESS", conclusion="")
     assert publish(target, monkeypatch) == 0
     assert "pr merge" not in gh.verbs()
     gh.pulls[0]["statusCheckRollup"][0].update(status="COMPLETED", conclusion="SUCCESS")
@@ -316,10 +317,7 @@ def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
     source, target, remote = feature
     apply_first_update(feature, monkeypatch)
     assert publish(target, monkeypatch) == 0
-    other = target.parent / "other"
-    git(target.parent, "clone", "-q", str(remote), str(other))
-    git(other, "config", "user.name", "Fixture")
-    git(other, "config", "user.email", "fixture@example.invalid")
+    other = other_checkout(target, remote)
     git(other, "switch", "-q", BRANCH)
     (other / "fix.txt").write_text("fix\n")
     fix = commit(other, "fix the update")
@@ -352,11 +350,11 @@ def test_update_pr_refreshes_a_branch_another_checkout_already_superseded(
     other = other_checkout(target, remote)
     assert update_runner.apply_update(other) == 0
     git(other, "push", "-q", "--no-verify", "origin", f"{BRANCH}:main")
-    monkeypatch.setattr(
-        update,
-        "latest_verified",
-        lambda previous: None if previous == second else second,
-    )
+
+    def newest(previous: str) -> str | None:
+        return None if previous == second else second
+
+    monkeypatch.setattr(update, "latest_verified", newest)
     assert update_pr.publish(target) == 0
     assert "Nothing to publish" in capsys.readouterr().out
     assert subprocess.run(
@@ -371,9 +369,9 @@ def test_update_pr_does_not_replace_a_newer_update_with_an_older_branch(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    source, target, remote = feature
-    first = newer_release(source, monkeypatch, "first update")
-    assert update_runner.apply_update(target) == 0
+    source, _, remote = feature
+    target = apply_first_update(feature, monkeypatch)
+    first = update_runner.revision_at(target, f"refs/heads/{BRANCH}")
     newer_release(source, monkeypatch, "second update")
     other = other_checkout(target, remote)
     assert update_runner.apply_update(other) == 0
@@ -466,21 +464,7 @@ def test_setup_rerun_restores_a_huskys_missing_launcher_in_the_checkout(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source, target, _ = release
-    shim = target / ".husky/_/pre-push"
-    shim.parent.mkdir(parents=True)
-    shim.write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
-    (shim.parent / "h").write_text(
-        'n=$(basename "$0")\ns=$(dirname "$(dirname "$0")")/$n\nsh -e "$s" "$@"\n'
-    )
-    (shim.parent / ".gitignore").write_text("*\n")
-    git(target, "config", "core.hooksPath", ".husky/_")
-    config_path = target / "hard-eng.gates.json"
-    config = json.loads(config_path.read_text())
-    config["shared"].append(
-        {"name": "shell", "role": "shell", "command": ["python3", "-c", "pass"]}
-    )
-    config_path.write_text(json.dumps(config))
-    commit(target, "Husky hooks")
+    husky_project(target)
     select_release(source, monkeypatch)
     update.update(target)
     launcher = target / ".husky/pre-push"
