@@ -398,6 +398,18 @@ def test_manual_setup_rerun_prepares_the_branch_instead_of_committing(
     assert git(target, "rev-list", "--count", f"origin/main..{BRANCH}") == "1"
 
 
+def test_setup_rerun_restores_a_missing_pre_push_hook_before_the_first_push(
+    release: tuple[Path, Path, str],
+) -> None:
+    _, target, _ = release
+    hook = target / ".git/hooks/pre-push"
+    hook.unlink(missing_ok=True)
+    assert (
+        update_runner.locked_update(target, repair=True) == update_runner.NOT_PUBLISHED
+    )
+    assert hook.is_file()
+
+
 def test_update_waits_quietly_until_origin_has_the_base_branch(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

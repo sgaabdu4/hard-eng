@@ -810,6 +810,12 @@ def prepare_update(root: Path, repair: bool = False) -> str:
 
     base = update_base(root)
     if not published(root, base):
+        if repair:
+            from update import SOURCE_FILE, repair_current_hook
+
+            repair_current_hook(
+                root, json.loads((root / SOURCE_FILE).read_text())["revision"]
+            )
         return NOT_PUBLISHED
     tip = fetch_base(root, base)
     if unfinished_update(root, tip):
