@@ -35,7 +35,7 @@ SUFFIX_LABELS = {
     ".h": "C/C++",
     ".hpp": "C/C++",
 }
-OTHER_SUFFIXES = {".sh", ".bash", ".py", ".js", ".ts", ".dart", ".lua", ".pl", ".ex"}
+TRIVIAL_NAMES = {".gitignore", ".gitattributes", ".editorconfig"}
 OSV_LOCKFILES = {
     "go.mod",
     "Cargo.lock",
@@ -49,16 +49,21 @@ GENERATED_DIRECTORIES = {".agents", ".hooks", ".claude", ".codex", ".husky"}
 FALLBACK_LABEL = "this language"
 
 
+def trivial(path: Path) -> bool:
+    name = path.name.upper()
+    return (
+        path.name in TRIVIAL_NAMES
+        or path.suffix.lower() == ".md"
+        or name.startswith(("README", "LICENSE"))
+    )
+
+
 def project_files(root: Path, files: list[Path]) -> list[Path]:
     return [
         path
         for path in files
         if not GENERATED_DIRECTORIES & set(path.relative_to(root).parts)
-        and (
-            path.name in MANIFEST_LABELS
-            or path.suffix in SUFFIX_LABELS
-            or path.suffix in OTHER_SUFFIXES
-        )
+        and not trivial(path)
     ]
 
 
