@@ -734,9 +734,9 @@ def unfinished_update(root: Path, tip: str) -> bool:
     """A checked-out update branch, or one holding fixes beyond the update commit, is someone's work."""
     if branch_worktree(root) is not None:
         return True
-    span = f"{tip}..refs/heads/{UPDATE_BRANCH}"
+    span = f"{tip}...refs/heads/{UPDATE_BRANCH}"
     ahead = subprocess.run(
-        ["git", "rev-list", "--count", span],
+        ["git", "rev-list", "--count", "--right-only", "--cherry-pick", span],
         cwd=root,
         capture_output=True,
         text=True,
