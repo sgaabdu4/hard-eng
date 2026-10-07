@@ -737,11 +737,10 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         }
     return {
         "decision": "block",
-        "reason": "Verification failed; do not claim completion. Repair every reported finding in code, including findings unrelated to the task, as its own commit before the task continues, then reverify. If the user has not allowed edits or commits here, report the findings and stop. "
-        + learning_context("failed verification")
-        + "\n"
-        + output
-        + decisions,
+        "reason": output.rstrip("\n")
+        + decisions
+        + "\n\nVerification failed; do not claim completion. Repair every reported finding in code, including findings unrelated to the task, as its own commit before the task continues, then reverify. If the user has not allowed edits or commits here, report the findings and stop. "
+        + learning_context("failed verification"),
     }
 
 
