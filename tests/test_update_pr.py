@@ -297,3 +297,22 @@ def test_update_waits_quietly_until_origin_has_the_base_branch(
     git(target, "remote", "set-url", "origin", str(target.parent / "missing.git"))
     assert update_runner.apply_update(target) == 0
     assert "Hard Eng update failed" in (target / update_runner.RESULT_FILE).read_text()
+
+
+def test_manual_setup_rerun_prints_a_refusal_as_a_message(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    monkeypatch.setenv("UV_OFFLINE", "1")
+    with update_runner.lock_file(target).open("a") as handle:
+        assert update_runner.exclusive(handle)
+        result = subprocess.run(
+            ["sh", str(source / "setup.sh"), str(source)],
+            cwd=target,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    assert result.returncode == 1, result.stderr
+    assert "Another Hard Eng update is already running" in result.stderr
+    assert "Traceback" not in result.stderr
