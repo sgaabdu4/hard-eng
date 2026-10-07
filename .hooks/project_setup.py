@@ -338,8 +338,8 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
 
     manifest = yaml.safe_load((directory / "pubspec.yaml").read_text())
     dependencies = {
-        **manifest.get("dependencies", {}),
-        **manifest.get("dev_dependencies", {}),
+        **(manifest.get("dependencies") or {}),
+        **(manifest.get("dev_dependencies") or {}),
     }
     manager = (
         "flutter"
@@ -831,8 +831,8 @@ def adapt_javascript(directory: Path, package: Group, manager: str) -> None:
                 if output is not None:
                     gate.setdefault("report", {})["path"] = output
     dependencies = {
-        **manifest.get("dependencies", {}),
-        **manifest.get("devDependencies", {}),
+        **(manifest.get("dependencies") or {}),
+        **(manifest.get("devDependencies") or {}),
     }
     if "react" in dependencies:
         package["checks"].append(
