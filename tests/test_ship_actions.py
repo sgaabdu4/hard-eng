@@ -23,7 +23,10 @@ from shipping import PendingCheck, Shipment, ShippingError, ShippingPolicy, git
 
 
 @pytest.fixture
-def delivered_worktree(tmp_path: Path, completed_plan: str) -> tuple[Path, Shipment]:
+def delivered_worktree(
+    tmp_path: Path, completed_plan: str, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Shipment]:
+    monkeypatch.setattr(ship_actions, "shipping_note", Mock(return_value=None))
     root, bare, task = (tmp_path / name for name in ("checkout", "origin.git", "task"))
     git(tmp_path, "init", "-q", "-b", "main", str(root))
     git(tmp_path, "init", "--bare", "-q", str(bare))

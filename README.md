@@ -157,7 +157,7 @@ flowchart TD
   J -->|Yes| K
 ```
 
-For visible work, compare matching before/final states. Publish an image pair only when appearance differs; otherwise record the comparison. Deploy needs the configured runtime verifier. Clean up only after confirmed merge and required delivery proof, preserving unrelated or uncertain worktrees. Local Complete is not delivery.
+For visible work, compare matching before/final states. Publish an image pair only when appearance differs; otherwise record the comparison. Deploy needs the configured runtime verifier. A big change is first challenged by the other agent (`python3 .hooks/hard-eng.py challenge`: Codex reviews Claude Code work, Claude Code reviews Codex work, read-only); shipping blocks without that record for the current revision. Clean up only after confirmed merge and required delivery proof, preserving unrelated or uncertain worktrees. Local Complete is not delivery.
 
 ## 5. Learn
 
