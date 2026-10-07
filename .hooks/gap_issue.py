@@ -13,7 +13,19 @@ REPO = "sgaabdu4/hard-eng"
 MAX_LENGTH = 120
 LABELS = sorted({*MANIFEST_LABELS.values(), *SUFFIX_LABELS.values()}, key=len)
 LOOKS_LIKE_DETAIL = re.compile(r"[/\\@]|://|\bwww\.|[\w-]\.[A-Za-z][A-Za-z0-9]{0,4}\b")
-BODY = """Hard Eng has no built-in check for: {text}
+COMMON_FILES = (
+    "go.mod go.sum Cargo.toml Cargo.lock package.json package-lock.json "
+    "pnpm-lock.yaml yarn.lock bun.lock pyproject.toml uv.lock poetry.lock "
+    "requirements.txt pubspec.yaml pubspec.lock Gemfile Gemfile.lock "
+    "composer.json composer.lock pom.xml build.gradle build.gradle.kts "
+    "Package.swift CMakeLists.txt Dockerfile Makefile tsconfig.json"
+).split()
+COMMON_FILE = re.compile(
+    r"(?<![\w./\\@-])(?:"
+    + "|".join(re.escape(name) for name in COMMON_FILES)
+    + r")(?![\w/\\@-]|\.\w)"
+)
+BODY = """Missing check: {text}
 
 Language: {language}
 Hard Eng revision: {revision}
@@ -22,7 +34,7 @@ Filed by `python3 .hooks/hard-eng.py gap-issue`. It names only the missing check
 
 
 def generic_problem(text: str) -> str | None:
-    stripped = text
+    stripped = COMMON_FILE.sub("", text)
     for label in reversed(LABELS):
         stripped = stripped.replace(label, "")
     if not text.strip() or len(text) > MAX_LENGTH:
