@@ -806,17 +806,25 @@ def published(root: Path, base: str) -> bool:
 
 def prepare_update(root: Path, repair: bool = False) -> str:
     """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
+    base = update_base(root)
+    repaired = ""
+    if repair:
+        from update import SOURCE_FILE, repair_current_hook
+
+        repaired = repair_current_hook(
+            root, json.loads((root / SOURCE_FILE).read_text())["revision"]
+        )
+    if not published(root, base):
+        return NOT_PUBLISHED
+    outcome = build_update(root, base, repair)
+    if "installed the missing" in repaired:
+        return f"{outcome} This checkout: installed the missing pre-push hook."
+    return outcome
+
+
+def build_update(root: Path, base: str, repair: bool) -> str:
     from update import latest_verified, update
 
-    base = update_base(root)
-    if not published(root, base):
-        if repair:
-            from update import SOURCE_FILE, repair_current_hook
-
-            repair_current_hook(
-                root, json.loads((root / SOURCE_FILE).read_text())["revision"]
-            )
-        return NOT_PUBLISHED
     tip = fetch_base(root, base)
     if unfinished_update(root, tip):
         return (
