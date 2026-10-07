@@ -123,8 +123,10 @@ def test_update_from_a_linked_worktree_ignores_its_inherited_hooks_path(
     feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source, target, _ = feature
-    stale = target.parent / "stale-hooks"
+    stale = target / ".stale-hooks"
     stale.mkdir()
+    with (target / ".git/info/exclude").open("a") as exclude:
+        exclude.write(".stale-hooks/\n")
     (stale / "pre-commit").write_text("#!/bin/sh\nexit 1\n")
     (stale / "pre-commit").chmod(0o755)
     git(target, "config", "extensions.worktreeConfig", "true")
