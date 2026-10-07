@@ -430,9 +430,10 @@ def test_lock_setup_runs_first_and_blocks_on_failure(
     assert not (tmp_path / "ran").exists()
 
 
-def test_parallel_checks_overlap_with_two_worker_bound(
-    runner: ModuleType, tmp_path: Path
+def test_parallel_checks_overlap_up_to_the_cpu_count(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(runner.os, "cpu_count", lambda: 2)
     code = (
         "from pathlib import Path;import time;Path('{name}.start').write_text(str(time.monotonic()))\n"
         "deadline = time.monotonic() + 60\n"
@@ -458,6 +459,18 @@ def test_parallel_checks_overlap_with_two_worker_bound(
     assert times["quick.start"] < times["slow.end"]
     assert times["third.start"] >= times["quick.end"]
     assert times["third.end"] < times["slow.end"]
+    for path in tmp_path.glob("*.start"):
+        path.unlink()
+    monkeypatch.setattr(runner.os, "cpu_count", lambda: 3)
+    together = "from pathlib import Path;import time;Path('{name}.start').touch();end = time.monotonic() + 30\nwhile len(list(Path().glob('*.start'))) < 3: assert time.monotonic() < end; time.sleep(0.02)"
+    configure(
+        tmp_path,
+        [
+            gate(name, together.format(name=name), parallel=True)
+            for name in ("first", "second", "third")
+        ],
+    )
+    assert runner.check() == 0
 
 
 @pytest.mark.parametrize("document", ["PRODUCT.md", "DESIGN.md"])

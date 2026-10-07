@@ -417,15 +417,17 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
 
 
 def dart_scan_includes_boundaries(gate: Gate) -> bool:
-    command = ["dart-decimate", "check", ".", "--threshold", "0"]
+    command = gate["command"]
+    arguments = iter(command[3:])
+    options = {
+        argument: next(arguments, "") if argument in {"--threshold", "--format"} else ""
+        for argument in arguments
+    }
     report = gate.get("report", {})
     return (
         gate.get("role") == "dead-code-duplicates"
-        and gate["command"]
-        in (
-            [*command, "--strict", "--format", "json"],
-            [*command, "--format", "json", "--strict"],
-        )
+        and command[:3] == ["dart-decimate", "check", "."]
+        and options == {"--threshold": "0", "--format": "json", "--strict": ""}
         and report.get("type") == "dart-decimate"
         and report.get("stdout") is True
     )
@@ -603,7 +605,12 @@ def packages_for(
 
 
 def affected_groups(
-    root: Path, groups: list[Group], base: str | None, *, prove_update: bool = False
+    root: Path,
+    groups: list[Group],
+    base: str | None,
+    *,
+    prove_update: bool = False,
+    dependents: bool = True,
 ) -> list[Group]:
     packages = groups[:-1]
     if guidance := dependency_review_guidance(packages):
@@ -622,9 +629,12 @@ def affected_groups(
         return groups
     if not selected:
         return [shared_only(groups[-1], names)]
-    if any("depends_on" not in group for group in packages):
+    if not dependents:
+        print("Pre-push leaves dependents of changed packages to CI.")
+    elif any("depends_on" not in group for group in packages):
         return groups
-    selected = expand_dependents(packages, by_path, selected)
+    else:
+        selected = expand_dependents(packages, by_path, selected)
     print("Affected packages and dependents: " + ", ".join(sorted(selected)))
     return selected_services(root, packages, selected) + [groups[-1]]
 
@@ -954,7 +964,9 @@ def parse_config(content: str, *, require_impact_review: bool = True) -> GateCon
     return config
 
 
-def load_groups(root: Path, base: str | None = None) -> list[Group]:
+def load_groups(
+    root: Path, base: str | None = None, *, dependents: bool = True
+) -> list[Group]:
     validate_documents(root)
     config = parse_config((root / "hard-eng.gates.json").read_text())
     if type(config.get("scan_git_history", True)) is not bool:
@@ -982,4 +994,4 @@ def load_groups(root: Path, base: str | None = None) -> list[Group]:
     for gate in config["shared"]:
         if gate.get("role") == "secrets-history":
             gate["command"] = new_commits_command(gate["command"], root, base)
-    return affected_groups(root, groups, base, prove_update=True)
+    return affected_groups(root, groups, base, prove_update=True, dependents=dependents)

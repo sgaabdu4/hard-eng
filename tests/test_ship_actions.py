@@ -289,8 +289,9 @@ def test_ship_routes_refuse_wrong_plan_and_unselected_merge(
     verified = Mock(return_value=shipment)
     monkeypatch.setattr(ship_actions, "verify", verified)
     for plan, method, message in [
-        ("../outside.md", "squash", "inside its worktree"),
-        ("PLAN.md", None, "merge method"),
+        ("../outside.md", "rebase", "inside its worktree"),
+        ("PLAN.md", "squash", "rebase only"),
+        ("PLAN.md", "merge", "rebase only"),
     ]:
         with pytest.raises(ValueError, match=message):
             ship_actions.run(
@@ -311,17 +312,18 @@ def test_ship_merge_matches_verified_head_and_checks_result(
     monkeypatch.setattr(ship_actions, "gh", remote)
     assert (
         ship_actions.run(
-            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "squash"
+            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "rebase"
         )
         == 0
     )
     assert verified.call_args_list[-1].args[-1] == "delivered"
+    assert "--rebase" in remote.call_args.args
     assert remote.call_args.args[-2:] == ("--match-head-commit", shipment.head_sha)
     assert "--admin" not in remote.call_args.args
     assert "Review bypass" not in capsys.readouterr().out
     verified.side_effect = [replace(shipment, review_bypass=True), shipment]
     ship_actions.run(
-        root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "squash"
+        root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "rebase"
     )
     assert remote.call_args.args[-3:] == (
         "--admin",
@@ -337,7 +339,7 @@ def test_ship_merge_matches_verified_head_and_checks_result(
     remote.reset_mock()
     with pytest.raises(ValueError, match="not merging"):
         ship_actions.run(
-            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "squash"
+            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "rebase"
         )
     remote.assert_not_called()
 
@@ -361,7 +363,7 @@ def test_ship_merge_reports_pending_delivery_after_merge_command(
         match="Merge command succeeded; post-merge delivery verification is pending",
     ):
         ship_actions.run(
-            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "squash"
+            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "rebase"
         )
 
     assert remote.called
@@ -378,7 +380,7 @@ def test_ship_merge_reports_unfinished_base_ci_as_merged_not_failed(
 
     with pytest.raises(ShippingError, match="Merged; base-branch CI") as raised:
         ship_actions.run(
-            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "squash"
+            root, "PLAN.md", shipment.pr_url, "merge", str(shipment.root), "rebase"
         )
 
     assert "failed" not in str(raised.value)
@@ -586,7 +588,7 @@ def test_shipping_rejects_stale_install_before_remote_action(
     remote = Mock()
     monkeypatch.setattr(ship_actions, "gh", remote)
     with pytest.raises(ValueError, match="freshness"):
-        ship_actions.run(root, "PLAN.md", shipment.pr_url, "merge", None, "squash")
+        ship_actions.run(root, "PLAN.md", shipment.pr_url, "merge", None, "rebase")
     remote.assert_not_called()
 
 
@@ -622,6 +624,12 @@ def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
     hard_eng = Mock(side_effect=[0, 1])
     monkeypatch.setattr(ship_actions, "run_hard_eng", hard_eng)
     assert runner.pre_push() == 0
+    assert hard_eng.call_args_list[0].args[1] == [
+        "check",
+        "--base",
+        "2" * 40,
+        "--without-dependents",
+    ]
     mutating = hard_eng.call_args_list[1].args[1]
     assert mutating == [
         "mutation",

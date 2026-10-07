@@ -8,7 +8,13 @@ from types import ModuleType
 import pytest
 import yaml
 from conftest import git
-from gate_config import JsonObject, generated_sources, validate_dart_exclusions
+from gate_config import (
+    Gate,
+    JsonObject,
+    dart_scan_includes_boundaries,
+    generated_sources,
+    validate_dart_exclusions,
+)
 
 
 def dart_format_command(installer: ModuleType) -> list[str]:
@@ -540,3 +546,25 @@ def test_dart_generator_output_is_marked_generated_once(
     repeated: dict[str, str] = {}
     installer.configure_dart_generated(tmp_path, app, repeated)
     assert repeated == {}
+
+
+@pytest.mark.parametrize(
+    ("arguments", "covers"),
+    [
+        ("--threshold 0 --strict --format json", True),
+        ("--format json --threshold 0 --strict", True),
+        ("--strict --format json --threshold 0", True),
+        ("--format json --threshold 0 --strict --no-boundary-violations", False),
+        ("--format json --threshold 1 --strict", False),
+    ],
+)
+def test_dart_scan_covers_boundaries_in_any_argument_order(
+    arguments: str, covers: bool
+) -> None:
+    gate: Gate = {
+        "name": "dead-code",
+        "role": "dead-code-duplicates",
+        "command": ["dart-decimate", "check", ".", *arguments.split()],
+        "report": {"type": "dart-decimate", "stdout": True},
+    }
+    assert dart_scan_includes_boundaries(gate) is covers
