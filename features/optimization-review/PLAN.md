@@ -1,6 +1,6 @@
 # Optimisation review follow-ups
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -91,11 +91,15 @@ Authority: User approved building points 1-8 and 10 on 2026-10-07, with commits 
 
 ## Acceptance + steps
 
-- [ ] Point 1: a 1-file, 4-line code fix with no plan passes `check` and prints "Size: small" → new test in `tests/test_plans.py`.
-- [ ] Point 1: each disqualifier (21 lines, 4 files, new file, lockfile, workflow, removed test line) still demands a plan and names the reason → same test, one case each.
-
-- [ ] Point 2: with GitHub unreachable or a newer revision available, the Stop hook passes with a note and makes no network request → test in `tests/test_agent_hooks.py` with the network call failing the test if reached.
-- [ ] Point 2: shipping still blocks on a newer revision or a failed lookup → existing shipping tests stay green.
+- [x] Point 1: a small code fix with no plan passes and prints "Size: small"; each disqualifier names its reason and still needs a plan; docs don't count toward size; small changes ship without a plan → `tests/test_plans.py`, `tests/test_shipping_plan.py`.
+- [x] Point 2: the Stop hook never blocks on freshness and makes no update-freshness request; quick checks use installed tools offline; shipping still blocks when stale → `tests/test_agent_hooks.py`, `tests/test_planning_handoffs.py`, `tests/test_ship_actions.py`.
+- [x] Point 3: updates prepare `hard-eng/update` without touching the current branch; `update-pr` publishes one PR and merges only after every check on the exact head passed, with the repo's allowed method; remote fixes are kept; rebase- or squash-merged fixes don't block later updates; no origin is a plain wait → `tests/test_update_pr.py`, `tests/test_update_runner.py`.
+- [x] Point 4: Stop runs only the quick roles and shows `Failed gates:` and the first error first → `tests/test_quick_check.py`, `tests/test_stop_checks.py`.
+- [x] Point 5: an Accepted ADR's `Applies to:` prefix blocks once per session with its Decision; new ADRs need the line; deleting the last file under a prefix fails → `tests/test_decisions.py`, `tests/test_stop_checks.py`.
+- [x] Point 6: sample requests rank their own skill first and no two descriptions are too alike; three on-demand agent routing cases → `tests/test_skill_routing.py`, `tests/test_agent_checks.py`.
+- [x] Point 7: reviews report Plan match per item; big changes need a cross-model challenge record before shipping, `not done` is stated → `tests/test_challenge.py`, `tests/test_ship_actions.py`.
+- [x] Point 8: added suppressions, skips (incl. module-level and bare `mark`) and net-removed assertions fail; existing lines don't → `tests/test_comments.py`.
+- [x] Point 10: existing pre-push hooks (plain, Husky, lefthook-managed) are kept and run first; a replaced launcher is reported; other languages install in basic mode; gap issues dedupe and refuse project detail; stock Dart pubspec and `uv init --package` entry points work → `tests/test_hook_chain.py`, `tests/test_basic_mode.py`, `tests/test_gap_issue.py`, `tests/test_dart_config.py`.
 
 ## Baseline + execution
 
@@ -106,6 +110,7 @@ Execution: Sequential Sonnet builders, one point per commit, in order 2, 4, 1, 8
 ## Risks + recovery
 
 A one-line behaviour change can skip planning. Recovery: all checks still run, and the user can require a plan.
+Accepted limits (judged unrealistic in review): an update fix made by amending the generated update commit can be replaced by a newer update; Stop misses an edit that restores a file already changed at session start. Removed test `test_interrupt_after_installing_reports_the_installed_revision`: updates no longer write the user's checkout, so an interrupt can't leave a half-installed marker.
 
 ## ux_reference
 
@@ -113,6 +118,9 @@ N/A — no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Not run yet.
-E2E: Required — a real agent session makes a small code fix without a plan and is not blocked; a 4-file change is blocked until a plan exists.
+Result: Passed
+Evidence: Full `check --plan-stage Ready --base origin/main` passed 18/18 gates after rebasing on origin/main (1424 tests). Six Codex adversarial review rounds on gpt-6-astra; every realistic finding fixed with a regression test; the loop stopped when only narrow cases remained (see Risks). End-to-end fixtures (Python, TypeScript/pnpm/vitest, Dart package, Go basic mode with its own pre-push hook, Python with CLAUDE.md, Python with its own pre-push, Python without origin) exercised setup, Size verdicts, quick Stop, offline Stop, suppression guard, ADR matching, hook chaining, gap-issue (fake gh) and a real Codex challenge; findings were fixed. Not run: real upstream update publication and an end-to-end `ship` against GitHub.
+E2E: Passed — a real `claude -p` session in a fresh `uv init --package` project changed one line with no plan; the Stop hook ran only quick gates and returned a short, first-error-first reason (a real PRODUCT.md prerequisite); `check --quick` then printed `Size: small (1 file, 2 changed lines); no plan needed.` A 4-file or new-file change printing `Size: big` and failing was proven in the fixture runs.
+
+Delivery target: Merge
+Delivery: Pending — PR CI on GitHub, then rebase merge.
