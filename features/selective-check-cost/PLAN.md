@@ -10,6 +10,7 @@ Status: Ready
 - Pre-push checks only the packages that own changed files; CI still adds their dependents.
 - A Dart Decimate dead-code gate covers import boundaries whatever order its arguments take.
 - `ship --stage merge` merges by rebase only and refuses squash and merge commits.
+- The Hard Eng workflow grants `pull-requests: read`, which the PR lookup needs in private repositories; setup adds it to existing generated copies (user approval 2026-10-07).
 
 Non-goals (user decision 2026-10-07): skipping checks that passed before, a package exclude list, tool-specific related-test runs, conflict declarations between checks. Mutation stays in pre-push: it already covers only changed lines, never blocks and runs nowhere else.
 
@@ -38,6 +39,7 @@ Authority: The user asked to fix the open issues, chose these changes on 2026-10
 - [ ] `check` keeps up to `os.cpu_count()` parallel checks in flight → runner test.
 - [ ] Pre-push passes the owner-only scope; `check` with it selects changed packages without dependents while ancestor installs and shared checks stay → `tests/test_ship_actions.py`, `tests/test_affected_selection.py`.
 - [ ] A Decimate gate with `--format json --threshold 0 --strict` covers boundaries; one with an extra `--no-boundary-violations` does not → `tests/test_setup.py`.
+- [ ] An installed workflow without `pull-requests: read` gains it on update and then matches the template → `tests/test_ci_setup.py`.
 - [ ] `ship --stage merge` calls `gh pr merge --rebase`; `squash` or `merge` is refused before any GitHub call → `tests/test_ship_actions.py`.
 - [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
@@ -49,7 +51,7 @@ Execution: One builder in this worktree.
 
 ## Risks + recovery
 
-A change that breaks a dependent package now fails in CI instead of pre-push, costing one CI round. A non-JavaScript package whose Markdown is build input must list that folder in `impact_inputs`. More parallel checks use more memory at once. A failed GitHub query falls back to the full run. Recovery is reverting this branch.
+A change that breaks a dependent package now fails in CI instead of pre-push, costing one CI round. A non-JavaScript package whose Markdown is build input must list that folder in `impact_inputs`. More parallel checks use more memory at once. A failed GitHub query falls back to the full run. Another workflow that calls the Hard Eng workflow must also grant `pull-requests: read`, or it fails to start. Recovery is reverting this branch.
 
 ## ux_reference
 
