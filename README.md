@@ -21,6 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | s
 | Starting point | What happens |
 | --- | --- |
 | Empty repository | Setup stops. The agent asks which project type to create (Python, Flutter, Next.js or OpenNext on Cloudflare) unless the request says, creates it, then reruns setup. New Flutter apps use Riverpod. |
+| Other language (Go, Rust, Java/Kotlin, Ruby, PHP, .NET, Swift, C/C++, shell) | Basic mode: rules, skills, hooks, CI, current-files and history secret scans, a Semgrep security scan, and an OSV scan when a lockfile OSV reads exists. No built-in language checks; setup prints a `Gap:` line naming the missing checks. |
 | New project | Install the scaffold; establish product/design context, checks, and intended integrations. |
 | Existing project | Preserve custom instructions, skills, hooks, and configuration; report genuine conflicts. |
 | Hard Eng already installed | Select a newer CI-verified revision when available, check the project's gate configuration against its hooks, then apply changes as a local update commit that pre-push and CI verify. |

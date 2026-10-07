@@ -55,6 +55,7 @@ def merge(
 
 
 def gate_config(root: Path) -> GateConfig:
+    from basic_mode import basic_config
     from gate_config import dart_test_support, package_manifests, repository_files
     from project_setup import adapt_packages
 
@@ -88,6 +89,8 @@ def gate_config(root: Path) -> GateConfig:
             "`uv init --bare` then `uv add -r requirements.txt` there (writes pyproject.toml "
             "and uv.lock), commit both, then rerun setup."
         )
+    if not packages and (basic := basic_config(SOURCE, root, files)) is not None:
+        return basic
     if not packages:
         raise ValueError(
             "No supported project manifest found. New project: ask the user which type to create "
@@ -940,6 +943,9 @@ def install(root: Path, previous: Path | None = None) -> None:
     guidance = dependency_review_guidance(config["packages"])
     if guidance is not None:
         print("Before verification, " + guidance)
+    from basic_mode import announce
+
+    announce(root, config)
     if deleted:
         print("Removed old Hard Eng files: " + ", ".join(deleted))
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
