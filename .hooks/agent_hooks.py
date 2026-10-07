@@ -476,6 +476,10 @@ def session_context(root: Path, payload: JsonObject) -> str:
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         messages = [failed_update(error)]
     messages.append(gate_status(root))
+    from hook_chain import restore_note
+
+    if note := restore_note(root):
+        messages.append(note)
     if not recorded:
         messages.append("Session revision unavailable; use full checks.")
     messages.append(

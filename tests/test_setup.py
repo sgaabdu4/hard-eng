@@ -726,9 +726,7 @@ def test_install_preserves_project_and_repeats(
     assert not (tmp_path / ".agents/skill-sources").exists()
 
 
-@pytest.mark.parametrize(
-    "name", [".hooks/reports.py", ".agents/skills/he/SKILL.md", ".git/hooks/pre-push"]
-)
+@pytest.mark.parametrize("name", [".hooks/reports.py", ".agents/skills/he/SKILL.md"])
 def test_conflict_writes_nothing(
     installer: ModuleType, tmp_path: Path, name: str
 ) -> None:

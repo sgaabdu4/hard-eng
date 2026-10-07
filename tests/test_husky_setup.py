@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 from types import ModuleType
 
+import hook_chain
 import pytest
 import update
 import update_runner
@@ -60,8 +61,7 @@ def test_husky_update_preserves_shim_and_runs_shell_launcher(
         installer.prepare_hook(tmp_path)
     target.unlink()
     shim.write_text("#!/bin/sh\necho custom shim\n")
-    with pytest.raises(ValueError, match="Existing pre-push hook must be preserved"):
-        installer.prepare_hook(tmp_path)
+    assert installer.prepare_hook(tmp_path) == (shim, hook_chain.CHAINED_LAUNCHER)
 
 
 @pytest.mark.parametrize("installed", [False, True])

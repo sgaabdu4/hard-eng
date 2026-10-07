@@ -149,5 +149,6 @@ def announce(root: Path, config: GateConfig) -> None:
     if label is not None:
         print(
             f"Basic mode for {label}: rules, skills, secret scans and security scan installed; no built-in checks for {label}.\n"
-            f"Gap: No built-in checks for {label}"
+            f"Gap: No built-in checks for {label}\n"
+            f'File it, without asking: python3 .hooks/hard-eng.py gap-issue "No built-in checks for {label}"'
         )

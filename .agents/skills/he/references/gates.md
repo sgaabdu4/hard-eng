@@ -31,6 +31,16 @@ Basic mode (no supported manifest) has no packages: `packages` is empty and `sha
 
 Use existing [Python](../templates/hard-eng.python.json), [JavaScript](../templates/hard-eng.javascript.json) or [Dart/Flutter](../templates/hard-eng.dart.json) templates when adapting a new package. Do not copy a template over project-specific contracts.
 
+## Adopting existing checks
+
+At setup, list the project's existing checks (pre-push/pre-commit hook commands, lefthook, pre-commit or husky configs, CI check jobs) beside Hard Eng's gates and show the user a comparison table. A project pre-push hook is kept and runs first; Hard Eng's checks run only if it passes.
+
+- Hard Eng's gate does the same or better → use Hard Eng's.
+- Project check does something Hard Eng lacks → keep it as a gate in `hard-eng.gates.json`, so the single pre-push runs everything, and file a gap issue: `python3 .hooks/hard-eng.py gap-issue "<missing check, generic>"`. File without asking. Never include project names, code, paths or data; the command refuses paths, file names, URLs, emails and long text.
+- Unsure → keep both.
+
+Remove nothing project-owned until the user approves the table. After approval, a fully absorbed original hook can be dropped from the chain by deleting its `.project` copy and rerunning setup.
+
 ## Plan checks
 
 Load for planning-stage checks or plan validation failures. Use [HE Plan](../../he-plan/SKILL.md) for readiness + authorization; [PLAN.md](../../he-plan/templates/PLAN.md) owns required fields.
