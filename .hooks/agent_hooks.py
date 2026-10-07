@@ -13,8 +13,8 @@ from pathlib import Path
 
 from gate_config import JsonObject, JsonValue, nonproduction_source, repository_files
 
-# The HE Build handoff line, not a quoted or negated mention of it.
 GATE_OUTPUT_LIMIT = 8000
+# The HE Build handoff line, not a quoted or negated mention of it.
 SHIP_CLAIM = re.compile(r"^[*_ ]*Ready for ship[*_]*\s*[—–-]", re.MULTILINE)
 
 
