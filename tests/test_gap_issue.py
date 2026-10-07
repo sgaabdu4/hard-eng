@@ -49,7 +49,7 @@ def test_new_gap_is_filed_with_the_fixed_title_and_body(
         == "Missing check: No built-in checks for Go"
     )
     assert create[create.index("--body") + 1] == (
-        "Hard Eng has no built-in check for: No built-in checks for Go\n\n"
+        "Missing check: No built-in checks for Go\n\n"
         "Language: Go\nHard Eng revision: abc123\n\n"
         "Filed by `python3 .hooks/hard-eng.py gap-issue`. It names only the missing check."
     )
@@ -74,6 +74,8 @@ def test_gap_already_filed_open_or_closed_is_not_filed_again(
         "lint src/app/main.py",
         "run scripts\\build",
         "check app.config.ts",
+        "check apps/web/package.json",
+        "check package.json.bak",
         "scan https://internal.example",
         "notify owner@example.com",
         "x" * 121,
@@ -87,6 +89,17 @@ def test_project_detail_is_refused_before_any_github_call(
     with pytest.raises(ValueError, match="Describe the missing check generically"):
         gap_issue.file_gap(project, text)
     assert gh.calls == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["go.sum drift", "package.json scripts", "Dockerfile base image pinning"],
+)
+def test_common_manifest_names_are_accepted(
+    project: Path, monkeypatch: pytest.MonkeyPatch, text: str
+) -> None:
+    fake(monkeypatch, [])
+    assert gap_issue.file_gap(project, text) == 0
 
 
 def test_language_labels_with_a_slash_are_accepted(
