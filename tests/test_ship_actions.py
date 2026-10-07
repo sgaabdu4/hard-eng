@@ -597,7 +597,7 @@ def update_pull(*checks: dict[str, str]) -> str:
         ),
         (
             update_pull({"status": "IN_PROGRESS", "conclusion": ""}),
-            "merges by itself once its checks pass: wait for it",
+            "merges once its checks pass: wait for them",
         ),
         ("merged", "rebase this branch on origin/main"),
     ],

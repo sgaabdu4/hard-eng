@@ -127,7 +127,7 @@ def ready_revision(root: Path) -> str | None:
 def ready_message(revision: str) -> str:
     return (
         f"Hard Eng update {revision} is ready on branch {UPDATE_BRANCH}; publish it with "
-        f"`{UPDATE_COMMAND}`. Its PR is allowed beside the task's PR and merges by itself "
+        f"`{UPDATE_COMMAND}`. Its PR is allowed beside the task's PR and merges "
         "once its checks pass."
     )
 
