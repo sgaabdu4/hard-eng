@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-Issue 247. The background update builds its commit in a fresh `git worktree add` candidate. With `extensions.worktreeConfig` on, Git copies the calling worktree's `config.worktree` into the candidate, including an absolute `core.hooksPath` into the main checkout, so the candidate ran the main checkout's hooks instead of its own. The candidate now rewrites an inherited absolute worktree-scoped hooks path that lies inside the calling worktree or the main checkout as the same path relative to the candidate, so the candidate runs its own copy of those hooks. A relative path already resolves inside the candidate, and a hooks folder in the shared `.git` directory or outside the repository is the same for every checkout; those are kept. When the update commit is still rejected, the error now says the project's commit hook failed in a fresh checkout with no package install, and that the fix belongs in the project's hook (quick guards in pre-commit, verification in pre-push), not in Hard Eng. The optional setup warning from the issue is not added. No new file other than this plan.
+Issue 247. The background update builds its commit in a fresh `git worktree add` candidate. With `extensions.worktreeConfig` on, Git copies the calling worktree's `config.worktree` into the candidate, including an absolute `core.hooksPath` into the main checkout, so the candidate ran the main checkout's hooks instead of its own. The candidate now rewrites an inherited absolute worktree-scoped hooks path that lies inside the calling worktree or the main checkout as the same path relative to the candidate, so the candidate runs its own copy of those hooks. A relative path already resolves inside the candidate, and a hooks folder in the shared `.git` directory or outside the repository is the same for every checkout; those are kept. When the update commit is still rejected, the error now says a rejecting project commit hook ran in a fresh checkout with no package install, and that the fix belongs in the project's hook (quick guards in pre-commit, verification in pre-push), not in Hard Eng. The optional setup warning from the issue is not added. No new file other than this plan.
 
 ## Repository context
 
@@ -31,7 +31,7 @@ Execution: Single session on `feature/update-candidate-hooks`.
 
 ## Risks + recovery
 
-A Husky project whose `.husky/_` is untracked runs no pre-commit hook in the candidate, the same as a fresh clone; the update PR's checks remain the gate. Recovery is reverting this branch.
+A Husky project whose `.husky/_` is untracked runs no pre-commit hook in the candidate, the same as a fresh clone; the update PR's checks remain the gate. The error text names a project hook as the likely cause, but the commit's own last lines come first, so a non-hook failure such as commit signing still shows its real reason. Left unfixed after the fourth Codex review: the calling worktree's `post-checkout` hook still runs during `git worktree add`, before the candidate's hooks path is rewritten; this predates the change and a rejecting `post-checkout` hook is rare. Recovery is reverting this branch.
 
 ## ux_reference
 
