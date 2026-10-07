@@ -27,6 +27,8 @@ Measure before and after each CI change: `python3 .hooks/hard-eng.py ci-usage [-
 
 `shipping.ci_seconds` bounds each named check's reported execution time. A three-second aggregate does not measure its upstream jobs: retain meaningful worker checks in the policy and measured native workflow/job timeouts. Report end-to-end CI elapsed time separately; do not claim a whole-pipeline budget from the aggregate's duration. Existing monoliths require a deliberate assertion-by-assertion migration before removing their product triggers; setup never deletes them automatically.
 
+Basic mode (no supported manifest) has no packages: `packages` is empty and `shared` holds secrets-files, secrets-history, security (Semgrep `p/default`, excluding the installed `.agents` and `.hooks`) and, only when a lockfile OSV reads exists, vulnerabilities. Add project-owned checks as gates; CI installs only the bootstrap tools.
+
 Use existing [Python](../templates/hard-eng.python.json), [JavaScript](../templates/hard-eng.javascript.json) or [Dart/Flutter](../templates/hard-eng.dart.json) templates when adapting a new package. Do not copy a template over project-specific contracts.
 
 ## Plan checks
