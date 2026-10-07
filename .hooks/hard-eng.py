@@ -929,7 +929,9 @@ def main() -> int:
     shipping = commands.add_parser(
         "ship", help="Verify PR delivery or perform guarded shipping actions"
     )
-    shipping.add_argument("--plan", required=True)
+    shipping.add_argument(
+        "--plan", help="Task plan; optional only when `check` reports Size: small"
+    )
     shipping.add_argument("--pr", required=True)
     shipping.add_argument(
         "--stage", choices=("ready", "merge", "delivered", "cleanup"), default="ready"

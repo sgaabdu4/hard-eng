@@ -277,6 +277,30 @@ def test_ready_returns_identity_after_current_checks(
     assert any("check-runs" in call[-1] for call in fake.calls)
 
 
+def test_ready_without_a_plan_only_for_a_small_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    (fixture.root / "source.txt").write_text("fixture\nsmall fix\n")
+    _native(fixture.root, "commit", "-qam", "small fix")
+    fixture = Fixture(
+        fixture.root, fixture.plan, _native(fixture.root, "rev-parse", "HEAD")
+    )
+    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [_check(fixture.head)]))
+    shipment = shipping.verify(fixture.root, None, _PR_URL, "ready")
+    assert shipment.plan is None
+    assert shipment.delivery_target == "Merge"
+    (fixture.root / "added.txt").write_text("new file\n")
+    _native(fixture.root, "add", "added.txt")
+    _native(fixture.root, "commit", "-qm", "big change")
+    fixture = Fixture(
+        fixture.root, fixture.plan, _native(fixture.root, "rev-parse", "HEAD")
+    )
+    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [_check(fixture.head)]))
+    with pytest.raises(shipping.ShippingError, match="big change needs a plan"):
+        shipping.verify(fixture.root, None, _PR_URL, "ready")
+
+
 @pytest.mark.parametrize("configured", [False, True])
 def test_deploy_readiness_requires_verifier_without_running_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, configured: bool

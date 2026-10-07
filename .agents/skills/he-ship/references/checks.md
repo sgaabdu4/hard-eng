@@ -93,7 +93,7 @@ The verifier checks the declaration or attachment availability/media type; E2E o
 
 ## Commands + proof boundaries
 
-From the task checkout, with its actual PR URL and plan:
+From the task checkout, with its actual PR URL and plan (a change `check` reports as `Size: small` ships without a plan: omit `--plan`; delivery scope is Merge and every check still runs, while a big change without a plan is refused):
 
 ```sh
 python3 .hooks/hard-eng.py ship --plan PLAN.md --pr https://github.com/owner/repo/pull/123 --stage ready

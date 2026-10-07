@@ -6,7 +6,7 @@ description: Implement and verify a ready, authorized plan through focused fixes
 # Hard Eng Build
 
 - Input = existing Ready + authorized plan from [HE Plan](../he-plan/SKILL.md); inspect its readiness evidence (passing baseline, applicable UX, blockers), not Status alone. Failed-baseline repairs alone may use its [authorized Draft repair route](../he/references/gates.md#baseline-repair); feature work remains blocked until repair delivery. Other missing, pending or contradictory readiness → that owner before production edits. Material scope change → same owner; preserve accepted decisions + completed work. Participation and project context → [HE workflow](../he/references/workflow.md).
-- Output = locally implemented + verified behavior, Complete plan and explicit Ready for ship handoff. Build adds no authority to commit, push, publish, merge or deploy; delivery is a separate stage.
+- Output = locally implemented + verified behavior, Complete plan (none for a change `check` rates `Size: small`) and explicit Ready for ship handoff. Build adds no authority to commit, push, publish, merge or deploy; delivery is a separate stage.
 
 ## Implement + verify
 
