@@ -91,7 +91,7 @@ def test_session_notes_a_replaced_launcher_and_says_how_to_restore(
     assert hook_chain.RESTORE not in agent_hooks.session_context(repository, {})
     hook.write_text("#!/bin/sh\nexec lefthook run pre-push\n")
     message = agent_hooks.session_context(repository, {})
-    assert hook_chain.RESTORE in message
+    assert hook_chain.RESTORE in message.splitlines()[:2]
     assert "Rerun setup" in message
     hook.unlink()
     assert hook_chain.restore_note(repository) == hook_chain.RESTORE
