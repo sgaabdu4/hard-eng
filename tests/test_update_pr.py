@@ -119,6 +119,24 @@ def test_background_update_leaves_the_checkout_and_moves_one_branch(
     assert second in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
 
 
+def test_update_from_a_linked_worktree_ignores_its_inherited_hooks_path(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    stale = target.parent / "stale-hooks"
+    stale.mkdir()
+    (stale / "pre-commit").write_text("#!/bin/sh\nexit 1\n")
+    (stale / "pre-commit").chmod(0o755)
+    git(target, "config", "extensions.worktreeConfig", "true")
+    linked = target.parent / "linked"
+    git(target, "worktree", "add", "-q", "--detach", str(linked), "HEAD")
+    git(linked, "config", "--worktree", "core.hooksPath", str(stale))
+    first = newer_release(source, monkeypatch, "first update")
+    assert update_runner.apply_update(linked) == 0
+    assert first in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
+    assert git(linked, "config", "core.hooksPath") == str(stale)
+
+
 def fix_update_branch(target: Path) -> str:
     fixing = target.parent / "fixing"
     git(target, "worktree", "add", "-q", str(fixing), BRANCH)

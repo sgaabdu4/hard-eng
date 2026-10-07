@@ -767,7 +767,10 @@ def test_failed_update_restores_the_skill_folder_link(
     hook = target / ".git/hooks/pre-commit"
     hook.write_text("#!/bin/sh\nexit 1\n")
     hook.chmod(0o755)
-    with pytest.raises(subprocess.SubprocessError, match="git commit exited 1"):
+    with pytest.raises(
+        subprocess.SubprocessError,
+        match="git commit exited 1.*fix that hook in the project, not Hard Eng",
+    ):
         update.update(target)
     assert skill.is_symlink()
     assert git(target, "status", "--porcelain") == ""
