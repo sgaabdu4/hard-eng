@@ -191,6 +191,31 @@ def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, 
     return source, old
 
 
+def revision_follows(revision: str, reference: str) -> bool:
+    """Whether upstream's history puts revision after reference."""
+    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "--quiet",
+                "--bare",
+                "--filter=blob:none",
+                REPOSITORY,
+                temporary,
+            ],
+            check=True,
+            timeout=120,
+        )
+        ordered = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", reference, revision],
+            cwd=temporary,
+            check=False,
+            timeout=30,
+        )
+    return revision != reference and ordered.returncode == 0
+
+
 def scaffold_files(source: Path) -> set[str]:
     from gate_config import repository_files
 

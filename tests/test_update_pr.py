@@ -332,6 +332,60 @@ def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
     assert "not replaced" in capsys.readouterr().out
 
 
+def other_checkout(target: Path, remote: Path) -> Path:
+    other = target.parent / "other"
+    git(target.parent, "clone", "-q", str(remote), str(other))
+    git(other, "config", "user.name", "Fixture")
+    git(other, "config", "user.email", "fixture@example.invalid")
+    return other
+
+
+def test_update_pr_refreshes_a_branch_another_checkout_already_superseded(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source, target, remote = feature
+    apply_first_update(feature, monkeypatch)
+    second = newer_release(source, monkeypatch, "second update")
+    other = other_checkout(target, remote)
+    assert update_runner.apply_update(other) == 0
+    git(other, "push", "-q", "--no-verify", "origin", f"{BRANCH}:main")
+    monkeypatch.setattr(
+        update,
+        "latest_verified",
+        lambda previous: None if previous == second else second,
+    )
+    assert update_pr.publish(target) == 0
+    assert "Nothing to publish" in capsys.readouterr().out
+    assert subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", BRANCH], cwd=remote, check=False
+    ).returncode
+    assert gh.calls == []
+
+
+def test_update_pr_does_not_replace_a_newer_update_with_an_older_branch(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source, target, remote = feature
+    first = newer_release(source, monkeypatch, "first update")
+    assert update_runner.apply_update(target) == 0
+    newer_release(source, monkeypatch, "second update")
+    other = other_checkout(target, remote)
+    assert update_runner.apply_update(other) == 0
+    newer = git(other, "rev-parse", BRANCH)
+    git(other, "push", "-q", "--no-verify", "origin", BRANCH)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=first))
+    assert publish(target, monkeypatch) == 1
+    assert git(remote, "rev-parse", BRANCH) == newer
+    assert "newer Hard Eng update" in capsys.readouterr().out
+    assert gh.calls == []
+
+
 def test_update_pr_reports_a_failing_pr_with_its_fix_steps(
     feature: tuple[Path, Path, Path],
     gh: FakeGh,

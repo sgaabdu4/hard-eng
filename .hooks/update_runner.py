@@ -823,7 +823,7 @@ def prepare_update(root: Path, repair: bool = False) -> str:
 
 
 def build_update(root: Path, base: str, repair: bool) -> str:
-    from update import latest_verified, update
+    from update import update
 
     tip = fetch_base(root, base)
     if unfinished_update(root, tip):
@@ -831,15 +831,8 @@ def build_update(root: Path, base: str, repair: bool) -> str:
             f"Hard Eng update branch {UPDATE_BRANCH} holds unfinished work; finish it with "
             f"`{UPDATE_COMMAND}` before a newer update is prepared."
         )
-    current = revision_at(root, tip)
-    waiting = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
-    if (
-        current
-        and waiting
-        and HEX_REVISION.fullmatch(current)
-        and waiting == latest_verified(current)
-    ):
-        return ready_message(waiting)
+    if branch_current(root, tip):
+        return ready_message(revision_at(root, f"refs/heads/{UPDATE_BRANCH}") or "")
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         candidate = Path(temporary) / "candidate"
         subprocess.run(
@@ -872,6 +865,25 @@ def build_update(root: Path, base: str, repair: bool) -> str:
         return outcome
     set_update_branch(root, landed[0])
     return ready_message(revision)
+
+
+def branch_current(root: Path, tip: str) -> bool:
+    """The update branch sits on the base tip and holds the newest verified release."""
+    from update import latest_verified
+
+    current = revision_at(root, tip)
+    waiting = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
+    branch = f"refs/heads/{UPDATE_BRANCH}"
+    based = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", tip, branch], cwd=root, check=False
+    )
+    return bool(
+        current
+        and waiting
+        and HEX_REVISION.fullmatch(current)
+        and based.returncode == 0
+        and waiting == latest_verified(current)
+    )
 
 
 def apply_update(root: Path) -> int:
