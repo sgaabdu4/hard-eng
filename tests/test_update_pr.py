@@ -117,16 +117,20 @@ def test_background_update_leaves_the_checkout_and_moves_one_branch(
     assert second in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
 
 
+def fix_update_branch(target: Path) -> str:
+    fixing = target.parent / "fixing"
+    git(target, "worktree", "add", "-q", str(fixing), BRANCH)
+    (fixing / "fix.txt").write_text("fix\n")
+    return commit(fixing, "fix the update")
+
+
 def test_background_update_keeps_an_update_branch_being_fixed(
     feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source, target, _ = feature
     newer_release(source, monkeypatch, "first update")
     assert update_runner.apply_update(target) == 0
-    fixing = target.parent / "fixing"
-    git(target, "worktree", "add", "-q", str(fixing), BRANCH)
-    (fixing / "fix.txt").write_text("fix\n")
-    fixed = commit(fixing, "fix the update")
+    fixed = fix_update_branch(target)
     newer_release(source, monkeypatch, "second update")
     assert update_runner.apply_update(target) == 0
     assert git(target, "rev-parse", BRANCH) == fixed
@@ -139,11 +143,8 @@ def test_update_after_a_rebase_merged_fix_prepares_the_next_release(
     source, target, _ = feature
     newer_release(source, monkeypatch, "first update")
     assert update_runner.apply_update(target) == 0
-    fixing = target.parent / "fixing"
-    git(target, "worktree", "add", "-q", str(fixing), BRANCH)
-    (fixing / "fix.txt").write_text("fix\n")
-    commit(fixing, "fix the update")
-    git(target, "worktree", "remove", "--force", str(fixing))
+    fix_update_branch(target)
+    git(target, "worktree", "remove", "--force", str(target.parent / "fixing"))
     landing = target.parent / "landing"
     git(target, "worktree", "add", "-q", "--detach", str(landing), "origin/main")
     (landing / "moved.txt").write_text("base moved\n")
