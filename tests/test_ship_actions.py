@@ -612,7 +612,11 @@ def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
     checkout = runner.ROOT / "snapshot"
     (checkout / ".hooks").mkdir(parents=True)
     (checkout / ".hooks/hard-eng.py").write_text(" ".join(scope))
-    monkeypatch.setattr(ship_actions, "snapshot", lambda *_args: nullcontext(checkout))
+
+    def snapshot(*_args: object) -> nullcontext[Path]:
+        return nullcontext(checkout)
+
+    monkeypatch.setattr(ship_actions, "snapshot", snapshot)
     shipping_policy["pre_push_seconds"] = 1.0
     (runner.ROOT / "hard-eng.gates.json").write_text(
         json.dumps({"shipping": shipping_policy})
