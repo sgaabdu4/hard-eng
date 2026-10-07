@@ -167,6 +167,10 @@ def migrate_pnpm_bootstrap(root: Path, content: str) -> str:
     )
 
 
+OLD_PERMISSIONS = (
+    "  checks: read # Verify the upstream release for scaffold-only updates.\n"
+)
+PERMISSIONS = "  pull-requests: read # Find the merged PR whose passed checks cover a base-branch push.\n"
 OLD_LAUNCHER = "pnpm dlx --allow-build=@jdxcode/mise"
 LAUNCHER = "pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise"
 
@@ -505,6 +509,10 @@ def configure_ci(
         )
         migrated = migrate_affected_tools(root, source, config, migrated)
         migrated = migrate_pnpm_bootstrap(root, migrated)
+        if PERMISSIONS not in migrated:
+            migrated = migrated.replace(
+                OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
+            )
         if migrated != original:
             changes[name] = migrated
         integrated(workflows)

@@ -13,6 +13,7 @@ import pytest
 import tool_setup
 import yaml
 from ci_setup import (
+    PERMISSIONS,
     configure_ci,
     impact_tools,
     migrate_pnpm_bootstrap,
@@ -960,6 +961,16 @@ def test_installed_launcher_gains_ignore_scripts_override(tmp_path: Path) -> Non
     migrated = changes[str(path.relative_to(tmp_path))]
     assert "pnpm dlx --allow-build" not in migrated
     assert migrated.count("pnpm dlx --config.ignore-scripts=false --allow-build") == 4
+
+
+def test_installed_workflow_gains_pull_request_read_permission(tmp_path: Path) -> None:
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    path.write_text(template.replace(PERMISSIONS, ""))
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes[".github/workflows/hard-eng.yml"] == template
 
 
 def test_generated_tool_cache_is_removed_from_existing_workflows(
