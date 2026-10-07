@@ -61,9 +61,10 @@ def open_pull(root: Path) -> dict[str, JsonValue] | None:
 
 def check_state(pull: dict[str, JsonValue], required: list[str] | None = None) -> str:
     rollup = pull.get("statusCheckRollup")
-    entries = (
-        [e for e in rollup if isinstance(e, dict)] if isinstance(rollup, list) else []
-    )
+    entries: list[dict[str, JsonValue]] = []
+    for item in rollup if isinstance(rollup, list) else []:
+        if isinstance(item, dict):
+            entries.append(item)
     if required:
         named = [e for e in entries if (e.get("name") or e.get("context")) in required]
         pending = len({e.get("name") or e.get("context") for e in named}) < len(
