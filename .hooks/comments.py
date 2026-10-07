@@ -276,7 +276,7 @@ def validate_comments(root: Path, base: str | None) -> None:
 
 PYTHON_OFF = re.compile(
     r"#\s*(noqa|type:\s*ignore|pyrefly:\s*ignore|pyright:\s*ignore|pylint:\s*disable"
-    r"|pragma:\s*no cover)|\bpytest\.mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
+    r"|pragma:\s*no cover)|\b(pytest\.)?mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
 )
 SCRIPT_OFF = re.compile(
     r"eslint-disable|@ts-(ignore|expect-error|nocheck)|biome-ignore"
