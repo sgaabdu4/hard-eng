@@ -14,6 +14,8 @@ import json, os, sys, time
 from pathlib import Path
 state = Path({state!r})
 if sys.argv[1] == "view":
+    if (state / "offline").exists():
+        raise SystemExit("network unreachable")
     print(json.dumps((state / "latest").read_text().strip()))
     raise SystemExit
 target = Path(sys.argv[sys.argv.index("--dir") + 1])
@@ -59,14 +61,23 @@ def registry(tmp_path: Path) -> Path:
     return state
 
 
-def launch(tmp_path: Path, add_seconds: float = 0) -> subprocess.Popen[str]:
+def launch(
+    tmp_path: Path, add_seconds: float = 0, quick: bool = False
+) -> subprocess.Popen[str]:
     environment = {
         name: value
         for name, value in os.environ.items()
         if not name.startswith(("MISE_", "PNPM_CONFIG_", "NPM_CONFIG_"))
     }
     return subprocess.Popen(
-        [sys.executable, "-c", PROVISION, str(SOURCE / ".hooks"), str(tmp_path)],
+        [
+            sys.executable,
+            "-c",
+            PROVISION,
+            str(SOURCE / ".hooks"),
+            str(tmp_path),
+            *(["--quick"] if quick else []),
+        ],
         env={
             **environment,
             "RUNNER_TEMP": str(tmp_path / "runner"),
@@ -80,8 +91,8 @@ def launch(tmp_path: Path, add_seconds: float = 0) -> subprocess.Popen[str]:
     )
 
 
-def provision(tmp_path: Path) -> subprocess.CompletedProcess[str]:
-    process = launch(tmp_path)
+def provision(tmp_path: Path, quick: bool = False) -> subprocess.CompletedProcess[str]:
+    process = launch(tmp_path, quick=quick)
     output, _ = process.communicate(timeout=60)
     return subprocess.CompletedProcess(process.args, process.returncode, output)
 
@@ -213,3 +224,40 @@ def test_dead_code_gate_treats_console_script_targets_as_used(tmp_path: Path) ->
     ]
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
     assert tool_setup.managed_command(command, tmp_path)[2:] == command[1:]
+
+
+def test_quick_check_uses_installed_tools_while_offline(
+    tmp_path: Path, registry: Path
+) -> None:
+    assert provision(tmp_path).returncode == 0
+    (registry / "offline").touch()
+    assert provision(tmp_path).returncode != 0
+    result = provision(tmp_path, quick=True)
+    assert result.returncode == 0, result.stdout
+    assert adds(registry) == ["2026.9.13"]
+
+
+def test_quick_check_offline_without_tools_says_to_connect_once(
+    tmp_path: Path, registry: Path
+) -> None:
+    (registry / "offline").touch()
+    result = provision(tmp_path, quick=True)
+    assert result.returncode != 0
+    assert "Tools are not installed yet" in result.stdout
+    assert "run the full check" in result.stdout
+
+
+def test_quick_check_runs_python_scanners_from_the_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tool_setup
+
+    command = ["ruff", "check"]
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check"])
+    assert tool_setup.managed_command(command)[:2] == ["uvx", "ruff@latest"]
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
+    assert tool_setup.managed_command(command)[:3] == [
+        "uvx",
+        "--offline",
+        "ruff@latest",
+    ]
