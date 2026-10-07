@@ -21,9 +21,11 @@ class FakeGh:
         self.pulls: list[dict[str, object]] = []
         self.calls: list[tuple[str, ...]] = []
 
-    def __call__(self, _root: Path, *args: str) -> str:
+    def __call__(self, root: Path, *args: str) -> str:
         self.calls.append(args)
         if args[:2] == ("pr", "list"):
+            for pull in self.pulls:
+                pull["headRefOid"] = git(root, "rev-parse", f"refs/heads/{BRANCH}")
             return json.dumps(self.pulls)
         if args[:2] == ("pr", "create"):
             title = args[args.index("--title") + 1]
@@ -138,7 +140,7 @@ def test_update_pr_pushes_opens_one_pr_and_turns_on_auto_merge(
     create = next(call for call in gh.calls if call[:2] == ("pr", "create"))
     assert create[create.index("--title") + 1] == f"Update Hard Eng to {first[:12]}"
     assert create[create.index("--base") + 1] == "main"
-    assert ("pr", "merge", PULL, "--auto", "--rebase") in gh.calls
+    assert "pr merge" not in gh.verbs()
     assert f"{PULL}: checks pending" in capsys.readouterr().out
     second = newer_release(source, monkeypatch, "second update")
     assert update_runner.apply_update(target) == 0
@@ -146,6 +148,81 @@ def test_update_pr_pushes_opens_one_pr_and_turns_on_auto_merge(
     assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
     assert gh.verbs().count("pr create") == 1
     assert gh.pulls[0]["title"] == f"Update Hard Eng to {second[:12]}"
+
+
+def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = apply_first_update(feature, monkeypatch)
+    assert publish(target, monkeypatch) == 0
+    gh.pulls[0]["statusCheckRollup"] = [
+        {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"},
+        {"name": "b", "status": "IN_PROGRESS", "conclusion": ""},
+    ]
+    assert publish(target, monkeypatch) == 0
+    assert "pr merge" not in gh.verbs()
+    gh.pulls[0]["statusCheckRollup"][1] = {
+        "name": "b",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+    }
+    assert publish(target, monkeypatch) == 0
+    head = git(target, "rev-parse", BRANCH)
+    assert (
+        "pr",
+        "merge",
+        PULL,
+        "--auto",
+        "--rebase",
+        "--match-head-commit",
+        head,
+    ) in gh.calls
+
+
+def test_update_pr_waits_for_the_configured_shipping_checks(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = apply_first_update(feature, monkeypatch)
+    policy = {"shipping": {"base": "main", "checks": ["gate"], "ui_paths": []}}
+    monkeypatch.setattr(update_pr, "load_policy", lambda *_a, **_k: policy["shipping"])
+    assert publish(target, monkeypatch) == 0
+    gh.pulls[0]["statusCheckRollup"] = [
+        {"name": "other", "status": "COMPLETED", "conclusion": "SUCCESS"}
+    ]
+    assert publish(target, monkeypatch) == 0
+    assert "pr merge" not in gh.verbs()
+    gh.pulls[0]["statusCheckRollup"].append(
+        {"name": "gate", "status": "COMPLETED", "conclusion": "SUCCESS"}
+    )
+    assert publish(target, monkeypatch) == 0
+    assert "pr merge" in gh.verbs()
+
+
+def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source, target, remote = feature
+    apply_first_update(feature, monkeypatch)
+    assert publish(target, monkeypatch) == 0
+    other = target.parent / "other"
+    git(target.parent, "clone", "-q", str(remote), str(other))
+    git(other, "switch", "-q", BRANCH)
+    (other / "fix.txt").write_text("fix\n")
+    fix = commit(other, "fix the update")
+    git(other, "push", "-q", "--no-verify", "origin", BRANCH)
+    newer_release(source, monkeypatch, "second update")
+    assert update_runner.apply_update(target) == 0
+    capsys.readouterr()
+    assert publish(target, monkeypatch) == 1
+    assert git(remote, "rev-parse", BRANCH) == fix
+    assert "not replaced" in capsys.readouterr().out
 
 
 def test_update_pr_reports_a_failing_pr_with_its_fix_steps(

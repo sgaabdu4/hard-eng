@@ -909,7 +909,7 @@ def main() -> int:
     )
     commands.add_parser(
         "update-pr",
-        help="Push the prepared Hard Eng update branch, open its PR and turn on auto-merge",
+        help="Push the prepared Hard Eng update branch, open its PR and merge it once its checks pass",
     ).set_defaults(apply=False)
     challenging = commands.add_parser(
         "challenge",
