@@ -80,6 +80,58 @@ def test_setup_keeps_a_project_pre_push_hook_and_runs_it_first(
     ).read_text() == "refs/heads/a 1 refs/heads/a 0\n"
 
 
+def test_setup_chains_a_husky_projects_own_pre_push_script(
+    installer: ModuleType,
+    repository: Path,
+    shipping_policy: ShippingPolicy,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    go_project(repository)
+    shim = repository / ".husky/_/pre-push"
+    shim.parent.mkdir(parents=True)
+    shim.write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
+    (shim.parent / "h").write_text(
+        'n=$(basename "$0")\ns=$(dirname "$(dirname "$0")")/$n\nsh -e "$s" "$@"\n'
+    )
+    script = repository / ".husky/pre-push"
+    script.write_text(PROJECT_HOOK.removeprefix("#!/bin/sh\n"))
+    original = script.read_bytes()
+    git(repository, "config", "core.hooksPath", ".husky/_")
+    config = installer.gate_config(repository)
+    config["shipping"] = shipping_policy
+    (repository / "hard-eng.gates.json").write_text(json.dumps(config))
+    installer.install(repository)
+    assert hook_chain.KEPT in capsys.readouterr().out.splitlines()
+    kept = repository / ".husky/pre-push.project"
+    assert kept.read_bytes() == original
+    assert script.read_text() == hook_chain.HUSKY_CHAINED_LAUNCHER
+    installer.install(repository)
+    assert kept.read_bytes() == original
+    assert script.read_text() == hook_chain.HUSKY_CHAINED_LAUNCHER
+    (repository / ".hooks/hard-eng.py").write_text(STUB)
+    arguments = ["sh", str(shim), "origin", "https://example.test/r"]
+    for code, expected, ran in ((3, 3, False), (0, 5, True)):
+        (repository / "project.exit").write_text(f"{code}\n")
+        (repository / "stub.args").unlink(missing_ok=True)
+        result = subprocess.run(
+            arguments,
+            cwd=repository,
+            input="refs/heads/a 1 refs/heads/a 0\n",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == expected
+        assert (repository / "stub.args").exists() == ran
+    assert (
+        repository / "project.args"
+    ).read_text() == "origin https://example.test/r\n"
+    assert (
+        repository / "project.stdin"
+    ).read_text() == "refs/heads/a 1 refs/heads/a 0\n"
+    assert (repository / "stub.stdin").read_text() == "refs/heads/a 1 refs/heads/a 0\n"
+
+
 def test_session_notes_a_replaced_launcher_and_says_how_to_restore(
     installer: ModuleType,
     repository: Path,

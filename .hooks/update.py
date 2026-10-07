@@ -275,6 +275,14 @@ def planned_hook(root: Path, plan: object) -> tuple[str, str]:
     if hook_path == ".husky/pre-push":
         if (root / hook_path).is_symlink():
             raise ValueError("Preserve the existing hook symlink before updating")
+        import hook_chain
+
+        if hook_chain.foreign_hook(root, root / hook_path) and not (
+            hook_chain.project_copy(root / hook_path).exists()
+        ):
+            raise ValueError(
+                "Existing pre-push hook must be preserved; run the setup command to keep it"
+            )
         files = plan.get("files")
         if not isinstance(files, dict):
             raise TypeError("Setup plan must include file changes")

@@ -484,20 +484,19 @@ def prepare_hook(root: Path) -> tuple[Path, str]:
 
     hook, target = hook_chain.locate(root)
     shell = target != hook
-    foreign = hook_chain.foreign_hook(root, target)
-    if foreign and shell:
-        raise ValueError(
-            "Existing pre-push hook must be preserved; ask before changing it"
-        )
     hook_chain.check_free(root, target)
-    chained = not shell and (foreign or hook_chain.project_copy(target).exists())
-    launcher = (
-        hook_chain.SHELL_LAUNCHER
-        if shell
-        else hook_chain.CHAINED_LAUNCHER
-        if chained
-        else hook_chain.PYTHON_LAUNCHER
+    chained = (
+        hook_chain.foreign_hook(root, target)
+        or hook_chain.project_copy(target).exists()
     )
+    if shell:
+        launcher = (
+            hook_chain.HUSKY_CHAINED_LAUNCHER if chained else hook_chain.SHELL_LAUNCHER
+        )
+    else:
+        launcher = (
+            hook_chain.CHAINED_LAUNCHER if chained else hook_chain.PYTHON_LAUNCHER
+        )
     return target, launcher
 
 
@@ -910,7 +909,10 @@ def install(root: Path, previous: Path | None = None) -> None:
     names = sorted({*changes, *links, *deleted})
     if hook.is_relative_to(root) and ".git" not in hook.relative_to(root).parts:
         names.append(str(hook.relative_to(root)))  # A Husky launcher lives in the tree.
-        if launcher == hook_chain.CHAINED_LAUNCHER:
+        if launcher in {
+            hook_chain.CHAINED_LAUNCHER,
+            hook_chain.HUSKY_CHAINED_LAUNCHER,
+        }:
             names.append(str(hook_chain.project_copy(hook).relative_to(root)))
     # Commit only paths without prior local state, so no project edit joins the commit.
     clean = not local_state(root, names)
