@@ -36,7 +36,7 @@ Execution: Main agent in this checkout.
 
 ## Risks + recovery
 
-A reworded rule could read differently to an agent; the clause map is the review aid. First pass: size fell from 5,369 to about 4,800 bytes. Second pass, measured with the cl100k_base tokenizer: 1,014 to about 845 tokens. Recovery is reverting this branch.
+A reworded rule could read differently to an agent; the clause map is the review aid. First pass: size fell from 5,369 to about 4,800 bytes. Second pass, measured with the cl100k_base tokenizer: 1,014 to about 865 tokens. Recovery is reverting this branch.
 
 ## ux_reference
 
