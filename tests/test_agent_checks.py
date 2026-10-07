@@ -23,6 +23,8 @@ from agent_checks import (
     judge_grade,
     judge_plan_only,
     judge_review,
+    loaded_skills,
+    loads_skill,
 )
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
@@ -320,3 +322,39 @@ def test_a_grader_that_used_tools_gives_no_verdict(tmp_path: Path) -> None:
         judge_grade(client(peeked), Namespace(), tmp_path / "b", "rubric", "report")
         is None
     )
+
+
+def test_skill_routing_is_judged_from_the_skills_each_client_loaded(
+    tmp_path: Path,
+) -> None:
+    root, base = case_fixture(tmp_path, "routes-to-ship")
+    claude: list[dict[str, object]] = [
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "s",
+                        "name": "Skill",
+                        "input": {"skill": "he-ship"},
+                    }
+                ]
+            },
+        },
+        {
+            "type": "user",
+            "message": {"content": [{"type": "tool_result", "tool_use_id": "s"}]},
+        },
+    ]
+    codex = [
+        Action("command", "sed -n 1,80p .agents/skills/he-ship/SKILL.md", True),
+        Action("command", "cat .agents/skills/he-plan/SKILL.md", False),
+    ]
+    assert loaded_skills(claude_actions(claude)) == {"he-ship"}
+    assert loaded_skills(codex) == {"he-ship"}
+    judge = loads_skill("he-ship")
+    assert judge(Run(root, base, "", [], codex)) == []
+    assert judge(Run(root, base, "", [], [codex[1]])) == [
+        "never loaded the he-ship skill"
+    ]
