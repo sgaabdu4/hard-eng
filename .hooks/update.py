@@ -762,8 +762,8 @@ def refuse_local_state(root: Path, names: list[str]) -> None:
         )
 
 
-def update(root: Path, repair: bool = False, *, remember: bool = False) -> str:
-    """The background run remembers a refusal; setup always retries."""
+def update(root: Path, repair: bool = False, *, remember: Path | None = None) -> str:
+    """The background run remembers a refusal under the given root; setup always retries."""
     if (blocker := update_blocker(root)) is not None:
         return blocker
     previous = json.loads((root / SOURCE_FILE).read_text())["revision"]
@@ -773,15 +773,15 @@ def update(root: Path, repair: bool = False, *, remember: bool = False) -> str:
             return repair_installation(root, previous)
         return repair_current_hook(root, previous)
     attempt = update_attempt(root, revision) if remember else None
-    if attempt is not None and (known := known_failure(root, attempt)):
+    if attempt is not None and remember and (known := known_failure(remember, attempt)):
         return known
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
         try:
             return install_revision(root, source, old, revision)
         except (ValueError, TypeError, subprocess.CalledProcessError) as error:
-            if attempt is not None:
-                remember_failure(root, attempt, error)
+            if attempt is not None and remember:
+                remember_failure(remember, attempt, error)
             raise
 
 

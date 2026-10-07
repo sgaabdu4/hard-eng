@@ -21,6 +21,9 @@ RESULT_FILE = ".hard-eng/update-result.txt"
 LOG_FILE = ".hard-eng/update.log"
 FAILURE_FILE = ".hard-eng/update-failure.json"
 LOCAL_INPUTS = (".claude/settings.local.json", "CLAUDE.local.md")
+UPDATE_BRANCH = "hard-eng/update"
+UPDATE_COMMAND = "python3 .hooks/hard-eng.py update-pr"
+HEX_REVISION = re.compile(r"[0-9a-f]{40}")
 OWNER = re.compile(r"hard-eng-update (\d+)")
 TEMPORARY = re.compile(
     r"hard-eng-(?:update|push|gate|gitleaks|dart-parser|scaffold-check|mutation)-[a-z0-9_]{8}"
@@ -85,10 +88,46 @@ def stale_error(root: Path, revision: str) -> ValueError:
             f"background ({LOG_FILE}). Wait for it to finish without starting another update, "
             "then reverify before shipping or claiming completion."
         )
+    from update_pr import next_step
+
     return UpdateNeeded(
         f"Hard Eng freshness check found newer verified revision {revision}. "
-        f"Last update result: {last_result(root)}. "
-        "Use the supported updater, preserve local edits, then reverify before shipping or claiming completion."
+        f"Last update result: {last_result(root)}. {next_step(root)} "
+        "Shipping stays blocked until this branch contains the current Hard Eng; then reverify."
+    )
+
+
+def revision_at(root: Path, ref: str) -> str | None:
+    from update import SOURCE_FILE
+
+    path = f"{ref}:{SOURCE_FILE}"
+    shown = subprocess.run(
+        ["git", "show", path],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    try:
+        revision = json.loads(shown.stdout).get("revision")
+    except (ValueError, AttributeError):
+        return None
+    return revision if isinstance(revision, str) else None
+
+
+def ready_revision(root: Path) -> str | None:
+    """The revision waiting on the update branch that this checkout does not hold yet."""
+    waiting = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
+    return (
+        waiting if waiting is not None and waiting != installed_revision(root) else None
+    )
+
+
+def ready_message(revision: str) -> str:
+    return (
+        f"Hard Eng update {revision} is ready on branch {UPDATE_BRANCH}; publish it with "
+        f"`{UPDATE_COMMAND}`. Its PR is allowed beside the task's PR and merges by itself "
+        "once its checks pass."
     )
 
 
@@ -103,12 +142,14 @@ def freshness_note(root: Path) -> str:
             return blocker
         if update_running(root):
             return f"Hard Eng update is still running in the background ({LOG_FILE}); the scaffold may be out of date."
+        if (ready := ready_revision(root)) is not None:
+            return ready_message(ready)
         result = last_result(root)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return f"Hard Eng freshness is unknown: {error}."
     if result == "none recorded yet":
         return "Hard Eng freshness is unknown: no update result is recorded yet."
-    if "failed" in result or "stopped before" in result:
+    if "failed" in result:
         return f"The scaffold may be out of date. Last Hard Eng update result: {result}"
     return ""
 
@@ -524,16 +565,22 @@ def stop_idle_watcher(worktree: Path) -> None:
             )
 
 
-def remove_stale_candidates(root: Path) -> None:
-    """Remove candidates whose update has exited; the caller holds the lock."""
+def registered_worktrees(root: Path) -> list[dict[str, str]]:
     listing = subprocess.check_output(
         ["git", "worktree", "list", "--porcelain"], cwd=root, text=True
     )
-    for block in listing.split("\n\n"):
-        fields = {
+    return [
+        {
             key: value
             for key, _, value in (line.partition(" ") for line in block.splitlines())
         }
+        for block in listing.split("\n\n")
+    ]
+
+
+def remove_stale_candidates(root: Path) -> None:
+    """Remove candidates whose update has exited; the caller holds the lock."""
+    for fields in registered_worktrees(root):
         path = Path(fields.get("worktree", ""))
         owner = OWNER.fullmatch(fields.get("locked", ""))
         if not WORKTREE.fullmatch(f"{path.parent.name}/{path.name}"):
@@ -656,21 +703,124 @@ def installed_revision(root: Path) -> object:
         return None
 
 
-def apply_update(root: Path) -> int:
-    """Install the update and record its outcome; the supervising process holds the lock."""
-    from update import update
+def update_base(root: Path) -> str:
+    from shipping import load_policy
 
+    policy = load_policy(root, required=False)
+    return policy["base"] if policy else "main"
+
+
+def fetch_base(root: Path, base: str) -> str:
+    subprocess.run(
+        ["git", "fetch", "--quiet", "--no-tags", "origin", base],
+        cwd=root,
+        check=True,
+        timeout=120,
+    )
+    return subprocess.check_output(
+        ["git", "rev-parse", "FETCH_HEAD^{commit}"], cwd=root, text=True
+    ).strip()
+
+
+def branch_worktree(root: Path) -> Path | None:
+    for fields in registered_worktrees(root):
+        if fields.get("branch") == f"refs/heads/{UPDATE_BRANCH}":
+            return Path(fields["worktree"])
+    return None
+
+
+def unfinished_update(root: Path, tip: str) -> bool:
+    """A checked-out update branch, or one holding fixes beyond the update commit, is someone's work."""
+    if branch_worktree(root) is not None:
+        return True
+    span = f"{tip}..refs/heads/{UPDATE_BRANCH}"
+    ahead = subprocess.run(
+        ["git", "rev-list", "--count", span],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return ahead.returncode == 0 and int(ahead.stdout) > 1
+
+
+def set_update_branch(root: Path, commit: str) -> None:
+    ref = f"refs/heads/{UPDATE_BRANCH}"
+    found = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", ref],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    subprocess.run(
+        ["git", "update-ref", ref, commit, found.stdout.strip()],
+        cwd=root,
+        check=True,
+    )
+
+
+def prepare_update(root: Path) -> str:
+    """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
+    from update import latest_verified, update
+
+    base = update_base(root)
+    tip = fetch_base(root, base)
+    if unfinished_update(root, tip):
+        return (
+            f"Hard Eng update branch {UPDATE_BRANCH} holds unfinished work; finish it with "
+            f"`{UPDATE_COMMAND}` before a newer update is prepared."
+        )
+    current = revision_at(root, tip)
+    waiting = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
+    if (
+        current
+        and waiting
+        and HEX_REVISION.fullmatch(current)
+        and waiting == latest_verified(current)
+    ):
+        return ready_message(waiting)
+    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
+        candidate = Path(temporary) / "candidate"
+        subprocess.run(
+            ["git", "worktree", "add", "--quiet", "--detach", str(candidate), tip],
+            cwd=root,
+            check=True,
+            timeout=120,
+        )
+        owner = f"hard-eng-update {os.getpid()}"
+        subprocess.run(
+            ["git", "worktree", "lock", "--reason", owner, str(candidate)],
+            cwd=root,
+            check=True,
+        )
+        try:
+            outcome = update(candidate, remember=root)
+            revision = installed_revision(candidate)
+            landed = landed_commit(candidate, tip, f"Update Hard Eng to {revision}")
+        finally:
+            subprocess.run(
+                ["git", "worktree", "unlock", str(candidate)], cwd=root, check=False
+            )
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(candidate)],
+                cwd=root,
+                check=False,
+                timeout=120,
+            )
+    if landed is None or not isinstance(revision, str):
+        return outcome
+    set_update_branch(root, landed[0])
+    return ready_message(revision)
+
+
+def apply_update(root: Path) -> int:
+    """Prepare the update branch and record the outcome; the supervising process holds the lock."""
     signal.signal(signal.SIGTERM, interrupt_update)
-    previous = installed_revision(root)
     try:
-        outcome = update(root, remember=True)
+        outcome = prepare_update(root)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         outcome = failed_update(error)
-        if (revision := installed_revision(root)) != previous:
-            outcome = (
-                f"Updated Hard Eng to {revision} with a local commit, but it stopped before "
-                f"its final steps ({error}); the next update finishes them."
-            )
     record_result(root, outcome)
     return 0
 
@@ -762,3 +912,11 @@ def start_update(root: Path) -> str:
         "it finishes, and the next session start reports its result. Do not run setup meanwhile. "
         f"Last update result: {last_result(root)}"
     )
+
+
+def update_main(root: Path, publishing: bool, apply: bool) -> int:
+    if publishing:
+        from update_pr import publish
+
+        return publish(root)
+    return apply_update(root) if apply else run_update(root)

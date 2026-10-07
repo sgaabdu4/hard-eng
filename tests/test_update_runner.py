@@ -17,11 +17,20 @@ from unittest.mock import Mock
 import agent_hooks
 import pytest
 import update
+import update_pr
 import update_runner
 from conftest import SOURCE, commit, git
 from gate_config import JsonObject
 from test_adoption import link_skill_into_old_copy
 from test_updates import select_release
+
+
+def add_origin(root: Path) -> Path:
+    git(root, "branch", "-M", "main")
+    remote = root.parent / "origin.git"
+    git(root, "clone", "--bare", str(root), str(remote))
+    git(root, "remote", "add", "origin", str(remote))
+    return remote
 
 
 @pytest.fixture
@@ -31,6 +40,7 @@ def installed(repository: Path) -> Path:
     marker.write_text(json.dumps({"revision": "a" * 40}))
     (repository / ".git/info/exclude").write_text(".hard-eng/\n")
     commit(repository, "installed")
+    add_origin(repository)
     return repository
 
 
@@ -100,13 +110,14 @@ def test_stop_waits_for_running_update_instead_of_rerunning_setup(
     installed: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
+    monkeypatch.setattr(update_pr, "gh", Mock(return_value="[]"))
     with (
         held_lock(installed),
         pytest.raises(ValueError, match="still running") as running,
     ):
         update.require_current(installed)
     assert not isinstance(running.value, update_runner.UpdateNeeded)
-    with pytest.raises(update_runner.UpdateNeeded, match="Use the supported updater"):
+    with pytest.raises(update_runner.UpdateNeeded, match="update-pr"):
         update.require_current(installed)
 
 
@@ -553,21 +564,6 @@ def test_interrupt_after_the_update_commit_keeps_the_update(installed: Path) -> 
     assert json.loads(state.read_text())["base"] == git(installed, "rev-parse", "HEAD")
 
 
-def test_interrupt_after_installing_reports_the_installed_revision(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def interrupted(root: Path, repair: bool = False, *, remember: bool = False) -> str:
-        (root / update.SOURCE_FILE).write_text(json.dumps({"revision": "b" * 40}))
-        raise subprocess.SubprocessError("interrupted by signal 15")
-
-    monkeypatch.setattr(update, "update", interrupted)
-    monkeypatch.setattr(update_runner.signal, "signal", Mock())
-    assert update_runner.apply_update(installed) == 0
-    result = (installed / update_runner.RESULT_FILE).read_text()
-    assert f"Updated Hard Eng to {'b' * 40} with a local commit" in result
-    assert "failed" not in result
-
-
 def refused_release(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, Mock]:
@@ -580,6 +576,7 @@ def refused_release(
     )
     config_path.write_text(json.dumps(config))
     commit(target, "wrapped files scanner the new hooks reject")
+    add_origin(target)
     select_release(source, monkeypatch)
     fetch = Mock(side_effect=update.fetch_sources)
     monkeypatch.setattr(update, "fetch_sources", fetch)
@@ -600,7 +597,9 @@ def test_background_update_does_not_repeat_a_refusal_until_inputs_change(
     with pytest.raises(ValueError, match="secrets-files requires native"):
         update.update(target, repair=True)
     assert fetch.call_count == 2
-    (target / "notes.txt").write_text("local work\n")
+    (target / "notes.txt").write_text("new base work\n")
+    commit(target, "base moved")
+    git(target, "push", "-q", "--no-verify", "origin", "main")
     assert update_runner.apply_update(target) == 0
     assert "not retried" not in result.read_text()
     assert fetch.call_count == 3
