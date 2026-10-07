@@ -24,7 +24,7 @@ python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py" pre-push < "$input
 """
 HUSKY_CHAINED_LAUNCHER = CHAINED_LAUNCHER.replace(
     'if [ -x "$original" ]; then\n  "$original" "$@"',
-    'if [ -f "$original" ]; then\n  sh "$original" "$@"',
+    'if [ -f "$original" ]; then\n  sh -e "$original" "$@"',
 )
 MANAGER_MARKERS = {
     "lefthook": "LEFTHOOK",
