@@ -23,6 +23,7 @@ FAILURE_FILE = ".hard-eng/update-failure.json"
 LOCAL_INPUTS = (".claude/settings.local.json", "CLAUDE.local.md")
 UPDATE_BRANCH = "hard-eng/update"
 UPDATE_COMMAND = "python3 .hooks/hard-eng.py update-pr"
+NOT_PUBLISHED = "Hard Eng updates start after the project is pushed to a remote with its base branch."
 HEX_REVISION = re.compile(r"[0-9a-f]{40}")
 OWNER = re.compile(r"hard-eng-update (\d+)")
 TEMPORARY = re.compile(
@@ -147,6 +148,8 @@ def freshness_note(root: Path) -> str:
         result = last_result(root)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return f"Hard Eng freshness is unknown: {error}."
+    if NOT_PUBLISHED in result:
+        return NOT_PUBLISHED
     if result == "none recorded yet":
         return "Hard Eng freshness is unknown: no update result is recorded yet."
     if "failed" in result:
@@ -758,11 +761,35 @@ def set_update_branch(root: Path, commit: str) -> None:
     )
 
 
+def published(root: Path, base: str) -> bool:
+    """Whether origin exists and has the base branch; any other lookup failure raises."""
+    remote = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    if remote.returncode != 0:
+        return False
+    found = subprocess.run(
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", base],
+        cwd=root,
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    if found.returncode not in {0, 2}:
+        raise subprocess.SubprocessError(f"git ls-remote exited {found.returncode}")
+    return found.returncode == 0
+
+
 def prepare_update(root: Path, repair: bool = False) -> str:
     """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
     from update import latest_verified, update
 
     base = update_base(root)
+    if not published(root, base):
+        return NOT_PUBLISHED
     tip = fetch_base(root, base)
     if unfinished_update(root, tip):
         return (
