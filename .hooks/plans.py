@@ -47,10 +47,11 @@ def planning_only(root: Path, names: set[str]) -> bool:
     )
 
 
-def is_documentation(path: Path) -> bool:
-    """Plans and Markdown, which only the secret scan reads unless a package claims them."""
+def is_documentation(path: Path, owner_language: str | None = None) -> bool:
+    """Plans and Markdown, except nested Markdown a JavaScript site may build from."""
     markdown = path.suffix.lower() == ".md" and path.name != "AGENTS.md"
-    return is_plan_path(path) or markdown
+    site = owner_language == "javascript" and path.parent != Path(".")
+    return is_plan_path(path) or (markdown and not site)
 
 
 def report_stage(failed: bool, stage: str | None) -> None:

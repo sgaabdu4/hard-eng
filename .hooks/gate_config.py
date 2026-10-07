@@ -589,14 +589,15 @@ def packages_for(
             for path, prefixes in inputs.items()
             if any(Path(name).is_relative_to(prefix) for prefix in prefixes)
         }
+        matches = [path for path in by_path if Path(name).is_relative_to(path)]
+        language = by_path[max(matches, key=len)].get("language") if matches else None
         if not consumers and (
-            is_documentation(Path(name))
+            is_documentation(Path(name), language)
             or name.startswith(".agents/")
             or is_workflow(name)
             or name in {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}
         ):
             continue
-        matches = [path for path in by_path if Path(name).is_relative_to(path)]
         if not matches and not consumers:
             return f"no package owns {name}."
         selected.update(consumers)
