@@ -4,9 +4,10 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from types import ModuleType
 
 import pytest
-from comments import validate_comments
+from comments import validate_comments, validate_suppressions
 from conftest import SOURCE, commit, git, init
 from shipping import ShippingPolicy
 
@@ -171,3 +172,140 @@ def test_check_without_base_covers_committed_branch_changes(
     validate_comments(root, "HEAD")
     with pytest.raises(ValueError, match=r"app\.py:1 holds a 2-line"):
         validate_comments(root, None)
+
+
+OFF = "A change must not switch a check off"
+SWITCHES = [
+    ("app.py", "x = 1  # no" + "qa: E501\n", "# no" + "qa"),
+    ("app.py", "x = 1  # type:" + " ignore\n", "# type:" + " ignore"),
+    ("app.py", "x = 1  # pyrefly:" + " ignore\n", "# pyrefly:" + " ignore"),
+    ("app.py", "x = 1  # pyright:" + " ignore\n", "# pyright:" + " ignore"),
+    ("app.py", "x = 1  # pylint:" + " disable=x\n", "# pylint:" + " disable"),
+    ("app.py", "x = 1  # pragma:" + " no cover\n", "# pragma:" + " no cover"),
+    ("t.py", "@pytest.mark." + "skip\ndef t(): ...\n", "@pytest.mark." + "skip"),
+    ("t.py", "@pytest.mark." + "skipif(a)\ndef t(): ...\n", "@pytest.mark." + "skipif"),
+    ("t.py", "@pytest.mark." + "xfail\ndef t(): ...\n", "@pytest.mark." + "xfail"),
+    ("t.py", "pytest." + "skip('x')\n", "pytest." + "skip("),
+    ("t.py", "pytest." + "xfail('x')\n", "pytest." + "xfail("),
+    ("a.ts", "// eslint-" + "disable-next-line\nf();\n", "eslint-" + "disable"),
+    ("a.ts", "// @ts-" + "ignore\nf();\n", "@ts-" + "ignore"),
+    ("a.tsx", "// @ts-expect-" + "error\nf();\n", "@ts-expect-" + "error"),
+    ("a.mjs", "// @ts-no" + "check\n", "@ts-no" + "check"),
+    ("a.js", "// biome-" + "ignore lint: x\nf();\n", "biome-" + "ignore"),
+    ("a.test.ts", "describe." + "only('s', () => {});\n", "describe." + "only("),
+    ("a.test.js", "it." + "skip('s', () => {});\n", "it." + "skip("),
+    ("a.test.js", "x" + "it('s', () => {});\n", "x" + "it("),
+    ("a.test.js", "f" + "describe('s', () => {});\n", "f" + "describe("),
+    ("a.js", "/* istanbul " + "ignore next */\nf();\n", "/* istanbul " + "ignore"),
+    ("a.js", "/* c8 " + "ignore next */\nf();\n", "/* c8 " + "ignore"),
+    ("a.js", "/* v8 " + "ignore next */\nf();\n", "/* v8 " + "ignore"),
+    ("lib/a.dart", "// ig" + "nore: unused_import\n", "// ig" + "nore:"),
+    ("lib/a.dart", "// ig" + "nore_for_file: x\n", "// ig" + "nore_for_file:"),
+    ("test/a_test.dart", "test('t', () {}, ski" + "p: true);\n", "ski" + "p:"),
+    (
+        "test/a_test.dart",
+        "group('t', () {}, ski" + "p: 'later');\n",
+        "ski" + "p:",
+    ),
+    ("test/a_test.dart", "@Sk" + "ip('why')\nlibrary a;\n", "@Sk" + "ip("),
+]
+
+
+def switch_root(tmp_path: Path, name: str, before: str) -> Path:
+    init(tmp_path / "repo")
+    root = tmp_path / "repo"
+    (root / "README.md").write_text("fixture\n")
+    if before:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(before)
+    commit(root, "baseline")
+    return root
+
+
+@pytest.mark.parametrize(("name", "text", "pattern"), SWITCHES)
+def test_added_switch_off_fails_naming_file_line_and_pattern(
+    tmp_path: Path, name: str, text: str, pattern: str
+) -> None:
+    root = switch_root(tmp_path, name, "")
+    (root / name).parent.mkdir(parents=True, exist_ok=True)
+    (root / name).write_text("ok = 1\n" + text)
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"{name}:2 adds {pattern!r}" in str(error.value)
+    assert "fix the cause" in str(error.value)
+
+
+@pytest.mark.parametrize(("name", "text", "pattern"), SWITCHES)
+def test_switch_off_already_in_the_project_is_not_flagged(
+    tmp_path: Path, name: str, text: str, pattern: str
+) -> None:
+    root = switch_root(tmp_path, name, text)
+    (root / name).write_text(text + "extra = 1\n")
+    validate_suppressions(root, "HEAD")
+
+
+def test_scaffold_paths_and_ordinary_words_are_not_flagged(tmp_path: Path) -> None:
+    root = switch_root(tmp_path, "app.py", "")
+    (root / ".hooks").mkdir()
+    (root / ".hooks/tool.py").write_text("x = 1  # no" + "qa\n")
+    (root / "app.py").write_text("skip = True\nskipped = pytest_skip_reason\n")
+    (root / "lib").mkdir()
+    (root / "lib/a.dart").write_text("final f = Foo(ski" + "p: false);\n")
+    validate_suppressions(root, "HEAD")
+
+
+ASSERTS = [
+    ("tests/test_a.py", "def test_a():\n    assert f() == 1\n    assert g()\n"),
+    ("src/a.test.ts", "test('a', () => {\n  expect(f()).toBe(1);\n});\n"),
+    ("test/a_test.dart", "void main() {\n  expect(f(), 1);\n}\n"),
+]
+
+
+@pytest.mark.parametrize(("name", "text"), ASSERTS)
+def test_removed_assertion_in_a_test_file_fails(
+    tmp_path: Path, name: str, text: str
+) -> None:
+    root = switch_root(tmp_path, name, text)
+    (root / name).write_text(
+        text.replace("assert g()\n", "")
+        .replace("expect(f()).toBe(1);", "f();")
+        .replace("expect(f(), 1);", "f();")
+    )
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"{name}:" in str(error.value)
+    assert "removes the assertion" in str(error.value)
+
+
+def test_moved_assertion_passes_and_removed_assertion_outside_tests_passes(
+    tmp_path: Path,
+) -> None:
+    moved = "def test_a():\n    assert f() == 1\n\n\ndef test_b():\n    x = 1\n"
+    root = switch_root(tmp_path, "tests/test_a.py", moved)
+    (root / "tests/test_a.py").write_text(
+        "def test_a():\n    x = 1\n\n\ndef test_b():\n    assert f() == 1\n"
+    )
+    validate_suppressions(root, "HEAD")
+    (tmp_path / "plain").mkdir()
+    plain = switch_root(tmp_path / "plain", "lib.py", "assert ready\nx = 1\n")
+    (plain / "lib.py").write_text("x = 1\n")
+    validate_suppressions(plain, "HEAD")
+
+
+def test_duplicated_assertion_cannot_hide_a_removed_one(tmp_path: Path) -> None:
+    root = switch_root(
+        tmp_path, "tests/test_a.py", "def test_a():\n    assert f()\n    assert f()\n"
+    )
+    (root / "tests/test_a.py").write_text("def test_a():\n    assert f()\n")
+    with pytest.raises(ValueError, match=OFF):
+        validate_suppressions(root, "HEAD")
+
+
+def test_quick_check_runs_the_switch_off_guard(runner: ModuleType) -> None:
+    root = runner.ROOT
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [{"name": "noop", "command": ["true"]}]})
+    )
+    (root / "app.py").write_text("x = 1  # no" + "qa\n")
+    with pytest.raises(ValueError, match=OFF):
+        runner.check(quick=True, base="HEAD")

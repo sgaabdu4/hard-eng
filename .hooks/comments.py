@@ -7,9 +7,11 @@ import io
 import re
 import subprocess
 import tokenize
-from pathlib import Path
+from collections import Counter
+from pathlib import Path, PurePosixPath
 
-from gate_config import changed_files, generated_sources
+from gate_config import changed_files, generated_sources, initial_base
+from plans import _is_test as is_test_path
 
 HASH = {".py", ".pyi", ".sh", ".bash", ".zsh"}
 JAVASCRIPT = {".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx"}
@@ -270,4 +272,140 @@ def validate_comments(root: Path, base: str | None) -> None:
             "Code comments are none by default: delete each block below, and add one "
             "terse line of why only where naming, types, structure or a test cannot "
             "carry a needed non-obvious constraint. " + "; ".join(found)
+        )
+
+
+PYTHON_OFF = re.compile(
+    r"#\s*(noqa|type:\s*ignore|pyrefly:\s*ignore|pyright:\s*ignore|pylint:\s*disable"
+    r"|pragma:\s*no cover)|@pytest\.mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
+)
+SCRIPT_OFF = re.compile(
+    r"eslint-disable|@ts-(ignore|expect-error|nocheck)|biome-ignore"
+    r"|\b(it|test|describe|suite)\.(skip|only)\(|\b(xit|xdescribe|fit|fdescribe)\("
+    r"|(/\*|//)\s*(istanbul|c8|v8) ignore"
+)
+DART_OFF = re.compile(r"//\s*ignore(_for_file)?:|\bskip:(?=\s*(?!false\b)\S)|@Skip\(")
+UNOWNED = (".hooks/", ".agents/", ".claude/")
+
+
+def switch_off_pattern(name: str) -> re.Pattern[str] | None:
+    suffix = Path(name).suffix
+    if suffix == ".py":
+        return PYTHON_OFF
+    if suffix == ".dart":
+        return DART_OFF
+    return SCRIPT_OFF if suffix in JAVASCRIPT else None
+
+
+def diff_base(root: Path, base: str) -> str:
+    head = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    unborn = base == "HEAD" and head.returncode == 1
+    return initial_base(root) if unborn or re.fullmatch("0{40}|0{64}", base) else base
+
+
+def diff_lines(
+    root: Path, base: str
+) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[tuple[int, str]]]]:
+    """Added and removed (line number, text) pairs per file; untracked files count as added."""
+    diff = subprocess.check_output(
+        [
+            "git",
+            "-c",
+            "core.quotepath=off",
+            "diff",
+            "-U0",
+            "--no-color",
+            diff_base(root, base),
+            "--",
+        ],
+        cwd=root,
+        text=True,
+        errors="replace",
+    )
+    added: dict[str, list[tuple[int, str]]] = {}
+    removed: dict[str, list[tuple[int, str]]] = {}
+    name, old, new, in_hunk = "", 0, 0, False
+    for line in diff.splitlines():
+        hunk = re.match(r"@@ -(\d+)(?:,\d+)? \+(\d+)", line)
+        if line.startswith("diff --git "):
+            in_hunk = False
+        elif hunk:
+            old, new, in_hunk = int(hunk[1]), int(hunk[2]), True
+        elif in_hunk and line[:1] == "+":
+            added.setdefault(name, []).append((new, line[1:]))
+            new += 1
+        elif in_hunk and line[:1] == "-":
+            removed.setdefault(name, []).append((old, line[1:]))
+            old += 1
+        elif not in_hunk and line.startswith(("+++ b/", "--- a/")):
+            name = line[6:]
+    untracked = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        cwd=root,
+        text=True,
+    )
+    for other in filter(None, untracked.split("\0")):
+        if (root / other).is_file() and not (root / other).is_symlink():
+            text = (root / other).read_text(errors="replace")
+            added[other] = list(enumerate(text.splitlines(), 1))
+    return added, removed
+
+
+def file_switch_offs(
+    name: str,
+    pattern: re.Pattern[str],
+    added: list[tuple[int, str]],
+    removed: list[tuple[int, str]],
+) -> list[str]:
+    found = [
+        f"{name}:{number} adds {hit[0].strip()!r}"
+        for number, text in added
+        if (hit := pattern.search(text))
+    ]
+    if not is_test_path(PurePosixPath(name)):
+        return found
+    words = ("assert",) if name.endswith(".py") else ("assert", "expect(")
+    kept = Counter(
+        text.strip() for _, text in added if any(word in text for word in words)
+    )
+    for number, text in removed:
+        if not any(word in text for word in words):
+            continue
+        if kept[text.strip()] > 0:
+            kept[text.strip()] -= 1
+        else:
+            found.append(f"{name}:{number} removes the assertion {text.strip()!r}")
+    return found
+
+
+def validate_suppressions(root: Path, base: str | None) -> None:
+    try:
+        added, removed = diff_lines(root, base or branch_point(root))
+    except subprocess.CalledProcessError as error:
+        raise ValueError(
+            "Cannot verify suppression scope; fetch or supply a valid Git --base"
+        ) from error
+    names = sorted(
+        name
+        for name in added.keys() | removed.keys()
+        if not name.startswith(UNOWNED) and switch_off_pattern(name) is not None
+    )
+    skipped = generated_sources(root, names)
+    found = [
+        item
+        for name in names
+        if name not in skipped and (pattern := switch_off_pattern(name)) is not None
+        for item in file_switch_offs(
+            name, pattern, added.get(name, []), removed.get(name, [])
+        )
+    ]
+    if found:
+        raise ValueError(
+            "A change must not switch a check off: fix the cause instead of "
+            "suppressing, skipping or deleting the check. " + "; ".join(found)
         )
