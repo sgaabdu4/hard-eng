@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import agent_hooks
+import pytest
 from conftest import SOURCE
 from gate_config import JsonObject
 
@@ -119,3 +120,66 @@ def test_failure_reason_lists_failed_gates_and_starts_at_the_first_error(
     assert "FIRST ERROR" in reason
     assert "second error" not in reason
     assert len(reason) < 10000
+
+
+def decision_record(repository: Path, status: str, applies: str = "") -> None:
+    (repository / "docs/adr").mkdir(parents=True)
+    (repository / "docs/adr/0001-pay.md").write_text(
+        f"# 0001 — Pay\n\nStatus: {status}\n{applies}\n## Decision\nUse the ledger.\n"
+    )
+    (repository / "src/payments").mkdir(parents=True)
+    (repository / "src/payments/a.py").write_text("x = 1\n")
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n.hooks/\n")
+    subprocess.run(["git", "add", "."], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-qm", "adr"], cwd=repository, check=True)
+
+
+def decision_turn(repository: Path, path: str = "src/payments/a.py") -> JsonObject:
+    payload: JsonObject = {"session_id": "known"}
+    state = repository / ".hard-eng/sessions/known.json"
+    if not state.exists():
+        install_check(repository, "raise SystemExit(0)\n")
+        assert agent_hooks.record_session(repository, payload)
+    (repository / path).write_text(f"x = {time.monotonic_ns()}\n")
+    return agent_hooks.completion(repository, payload)
+
+
+def test_matching_decision_blocks_once_per_session(repository: Path) -> None:
+    decision_record(repository, "Accepted", "Applies to: `src/payments/`\n")
+    first = decision_turn(repository)
+    assert first["decision"] == "block"
+    assert "Use the ledger." in str(first["reason"])
+    assert "decision" not in decision_turn(repository)
+
+
+def test_decision_text_joins_a_failed_check(repository: Path) -> None:
+    decision_record(repository, "Accepted", "Applies to: `src/payments/`\n")
+    install_check(repository, "print('FAIL gate')\nraise SystemExit(1)\n")
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "src/payments/a.py").write_text("x = 2\n")
+    reason = str(agent_hooks.completion(repository, payload)["reason"])
+    assert "Verification failed" in reason
+    assert "Use the ledger." in reason
+    (repository / "src/payments/a.py").write_text("x = 3\n")
+    assert "Use the ledger." not in str(agent_hooks.completion(repository, payload))
+
+
+@pytest.mark.parametrize(
+    ("status", "applies", "path"),
+    [
+        ("Accepted", "Applies to: `src/payments/`\n", "other.py"),
+        (
+            "Superseded by [0002](0002-x.md)",
+            "Applies to: `src/payments/`\n",
+            "src/payments/a.py",
+        ),
+        ("Proposed", "Applies to: `src/payments/`\n", "src/payments/a.py"),
+        ("Accepted", "", "src/payments/a.py"),
+    ],
+)
+def test_unmatched_or_inactive_decisions_do_not_block(
+    repository: Path, status: str, applies: str, path: str
+) -> None:
+    decision_record(repository, status, applies)
+    assert "decision" not in decision_turn(repository, path)

@@ -518,3 +518,82 @@ def validate_plans(
             )
         effective_stage = min(effective_stage, status, key=STAGES.index)
     return stage if explicit_stage or not applicable else effective_stage
+
+
+ADR_NAME = re.compile(r"docs/adr/\d{4}-[^/]+\.md")
+ADR_PREFIXES = re.compile(r"`(?!/)[^`\s]+`(?:, *`(?!/)[^`\s]+`)*")
+
+
+def decision_field(content: str, name: str) -> str | None:
+    found = re.search(rf"(?m)^{name}: *(.*?) *$", content.split("\n## ", 1)[0])
+    return found[1] if found else None
+
+
+def decision_prefixes(content: str) -> list[str]:
+    line = decision_field(content, "Applies to") or ""
+    return re.findall(r"`([^`]+)`", line) if ADR_PREFIXES.fullmatch(line) else []
+
+
+def accepted_decisions(root: Path) -> list[tuple[str, str, list[str]]]:
+    found = []
+    for path in repository_files(root):
+        name = path.relative_to(root).as_posix()
+        if ADR_NAME.fullmatch(name):
+            content = path.read_text(errors="replace")
+            prefixes = decision_prefixes(content)
+            if prefixes and decision_field(content, "Status") == "Accepted":
+                found.append((name, content, prefixes))
+    return found
+
+
+def matched_decisions(root: Path, names: list[str]) -> dict[str, str]:
+    """ADR path to its title and Decision text, for each Accepted ADR whose prefix a name starts with."""
+    matched = {}
+    for name, content, prefixes in accepted_decisions(root):
+        if any(file.startswith(prefix) for file in names for prefix in prefixes):
+            title = content.splitlines()[0].lstrip("# ")
+            decision = re.search(r"(?ms)^## Decision\n(.*?)(?=^## |\Z)", content)
+            matched[name] = (
+                f"{title} ({name})\n{decision[1].strip() if decision else ''}"
+            )
+    return matched
+
+
+def validate_decisions(root: Path, base: str | None = None) -> None:
+    point = base or _default_branch_point(root) or "HEAD"
+    changed = changed_files(root, point)
+    if changed is None:
+        raise ValueError(
+            "Cannot verify decision scope; fetch or supply a valid Git --base"
+        )
+    found = []
+    for name in sorted(changed):
+        path = root / name
+        if ADR_NAME.fullmatch(name) and path.is_file():
+            content = path.read_text(errors="replace")
+            superseded = (decision_field(content, "Status") or "").startswith(
+                "Superseded"
+            )
+            if not superseded and not decision_prefixes(content):
+                found.append(
+                    f"{name} needs an 'Applies to:' line under Status listing path "
+                    "prefixes in backticks, such as Applies to: `src/payments/`"
+                )
+    before: list[str] = []
+    try:
+        before = _git_output(root, "ls-tree", "-r", "--name-only", "-z", point).split(
+            "\0"
+        )
+    except (subprocess.CalledProcessError, OSError):
+        pass
+    now = [path.relative_to(root).as_posix() for path in repository_files(root)]
+    for name, _, prefixes in accepted_decisions(root):
+        found += [
+            f"{name}: this change removes the last file under {prefix}; update the "
+            "decision's 'Applies to:' line or mark it Superseded"
+            for prefix in prefixes
+            if any(file.startswith(prefix) for file in before)
+            and not any(file.startswith(prefix) for file in now)
+        ]
+    if found:
+        raise ValueError("Decision records are out of date: " + "; ".join(found))
