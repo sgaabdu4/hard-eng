@@ -190,6 +190,7 @@ SWITCHES = [
         "pytestmark = pytest.mark." + "skip(reason='x')\n",
         "pytest.mark." + "skip",
     ),
+    ("t.py", "pytestmark = mark." + "skip(reason='x')\n", "mark." + "skip"),
     ("t.py", "pytest." + "skip('x')\n", "pytest." + "skip("),
     ("t.py", "pytest." + "xfail('x')\n", "pytest." + "xfail("),
     ("a.ts", "// eslint-" + "disable-next-line\nf();\n", "eslint-" + "disable"),
