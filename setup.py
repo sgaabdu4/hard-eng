@@ -152,6 +152,10 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
             from mcp_setup import retire_claude_integrations
 
             retire_claude_integrations(current)
+            current.setdefault("advisorModel", "fable")
+            current.setdefault(
+                "attribution", {"commit": "", "pr": "", "sessionUrl": False}
+            )
         merged = merge(current, additions)
         if merged != json.loads(text):
             changes[name] = json_file(root, merged)
