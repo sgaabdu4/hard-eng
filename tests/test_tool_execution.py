@@ -495,7 +495,7 @@ def test_root_biome_keeps_files_without_an_equivalent_selected_child(
         json.dumps({"packages": groups, "shared": []})
     )
 
-    def selected(*_args: object) -> list[Group]:
+    def selected(*_args: object, **_options: object) -> list[Group]:
         return groups
 
     def provision(*_args: object) -> None:

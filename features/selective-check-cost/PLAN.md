@@ -1,0 +1,66 @@
+# Check one tree once, keep notes out of package scope, run more checks at once, lighten pre-push and merge by rebase only
+
+Status: Ready
+
+## Outcome + scope
+
+- A push to the base branch reuses a merged PR's passed required checks whenever the pushed tree equals that PR head's tree, for merge, squash and rebase merges alike.
+- Markdown in any folder counts as documentation unless a package's `impact_inputs` claims it.
+- `check` runs up to one parallel-safe check per CPU instead of two.
+- Pre-push checks only the packages that own changed files; CI still adds their dependents.
+- A Dart Decimate dead-code gate covers import boundaries whatever order its arguments take.
+- `ship --stage merge` merges by rebase only and refuses squash and merge commits.
+
+Non-goals (user decision 2026-10-07): skipping checks that passed before, a package exclude list, tool-specific related-test runs, conflict declarations between checks. Mutation stays in pre-push: it already covers only changed lines, never blocks and runs nowhere else.
+
+## Repository context
+
+Owners:
+- `.hooks/shipping.py` `_pull_request_head`, `reused_pull_request`: reuse needs one commit onto the old base named as a merge or `(#N)`, so rebase merges never match.
+- `.hooks/plans.py` `is_documentation`: counts only top-level Markdown; `.hooks/gate_config.py` `packages_for` checks `impact_inputs` consumers first.
+- `.hooks/hard-eng.py` `check`: `ThreadPoolExecutor(max_workers=2)` and a drain at two pending.
+- `.hooks/ship_actions.py` `pre_push`, `.hooks/gate_config.py` `affected_groups`, `.hooks/dependency_graph.py` `expand_dependents`.
+- `.hooks/gate_config.py` `dart_scan_includes_boundaries`: matches two exact argument orders.
+- `.hooks/ship_actions.py` `run`, `.hooks/hard-eng.py` `--merge-method`, `.agents/skills/he-ship/references/checks.md`: accept merge, squash or rebase.
+- Evidence: issue #238; the user's 2026-10-07 replies on Dart Decimate argument order and rebase-only merging. `gh api repos/<repo>/commits/<sha>/pulls` returns the merged PR with `head.sha`, `base.ref` and `merged_at` for a squash merge on this repository.
+
+## Decisions + authorization
+
+Blockers: None
+Handoff: Approval
+Authority: The user asked to fix the open issues, chose these changes on 2026-10-07, added rebase-only merging the same day, and asked for an adversarial review loop before opening the PR.
+
+## Acceptance + steps
+
+- [ ] A base-branch push of several rebased commits whose tree equals the merged PR head's tree, with passed required checks, reuses that result → new rebase case in `tests/test_shipping.py`; squash and merge cases keep passing.
+- [ ] A different tree, no merged PR, more than one merged PR, a PR into another base, or a failed or missing required check runs the gates → existing and updated refusal cases.
+- [ ] `docs/notes/x.md` alone selects only the secret scan; the same file under a package's `impact_inputs` selects that package → `tests/test_affected_selection.py`.
+- [ ] `check` keeps up to `os.cpu_count()` parallel checks in flight → runner test.
+- [ ] Pre-push passes the owner-only scope; `check` with it selects changed packages without dependents while ancestor installs and shared checks stay → `tests/test_ship_actions.py`, `tests/test_affected_selection.py`.
+- [ ] A Decimate gate with `--format json --threshold 0 --strict` covers boundaries; one with an extra `--no-boundary-violations` does not → `tests/test_setup.py`.
+- [ ] `ship --stage merge` calls `gh pr merge --rebase`; `squash` or `merge` is refused before any GitHub call → `tests/test_ship_actions.py`.
+- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
+
+## Baseline + execution
+
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Draft` on unchanged `6b5d3481` plus this plan → exit 0, 1213 tests passed.
+Execution: One builder in this worktree.
+
+## Risks + recovery
+
+A change that breaks a dependent package now fails in CI instead of pre-push, costing one CI round. A docs-site package whose Markdown is build input must list that folder in `impact_inputs`. More parallel checks use more memory at once. A failed GitHub query falls back to the full run. Recovery is reverting this branch.
+
+## ux_reference
+
+N/A — check selection and CI behaviour; no visual surface.
+
+## Verification
+
+Result: Pending
+Evidence: Pending
+Gate: Pending
+E2E: N/A — the main-branch reuse is a GitHub push run, proven after merge when main prints the reuse line; the pre-push journey is covered by `test_pre_push_tests_committed_code`, which pushes through the real hook.
+
+Delivery target: Merge
+Delivery: Pending

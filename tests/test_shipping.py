@@ -762,13 +762,14 @@ class MergedPush:
     base: str
     head: str
     responses: dict[str, object]
+    pulls: list[dict[str, object]]
 
 
 def _merged_push(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
-    merge: bool = False,
+    method: str = "squash",
     behind: bool = False,
 ) -> MergedPush:
     fixture = _fixture(tmp_path)
@@ -776,6 +777,8 @@ def _merged_push(
     base = _native(root, "rev-parse", "main")
     (root / "source.txt").write_text("changed\n")
     _native(root, "commit", "-qam", "Change the source")
+    (root / "source.txt").write_text("changed again\n")
+    _native(root, "commit", "-qam", "Change the source again")
     _native(root, "switch", "-q", "main")
     if behind:
         (root / "other.txt").write_text("merged meanwhile\n")
@@ -786,16 +789,28 @@ def _merged_push(
         _native(root, "cherry-pick", base)
         _native(root, "switch", "-q", "main")
     head = _native(root, "rev-parse", "feature/shipping")
-    if merge:
+    if method == "merge":
         _native(root, "merge", "-q", "--no-ff", "-m", "Merge feature", head)
+    elif method == "rebase":
+        _native(root, "cherry-pick", f"{base}..{head}")
     else:
         _native(root, "merge", "-q", "--squash", head)
         _native(
             root, "commit", "-qm", "Change the source (#7)", "-m", "* Change the source"
         )
+    pulls: list[dict[str, object]] = [
+        {
+            "number": 7,
+            "merged_at": "2026-10-07T10:00:00Z",
+            "base": {"ref": "main"},
+            "head": {"sha": head},
+        }
+    ]
     responses: dict[str, object] = {
-        "git/ref/pull/7/head": {"object": {"sha": head}},
-        f"compare/{base}...{head}": {"status": "ahead"},
+        f"commits/{_native(root, 'rev-parse', 'HEAD')}/pulls": pulls,
+        f"compare/{base}...{head}": {
+            "status": "diverged" if behind else "ahead",
+        },
         f"git/commits/{head}": {
             "tree": {"sha": _native(root, "rev-parse", "HEAD^{tree}")}
         },
@@ -818,14 +833,14 @@ def _merged_push(
         "GITHUB_REPOSITORY": "acme/widget",
     }.items():
         monkeypatch.setenv(name, value)
-    return MergedPush(root, base, head, responses)
+    return MergedPush(root, base, head, responses, pulls)
 
 
-@pytest.mark.parametrize("merge", [False, True], ids=["squash", "merge"])
+@pytest.mark.parametrize("method", ["squash", "merge", "rebase"])
 def test_push_reuses_passed_pull_request_tree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, merge: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, method: str
 ) -> None:
-    push = _merged_push(tmp_path, monkeypatch, merge=merge)
+    push = _merged_push(tmp_path, monkeypatch, method=method)
     assert shipping.reused_pull_request(push.root, push.base) == push.head
 
 
@@ -859,11 +874,19 @@ def _check_pending(push: MergedPush) -> None:
 
 
 def _query_failure(push: MergedPush) -> None:
-    del push.responses["git/ref/pull/7/head"]
+    del push.responses[f"commits/{_native(push.root, 'rev-parse', 'HEAD')}/pulls"]
 
 
-def _no_pull_request_subject(push: MergedPush) -> None:
-    _native(push.root, "commit", "-q", "--amend", "-m", "Change the source")
+def _no_merged_pull_request(push: MergedPush) -> None:
+    push.pulls[0]["merged_at"] = None
+
+
+def _pull_request_into_another_base(push: MergedPush) -> None:
+    push.pulls[0]["base"] = {"ref": "release"}
+
+
+def _two_merged_pull_requests(push: MergedPush) -> None:
+    push.pulls.append({**push.pulls[0], "number": 8, "head": {"sha": "e" * 40}})
 
 
 def _uncommitted_change(push: MergedPush) -> None:
@@ -879,7 +902,9 @@ def _uncommitted_change(push: MergedPush) -> None:
         _check_missing,
         _check_pending,
         _query_failure,
-        _no_pull_request_subject,
+        _no_merged_pull_request,
+        _pull_request_into_another_base,
+        _two_merged_pull_requests,
         _uncommitted_change,
     ],
 )
@@ -912,18 +937,10 @@ def test_only_ci_pushes_to_the_base_branch_reuse_pull_request_checks(
     assert shipping.reused_pull_request(push.root, push.base) is None
 
 
-@pytest.mark.parametrize("merge", [False, True], ids=["squash", "merge"])
-def test_push_not_directly_onto_the_previous_base_runs_checks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, merge: bool
-) -> None:
-    push = _merged_push(tmp_path, monkeypatch, merge=merge)
-    assert shipping.reused_pull_request(push.root, push.head) is None
-
-
 def test_merge_of_a_head_without_the_previous_base_runs_checks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    push = _merged_push(tmp_path, monkeypatch, merge=True, behind=True)
+    push = _merged_push(tmp_path, monkeypatch, method="merge", behind=True)
     assert _native(push.root, "rev-parse", "HEAD^{tree}") == _native(
         push.root, "rev-parse", f"{push.head}^{{tree}}"
     )

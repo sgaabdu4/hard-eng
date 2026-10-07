@@ -214,7 +214,8 @@ def pre_push(root: Path) -> int:
                 )
         environment = snapshot_environment(root)
         with snapshot(root, revision, environment) as checkout:
-            check = ["check", *(["--base", base] if base else [])]
+            scope = ["--base", base, "--without-dependents"] if base else []
+            check = ["check", *scope]
             if returncode := run_hard_eng(checkout, check, environment):
                 return returncode
             if base is not None:
@@ -404,8 +405,10 @@ def run(
         raise ValueError("Use the selected task's plan inside its worktree")
     if stage not in {"ready", "merge", "delivered", "cleanup"}:
         raise ValueError("Unknown shipping stage")
-    if stage == "merge" and merge_method not in {"merge", "squash", "rebase"}:
-        raise ValueError("Select the repository's merge method with --merge-method")
+    if stage == "merge" and merge_method != "rebase":
+        raise ValueError(
+            "Hard Eng merges by rebase only; squash and merge commits are refused"
+        )
     proof_stage = "ready" if stage in {"ready", "merge"} else "delivered"
     require_current(target)
     shipment = verify(target, plan_path, pr_url, proof_stage)

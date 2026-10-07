@@ -704,6 +704,7 @@ def check(
     plan_stage: str | None = None,
     *,
     verify_plan: bool = True,
+    dependents: bool = True,
 ) -> int:
     from gate_config import load_groups, parse_config
 
@@ -713,7 +714,7 @@ def check(
         return 0
 
     with check_lock(ROOT):
-        groups = load_groups(ROOT, base)
+        groups = load_groups(ROOT, base, dependents=dependents)
         timeout = timeout or gate_timeout(ROOT)
         from comments import validate_comments
         from plans import report_stage, validate_plans
@@ -729,10 +730,11 @@ def check(
         checks = [(group, gate) for group in groups for gate in group["checks"]]
         ordered = [item for item in checks if item[1].get("role") == "lockfiles"]
         ordered += [item for item in checks if item[1].get("role") != "lockfiles"]
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        workers = os.cpu_count() or 2
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             for group, gate in ordered:
                 if gate.get("parallel", False) and gate.get("role") != "lockfiles":
-                    if len(pending) == 2:
+                    if len(pending) == workers:
                         done, pending = wait(pending, return_when=FIRST_COMPLETED)
                         for future in done:
                             failed |= future.result()
@@ -794,6 +796,11 @@ def main() -> int:
         "--base", help="Git comparison base; unknown impact runs all checks"
     )
     checks.add_argument("--plan-stage", choices=("Draft", "Ready", "Complete"))
+    checks.add_argument(
+        "--without-dependents",
+        action="store_true",
+        help="Check changed packages only; CI checks their dependents",
+    )
     impacts = commands.add_parser(
         "impact", help="Print docs_only=true when only the secret scan applies"
     )
@@ -831,7 +838,7 @@ def main() -> int:
         "--stage", choices=("ready", "merge", "delivered", "cleanup"), default="ready"
     )
     shipping.add_argument("--worktree", help="Task worktree in the same repository")
-    shipping.add_argument("--merge-method", choices=("merge", "squash", "rebase"))
+    shipping.add_argument("--merge-method", choices=("rebase",), default="rebase")
     for event in ("session", "failure", "stop"):
         hook = commands.add_parser(event, help=f"Handle a native {event} hook")
         hook.add_argument("agent", choices=("claude", "codex"))
@@ -840,7 +847,11 @@ def main() -> int:
         from tool_setup import ensure_python_runtime
 
         ensure_python_runtime()
-        return check(base=args.base, plan_stage=args.plan_stage)
+        return check(
+            base=args.base,
+            plan_stage=args.plan_stage,
+            dependents=not args.without_dependents,
+        )
     if args.command == "impact":
         return impact(args.base)
     if args.command == "pre-push":

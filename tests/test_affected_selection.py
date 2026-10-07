@@ -23,11 +23,12 @@ from gate_config import Gate, Group, affected_groups, parse_config
         (".agents/skills/he/x.md", ["lib", "app", "site", "other", "."]),
         (".github/dependabot.yml", ["lib", "app", "site", "other", "."]),
         (".github/workflows/x.yml", ["."]),
-        ("lib/README.md", ["lib", "app", "site", "."]),
+        ("lib/README.md", ["."]),
+        ("docs/notes/x.md", ["."]),
         (".hooks/a.py", ["lib", "app", "site", "other", "."]),
         ("PLAN.md", ["."]),
         ("features/task/PLAN.md", ["."]),
-        ("docs/PLAN.md", ["lib", "app", "site", "other", "."]),
+        ("docs/PLAN.md", ["."]),
     ],
 )
 def test_changed_package_includes_transitive_dependents_and_shared(
@@ -48,6 +49,35 @@ def test_changed_package_includes_transitive_dependents_and_shared(
         plan.parent.mkdir(parents=True, exist_ok=True)
         plan.write_text("Task plan\n")
     assert [g["path"] for g in affected_groups(repository, groups, "HEAD")] == expected
+
+
+def test_pre_push_scope_checks_changed_packages_without_dependents(
+    repository: Path,
+) -> None:
+    install: Gate = {"name": "install", "command": ["true"], "role": "lockfiles"}
+    groups: list[Group] = [
+        {
+            "path": ".",
+            "checks": [install, {"name": "t", "command": ["true"]}],
+            "depends_on": [],
+        },
+        {"path": "lib", "checks": [], "depends_on": []},
+        {"path": "app", "checks": [], "depends_on": ["lib"]},
+        {"path": ".", "checks": []},
+    ]
+    (repository / "lib").mkdir()
+    (repository / "lib/a.py").write_text("change")
+    assert affected_groups(repository, groups, "HEAD", dependents=False) == [
+        {**groups[0], "checks": [install]},
+        groups[1],
+        groups[-1],
+    ]
+    assert [g["path"] for g in affected_groups(repository, groups, "HEAD")] == [
+        ".",
+        "lib",
+        "app",
+        ".",
+    ]
 
 
 def test_cross_package_fallow_coverage_owner_must_be_selected_with_its_consumer(
@@ -277,6 +307,8 @@ def test_root_lockfile_change_includes_reviewed_consumers(repository: Path) -> N
         ("CONTRACT.md", ["app", "site", "."]),
         ("features/contracts/PLAN.md", ["app", "site", "."]),
         ("README.md", ["."]),
+        ("other/notes.md", ["."]),
+        ("contracts/notes.md", ["contracts", "app", "site", "."]),
         ("shared/schema.json.old", ["contracts", "app", "site", "other", "."]),
         (".github/workflows/check.yml", ["app", "site", "."]),
     ],
@@ -319,7 +351,8 @@ def test_explicit_inputs_select_consumers_before_docs_filtering(
     runner.__dict__["ROOT"] = repository
     assert runner.impact("HEAD") == 0
     assert (
-        f"docs_only={str(changed == 'README.md').lower()}\n" in capsys.readouterr().out
+        f"docs_only={str(changed in {'README.md', 'other/notes.md'}).lower()}\n"
+        in capsys.readouterr().out
     )
 
 
