@@ -1,6 +1,6 @@
 # Run only related JavaScript tests before push
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -25,10 +25,10 @@ Authority: The user asked on 2026-10-07 for related tests before push with the c
 
 ## Acceptance + steps
 
-- [ ] A Vitest or Jest test gate gets the related-test flags only in related mode; chained scripts, other runners, non-JavaScript packages and coverage-reusing Fallow setups get none → `tests/test_reports.py`.
-- [ ] In related mode a passing gate with zero related tests passes, a failing test still fails, and coverage is not checked; the configured command still rejects these flags → runner tests.
-- [ ] Pre-push passes `--related-tests` only when the pushed runner supports it → `tests/test_ship_actions.py`.
-- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
+- [x] A Vitest or Jest test gate gets the related-test flags only in related mode; chained scripts, other runners, non-JavaScript packages and coverage-reusing Fallow setups get none → `tests/test_reports.py`.
+- [x] In related mode a passing gate with zero related tests passes, a failing test still fails, and coverage is not checked; the configured command still rejects these flags → runner tests.
+- [x] Pre-push passes `--related-tests` only when the pushed runner supports it → `tests/test_ship_actions.py`.
+- [x] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
 ## Baseline + execution
 
@@ -46,9 +46,9 @@ N/A — check behaviour; no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-Gate: Pending
+Result: Passed
+Evidence: `test_related_test_flags_follow_the_native_runner` covers Vitest, Jest, a chained script, another runner, a non-JavaScript report and a coverage-reusing Fallow gate. `test_related_tests_skip_coverage_but_keep_failures` runs a test gate through `run_gate`: related mode passes with zero tests and no coverage, a failing run still fails, and full mode still fails without tests or coverage. The pre-push test covers runners with both options, only the older one, and neither. Codex adversarial review (gpt-6-astra) round 1 approved with no findings.
+Gate: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` → exit 0.
 E2E: N/A — the pre-push journey runs through the real hook in `test_pre_push_tests_committed_code`; the Vitest and Jest behaviour was proven in scratch projects with the real tools.
 
 Delivery target: Merge
