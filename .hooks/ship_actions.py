@@ -215,10 +215,12 @@ def pre_push(root: Path) -> int:
         environment = snapshot_environment(root)
         with snapshot(root, revision, environment) as checkout:
             runner = (checkout / ".hooks/hard-eng.py").read_text()
-            # A pushed revision older than this option checks dependents too.
-            narrow = (
-                ["--without-dependents"] if "--without-dependents" in runner else []
-            )
+            # A pushed revision older than these options runs its full check.
+            narrow = [
+                option
+                for option in ("--without-dependents", "--related-tests")
+                if option in runner
+            ]
             check = ["check", *(["--base", base, *narrow] if base else [])]
             if returncode := run_hard_eng(checkout, check, environment):
                 return returncode
