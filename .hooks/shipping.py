@@ -34,7 +34,7 @@ ShippingPolicy = TypedDict(
 @dataclass(frozen=True)
 class Shipment:
     root: Path
-    plan: Path
+    plan: Path | None
     pr_url: str
     repository: str
     remote: str
@@ -655,6 +655,17 @@ def _plan_target(root: Path, plan: Path) -> tuple[Path, str]:
     return resolved_plan, targets[0]
 
 
+def _delivery_scope(root: Path, plan: Path | None) -> tuple[Path | None, str]:
+    if plan is not None:
+        return _plan_target(root, plan)
+    from plans import size_verdict
+
+    small, reason = size_verdict(root)
+    if not small:
+        raise ShippingError(f"a big change needs a plan: {reason}")
+    return None, "Merge"
+
+
 def _remote_sha(root: Path, base: str, remote_url: str) -> str:
     ref = f"refs/heads/{base}"
     output = git(root, "ls-remote", "--heads", remote_url, ref).strip()
@@ -790,7 +801,7 @@ def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) ->
             )
 
 
-def verify(root: Path, plan: Path, pr_url: str, stage: str) -> Shipment:
+def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     if stage not in {"ready", "delivered"}:
         raise ShippingError("shipping stage must be ready or delivered")
     policy = cast(ShippingPolicy, load_policy(root, required=True))
@@ -801,7 +812,7 @@ def verify(root: Path, plan: Path, pr_url: str, stage: str) -> Shipment:
     url = f"https://github.com/{owner}/{name}/pull/{number}"
     if repository != f"{owner}/{name}".lower():
         raise ShippingError("PR URL repository does not match origin")
-    resolved_plan, target = _plan_target(resolved_root, plan)
+    resolved_plan, target = _delivery_scope(resolved_root, plan)
     if target == "Deploy" and not policy["delivery"]:
         raise ShippingError("Deploy target requires configured delivery checks")
     pull = _pull(resolved_root, owner, name, number)

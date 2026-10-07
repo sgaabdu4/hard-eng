@@ -367,7 +367,7 @@ def cleanup(coordinator: Path, shipment: Shipment) -> None:
     print(f"Removed local task branch {shipment.branch}", flush=True)
 
 
-def merge(target: Path, plan: Path, shipment: Shipment, method: str) -> Shipment:
+def merge(target: Path, plan: Path | None, shipment: Shipment, method: str) -> Shipment:
     """Merge the verified head, then prove the merged revision."""
     if shipment.delivery_target == "PR":
         raise ValueError("The plan authorizes PR delivery, not merging")
@@ -398,7 +398,7 @@ def merge(target: Path, plan: Path, shipment: Shipment, method: str) -> Shipment
 
 def run(
     coordinator: Path,
-    plan: str,
+    plan: str | None,
     pr_url: str,
     stage: str,
     worktree: str | None,
@@ -407,8 +407,8 @@ def run(
     target = Path(worktree).resolve() if worktree else coordinator.resolve()
     if common_directory(coordinator) != common_directory(target):
         raise ValueError("Shipping target belongs to a different repository")
-    plan_path = (target / plan).resolve()
-    if not plan_path.is_relative_to(target):
+    plan_path = (target / plan).resolve() if plan else None
+    if plan_path is not None and not plan_path.is_relative_to(target):
         raise ValueError("Use the selected task's plan inside its worktree")
     if stage not in {"ready", "merge", "delivered", "cleanup"}:
         raise ValueError("Unknown shipping stage")
