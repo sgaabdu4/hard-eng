@@ -299,7 +299,10 @@ def test_update_pr_waits_for_the_configured_shipping_checks(
     gh.pulls[0]["statusCheckRollup"][0]["conclusion"] = "FAILURE"
     assert publish(target, monkeypatch) == 1
     assert "pr merge" not in gh.verbs()
-    gh.pulls[0]["statusCheckRollup"][0]["conclusion"] = "SUCCESS"
+    gh.pulls[0]["statusCheckRollup"][0].update(status="IN_PROGRESS", conclusion=None)
+    assert publish(target, monkeypatch) == 0
+    assert "pr merge" not in gh.verbs()
+    gh.pulls[0]["statusCheckRollup"][0].update(status="COMPLETED", conclusion="SUCCESS")
     assert publish(target, monkeypatch) == 0
     assert "pr merge" in gh.verbs()
 
