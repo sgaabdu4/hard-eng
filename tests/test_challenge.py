@@ -241,3 +241,21 @@ def test_a_review_of_an_older_head_does_not_cover_a_new_commit(
 def test_a_small_change_needs_no_review(branch: Path) -> None:
     small(branch)
     assert challenge.shipping_note(branch, git(branch, "rev-parse", "HEAD")) is None
+
+
+def test_a_failed_rerun_keeps_the_completed_review_of_the_same_revision(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    fake_cli(tmp_path / "bin", "codex", "src/a.py:3 breaks\nVERDICT: findings")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    fake_cli(tmp_path / "bin", "codex", "", 1, "Not signed in")
+    assert challenge.challenge(branch, None, None) == 0
+    record = json.loads(
+        challenge.store(branch, git(branch, "rev-parse", "HEAD"))
+        .with_suffix(".json")
+        .read_text()
+    )
+    assert record["outcome"] == "findings"
+    assert "VERDICT: findings" in Path(record["output"]).read_text()
