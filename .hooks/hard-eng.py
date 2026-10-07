@@ -680,20 +680,6 @@ def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path,
     )
 
 
-def require_ci_base(base: str | None) -> None:
-    if (
-        os.environ.get("GITHUB_ACTIONS") == "true"
-        and os.environ.get("GITHUB_EVENT_NAME")
-        in {"push", "pull_request", "pull_request_target"}
-        and (base is None or not base.strip())
-    ):
-        raise ValueError(
-            "GitHub push/PR checks require --base with the comparison commit; "
-            "pass github.event.pull_request.base.sha || github.event.before. "
-            "Manual full checks may omit --base."
-        )
-
-
 def proven_elsewhere(base: str | None) -> bool:
     """A merged PR or verified upstream release already proved this change."""
     from shipping import reused_pull_request
@@ -765,6 +751,7 @@ def check(
     related_tests: bool = False,
     quick: bool = False,
 ) -> int:
+    from ci_setup import require_ci_base
     from gate_config import load_groups, parse_config
 
     require_ci_base(base)
@@ -828,7 +815,7 @@ def impact(base: str) -> int:
     """Tell CI whether the check will run only the secret scan, before tools."""
     from contextlib import redirect_stdout
 
-    from ci_setup import impact_tools
+    from ci_setup import impact_tools, require_ci_base
     from gate_config import affected_groups, parse_config
 
     require_ci_base(base)
@@ -852,6 +839,10 @@ def pre_push() -> int:
 
 
 def deliver(args: "Namespace") -> int:
+    if args.command == "gap-issue":
+        from gap_issue import file_gap
+
+        return file_gap(ROOT, args.text)
     if args.command == "challenge":
         from challenge import challenge
 
@@ -932,6 +923,9 @@ def main() -> int:
         choices=("claude", "codex"),
         help="The running agent, only when it cannot be detected",
     )
+    commands.add_parser(
+        "gap-issue", help="File a Hard Eng issue for a check it lacks"
+    ).add_argument("text", help="the missing check, described generically")
     shipping = commands.add_parser(
         "ship", help="Verify PR delivery or perform guarded shipping actions"
     )
@@ -973,7 +967,7 @@ def main() -> int:
         from update_runner import update_main
 
         return update_main(ROOT, args.command == "update-pr", args.apply)
-    if args.command in {"challenge", "ship"}:
+    if args.command in {"challenge", "ship", "gap-issue"}:
         return deliver(args)
     from agent_hooks import handle_event
 

@@ -55,6 +55,10 @@ def test_go_project_installs_with_only_shared_gates(
         "no built-in checks for Go." in lines
     )
     assert "Gap: No built-in checks for Go" in lines
+    assert (
+        'File it, without asking: python3 .hooks/hard-eng.py gap-issue "No built-in checks for Go"'
+        in lines
+    )
     for name in (".hooks/hard-eng.py", ".git/hooks/pre-push", "AGENTS.md"):
         assert (repository / name).exists()
     installed = parse_config((repository / "hard-eng.gates.json").read_text())

@@ -2,6 +2,7 @@
 
 import json
 import math
+import os
 import re
 import sys
 from pathlib import Path
@@ -671,3 +672,17 @@ def ci_usage(root: Path, repository: str | None, days: int) -> int:
             f"(push {minutes[0]} min, pull_request {minutes[1]} min)"
         )
     return 0
+
+
+def require_ci_base(base: str | None) -> None:
+    if (
+        os.environ.get("GITHUB_ACTIONS") == "true"
+        and os.environ.get("GITHUB_EVENT_NAME")
+        in {"push", "pull_request", "pull_request_target"}
+        and (base is None or not base.strip())
+    ):
+        raise ValueError(
+            "GitHub push/PR checks require --base with the comparison commit; "
+            "pass github.event.pull_request.base.sha || github.event.before. "
+            "Manual full checks may omit --base."
+        )

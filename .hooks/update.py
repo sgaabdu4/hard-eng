@@ -613,6 +613,9 @@ def install_planned_hook(root: Path, hook: tuple[str, str]) -> bool:
         and target.stat().st_mode & 0o111
     ):
         return False
+    import hook_chain
+
+    hook_chain.preserve(root, target)
     if target.is_symlink():
         target.unlink()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -653,7 +656,11 @@ def validate_gates(root: Path, source: Path, changes: dict[str, str | None]) -> 
 
 
 def repair_current_hook(root: Path, previous: str) -> str:
-    if not pre_push_missing(root):
+    import hook_chain
+
+    if not pre_push_missing(root) and not hook_chain.foreign_hook(
+        root, hook_chain.locate(root)[1]
+    ):
         return "No newer CI-verified Hard Eng revision is available."
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), previous, previous)
