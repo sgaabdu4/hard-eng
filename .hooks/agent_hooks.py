@@ -12,7 +12,6 @@ from contextlib import suppress
 from pathlib import Path
 
 from gate_config import JsonObject, JsonValue, nonproduction_source, repository_files
-from update import require_current
 
 # The HE Build handoff line, not a quoted or negated mention of it.
 SHIP_CLAIM = re.compile(r"^[*_ ]*Ready for ship[*_]*\s*[—–-]", re.MULTILINE)
@@ -604,28 +603,23 @@ def saved_session(state: Path | None) -> tuple[str, JsonObject]:
     return base, before
 
 
-def unchanged_notice(root: Path, notice: str) -> JsonObject:
-    """A session that changed nothing has nothing to verify, but a stale scaffold it can update still blocks."""
-    from update_runner import UpdateNeeded
+def with_freshness(root: Path, output: JsonObject) -> JsonObject:
+    from update_runner import freshness_note
 
+    note = freshness_note(root)
+    if not note:
+        return output
+    shown = output.get("systemMessage")
+    return {**output, "systemMessage": f"{shown}\n{note}" if shown else note}
+
+
+def unchanged_notice(root: Path, notice: str) -> JsonObject:
     message = (
         f"{notice}. No code checks were run for this planning-only handoff."
         if notice
         else "No repository changes since this session's Git base; no code checks were run."
     )
-    try:
-        require_current(root)
-    except UpdateNeeded as error:
-        return {
-            "decision": "block",
-            "systemMessage": f"{message}\n{error}",
-            "reason": f"{error} Before other repository work, repair a failed update's cause as its own "
-            "commit, then run the published setup command. If the cause is outside this repository or "
-            "the user has not allowed edits here, report it to the user and stop.",
-        }
-    except ValueError as error:
-        return {"systemMessage": f"{message}\n{error}"}
-    return {"systemMessage": message}
+    return with_freshness(root, {"systemMessage": message})
 
 
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
@@ -660,11 +654,13 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         if not changed.strip() and state is not None and state.exists():
             return unchanged_notice(root, notice)
         if notice and planning_only(root, set(changed.splitlines())):
-            require_current(root)
-            return {
-                "systemMessage": notice
-                + ". No code checks were run for this planning-only handoff."
-            }
+            return with_freshness(
+                root,
+                {
+                    "systemMessage": notice
+                    + ". No code checks were run for this planning-only handoff."
+                },
+            )
         claim = str(
             payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
         )
@@ -674,16 +670,17 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         )
         verified: JsonObject = {"base": base, "files": dict(current)}
         if not building and last_pass(state) == verified:
-            require_current(root)
-            return {
-                "systemMessage": "Hard Eng: nothing changed since this session's last passing check, so it was not rerun."
-            }
+            return with_freshness(
+                root,
+                {
+                    "systemMessage": "Hard Eng: nothing changed since this session's last passing check, so it was not rerun."
+                },
+            )
         returncode, output = run_check(root, base, building)
         if returncode == 0:
             if not building:
                 remember_pass(state, verified)
-            require_current(root)
-            return passed_notice(building, notice, agent, output)
+            return with_freshness(root, passed_notice(building, notice, agent, output))
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return {
             "decision": "block",
