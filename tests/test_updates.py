@@ -244,7 +244,7 @@ exit $c
     assert update.check_scaffold_update(target, base)
     launcher.write_text("#!/bin/sh\necho custom\n")
     commit(target, "custom hook is not a canonical scaffold update")
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(ValueError, match="Existing pre-push hook must be preserved"):
         update.check_scaffold_update(target, base)
 
 
