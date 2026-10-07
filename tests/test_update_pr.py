@@ -150,16 +150,18 @@ def squash_merge(landing: Path) -> None:
 
 
 @pytest.mark.parametrize("merge", [rebase_merge, squash_merge])
-def test_update_after_a_merged_fix_prepares_the_next_release(
+def test_update_after_a_merged_fix_prepares_and_publishes_the_next_release(
     feature: tuple[Path, Path, Path],
+    gh: FakeGh,
     monkeypatch: pytest.MonkeyPatch,
     merge: Callable[[Path], None],
 ) -> None:
-    source, target, _ = feature
+    source, target, remote = feature
     newer_release(source, monkeypatch, "first update")
     assert update_runner.apply_update(target) == 0
     fix_update_branch(target)
     git(target, "worktree", "remove", "--force", str(target.parent / "fixing"))
+    git(target, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", BRANCH)
     landing = target.parent / "landing"
     git(target, "worktree", "add", "-q", "--detach", str(landing), "origin/main")
     merge(landing)
@@ -169,6 +171,8 @@ def test_update_after_a_merged_fix_prepares_the_next_release(
     assert update_runner.apply_update(target) == 0
     assert "unfinished work" not in (target / update_runner.RESULT_FILE).read_text()
     assert second in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
+    assert publish(target, monkeypatch) == 0
+    assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
 
 
 def test_update_pr_pushes_opens_one_pr_and_turns_on_auto_merge(

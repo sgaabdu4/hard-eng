@@ -13,6 +13,7 @@ from update_runner import (
     branch_worktree,
     fetch_base,
     installed_revision,
+    landed,
     last_result,
     locked_update,
     revision_at,
@@ -180,6 +181,8 @@ def replaceable_remote(root: Path, base: str) -> str | None:
         f"origin/{base}...{remote}",
     )
     if subjects is not None and all(GENERATED.fullmatch(s) for s in subjects):
+        return tip[0]
+    if landed(root, f"origin/{base}", remote):
         return tip[0]
     print(
         f"origin/{UPDATE_BRANCH} holds commits that are not generated update commits, so it was "
