@@ -201,7 +201,7 @@ Fill [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md). Handwritten source/tes
 | Deployment configuration | A deployment-configuration check such as Trivy. |
 | A delivery request | The project shipping contract: actual PR identity, required CI, applicable UI proof, and a deployment verifier for Deploy. |
 
-Run affected packages, reviewed dependents, and shared checks. Unknown relationships and changes to gate configuration normally require full scope. Parallelize independent checks and retain latest-tool resolution. A push to the base branch reuses the merged PR's passed checks when it holds exactly the tree that PR tested.
+Run affected packages, reviewed dependents, and shared checks; pre-push leaves dependents to CI. Unknown relationships and changes to gate configuration normally require full scope. Parallelize independent checks and retain latest-tool resolution. A push to the base branch reuses the merged PR's passed checks when it holds exactly the tree that PR tested.
 
 Give each CI assertion one owner, preserving its reports, thresholds, and deployment dependencies. Measure pre-push, required CI checks, total pipeline time, and billed minutes (`python3 .hooks/hard-eng.py ci-usage`). Setup preserves existing workflows; it adds one only when none exists and shipping policy is configured. Details: [gates](.agents/skills/he/references/gates.md), [testing](.agents/skills/he/references/testing.md), [shipping](.agents/skills/he-ship/references/checks.md).
 
