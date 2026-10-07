@@ -137,7 +137,11 @@ def use_own_hooks(root: Path, candidate: Path) -> None:
         check=False,
     ).stdout.strip()
     path = Path(found).expanduser()
-    if not found or not path.is_absolute():
+    if (
+        not found
+        or not path.is_absolute()
+        or path.resolve().is_relative_to(Path(common).resolve())
+    ):
         return
     checkouts = [root, Path(common).parent] if Path(common).name == ".git" else [root]
     for checkout in checkouts:
