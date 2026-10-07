@@ -57,8 +57,10 @@ def test_husky_update_preserves_shim_and_runs_shell_launcher(
         == ".husky/_"
     )
     target.write_text("#!/bin/sh\necho custom\n")
-    with pytest.raises(ValueError, match="Existing pre-push hook must be preserved"):
-        installer.prepare_hook(tmp_path)
+    assert installer.prepare_hook(tmp_path) == (
+        target,
+        hook_chain.HUSKY_CHAINED_LAUNCHER,
+    )
     target.unlink()
     shim.write_text("#!/bin/sh\necho custom shim\n")
     assert installer.prepare_hook(tmp_path) == (shim, hook_chain.CHAINED_LAUNCHER)
