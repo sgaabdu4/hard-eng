@@ -440,7 +440,7 @@ def git_commit(
         tail = " | ".join(result.stdout.strip().splitlines()[-5:])
         raise subprocess.SubprocessError(
             f"git commit exited {result.returncode}: {tail}".removesuffix(": ")
-            + ". The project's commit hook failed in a fresh checkout with no package install; "
+            + ". A project commit hook that rejects it ran in a fresh checkout with no package install; "
             "fix that hook in the project, not Hard Eng, and leave verification to the pre-push gate"
         )
 
