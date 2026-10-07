@@ -262,7 +262,7 @@ ASSERTS = [
 
 
 @pytest.mark.parametrize(("name", "text"), ASSERTS)
-def test_removed_assertion_in_a_test_file_fails(
+def test_net_loss_of_assertions_fails_naming_lines_and_count(
     tmp_path: Path, name: str, text: str
 ) -> None:
     root = switch_root(tmp_path, name, text)
@@ -273,32 +273,32 @@ def test_removed_assertion_in_a_test_file_fails(
     )
     with pytest.raises(ValueError, match=OFF) as error:
         validate_suppressions(root, "HEAD")
-    assert f"{name}:" in str(error.value)
-    assert "removes the assertion" in str(error.value)
+    assert "tests lose 1 assertion lines net (1 removed, 0 added)" in str(error.value)
+    assert re.search(rf"removed at {re.escape(name)}:\d+", str(error.value))
 
 
-def test_moved_assertion_passes_and_removed_assertion_outside_tests_passes(
-    tmp_path: Path,
-) -> None:
-    moved = "def test_a():\n    assert f() == 1\n\n\ndef test_b():\n    x = 1\n"
-    root = switch_root(tmp_path, "tests/test_a.py", moved)
-    (root / "tests/test_a.py").write_text(
-        "def test_a():\n    x = 1\n\n\ndef test_b():\n    assert f() == 1\n"
-    )
-    validate_suppressions(root, "HEAD")
-    (tmp_path / "plain").mkdir()
-    plain = switch_root(tmp_path / "plain", "lib.py", "assert ready\nx = 1\n")
-    (plain / "lib.py").write_text("x = 1\n")
-    validate_suppressions(plain, "HEAD")
-
-
-def test_duplicated_assertion_cannot_hide_a_removed_one(tmp_path: Path) -> None:
-    root = switch_root(
-        tmp_path, "tests/test_a.py", "def test_a():\n    assert f()\n    assert f()\n"
-    )
-    (root / "tests/test_a.py").write_text("def test_a():\n    assert f()\n")
-    with pytest.raises(ValueError, match=OFF):
+def test_deleting_a_test_file_without_replacement_fails(tmp_path: Path) -> None:
+    root = switch_root(tmp_path, "tests/test_a.py", "def t():\n    assert f()\n")
+    (root / "tests/test_a.py").unlink()
+    with pytest.raises(ValueError, match=r"tests/test_a\.py:2"):
         validate_suppressions(root, "HEAD")
+
+
+def test_edited_moved_and_split_assertions_pass(tmp_path: Path) -> None:
+    root = switch_root(
+        tmp_path,
+        "tests/test_a.py",
+        "def t():\n    assert f() == 1\n\n\ndef u():\n    assert g()\n",
+    )
+    (root / "tests/test_a.py").write_text("def t():\n    assert f() == 2\n")
+    (root / "tests/test_b.py").write_text("def u():\n    assert g()\n")
+    validate_suppressions(root, "HEAD")
+
+
+def test_removed_assertion_outside_tests_passes(tmp_path: Path) -> None:
+    root = switch_root(tmp_path, "lib.py", "assert ready\nx = 1\n")
+    (root / "lib.py").write_text("x = 1\n")
+    validate_suppressions(root, "HEAD")
 
 
 def test_quick_check_runs_the_switch_off_guard(runner: ModuleType) -> None:
