@@ -191,8 +191,13 @@ def test_a_hook_manager_reinstalling_its_own_hook_replaces_the_kept_copy(
 
 @pytest.mark.parametrize(
     ("copied", "own"),
-    [(".githooks", ".githooks"), ("{root}/.githooks", ".githooks"), ("{out}", "{out}")],
-    ids=["relative", "checkout", "outside"],
+    [
+        (".githooks", ".githooks"),
+        ("{root}/.githooks", ".githooks"),
+        ("{root}/.git/hooks", "{root}/.git/hooks"),
+        ("{out}", "{out}"),
+    ],
+    ids=["relative", "checkout", "shared", "outside"],
 )
 def test_update_candidate_runs_its_own_copy_of_the_inherited_hooks_path(
     repository: Path, copied: str, own: str
