@@ -48,9 +48,9 @@ def planning_only(root: Path, names: set[str]) -> bool:
 
 
 def is_documentation(path: Path) -> bool:
-    """Plans and top-level Markdown, which only the secret scan reads."""
-    top_level = path.parent == Path(".") and path.suffix.lower() == ".md"
-    return is_plan_path(path) or (top_level and path.name != "AGENTS.md")
+    """Plans and Markdown, which only the secret scan reads unless a package claims them."""
+    markdown = path.suffix.lower() == ".md" and path.name != "AGENTS.md"
+    return is_plan_path(path) or markdown
 
 
 def report_stage(failed: bool, stage: str | None) -> None:
