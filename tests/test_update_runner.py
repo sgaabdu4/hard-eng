@@ -19,18 +19,10 @@ import pytest
 import update
 import update_pr
 import update_runner
-from conftest import SOURCE, commit, git
+from conftest import SOURCE, add_origin, commit, git
 from gate_config import JsonObject
 from test_adoption import link_skill_into_old_copy
 from test_updates import select_release
-
-
-def add_origin(root: Path) -> Path:
-    git(root, "branch", "-M", "main")
-    remote = root.parent / "origin.git"
-    git(root, "clone", "--bare", str(root), str(remote))
-    git(root, "remote", "add", "origin", str(remote))
-    return remote
 
 
 @pytest.fixture

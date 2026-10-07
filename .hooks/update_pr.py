@@ -9,15 +9,11 @@ from shipping import ShippingError, gh
 from update_runner import (
     UPDATE_BRANCH,
     UPDATE_COMMAND,
-    UpdateRunning,
     branch_worktree,
-    exclusive,
     fetch_base,
     installed_revision,
     last_result,
-    lock_file,
-    prepare_update,
-    remove_stale_candidates,
+    locked_update,
     revision_at,
     update_base,
 )
@@ -120,22 +116,12 @@ def next_step(root: Path) -> str:
     )
 
 
-def prepare_locked(root: Path) -> str:
-    with lock_file(root).open("a") as handle:
-        if not exclusive(handle):
-            raise UpdateRunning(
-                "A Hard Eng update is still running in the background; rerun this command when it ends"
-            )
-        remove_stale_candidates(root)
-        return prepare_update(root)
-
-
 def publish(root: Path) -> int:
     base = update_base(root)
     landed = revision_at(root, fetch_base(root, base))
     revision = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
     if revision is None:
-        print(prepare_locked(root))
+        print(locked_update(root))
         revision = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
     if revision is None or revision == landed:
         print(

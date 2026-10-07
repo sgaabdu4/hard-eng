@@ -67,6 +67,14 @@ def init(root: Path) -> None:
         config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
 
 
+def add_origin(root: Path) -> Path:
+    git(root, "branch", "-M", "main")
+    remote = root.parent / "origin.git"
+    git(root, "clone", "--bare", str(root), str(remote))
+    git(root, "remote", "add", "origin", str(remote))
+    return remote
+
+
 @pytest.fixture
 def installer() -> ModuleType:
     return load_module("installer", SOURCE / "setup.py")

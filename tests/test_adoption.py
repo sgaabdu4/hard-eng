@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 import update
-from conftest import commit, git, init
+from conftest import add_origin, commit, git, init
 from gate_config import json_file
 from test_setup import repository, snapshot
 from test_updates import select_release
@@ -835,7 +835,7 @@ def test_setup_runs_the_verified_revisions_own_install_step(
         "import subprocess\nfrom pathlib import Path\n\n"
         "SOURCE_FILE = '.hooks/hard-eng-source.json'\n\n\n"
         "def latest_verified(previous: str) -> None:\n    return None\n\n\n"
-        "def update(root: object, repair: bool = False) -> str:\n"
+        "def update(root: object, repair: bool = False, remember: object = None) -> str:\n"
         "    module = Path(__file__).parents[1] / 'component'\n"
         "    assert (module / 'contract.txt').read_text() == 'pinned'\n"
         "    assert subprocess.check_output(['git', '-C', str(module), 'rev-parse', '--is-shallow-repository'], text=True).strip() == 'true'\n"
@@ -849,6 +849,7 @@ def test_setup_runs_the_verified_revisions_own_install_step(
     )
     commit(source, "main setup passes repair")
     monkeypatch.setenv("UV_OFFLINE", "1")
+    add_origin(target)
     result = subprocess.run(
         ["sh"], input=entry, cwd=target, capture_output=True, text=True, check=False
     )

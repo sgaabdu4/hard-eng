@@ -8,7 +8,8 @@ from types import ModuleType
 
 import pytest
 import update
-from conftest import commit, git, init
+import update_runner
+from conftest import add_origin, commit, git, init
 from test_updates import select_release
 
 
@@ -82,6 +83,7 @@ def test_shell_bootstrap_installs_verified_main(
     commit(source, "unverified newer source")
     if installed:
         (target / "project.txt").write_text("preserved local work\n")
+        add_origin(target)
     else:
         target = target.parent / "fresh"
         init(target)
@@ -94,17 +96,21 @@ def test_shell_bootstrap_installs_verified_main(
         capture_output=True,
         text=True,
     )
-    if installed:
-        assert f"Updated Hard Eng to {revision}" in result.stdout
+    marker = (
+        f"{update_runner.UPDATE_BRANCH}:{update.SOURCE_FILE}" if installed else None
+    )
+    if installed and marker:
+        assert f"update {revision} is ready on branch" in result.stdout
         assert (target / "project.txt").read_text() == "preserved local work\n"
+        metadata = json.loads(git(target, "show", marker))
+        assert (target / ".github/workflows/hard-eng.yml").is_file()
     else:
         assert "Installed Hard Eng" in result.stdout
-    metadata = json.loads((target / update.SOURCE_FILE).read_text())
+        metadata = json.loads((target / update.SOURCE_FILE).read_text())
+        assert not (target / ".github/workflows/hard-eng.yml").exists()
+        assert "CI setup pending" in result.stderr
     assert metadata["revision"] == revision
     assert (target / ".git/hooks/pre-push").stat().st_mode & 0o111
-    assert (target / ".github/workflows/hard-eng.yml").is_file() is installed
-    if not installed:
-        assert "CI setup pending" in result.stderr
 
 
 def test_shell_bootstrap_current_clone_installs_missing_pre_push(
@@ -132,6 +138,7 @@ def test_shell_bootstrap_current_clone_installs_missing_pre_push(
     )
     (target / update.SOURCE_FILE).write_text(json.dumps({"revision": revision}) + "\n")
     commit(target, "current installed source")
+    git(target, "branch", "-M", "main")
     fresh = target.parent / "fresh"
     subprocess.run(["git", "clone", "--quiet", str(target), str(fresh)], check=True)
     hook = fresh / ".git/hooks/pre-push"

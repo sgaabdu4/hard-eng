@@ -9,8 +9,7 @@ import pytest
 import update
 import update_pr
 import update_runner
-from conftest import commit, git
-from test_update_runner import add_origin
+from conftest import add_origin, commit, git
 from test_updates import select_release
 
 PULL = "https://github.com/fixture/project/pull/9"
@@ -180,3 +179,18 @@ def test_update_pr_says_when_hard_eng_is_already_on_the_base(
         subprocess.run(["git", "diff", "--quiet"], cwd=target, check=False).returncode
         == 0
     )
+
+
+def test_manual_setup_rerun_prepares_the_branch_instead_of_committing(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    head = git(target, "rev-parse", "HEAD")
+    (target / "project.txt").write_text("working edit\n")
+    revision = newer_release(source, monkeypatch, "manual update")
+    message = update_runner.locked_update(target, repair=True)
+    assert "python3 .hooks/hard-eng.py update-pr" in message
+    assert git(target, "rev-parse", "HEAD") == head
+    assert (target / "project.txt").read_text() == "working edit\n"
+    assert revision in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
+    assert git(target, "rev-list", "--count", f"origin/main..{BRANCH}") == "1"
