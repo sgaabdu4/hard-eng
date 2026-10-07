@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
+import gate_config
 import pytest
 import shipping
 from conftest import plan_document
@@ -969,3 +970,78 @@ def test_reused_pull_request_result_skips_gates(
     output = capsys.readouterr().out
     assert f"PR head {'a' * 40} passed the required checks" in output
     assert "fails" not in output
+
+
+@pytest.mark.parametrize(
+    ("conclusion", "expected"), [("success", True), ("failure", False)]
+)
+def test_branch_point_is_reused_only_after_its_checks_passed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conclusion: str, expected: bool
+) -> None:
+    fixture = _fixture(tmp_path)
+    point = _native(fixture.root, "rev-parse", "main")
+
+    def github(_root: Path, *args: str) -> str:
+        assert args[-1] == (
+            f"repos/acme/widget/commits/{point}/check-runs?per_page=100&filter=all"
+        )
+        return json.dumps(
+            [{"total_count": 1, "check_runs": [_check(point, conclusion=conclusion)]}]
+        )
+
+    monkeypatch.setattr(shipping, "gh", github)
+    assert shipping.passed_branch_point(fixture.root) == (point if expected else None)
+
+
+def _no_requirements(_root: Path, _config: object) -> None:
+    return None
+
+
+@pytest.mark.parametrize(
+    ("plan_stage", "point", "failed"),
+    [("Draft", True, False), ("Draft", False, True), (None, True, True)],
+)
+def test_plan_stage_check_skips_packages_unchanged_since_a_passed_branch_point(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    plan_stage: str | None,
+    point: bool,
+    failed: bool,
+) -> None:
+    failing = {
+        "name": "fails",
+        "command": [sys.executable, "-c", "raise SystemExit(2)"],
+    }
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg/source.py").write_text("value = 1\n")
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [{"path": "pkg", "checks": [failing], "depends_on": []}],
+                "shared": [],
+            }
+        )
+    )
+    monkeypatch.setattr(gate_config, "validate_required_checks", _no_requirements)
+    _native(tmp_path, "add", "--all")
+    _native(
+        tmp_path,
+        "-c",
+        "user.name=T",
+        "-c",
+        "user.email=t@t.invalid",
+        "commit",
+        "-qm",
+        "m",
+    )
+    (tmp_path / "PLAN.md").write_text(_plan().replace("Complete", "Draft", 1))
+    head = _native(tmp_path, "rev-parse", "HEAD")
+
+    def passed(_root: Path) -> str | None:
+        return head if point else None
+
+    monkeypatch.setattr(shipping, "passed_branch_point", passed)
+    assert runner.check(plan_stage=plan_stage) == int(failed)
+    assert ("FAIL fails" in capsys.readouterr().out) is failed

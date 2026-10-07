@@ -515,6 +515,22 @@ def reused_pull_request(root: Path, base: str) -> str | None:
     return head
 
 
+def passed_branch_point(root: Path) -> str | None:
+    """The shipping-base commit HEAD left, when its required checks passed in CI."""
+    from comments import branch_point
+
+    try:
+        policy = load_policy(root, required=False)
+        point = branch_point(root)
+        if policy is None or point == "HEAD":
+            return None
+        remote = git(root, "remote", "get-url", "origin").strip()
+        _checks(root, origin_repository(remote), point, policy)
+    except ShippingError:
+        return None
+    return point
+
+
 def _changed_paths(root: Path, owner: str, name: str, number: int) -> list[str]:
     endpoint = f"repos/{owner}/{name}/pulls/{number}/files?per_page=100"
     items = _api_items(root, endpoint, "files", "PR files query")
