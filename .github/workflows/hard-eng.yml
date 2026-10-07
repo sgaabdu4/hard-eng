@@ -15,6 +15,7 @@ on:
 permissions:
   contents: read
   checks: read # Verify the upstream release for scaffold-only updates.
+  pull-requests: read # Find the merged PR whose passed checks cover a base-branch push.
 
 concurrency:
   group: hard-eng-${{ github.workflow }}-${{ github.ref }}
