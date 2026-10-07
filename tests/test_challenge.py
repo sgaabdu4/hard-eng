@@ -4,6 +4,7 @@ import json
 import os
 import stat
 import sys
+from contextlib import suppress
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -11,7 +12,9 @@ import challenge
 import pytest
 import ship_actions
 from conftest import commit, git
+from plans import validate_plans
 from shipping import Shipment
+from test_plans import edit, sized_branch
 
 FAKE = """#!{python}
 import json, os, sys
@@ -259,3 +262,27 @@ def test_a_failed_rerun_keeps_the_completed_review_of_the_same_revision(
     )
     assert record["outcome"] == "findings"
     assert "VERDICT: findings" in Path(record["output"]).read_text()
+
+
+@pytest.mark.parametrize(
+    ("page", "verdict"),
+    [("site/page.md", "Size: big"), ("README.md", "Size: small (documentation only)")],
+)
+def test_nested_markdown_in_a_javascript_package_counts_as_code_size(
+    repository: Path,
+    capsys: pytest.CaptureFixture[str],
+    page: str,
+    verdict: str,
+) -> None:
+    (repository / "site").mkdir()
+    (repository / page).write_text("".join(f"line {n}\n" for n in range(1200)))
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {"packages": [{"path": ".", "language": "javascript"}], "shared": []}
+        )
+    )
+    sized_branch(repository)
+    edit(repository, page, 1100)
+    with suppress(ValueError):
+        validate_plans(repository)
+    assert verdict in capsys.readouterr().out

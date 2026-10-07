@@ -6,7 +6,6 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
-from contextlib import suppress
 from functools import partial
 from pathlib import Path
 from types import ModuleType
@@ -915,28 +914,6 @@ def test_new_documentation_file_beside_a_new_code_file_is_big(
     with pytest.raises(ValueError, match="applicable PLAN"):
         validate_plans(repository)
     assert "Size: big, because it adds" in capsys.readouterr().out
-
-
-@pytest.mark.parametrize(
-    ("page", "verdict"),
-    [("site/page.md", "Size: big"), ("README.md", "Size: small (documentation only)")],
-)
-def test_nested_markdown_in_a_javascript_package_counts_as_code_size(
-    repository: Path,
-    capsys: pytest.CaptureFixture[str],
-    page: str,
-    verdict: str,
-) -> None:
-    (repository / "site").mkdir()
-    (repository / page).write_text("".join(f"line {n}\n" for n in range(1200)))
-    (repository / "hard-eng.gates.json").write_text(
-        json.dumps({"packages": [{"path": ".", "language": "javascript"}], "shared": []})
-    )
-    sized_branch(repository)
-    edit(repository, page, 1100)
-    with suppress(ValueError):
-        validate_plans(repository)
-    assert verdict in capsys.readouterr().out
 
 
 def two_commits_then_edit(root: Path) -> None:
