@@ -54,6 +54,37 @@ def test_hook_registrations_invoke_shared_runner(
 
 
 @pytest.mark.parametrize(
+    ("project", "expected"),
+    [
+        (
+            {},
+            {
+                "advisorModel": "fable",
+                "attribution": {"commit": "", "pr": "", "sessionUrl": False},
+            },
+        ),
+        (
+            {"advisorModel": "opus", "attribution": {"pr": "By the team"}},
+            {"advisorModel": "opus", "attribution": {"pr": "By the team"}},
+        ),
+    ],
+)
+def test_claude_settings_default_fable_advisor_and_no_attribution(
+    installer: ModuleType,
+    repository: Path,
+    project: dict[str, object],
+    expected: dict[str, object],
+) -> None:
+    root = installer_project(repository)
+    settings = root / ".claude/settings.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps(project))
+    installer.install(root)
+    current = json.loads(settings.read_text())
+    assert {key: current[key] for key in expected} == expected
+
+
+@pytest.mark.parametrize(
     ("features", "setting"),
     [
         ("hooks = false\n", "hooks"),
