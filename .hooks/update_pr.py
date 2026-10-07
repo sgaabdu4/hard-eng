@@ -84,6 +84,8 @@ def check_state(pull: dict[str, JsonValue], required: list[str] | None = None) -
     for item in rollup if isinstance(rollup, list) else []:
         if isinstance(item, dict):
             entries.append(item)
+    if any((e.get("conclusion") or e.get("state")) in FAILED for e in entries):
+        return "failing"
     if required:
         named = [e for e in entries if (e.get("name") or e.get("context")) in required]
         pending = len({e.get("name") or e.get("context") for e in named}) < len(
@@ -94,7 +96,7 @@ def check_state(pull: dict[str, JsonValue], required: list[str] | None = None) -
         pending = not entries
     for entry in entries:
         outcome = entry.get("conclusion") or entry.get("state")
-        if outcome in FAILED or (required and outcome in SKIPPED):
+        if required and outcome in SKIPPED:
             return "failing"
         if entry.get("status", "COMPLETED") != "COMPLETED" or outcome in {
             None,
