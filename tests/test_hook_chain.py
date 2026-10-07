@@ -189,12 +189,18 @@ def test_a_hook_manager_reinstalling_its_own_hook_replaces_the_kept_copy(
     assert hook_chain.project_copy(hook).read_text() == newer
 
 
-def test_update_candidate_keeps_a_relative_hooks_path_of_its_own(
-    repository: Path,
+@pytest.mark.parametrize(
+    ("copied", "own"),
+    [(".githooks", ".githooks"), ("{root}/.githooks", ".githooks"), ("{out}", "{out}")],
+    ids=["relative", "checkout", "outside"],
+)
+def test_update_candidate_runs_its_own_copy_of_the_inherited_hooks_path(
+    repository: Path, copied: str, own: str
 ) -> None:
     git(repository, "config", "extensions.worktreeConfig", "true")
     candidate = repository.parent / "candidate"
     git(repository, "worktree", "add", "-q", "--detach", str(candidate), "HEAD")
-    git(candidate, "config", "--worktree", "core.hooksPath", ".githooks")
-    hook_chain.use_own_hooks(candidate)
-    assert git(candidate, "config", "core.hooksPath") == ".githooks"
+    paths = {"root": repository, "out": repository.parent / "global-hooks"}
+    git(candidate, "config", "--worktree", "core.hooksPath", copied.format(**paths))
+    hook_chain.use_own_hooks(repository, candidate)
+    assert git(candidate, "config", "core.hooksPath") == own.format(**paths)

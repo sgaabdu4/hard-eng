@@ -851,7 +851,7 @@ def build_update(root: Path, base: str, repair: bool) -> str:
             check=True,
         )
         try:
-            use_own_hooks(candidate)
+            use_own_hooks(root, candidate)
             outcome = update(candidate, repair, remember=root)
             revision = installed_revision(candidate)
             landed = landed_commit(candidate, tip, f"Update Hard Eng to {revision}")
