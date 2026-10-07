@@ -10,7 +10,14 @@ if [ "$#" -eq 0 ]; then
     git -C "$temporary/source" submodule update --init --recursive --depth=1 --quiet
     sh "$temporary/source/setup.sh" "$temporary/source"
 elif [ -f "$PWD/.hooks/hard-eng-source.json" ]; then
-    uv run --project "$1" --locked --no-dev python -I -c 'import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); from update_runner import locked_update; print(locked_update(Path.cwd(), repair=True))' "$1/.hooks"
+    uv run --project "$1" --locked --no-dev python -I -c 'import subprocess, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from update_runner import locked_update
+try:
+    print(locked_update(Path.cwd(), repair=True))
+except (OSError, TypeError, ValueError, subprocess.SubprocessError) as error:
+    sys.exit(str(error))' "$1/.hooks"
 else
     uv run --project "$1" --locked --no-dev python "$1/setup.py" "$PWD"
 fi
