@@ -558,6 +558,28 @@ def failure_summary(log: str) -> str:
     return heading + body[: end.start() if end else None][:GATE_OUTPUT_LIMIT]
 
 
+def show_decisions(root: Path, names: list[str], state: Path | None) -> str:
+    """Accepted ADRs matching these files and not yet shown this session; records them as shown."""
+    from plans import matched_decisions
+
+    if state is None or not state.exists():
+        return ""
+    saved = json.loads(state.read_text())
+    shown = saved.get("decisions", [])
+    pending = {
+        name: text
+        for name, text in matched_decisions(root, names).items()
+        if name not in shown
+    }
+    if not pending:
+        return ""
+    state.write_text(json.dumps({**saved, "decisions": [*shown, *pending]}))
+    return (
+        "\nAccepted decisions apply to files you changed. Confirm your change follows "
+        "each decision below and fix it if not.\n\n" + "\n\n".join(pending.values())
+    )
+
+
 def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
     with tempfile.TemporaryFile() as log:
         check = subprocess.Popen(
@@ -697,9 +719,12 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 },
             )
         returncode, output = run_check(root, base, building)
+        decisions = show_decisions(root, changed.splitlines(), state)
         if returncode == 0:
             if not building:
                 remember_pass(state, verified)
+            if decisions:
+                return {"decision": "block", "reason": decisions.strip()}
             return with_freshness(root, passed_notice(building, notice, agent, output))
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return {
@@ -711,7 +736,8 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         "reason": "Verification failed; do not claim completion. Repair every reported finding in code, including findings unrelated to the task, as its own commit before the task continues, then reverify. If the user has not allowed edits or commits here, report the findings and stop. "
         + learning_context("failed verification")
         + "\n"
-        + output,
+        + output
+        + decisions,
     }
 
 
