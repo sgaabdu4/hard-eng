@@ -65,7 +65,7 @@ Requires Git, curl, uv, Python 3.12+, and the project's SDKs/package manager. Da
 
 ## 2. Plan
 
-The `he` skill tells the agent to select the appropriate stage; you do not need to invoke skills by name. Reuse an existing Ready plan. New work starts with the request, accepted decisions, and product/design context, recorded in one `PLAN.md`.
+The `he` skill tells the agent to select the appropriate stage; you do not need to invoke skills by name. Reuse an existing Ready plan. New work starts with the request, accepted decisions, and product/design context, recorded in one `PLAN.md`. `check` skips that requirement only for a small change: documentation only, or at most 20 changed lines in at most 3 files with no added, deleted, renamed or binary file, no dependency, CI, `.hooks/`, `.agents/`, `.claude/`, gate-config, `AGENTS.md` or database change, and no removed test lines. It measures the whole branch against its merge base with the default branch, prints `Size: small` or `Size: big, because …`, and still runs every other gate. A plan that exists is always validated.
 
 [HE Plan](.agents/skills/he-plan/SKILL.md) covers:
 
