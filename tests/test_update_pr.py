@@ -70,6 +70,15 @@ def newer_release(source: Path, monkeypatch: pytest.MonkeyPatch, note: str) -> s
     return git(source, "rev-parse", "HEAD")
 
 
+def apply_first_update(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    source, target, _ = feature
+    newer_release(source, monkeypatch, "first update")
+    assert update_runner.apply_update(target) == 0
+    return target
+
+
 def test_background_update_leaves_the_checkout_and_moves_one_branch(
     feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -145,9 +154,7 @@ def test_update_pr_reports_a_failing_pr_with_its_fix_steps(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    source, target, _ = feature
-    newer_release(source, monkeypatch, "first update")
-    assert update_runner.apply_update(target) == 0
+    target = apply_first_update(feature, monkeypatch)
     assert publish(target, monkeypatch) == 0
     capsys.readouterr()
     failure = {"status": "COMPLETED", "conclusion": "FAILURE"}
@@ -168,9 +175,7 @@ def test_update_pr_says_when_hard_eng_is_already_on_the_base(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    source, target, _ = feature
-    newer_release(source, monkeypatch, "first update")
-    assert update_runner.apply_update(target) == 0
+    target = apply_first_update(feature, monkeypatch)
     git(target, "push", "-q", "--no-verify", "origin", f"{BRANCH}:main")
     assert publish(target, monkeypatch) == 0
     assert "Nothing to publish" in capsys.readouterr().out
