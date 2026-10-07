@@ -15,6 +15,7 @@ from gate_config import (
     generated_sources,
     validate_dart_exclusions,
 )
+from project_setup import dependency_command
 
 
 def dart_format_command(installer: ModuleType) -> list[str]:
@@ -568,3 +569,12 @@ def test_dart_scan_covers_boundaries_in_any_argument_order(
         "report": {"type": "dart-decimate", "stdout": True},
     }
     assert dart_scan_includes_boundaries(gate) is covers
+
+
+def test_dart_package_with_comment_only_dependencies_is_accepted(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text(
+        "name: stock\ndependencies:\n  # none yet\ndev_dependencies:\n  lints: ^6.0.0\n"
+    )
+    assert dependency_command(tmp_path, "dart")[0] == "dart"
