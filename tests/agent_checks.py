@@ -288,6 +288,8 @@ def claude_actions(found: list[dict[str, object]]) -> list[Action]:
         elif part.get("name") in {"Edit", "Write", "MultiEdit", "NotebookEdit"}:
             path = arguments.get("file_path", arguments.get("notebook_path"))
             actions.append(Action("edit", str(path), ok))
+        elif part.get("name") == "Skill":
+            actions.append(Action("skill", str(arguments.get("skill")), ok))
     return actions
 
 
@@ -493,6 +495,30 @@ def judge_failed_baseline(fixture: Run) -> list[str]:
     return failures
 
 
+SKILL_FILE = re.compile(r"skills/([\w-]+)/SKILL\.md")
+
+
+def loaded_skills(actions: list[Action]) -> set[str]:
+    """Skills the client loaded: Claude's Skill tool, or Codex reading a SKILL.md."""
+    found = {
+        action.detail for action in actions if action.ok and action.kind == "skill"
+    }
+    for action in actions:
+        read = SKILL_FILE.search(action.detail) if action.kind == "command" else None
+        if action.ok and read:
+            found.add(read[1])
+    return found
+
+
+def loads_skill(skill: str) -> Callable[[Run], list[str]]:
+    def judge(fixture: Run) -> list[str]:
+        if skill in loaded_skills(fixture.actions):
+            return []
+        return [f"never loaded the {skill} skill"]
+
+    return judge
+
+
 CASES = [
     Case(
         "planning-only",
@@ -517,6 +543,24 @@ CASES = [
         "Add a multiply(a, b) function to calc.py with a unittest.",
         prepare_failed_baseline,
         judge_failed_baseline,
+    ),
+    Case(
+        "routes-to-plan",
+        "I want average([]) to return 0.0. Plan it first; do not write code yet.",
+        prepare_nothing,
+        loads_skill("he-plan"),
+    ),
+    Case(
+        "routes-to-review",
+        "Review the latest commit for concrete defects. Review only.",
+        prepare_defective_commit,
+        loads_skill("code-review"),
+    ),
+    Case(
+        "routes-to-ship",
+        "Ship this: open the pull request and merge it once it is green.",
+        prepare_nothing,
+        loads_skill("he-ship"),
     ),
 ]
 
