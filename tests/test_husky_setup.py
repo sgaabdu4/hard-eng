@@ -162,10 +162,7 @@ def test_shell_bootstrap_current_clone_installs_missing_pre_push(
     assert git(fresh, "rev-parse", "HEAD") == git(target, "rev-parse", "HEAD")
 
 
-def test_linked_worktree_may_use_the_common_checkout_hooks(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, _ = release
+def husky_project(target: Path) -> tuple[Path, str]:
     shim = target / ".husky/_/pre-push"
     shim.parent.mkdir(parents=True)
     shim.write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
@@ -180,7 +177,14 @@ def test_linked_worktree_may_use_the_common_checkout_hooks(
         {"name": "shell", "role": "shell", "command": ["python3", "-c", "pass"]}
     )
     config_path.write_text(json.dumps(config))
-    base = commit(target, "Husky hooks")
+    return shim, commit(target, "Husky hooks")
+
+
+def test_linked_worktree_may_use_the_common_checkout_hooks(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    shim, base = husky_project(target)
     select_release(source, monkeypatch)
     update.update(target)
     assert (target / ".husky/pre-push").is_file()
