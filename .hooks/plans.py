@@ -4,7 +4,8 @@ import re
 import subprocess
 from pathlib import Path, PurePosixPath
 
-from gate_config import changed_files, repository_files
+from dependency_graph import owner_language
+from gate_config import Group, changed_files, parse_config, repository_files
 from shipping import ShippingError, load_policy
 
 SECTIONS = (
@@ -454,6 +455,16 @@ def _counted_lines(counts: list[str], names: set[str]) -> int | str:
     return total
 
 
+def configured_packages(root: Path) -> dict[str, Group]:
+    try:
+        config = parse_config(
+            (root / "hard-eng.gates.json").read_text(), require_impact_review=False
+        )
+    except (OSError, ValueError, TypeError):
+        return {}
+    return {group["path"]: group for group in config["packages"]}
+
+
 def size_verdict(root: Path) -> tuple[bool, str]:
     """Whether the whole branch change, not just this session's, is small, and the first reason."""
     point = default_branch_point(root)
@@ -464,13 +475,18 @@ def size_verdict(root: Path) -> tuple[bool, str]:
     except (subprocess.CalledProcessError, OSError):
         return False, "the change cannot be measured"
     names = {name for name in status[1::2] + untracked if name}
-    if all(is_documentation(Path(name)) for name in names):
+    packages = configured_packages(root)
+
+    def documentation(name: str) -> bool:
+        return is_documentation(Path(name), owner_language(packages, name))
+
+    if all(documentation(name) for name in names):
         return True, "documentation only"
 
     names = {
         name
         for name in names
-        if not is_documentation(Path(name)) or _is_protected(PurePosixPath(name))
+        if not documentation(name) or _is_protected(PurePosixPath(name))
     }
     if any(
         kind[:1] in {"A", "D", "T"} and name in names
