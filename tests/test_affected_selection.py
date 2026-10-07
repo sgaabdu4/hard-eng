@@ -25,6 +25,7 @@ from gate_config import Gate, Group, affected_groups, parse_config
         (".github/workflows/x.yml", ["."]),
         ("lib/README.md", ["."]),
         ("docs/notes/x.md", ["."]),
+        ("site/content/post.md", ["site", "."]),
         (".hooks/a.py", ["lib", "app", "site", "other", "."]),
         ("PLAN.md", ["."]),
         ("features/task/PLAN.md", ["."]),
@@ -37,7 +38,7 @@ def test_changed_package_includes_transitive_dependents_and_shared(
     groups: list[Group] = [
         {"path": "lib", "checks": [], "depends_on": []},
         {"path": "app", "checks": [], "depends_on": ["lib"]},
-        {"path": "site", "checks": [], "depends_on": ["app"]},
+        {"path": "site", "checks": [], "depends_on": ["app"], "language": "javascript"},
         {"path": "other", "checks": [], "depends_on": []},
         {"path": ".", "checks": []},
     ]
