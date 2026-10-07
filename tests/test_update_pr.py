@@ -331,6 +331,8 @@ def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
     assert publish(target, monkeypatch) == 0
     other = target.parent / "other"
     git(target.parent, "clone", "-q", str(remote), str(other))
+    git(other, "config", "user.name", "Fixture")
+    git(other, "config", "user.email", "fixture@example.invalid")
     git(other, "switch", "-q", BRANCH)
     (other / "fix.txt").write_text("fix\n")
     fix = commit(other, "fix the update")
