@@ -445,15 +445,24 @@ def size_verdict(root: Path) -> tuple[bool, str]:
         ).split("\0")
     except (subprocess.CalledProcessError, OSError):
         return False, "the change cannot be measured"
-    kinds = status[0::2]
     names = {name for name in status[1::2] + untracked if name}
     if all(is_documentation(Path(name)) for name in names):
         return True, "documentation only"
-    if any(kind[:1] in {"A", "D", "T"} for kind in kinds) or any(untracked):
+
+    def counted(name: str) -> bool:
+        return not is_documentation(Path(name)) or _is_protected(PurePosixPath(name))
+
+    names = {name for name in names if counted(name)}
+    if any(
+        kind[:1] in {"A", "D", "T"} and name in names
+        for kind, name in zip(status[0::2], status[1::2], strict=False)
+    ) or any(name in names for name in untracked):
         return False, "it adds, deletes or renames a file"
     total = 0
     for entry in filter(None, counts):
         added, removed, name = entry.split("\t", 2)
+        if name not in names:
+            continue
         if reason := _file_reason(name, added, removed):
             return False, reason
         total += int(added) + int(removed)
