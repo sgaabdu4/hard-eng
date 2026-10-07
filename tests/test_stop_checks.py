@@ -116,8 +116,8 @@ def test_failure_reason_lists_failed_gates_and_starts_at_the_first_error(
     assert agent_hooks.record_session(repository, payload)
     (repository / "work.py").write_text("value = 1\n")
     reason = str(agent_hooks.completion(repository, payload)["reason"])
-    assert "Failed gates: lint, types" in reason
-    assert "FIRST ERROR" in reason
+    assert reason.startswith("Failed gates: lint, types")
+    assert reason.index("FIRST ERROR") < reason.index("Verification failed")
     assert "second error" not in reason
     assert len(reason) < 10000
 
