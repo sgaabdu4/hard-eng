@@ -11,6 +11,7 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
+from challenge import shipping_note
 from gate_config import Group
 from shipping import (
     PendingCheck,
@@ -418,6 +419,10 @@ def run(
     proof_stage = "ready" if stage in {"ready", "merge"} else "delivered"
     require_current(target)
     shipment = verify(target, plan_path, pr_url, proof_stage)
+    if stage in {"ready", "merge"} and (
+        note := shipping_note(shipment.root, shipment.head_sha)
+    ):
+        print(note)
     bypassed = shipment.review_bypass
     if stage == "merge":
         shipment = merge(target, plan_path, shipment, str(merge_method))

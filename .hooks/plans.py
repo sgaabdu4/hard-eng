@@ -414,7 +414,7 @@ def _file_reason(name: str, added: str, removed: str) -> str | None:
     return None
 
 
-def _default_branch_point(root: Path) -> str | None:
+def default_branch_point(root: Path) -> str | None:
     try:
         policy = load_policy(root, required=False)
     except ShippingError:
@@ -428,9 +428,9 @@ def _default_branch_point(root: Path) -> str | None:
     return None
 
 
-def _size_verdict(root: Path) -> tuple[bool, str]:
+def size_verdict(root: Path) -> tuple[bool, str]:
     """Whether the whole branch change, not just this session's, is small, and the first reason."""
-    point = _default_branch_point(root)
+    point = default_branch_point(root)
     if point is None:
         return False, "the branch point with the default branch cannot be found"
     try:
@@ -466,7 +466,7 @@ def _size_verdict(root: Path) -> tuple[bool, str]:
 
 
 def plan_not_needed(root: Path) -> bool:
-    small, reason = _size_verdict(root)
+    small, reason = size_verdict(root)
     if small:
         print(f"Size: small ({reason}); no plan needed.")
     else:
@@ -560,7 +560,7 @@ def matched_decisions(root: Path, names: list[str]) -> dict[str, str]:
 
 
 def validate_decisions(root: Path, base: str | None = None) -> None:
-    point = base or _default_branch_point(root) or "HEAD"
+    point = base or default_branch_point(root) or "HEAD"
     changed = changed_files(root, point)
     if changed is None:
         raise ValueError(

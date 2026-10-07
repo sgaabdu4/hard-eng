@@ -6,6 +6,7 @@ description: Deliver a verified build through a task branch and PR, check the in
 # Hard Eng Ship
 
 - Input = [HE Build](../he-build/SKILL.md) local Ready-for-ship evidence + user's delivery scope. Reuse authorization; a skill, plan or green check adds none. Resolve the actual repository, branch/PR and requested environment from the task + project instructions. Missing material authority/target → finish safe preparation, then ask only for that boundary.
+- Big change = run `python3 .hooks/hard-eng.py challenge` on the final HEAD before ready or merge; address verified findings, rerun after new commits, and state the result or "independent review not done: <reason>" in the PR ([checks](references/checks.md)). Small changes skip it.
 - Contract = [native shipping checks](references/checks.md); configure from repository facts in the existing gate file. Missing configuration/access/proof blocks. Use project-owned release commands and existing Git/`gh`; do not introduce a provider, tracker, upload service or watcher automatically.
 
 ```mermaid

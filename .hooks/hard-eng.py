@@ -18,7 +18,7 @@ from collections.abc import Generator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
 from gate_config import (
@@ -35,6 +35,9 @@ from gate_config import (
 from project_setup import package_script_arguments as test_arguments
 from tool_setup import managed_command, provision_tools
 from untrusted_input import DECLARATIONS, reject_jsdoc_casts
+
+if TYPE_CHECKING:
+    from argparse import Namespace
 
 DartAnalyzer = TypedDict(
     "DartAnalyzer",
@@ -848,6 +851,16 @@ def pre_push() -> int:
     return verify_push(ROOT)
 
 
+def deliver(args: "Namespace") -> int:
+    if args.command == "challenge":
+        from challenge import challenge
+
+        return challenge(ROOT, args.base, args.host)
+    from ship_actions import run
+
+    return run(ROOT, args.plan, args.pr, args.stage, args.worktree, args.merge_method)
+
+
 def main() -> int:
     import argparse
 
@@ -907,6 +920,18 @@ def main() -> int:
         "update-pr",
         help="Push the prepared Hard Eng update branch, open its PR and turn on auto-merge",
     ).set_defaults(apply=False)
+    challenging = commands.add_parser(
+        "challenge",
+        help="Have the other agent CLI review this branch read-only and record the result",
+    )
+    challenging.add_argument(
+        "--base", help="Git comparison base; defaults to the merge base"
+    )
+    challenging.add_argument(
+        "--host",
+        choices=("claude", "codex"),
+        help="The running agent, only when it cannot be detected",
+    )
     shipping = commands.add_parser(
         "ship", help="Verify PR delivery or perform guarded shipping actions"
     )
@@ -948,12 +973,8 @@ def main() -> int:
         from update_runner import update_main
 
         return update_main(ROOT, args.command == "update-pr", args.apply)
-    if args.command == "ship":
-        from ship_actions import run
-
-        return run(
-            ROOT, args.plan, args.pr, args.stage, args.worktree, args.merge_method
-        )
+    if args.command in {"challenge", "ship"}:
+        return deliver(args)
     from agent_hooks import handle_event
 
     return handle_event(ROOT, args.command, args.agent)
