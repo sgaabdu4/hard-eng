@@ -187,3 +187,14 @@ def test_a_hook_manager_reinstalling_its_own_hook_replaces_the_kept_copy(
     with pytest.raises(ValueError, match="merge them into pre-push.project"):
         installer.prepare_hook(repository)
     assert hook_chain.project_copy(hook).read_text() == newer
+
+
+def test_update_candidate_keeps_a_relative_hooks_path_of_its_own(
+    repository: Path,
+) -> None:
+    git(repository, "config", "extensions.worktreeConfig", "true")
+    candidate = repository.parent / "candidate"
+    git(repository, "worktree", "add", "-q", "--detach", str(candidate), "HEAD")
+    git(candidate, "config", "--worktree", "core.hooksPath", ".githooks")
+    hook_chain.use_own_hooks(candidate)
+    assert git(candidate, "config", "core.hooksPath") == ".githooks"
