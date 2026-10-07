@@ -18,7 +18,7 @@ Owners:
 
 Blockers: None
 Handoff: Approval
-Authority: The user asked on 2026-10-07 to compress `AGENTS.md` with Writing Great Skills without losing anything and to audit it with the Claude API prompt audit; merge when green is approved.
+Authority: The user asked on 2026-10-07 to compress `AGENTS.md` with Writing Great Skills without losing anything and to audit it with the Claude API prompt audit; merge when green is approved. On 2026-10-08 the user asked for a second, symbol-heavy pass without losing meaning.
 
 ## Acceptance + steps
 
@@ -26,6 +26,7 @@ Authority: The user asked on 2026-10-07 to compress `AGENTS.md` with Writing Gre
 - [x] The three overlapping rules on additions (before-editing, YAGNI, Additions) state each requirement once.
 - [x] The startup rule drops migration-relative wording and splits into terse sub-bullets with every command and condition kept.
 - [x] Full gate passes → `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` exits 0.
+- [x] Second pass: every clause still maps; rule labels other docs cite (Tests, Verification) stay; repeated "keep required gates" and "apply publication privacy" lean on their single owning rules.
 
 ## Baseline + execution
 
@@ -35,7 +36,7 @@ Execution: Main agent in this checkout.
 
 ## Risks + recovery
 
-A reworded rule could read differently to an agent; the clause map is the review aid. Token counts were not measured (no API credentials here); size fell from 5,369 to about 4,800 bytes. Recovery is reverting this branch.
+A reworded rule could read differently to an agent; the clause map is the review aid. First pass: size fell from 5,369 to about 4,800 bytes. Second pass, measured with the cl100k_base tokenizer: 1,014 to about 845 tokens. Recovery is reverting this branch.
 
 ## ux_reference
 

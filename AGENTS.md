@@ -1,24 +1,24 @@
 # Agent Rules
 
-- Installed-project startup = when `.hooks/hard-eng-source.json` exists, get this session's Hard Eng update status before any repository work, read-only included.
-  - SessionStart reports the last result + starts or reports a background update. Once verified, it prepares one commit on local `hard-eng/update` from the remote base; the current branch is never touched.
-  - No status → first run `curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh` from the repository root; it prepares the same branch.
-  - Prepared branch → `python3 .hooks/hard-eng.py update-pr`: pushes it, opens or reuses the "Update Hard Eng" PR + enables auto-merge, so it merges only after checks pass; no approval needed. Allowed beside the task's main PR despite any one-PR rule; a failing one is fixed on its own branch + worktree before other shipping.
-  - Tell the user: updated / no newer verified release / still running in the background / failed. Report failures explicitly; keep the required gates. No updater output = failed, even on exit 0. A marker or session file alone ≠ success.
-  - Rerun setup only after a failed status or with no status; never while an update runs.
-- Before editing, state the single change, the files it touches + how it will be verified.
-- Scope = the user's request + accepted constraints; preserve unrelated work.
-- Project instructions = `AGENTS.md` for Claude + Codex. Move unique scoped rules to the matching `AGENTS.md` before retiring legacy `CLAUDE.md` files; never recreate import wrappers or publish private local instructions.
-- Publication = before recording tracked content or publishing, apply [publication privacy](.agents/skills/he-ship/references/checks.md#publication-privacy) for the destination's audience.
-- YAGNI = ultra always unless the user changes it. Understand the real flow first; reuse existing files, code, stdlib, native commands/features + installed dependencies before adding code.
-- Additions = each new file, dependency, wrapper, abstraction, configuration or stored state needs the current agreed requirement it serves + why existing code or a direct command can't satisfy it; missing either → leave it out. Give this reasoning in normal updates; no justification files.
-- Comments = none by default. One terse why-line only when naming, types, structure or a test can't carry a needed non-obvious constraint; `check` fails any changed source file holding a longer comment block, older blocks included.
-- Changes = fix the cause at its existing owner. Optional improvements + extra infrastructure need an explicit user request; never slip them in as robustness, best practices or future needs.
-- Tests = each added test proves a named required outcome or catches a specific meaningful failure. Reuse existing tests first; no tests that merely mirror implementation details or pad coverage. Identify expected outcomes + relevant failure modes before implementing; tests may follow. Affected journeys need real E2E proof where applicable; keep focused tests that add coverage, speed or diagnosis. Before deleting a test, state what it protects + its replacement proof or why it's unnecessary; E2E overlap alone isn't enough. Details: [testing](.agents/skills/he/references/testing.md).
-- Verification = run applicable gates + prove affected behavior; never hide findings, weaken checks to pass or claim an unrun check succeeded. Repair every reported finding in code, unrelated ones included, as its own commit before the task continues; never baseline, tolerate or suppress one.
-- Acceptance = before completion, review the actual diff against the latest request, remove unsupported additions + report any remaining expansion. Passing tools never excuse unnecessary code; metrics can't prove necessity or test quality.
-- Authorization = reuse settled approvals; ask only when missing information changes the result or an unapproved consequential action is necessary.
-- Communication = concise plain English; report actual changes, proof and remaining gaps.
-- Missing-check gaps = a project check or language Hard Eng lacks (setup prints `Gap:`) → file it without asking: `python3 .hooks/hard-eng.py gap-issue "<missing check, generic>"`. It dedupes + refuses project detail; never include project names, code, paths or data.
-- Other Hard Eng defects = a reproduced fault in Hard Eng's own files (`.hooks/`, `.agents/skills/he*`, setup), not the project → tell the user, search [hard-eng issues](https://github.com/sgaabdu4/hard-eng/issues) for a duplicate + with their approval file a terse one: Problem, Reproduction, installed revision, Suggestion. Apply publication privacy; keep the required gates.
-- Hard Eng = follow `.agents/skills/he/SKILL.md` when working on this repository; use `python3 .hooks/hard-eng.py --help` for commands.
+- `.hooks/hard-eng-source.json` exists → get this session's Hard Eng update status before any repo work, read-only too.
+  - SessionStart reports last result + starts/reports a background update; verified → 1 commit on local `hard-eng/update` from remote base, current branch untouched.
+  - No status → from repo root: `curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh` (prepares that branch).
+  - Prepared branch → `python3 .hooks/hard-eng.py update-pr` (pushes, opens/reuses "Update Hard Eng" PR, auto-merges after checks; no approval). Exempt from one-PR rules; failing → fix on own branch + worktree before other shipping.
+  - Report: updated / no newer verified release / running in background / failed (explicitly). No updater output = failed, even exit 0; marker/session file alone ≠ success.
+  - Rerun setup only after failed or no status; never mid-update.
+- Before editing: state the single change, files touched + verification.
+- Scope = user request + accepted constraints; preserve unrelated work.
+- Legacy `CLAUDE.md` → move unique scoped rules to the matching `AGENTS.md` (Claude + Codex) before retiring it; never recreate import wrappers or publish private local instructions.
+- Before recording tracked content or publishing → apply [publication privacy](.agents/skills/he-ship/references/checks.md#publication-privacy) for the audience.
+- YAGNI = ultra unless user changes it. Understand the real flow; reuse existing files, code, stdlib, native commands/features + installed deps before adding code.
+- New file/dep/wrapper/abstraction/config/stored state → needs a current agreed requirement + why existing code or a direct command can't do it; else omit. Explain in normal updates; no justification files.
+- Comments: none by default; max 1 terse why-line for a needed non-obvious constraint names/types/structure/tests can't carry. `check` fails changed source files with longer comment blocks (old ones too).
+- Fix causes at their existing owner. Optional improvements + extra infra only on explicit user request; never as robustness/best practice/future needs.
+- Tests: each proves a named required outcome or catches a specific meaningful failure; reuse first; no implementation mirrors/padding. Name outcomes + failure modes first; tests may follow code. Affected journeys need real E2E proof where applicable; keep focused tests adding coverage/speed/diagnosis. Deleting one → state what it protects + replacement proof or why unneeded; E2E overlap alone ≠ enough. [testing](.agents/skills/he/references/testing.md)
+- Verification: run applicable gates + prove affected behavior; never hide findings, weaken checks or claim unrun checks passed. Repair every reported finding in code, unrelated too, as its own commit before continuing; never baseline/tolerate/suppress.
+- Before done: review the diff vs the latest request, remove unsupported additions + report remaining expansion. Passing tools/metrics never prove necessity or test quality.
+- Reuse settled approvals; ask only when missing info changes the result or an unapproved consequential action is needed.
+- Report concisely in plain English: actual changes, proof, gaps.
+- Setup prints `Gap:` (missing check/language) → file without asking: `python3 .hooks/hard-eng.py gap-issue "<missing check, generic>"` (dedupes, refuses project detail); never include project names, code, paths or data.
+- Reproduced fault in Hard Eng's own `.hooks/`, `.agents/skills/he*` or setup → tell user, check [issues](https://github.com/sgaabdu4/hard-eng/issues) for duplicates, then with approval file a terse one: Problem, Reproduction, installed revision, Suggestion.
+- Follow `.agents/skills/he/SKILL.md`; commands: `python3 .hooks/hard-eng.py --help`.
