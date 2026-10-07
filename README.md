@@ -73,7 +73,7 @@ The `he` skill tells the agent to select the appropriate stage; you do not need 
 2. **Scope and decisions:** define outcomes, boundaries, and the smallest execution arrangement. Ask only unresolved material questions. Parallel work needs named owners and an integration check.
 3. **UX:** show the relevant flow using a lightweight mock grounded in the actual website/design system, or an isolated actual-app preview. Label which it is; record owners, rendering and inspection. A dashboard shell does not cover unseen decision-bearing workflows. Actual-app captures need a real baseline; mocks may explain its absence.
 4. **E2E:** name the actual journey and expected result, or explain inapplicability. Unchanged appearance does not waive interaction testing; missing or failed proof stays blocked.
-5. **Readiness:** run the Draft baseline gate after planning/preview work, then the Ready gate. A failed baseline needs a separate authorized repair delivered through verified main before feature work resumes.
+5. **Readiness:** run the Draft baseline gate after planning/preview work, then the Ready gate. When main's commit passed CI, the baseline checks only what the branch changed. A failed baseline needs a separate authorized repair delivered through verified main before feature work resumes.
 
 ```mermaid
 flowchart TD
