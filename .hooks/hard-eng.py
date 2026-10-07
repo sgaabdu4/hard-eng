@@ -708,6 +708,20 @@ def proven_elsewhere(base: str | None) -> bool:
     return check_scaffold_update(ROOT, base)
 
 
+def plan_base(base: str | None, plan_stage: str | None) -> str | None:
+    from shipping import passed_branch_point
+
+    if base is not None or plan_stage is None:
+        return base
+    if point := passed_branch_point(ROOT):
+        print(
+            f"Base-branch commit {point} passed the required CI checks; "
+            "checking only changes since it.",
+            flush=True,
+        )
+    return point
+
+
 def check(
     timeout: float | None = None,
     base: str | None = None,
@@ -725,7 +739,7 @@ def check(
         return 0
 
     with check_lock(ROOT):
-        groups = load_groups(ROOT, base, dependents=dependents)
+        groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         timeout = timeout or gate_timeout(ROOT)
         from comments import validate_comments
         from plans import report_stage, validate_plans
