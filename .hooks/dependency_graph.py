@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from collections import deque
-from pathlib import PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from gate_config import Group
+
+
+def owner_language(by_path: dict[str, Group], name: str) -> str | None:
+    matches = [path for path in by_path if Path(name).is_relative_to(path)]
+    return by_path[max(matches, key=len)].get("language") if matches else None
 
 
 def impact_inputs(group: Group) -> list[PurePosixPath]:
