@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -46,9 +47,39 @@ def ensure_python_runtime() -> None:
         )
 
 
+def entry_point_names(directory: Path) -> list[str]:
+    """Functions the project's console scripts call, which vulture cannot see being used."""
+    try:
+        project = tomllib.loads((directory / "pyproject.toml").read_text())["project"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError):
+        return []
+    targets = [
+        target
+        for table in ("scripts", "gui-scripts")
+        for target in project.get(table, {}).values()
+        if isinstance(target, str)
+    ]
+    return sorted(
+        {
+            target.split(":")[-1].split("[")[0].split(".")[-1].strip()
+            for target in targets
+        }
+        - {""}
+    )
+
+
+def with_entry_points(command: list[str], directory: Path) -> list[str]:
+    names = entry_point_names(directory)
+    if command[0] != "vulture" or not names:
+        return command
+    return [*command, "--ignore-names", ",".join(names)]
+
+
 def managed_command(command: list[str], directory: Path | None = None) -> list[str]:
     if directory is not None:
-        command = managed_scanner_command(command, directory)
+        command = with_entry_points(
+            managed_scanner_command(command, directory), directory
+        )
     if command[0] in MANAGED_PYTHON_SCANNERS:
         return ["uvx", command[0] + "@latest", *command[1:]]
     return command
