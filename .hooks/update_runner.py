@@ -92,6 +92,27 @@ def stale_error(root: Path, revision: str) -> ValueError:
     )
 
 
+def freshness_note(root: Path) -> str:
+    """What the session-start update already found, read without any network request."""
+    from update import SOURCE_FILE
+
+    if not (root / SOURCE_FILE).exists():
+        return ""
+    try:
+        if (blocker := update_blocker(root)) is not None:
+            return blocker
+        if update_running(root):
+            return f"Hard Eng update is still running in the background ({LOG_FILE}); the scaffold may be out of date."
+        result = last_result(root)
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        return f"Hard Eng freshness is unknown: {error}."
+    if result == "none recorded yet":
+        return "Hard Eng freshness is unknown: no update result is recorded yet."
+    if "failed" in result or "stopped before" in result:
+        return f"The scaffold may be out of date. Last Hard Eng update result: {result}"
+    return ""
+
+
 def current_head(root: Path) -> str:
     found = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", "HEAD"],

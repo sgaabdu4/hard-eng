@@ -14,7 +14,7 @@ import agent_hooks
 import pytest
 import update
 import update_runner
-from conftest import SOURCE, commit, git
+from conftest import SOURCE, commit, git, plan_document
 from gate_config import Group, JsonObject, affected_groups
 from shipping import ShippingPolicy
 
@@ -238,69 +238,81 @@ def test_release_lookup_supports_account_free_setup_and_existing_auth(
         update.github_json("repos/example/fixture/check-runs")
 
 
-@pytest.mark.parametrize("changed", [False, True])
-@pytest.mark.parametrize("upstream", [None, "b" * 40, OSError("offline")])
-def test_completion_checks_freshness_without_mutating_installation(
-    repository: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    changed: bool,
-    upstream: str | OSError | None,
-) -> None:
+def install_fixture(repository: Path, result: str | None) -> Path:
     hooks = repository / ".hooks"
     hooks.mkdir()
     (hooks / "hard-eng.py").write_text("raise SystemExit(0)\n")
-    marker = hooks / "hard-eng-source.json"
-    content = json.dumps({"revision": "a" * 40})
-    marker.write_text(content)
+    (hooks / "hard-eng-source.json").write_text(json.dumps({"revision": "a" * 40}))
     (repository / ".git/info/exclude").write_text(".hard-eng/\n")
-    subprocess.run(["git", "add", "."], cwd=repository, check=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=test@example.invalid",
-            "commit",
-            "-qm",
-            "installed fixture",
-        ],
-        cwd=repository,
-        check=True,
-    )
-    head = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=repository, text=True
-    ).strip()
+    head = commit(repository, "installed fixture")
     state = repository / ".hard-eng/sessions/known.json"
     state.parent.mkdir(parents=True)
     state.write_text(json.dumps({"base": head}))
-    (repository / ".hard-eng/update-result.txt").write_text(
-        "earlier: Hard Eng update failed: fixture cause\n"
-    )
-    if changed:
+    if result is not None:
+        (repository / update_runner.RESULT_FILE).write_text(result)
+    return state
+
+
+def refuse_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    def reached(*_: object, **__: object) -> None:
+        raise AssertionError("the end of a reply must not reach GitHub")
+
+    for name in ("github_json", "latest_verified", "upstream_moved"):
+        monkeypatch.setattr(update, name, reached)
+    monkeypatch.setattr(urllib.request, "urlopen", reached)
+
+
+@pytest.mark.parametrize("path", ["passed", "unchanged", "planning", "repeat"])
+@pytest.mark.parametrize(
+    ("result", "note"),
+    [
+        ("earlier: Hard Eng update failed: fixture cause\n", "fixture cause"),
+        (None, "freshness is unknown"),
+        ("earlier: Updated Hard Eng to " + "b" * 40 + "\n", ""),
+    ],
+)
+def test_reply_end_never_reaches_github_or_blocks_on_freshness(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    result: str | None,
+    note: str,
+) -> None:
+    state = install_fixture(repository, result)
+    refuse_network(monkeypatch)
+    if path == "planning":
+        plan = repository / "features/draft/PLAN.md"
+        plan.parent.mkdir(parents=True)
+        plan.write_text(
+            plan_document()
+            .replace("Status: Complete", "Status: Draft")
+            .replace("Blockers: None", "Blockers: Need an answer")
+            .replace("Handoff: Approval", "Handoff: Clarification")
+        )
+    elif path != "unchanged":
         (repository / "change.txt").write_text("local work")
-    query = (
-        Mock(side_effect=upstream)
-        if isinstance(upstream, OSError)
-        else Mock(return_value=upstream)
-    )
-    monkeypatch.setattr(update, "latest_verified", query)
-    result = agent_hooks.completion(repository, {"session_id": "known"})
-    if upstream is None or (not changed and isinstance(upstream, OSError)):
-        assert result.get("decision") != "block"
-    else:
-        assert result.get("decision") == "block"
-    if isinstance(upstream, str):
-        assert "Hard Eng update failed: fixture cause" in str(result["reason"])
-    assert ("freshness" in str(result).lower()) == (upstream is not None)
-    query.assert_called_once_with("a" * 40)
-    assert marker.read_text() == content
+    if path == "repeat":
+        agent_hooks.completion(repository, {"session_id": "known"})
+    output = agent_hooks.completion(repository, {"session_id": "known"})
+    assert output.get("decision") != "block"
+    shown = str(output.get("systemMessage", ""))
     assert (
-        subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=repository, text=True
-        ).strip()
-        == head
+        (note in shown)
+        if note
+        else ("update" not in shown.lower().replace("not rerun", ""))
     )
+    assert state.exists()
+
+
+def test_reply_end_notes_a_running_update(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_fixture(repository, None)
+    refuse_network(monkeypatch)
+    monkeypatch.setattr(update_runner, "update_running", Mock(return_value=True))
+    output = agent_hooks.completion(repository, {"session_id": "known"})
+    assert output.get("decision") != "block"
+    assert "still running" in str(output["systemMessage"])
 
 
 def test_unchanged_session_does_not_claim_checks_passed(repository: Path) -> None:

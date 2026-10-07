@@ -220,7 +220,7 @@ Semgrep or configured native rules check code; OSV checks selected lockfiles or 
 - **Pre-push:** verifies pushed revisions in isolated worktrees, checking changed packages and, for Vitest or Jest, only the related tests; CI runs dependents and full suites. It then reports mutants on changed production lines that the tests miss. The mutation report never blocks the push and stops after 180 seconds; `python3 .hooks/hard-eng.py mutation --base <ref>` gives the full result.
 - **CI:** runs configured checks and fails its job on failure.
 
-Explicit Draft/Ready/Complete commands normally run native checks too. Verified scaffold-only updates have a dedicated path that avoids unrelated product checks; when an update shares a branch with other work, the checks follow that other work. Completion and shipping check scaffold freshness. Host hooks work only when supported, trusted, and invoked; registration alone proves nothing.
+Explicit Draft/Ready/Complete commands normally run native checks too. Verified scaffold-only updates have a dedicated path that avoids unrelated product checks; when an update shares a branch with other work, the checks follow that other work. Shipping checks scaffold freshness live and blocks when it is out of date or cannot be confirmed. The end of a reply makes no network request; it only adds a note from the session-start update result and never blocks on freshness. Host hooks work only when supported, trusted, and invoked; registration alone proves nothing.
 
 ```mermaid
 flowchart TD
@@ -228,7 +228,7 @@ flowchart TD
   C[Stop] --> D{Invalid Draft handoff or missing approval evidence?}
   D -->|Yes| F[Block completion and identify missing planning work]
   D -->|No| P{Planning-only handoff or known unchanged session?}
-  P -->|Yes| E[Check freshness; send the agent to update when none is running]
+  P -->|Yes| E[Pass with a note taken from the session-start update result]
   P -->|No| G[Native check]
   H[Manual check] --> G
   I[Git pre-push] --> J[Isolated pushed-change check]
