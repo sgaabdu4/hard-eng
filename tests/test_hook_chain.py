@@ -106,3 +106,24 @@ def test_replaced_launcher_with_another_project_hook_asks_for_a_merge(
         installer.prepare_hook(repository)
     assert hook_chain.project_copy(hook).read_text() == PROJECT_HOOK
     git(repository, "status", "--short")
+
+
+LEFTHOOK_HOOK = '#!/bin/sh\nif [ "$LEFTHOOK" = "0" ]; then exit 0; fi\n# {version}\nexec lefthook run pre-push\n'
+
+
+def test_a_hook_manager_reinstalling_its_own_hook_replaces_the_kept_copy(
+    installer: ModuleType, repository: Path, shipping_policy: ShippingPolicy
+) -> None:
+    older = LEFTHOOK_HOOK.format(version="1.0")
+    hook = install_over(installer, repository, shipping_policy, older)
+    assert hook_chain.project_copy(hook).read_text() == older
+    newer = LEFTHOOK_HOOK.format(version="2.0")
+    hook.write_text(newer)
+    hook.chmod(0o755)
+    installer.install(repository)
+    assert hook_chain.project_copy(hook).read_text() == newer
+    assert hook.read_text() == hook_chain.CHAINED_LAUNCHER
+    hook.write_text("#!/bin/sh\nexit 0\n")
+    with pytest.raises(ValueError, match="merge them into pre-push.project"):
+        installer.prepare_hook(repository)
+    assert hook_chain.project_copy(hook).read_text() == newer
