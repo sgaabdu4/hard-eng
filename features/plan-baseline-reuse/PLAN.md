@@ -1,6 +1,6 @@
 # Reuse main's CI result for the plan baseline
 
-Status: Draft
+Status: Complete
 
 ## Outcome + scope
 
@@ -25,15 +25,15 @@ Authority: The user asked on 2026-10-07 to fix all open issues, review with Code
 
 ## Acceptance + steps
 
-- [ ] Plan-stage check without `--base`, branch point's required checks passed → only changed packages run; a plan-only branch runs no package checks → runner test.
-- [ ] Branch point's checks not passed, or no plan stage → every check runs → runner and shipping tests.
-- [ ] Skill text and README describe the reuse.
-- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
+- [x] Plan-stage check without `--base`, branch point's required checks passed → only changed packages run; a plan-only branch runs no package checks → runner test.
+- [x] Branch point's checks not passed, or no plan stage → every check runs → runner and shipping tests.
+- [x] Skill text and README describe the reuse.
+- [x] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
 ## Baseline + execution
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: main `8f7f8fac` passed its required `hard-eng` CI check run; this branch starts from it unchanged.
 Execution: One builder in this worktree.
 
 ## Risks + recovery
@@ -46,9 +46,9 @@ N/A — check behaviour; no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-Gate: Pending
+Result: Passed
+Evidence: `test_plan_stage_check_skips_packages_unchanged_since_a_passed_branch_point` runs a failing package check through `check`: a Draft check with a passed branch point skips it and exits 0; without a passed branch point, or without a plan stage, it runs and fails. `test_branch_point_is_reused_only_after_its_checks_passed` returns the main commit only when its required check run succeeded. A live call from this branch returned main `8f7f8fac` from GitHub. Codex adversarial review (gpt-6-astra) round 1 found no code issues; its only finding was this plan still being Draft.
+Gate: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` → exit 0 (1240 tests, 90.31% line coverage).
 E2E: N/A — command-line check behaviour proven through the runner in tests.
 
 Delivery target: Merge
