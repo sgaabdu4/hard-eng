@@ -26,6 +26,14 @@ MANAGED_PYTHON_SCANNERS = {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "p
 MISE_PACKAGE = "@jdxcode/mise"
 MISE_LATEST = MISE_PACKAGE + "@latest"
 MISE_BINARY = Path("node_modules/@jdxcode/mise/bin/mise")
+NOT_INSTALLED = (
+    "Tools are not installed yet and cannot be fetched now: {error}. "
+    "Connect once or run the full check (python3 .hooks/hard-eng.py check) to install them."
+)
+
+
+def quick_mode() -> bool:
+    return "--quick" in sys.argv
 
 
 def ensure_python_runtime() -> None:
@@ -81,7 +89,8 @@ def managed_command(command: list[str], directory: Path | None = None) -> list[s
             managed_scanner_command(command, directory), directory
         )
     if command[0] in MANAGED_PYTHON_SCANNERS:
-        return ["uvx", command[0] + "@latest", *command[1:]]
+        offline = ["--offline"] if quick_mode() else []
+        return ["uvx", *offline, command[0] + "@latest", *command[1:]]
     return command
 
 
@@ -146,8 +155,32 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
     selected = sorted(
         packages[name] + "@latest" for name in executables & packages.keys()
     )
+    if quick_mode():
+        warm_python_scanners(sorted(executables & MANAGED_PYTHON_SCANNERS), timeout)
     if selected:
         provision_batch(selected, timeout)
+
+
+def scanner_runs(name: str, offline: bool, timeout: float) -> bool:
+    try:
+        subprocess.run(
+            ["uvx", *(["--offline"] if offline else []), name + "@latest", "--version"],
+            capture_output=True,
+            timeout=timeout,
+            check=True,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return False
+    return True
+
+
+def warm_python_scanners(names: list[str], timeout: float) -> None:
+    """Quick checks run scanners from uv's cache; fetch one only when it was never cached."""
+    for name in names:
+        if not (
+            scanner_runs(name, True, timeout) or scanner_runs(name, False, timeout)
+        ):
+            raise ValueError(NOT_INSTALLED.format(error=f"{name} could not be run"))
 
 
 def provision_batch(batch: list[str], timeout: float) -> None:
@@ -163,13 +196,60 @@ def provision_batch(batch: list[str], timeout: float) -> None:
         "PNPM_CONFIG_CACHE_DIR": "pnpm/cache",
     }.items():
         environment.setdefault(name, str(storage / directory))
-    data_directory = Path(environment["MISE_DATA_DIR"])
     if shutil.which("gh"):
         environment.setdefault(
             "MISE_GITHUB_CREDENTIAL_COMMAND",
             'gh auth token --hostname "$MISE_CREDENTIAL_HOST"',
         )
+    if quick_mode():
+        try:
+            if use_installed_tools(batch, storage, environment, timeout):
+                return
+            print("Install missing native tools: " + ", ".join(batch), flush=True)
+            provision_latest(batch, storage, environment, timeout)
+        except (subprocess.SubprocessError, OSError, ValueError) as error:
+            raise ValueError(NOT_INSTALLED.format(error=error)) from error
+        return
     print("Prepare latest native tools: " + ", ".join(batch), flush=True)
+    provision_latest(batch, storage, environment, timeout)
+
+
+def newest_launcher(launchers: Path) -> Path | None:
+    found = [
+        path for path in launchers.glob("[0-9]*/") if (path / MISE_BINARY).is_file()
+    ]
+    return max(
+        found,
+        key=lambda path: [int(part) for part in re.findall(r"\d+", path.name)],
+        default=None,
+    )
+
+
+def use_installed_tools(
+    batch: list[str], storage: Path, environment: dict[str, str], timeout: float
+) -> bool:
+    """Resolve already-installed tool versions without any network request."""
+    launcher = newest_launcher(storage / "mise-launcher")
+    if launcher is None:
+        return False
+    result = subprocess.run(
+        [str(launcher / MISE_BINARY), "--no-config", "env", "--json", *batch],
+        cwd=storage,
+        text=True,
+        timeout=timeout,
+        capture_output=True,
+        check=False,
+        env={**environment, "MISE_OFFLINE": "1", "MISE_NPM_PACKAGE_MANAGER": "pnpm"},
+    )
+    if result.returncode != 0 or "Failed to resolve tool version" in result.stderr:
+        return False
+    export_tool_paths(result.stdout, Path(environment["MISE_DATA_DIR"]))
+    return True
+
+
+def provision_latest(
+    batch: list[str], storage: Path, environment: dict[str, str], timeout: float
+) -> None:
     with mise_launcher(storage / "mise-launcher", environment, timeout) as mise:
         environment["PATH"] = os.pathsep.join(
             [str(mise.parent), environment.get("PATH", os.defpath)]
@@ -205,7 +285,11 @@ def provision_batch(batch: list[str], timeout: float) -> None:
                 raise ValueError(
                     "Latest tool versions could not be resolved; retry provisioning"
                 )
-    environment = json.loads(result.stdout)
+    export_tool_paths(result.stdout, Path(environment["MISE_DATA_DIR"]))
+
+
+def export_tool_paths(output: str, data_directory: Path) -> None:
+    environment = json.loads(output)
     if not isinstance(environment, dict) or not isinstance(
         environment.get("PATH"), str
     ):
