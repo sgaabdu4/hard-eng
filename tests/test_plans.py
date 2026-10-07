@@ -893,6 +893,29 @@ def test_documentation_only_change_needs_no_plan(
     assert "Size: small (documentation only)" in capsys.readouterr().out
 
 
+def test_new_documentation_file_beside_a_small_fix_stays_small(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    edit(repository, "a.py", 2)
+    (repository / "docs").mkdir()
+    (repository / "docs/decision.md").write_text("why\n" * 80)
+    validate_plans(repository)
+    assert "Size: small (1 file, 4 changed lines)" in capsys.readouterr().out
+
+
+def test_new_documentation_file_beside_a_new_code_file_is_big(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    new_file(repository)
+    (repository / "docs").mkdir()
+    (repository / "docs/decision.md").write_text("why\n")
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+    assert "Size: big, because it adds" in capsys.readouterr().out
+
+
 def two_commits_then_edit(root: Path) -> None:
     edit(root, "a.py", 6)
     commit(root, "first half")
