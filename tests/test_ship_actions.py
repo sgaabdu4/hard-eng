@@ -17,6 +17,7 @@ from unittest.mock import Mock
 import pytest
 import ship_actions
 import update
+import update_pr
 from conftest import SOURCE, commit, init
 from shipping import PendingCheck, Shipment, ShippingError, ShippingPolicy, git
 
@@ -578,18 +579,51 @@ def test_pre_push_rejects_missing_shipping_before_commands(
     commands.assert_not_called()
 
 
-def test_shipping_rejects_stale_install_before_remote_action(
-    delivered_worktree: tuple[Path, Shipment], monkeypatch: pytest.MonkeyPatch
+def update_pull(*checks: dict[str, str]) -> str:
+    pull = {"url": "https://github.com/fixture/project/pull/9", "title": "Update"}
+    return json.dumps([{**pull, "statusCheckRollup": list(checks)}])
+
+
+@pytest.mark.parametrize(
+    ("answer", "instruction"),
+    [
+        ("[]", "run `python3 .hooks/hard-eng.py update-pr`"),
+        (
+            update_pull({"status": "COMPLETED", "conclusion": "FAILURE"}),
+            "is failing: fix it first. Fix its checks on branch hard-eng/update in its own worktree",
+        ),
+        (
+            update_pull({"status": "IN_PROGRESS", "conclusion": ""}),
+            "merges by itself once its checks pass: wait for it",
+        ),
+        ("merged", "rebase this branch on origin/main"),
+    ],
+    ids=["no-pr", "failing-pr", "pending-pr", "merged"],
+)
+def test_shipping_a_stale_install_names_the_update_pr_step(
+    delivered_worktree: tuple[Path, Shipment],
+    monkeypatch: pytest.MonkeyPatch,
+    answer: str,
+    instruction: str,
 ) -> None:
     root, shipment = delivered_worktree
-    hooks = root / ".hooks"
-    hooks.mkdir()
-    (hooks / "hard-eng-source.json").write_text(json.dumps({"revision": "a" * 40}))
+    marker = root / ".hooks/hard-eng-source.json"
+    marker.parent.mkdir()
+    if answer == "merged":
+        marker.write_text(json.dumps({"revision": "b" * 40}))
+        commit(root, "update landed")
+        git(root, "push", "-q", "origin", "main")
+        answer = "[]"
+    marker.write_text(json.dumps({"revision": "a" * 40}))
     monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
+    pulls = Mock(return_value=answer)
+    monkeypatch.setattr(update_pr, "gh", pulls)
     remote = Mock()
     monkeypatch.setattr(ship_actions, "gh", remote)
-    with pytest.raises(ValueError, match="freshness"):
+    with pytest.raises(ValueError, match="freshness") as blocked:
         ship_actions.run(root, "PLAN.md", shipment.pr_url, "merge", None, "rebase")
+    assert instruction in str(blocked.value)
+    assert "Shipping stays blocked" in str(blocked.value)
     remote.assert_not_called()
 
 
