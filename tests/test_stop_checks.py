@@ -122,6 +122,29 @@ def test_failure_reason_lists_failed_gates_and_starts_at_the_first_error(
     assert len(reason) < 10000
 
 
+def test_failure_reason_shows_the_failing_packages_output_not_a_passing_one_of_the_same_gate(
+    repository: Path,
+) -> None:
+    install_check(
+        repository,
+        "print('CHECK a/lint')\n"
+        "print('CHECK b/lint')\n"
+        "print('OUTPUT a/lint')\n"
+        "print('a is clean')\n"
+        "print('OUTPUT b/lint')\n"
+        "print('b is broken')\n"
+        "print('PASS lint (exit 0; elapsed 1.0s) @ a')\n"
+        "print('FAIL lint (exit 1; elapsed 1.0s) @ b')\n"
+        "raise SystemExit(1)\n",
+    )
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "work.py").write_text("value = 1\n")
+    reason = str(agent_hooks.completion(repository, payload)["reason"])
+    assert "b is broken" in reason
+    assert "a is clean" not in reason
+
+
 def decision_record(repository: Path, status: str, applies: str = "") -> None:
     (repository / "docs/adr").mkdir(parents=True)
     (repository / "docs/adr/0001-pay.md").write_text(

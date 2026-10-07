@@ -547,18 +547,22 @@ def passed_notice(
 
 def failure_summary(log: str) -> str:
     """Failed gate names, then the first failing gate's output from its start."""
-    failed = re.findall(r"FAIL (\S+?)(?: \(exit \d+;|: [^\n]*; elapsed)", log)
-    if not failed:
+    failures = re.findall(
+        r"FAIL (\S+?)(?: \(exit \d+;|: [^\n]*; elapsed)(?:[^\n]*? @ (\S+))?",
+        log,
+    )
+    if not failures:
         return log[-GATE_OUTPUT_LIMIT:]
-    heading = "Failed gates: " + ", ".join(dict.fromkeys(failed)) + "\n"
-    name = re.escape(failed[0])
-    start = re.search(rf"OUTPUT (?:\S*/)?{name}[^\n]*\n", log)
+    heading = "Failed gates: " + ", ".join(dict.fromkeys(n for n, _ in failures)) + "\n"
+    name, package = failures[0]
+    owner = re.escape(f"{package}/" if package else "") or r"(?:\S*/)?"
+    start = re.search(rf"OUTPUT {owner}{re.escape(name)}[^\n]*\n", log)
     if start is None:
         return heading + log[-GATE_OUTPUT_LIMIT:]
     body = log[start.end() :]
-    end = re.search(
-        rf"(?m)^(?:CHECK|OUTPUT) \S*/\S+|(?:PASS|FAIL) {name}(?: \(exit|:)", body
-    )
+    tail = f"[^\n]* @ {re.escape(package)}(?!\\S)" if package else ""
+    finished = re.escape(name) + r"(?: \(exit|:)" + tail
+    end = re.search(rf"(?m)^(?:CHECK|OUTPUT) \S*/\S+|(?:PASS|FAIL) {finished}", body)
     return heading + body[: end.start() if end else None][:GATE_OUTPUT_LIMIT]
 
 
