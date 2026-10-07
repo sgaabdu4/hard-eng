@@ -5,7 +5,7 @@ Status: Ready
 ## Outcome + scope
 
 - A push to the base branch reuses a merged PR's passed required checks whenever the pushed tree equals that PR head's tree, for merge, squash and rebase merges alike.
-- Markdown in any folder counts as documentation unless a package's `impact_inputs` claims it.
+- Markdown in any folder counts as documentation unless a package's `impact_inputs` claims it or it sits below the root of a JavaScript package, where sites build from Markdown (user choice 2026-10-07).
 - `check` runs up to one parallel-safe check per CPU instead of two.
 - Pre-push checks only the packages that own changed files; CI still adds their dependents.
 - A Dart Decimate dead-code gate covers import boundaries whatever order its arguments take.
@@ -34,7 +34,7 @@ Authority: The user asked to fix the open issues, chose these changes on 2026-10
 
 - [ ] A base-branch push of several rebased commits whose tree equals the merged PR head's tree, with passed required checks, reuses that result → new rebase case in `tests/test_shipping.py`; squash and merge cases keep passing.
 - [ ] A different tree, no merged PR, more than one merged PR, a PR into another base, or a failed or missing required check runs the gates → existing and updated refusal cases.
-- [ ] `docs/notes/x.md` alone selects only the secret scan; the same file under a package's `impact_inputs` selects that package → `tests/test_affected_selection.py`.
+- [ ] `docs/notes/x.md` alone selects only the secret scan; the same file under a package's `impact_inputs` selects that package; `site/content/post.md` in a JavaScript package selects it → `tests/test_affected_selection.py`.
 - [ ] `check` keeps up to `os.cpu_count()` parallel checks in flight → runner test.
 - [ ] Pre-push passes the owner-only scope; `check` with it selects changed packages without dependents while ancestor installs and shared checks stay → `tests/test_ship_actions.py`, `tests/test_affected_selection.py`.
 - [ ] A Decimate gate with `--format json --threshold 0 --strict` covers boundaries; one with an extra `--no-boundary-violations` does not → `tests/test_setup.py`.
@@ -49,7 +49,7 @@ Execution: One builder in this worktree.
 
 ## Risks + recovery
 
-A change that breaks a dependent package now fails in CI instead of pre-push, costing one CI round. A docs-site package whose Markdown is build input must list that folder in `impact_inputs`. More parallel checks use more memory at once. A failed GitHub query falls back to the full run. Recovery is reverting this branch.
+A change that breaks a dependent package now fails in CI instead of pre-push, costing one CI round. A non-JavaScript package whose Markdown is build input must list that folder in `impact_inputs`. More parallel checks use more memory at once. A failed GitHub query falls back to the full run. Recovery is reverting this branch.
 
 ## ux_reference
 
