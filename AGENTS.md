@@ -3,7 +3,7 @@
 - `.hooks/hard-eng-source.json` exists → get this session's Hard Eng update status before any repo work, read-only too.
   - SessionStart reports last result + starts/reports a background update; verified → 1 commit on local `hard-eng/update` from remote base, current branch untouched.
   - No status → from repo root: `curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh` (prepares that branch).
-  - Prepared branch → `python3 .hooks/hard-eng.py update-pr` (pushes, opens/reuses "Update Hard Eng" PR, auto-merges after checks; no approval; merge denied → rerun with `--no-merge`, give user its printed merge command). Exempt from one-PR rules; failing → fix on own branch + worktree before other shipping.
+  - Prepared branch → `python3 .hooks/hard-eng.py update-pr` (pushes, opens/reuses "Update Hard Eng" PR, auto-merges after checks; no approval; merge denied → rerun with `--no-merge`, give user the merge command it prints once checks pass). Exempt from one-PR rules; failing → fix on own branch + worktree before other shipping.
   - Report: updated / no newer verified release / running in background / failed (explicitly). No updater output = failed, even exit 0; marker/session file alone ≠ success.
   - Rerun setup only after failed or no status; never mid-update.
 - Before editing: state the single change, files touched + verification.

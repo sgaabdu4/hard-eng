@@ -176,7 +176,7 @@ def next_step(root: Path) -> str:
             f"No Hard Eng update PR is open: run `{UPDATE_COMMAND}`. It pushes {UPDATE_BRANCH}, "
             "opens the PR and merges it once its checks pass; no approval is needed. If the "
             f"merge request is denied, run `{UPDATE_COMMAND} --no-merge` and give the user "
-            "the merge command it prints."
+            "the merge command it prints once the checks pass."
         )
     if check_state(pull) == "failing":
         return f"The Hard Eng update PR {pull.get('url')} is failing: fix it first. {fix_steps(root)}"
