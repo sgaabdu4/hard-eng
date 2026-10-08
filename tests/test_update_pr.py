@@ -90,6 +90,15 @@ def apply_first_update(
     return target
 
 
+@pytest.fixture
+def opened(
+    feature: tuple[Path, Path, Path], gh: FakeGh, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    target = apply_first_update(feature, monkeypatch)
+    assert publish(target, monkeypatch) == 0
+    return target
+
+
 def test_background_update_leaves_the_checkout_and_moves_one_branch(
     feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -256,13 +265,12 @@ def test_update_pr_pushes_opens_one_pr_and_turns_on_auto_merge(
 
 
 def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
-    feature: tuple[Path, Path, Path],
+    opened: Path,
     gh: FakeGh,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    target = apply_first_update(feature, monkeypatch)
-    assert publish(target, monkeypatch) == 0
+    target = opened
     gh.pulls[0]["statusCheckRollup"] = [
         {"name": "a", "status": "COMPLETED", "conclusion": "SKIPPED"}
     ]
@@ -449,13 +457,12 @@ def test_update_pr_does_not_replace_a_newer_update_with_an_older_branch(
 
 
 def test_update_pr_reports_a_failing_pr_with_its_fix_steps(
-    feature: tuple[Path, Path, Path],
+    opened: Path,
     gh: FakeGh,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    target = apply_first_update(feature, monkeypatch)
-    assert publish(target, monkeypatch) == 0
+    target = opened
     capsys.readouterr()
     failure = {"status": "COMPLETED", "conclusion": "FAILURE"}
     gh.pulls[0]["statusCheckRollup"] = [failure]
