@@ -1,6 +1,6 @@
 # Make the update path finish and explain itself
 
-Status: Build
+Status: Ready
 
 ## Outcome + scope
 
@@ -27,7 +27,7 @@ Authority: The user asked to fix all open issues in one PR and to run a GPT-6 As
 
 ## Baseline + execution
 
-Result: Pending
+Result: Passed
 Evidence: main at 518c4a3. Each new or changed test failed on main's `.hooks` and passes on this branch.
 Execution: Single session on `fix/update-path-issues`.
 
@@ -42,7 +42,7 @@ N/A — command output and error text only; no product appearance.
 ## Verification
 
 Result: Pending
-E2E: Pending
+E2E: Required — run `update` in a scratch installed project and check it prints its result and exit code
 Evidence: Pending
 
 Delivery target: Merge
