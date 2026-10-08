@@ -420,7 +420,7 @@ def test_overlapping_local_edit_prevents_update(
     select_release(source, monkeypatch)
     reference = target / ".agents/skills/he/references/workflow.md"
     reference.write_text("local custom instructions\n")
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(ValueError, match="workflow.md already differs"):
         update.update(target)
     assert reference.read_text() == "local custom instructions\n"
     assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
@@ -814,8 +814,7 @@ def test_committed_scaffold_exemption_preserves_application_boundary(
             assert update.check_scaffold_update(linked, base)
             assert hook.read_bytes() == before
             git(linked, "config", "core.hooksPath", str(target.parent / "external"))
-            with pytest.raises(subprocess.CalledProcessError):
-                update.check_scaffold_update(linked, base)
+            assert update.check_scaffold_update(linked, base)
             assert hook.read_bytes() == before
         finally:
             subprocess.run(

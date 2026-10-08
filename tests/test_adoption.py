@@ -492,7 +492,7 @@ def test_setup_rerun_preserves_new_claude_rules_for_review(
     (target / "CLAUDE.md").write_text("Project rules\n")
     commit(target, "project rules")
     monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(ValueError, match="Repository CLAUDE instructions"):
         update.update(target, repair=True)
     assert (
         "Repository CLAUDE instructions prevent native AGENTS.md loading"
@@ -685,7 +685,7 @@ def test_update_checks_local_settings_before_committing(
     settings = target / ".claude/settings.local.json"
     settings.write_text("{")
     select_release(source, monkeypatch)
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(ValueError, match="Expecting property name"):
         update.update(target)
     assert (target / ".agents/hard-eng/current").is_dir()
     assert settings.read_text() == "{"
@@ -930,7 +930,7 @@ def test_appwrite_cli_retirement_preserves_required_project_guard(
     assert snapshot(target) == before
     git(target, "add", "scripts/schema-check.py")
     status = git(target, "status", "--porcelain")
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(ValueError, match="schema-check.py references"):
         update.update_plan(target, source, previous)
     assert snapshot(target) == before
     assert git(target, "status", "--porcelain") == status
