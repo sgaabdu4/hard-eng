@@ -14,6 +14,7 @@ from collections.abc import Callable
 from operator import itemgetter
 from pathlib import Path
 
+import hook_chain
 from mcp_setup import retired_settings
 from update_runner import (
     commit_update,
@@ -288,33 +289,6 @@ def pre_push_missing(root: Path) -> bool:
     return not target.exists() and not target.is_symlink()
 
 
-def planned_hook(root: Path, plan: object) -> tuple[str, str]:
-    if not isinstance(plan, dict):
-        raise TypeError("Setup plan must be an object")
-    hook = plan.get("hook")
-    if not isinstance(hook, dict):
-        raise TypeError("Setup plan is missing the pre-push hook")
-    hook_path, hook_content = hook.get("path"), hook.get("content")
-    if not isinstance(hook_path, str) or not isinstance(hook_content, str):
-        raise TypeError("Setup plan has an invalid pre-push hook")
-    if hook_path == ".husky/pre-push":
-        if (root / hook_path).is_symlink():
-            raise ValueError("Preserve the existing hook symlink before updating")
-        import hook_chain
-
-        if hook_chain.foreign_hook(root, root / hook_path) and not (
-            hook_chain.project_copy(root / hook_path).exists()
-        ):
-            raise ValueError(
-                "Existing pre-push hook must be preserved; run the setup command to keep it"
-            )
-        files = plan.get("files")
-        if not isinstance(files, dict):
-            raise TypeError("Setup plan must include file changes")
-        files[hook_path] = hook_content
-    return hook_path, hook_content
-
-
 def update_plan(
     root: Path, source: Path, previous: Path, env: dict[str, str] | None = None
 ) -> tuple[dict[str, str | None], dict[str, str | None], tuple[str, str], list[str]]:
@@ -348,7 +322,7 @@ def update_plan(
         reason = " | ".join(planned.stderr.strip().splitlines()[-5:])
         raise ValueError(f"setup refused the update: {reason or 'no reason printed'}")
     plan = json.loads(planned.stdout)
-    hook = planned_hook(root, plan)
+    hook = hook_chain.planned_hook(root, plan)
     changes: dict[str, str | None] = {
         name: content
         for name, content in plan["files"].items()
@@ -654,8 +628,6 @@ def install_planned_hook(root: Path, hook: tuple[str, str]) -> bool:
         and target.stat().st_mode & 0o111
     ):
         return False
-    import hook_chain
-
     hook_chain.preserve(root, target)
     if target.is_symlink():
         target.unlink()
@@ -697,8 +669,6 @@ def validate_gates(root: Path, source: Path, changes: dict[str, str | None]) -> 
 
 
 def repair_current_hook(root: Path, previous: str) -> str:
-    import hook_chain
-
     if not pre_push_missing(root) and not hook_chain.foreign_hook(
         root, hook_chain.locate(root)[1]
     ):
@@ -925,32 +895,6 @@ def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
     return revision, previous, names
 
 
-def own_hooks_env(root: Path) -> dict[str, str] | None:
-    """CI never runs the pre-push hook, so a runner's hooks folder outside the checkout must not fail the check."""
-    common, hooks = subprocess.check_output(
-        [
-            "git",
-            "rev-parse",
-            "--path-format=absolute",
-            "--git-common-dir",
-            "--git-path",
-            "hooks",
-        ],
-        cwd=root,
-        text=True,
-    ).splitlines()
-    if Path(hooks).resolve().is_relative_to(root.resolve()):
-        return None
-    env = dict(os.environ)
-    count = int(env.get("GIT_CONFIG_COUNT", "0"))
-    env |= {
-        "GIT_CONFIG_COUNT": str(count + 1),
-        f"GIT_CONFIG_KEY_{count}": "core.hooksPath",
-        f"GIT_CONFIG_VALUE_{count}": str(Path(common) / "hooks"),
-    }
-    return env
-
-
 def release_installed(
     root: Path, base: str, names: set[str], revision: str, previous: str
 ) -> bool:
@@ -964,7 +908,9 @@ def release_installed(
             for path in (tree / ".agents/skills").iterdir()
             if path.is_dir()
         }
-        changes, links, _, _ = update_plan(root, source, source, own_hooks_env(root))
+        changes, links, _, _ = update_plan(
+            root, source, source, hook_chain.own_hooks_env(root)
+        )
         if (
             not names <= allowed
             or changes

@@ -859,6 +859,7 @@ def main() -> int:
     if Path(sys.argv[0]).name == "pre-push":
         return pre_push()
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.set_defaults(apply=False, merge=True)
     commands = parser.add_subparsers(dest="command", required=True)
     checks = commands.add_parser("check", help="Run applicable native checks")
     checks.add_argument(
@@ -908,18 +909,10 @@ def main() -> int:
     updating.add_argument(
         "--apply", action="store_true", help="Run inside the supervising update process"
     )
-    updating.set_defaults(merge=True)
-    publishing = commands.add_parser(
+    commands.add_parser(
         "update-pr",
-        help="Push the prepared Hard Eng update branch, open its PR and merge it once its checks pass",
-    )
-    publishing.set_defaults(apply=False)
-    publishing.add_argument(
-        "--no-merge",
-        dest="merge",
-        action="store_false",
-        help="Push and open the PR, then print the merge command instead of merging",
-    )
+        help="Push the prepared Hard Eng update branch, open its PR and merge it once its checks pass; --no-merge prints the merge command instead",
+    ).add_argument("--no-merge", dest="merge", action="store_false")
     challenging = commands.add_parser(
         "challenge",
         help="Have the other agent CLI review this branch read-only and record the result",

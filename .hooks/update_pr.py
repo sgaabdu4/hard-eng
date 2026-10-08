@@ -13,14 +13,13 @@ from update_runner import (
     UPDATE_BRANCH,
     UPDATE_COMMAND,
     branch_current,
-    branch_worktree,
     fetch_base,
     installed_revision,
     landed,
     last_result,
     locked_update,
+    registered_worktrees,
     revision_at,
-    unfinished_update,
     update_base,
 )
 
@@ -113,6 +112,37 @@ def check_state(pull: dict[str, JsonValue], required: list[str] | None = None) -
     ):
         return "pending"
     return "pending" if pending else "passing"
+
+
+def branch_worktree(root: Path) -> Path | None:
+    for fields in registered_worktrees(root):
+        if fields.get("branch") == f"refs/heads/{UPDATE_BRANCH}":
+            return Path(fields["worktree"])
+    return None
+
+
+def unfinished_update(root: Path, tip: str) -> bool:
+    """Uncommitted edits in the update branch's worktree, or fixes beyond the update commit, are someone's work."""
+    worktree = branch_worktree(root)
+    if (
+        worktree is not None
+        and worktree.is_dir()
+        and subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=worktree, text=True
+        )
+    ):
+        return True
+    span = f"{tip}...refs/heads/{UPDATE_BRANCH}"
+    ahead = subprocess.run(
+        ["git", "rev-list", "--count", "--right-only", "--cherry-pick", span],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if ahead.returncode != 0 or int(ahead.stdout) <= 1:
+        return False
+    return not landed(root, tip, f"refs/heads/{UPDATE_BRANCH}")
 
 
 def fix_steps(root: Path) -> str:
