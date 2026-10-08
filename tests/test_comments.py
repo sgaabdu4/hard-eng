@@ -358,6 +358,35 @@ def test_changing_a_message_does_not_excuse_deleting_its_test(tmp_path: Path) ->
         validate_suppressions(root, "HEAD")
 
 
+def test_retired_import_reaches_a_test_in_a_separate_hunk(tmp_path: Path) -> None:
+    root = retiring_root(tmp_path)
+    keep_test = "def test_keep():\n    assert keep() == 1\n"
+    (root / "tests/test_app.py").write_text(
+        "from app import keep\nfrom migrate_users import run as migrate\n\n\n"
+        f"{keep_test}\n\ndef test_migrate():\n    assert migrate() == 2\n"
+    )
+    commit(root, "mixed test file")
+    (root / "migrate_users.py").unlink()
+    (root / "tests/test_migrate.py").unlink()
+    (root / "tests/test_app.py").write_text(f"from app import keep\n\n\n{keep_test}")
+    validate_suppressions(root, "HEAD")
+
+
+def test_inlining_a_local_does_not_excuse_deleting_its_test(tmp_path: Path) -> None:
+    root = switch_root(
+        tmp_path, "app.py", "def total(items):\n    subtotal = sum(items)\n    return subtotal\n"
+    )
+    (root / "tests").mkdir()
+    (root / "tests/test_app.py").write_text(
+        "def test_total():\n    subtotal = total([1, 2])\n    assert subtotal == 3\n"
+    )
+    commit(root, "total test")
+    (root / "app.py").write_text("def total(items):\n    return sum(items)\n")
+    (root / "tests/test_app.py").unlink()
+    with pytest.raises(ValueError, match=r"tests lose 1 assertion lines net"):
+        validate_suppressions(root, "HEAD")
+
+
 def test_edited_moved_and_split_assertions_pass(tmp_path: Path) -> None:
     root = switch_root(
         tmp_path,

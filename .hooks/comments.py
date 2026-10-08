@@ -367,17 +367,21 @@ TEST_START = re.compile(
 )
 IMPORT = re.compile(r"^\s*(import|from|export|use)\b|\brequire\(")
 SYNTAX = {"import", "from", "as", "export", "use", "require", "const", "let", "var"}
+DEFINITION = re.compile(
+    r"\b(?:def|class|function|fn|struct|enum|trait|interface|mixin|extension)\s+(\w+)"
+    r"|^(?:export\s+)?(?:const|let|var|final|type)\s+(\w+)"
+    r"|^(\w+)\s*(?::[^=]*)?=(?!=)|^(\w+)\s*\(\)\s*\{"
+    r"|^[A-Za-z_][\w<>?,\[\] ]*\s(\w+)\s*\("
+)
 
 
 def is_code(name: str) -> bool:
     return Path(name).suffix in HASH | SLASH and not is_test_path(PurePosixPath(name))
 
 
-def code_words(name: str, text: str) -> list[str]:
-    if text.lstrip().startswith(("*", "/*")):
-        return []
-    marker = "#" if Path(name).suffix in HASH else "//"
-    return WORD.findall(LITERAL.sub(" ", text).split(marker)[0])
+def defined_names(text: str) -> list[str]:
+    found = DEFINITION.findall(LITERAL.sub(" ", text))
+    return [name for groups in found for name in groups if name]
 
 
 def removed_blocks(lines: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
@@ -398,7 +402,7 @@ def retired_names(
         for name, lines in removed.items()
         if is_code(name)
         for _, text in lines
-        for word in code_words(name, text)
+        for word in defined_names(text)
     }
     modules = {
         word
@@ -433,15 +437,17 @@ def lost_assertions(
     retired: tuple[set[str], set[str]],
 ) -> list[str]:
     names, modules = retired
-    lost: list[str] = []
+    imported: dict[str, set[str]] = {}
     for name, block in blocks:
-        imported = {
+        imported.setdefault(name, set()).update(
             word
             for _, text in block
             if IMPORT.search(text) and modules.intersection(WORD.findall(text))
             for word in WORD.findall(text)
-        }
-        gone = names | imported - SYNTAX
+        )
+    lost: list[str] = []
+    for name, block in blocks:
+        gone = names | imported[name] - SYNTAX
         for test in split_tests(block):
             if not gone.intersection(WORD.findall("\n".join(t for _, t in test))):
                 lost += [f"{name}:{n}" for n, _ in assertion_lines(name, test)]
