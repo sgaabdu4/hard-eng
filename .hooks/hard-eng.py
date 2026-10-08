@@ -908,10 +908,18 @@ def main() -> int:
     updating.add_argument(
         "--apply", action="store_true", help="Run inside the supervising update process"
     )
-    commands.add_parser(
+    updating.set_defaults(merge=True)
+    publishing = commands.add_parser(
         "update-pr",
         help="Push the prepared Hard Eng update branch, open its PR and merge it once its checks pass",
-    ).set_defaults(apply=False)
+    )
+    publishing.set_defaults(apply=False)
+    publishing.add_argument(
+        "--no-merge",
+        dest="merge",
+        action="store_false",
+        help="Push and open the PR, then print the merge command instead of merging",
+    )
     challenging = commands.add_parser(
         "challenge",
         help="Have the other agent CLI review this branch read-only and record the result",
@@ -969,7 +977,7 @@ def main() -> int:
     if args.command in {"update", "update-pr"}:
         from update_runner import update_main
 
-        return update_main(ROOT, args.command == "update-pr", args.apply)
+        return update_main(ROOT, args.command == "update-pr", args.apply, args.merge)
     if args.command in {"challenge", "ship", "gap-issue"}:
         return deliver(args)
     from agent_hooks import handle_event

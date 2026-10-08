@@ -203,9 +203,8 @@ def test_linked_worktree_may_use_the_common_checkout_hooks(
         assert update.repair_current_hook(linked, revision).endswith("available.")
         assert update.check_scaffold_update(linked, base)
         git(linked, "config", "--worktree", "core.hooksPath", str(target.parent))
-        with pytest.raises(ValueError, match="outside this repository"):
+        with pytest.raises(ValueError, match=f"{target.parent} is not under {linked}"):
             update.pre_push_missing(linked)
-        with pytest.raises(subprocess.CalledProcessError):
-            update.check_scaffold_update(linked, base)
+        assert update.check_scaffold_update(linked, base)
     finally:
         git(target, "worktree", "remove", "--force", str(linked))

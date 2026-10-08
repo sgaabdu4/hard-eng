@@ -2,6 +2,7 @@
 
 import json
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -123,7 +124,8 @@ def fix_steps(root: Path) -> str:
         where = f"in its own worktree (`git worktree add {path} {UPDATE_BRANCH}`)"
     return (
         f"Fix its checks on branch {UPDATE_BRANCH} {where}, commit there, then run "
-        f"`{UPDATE_COMMAND}` from that worktree to push the fix."
+        f"`{UPDATE_COMMAND}` from that worktree to push the fix. Once it merges, remove that "
+        "worktree so the next update can move the branch."
     )
 
 
@@ -143,7 +145,9 @@ def next_step(root: Path) -> str:
     if pull is None:
         return (
             f"No Hard Eng update PR is open: run `{UPDATE_COMMAND}`. It pushes {UPDATE_BRANCH}, "
-            "opens the PR and merges it once its checks pass; no approval is needed."
+            "opens the PR and merges it once its checks pass; no approval is needed. If the "
+            f"merge request is denied, run `{UPDATE_COMMAND} --no-merge` and give the user "
+            "the merge command it prints."
         )
     if check_state(pull) == "failing":
         return f"The Hard Eng update PR {pull.get('url')} is failing: fix it first. {fix_steps(root)}"
@@ -205,7 +209,7 @@ def replaceable_remote(root: Path, base: str) -> str | None:
     return None
 
 
-def publish(root: Path) -> int:
+def publish(root: Path, merge: bool = True) -> int:
     base = update_base(root)
     tip = fetch_base(root, base)
     landed = revision_at(root, tip)
@@ -264,6 +268,14 @@ def publish(root: Path) -> int:
     )
     if pull is not None and pull.get("headRefOid") != head:
         state = "pending"
+    if not merge and state != "failing":
+        command = ["gh", "pr", "merge", url, "--auto", merge_method(root)]
+        command += ["--match-head-commit", head]
+        print(
+            f"Hard Eng update PR {url}: checks {state}. Not merged (--no-merge); ask the user "
+            f"to merge it with `{shlex.join(command)}`, which waits for its checks."
+        )
+        return 0
     if state == "passing":
         gh(
             root,
