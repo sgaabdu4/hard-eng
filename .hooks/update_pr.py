@@ -8,7 +8,6 @@ from pathlib import Path
 
 from gate_config import JsonValue
 from shipping import ShippingError, gh, load_policy
-from update import revision_follows
 from update_runner import (
     UPDATE_BRANCH,
     UPDATE_COMMAND,
@@ -219,6 +218,8 @@ def replaceable_remote(root: Path, base: str) -> str | None:
         f"origin/{base}...{remote}",
     )
     if subjects is not None and all(GENERATED.fullmatch(s) for s in subjects):
+        from update import revision_follows
+
         theirs = revision_at(root, remote)
         ours = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
         if theirs and ours and revision_follows(theirs, ours):
@@ -237,6 +238,29 @@ def replaceable_remote(root: Path, base: str) -> str | None:
         f"put those commits on {UPDATE_BRANCH}, then run `{UPDATE_COMMAND}` again."
     )
     return None
+
+
+def settle(root: Path, url: str, head: str, state: str, merge: bool) -> int:
+    print(f"Hard Eng update PR {url}: checks {state}.")
+    if state == "failing":
+        print(fix_steps(root))
+        return 1
+    if merge and state != "passing":
+        print(
+            f"Not merged yet. Run `{UPDATE_COMMAND}` again once the checks pass to merge it."
+        )
+        return 0
+    merging = ["pr", "merge", url, "--auto", merge_method(root)]
+    merging += ["--match-head-commit", head]
+    if not merge:
+        print(
+            f"Not merged (--no-merge); ask the user to merge it with "
+            f"`{shlex.join(['gh', *merging])}`, which waits for its checks."
+        )
+        return 0
+    gh(root, *merging)
+    print(f"Merge requested for {head[:12]}.")
+    return 0
 
 
 def publish(root: Path, merge: bool = True) -> int:
@@ -298,34 +322,4 @@ def publish(root: Path, merge: bool = True) -> int:
     )
     if pull is not None and pull.get("headRefOid") != head:
         state = "pending"
-    if not merge and state != "failing":
-        command = ["gh", "pr", "merge", url, "--auto", merge_method(root)]
-        command += ["--match-head-commit", head]
-        print(
-            f"Hard Eng update PR {url}: checks {state}. Not merged (--no-merge); ask the user "
-            f"to merge it with `{shlex.join(command)}`, which waits for its checks."
-        )
-        return 0
-    if state == "passing":
-        gh(
-            root,
-            "pr",
-            "merge",
-            url,
-            "--auto",
-            merge_method(root),
-            "--match-head-commit",
-            head,
-        )
-        print(
-            f"Hard Eng update PR {url}: checks passing. Merge requested for {head[:12]}."
-        )
-        return 0
-    print(f"Hard Eng update PR {url}: checks {state}.")
-    if state == "failing":
-        print(fix_steps(root))
-        return 1
-    print(
-        f"Not merged yet. Run `{UPDATE_COMMAND}` again once the checks pass to merge it."
-    )
-    return 0
+    return settle(root, url, head, state, merge)
