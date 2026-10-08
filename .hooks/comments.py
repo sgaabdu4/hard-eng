@@ -361,10 +361,23 @@ def assertion_lines(name: str, lines: list[tuple[int, str]]) -> list[tuple[int, 
 
 
 WORD = re.compile(r"[A-Za-z_]\w*")
+LITERAL = re.compile(r"\"(\\.|[^\"\\\n])*\"|'(\\.|[^'\\\n])*'|`(\\.|[^`\\\n])*`")
+TEST_START = re.compile(
+    r"^\s*((async\s+)?def\s|class\s|(it|test|testWidgets|describe|group)(\.\w+)?\()"
+)
+IMPORT = re.compile(r"^\s*(import|from|export|use)\b|\brequire\(")
+SYNTAX = {"import", "from", "as", "export", "use", "require", "const", "let", "var"}
 
 
 def is_code(name: str) -> bool:
     return Path(name).suffix in HASH | SLASH and not is_test_path(PurePosixPath(name))
+
+
+def code_words(name: str, text: str) -> list[str]:
+    if text.lstrip().startswith(("*", "/*")):
+        return []
+    marker = "#" if Path(name).suffix in HASH else "//"
+    return WORD.findall(LITERAL.sub(" ", text).split(marker)[0])
 
 
 def removed_blocks(lines: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
@@ -377,20 +390,23 @@ def removed_blocks(lines: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
     return blocks
 
 
-def retired_names(root: Path, removed: dict[str, list[tuple[int, str]]]) -> set[str]:
+def retired_names(
+    root: Path, removed: dict[str, list[tuple[int, str]]]
+) -> tuple[set[str], set[str]]:
     names = {
         word
         for name, lines in removed.items()
         if is_code(name)
         for _, text in lines
-        for word in WORD.findall(text)
+        for word in code_words(name, text)
     }
-    names |= {
+    modules = {
         word
         for name in removed
         if is_code(name) and not (root / name).exists()
         for word in WORD.findall(PurePosixPath(name).stem)
     }
+    names |= modules
     remaining = subprocess.check_output(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         cwd=root,
@@ -400,18 +416,36 @@ def retired_names(root: Path, removed: dict[str, list[tuple[int, str]]]) -> set[
         path = root / name
         if names and is_code(name) and path.is_file() and not path.is_symlink():
             names -= set(WORD.findall(path.read_text(errors="replace")))
-    return names
+    return names, modules & names
+
+
+def split_tests(block: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
+    tests: list[list[tuple[int, str]]] = [[]]
+    for number, text in block:
+        if TEST_START.match(text) and tests[-1]:
+            tests.append([])
+        tests[-1].append((number, text))
+    return tests
 
 
 def lost_assertions(
-    blocks: list[tuple[str, list[tuple[int, str]]]], retired: set[str]
+    blocks: list[tuple[str, list[tuple[int, str]]]],
+    retired: tuple[set[str], set[str]],
 ) -> list[str]:
-    return [
-        f"{name}:{number}"
-        for name, block in blocks
-        if not retired.intersection(WORD.findall("\n".join(t for _, t in block)))
-        for number, _ in assertion_lines(name, block)
-    ]
+    names, modules = retired
+    lost: list[str] = []
+    for name, block in blocks:
+        imported = {
+            word
+            for _, text in block
+            if IMPORT.search(text) and modules.intersection(WORD.findall(text))
+            for word in WORD.findall(text)
+        }
+        gone = names | imported - SYNTAX
+        for test in split_tests(block):
+            if not gone.intersection(WORD.findall("\n".join(t for _, t in test))):
+                lost += [f"{name}:{n}" for n, _ in assertion_lines(name, test)]
+    return lost
 
 
 def validate_suppressions(root: Path, base: str | None) -> None:
@@ -442,7 +476,7 @@ def validate_suppressions(root: Path, base: str | None) -> None:
         if is_test_path(PurePosixPath(name)):
             gained += len(assertion_lines(name, added.get(name, [])))
             blocks += [(name, b) for b in removed_blocks(removed.get(name, []))]
-    lost = lost_assertions(blocks, set())
+    lost = lost_assertions(blocks, (set(), set()))
     if len(lost) > gained:
         lost = lost_assertions(blocks, retired_names(root, removed))
     if len(lost) > gained:
