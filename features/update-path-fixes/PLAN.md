@@ -22,7 +22,7 @@ Authority: The user asked to fix all open issues in one PR and to run a GPT-6 As
 - [x] `update` prints its result, exits 1 on failure and reports a held lock → `test_update_prints_its_result_and_fails_when_the_update_failed`, `test_interrupted_update_stops_every_process_and_records_failure`.
 - [x] A clean checked-out update branch is named with how to free it, and the update runs once it is freed → `test_background_update_names_a_clean_checked_out_update_branch`.
 - [x] A setup refusal's reason is recorded and replayed → `test_background_update_records_why_setup_refused_it`.
-- [x] `update-pr --no-merge` never requests a merge and prints the command → `test_update_pr_without_merge_prints_the_merge_command_instead`.
+- [x] `update-pr --no-merge` never requests a merge and prints the command → `test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed`.
 - [ ] Full check passes.
 
 ## Baseline + execution
