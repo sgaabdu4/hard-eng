@@ -293,6 +293,7 @@ def test_deleting_a_test_file_without_replacement_fails(tmp_path: Path) -> None:
 def retiring_root(tmp_path: Path) -> Path:
     root = switch_root(tmp_path, "app.py", "def keep():\n    return 1\n")
     (root / "migrate_users.py").write_text("def run():\n    return 2\n")
+    (root / "jobs.py").write_text("def run():\n    return 0\n")
     (root / "app.py").write_text(
         "def keep():\n    return 1\n\n\ndef read_legacy():\n    return 3\n"
     )
@@ -330,6 +331,31 @@ def test_removing_tests_for_code_still_in_use_fails(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=OFF) as error:
         validate_suppressions(root, "HEAD")
     assert "tests lose 2 assertion lines net (2 removed, 0 added)" in str(error.value)
+
+
+def test_deleting_a_test_file_that_also_covers_kept_code_fails(tmp_path: Path) -> None:
+    root = retiring_root(tmp_path)
+    (root / "app.py").write_text("def keep():\n    return 1\n")
+    (root / "tests/test_app.py").unlink()
+    with pytest.raises(ValueError, match=r"tests lose 1 assertion lines net"):
+        validate_suppressions(root, "HEAD")
+
+
+def test_changing_a_message_does_not_excuse_deleting_its_test(tmp_path: Path) -> None:
+    root = switch_root(
+        tmp_path, "app.py", "def check():\n    raise ValueError('Unknown account')\n"
+    )
+    (root / "tests").mkdir()
+    (root / "tests/test_app.py").write_text(
+        "def test_check():\n    assert 'Unknown' in message(check)\n"
+    )
+    commit(root, "message test")
+    (root / "app.py").write_text(
+        "def check():\n    raise ValueError('Invalid account')\n"
+    )
+    (root / "tests/test_app.py").unlink()
+    with pytest.raises(ValueError, match=r"tests lose 1 assertion lines net"):
+        validate_suppressions(root, "HEAD")
 
 
 def test_edited_moved_and_split_assertions_pass(tmp_path: Path) -> None:
