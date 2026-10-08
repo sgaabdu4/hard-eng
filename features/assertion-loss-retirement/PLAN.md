@@ -24,17 +24,18 @@ Authority: The user asked to fix all open issues (250 was the only one open) and
 - [x] Changing an error message does not excuse deleting its test → `test_changing_a_message_does_not_excuse_deleting_its_test` (Codex round 1).
 - [x] Inlining a local variable does not excuse deleting a test that uses the same name → `test_inlining_a_local_does_not_excuse_deleting_its_test` (Codex round 2).
 - [x] A removed import of a deleted module reaches a removed test in a separate hunk → `test_retired_import_reaches_a_test_in_a_separate_hunk` (Codex round 2).
+- [x] Removing a typed Dart constant (`const String legacy`) with its test passes → `test_removing_a_typed_dart_constant_with_its_test_passes` (challenge review).
 - [x] Full check passes.
 
 ## Baseline + execution
 
 Result: Passed
 Evidence: main at 99634e5; its full `check` passed on this branch's first commit before the later review fixes.
-Execution: Single session on `fix/assertion-loss-deleted-subject`; three Codex adversarial review rounds on GPT-6 Astra.
+Execution: Single session on `fix/assertion-loss-deleted-subject`; three Codex adversarial review rounds on GPT-6 Astra, then `hard-eng.py challenge`.
 
 ## Risks + recovery
 
-The exemption is a name match, not a call graph: a removed test for kept code that happens to use a removed, now-unused definition name passes. Left unfixed after Codex round 3 as unrealistic: a test file that imports the same name from both a deleted module (renamed with `as`) and a kept module, then deletes the kept module's test too. A Dart test that reaches a deleted file only through a package import, and whose body names only definitions still used elsewhere, still fails the check (safe direction). Recovery is reverting this branch.
+The exemption is a name match, not a call graph: a removed test for kept code that happens to use a removed, now-unused definition name passes. Left unfixed after Codex round 3 as unrealistic: a test file that imports the same name from both a deleted module (renamed with `as`) and a kept module, then deletes the kept module's test too. Left unfixed after the challenge review as unrealistic or failing safe: Vitest tagged-template `test.each` blocks in a deleted mixed file, test data strings equal to a retired name, an `as` alias of a retired function from a kept module, and a multiline import whose names collide with kept code. A Dart test that reaches a deleted file only through a package import, and whose body names only definitions still used elsewhere, still fails the check (safe direction). Recovery is reverting this branch.
 
 ## ux_reference
 

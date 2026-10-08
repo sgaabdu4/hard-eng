@@ -369,7 +369,7 @@ IMPORT = re.compile(r"^\s*(import|from|export|use)\b|\brequire\(")
 SYNTAX = {"import", "from", "as", "export", "use", "require", "const", "let", "var"}
 DEFINITION = re.compile(
     r"\b(?:def|class|function|fn|struct|enum|trait|interface|mixin|extension)\s+(\w+)"
-    r"|^(?:export\s+)?(?:const|let|var|final|type)\s+(\w+)"
+    r"|^(?:export\s+)?(?:const|let|var|final|type)\s+(?:(?:[\w<>?\[\]]|,\s*)+\s+)?(\w+)\s*(?=[=:;<])"
     r"|^(\w+)\s*(?::[^=]*)?=(?!=)|^(\w+)\s*\(\)\s*\{"
     r"|^[A-Za-z_][\w<>?,\[\] ]*\s(\w+)\s*\("
 )
