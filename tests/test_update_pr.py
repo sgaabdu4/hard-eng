@@ -259,6 +259,7 @@ def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
     feature: tuple[Path, Path, Path],
     gh: FakeGh,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     target = apply_first_update(feature, monkeypatch)
     assert publish(target, monkeypatch) == 0
@@ -278,8 +279,13 @@ def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
         "status": "COMPLETED",
         "conclusion": "SUCCESS",
     }
-    assert publish(target, monkeypatch) == 0
     head = git(target, "rev-parse", BRANCH)
+    capsys.readouterr()
+    assert publish(target, monkeypatch, merge=False) == 0
+    assert "pr merge" not in gh.verbs()
+    command = f"gh pr merge {PULL} --auto --rebase --match-head-commit {head}"
+    assert command in capsys.readouterr().out
+    assert publish(target, monkeypatch) == 0
     assert (
         "pr",
         "merge",
@@ -289,25 +295,6 @@ def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
         "--match-head-commit",
         head,
     ) in gh.calls
-
-
-def test_update_pr_without_merge_prints_the_merge_command_instead(
-    feature: tuple[Path, Path, Path],
-    gh: FakeGh,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    target = apply_first_update(feature, monkeypatch)
-    assert publish(target, monkeypatch) == 0
-    gh.pulls[0]["statusCheckRollup"] = [
-        {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"}
-    ]
-    capsys.readouterr()
-    assert publish(target, monkeypatch, merge=False) == 0
-    assert "pr merge" not in gh.verbs()
-    head = git(target, "rev-parse", BRANCH)
-    command = f"gh pr merge {PULL} --auto --rebase --match-head-commit {head}"
-    assert command in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
