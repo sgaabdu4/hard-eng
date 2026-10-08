@@ -360,6 +360,60 @@ def assertion_lines(name: str, lines: list[tuple[int, str]]) -> list[tuple[int, 
     return [(n, text) for n, text in lines if any(word in text for word in words)]
 
 
+WORD = re.compile(r"[A-Za-z_]\w*")
+
+
+def is_code(name: str) -> bool:
+    return Path(name).suffix in HASH | SLASH and not is_test_path(PurePosixPath(name))
+
+
+def removed_blocks(lines: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
+    blocks: list[list[tuple[int, str]]] = []
+    for number, text in lines:
+        if blocks and blocks[-1][-1][0] == number - 1:
+            blocks[-1].append((number, text))
+        else:
+            blocks.append([(number, text)])
+    return blocks
+
+
+def retired_names(root: Path, removed: dict[str, list[tuple[int, str]]]) -> set[str]:
+    names = {
+        word
+        for name, lines in removed.items()
+        if is_code(name)
+        for _, text in lines
+        for word in WORD.findall(text)
+    }
+    names |= {
+        word
+        for name in removed
+        if is_code(name) and not (root / name).exists()
+        for word in WORD.findall(PurePosixPath(name).stem)
+    }
+    remaining = subprocess.check_output(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=root,
+        text=True,
+    )
+    for name in filter(None, remaining.split("\0")):
+        path = root / name
+        if names and is_code(name) and path.is_file() and not path.is_symlink():
+            names -= set(WORD.findall(path.read_text(errors="replace")))
+    return names
+
+
+def lost_assertions(
+    blocks: list[tuple[str, list[tuple[int, str]]]], retired: set[str]
+) -> list[str]:
+    return [
+        f"{name}:{number}"
+        for name, block in blocks
+        if not retired.intersection(WORD.findall("\n".join(t for _, t in block)))
+        for number, _ in assertion_lines(name, block)
+    ]
+
+
 def validate_suppressions(root: Path, base: str | None) -> None:
     try:
         added, removed = diff_lines(root, base or branch_point(root))
@@ -375,7 +429,7 @@ def validate_suppressions(root: Path, base: str | None) -> None:
     skipped = generated_sources(root, names)
     found: list[str] = []
     gained = 0
-    lost: list[str] = []
+    blocks: list[tuple[str, list[tuple[int, str]]]] = []
     for name in names:
         pattern = switch_off_pattern(name)
         if name in skipped or pattern is None:
@@ -387,10 +441,10 @@ def validate_suppressions(root: Path, base: str | None) -> None:
         ]
         if is_test_path(PurePosixPath(name)):
             gained += len(assertion_lines(name, added.get(name, [])))
-            lost += [
-                f"{name}:{number}"
-                for number, _ in assertion_lines(name, removed.get(name, []))
-            ]
+            blocks += [(name, b) for b in removed_blocks(removed.get(name, []))]
+    lost = lost_assertions(blocks, set())
+    if len(lost) > gained:
+        lost = lost_assertions(blocks, retired_names(root, removed))
     if len(lost) > gained:
         found.append(
             f"tests lose {len(lost) - gained} assertion lines net "
