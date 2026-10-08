@@ -245,9 +245,10 @@ def settle(root: Path, url: str, head: str, state: str, merge: bool) -> int:
     if state == "failing":
         print(fix_steps(root))
         return 1
-    if merge and state != "passing":
+    if state != "passing":
+        option = "" if merge else " --no-merge"
         print(
-            f"Not merged yet. Run `{UPDATE_COMMAND}` again once the checks pass to merge it."
+            f"Not merged yet. Run `{UPDATE_COMMAND}{option}` again once the checks pass."
         )
         return 0
     merging = ["pr", "merge", url, "--auto", merge_method(root)]
@@ -255,7 +256,7 @@ def settle(root: Path, url: str, head: str, state: str, merge: bool) -> int:
     if not merge:
         print(
             f"Not merged (--no-merge); ask the user to merge it with "
-            f"`{shlex.join(['gh', *merging])}`, which waits for its checks."
+            f"`{shlex.join(['gh', *merging])}`."
         )
         return 0
     gh(root, *merging)

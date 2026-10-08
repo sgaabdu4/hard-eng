@@ -273,7 +273,10 @@ def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
         {"name": "b", "status": "IN_PROGRESS", "conclusion": ""},
     ]
     assert publish(target, monkeypatch) == 0
+    capsys.readouterr()
+    assert publish(target, monkeypatch, merge=False) == 0
     assert "pr merge" not in gh.verbs()
+    assert "--no-merge` again once the checks pass" in capsys.readouterr().out
     gh.pulls[0]["statusCheckRollup"][1] = {
         "name": "b",
         "status": "COMPLETED",

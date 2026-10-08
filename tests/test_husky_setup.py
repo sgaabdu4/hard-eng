@@ -205,6 +205,11 @@ def test_linked_worktree_may_use_the_common_checkout_hooks(
         git(linked, "config", "--worktree", "core.hooksPath", str(target.parent))
         with pytest.raises(ValueError, match=f"{target.parent} is not under {linked}"):
             update.pre_push_missing(linked)
-        assert update.check_scaffold_update(linked, base)
+        assert not update.check_scaffold_update(linked, base)
+        git(linked, "config", "--worktree", "core.hooksPath", str(shim.parent))
+        (linked / ".husky/pre-push").write_text("#!/bin/sh\nexit 0\n")
+        commit(linked, "replace the pre-push launcher")
+        with pytest.raises(ValueError, match="pre-push hook must be preserved"):
+            update.check_scaffold_update(linked, base)
     finally:
         git(target, "worktree", "remove", "--force", str(linked))
