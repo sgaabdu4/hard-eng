@@ -290,6 +290,48 @@ def test_deleting_a_test_file_without_replacement_fails(tmp_path: Path) -> None:
         validate_suppressions(root, "HEAD")
 
 
+def retiring_root(tmp_path: Path) -> Path:
+    root = switch_root(tmp_path, "app.py", "def keep():\n    return 1\n")
+    (root / "migrate_users.py").write_text("def run():\n    return 2\n")
+    (root / "app.py").write_text(
+        "def keep():\n    return 1\n\n\ndef read_legacy():\n    return 3\n"
+    )
+    (root / "tests").mkdir()
+    (root / "tests/test_migrate.py").write_text(
+        "from migrate_users import run\n\n\ndef test_run():\n    assert run() == 2\n"
+    )
+    (root / "tests/test_app.py").write_text(
+        "from app import keep, read_legacy\n\n\n"
+        "def test_keep():\n    assert keep() == 1\n\n\n"
+        "def test_legacy():\n    assert read_legacy() == 3\n"
+    )
+    commit(root, "subjects")
+    return root
+
+
+def test_removing_tests_with_the_code_they_cover_passes(tmp_path: Path) -> None:
+    root = retiring_root(tmp_path)
+    (root / "migrate_users.py").unlink()
+    (root / "tests/test_migrate.py").unlink()
+    (root / "app.py").write_text("def keep():\n    return 1\n")
+    (root / "tests/test_app.py").write_text(
+        "from app import keep\n\n\ndef test_keep():\n    assert keep() == 1\n"
+    )
+    validate_suppressions(root, "HEAD")
+
+
+def test_removing_tests_for_code_still_in_use_fails(tmp_path: Path) -> None:
+    root = retiring_root(tmp_path)
+    (root / "tests/test_migrate.py").unlink()
+    (root / "tests/test_app.py").write_text(
+        "from app import keep, read_legacy\n\n\n"
+        "def test_legacy():\n    assert read_legacy() == 3\n"
+    )
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert "tests lose 2 assertion lines net (2 removed, 0 added)" in str(error.value)
+
+
 def test_edited_moved_and_split_assertions_pass(tmp_path: Path) -> None:
     root = switch_root(
         tmp_path,
