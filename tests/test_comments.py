@@ -374,7 +374,9 @@ def test_retired_import_reaches_a_test_in_a_separate_hunk(tmp_path: Path) -> Non
 
 def test_inlining_a_local_does_not_excuse_deleting_its_test(tmp_path: Path) -> None:
     root = switch_root(
-        tmp_path, "app.py", "def total(items):\n    subtotal = sum(items)\n    return subtotal\n"
+        tmp_path,
+        "app.py",
+        "def total(items):\n    subtotal = sum(items)\n    return subtotal\n",
     )
     (root / "tests").mkdir()
     (root / "tests/test_app.py").write_text(
