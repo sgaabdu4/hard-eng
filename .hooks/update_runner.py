@@ -733,8 +733,15 @@ def branch_worktree(root: Path) -> Path | None:
 
 
 def unfinished_update(root: Path, tip: str) -> bool:
-    """A checked-out update branch, or one holding fixes beyond the update commit, is someone's work."""
-    if branch_worktree(root) is not None:
+    """Uncommitted edits in the update branch's worktree, or fixes beyond the update commit, are someone's work."""
+    worktree = branch_worktree(root)
+    if (
+        worktree is not None
+        and worktree.is_dir()
+        and subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=worktree, text=True
+        )
+    ):
         return True
     span = f"{tip}...refs/heads/{UPDATE_BRANCH}"
     ahead = subprocess.run(
@@ -836,6 +843,12 @@ def build_update(root: Path, base: str, repair: bool) -> str:
         )
     if branch_current(root, tip):
         return ready_message(revision_at(root, f"refs/heads/{UPDATE_BRANCH}") or "")
+    if (worktree := branch_worktree(root)) is not None:
+        raise ValueError(
+            f"{UPDATE_BRANCH} is checked out in {worktree} with no unfinished work, so the "
+            f"update cannot move it; free it with `git -C {worktree} switch --detach` or "
+            f"`git worktree remove {worktree}`, then rerun `python3 .hooks/hard-eng.py update`"
+        )
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         candidate = Path(temporary) / "candidate"
         subprocess.run(
@@ -938,6 +951,10 @@ def run_update(root: Path) -> int:
     """Hold the repository's update lock while one update runs in its own process group."""
     with lock_file(root).open("a") as handle:
         if not exclusive(handle):
+            print(
+                "Another Hard Eng update is already running for this repository; "
+                f"its result will be in {RESULT_FILE}."
+            )
             return 0
         try:
             remove_stale_candidates(root)
@@ -949,7 +966,8 @@ def run_update(root: Path) -> int:
             )
         except (OSError, subprocess.SubprocessError) as error:
             record_result(root, failed_update(error))
-            return 0
+            print(last_result(root))
+            return 1
         signal.signal(signal.SIGTERM, interrupt_update)
         with suppress(subprocess.SubprocessError):
             try:
@@ -961,7 +979,9 @@ def run_update(root: Path) -> int:
             record_result(root, failed_update(f"update exited {update.returncode}"))
         with suppress(OSError, subprocess.SubprocessError):
             remove_stale_candidates(root)
-    return 0
+    result = last_result(root)
+    print(result)
+    return 1 if "Hard Eng update failed" in result else 0
 
 
 def start_update(root: Path) -> str:
@@ -973,7 +993,7 @@ def start_update(root: Path) -> str:
     else:
         log = root / LOG_FILE
         log.parent.mkdir(parents=True, exist_ok=True)
-        with log.open("w") as output:
+        with log.open("a") as output:
             subprocess.Popen(
                 update_command(),
                 cwd=root,
@@ -990,9 +1010,9 @@ def start_update(root: Path) -> str:
     )
 
 
-def update_main(root: Path, publishing: bool, apply: bool) -> int:
+def update_main(root: Path, publishing: bool, apply: bool, merge: bool = True) -> int:
     if publishing:
         from update_pr import publish
 
-        return publish(root)
+        return publish(root, merge)
     return apply_update(root) if apply else run_update(root)

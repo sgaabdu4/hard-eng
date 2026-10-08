@@ -113,6 +113,28 @@ def test_stop_waits_for_running_update_instead_of_rerunning_setup(
         update.require_current(installed)
 
 
+def test_update_prints_its_result_and_fails_when_the_update_failed(
+    installed: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    worker = tmp_path / "worker"
+    monkeypatch.setattr(update_runner.sys, "executable", str(worker))
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    for outcome, code in (("Hard Eng update failed: boom", 1), ("Updated", 0)):
+        worker.write_text(
+            "#!/bin/sh\nmkdir -p .hard-eng\n"
+            f"echo 'now: {outcome}' > {update_runner.RESULT_FILE}\n"
+        )
+        worker.chmod(0o755)
+        assert update_runner.run_update(installed) == code
+        assert capsys.readouterr().out == f"now: {outcome}\n"
+    with held_lock(installed):
+        assert update_runner.run_update(installed) == 0
+    assert "already running" in capsys.readouterr().out
+
+
 def test_unavailable_update_is_reported_without_a_worker(
     repository: Path, spawned: Path
 ) -> None:
@@ -275,7 +297,7 @@ def test_interrupted_update_stops_every_process_and_records_failure(
         time.sleep(0.05)
     assert update_runner.update_running(installed)
     worker.terminate()
-    assert worker.wait(timeout=60) == 0
+    assert worker.wait(timeout=60) == int(still_running)
     sleeper = int(child.read_text())
     assert subprocess.run(["kill", "-0", str(sleeper)], check=False).returncode != 0
     result = (installed / update_runner.RESULT_FILE).read_text()

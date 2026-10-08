@@ -66,12 +66,12 @@ def feature(
     return source, target, remote
 
 
-def publish(target: Path, monkeypatch: pytest.MonkeyPatch) -> int:
+def publish(target: Path, monkeypatch: pytest.MonkeyPatch, merge: bool = True) -> int:
     with monkeypatch.context() as scope:
         scope.setenv("GIT_CONFIG_COUNT", "2")
         scope.setenv("GIT_CONFIG_KEY_1", "core.hooksPath")
         scope.setenv("GIT_CONFIG_VALUE_1", "/dev/null")
-        return update_pr.publish(target)
+        return update_pr.publish(target, merge)
 
 
 def newer_release(source: Path, monkeypatch: pytest.MonkeyPatch, note: str) -> str:
@@ -157,6 +157,41 @@ def test_background_update_keeps_an_update_branch_being_fixed(
     assert update_runner.apply_update(target) == 0
     assert git(target, "rev-parse", BRANCH) == fixed
     assert "unfinished work" in (target / update_runner.RESULT_FILE).read_text()
+
+
+def test_background_update_names_a_clean_checked_out_update_branch(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    parked = target.parent / "parked"
+    git(target, "worktree", "add", "-q", "-b", BRANCH, str(parked), "main")
+    first = newer_release(source, monkeypatch, "first update")
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "holds unfinished work" not in result
+    assert f"checked out in {parked}" in result
+    assert f"git -C {parked} switch --detach" in result
+    git(parked, "switch", "-q", "--detach")
+    assert update_runner.apply_update(target) == 0
+    assert first in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
+
+
+def test_background_update_records_why_setup_refused_it(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    edited = ".agents/skills/he/references/workflow.md"
+    (target / edited).write_text("local edit\n")
+    commit(target, "edit a scaffold file")
+    git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
+    newer_release(source, monkeypatch, "first update")
+    assert update_runner.apply_update(target) == 0
+    refusal = f"{edited} already differs"
+    assert refusal in (target / update_runner.RESULT_FILE).read_text()
+    assert update_runner.apply_update(target) == 0
+    replayed = (target / update_runner.RESULT_FILE).read_text()
+    assert refusal in replayed
+    assert "not retried" in replayed
 
 
 def rebase_merge(landing: Path) -> None:
@@ -254,6 +289,25 @@ def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
         "--match-head-commit",
         head,
     ) in gh.calls
+
+
+def test_update_pr_without_merge_prints_the_merge_command_instead(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target = apply_first_update(feature, monkeypatch)
+    assert publish(target, monkeypatch) == 0
+    gh.pulls[0]["statusCheckRollup"] = [
+        {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"}
+    ]
+    capsys.readouterr()
+    assert publish(target, monkeypatch, merge=False) == 0
+    assert "pr merge" not in gh.verbs()
+    head = git(target, "rev-parse", BRANCH)
+    command = f"gh pr merge {PULL} --auto --rebase --match-head-commit {head}"
+    assert command in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(

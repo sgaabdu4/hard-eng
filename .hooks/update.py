@@ -316,12 +316,13 @@ def planned_hook(root: Path, plan: object) -> tuple[str, str]:
 
 
 def update_plan(
-    root: Path, source: Path, previous: Path
+    root: Path, source: Path, previous: Path, env: dict[str, str] | None = None
 ) -> tuple[dict[str, str | None], dict[str, str | None], tuple[str, str], list[str]]:
-    output = subprocess.check_output(
+    planned = subprocess.run(
         [
             "uv",
             "run",
+            "--quiet",
             "--project",
             str(source),
             "--locked",
@@ -336,10 +337,17 @@ def update_plan(
             str(previous),
         ],
         cwd=root,
+        env=env,
+        capture_output=True,
         text=True,
         timeout=60,
+        check=False,
     )
-    plan = json.loads(output)
+    sys.stderr.write(planned.stderr)
+    if planned.returncode != 0:
+        reason = " | ".join(planned.stderr.strip().splitlines()[-5:])
+        raise ValueError(f"setup refused the update: {reason or 'no reason printed'}")
+    plan = json.loads(planned.stdout)
     hook = planned_hook(root, plan)
     changes: dict[str, str | None] = {
         name: content
@@ -917,6 +925,32 @@ def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
     return revision, previous, names
 
 
+def own_hooks_env(root: Path) -> dict[str, str] | None:
+    """CI never runs the pre-push hook, so a runner's hooks folder outside the checkout must not fail the check."""
+    common, hooks = subprocess.check_output(
+        [
+            "git",
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+            "--git-path",
+            "hooks",
+        ],
+        cwd=root,
+        text=True,
+    ).splitlines()
+    if Path(hooks).resolve().is_relative_to(root.resolve()):
+        return None
+    env = dict(os.environ)
+    count = int(env.get("GIT_CONFIG_COUNT", "0"))
+    env |= {
+        "GIT_CONFIG_COUNT": str(count + 1),
+        f"GIT_CONFIG_KEY_{count}": "core.hooksPath",
+        f"GIT_CONFIG_VALUE_{count}": str(Path(common) / "hooks"),
+    }
+    return env
+
+
 def release_installed(
     root: Path, base: str, names: set[str], revision: str, previous: str
 ) -> bool:
@@ -930,7 +964,7 @@ def release_installed(
             for path in (tree / ".agents/skills").iterdir()
             if path.is_dir()
         }
-        changes, links, _, _ = update_plan(root, source, source)
+        changes, links, _, _ = update_plan(root, source, source, own_hooks_env(root))
         if (
             not names <= allowed
             or changes

@@ -163,7 +163,21 @@ def project_pre_push(root: Path, hook: Path) -> Path:
         directory = hook.parent.resolve()
         if directory != common / "hooks":
             if common.name != ".git" or not directory.is_relative_to(common.parent):
-                raise ValueError("Git hooks point outside this repository")
+                origin = (
+                    subprocess.run(
+                        ["git", "config", "--show-origin", "core.hooksPath"],
+                        cwd=root,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    .stdout.strip()
+                    .replace("\t", " as ")
+                )
+                raise ValueError(
+                    f"Git hooks point outside this repository: {directory} is not under {root}"
+                    + (f" (core.hooksPath set in {origin})" if origin else "")
+                )
             owner, hook = common.parent, directory / hook.name
     shim = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"'
     if (
