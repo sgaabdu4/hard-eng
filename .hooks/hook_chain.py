@@ -1,5 +1,6 @@
 """Keep a project's own pre-push hook running ahead of Hard Eng's."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -150,3 +151,54 @@ def use_own_hooks(root: Path, candidate: Path) -> None:
             replace = [*setting, "--replace-all", "core.hooksPath", own]
             subprocess.run(replace, cwd=candidate, check=True)
             return
+
+
+def planned_hook(root: Path, plan: object) -> tuple[str, str]:
+    if not isinstance(plan, dict):
+        raise TypeError("Setup plan must be an object")
+    hook = plan.get("hook")
+    if not isinstance(hook, dict):
+        raise TypeError("Setup plan is missing the pre-push hook")
+    hook_path, hook_content = hook.get("path"), hook.get("content")
+    if not isinstance(hook_path, str) or not isinstance(hook_content, str):
+        raise TypeError("Setup plan has an invalid pre-push hook")
+    if hook_path == ".husky/pre-push":
+        if (root / hook_path).is_symlink():
+            raise ValueError("Preserve the existing hook symlink before updating")
+        if foreign_hook(root, root / hook_path) and not (
+            project_copy(root / hook_path).exists()
+        ):
+            raise ValueError(
+                "Existing pre-push hook must be preserved; run the setup command to keep it"
+            )
+        files = plan.get("files")
+        if not isinstance(files, dict):
+            raise TypeError("Setup plan must include file changes")
+        files[hook_path] = hook_content
+    return hook_path, hook_content
+
+
+def own_hooks_env(root: Path) -> dict[str, str] | None:
+    """CI never runs the pre-push hook, so a runner's hooks folder outside the checkout must not fail the check."""
+    common, hooks = subprocess.check_output(
+        [
+            "git",
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+            "--git-path",
+            "hooks",
+        ],
+        cwd=root,
+        text=True,
+    ).splitlines()
+    if Path(hooks).resolve().is_relative_to(root.resolve()):
+        return None
+    env = dict(os.environ)
+    count = int(env.get("GIT_CONFIG_COUNT", "0"))
+    env |= {
+        "GIT_CONFIG_COUNT": str(count + 1),
+        f"GIT_CONFIG_KEY_{count}": "core.hooksPath",
+        f"GIT_CONFIG_VALUE_{count}": str(Path(common) / "hooks"),
+    }
+    return env

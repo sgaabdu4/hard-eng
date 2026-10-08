@@ -725,37 +725,6 @@ def fetch_base(root: Path, base: str) -> str:
     ).strip()
 
 
-def branch_worktree(root: Path) -> Path | None:
-    for fields in registered_worktrees(root):
-        if fields.get("branch") == f"refs/heads/{UPDATE_BRANCH}":
-            return Path(fields["worktree"])
-    return None
-
-
-def unfinished_update(root: Path, tip: str) -> bool:
-    """Uncommitted edits in the update branch's worktree, or fixes beyond the update commit, are someone's work."""
-    worktree = branch_worktree(root)
-    if (
-        worktree is not None
-        and worktree.is_dir()
-        and subprocess.check_output(
-            ["git", "status", "--porcelain"], cwd=worktree, text=True
-        )
-    ):
-        return True
-    span = f"{tip}...refs/heads/{UPDATE_BRANCH}"
-    ahead = subprocess.run(
-        ["git", "rev-list", "--count", "--right-only", "--cherry-pick", span],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if ahead.returncode != 0 or int(ahead.stdout) <= 1:
-        return False
-    return not landed(root, tip, f"refs/heads/{UPDATE_BRANCH}")
-
-
 def landed(root: Path, base: str, branch: str) -> bool:
     """Every file the branch changed already matches the base, as after a squash merge."""
     span = f"{base}...{branch}"
@@ -834,6 +803,7 @@ def prepare_update(root: Path, repair: bool = False) -> str:
 def build_update(root: Path, base: str, repair: bool) -> str:
     from hook_chain import use_own_hooks
     from update import update
+    from update_pr import branch_worktree, unfinished_update
 
     tip = fetch_base(root, base)
     if unfinished_update(root, tip):
