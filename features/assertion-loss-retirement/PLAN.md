@@ -45,7 +45,7 @@ N/A — check error text only; no product appearance.
 
 Result: Passed
 E2E: Passed — in a scratch Git project with this branch's `.hooks`, a commit deleting `migrate_users.py` and `tests/test_migrate.py` (while `jobs.py` keeps its own `run`) passed `validate_suppressions` against its parent; the same commit with main's `comments.py` failed with `tests lose 1 assertion lines net`. A following commit deleting the test for kept `app.keep` failed with the same message. The full `check` in that scratch project stopped earlier on its missing plan, so the validator was called directly, the same call `check` makes.
-Evidence: `hard-eng.py check --base origin/main` exit 0: 18 checks passed, 1448 tests, 90.71% line coverage. Each new regression failed on the code before its fix.
+Evidence: `hard-eng.py check --base origin/main` exit 0: 18 checks passed, 1449 tests, 90.71% line coverage. Each new regression failed on the code before its fix.
 
 Delivery target: Merge
 Delivery: Pending — PR CI, merge, merged-main CI and cleanup remain unverified.
