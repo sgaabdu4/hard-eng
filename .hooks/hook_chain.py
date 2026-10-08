@@ -180,25 +180,19 @@ def planned_hook(root: Path, plan: object) -> tuple[str, str]:
 
 def own_hooks_env(root: Path) -> dict[str, str] | None:
     """CI never runs the pre-push hook, so a runner's hooks folder outside the checkout must not fail the check."""
-    common, hooks = subprocess.check_output(
-        [
-            "git",
-            "rev-parse",
-            "--path-format=absolute",
-            "--git-common-dir",
-            "--git-path",
-            "hooks",
-        ],
-        cwd=root,
-        text=True,
-    ).splitlines()
-    if Path(hooks).resolve().is_relative_to(root.resolve()):
-        return None
-    env = dict(os.environ)
-    count = int(env.get("GIT_CONFIG_COUNT", "0"))
-    env |= {
-        "GIT_CONFIG_COUNT": str(count + 1),
-        f"GIT_CONFIG_KEY_{count}": "core.hooksPath",
-        f"GIT_CONFIG_VALUE_{count}": str(Path(common) / "hooks"),
-    }
-    return env
+    try:
+        locate(root)
+    except ValueError:
+        common = subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=root,
+            text=True,
+        ).strip()
+        env = dict(os.environ)
+        count = int(env.get("GIT_CONFIG_COUNT", "0"))
+        return env | {
+            "GIT_CONFIG_COUNT": str(count + 1),
+            f"GIT_CONFIG_KEY_{count}": "core.hooksPath",
+            f"GIT_CONFIG_VALUE_{count}": str(Path(common) / "hooks"),
+        }
+    return None
