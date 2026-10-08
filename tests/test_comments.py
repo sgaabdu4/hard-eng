@@ -372,6 +372,20 @@ def test_retired_import_reaches_a_test_in_a_separate_hunk(tmp_path: Path) -> Non
     validate_suppressions(root, "HEAD")
 
 
+def test_removing_a_typed_dart_constant_with_its_test_passes(tmp_path: Path) -> None:
+    keep = "int keep() => 1;\n"
+    root = switch_root(tmp_path, "lib/app.dart", f"{keep}const String legacy = '1';\n")
+    keep_test = "  test('keep', () => expect(keep(), 1));\n"
+    (root / "test").mkdir()
+    (root / "test/app_test.dart").write_text(
+        f"void main() {{\n{keep_test}  test('old', () => expect(legacy, '1'));\n}}\n"
+    )
+    commit(root, "dart test")
+    (root / "lib/app.dart").write_text(keep)
+    (root / "test/app_test.dart").write_text(f"void main() {{\n{keep_test}}}\n")
+    validate_suppressions(root, "HEAD")
+
+
 def test_inlining_a_local_does_not_excuse_deleting_its_test(tmp_path: Path) -> None:
     root = switch_root(
         tmp_path,
