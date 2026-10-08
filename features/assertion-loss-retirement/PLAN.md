@@ -48,4 +48,4 @@ E2E: Passed — in a scratch Git project with this branch's `.hooks`, a commit d
 Evidence: `hard-eng.py check --base origin/main` exit 0: 18 checks passed, 1449 tests, 90.71% line coverage. Each new regression failed on the code before its fix.
 
 Delivery target: Merge
-Delivery: Pending — PR CI, merge, merged-main CI and cleanup remain unverified.
+Delivery: Passed — PR #251 CI passed; rebase-merged as dd4d846; `ship --stage delivered` passed on merged-main CI; the task branch was deleted locally and on GitHub after confirming main matched it.
