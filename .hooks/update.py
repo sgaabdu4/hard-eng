@@ -908,11 +908,11 @@ def release_installed(
             for path in (tree / ".agents/skills").iterdir()
             if path.is_dir()
         }
-        changes, links, _, _ = update_plan(
-            root, source, source, hook_chain.own_hooks_env(root)
-        )
+        env = hook_chain.own_hooks_env(root)
+        changes, links, _, _ = update_plan(root, source, source, env)
         if (
             not names <= allowed
+            or (env is not None and ".husky/pre-push" in names)
             or changes
             or links
             or any(
