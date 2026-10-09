@@ -170,9 +170,9 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
     selected = sorted(
         packages[name] + "@latest" for name in executables & packages.keys()
     )
-    pin_python_scanners(sorted(executables & MANAGED_PYTHON_SCANNERS), timeout)
     if selected:
         provision_batch(selected, timeout)
+    pin_python_scanners(sorted(executables & MANAGED_PYTHON_SCANNERS), timeout)
 
 
 def scanner_version(name: str, offline: bool, timeout: float) -> str | None:
