@@ -724,18 +724,14 @@ def plan_base(base: str | None, plan_stage: str | None) -> str | None:
 
 def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool | None:
     """Parallel gates share the CPUs; serial ones wait; None when dependency setup failed."""
-    from reports import early_scan, scan_blockers
+    from reports import early_scan, gate_order, scan_blockers
 
     output_lock = threading.Lock()
     failed = False
     pending: set[Future[bool]] = set()
     scans: dict[Future[bool], str] = {}
     checks = [(group, gate) for group in groups for gate in group["checks"]]
-    lockfiles = [item for item in checks if item[1].get("role") == "lockfiles"]
-    ordered = lockfiles + sorted(
-        (item for item in checks if item not in lockfiles),
-        key=lambda item: not early_scan(item[1]),
-    )
+    ordered = gate_order(checks)
     workers = os.cpu_count() or 2
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for group, gate in ordered:
