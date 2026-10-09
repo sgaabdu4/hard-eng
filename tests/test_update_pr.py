@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import Mock
@@ -146,6 +147,23 @@ def test_update_from_a_linked_worktree_ignores_its_inherited_hooks_path(
     assert update_runner.apply_update(linked) == 0
     assert first in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
     assert git(linked, "config", "core.hooksPath") == str(stale)
+
+
+def test_husky_update_succeeds_when_the_temporary_directory_is_a_symlink(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source, target, _ = release
+    husky_project(target)
+    add_origin(target)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    symlinked = tmp_path / "symlinked-tmp"
+    symlinked.symlink_to(tmp_path / "tmp")
+    monkeypatch.setenv("TMPDIR", str(symlinked))
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "failed" not in result, result
 
 
 def fix_update_branch(target: Path) -> str:
