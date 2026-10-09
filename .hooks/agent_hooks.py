@@ -681,13 +681,28 @@ def unchanged_notice(root: Path, notice: str) -> JsonObject:
     return with_freshness(root, {"systemMessage": message})
 
 
-def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
-    from plans import build_in_progress, planning_feedback, planning_only
-
+def paused_turn(payload: JsonObject) -> JsonObject | None:
     if payload.get("stop_hook_active") is True:
         return {
             "systemMessage": "Report blockers honestly; don't claim a pass; no stop-hook loop."
         }
+    tasks = payload.get("background_tasks")
+    if isinstance(tasks, list) and any(
+        isinstance(task, dict)
+        and task.get("type") in {"subagent", "workflow", "teammate"}
+        for task in tasks
+    ):
+        return {
+            "systemMessage": "Hard Eng: background agents still editing; checks run after they finish. Don't claim done."
+        }
+    return None
+
+
+def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
+    from plans import build_in_progress, planning_feedback, planning_only
+
+    if (paused := paused_turn(payload)) is not None:
+        return paused
     state = session_state(root, payload)
     base, before = saved_session(state)
     try:
