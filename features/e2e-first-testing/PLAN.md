@@ -1,6 +1,6 @@
 # E2E-first testing with fakes for outside services
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -18,11 +18,11 @@ Authority: The user approved the three guidance changes, adding them to the same
 
 ## Acceptance + steps
 
-- [ ] Guidance states E2E-first, fakes from recorded real responses, one real-service run or pending, and the two lower-level test cases → diff of the five guidance files.
-- [ ] The outside-service judge passes a good answer and fails a missing real run, a fake that shares the code's wrong format, a suite that calls the real tool, and a plan that does not name the journey test → `test_outside_service_needs_a_fake_backed_journey_and_one_real_run`.
-- [ ] Real models: `outside-service` with `--repeat 3` on Claude and Codex, for `--source d2d394f4` and this branch; pass rates and token use compared → results under `coverage/agent-checks/`.
-- [ ] Style: Claude `planning-only` and `review-only` with `--repeat 3 --judge` for both sources; pass rates, reply tokens and sentence length compared.
-- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
+- [x] Guidance states E2E-first, fakes from recorded real responses, one real-service run or pending, and the two lower-level test cases → diff of the five guidance files.
+- [x] The outside-service judge passes a good answer and fails a missing real run, a fake that shares the code's wrong format, a suite that calls the real tool, and a plan that does not name the journey test → `test_outside_service_needs_a_fake_backed_journey_and_one_real_run`.
+- [x] Real models: `outside-service` with `--repeat 3` on Claude and Codex, for `--source d2d394f4` and this branch; pass rates and token use compared → results under `coverage/agent-checks/`.
+- [x] Style: Claude `planning-only` and `review-only` with `--repeat 3 --judge` for both sources; pass rates, reply tokens and sentence length compared.
+- [x] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
 ## Baseline + execution
 
@@ -40,9 +40,12 @@ N/A — guidance and eval changes with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
-E2E: Required — `outside-service` real-model runs are the journey proof for the guidance; results pending.
+Result: Passed
+Evidence: Judge test → 5 passed, each bad answer failing for its own reason. Real models, 3 runs each, results under `coverage/agent-checks/20261009T1741*` and `T1742*`, `T1743*`:
+- `outside-service`: 12 of 12 pass on Claude Opus 5.5 and Codex GPT 6.1 Sol, old and new. Claude new: mean $0.66, 694k input and 9.6k output tokens, 27 turns; old: $0.83, 1086k, 12.4k, 31 turns. Codex new: 475k input, 5.5k output; old: 453k, 6.5k.
+- Style (Claude): review-only 6 of 6 pass. planning-only failed 6 of 6, old and new, from a stale grader pattern fixed in `features/open-issue-fixes`; every run's recorded check output shows a pass. New replies: 225 words and 9.2 words per sentence on average, at most 6% of sentences over 20 words; old: 283 words, 11.0, up to 20%. Output tokens similar; input tokens and cost higher for new on these 3-run samples.
+Gaps: `outside-service` does not separate old from new guidance, because its fixture text already tells the agent to keep tests off the real tool and names the swap variable. A fixture without those hints is needed to measure the guidance itself. Three runs per arm cannot settle cost differences.
+E2E: Passed — `outside-service` real-model journeys above; each run's own final command output was graded against the real tool.
 
 Delivery target: Merge
 Delivery: Pending — PR CI and merge.
