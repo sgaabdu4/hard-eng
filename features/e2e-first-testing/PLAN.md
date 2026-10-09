@@ -1,0 +1,48 @@
+# E2E-first testing with fakes for outside services
+
+Status: Ready
+
+## Outcome + scope
+
+Hard Eng guidance makes the E2E test the main proof of a user journey, written with the code. When no fake exists for an outside service, the agent builds one from recorded real responses. Then it runs the journey once against the real service, or reports that run as pending. Lower-level tests are kept for logic with many input cases and for bug reproductions. A new model eval case measures this behaviour with Claude and Codex. Non-goals: an audit or removal of existing tests, a reply-checking Stop hook, new runners or dependencies.
+
+## Repository context
+
+Owners: `AGENTS.md` Tests rule; `.agents/skills/he/references/testing.md` (Level and Outside services rows); `.agents/skills/e2e/SKILL.md` (routes, report gaps); `.agents/skills/he-plan/SKILL.md` + `templates/PLAN.md` (E2E test named per journey, slice sequencing); `tests/agent_checks.py` (model eval cases). Evidence: a public eval found that agent-written unit and integration tests mostly restate the code and add cost without raising success; it had no E2E data. In a private project, E2E tests over fakes found real defects, and one real-service run found a defect that the fakes shared with the code.
+
+## Decisions + authorization
+
+Blockers: None.
+Handoff: Approval
+Authority: The user approved the three guidance changes, adding them to the same PR, and real-model eval runs of both changes. AGENTS.md text must not grow materially; detail goes to on-demand skill files. Shipping follows the standing merge-when-green instruction.
+
+## Acceptance + steps
+
+- [ ] Guidance states E2E-first, fakes from recorded real responses, one real-service run or pending, and the two lower-level test cases → diff of the five guidance files.
+- [ ] The outside-service judge passes a good answer and fails a missing real run, a fake that shares the code's wrong format, a suite that calls the real tool, and a plan that does not name the journey test → `test_outside_service_needs_a_fake_backed_journey_and_one_real_run`.
+- [ ] Real models: `outside-service` with `--repeat 3` on Claude and Codex, for `--source d2d394f4` and this branch; pass rates and token use compared → results under `coverage/agent-checks/`.
+- [ ] Style: Claude `planning-only` and `review-only` with `--repeat 3 --judge` for both sources; pass rates, reply tokens and sentence length compared.
+- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
+
+## Baseline + execution
+
+Result: Passed
+Evidence: Branch base `d2d394f4` passed required CI; the style commit `9958aa5c` passed `check --plan-stage Complete` with 18 PASS.
+Execution: Single builder. Guidance and eval edits, gate, commit, then real-model runs from the committed source.
+
+## Risks + recovery
+
+Stricter test guidance can drop a useful focused test. Recovery: the existing rule still requires proof for each named outcome, and bug reproductions stay. Eval judges use text markers (`RECORDS_TOOL`, the plan naming the test file), so an unusual but valid answer can fail. Recovery: read the evidence diff of each failing run before drawing conclusions.
+
+## ux_reference
+
+N/A — guidance and eval changes with no visual surface.
+
+## Verification
+
+Result: Pending
+Evidence: Pending.
+E2E: Required — `outside-service` real-model runs are the journey proof for the guidance; results pending.
+
+Delivery target: Merge
+Delivery: Pending — PR CI and merge.

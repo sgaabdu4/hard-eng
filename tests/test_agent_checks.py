@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import sys
 from argparse import Namespace
 from collections.abc import Callable
@@ -25,6 +26,7 @@ from agent_checks import (
     judge_continue,
     judge_failed_baseline,
     judge_grade,
+    judge_outside_service,
     judge_plan_only,
     judge_review,
     loaded_skills,
@@ -220,6 +222,98 @@ def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
     )
     for ran in (check, tests):
         assert judge_failed_baseline(Run(root, base, "", [], [ran])) == []
+
+
+PHONE_APP = """import json
+import os
+import subprocess
+import sys
+
+
+def main(argv: list[str]) -> int:
+    if argv == ["version"]:
+        print("1.0")
+        return 0
+    tool = os.environ.get("RECORDS_TOOL", "vendor/records_tool.py")
+    found = subprocess.run(
+        [sys.executable, tool, "mobile", argv[1]], capture_output=True, text=True
+    )
+    if found.returncode:
+        print("Patient not found")
+        return 1
+    number = json.loads(found.stdout)["mobile_no"].replace(" ", "")
+    print("44" + number.removeprefix("0"))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
+"""
+PHONE_TEST = """import os
+import subprocess
+import sys
+import unittest
+
+
+class PhoneTest(unittest.TestCase):
+    def test_phone(self) -> None:
+        env = {**os.environ, "RECORDS_TOOL": "fake_records_tool.py"}
+        found = subprocess.run(
+            [sys.executable, "app.py", "phone", "P-1001"],
+            capture_output=True, text=True, env=env,
+        )
+        self.assertEqual(found.stdout, "447700900123\\n")
+"""
+FAKE_RECORDS = 'import json\nprint(json.dumps({"mobile_no": "07700 900123"}))\n'
+
+
+@pytest.mark.parametrize(
+    ("change", "real_run", "problem"),
+    [
+        ({}, True, None),
+        ({}, False, "never ran the real tool"),
+        (
+            {
+                "app.py": PHONE_APP.replace('.replace(" ", "")', ""),
+                "fake_records_tool.py": FAKE_RECORDS.replace(" ", "", 1),
+            },
+            True,
+            "real tool does not print 447700900123",
+        ),
+        (
+            {"test_phone.py": PHONE_TEST.replace("fake_", "vendor/")},
+            True,
+            "the test suite called the real records tool",
+        ),
+        ({"features/phone/PLAN.md": "# Phone\n"}, True, "no changed plan names"),
+    ],
+)
+def test_outside_service_needs_a_fake_backed_journey_and_one_real_run(
+    tmp_path: Path, change: dict[str, str], real_run: bool, problem: str | None
+) -> None:
+    root, base = case_fixture(tmp_path, "outside-service")
+    files = {
+        "app.py": PHONE_APP,
+        "test_phone.py": PHONE_TEST,
+        "fake_records_tool.py": FAKE_RECORDS,
+        "features/phone/PLAN.md": "# Phone\n\nE2E: `test_phone.py`\n",
+        **change,
+    }
+    for name, text in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    if real_run:
+        subprocess.run(
+            [sys.executable, "vendor/records_tool.py", "mobile", "P-1001"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+    failures = judge_outside_service(Run(root, base, "", [], []))
+    if problem is None:
+        assert failures == []
+    else:
+        assert problem in " ".join(failures)
 
 
 def test_both_clients_record_commands_edits_and_results() -> None:

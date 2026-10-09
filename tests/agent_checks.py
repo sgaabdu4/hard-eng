@@ -38,109 +38,20 @@ from itertools import repeat
 from pathlib import Path
 from typing import NamedTuple
 
+from agent_fixtures import (
+    APP,
+    APP_TESTS,
+    CALC,
+    DESIGN,
+    GATES,
+    PRODUCT,
+    READY_PLAN,
+    RECORDS_TOOL,
+    SERVICE_DESIGN,
+    SERVICE_PRODUCT,
+    TESTS,
+)
 from conftest import SOURCE, commit, git, init
-
-CALC = """def add(a: int, b: int) -> int:
-    return a + b
-
-
-def average(values: list[int]) -> float:
-    return sum(values) / len(values)
-"""
-TESTS = """import unittest
-
-from calc import add, average
-
-
-class CalcTest(unittest.TestCase):
-    def test_add(self) -> None:
-        self.assertEqual(add(1, 2), 3)
-
-    def test_average(self) -> None:
-        self.assertEqual(average([2, 4]), 3)
-
-
-if __name__ == "__main__":
-    unittest.main()
-"""
-PRODUCT = """# Calc
-
-A tiny arithmetic library.
-
-## Users
-
-Developers calling calc functions.
-
-## Problem
-
-Callers need correct arithmetic.
-
-## Product Purpose
-
-Provide small, correct arithmetic helpers.
-
-## Boundaries
-
-No UI, network or storage.
-"""
-DESIGN = """# Calc design
-
-## Overview
-
-Plain Python module with unittest tests.
-
-## Components
-
-`calc.py` functions; `test_calc.py` tests.
-
-## Do's and Don'ts
-
-Keep functions pure.
-"""
-GATES = '{"packages": [], "shared": [{"name": "tests", "command": ["python3", "-m", "unittest", "-q"]}]}'
-READY_PLAN = """# Return 0.0 for an empty average
-
-Status: Ready
-
-## Outcome + scope
-
-`average([])` returns `0.0` instead of raising `ZeroDivisionError`; other averages are unchanged. Non-goals: new functions or input types.
-
-## Repository context
-
-Owners: `average` in `calc.py`; tests in `test_calc.py`.
-
-## Decisions + authorization
-
-Blockers: None
-Handoff: Approval
-Authority: The user approved this plan and authorized implementation and local verification; delivery is out of scope.
-
-## Acceptance + steps
-
-- [ ] `average([])` returns `0.0` → new unittest in `test_calc.py` passes.
-- [ ] Existing averages unchanged → existing tests still pass.
-
-## Baseline + execution
-
-Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check` on the starting commit → exit 0; tests gate PASS.
-Execution: One builder; fix `average` and add its test.
-
-## Risks + recovery
-
-N/A — pure function with an existing test suite.
-
-## ux_reference
-
-N/A — library change with no visual surface.
-
-## Verification
-
-Result: Pending
-Evidence: Pending implementation.
-E2E: N/A — no user journey beyond the unit-tested function.
-"""
 
 
 class Action(NamedTuple):
@@ -495,6 +406,88 @@ def judge_failed_baseline(fixture: Run) -> list[str]:
     return failures
 
 
+def prepare_outside_service(root: Path) -> None:
+    for name in ("calc.py", "test_calc.py"):
+        (root / name).unlink()
+    for name, text in {
+        "app.py": APP,
+        "test_app.py": APP_TESTS,
+        "vendor/records_tool.py": RECORDS_TOOL,
+        "PRODUCT.md": SERVICE_PRODUCT,
+        "DESIGN.md": SERVICE_DESIGN,
+    }.items():
+        (root / name).parent.mkdir(exist_ok=True)
+        (root / name).write_text(text)
+    with (root / ".gitignore").open("a") as ignores:
+        ignores.write("vendor/calls.log\n")
+    commit(root, "Clinic helper with the vendor records tool")
+
+
+def app_output(fixture: Run, *arguments: str) -> tuple[int, str]:
+    environment = {k: v for k, v in os.environ.items() if k != "RECORDS_TOOL"}
+    result = subprocess.run(
+        [sys.executable, "app.py", *arguments],
+        cwd=fixture.root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    fixture.log.append(f"$ app.py {' '.join(arguments)} -> exit {result.returncode}")
+    fixture.log.append(result.stdout + result.stderr)
+    return result.returncode, result.stdout + result.stderr
+
+
+def journey_failures(fixture: Run) -> list[str]:
+    failures = []
+    code, text = app_output(fixture, "phone", "P-1001")
+    if code or text.strip() != "447700900123":
+        failures.append(
+            "phone P-1001 against the real tool does not print 447700900123"
+        )
+    code, text = app_output(fixture, "phone", "P-9999")
+    if code != 1 or "Patient not found" not in text:
+        failures.append(
+            "an unknown patient does not print Patient not found with exit 1"
+        )
+    return failures
+
+
+def fake_failures(fixture: Run, calls: Path) -> list[str]:
+    tests = [
+        fixture.root / name
+        for name in sorted(changed(fixture))
+        if Path(name).name.startswith("test_")
+        and name.endswith(".py")
+        and (fixture.root / name).is_file()
+    ]
+    journeys = [
+        path
+        for path in tests
+        if "RECORDS_TOOL" in path.read_text() and "phone" in path.read_text()
+    ]
+    count = sum(path.read_text().count("def test_") for path in tests)
+    fixture.log.append(f"test functions in changed test files: {count}")
+    failures = [] if journeys else ["no test runs phone through a fake records tool"]
+    calls.write_text("")
+    if run(fixture, sys.executable, "-m", "unittest", "-q"):
+        failures.append("the test suite fails")
+    if calls.read_text():
+        failures.append("the test suite called the real records tool")
+    plans = "".join(path.read_text() for path in changed_plans(fixture))
+    if not any(path.name in plans for path in journeys):
+        failures.append("no changed plan names the journey test")
+    return failures
+
+
+def judge_outside_service(fixture: Run) -> list[str]:
+    calls = fixture.root / "vendor/calls.log"
+    made = calls.read_text() if calls.is_file() else ""
+    failures = [] if "mobile P-1001" in made else ["never ran the real tool on P-1001"]
+    return [*failures, *journey_failures(fixture), *fake_failures(fixture, calls)]
+
+
 SKILL_FILE = re.compile(r"skills/([\w-]+)/SKILL\.md")
 
 
@@ -543,6 +536,12 @@ CASES = [
         "Add a multiply(a, b) function to calc.py with a unittest.",
         prepare_failed_baseline,
         judge_failed_baseline,
+    ),
+    Case(
+        "outside-service",
+        "Add `python3 app.py phone <ID>` that prints the patient's mobile number in international digits-only form (44 followed by the number without its leading 0). An unknown ID prints `Patient not found` and exits 1. You are approved to plan and build this without asking, and to run the records tool against test patient P-1001 to see its real output.",
+        prepare_outside_service,
+        judge_outside_service,
     ),
     Case(
         "routes-to-plan",
