@@ -80,6 +80,37 @@ QUICK_ROLES = frozenset(
 )
 
 
+READ_ONLY_ROLES = (
+    QUICK_ROLES
+    | SCAN_ROLES
+    | {
+        "tests",
+        "performance",
+        "complexity",
+        "dead-code",
+        "duplicates",
+        "dead-code-duplicates",
+        "dependencies",
+        "types-lint",
+        "react",
+    }
+)
+
+
+def gate_order(checks: list[tuple[Group, Gate]]) -> list[tuple[Group, Gate]]:
+    """Setup first; scans start after the last serial gate that may write files they read."""
+    setup = [item for item in checks if item[1].get("role") == "lockfiles"]
+    scans = [item for item in checks if early_scan(item[1])]
+    others = [item for item in checks if item not in setup and item not in scans]
+    producers = [
+        index
+        for index, (_, gate) in enumerate(others)
+        if not gate.get("parallel", False) and gate.get("role") not in READ_ONLY_ROLES
+    ]
+    cut = producers[-1] + 1 if producers else 0
+    return setup + others[:cut] + scans + others[cut:]
+
+
 def scan_blockers(
     group: Group, gate: Gate, scans: dict[Future[bool], str]
 ) -> set[Future[bool]]:

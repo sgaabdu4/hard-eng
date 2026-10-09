@@ -37,7 +37,9 @@ def test_scans_start_beside_a_serial_suite_listed_before_them(
         "Path('{mine}').touch()\n"
         "while not Path('{other}').exists(): assert time.monotonic() < end; time.sleep(0.02)"
     )
-    suite = gate("suite", wait.format(mine="suite-running", other="scan-running"))
+    suite = gate(
+        "suite", wait.format(mine="suite-running", other="scan-running"), role="tests"
+    )
     scan = gate(
         "scan",
         wait.format(mine="scan-running", other="suite-running"),
@@ -45,6 +47,24 @@ def test_scans_start_beside_a_serial_suite_listed_before_them(
         parallel=True,
     )
     configure(tmp_path, [suite, scan])
+    assert runner.check() == 0
+
+
+def test_scans_still_read_what_a_serial_generator_produced(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    generator = gate(
+        "generate",
+        "from pathlib import Path;import time;time.sleep(0.5);Path('generated').touch()",
+        role="codegen",
+    )
+    scan = gate(
+        "scan",
+        "from pathlib import Path;assert Path('generated').exists()",
+        role="shell",
+        parallel=True,
+    )
+    configure(tmp_path, [generator, scan])
     assert runner.check() == 0
 
 
