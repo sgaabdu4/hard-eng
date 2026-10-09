@@ -722,6 +722,11 @@ def plan_base(base: str | None, plan_stage: str | None) -> str | None:
     return point
 
 
+def settled(futures: set[Future[bool]]) -> bool:
+    """Wait for every gate; True when any failed."""
+    return True in [future.result() for future in futures]
+
+
 def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool | None:
     """Parallel gates share the CPUs; serial ones wait; None when dependency setup failed."""
     from reports import early_scan, gate_order, scan_blockers
@@ -738,8 +743,10 @@ def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool 
             if gate.get("parallel", False) and gate.get("role") != "lockfiles":
                 if len(pending) == workers:
                     done, pending = wait(pending, return_when=FIRST_COMPLETED)
-                    for future in done:
-                        failed |= future.result()
+                    failed |= settled(done)
+                if early_scan(gate) and not scans:
+                    failed |= settled(pending)
+                    pending.clear()
                 future = pool.submit(
                     run_gate, group, gate, timeout, output_lock, groups, related
                 )
@@ -751,16 +758,14 @@ def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool 
                 for future in scan_blockers(group, gate, scans):
                     del scans[future]
                     pending.add(future)
-                for future in pending:
-                    failed |= future.result()
+                failed |= settled(pending)
                 pending.clear()
                 result = run_gate(group, gate, timeout, output_lock, groups, related)
                 failed |= result
                 if result and gate.get("role") == "lockfiles":
                     print("Dependency setup failed; remaining checks were not run.")
                     return None
-        for future in pending | set(scans):
-            failed |= future.result()
+        failed |= settled(pending | set(scans))
     return failed
 
 
