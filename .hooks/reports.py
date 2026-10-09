@@ -5,6 +5,7 @@ import math
 import re
 import subprocess
 import xml.etree.ElementTree as ET
+from concurrent.futures import Future
 from pathlib import Path
 from typing import TextIO, cast
 
@@ -77,6 +78,18 @@ QUICK_ROLES = frozenset(
         "secrets-files",
     }
 )
+
+
+def scan_blockers(
+    group: Group, gate: Gate, scans: dict[Future[bool], str]
+) -> set[Future[bool]]:
+    """Scans a serial gate waits for: all before timing, and same-folder ones before
+    JavaScript tests, whose runners clear coverage/ where scan reports live."""
+    if gate.get("role") == "performance":
+        return set(scans)
+    if group.get("language") == "javascript" and gate.get("role") == "tests":
+        return {future for future, path in scans.items() if path == group["path"]}
+    return set()
 
 
 def quick_groups(groups: list[Group], quick: bool = True) -> list[Group]:
