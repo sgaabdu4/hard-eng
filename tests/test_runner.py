@@ -918,9 +918,10 @@ def test_ci_security_gate_turns_off_only_the_self_repository_audit(
     assert ("unpinned-uses" in rules) == bool(project)
 
 
+@pytest.mark.parametrize("quick", [None, False, True])
 @pytest.mark.parametrize("workflow", [False, True])
 def test_ci_security_passes_only_when_no_workflows_exist_to_collect(
-    tmp_path: Path, workflow: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, workflow: bool, quick: bool | None
 ) -> None:
     from gitleaks_scan import run_gate_command
 
@@ -933,8 +934,15 @@ def test_ci_security_passes_only_when_no_workflows_exist_to_collect(
     zizmor.parent.mkdir()
     zizmor.write_text(f"#!{sys.executable}\nraise SystemExit(3)\n")
     zizmor.chmod(0o755)
+    command = [str(zizmor)]
+    if quick is not None:
+        monkeypatch.setattr(tool_setup, "SCANNER_VERSIONS", {"zizmor": "1.2.3"})
+        monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", *["--quick"][:quick]])
+        uvx = zizmor.with_name("uvx")
+        zizmor.rename(uvx)
+        command = [str(uvx), *tool_setup.managed_command(["zizmor", "."])[1:]]
     with (tmp_path / "log").open("w+") as log:
-        result = run_gate_command("ci-security", [str(zizmor)], project, 30, log, log)
+        result = run_gate_command("ci-security", command, project, 30, log, log)
         log.seek(0)
         output = log.read()
     assert result.returncode == (3 if workflow else 0)

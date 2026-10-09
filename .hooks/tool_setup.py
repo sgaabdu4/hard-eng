@@ -102,7 +102,7 @@ def managed_command(command: list[str], directory: Path | None = None) -> list[s
     if command[0] in MANAGED_PYTHON_SCANNERS:
         offline = ["--offline"] if quick_mode() else []
         version = SCANNER_VERSIONS.get(command[0])
-        tool = f"{command[0]}=={version}" if version else command[0] + "@latest"
+        tool = f"{command[0]}@{version or 'latest'}"
         return ["uvx", *offline, tool, *command[1:]]
     return command
 
