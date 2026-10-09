@@ -23,6 +23,7 @@ NATIVE_SCANNERS = {
     "react-doctor": "React Doctor",
 }
 MANAGED_PYTHON_SCANNERS = {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "poetry"}
+SCANNER_VERSIONS: dict[str, str] = {}
 MISE_PACKAGE = "@jdxcode/mise"
 MISE_LATEST = MISE_PACKAGE + "@latest"
 MISE_BINARY = Path("node_modules/@jdxcode/mise/bin/mise")
@@ -90,7 +91,9 @@ def managed_command(command: list[str], directory: Path | None = None) -> list[s
         )
     if command[0] in MANAGED_PYTHON_SCANNERS:
         offline = ["--offline"] if quick_mode() else []
-        return ["uvx", *offline, command[0] + "@latest", *command[1:]]
+        version = SCANNER_VERSIONS.get(command[0])
+        tool = f"{command[0]}=={version}" if version else command[0] + "@latest"
+        return ["uvx", *offline, tool, *command[1:]]
     return command
 
 
@@ -155,32 +158,38 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
     selected = sorted(
         packages[name] + "@latest" for name in executables & packages.keys()
     )
-    if quick_mode():
-        warm_python_scanners(sorted(executables & MANAGED_PYTHON_SCANNERS), timeout)
+    pin_python_scanners(sorted(executables & MANAGED_PYTHON_SCANNERS), timeout)
     if selected:
         provision_batch(selected, timeout)
 
 
-def scanner_runs(name: str, offline: bool, timeout: float) -> bool:
+def scanner_version(name: str, offline: bool, timeout: float) -> str | None:
+    """The scanner's latest version, or None when it cannot run."""
     try:
-        subprocess.run(
+        done = subprocess.run(
             ["uvx", *(["--offline"] if offline else []), name + "@latest", "--version"],
             capture_output=True,
+            text=True,
             timeout=timeout,
             check=True,
         )
     except (subprocess.SubprocessError, OSError):
-        return False
-    return True
+        return None
+    found = re.search(r"\d+(?:\.\d+)+", done.stdout)
+    return found[0] if found else ""
 
 
-def warm_python_scanners(names: list[str], timeout: float) -> None:
-    """Quick checks run scanners from uv's cache; fetch one only when it was never cached."""
+def pin_python_scanners(names: list[str], timeout: float) -> None:
+    """Resolve each scanner's latest version once, serially, so parallel gates run it
+    pinned instead of each refreshing uv's shared interpreter cache at once."""
     for name in names:
-        if not (
-            scanner_runs(name, True, timeout) or scanner_runs(name, False, timeout)
-        ):
-            raise ValueError(NOT_INSTALLED.format(error=f"{name} could not be run"))
+        version = scanner_version(name, quick_mode(), timeout)
+        if version is None and quick_mode():
+            version = scanner_version(name, False, timeout)
+            if version is None:
+                raise ValueError(NOT_INSTALLED.format(error=f"{name} could not be run"))
+        if version:
+            SCANNER_VERSIONS[name] = version
 
 
 def provision_batch(batch: list[str], timeout: float) -> None:
