@@ -286,3 +286,28 @@ def test_parallel_scanners_run_the_version_found_once_before_them(
         "semgrep@latest --version",
     ]
     assert tool_setup.managed_command(["ruff", "check"])[:2] == ["uvx", "ruff==9.9.9"]
+
+
+def test_configured_uvx_scanners_are_pinned_like_bare_ones(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    pinned: list[str] = []
+
+    def pin(names: list[str], timeout: float) -> None:
+        del timeout
+        pinned.extend(names)
+
+    def batch(selected: list[str], timeout: float) -> None:
+        del selected, timeout
+
+    monkeypatch.setattr(tool_setup, "pin_python_scanners", pin)
+    monkeypatch.setattr(tool_setup, "provision_batch", batch)
+    monkeypatch.setattr(tool_setup, "SCANNER_VERSIONS", {"ruff": "9.9.9"})
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check"])
+    command = ["uvx", "ruff@latest", "check", "src"]
+    group: Group = {"path": ".", "checks": [{"name": "lint", "command": command}]}
+    tool_setup.provision_tools(tmp_path, [group], 30)
+    assert pinned == ["ruff"]
+    assert tool_setup.managed_command(command) == ["uvx", "ruff==9.9.9", "check", "src"]
