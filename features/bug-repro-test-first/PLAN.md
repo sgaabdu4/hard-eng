@@ -28,6 +28,7 @@ Authority: User approved items 1–4 on 2026-10-09 and asked for a Codex adversa
 - [x] Safe-mode reviewer → `test_codex_host_runs_claude_with_read_only_tools` asserts `--safe-mode`; failed before the fix, passes after.
 - [x] Repeat below 1 refused → `test_a_run_that_would_test_nothing_is_refused[0|-1]` exits 2 naming `--repeat`; before the fix `main()` returned success with no runs.
 - [x] Codex answer before a closing line is graded → `test_a_codex_review_keeps_the_answer_before_its_closing_line` with a fake `codex` CLI emitting two messages; before the fix the report was only "Review complete."
+- [x] CI repair: a stop signal that lands after the update records its outcome no longer turns it into "update exited -15" → `test_a_stop_after_the_result_is_recorded_keeps_the_result` exits 1 before the fix, 0 after; CI had failed `test_interrupted_update_stops_every_process_and_records_failure[during-cleanup]` on this race (40 local reruns did not hit it).
 - [x] Full `check` passes; Codex adversarial review loop has no substantial findings.
 
 ## Baseline + execution

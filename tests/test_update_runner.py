@@ -306,6 +306,25 @@ def test_interrupted_update_stops_every_process_and_records_failure(
     assert not update_runner.update_running(installed)
 
 
+def test_a_stop_after_the_result_is_recorded_keeps_the_result(
+    installed: Path, tmp_path: Path
+) -> None:
+    script = tmp_path / "apply.py"
+    script.write_text(
+        "import os, signal, sys\n"
+        "from pathlib import Path\n"
+        f"sys.path.insert(0, {str(SOURCE / '.hooks')!r})\n"
+        "import update, update_runner\n"
+        "update.update = lambda root, repair=False, remember=False: None\n"
+        "code = update_runner.apply_update(Path.cwd())\n"
+        "os.kill(os.getpid(), signal.SIGTERM)\n"
+        "raise SystemExit(code)\n"
+    )
+    applied = subprocess.run([sys.executable, str(script)], cwd=installed, check=False)
+    assert applied.returncode == 0
+    assert "failed" not in update_runner.last_result(installed)
+
+
 def test_update_commit_is_not_counted_as_session_work(
     installed: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
