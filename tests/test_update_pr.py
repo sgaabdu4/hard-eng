@@ -119,9 +119,9 @@ def test_background_update_leaves_the_checkout_and_moves_one_branch(
     assert git(target, "rev-list", "--count", f"origin/main..{BRANCH}") == "1"
     assert first in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
     result = (target / update_runner.RESULT_FILE).read_text()
-    assert f"ready on branch {BRANCH}" in result
+    assert f"ready on {BRANCH}" in result
     assert "python3 .hooks/hard-eng.py update-pr" in result
-    assert "ready on branch" in update_runner.freshness_note(target)
+    assert f"ready on {BRANCH}" in update_runner.freshness_note(target)
     second = newer_release(source, monkeypatch, "second update")
     assert update_runner.apply_update(target) == 0
     assert git(target, "branch", "--list", "hard-eng/*").split() == [BRANCH]
