@@ -84,7 +84,17 @@ def with_entry_points(command: list[str], directory: Path) -> list[str]:
     return [*command, "--ignore-names", ",".join(names)]
 
 
+def uvx_scanner(command: list[str]) -> list[str]:
+    """A configured `uvx ruff@latest …` gate runs like `ruff …`, so it is pinned too."""
+    tool = command[1] if len(command) > 1 and command[0] == "uvx" else ""
+    name = tool.removesuffix("@latest")
+    if tool.endswith("@latest") and name in MANAGED_PYTHON_SCANNERS:
+        return [name, *command[2:]]
+    return command
+
+
 def managed_command(command: list[str], directory: Path | None = None) -> list[str]:
+    command = uvx_scanner(command)
     if directory is not None:
         command = with_entry_points(
             managed_scanner_command(command, directory), directory
@@ -139,10 +149,12 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         "k6": "aqua:grafana/k6",
     }
     commands = [
-        package_script_invocation(
-            managed_scanner_command(gate["command"], root / group["path"]),
-            root / group["path"],
-        )[0]
+        uvx_scanner(
+            package_script_invocation(
+                managed_scanner_command(gate["command"], root / group["path"]),
+                root / group["path"],
+            )[0]
+        )
         for group in groups
         for gate in group["checks"]
     ]
