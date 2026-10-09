@@ -93,6 +93,7 @@ READ_ONLY_ROLES = (
         "dependencies",
         "types-lint",
         "react",
+        "shipped-format",
     }
 )
 
