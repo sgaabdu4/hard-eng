@@ -879,6 +879,7 @@ def apply_update(root: Path) -> int:
         outcome = prepare_update(root)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         outcome = failed_update(error)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
     record_result(root, outcome)
     return 0
 
