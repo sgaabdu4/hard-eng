@@ -708,36 +708,6 @@ def plan_base(base: str | None, plan_stage: str | None) -> str | None:
     return point
 
 
-QUICK_ROLES = frozenset(
-    {
-        "format",
-        "lint",
-        "format-lint",
-        "types",
-        "annotations",
-        "typing-style",
-        "imports",
-        "tests",
-        "focused-tests",
-        "secrets-files",
-    }
-)
-
-
-def quick_groups(groups: list[Group], quick: bool = True) -> list[Group]:
-    if not quick:
-        return groups
-    return [
-        {
-            **group,
-            "checks": [
-                gate for gate in group["checks"] if gate.get("role") in QUICK_ROLES
-            ],
-        }
-        for group in groups
-    ]
-
-
 def check(
     timeout: float | None = None,
     base: str | None = None,
@@ -750,7 +720,7 @@ def check(
 ) -> int:
     from ci_setup import require_ci_base
     from gate_config import load_groups, parse_config
-    from reports import early_scan
+    from reports import early_scan, quick_groups
     from shipping import gate_budget
 
     require_ci_base(base)
@@ -821,6 +791,11 @@ def impact(base: str) -> int:
     from gate_config import affected_groups, parse_config
 
     require_ci_base(base)
+    with redirect_stdout(sys.stderr):
+        proven = proven_elsewhere(base)
+    if proven:
+        print("docs_only=true")
+        return 0
     config = parse_config((ROOT / "hard-eng.gates.json").read_text())
     groups: list[Group] = [
         *config["packages"],
