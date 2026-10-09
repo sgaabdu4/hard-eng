@@ -60,16 +60,25 @@ def test_hook_registrations_invoke_shared_runner(
             {},
             {
                 "advisorModel": "fable",
+                "outputStyle": "Plain STE",
                 "attribution": {"commit": "", "pr": "", "sessionUrl": False},
             },
         ),
         (
-            {"advisorModel": "opus", "attribution": {"pr": "By the team"}},
-            {"advisorModel": "opus", "attribution": {"pr": "By the team"}},
+            {
+                "advisorModel": "opus",
+                "outputStyle": "Concise",
+                "attribution": {"pr": "By the team"},
+            },
+            {
+                "advisorModel": "opus",
+                "outputStyle": "Concise",
+                "attribution": {"pr": "By the team"},
+            },
         ),
     ],
 )
-def test_claude_settings_default_fable_advisor_and_no_attribution(
+def test_claude_settings_default_fable_advisor_plain_style_and_no_attribution(
     installer: ModuleType,
     repository: Path,
     project: dict[str, object],
@@ -82,6 +91,9 @@ def test_claude_settings_default_fable_advisor_and_no_attribution(
     installer.install(root)
     current = json.loads(settings.read_text())
     assert {key: current[key] for key in expected} == expected
+    style = (root / ".claude/output-styles/plain-ste.md").read_text()
+    assert "\nname: Plain STE\n" in style
+    assert "\nkeep-coding-instructions: true\n" in style
 
 
 @pytest.mark.parametrize(
