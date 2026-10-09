@@ -292,6 +292,7 @@ def test_configured_uvx_scanners_are_pinned_like_bare_ones(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import tool_setup
+    from gate_config import Group
 
     pinned: list[str] = []
 
