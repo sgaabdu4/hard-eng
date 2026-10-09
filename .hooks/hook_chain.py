@@ -39,7 +39,7 @@ LAUNCHERS = {
     HUSKY_CHAINED_LAUNCHER,
 }
 KEPT = "Kept your existing pre-push hook; it runs before Hard Eng's checks. Compare its checks with Hard Eng's (he references: adopting existing checks)."
-RESTORE = "Hard Eng's pre-push hook is missing or was replaced (another tool may have reinstalled its own), so pushes are not checked. Rerun setup to restore it: curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh"
+RESTORE = "Hard Eng pre-push hook missing or replaced (maybe by another tool) → pushes unchecked. Rerun setup to restore: curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh"
 
 
 def locate(root: Path) -> tuple[Path, Path]:
