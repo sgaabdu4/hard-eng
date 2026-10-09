@@ -490,6 +490,10 @@ def session_context(root: Path, payload: JsonObject) -> str:
     if note := restore_note(root):
         messages.append(note)
     messages.append(gate_status(root))
+    messages.append(
+        "Open the task's skill first: he-plan, he-build, he-ship or code-review. "
+        "Checks failing before your edits: repair them first; the feature waits."
+    )
     if not recorded:
         messages.append("Session revision unavailable → full checks.")
     messages.append(
