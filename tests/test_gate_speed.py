@@ -29,14 +29,15 @@ def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
 def test_scans_start_beside_a_serial_suite_listed_before_them(
     runner: ModuleType, tmp_path: Path
 ) -> None:
-    suite = gate(
-        "suite",
+    wait = (
         "from pathlib import Path;import time;end = time.monotonic() + 10\n"
-        "while not Path('scanned').exists(): assert time.monotonic() < end; time.sleep(0.02)",
+        "Path('{mine}').touch()\n"
+        "while not Path('{other}').exists(): assert time.monotonic() < end; time.sleep(0.02)"
     )
+    suite = gate("suite", wait.format(mine="suite-running", other="scan-running"))
     scan = gate(
         "scan",
-        "from pathlib import Path;Path('scanned').touch()",
+        wait.format(mine="scan-running", other="suite-running"),
         role="shell",
         parallel=True,
     )
