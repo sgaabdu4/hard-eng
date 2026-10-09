@@ -45,13 +45,13 @@ def update_blocker(root: Path) -> str | None:
 
     marker = root / SOURCE_FILE
     if not marker.exists():
-        return "Automatic update unavailable: this checkout has no installed source revision."
+        return "Auto-update unavailable: no installed source revision."
     metadata = json.loads(marker.read_text())
     if not isinstance(metadata, dict):
         raise TypeError("Installed source metadata must be an object")
     previous = metadata.get("revision")
     if not isinstance(previous, str) or not re.fullmatch(r"[0-9a-f]{40}", previous):
-        return "Installed from an uncommitted working copy; publish a verified source revision before automatic updates."
+        return "Installed from an uncommitted copy; publish a verified revision to enable auto-updates."
     return None
 
 
@@ -126,9 +126,8 @@ def ready_revision(root: Path) -> str | None:
 
 def ready_message(revision: str) -> str:
     return (
-        f"Hard Eng update {revision} is ready on branch {UPDATE_BRANCH}; publish it with "
-        f"`{UPDATE_COMMAND}`. Its PR is allowed beside the task's PR and merges "
-        "once its checks pass."
+        f"Hard Eng update {revision} ready on {UPDATE_BRANCH} → `{UPDATE_COMMAND}` "
+        "(own PR beside the task's; merges on green)."
     )
 
 
@@ -142,18 +141,18 @@ def freshness_note(root: Path) -> str:
         if (blocker := update_blocker(root)) is not None:
             return blocker
         if update_running(root):
-            return f"Hard Eng update is still running in the background ({LOG_FILE}); the scaffold may be out of date."
+            return f"Hard Eng update still running ({LOG_FILE}); scaffold may be stale."
         if (ready := ready_revision(root)) is not None:
             return ready_message(ready)
         result = last_result(root)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
-        return f"Hard Eng freshness is unknown: {error}."
+        return f"Hard Eng freshness unknown: {error}."
     if NOT_PUBLISHED in result:
         return NOT_PUBLISHED
     if result == "none recorded yet":
-        return "Hard Eng freshness is unknown: no update result is recorded yet."
+        return "Hard Eng freshness unknown: no update result yet."
     if "failed" in result:
-        return f"The scaffold may be out of date. Last Hard Eng update result: {result}"
+        return f"Scaffold may be stale. Last Hard Eng update: {result}"
     return ""
 
 
@@ -679,8 +678,8 @@ def remember_failure(root: Path, attempt: str, error: Exception) -> None:
 
 def failed_update(error: Exception | str) -> str:
     return (
-        f"Hard Eng update failed: {error}. Before other repository work, repair its cause as its own "
-        "commit; report a cause outside this repository to the user. The installed scaffold's gates remain required."
+        f"Hard Eng update failed: {error}. Fix its cause first as its own commit; "
+        "cause outside repo → tell user. Installed gates still apply."
     )
 
 
@@ -959,7 +958,7 @@ def start_update(root: Path) -> str:
     if (blocker := update_blocker(root)) is not None:
         return "Hard Eng update result: " + blocker
     if update_running(root):
-        status = "A Hard Eng update is already running in the background"
+        status = "Hard Eng update already running in the background"
     else:
         log = root / LOG_FILE
         log.parent.mkdir(parents=True, exist_ok=True)
@@ -974,9 +973,8 @@ def start_update(root: Path) -> str:
             )
         status = "Hard Eng update started in the background"
     return (
-        f"{status} ({LOG_FILE}); this session keeps the installed scaffold and its gates until "
-        "it finishes, and the next session start reports its result. Do not run setup meanwhile. "
-        f"Last update result: {last_result(root)}"
+        f"{status} ({LOG_FILE}); installed gates apply; next start reports it; no setup meanwhile. "
+        f"Last: {last_result(root)}"
     )
 
 

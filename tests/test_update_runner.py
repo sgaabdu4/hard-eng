@@ -74,10 +74,10 @@ def test_start_detaches_worker_without_inherited_pipes(
     assert arguments == [str(SOURCE / ".hooks/hard-eng.py"), "update"]
     assert (installed / update_runner.LOG_FILE).read_text() == "worker output\n"
     assert message.startswith("Hard Eng update started in the background")
-    assert message.endswith("Last update result: none recorded yet")
+    assert message.endswith("Last: none recorded yet")
     (installed / update_runner.RESULT_FILE).write_text("earlier: Updated Hard Eng\n")
     assert update_runner.start_update(installed).endswith(
-        "Last update result: earlier: Updated Hard Eng"
+        "Last: earlier: Updated Hard Eng"
     )
 
 
@@ -91,7 +91,7 @@ def test_running_update_is_reported_not_duplicated(
         assert update_runner.run_update(installed) == 0
         with pytest.raises(update_runner.UpdateRunning):
             update_runner.locked_update(installed, repair=True)
-    assert message.startswith("A Hard Eng update is already running")
+    assert message.startswith("Hard Eng update already running")
     assert not (installed / update_runner.LOG_FILE).exists()
     assert not spawned.exists()
     installer.assert_not_called()
@@ -142,8 +142,7 @@ def test_unavailable_update_is_reported_without_a_worker(
     assert not (repository / update_runner.LOG_FILE).exists()
     assert not spawned.exists()
     assert message == (
-        "Hard Eng update result: Automatic update unavailable: "
-        "this checkout has no installed source revision."
+        "Hard Eng update result: Auto-update unavailable: no installed source revision."
     )
 
 
@@ -330,7 +329,7 @@ def test_update_commit_is_not_counted_as_session_work(
     assert json.loads(other.read_text())["base"] == "c" * 40
     assert agent_hooks.completion(installed, after)["decision"] == "block"
     git(installed, "reset", "-q", "--hard", "HEAD^")
-    assert "no code checks were run" in str(agent_hooks.completion(installed, before))
+    assert "no code checks run" in str(agent_hooks.completion(installed, before))
     os.remove(installed / ".hooks/update.py")
     assert agent_hooks.completion(installed, before)["decision"] == "block"
 
