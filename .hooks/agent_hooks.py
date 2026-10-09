@@ -739,8 +739,12 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         building = not SHIP_CLAIM.search(claim) and build_in_progress(
             root, set(changed.splitlines())
         )
-        verified: JsonObject = {"base": base, "files": dict(current)}
-        if not building and last_pass(state) == verified:
+        verified: JsonObject = {
+            "base": base,
+            "files": dict(current),
+            "building": building,
+        }
+        if last_pass(state) == verified:
             return with_freshness(
                 root,
                 {
@@ -750,8 +754,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         returncode, output = run_check(root, base, building)
         decisions = show_decisions(root, changed.splitlines(), state)
         if returncode == 0:
-            if not building:
-                remember_pass(state, verified)
+            remember_pass(state, verified)
             if decisions:
                 return {"decision": "block", "reason": decisions.strip()}
             return with_freshness(root, passed_notice(building, notice, agent, output))
