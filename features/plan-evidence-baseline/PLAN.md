@@ -42,8 +42,9 @@ N/A — check behaviour; no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: Both tests above fail without the `packages_for` change (the capture selected a package; the failing package check ran) and pass with it. Codex adversarial review (gpt-6-astra) round 1 found no code issues, only this section still Pending.
+Gate: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Complete` → exit 0 (1459 tests, 91.08% line coverage).
 E2E: N/A — command-line check behaviour proven through the runner in tests.
 
 Delivery target: Merge
