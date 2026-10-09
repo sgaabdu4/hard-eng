@@ -461,6 +461,22 @@ def test_parallel_checks_overlap_up_to_the_cpu_count(
     assert runner.check() == 0
 
 
+def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import shipping
+
+    monkeypatch.setattr(shipping, "GATE_FLOOR_SECONDS", 1)
+    configure(tmp_path, [gate("suite", "pass")])
+    assert runner.check(timeout=120) == 0
+    times = json.loads((tmp_path / ".git/hard-eng-gate-times.json").read_text())
+    assert set(times) == {"./suite"}
+    configure(tmp_path, [gate("suite", "import time; time.sleep(60)")])
+    started = time.monotonic()
+    assert runner.check(timeout=120) == 1
+    assert time.monotonic() - started < 30
+
+
 def test_scans_start_beside_a_serial_suite_listed_before_them(
     runner: ModuleType, tmp_path: Path
 ) -> None:
