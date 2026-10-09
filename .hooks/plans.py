@@ -32,19 +32,25 @@ def is_plan_path(path: Path) -> bool:
 CAPTURES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".mp4", ".mov", ".webm"}
 
 
-def planning_only(root: Path, names: set[str]) -> bool:
-    """Markdown and captures, such as screenshots, kept in a feature plan's folder."""
-    folders = {
+def plan_folders(root: Path) -> set[Path]:
+    return {
         path.parent.relative_to(root)
         for path in repository_files(root)
         if is_plan_path(path.relative_to(root))
     } - {Path(".")}
+
+
+def is_plan_capture(name: str, folders: set[Path]) -> bool:
+    return Path(name).suffix.lower() in CAPTURES and bool(
+        folders.intersection(Path(name).parents)
+    )
+
+
+def planning_only(root: Path, names: set[str]) -> bool:
+    """Markdown and captures, such as screenshots, kept in a feature plan's folder."""
+    folders = plan_folders(root)
     return all(
-        Path(name).suffix.lower() == ".md"
-        or (
-            Path(name).suffix.lower() in CAPTURES
-            and folders.intersection(Path(name).parents)
-        )
+        Path(name).suffix.lower() == ".md" or is_plan_capture(name, folders)
         for name in names
     )
 

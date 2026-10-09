@@ -577,9 +577,10 @@ def is_workflow(name: str) -> bool:
 def packages_for(
     root: Path, base: str, names: set[str], by_path: dict[str, Group]
 ) -> set[str] | str:
-    from plans import is_documentation
+    from plans import is_documentation, is_plan_capture, plan_folders
 
     inputs = {path: impact_inputs(group) for path, group in by_path.items()}
+    folders = plan_folders(root)
     selected: set[str] = set()
     for name in sorted(names):
         if runs_checks(root, base, name):
@@ -593,6 +594,7 @@ def packages_for(
         language = by_path[max(matches, key=len)].get("language") if matches else None
         if not consumers and (
             is_documentation(Path(name), language)
+            or is_plan_capture(name, folders)
             or name.startswith(".agents/")
             or is_workflow(name)
             or name in {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}
