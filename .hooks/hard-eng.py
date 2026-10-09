@@ -500,7 +500,11 @@ def run_gate(
     groups: list[Group] | None = None,
     related_base: str | None = None,
 ) -> bool:
+    from shipping import gate_limit, record_gate_time
+
     started = time.monotonic()
+    key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
+    timeout = gate_limit(ROOT, key, timeout)
     print(f"CHECK {group['path']}/{gate['name']}", flush=True)
     try:
         report_path = coverage_path = None
@@ -612,6 +616,8 @@ def run_gate(
             f" @ {group['path']}" + parallel_hint(result.returncode, tests, command),
             flush=True,
         )
+        if result.returncode == 0:
+            record_gate_time(ROOT, key, time.monotonic() - started)
         return result.returncode != 0
     except (
         ImportError,
@@ -642,16 +648,6 @@ def check_lock(root: Path) -> Generator[None]:
             print("Waiting for another Hard Eng check in this checkout", flush=True)
             fcntl.flock(lock, fcntl.LOCK_EX)
         yield
-
-
-def gate_timeout(root: Path) -> float:
-    """Each gate may use the whole configured budget: CI's in CI, pre-push's elsewhere."""
-    from shipping import load_policy
-
-    policy = load_policy(root, required=False)
-    if policy is None:
-        return 600
-    return policy["ci_seconds" if os.environ.get("CI") else "pre_push_seconds"]
 
 
 def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path, ...]:
@@ -755,6 +751,7 @@ def check(
     from ci_setup import require_ci_base
     from gate_config import load_groups, parse_config
     from reports import early_scan
+    from shipping import gate_budget
 
     require_ci_base(base)
     parse_config((ROOT / "hard-eng.gates.json").read_text())
@@ -764,7 +761,7 @@ def check(
     with check_lock(ROOT):
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(groups, quick)
-        timeout = timeout or gate_timeout(ROOT)
+        timeout = timeout or gate_budget(ROOT)
         from comments import validate_comments, validate_suppressions
         from plans import report_stage, validate_decisions, validate_plans
 
