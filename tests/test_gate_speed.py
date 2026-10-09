@@ -29,8 +29,18 @@ def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
     assert time.monotonic() - started < 30
 
 
+PERFORMANCE = gate(
+    "performance",
+    "from pathlib import Path\n"
+    "Path('perf.xml').write_text('<testsuite tests=\"1\"><testcase name=\"t\"/></testsuite>')",
+    role="performance",
+    report={"type": "performance-junit", "path": "perf.xml"},
+)
+
+
+@pytest.mark.parametrize("first", [[], [PERFORMANCE]])
 def test_scans_start_beside_a_serial_suite_listed_before_them(
-    runner: ModuleType, tmp_path: Path
+    runner: ModuleType, tmp_path: Path, first: list[dict[str, object]]
 ) -> None:
     wait = (
         "from pathlib import Path;import time;end = time.monotonic() + 10\n"
@@ -48,7 +58,7 @@ def test_scans_start_beside_a_serial_suite_listed_before_them(
         role="shell",
         parallel=True,
     )
-    configure(tmp_path, [suite, scan])
+    configure(tmp_path, [*first, suite, scan])
     assert runner.check() == 0
 
 
