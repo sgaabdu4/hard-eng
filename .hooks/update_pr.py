@@ -196,10 +196,16 @@ def git_lines(root: Path, *args: str) -> list[str] | None:
 def replaceable_remote(root: Path, base: str) -> str | None:
     """The remote update tip to lease against, or None after refusing to overwrite someone's fix."""
     tracking = f"+refs/heads/{UPDATE_BRANCH}:refs/remotes/origin/{UPDATE_BRANCH}"
-    subprocess.run(
+    fetched = subprocess.run(
         ["git", "fetch", "--quiet", "origin", tracking], cwd=root, check=False
     )
     remote = f"refs/remotes/origin/{UPDATE_BRANCH}"
+    if (
+        fetched.returncode
+        and git_lines(root, "ls-remote", "--heads", "origin", UPDATE_BRANCH) == []
+    ):
+        git_lines(root, "update-ref", "-d", remote)
+        return ""
     tip = git_lines(root, "rev-parse", "--verify", "--quiet", remote)
     if not tip:
         return ""
