@@ -760,6 +760,7 @@ def check(
 
         failed = False
         pending: set[Future[bool]] = set()
+        scans: set[Future[bool]] = set()
         checks = [(group, gate) for group in groups for gate in group["checks"]]
         lockfiles = [item for item in checks if item[1].get("role") == "lockfiles"]
         ordered = lockfiles + sorted(
@@ -774,11 +775,11 @@ def check(
                         done, pending = wait(pending, return_when=FIRST_COMPLETED)
                         for future in done:
                             failed |= future.result()
-                    pending.add(
-                        pool.submit(
-                            run_gate, group, gate, timeout, output_lock, groups, related
-                        )
+                    future = pool.submit(
+                        run_gate, group, gate, timeout, output_lock, groups, related
                     )
+                    # Serial suites wait for other gates, not for read-only scans.
+                    (scans if early_scan(gate) else pending).add(future)
                 else:
                     for future in pending:
                         failed |= future.result()
@@ -791,7 +792,7 @@ def check(
                         print("Dependency setup failed; remaining checks were not run.")
                         report_stage(True, plan_stage)
                         return 1
-            for future in pending:
+            for future in pending | scans:
                 failed |= future.result()
         report_stage(failed, plan_stage)
         return int(failed)
