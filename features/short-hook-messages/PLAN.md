@@ -1,6 +1,6 @@
 # Short hook messages
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -18,11 +18,11 @@ Authority: User 2026-10-09: "ok, do it" for the override line + "have all our ho
 
 ## Acceptance + steps
 
-- [ ] Claude session in a root with `AGENTS.override.md` gets a read-it line; Codex session does not; no override → no line → `tests/test_agent_hooks.py` override test.
-- [ ] Session, failure and stop fixed text shorter for both agents, same JSON shape → hook output before/after measured in Verification; existing hook tests updated and passing.
-- [ ] Parse-dependent prefixes above unchanged → existing update/completion tests pass.
-- [ ] `AGENTS.md` carries the ASD-STE100 report rule with no Claude token increase → `claude -p` usage on 10 copies old vs new.
-- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
+- [x] Claude session in a root with `AGENTS.override.md` gets a read-it line; Codex session does not; no override → no line → `tests/test_agent_hooks.py` override test.
+- [x] Session, failure and stop fixed text shorter for both agents, same JSON shape → hook output before/after measured in Verification; existing hook tests updated and passing.
+- [x] Parse-dependent prefixes above unchanged → existing update/completion tests pass.
+- [x] `AGENTS.md` carries the ASD-STE100 report rule with no Claude token increase → `claude -p` usage on 10 copies old vs new.
+- [x] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
 ## Baseline + execution
 
@@ -40,8 +40,8 @@ N/A — no visual surface; hook text only.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: `hard-eng.py session|failure|stop <agent>` run in this repo before/after, additionalContext chars: session 673 → 314 (Codex) / 360 (Claude, + override line), failure 278 → 105, unchanged stop systemMessage 77 → 50. Claude `claude -p --model haiku` input tokens, 10 copies: session + failure text 325 → 168 tokens each; AGENTS.md 14 tokens smaller each. Codex `codex exec --json`, 7 copies (under its doc size cap): AGENTS.md 10 tokens smaller each. Hook tests 157 passed; first Ready gate failed format + 2 stale message tests, each fixed in its own commit.
 E2E: N/A — hook JSON output to agent CLIs; proof is hook runs for both agents plus tests and the gate.
 
 Delivery target: Merge
