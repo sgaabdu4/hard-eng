@@ -43,6 +43,7 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
         "claude",
         "--print",
         prompt,
+        "--safe-mode",
         "--tools",
         "Read,Grep,Glob,Bash",
         "--allowedTools",
