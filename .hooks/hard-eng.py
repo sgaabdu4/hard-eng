@@ -500,11 +500,27 @@ def run_gate(
     groups: list[Group] | None = None,
     related_base: str | None = None,
 ) -> bool:
+    """Run a gate under its own limit and record how long a pass took."""
     from shipping import gate_limit, record_gate_time
 
-    started = time.monotonic()
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
-    timeout = gate_limit(ROOT, key, timeout)
+    started = time.monotonic()
+    limit = gate_limit(ROOT, key, timeout)
+    failed = run_limited_gate(group, gate, limit, output_lock, groups, related_base)
+    if not failed:
+        record_gate_time(ROOT, key, time.monotonic() - started)
+    return failed
+
+
+def run_limited_gate(
+    group: Group,
+    gate: Gate,
+    timeout: float,
+    output_lock: AbstractContextManager[object],
+    groups: list[Group] | None = None,
+    related_base: str | None = None,
+) -> bool:
+    started = time.monotonic()
     print(f"CHECK {group['path']}/{gate['name']}", flush=True)
     try:
         report_path = coverage_path = None
@@ -616,8 +632,6 @@ def run_gate(
             f" @ {group['path']}" + parallel_hint(result.returncode, tests, command),
             flush=True,
         )
-        if result.returncode == 0:
-            record_gate_time(ROOT, key, time.monotonic() - started)
         return result.returncode != 0
     except (
         ImportError,

@@ -42,15 +42,21 @@ def test_unchanged_turn_during_a_build_reuses_the_pass_for_that_stage(
 ) -> None:
     import plans
 
+    def building(*_: object) -> bool:
+        return True
+
+    def finished(*_: object) -> bool:
+        return False
+
     runs = install_check(repository, "raise SystemExit(0)\n")
-    monkeypatch.setattr(plans, "build_in_progress", lambda *_: True)
+    monkeypatch.setattr(plans, "build_in_progress", building)
     payload: JsonObject = {"session_id": "known"}
     assert agent_hooks.record_session(repository, payload)
     (repository / "work.py").write_text("value = 1\n")
     assert "build in progress" in str(agent_hooks.completion(repository, payload))
     assert "not rerun" in str(agent_hooks.completion(repository, payload))
     assert runs.read_text().count("run") == 1
-    monkeypatch.setattr(plans, "build_in_progress", lambda *_: False)
+    monkeypatch.setattr(plans, "build_in_progress", finished)
     assert "not rerun" not in str(agent_hooks.completion(repository, payload))
     assert runs.read_text().count("run") == 2
 
