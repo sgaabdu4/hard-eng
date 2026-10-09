@@ -267,7 +267,7 @@ def refuse_network(monkeypatch: pytest.MonkeyPatch) -> None:
     ("result", "note"),
     [
         ("earlier: Hard Eng update failed: fixture cause\n", "fixture cause"),
-        (None, "freshness is unknown"),
+        (None, "freshness unknown"),
         ("earlier: Updated Hard Eng to " + "b" * 40 + "\n", ""),
     ],
 )
@@ -319,7 +319,7 @@ def test_unchanged_session_does_not_claim_checks_passed(repository: Path) -> Non
     (repository / ".git/info/exclude").write_text(".hard-eng/\n")
     payload: JsonObject = {"session_id": "known"}
     agent_hooks.session_context(repository, payload)
-    assert "no code checks were run" in str(agent_hooks.completion(repository, payload))
+    assert "no code checks run" in str(agent_hooks.completion(repository, payload))
 
 
 def test_work_from_before_the_session_is_not_session_work(repository: Path) -> None:
@@ -331,7 +331,7 @@ def test_work_from_before_the_session_is_not_session_work(repository: Path) -> N
     (repository / "draft café.py").write_text("print('draft')\n")
     payload: JsonObject = {"session_id": "known"}
     agent_hooks.session_context(repository, payload)
-    assert "no code checks were run" in str(agent_hooks.completion(repository, payload))
+    assert "no code checks run" in str(agent_hooks.completion(repository, payload))
     (repository / "draft café.py").write_text("print('session edit')\n")
     assert agent_hooks.completion(repository, payload)["decision"] == "block"
 
@@ -409,7 +409,7 @@ def test_stop_retry_allows_honest_blocker_without_rerunning(repository: Path) ->
     (repository / "change.txt").write_text("changed")
     response = agent_hooks.completion(repository, {"stop_hook_active": True})
     assert "decision" not in response
-    assert "Do not claim a pass" in str(response)
+    assert "don't claim a pass" in str(response)
 
 
 def test_string_false_cannot_activate_stop_retry_guard(repository: Path) -> None:
@@ -463,8 +463,29 @@ def test_session_reports_update_status_without_running_update(
         context.splitlines()[:2]
     )
     assert "Gates: not runnable" in output["systemMessage"]
-    assert "Use configured MCPs" not in output["systemMessage"]
+    assert "MCPs:" not in output["systemMessage"]
     assert (repository / ".hard-eng/sessions/startup.json").exists()
+
+
+@pytest.mark.parametrize("agent", ["claude", "codex"])
+@pytest.mark.parametrize("override", [False, True])
+def test_only_claude_is_told_to_read_override(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    agent: str,
+    override: bool,
+) -> None:
+    if override:
+        (repository / "AGENTS.override.md").write_text("# Local\n")
+    monkeypatch.setattr(update_runner, "start_update", Mock(return_value="status"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"session_id":"override"}'))
+    assert agent_hooks.handle_event(repository, "session", agent) == 0
+    context = json.loads(capsys.readouterr().out)["hookSpecificOutput"][
+        "additionalContext"
+    ]
+    told = "AGENTS.override.md exists → read + follow it." in context
+    assert told == (override and agent == "claude")
 
 
 def test_session_states_whether_gates_can_run(repository: Path) -> None:
@@ -477,8 +498,8 @@ def test_session_states_whether_gates_can_run(repository: Path) -> None:
         '{"families": {"lint": ["ruff", "check"]}}'
     )
     pending = (
-        " Uncommitted Hard Eng paths stop updates and are missing from new "
-        "worktrees; commit them: .hooks/ hard-eng.gates.json"
+        " Uncommitted Hard Eng paths block updates + new worktrees; commit: "
+        ".hooks/ hard-eng.gates.json"
     )
     status = agent_hooks.gate_status(repository)
     assert "rerun the Hard Eng installer" in status and status.endswith(pending)
@@ -491,12 +512,12 @@ def test_session_states_whether_gates_can_run(repository: Path) -> None:
         )
     )
     commit(repository, "commit installed files")
-    assert agent_hooks.gate_status(repository) == "Gates: configuration valid."
+    assert agent_hooks.gate_status(repository) == "Gates: ok."
     (repository / update.SOURCE_FILE).write_text('{"edited": true}\n')
     git(repository, "add", update.SOURCE_FILE)
     assert agent_hooks.gate_status(repository) == (
-        "Gates: configuration valid. Uncommitted Hard Eng paths stop updates and are "
-        "missing from new worktrees; commit them: .hooks/"
+        "Gates: ok. Uncommitted Hard Eng paths block updates + new worktrees; "
+        "commit: .hooks/"
     )
 
 
@@ -604,10 +625,10 @@ def test_session_defers_integration_readiness_until_relevant_use(
     monkeypatch.setattr(agent_hooks, "integrated_services", scan)
     message = agent_hooks.session_context(repository, {})
     scan.assert_not_called()
-    assert "when relevant to the task" in message
+    assert "use when relevant" in message
     assert "verify a real call" in message
-    assert "warn and continue" in message
-    assert "registration alone is not readiness" in message
+    assert "warn + continue" in message
+    assert "registration ≠ ready" in message
 
 
 def assert_rerun_keeps_written_hooks(

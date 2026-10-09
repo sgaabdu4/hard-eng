@@ -204,4 +204,4 @@ def test_unchanged_draft_session_gets_a_freshness_note_without_blocking(
     response = agent_hooks.completion(repository, payload, "codex")
     assert response.get("decision") != "block"
     assert "approval handoff prepared" in str(response["systemMessage"])
-    assert "freshness is unknown" in str(response["systemMessage"])
+    assert "freshness unknown" in str(response["systemMessage"])

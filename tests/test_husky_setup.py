@@ -102,7 +102,7 @@ def test_shell_bootstrap_installs_verified_main(
         f"{update_runner.UPDATE_BRANCH}:{update.SOURCE_FILE}" if installed else None
     )
     if installed and marker:
-        assert f"update {revision} is ready on branch" in result.stdout
+        assert f"update {revision} ready on" in result.stdout
         assert (target / "project.txt").read_text() == "preserved local work\n"
         metadata = json.loads(git(target, "show", marker))
         assert (target / ".github/workflows/hard-eng.yml").is_file()
