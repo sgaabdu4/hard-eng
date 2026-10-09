@@ -211,6 +211,10 @@ def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
         [edit, BASELINE],
         [shell_edit, BASELINE, Action("command", "git status 2>&1", True)],
         [edit, limited],
+        [
+            edit,
+            limited._replace(detail=limited.detail[:-1] + ' > "$TMPDIR/he.log" 2>&1"'),
+        ],
     ):
         assert missing not in " ".join(judge_continue(Run(root, base, "", [], actions)))
     (tmp_path / "baseline").mkdir()
