@@ -261,3 +261,28 @@ def test_quick_check_runs_python_scanners_from_the_cache(
         "--offline",
         "ruff@latest",
     ]
+
+
+def test_parallel_scanners_run_the_version_found_once_before_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    calls = tmp_path / "calls.txt"
+    uvx = tmp_path / "bin/uvx"
+    uvx.parent.mkdir()
+    uvx.write_text(
+        "#!/bin/sh\n"
+        f'echo "$*" >> {calls}\n'
+        'for a in "$@"; do case "$a" in *@latest) echo "${a%@latest} 9.9.9";; esac; done\n'
+    )
+    uvx.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{uvx.parent}:{os.environ['PATH']}")
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check"])
+    monkeypatch.setattr(tool_setup, "SCANNER_VERSIONS", {})
+    tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
+    assert calls.read_text().splitlines() == [
+        "ruff@latest --version",
+        "semgrep@latest --version",
+    ]
+    assert tool_setup.managed_command(["ruff", "check"])[:2] == ["uvx", "ruff==9.9.9"]
