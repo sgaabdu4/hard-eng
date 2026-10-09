@@ -168,3 +168,22 @@ def test_performance_still_follows_a_parallel_build() -> None:
     group: Group = {"path": ".", "checks": []}
     order = gate_order([(group, build), (group, performance)])
     assert [gate["name"] for _, gate in order] == ["build", "perf"]
+
+
+def test_scans_wait_for_a_parallel_generator_still_running(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    generator = gate(
+        "generate",
+        "from pathlib import Path;import time;time.sleep(1);Path('generated').touch()",
+        role="codegen",
+        parallel=True,
+    )
+    scan = gate(
+        "scan",
+        "from pathlib import Path;assert Path('generated').exists()",
+        role="shell",
+        parallel=True,
+    )
+    configure(tmp_path, [generator, scan])
+    assert runner.check() == 0
