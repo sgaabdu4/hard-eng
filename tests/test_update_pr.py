@@ -420,6 +420,20 @@ def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
     assert "not replaced" in capsys.readouterr().out
 
 
+def test_update_pr_recreates_the_update_branch_after_the_remote_deleted_it(
+    feature: tuple[Path, Path, Path], gh: FakeGh, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, remote = feature
+    apply_first_update(feature, monkeypatch)
+    assert publish(target, monkeypatch) == 0
+    git(remote, "branch", "-qD", BRANCH)
+    gh.pulls = []
+    newer_release(source, monkeypatch, "second update")
+    assert update_runner.apply_update(target) == 0
+    assert publish(target, monkeypatch) == 0
+    assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
+
+
 def other_checkout(target: Path, remote: Path) -> Path:
     other = target.parent / "other"
     git(target.parent, "clone", "-q", str(remote), str(other))
