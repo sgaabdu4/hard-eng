@@ -2,12 +2,15 @@
 
 import json
 import time
+from concurrent.futures import Future
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 from ci_setup import migrate_impact_token
 from conftest import SOURCE, commit, configure, gate, load_module
+from gate_config import Gate, Group
+from reports import scan_blockers
 
 
 def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
@@ -114,3 +117,15 @@ def test_impact_keeps_the_normal_path_when_the_reuse_probe_cannot_run(
     module.__dict__["proven_elsewhere"] = missing_uv
     assert module.impact("HEAD") == 0
     assert capsys.readouterr().out.startswith("docs_only=false\ntools=")
+
+
+def test_a_suite_waits_only_for_scans_its_cleanup_or_timing_could_disturb() -> None:
+    root, web = Future[bool](), Future[bool]()
+    scans = {root: ".", web: "web"}
+    javascript: Group = {"path": ".", "language": "javascript", "checks": []}
+    python: Group = {"path": ".", "language": "python", "checks": []}
+    tests: Gate = {"name": "tests", "role": "tests", "command": ["x"]}
+    performance: Gate = {"name": "performance", "role": "performance", "command": ["x"]}
+    assert scan_blockers(javascript, tests, scans) == {root}
+    assert scan_blockers(python, tests, scans) == set()
+    assert scan_blockers(python, performance, scans) == {root, web}

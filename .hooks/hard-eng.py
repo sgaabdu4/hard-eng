@@ -724,12 +724,12 @@ def plan_base(base: str | None, plan_stage: str | None) -> str | None:
 
 def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool | None:
     """Parallel gates share the CPUs; serial ones wait; None when dependency setup failed."""
-    from reports import early_scan
+    from reports import early_scan, scan_blockers
 
     output_lock = threading.Lock()
     failed = False
     pending: set[Future[bool]] = set()
-    scans: set[Future[bool]] = set()
+    scans: dict[Future[bool], str] = {}
     checks = [(group, gate) for group in groups for gate in group["checks"]]
     lockfiles = [item for item in checks if item[1].get("role") == "lockfiles"]
     ordered = lockfiles + sorted(
@@ -747,20 +747,23 @@ def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool 
                 future = pool.submit(
                     run_gate, group, gate, timeout, output_lock, groups, related
                 )
-                # Serial suites wait for other gates, not for read-only scans.
-                (scans if early_scan(gate) else pending).add(future)
+                if early_scan(gate):
+                    scans[future] = group["path"]
+                else:
+                    pending.add(future)
             else:
-                if gate.get("role") == "performance":
-                    pending |= scans
-                    scans.clear()
+                for future in scan_blockers(group, gate, scans):
+                    del scans[future]
+                    pending.add(future)
                 for future in pending:
                     failed |= future.result()
                 pending.clear()
                 result = run_gate(group, gate, timeout, output_lock, groups, related)
                 failed |= result
                 if result and gate.get("role") == "lockfiles":
+                    print("Dependency setup failed; remaining checks were not run.")
                     return None
-        for future in pending | scans:
+        for future in pending | set(scans):
             failed |= future.result()
     return failed
 
@@ -800,11 +803,7 @@ def check(
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
 
-        failed = run_gates(groups, timeout, related)
-        if failed is None:
-            print("Dependency setup failed; remaining checks were not run.")
-            report_stage(True, plan_stage)
-            return 1
+        failed = run_gates(groups, timeout, related) is not False
         report_stage(failed, plan_stage)
         return int(failed)
 
