@@ -204,9 +204,13 @@ def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
         assert missing in " ".join(judge_continue(Run(root, base, "", [], actions))), (
             actions
         )
+    limited = BASELINE._replace(
+        detail="/bin/bash -lc \"perl -e 'alarm shift; exec @ARGV' 900 python3 .hooks/hard-eng.py check\""
+    )
     for actions in (
         [edit, BASELINE],
         [shell_edit, BASELINE, Action("command", "git status 2>&1", True)],
+        [edit, limited],
     ):
         assert missing not in " ".join(judge_continue(Run(root, base, "", [], actions)))
     (tmp_path / "baseline").mkdir()
