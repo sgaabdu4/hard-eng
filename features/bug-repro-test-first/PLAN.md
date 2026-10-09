@@ -1,6 +1,6 @@
 # Test-first bug fixes, a clean Claude reviewer and two agent-runner fixes
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -28,12 +28,12 @@ Authority: User approved items 1–4 on 2026-10-09 and asked for a Codex adversa
 - [x] Safe-mode reviewer → `test_codex_host_runs_claude_with_read_only_tools` asserts `--safe-mode`; failed before the fix, passes after.
 - [x] Repeat below 1 refused → `test_a_run_that_would_test_nothing_is_refused[0|-1]` exits 2 naming `--repeat`; before the fix `main()` returned success with no runs.
 - [x] Codex answer before a closing line is graded → `test_a_codex_review_keeps_the_answer_before_its_closing_line` with a fake `codex` CLI emitting two messages; before the fix the report was only "Review complete."
-- [ ] Full `check` passes; Codex adversarial review loop has no substantial findings.
+- [x] Full `check` passes; Codex adversarial review loop has no substantial findings.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check --plan-stage Draft` on main 7199944 → exit 0: every gate PASS, 1459 tests, 91.08% line coverage.
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Draft` on 487b633 (main plus the plan-evidence-baseline commits, since merged) → exit 0: every gate PASS, 1459 tests, 91.08% line coverage.
 Execution: Single session. Each bug fix wrote its failing test first (red run: 4 failed for the expected reasons), then the fix (40 passed).
 
 ## Risks + recovery
@@ -46,8 +46,8 @@ N/A — agent instruction text and developer tooling, no visible interface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending full check and review loop.
+Result: Passed
+Evidence: Rebased on main be2d512. `python3 .hooks/hard-eng.py check --plan-stage Ready` → exit 0: every gate PASS, 1462 tests, 91.10% line coverage. Codex adversarial review on GPT-6 Astra, round 1: approve, no material findings.
 E2E: Passed — the real `challenge.command("claude", …)` argv with `--model haiku` against a scratch repository whose SessionStart hook touches a marker: without `--safe-mode` the marker appeared; with it the marker did not, `git log --oneline` still ran, and a Write attempt was refused (no file created). The Codex message fix is proved through `codex_run` with a fake CLI; no live paid Codex run.
 
 Delivery target: Merge
