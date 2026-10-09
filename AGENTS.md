@@ -3,7 +3,7 @@
 - `.hooks/hard-eng-source.json` exists → get this session's Hard Eng update status before any repo work, read-only too.
   - SessionStart reports last result + starts/reports a background update; verified → 1 commit on local `hard-eng/update` from remote base, current branch untouched.
   - No status → from repo root: `curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh` (prepares that branch).
-  - Prepared branch → `python3 .hooks/hard-eng.py update-pr` (pushes, opens/reuses "Update Hard Eng" PR, auto-merges after checks; no approval; merge denied → rerun with `--no-merge`, give user the merge command it prints once checks pass). Exempt from one-PR rules; failing → fix on own branch + worktree before other shipping.
+  - Prepared branch → `python3 .hooks/hard-eng.py update-pr` (opens/reuses its PR, auto-merges after checks; no approval; merge denied → rerun with `--no-merge`, give user the merge command it prints once checks pass). Exempt from one-PR rules; failing → fix on own branch + worktree before other shipping.
   - Report: updated / no newer verified release / running in background / failed (explicitly). No updater output = failed, even exit 0; marker/session file alone ≠ success.
   - Rerun setup only after failed or no status; never mid-update.
 - Before editing: state the single change, files touched + verification.
@@ -17,8 +17,8 @@
 - Tests: each proves a named required outcome or catches a specific meaningful failure; reuse first; no implementation mirrors/padding. Name outcomes + failure modes first; tests may follow code. Affected journeys need real E2E proof where applicable; keep focused tests adding coverage/speed/diagnosis. Deleting one → state what it protects + replacement proof or why unneeded; E2E overlap alone ≠ enough. [testing](.agents/skills/he/references/testing.md)
 - Verification: run applicable gates + prove affected behavior; never hide findings, weaken checks or claim unrun checks passed. Repair every reported finding in code, unrelated too, as its own commit before continuing; never baseline/tolerate/suppress. Gates stay required even when Hard Eng or its updater fails.
 - Before done: review the diff vs the latest request, remove unsupported additions + report remaining expansion. Passing tools/metrics never prove necessity or test quality.
-- Reuse settled approvals; ask only when missing info changes the result or an unapproved consequential action is needed.
-- Report concisely in plain English: actual changes, proof, gaps.
-- Setup prints `Gap:` (missing check/language) → file without asking: `python3 .hooks/hard-eng.py gap-issue "<missing check, generic>"` (dedupes, refuses project detail); never include project names, code, paths or data.
+- Reuse settled approvals; ask only if missing info changes the result or a consequential action lacks approval.
+- Report ~80% ASD-STE100: short active sentences, one idea each; changes, proof, gaps.
+- Setup prints `Gap:` (missing check/language) → file without asking: `python3 .hooks/hard-eng.py gap-issue "<missing check, generic>"`; never include project names, code, paths or data.
 - Reproduced fault in Hard Eng's own `.hooks/`, `.agents/skills/he*` or setup → tell user, check [issues](https://github.com/sgaabdu4/hard-eng/issues) for duplicates, then with approval file a terse one: Problem, Reproduction, installed revision, Suggestion; apply publication privacy.
 - Follow `.agents/skills/he/SKILL.md`; commands: `python3 .hooks/hard-eng.py --help`.
