@@ -125,6 +125,7 @@ def test_codex_host_runs_claude_with_read_only_tools(
     ran = json.loads(log.read_text())
     argv = ran["argv"]
     assert ran["stdin_is_null"]
+    assert "--safe-mode" in argv
     assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob,Bash"
     assert "Edit" not in " ".join(argv[argv.index("--allowedTools") + 1 :])
     record = json.loads(
