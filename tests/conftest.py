@@ -190,6 +190,7 @@ def release_template(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, st
             ),
         )
     shutil.copytree(SOURCE / ".claude/rules", source / ".claude/rules")
+    shutil.copytree(SOURCE / ".claude/output-styles", source / ".claude/output-styles")
     for name in (
         "setup.py",
         "setup.sh",

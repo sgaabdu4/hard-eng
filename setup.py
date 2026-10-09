@@ -156,6 +156,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
 
             retire_claude_integrations(current)
             current.setdefault("advisorModel", "fable")
+            current.setdefault("outputStyle", "Plain STE")
             current.setdefault(
                 "attribution", {"commit": "", "pr": "", "sessionUrl": False}
             )
