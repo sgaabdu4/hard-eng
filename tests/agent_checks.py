@@ -213,7 +213,7 @@ def result_text(content: object) -> str:
 
 
 WRITES = re.compile(
-    r"(?<![0-9&>=-])>>?\s*(?!&|/dev/null)[\w./'\"~$]|\bsed\s+(-\w+\s+)*-i|\bperl\s+-\w*i|\btee\b"
+    r"(?<![0-9&>=-])>>?\s*(?!&|/dev/null|[\"']?(?:\$TMPDIR|/tmp|/private/tmp)/|\S*\.log\b)[\w./'\"~$]|\bsed\s+(-\w+\s+)*-i|\bperl\s+-\w*i|\btee\b"
     r"|\b(mv|cp|rm|touch|truncate|patch|apply_patch)\b|write_(text|bytes)|open\([^)]*['\"][wax]"
     r"|\bgit\s+(apply|checkout|restore|stash|reset|am|cherry-pick|merge|rebase|mv|rm)\b"
 )
