@@ -1,6 +1,6 @@
 # Accept a project's own hooks when the update candidate path is a symlink
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
