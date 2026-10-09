@@ -37,6 +37,24 @@ def test_unchanged_turn_after_a_passing_check_does_not_rerun_it(
     assert runs.read_text().count("run") == 2
 
 
+def test_unchanged_turn_during_a_build_reuses_the_pass_for_that_stage(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import plans
+
+    runs = install_check(repository, "raise SystemExit(0)\n")
+    monkeypatch.setattr(plans, "build_in_progress", lambda *_: True)
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "work.py").write_text("value = 1\n")
+    assert "build in progress" in str(agent_hooks.completion(repository, payload))
+    assert "not rerun" in str(agent_hooks.completion(repository, payload))
+    assert runs.read_text().count("run") == 1
+    monkeypatch.setattr(plans, "build_in_progress", lambda *_: False)
+    assert "not rerun" not in str(agent_hooks.completion(repository, payload))
+    assert runs.read_text().count("run") == 2
+
+
 def test_failed_check_is_rerun_on_the_next_turn(repository: Path) -> None:
     runs = install_check(repository, "raise SystemExit(1)\n")
     payload: JsonObject = {"session_id": "known"}
