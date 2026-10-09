@@ -1,6 +1,6 @@
 # Faster checks without losing detection
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -26,7 +26,7 @@ Authority: The user approved group 1 of the push-speed proposal on 2026-10-09. S
 - [x] uv interpreter-cache race → not changed: seen once in CI, not reproduced locally, and no matching uv report found; a guessed fix without a failing test is not shipped. A CI rerun clears it.
 - [x] Guidance: one full check at the end of a build, not before each push; no CI polling when auto-merge is on → `he-build`, `he-ship`, `checks.md`, `gates.md`.
 - [x] Codex adversarial review (gpt-6-astra) loop. Round 1: performance suites overlapped scans → they now wait (`test_performance_suites_still_run_alone_after_early_scans`); impact crashed when the reuse probe lacked uv → falls back (`test_impact_keeps_the_normal_path_when_the_reuse_probe_cannot_run`). Round 2: JavaScript runners clear coverage/ while scans write there → they wait for same-folder scans (`test_a_suite_waits_only_for_scans_its_cleanup_or_timing_could_disturb`). Round 3: scans ran before a serial generator → scans start after the last producer (`test_scans_still_read_what_a_serial_generator_produced`). Round 4: a parallel generator could race scans → skipped: guidance requires ordering for generators, every installed generator is serial, and a parallel one already races other parallel gates.
-- [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
+- [x] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
 ## Baseline + execution
 
@@ -44,9 +44,10 @@ N/A — check runner, hook and guidance changes with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
-E2E: Required — a real check run shows the new gate order and per-gate limits; pending.
+Result: Passed
+Evidence: Full gate on `6259bf79`: 18 PASS, 1481 tests. Codex adversarial review round 5: approve, no material findings. Haiku 5.5 agent evals (all 8 cases, 3 runs, plus 5 more runs of the three noisiest cases), new against main `61546af8`: 21/39 against 20/39 passing. continue-approved 3/3 against 1/3; outside-service 1/3 against 0/3; routes-to-ship 5/8 against 5/8; routes-to-review 2/8 against 3/8; planning-only 7/8 against 8/8; failed-baseline 0/3 on both. Results under `coverage/agent-checks/20261009T1906*`, `T1911*`, `T1912*`.
+Gaps: Haiku often skips loading skills and fails the failed-baseline case on both versions; this change neither causes nor fixes that. The uv cache race is unreproduced. Per-gate limits depend on a recorded pass, so CI's fresh checkouts still use the whole budget.
+E2E: Passed — a real full check on this repository started performance first, then the scans, and the 19 s security scan finished while the 106 s test suite ran; `.git/hard-eng-gate-times.json` recorded every passing gate.
 
 Delivery target: Merge
 Delivery: Pending — PR CI and merge.
