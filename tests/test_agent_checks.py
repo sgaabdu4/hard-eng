@@ -1,5 +1,8 @@
 """The agent-case judges on controlled outcomes, without running an agent."""
 
+import json
+import os
+import sys
 from argparse import Namespace
 from collections.abc import Callable
 from pathlib import Path
@@ -17,6 +20,7 @@ from agent_checks import (
     Ungraded,
     claude_actions,
     codex_actions,
+    codex_run,
     fixture,
     judge_continue,
     judge_failed_baseline,
@@ -25,6 +29,7 @@ from agent_checks import (
     judge_review,
     loaded_skills,
     loads_skill,
+    main,
 )
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
@@ -358,3 +363,46 @@ def test_skill_routing_is_judged_from_the_skills_each_client_loaded(
     assert judge(Run(root, base, "", [], [codex[1]])) == [
         "never loaded the he-ship skill"
     ]
+
+
+def test_a_codex_review_keeps_the_answer_before_its_closing_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events = [
+        {"type": "thread.started", "thread_id": "t"},
+        {"type": "item.completed", "item": {"type": "agent_message", "text": CORRECT}},
+        {
+            "type": "item.completed",
+            "item": {"type": "agent_message", "text": "Review complete."},
+        },
+        {"type": "turn.completed"},
+    ]
+    codex = tmp_path / "bin/codex"
+    codex.parent.mkdir()
+    codex.write_text(
+        f"#!{sys.executable}\nimport sys\n"
+        "args = sys.argv\n"
+        "open(args[args.index('--output-last-message') + 1], 'w').write('Review complete.')\n"
+        f"print({'\n'.join(json.dumps(event) for event in events)!r})\n"
+    )
+    codex.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{codex.parent}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "user"))
+    (tmp_path / "project").mkdir()
+    (tmp_path / "evidence").mkdir()
+    options = Namespace(model="m", effort="high", timeout=60)
+    agent = codex_run(
+        tmp_path / "project", tmp_path / "evidence", options, "review", True
+    )
+    assert CORRECT in agent.message
+
+
+@pytest.mark.parametrize("count", ["0", "-1"])
+def test_a_run_that_would_test_nothing_is_refused(
+    count: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["agent_checks.py", "--repeat", count])
+    with pytest.raises(SystemExit) as refused:
+        main()
+    assert refused.value.code == 2
+    assert "--repeat" in capsys.readouterr().err

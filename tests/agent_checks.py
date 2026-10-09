@@ -723,10 +723,15 @@ def codex_run(
     thread = next((e.get("thread_id") for e in found if "thread_id" in e), None)
     settings = codex_settings(home, thread, evidence)
     settings["mcp_calls"] = mcp_calls(found)
-    message = evidence / "last-message.md"
     return Agent(
         any(event.get("type") == "turn.completed" for event in found),
-        message.read_text() if message.exists() else "",
+        "\n\n".join(
+            str(item.get("text"))
+            for event in found
+            if event.get("type") == "item.completed"
+            and isinstance(item := event.get("item"), dict)
+            and item.get("type") == "agent_message"
+        ),
         settings,
         [
             json.dumps(e)[:500]
@@ -923,6 +928,8 @@ def main() -> int:
         "--judge", action="store_true", help="grade diagnoses with the same client"
     )
     options = parser.parse_args()
+    if options.repeat < 1:
+        parser.error("--repeat must be at least 1")
     client = CLIENTS[options.client]
     options.model = options.model or client.model
     cases = [case for case in CASES if not options.case or case.name in options.case]
