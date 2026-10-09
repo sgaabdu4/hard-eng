@@ -55,12 +55,18 @@ def test_turn_end_waits_for_running_background_agents_before_checking(
     assert agent_hooks.record_session(repository, payload)
     (repository / "work.py").write_text("value = \n")
     for kind in ("subagent", "workflow", "teammate"):
-        waiting = {**payload, "background_tasks": [{"id": "1", "type": kind}]}
+        waiting: JsonObject = {
+            **payload,
+            "background_tasks": [{"id": "1", "type": kind}],
+        }
         result = agent_hooks.completion(repository, waiting)
         assert "decision" not in result
         assert "background" in str(result["systemMessage"])
     assert not runs.exists()
-    shell = {**payload, "background_tasks": [{"id": "2", "type": "shell"}]}
+    shell: JsonObject = {
+        **payload,
+        "background_tasks": [{"id": "2", "type": "shell"}],
+    }
     assert agent_hooks.completion(repository, shell)["decision"] == "block"
 
 
