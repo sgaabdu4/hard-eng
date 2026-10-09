@@ -47,6 +47,23 @@ def test_failed_check_is_rerun_on_the_next_turn(repository: Path) -> None:
     assert runs.read_text().count("run") == 2
 
 
+def test_turn_end_waits_for_running_background_agents_before_checking(
+    repository: Path,
+) -> None:
+    runs = install_check(repository, "raise SystemExit(1)\n")
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "work.py").write_text("value = \n")
+    for kind in ("subagent", "workflow", "teammate"):
+        waiting = {**payload, "background_tasks": [{"id": "1", "type": kind}]}
+        result = agent_hooks.completion(repository, waiting)
+        assert "decision" not in result
+        assert "background" in str(result["systemMessage"])
+    assert not runs.exists()
+    shell = {**payload, "background_tasks": [{"id": "2", "type": "shell"}]}
+    assert agent_hooks.completion(repository, shell)["decision"] == "block"
+
+
 def test_interrupted_stop_hook_stops_every_check_process(
     repository: Path, tmp_path: Path
 ) -> None:
