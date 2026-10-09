@@ -38,7 +38,9 @@ def test_scans_start_beside_a_serial_suite_listed_before_them(
         "while not Path('{other}').exists(): assert time.monotonic() < end; time.sleep(0.02)"
     )
     suite = gate(
-        "suite", wait.format(mine="suite-running", other="scan-running"), role="tests"
+        "suite",
+        wait.format(mine="suite-running", other="scan-running"),
+        role="complexity",
     )
     scan = gate(
         "scan",
