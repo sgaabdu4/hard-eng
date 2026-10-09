@@ -285,7 +285,7 @@ def test_parallel_scanners_run_the_version_found_once_before_them(
         "ruff@latest --version",
         "semgrep@latest --version",
     ]
-    assert tool_setup.managed_command(["ruff", "check"])[:2] == ["uvx", "ruff==9.9.9"]
+    assert tool_setup.managed_command(["ruff", "check"])[:2] == ["uvx", "ruff@9.9.9"]
 
 
 def test_configured_uvx_scanners_are_pinned_like_bare_ones(
@@ -311,4 +311,4 @@ def test_configured_uvx_scanners_are_pinned_like_bare_ones(
     group: Group = {"path": ".", "checks": [{"name": "lint", "command": command}]}
     tool_setup.provision_tools(tmp_path, [group], 30)
     assert pinned == ["ruff"]
-    assert tool_setup.managed_command(command) == ["uvx", "ruff==9.9.9", "check", "src"]
+    assert tool_setup.managed_command(command) == ["uvx", "ruff@9.9.9", "check", "src"]
