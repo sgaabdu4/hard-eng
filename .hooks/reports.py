@@ -46,6 +46,23 @@ def parallel_hint(code: int, tests: bool, command: list[str]) -> str:
     )
 
 
+SCAN_ROLES = frozenset(
+    {
+        "secrets-files",
+        "secrets-history",
+        "security",
+        "vulnerabilities",
+        "workflows",
+        "ci-security",
+        "shell",
+    }
+)
+
+
+def early_scan(gate: Gate) -> bool:
+    return gate.get("role") in SCAN_ROLES and gate.get("parallel", False) is True
+
+
 def related_test_flags(
     gate: Gate, groups: list[Group], directory: Path, base: str
 ) -> list[str]:
