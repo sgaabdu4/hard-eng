@@ -90,9 +90,7 @@ def test_performance_suites_still_run_alone_after_early_scans(
     assert runner.check() == 0
 
 
-def test_impact_takes_the_fast_path_when_the_change_is_already_proven(
-    repository: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def changed_project(repository: Path) -> ModuleType:
     (repository / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [{"path": ".", "checks": []}], "shared": []})
     )
@@ -100,6 +98,13 @@ def test_impact_takes_the_fast_path_when_the_change_is_already_proven(
     (repository / "app.py").write_text("change\n")
     module = load_module("impact_runner", SOURCE / ".hooks/hard-eng.py")
     module.__dict__["ROOT"] = repository
+    return module
+
+
+def test_impact_takes_the_fast_path_when_the_change_is_already_proven(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    module = changed_project(repository)
 
     def proven(base: str | None) -> bool:
         print(f"proven against {base}")
@@ -125,13 +130,7 @@ def test_old_impact_step_gains_the_token_its_reuse_lookup_needs() -> None:
 def test_impact_keeps_the_normal_path_when_the_reuse_probe_cannot_run(
     repository: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (repository / "hard-eng.gates.json").write_text(
-        json.dumps({"packages": [{"path": ".", "checks": []}], "shared": []})
-    )
-    commit(repository, "configure")
-    (repository / "app.py").write_text("change\n")
-    module = load_module("impact_runner", SOURCE / ".hooks/hard-eng.py")
-    module.__dict__["ROOT"] = repository
+    module = changed_project(repository)
 
     def missing_uv(base: str | None) -> bool:
         raise FileNotFoundError(f"uv is not installed yet for {base}")
