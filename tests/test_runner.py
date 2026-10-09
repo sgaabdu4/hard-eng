@@ -461,6 +461,24 @@ def test_parallel_checks_overlap_up_to_the_cpu_count(
     assert runner.check() == 0
 
 
+def test_scans_start_beside_a_serial_suite_listed_before_them(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    suite = gate(
+        "suite",
+        "from pathlib import Path;import time;end = time.monotonic() + 10\n"
+        "while not Path('scanned').exists(): assert time.monotonic() < end; time.sleep(0.02)",
+    )
+    scan = gate(
+        "scan",
+        "from pathlib import Path;Path('scanned').touch()",
+        role="shell",
+        parallel=True,
+    )
+    configure(tmp_path, [suite, scan])
+    assert runner.check() == 0
+
+
 @pytest.mark.parametrize("document", ["PRODUCT.md", "DESIGN.md"])
 @pytest.mark.parametrize("content", ["", "   \n", "# Title\n[TODO: fill]", "# Title\n"])
 def test_invalid_documents_prevent_commands(

@@ -754,6 +754,7 @@ def check(
 ) -> int:
     from ci_setup import require_ci_base
     from gate_config import load_groups, parse_config
+    from reports import early_scan
 
     require_ci_base(base)
     parse_config((ROOT / "hard-eng.gates.json").read_text())
@@ -779,8 +780,11 @@ def check(
         failed = False
         pending: set[Future[bool]] = set()
         checks = [(group, gate) for group in groups for gate in group["checks"]]
-        ordered = [item for item in checks if item[1].get("role") == "lockfiles"]
-        ordered += [item for item in checks if item[1].get("role") != "lockfiles"]
+        lockfiles = [item for item in checks if item[1].get("role") == "lockfiles"]
+        ordered = lockfiles + sorted(
+            (item for item in checks if item not in lockfiles),
+            key=lambda item: not early_scan(item[1]),
+        )
         workers = os.cpu_count() or 2
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for group, gate in ordered:
