@@ -398,6 +398,24 @@ def migrate_tool_cache(source: Path, content: str) -> str:
     return content.replace(old, template[start:end], 1)
 
 
+IMPACT_BASE = "          BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}\n"
+IMPACT_TOKEN = "          GH_TOKEN: ${{ github.token }}\n"
+
+
+def migrate_impact_token(content: str) -> str:
+    """Give the impact step the token it needs to find an already-proven change."""
+    start = content.find("        id: impact\n")
+    if start < 0:
+        return content
+    end = content.find("      - ", start)
+    end = len(content) if end < 0 else end
+    step = content[start:end]
+    if IMPACT_TOKEN in step or IMPACT_BASE not in step:
+        return content
+    step = step.replace(IMPACT_BASE, IMPACT_BASE + IMPACT_TOKEN, 1)
+    return content[:start] + step + content[end:]
+
+
 def drop_tool_cache(content: str) -> str:
     """Remove the generated tool cache; measured restores were no faster than installs."""
     start = content.find("      - name: Cache native tool downloads\n")
@@ -509,7 +527,7 @@ def configure_ci(
             root, source, migrate_docs_path(source, migrated)
         )
         migrated = migrate_affected_tools(root, source, config, migrated)
-        migrated = migrate_pnpm_bootstrap(root, migrated)
+        migrated = migrate_impact_token(migrate_pnpm_bootstrap(root, migrated))
         if "\n  pull-requests:" not in migrated:
             migrated = migrated.replace(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1

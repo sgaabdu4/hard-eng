@@ -6,6 +6,7 @@ from types import ModuleType
 import pytest
 from conftest import configure, gate
 from gate_config import Group
+from reports import quick_groups
 
 QUICK_ROLES = ("format", "lint", "types")
 SLOW_ROLES = ("complexity", "dead-code", "custom")
@@ -45,7 +46,7 @@ def test_quick_set_is_chosen_by_role(runner: ModuleType) -> None:
         ]
         + [{"name": "unlabelled", "command": ["x"]}],
     }
-    kept = runner.quick_groups([group])[0]["checks"]
+    kept = quick_groups([group])[0]["checks"]
     assert [item["name"] for item in kept] == quick
 
 
