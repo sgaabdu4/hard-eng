@@ -776,7 +776,7 @@ def handle_event(root: Path, event: str, agent: str) -> int:
                 and agent == "claude"
                 and (root / "AGENTS.override.md").is_file()
             ):
-                message += "\nAGENTS.override.md exists → read + follow it."
+                message += "\nProject rules also in AGENTS.override.md → read it now + follow it."
             output = context_output(native, message)
             if event == "session":
                 output["systemMessage"] = "Hard Eng startup: " + " ".join(
