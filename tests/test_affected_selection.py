@@ -164,7 +164,13 @@ def test_shared_package_paths_cannot_hide_a_declared_document_input(
 
 
 @pytest.mark.parametrize(
-    "docs", [[], ["PLAN.md", "features/task/PLAN.md"], ["README.md", "CHANGELOG.md"]]
+    "docs",
+    [
+        [],
+        ["PLAN.md", "features/task/PLAN.md"],
+        ["README.md", "CHANGELOG.md"],
+        ["features/task/PLAN.md", "features/task/evidence/shot.png"],
+    ],
 )
 @pytest.mark.parametrize("root", ["a", "."])
 def test_docs_only_change_runs_only_the_secret_scan(
@@ -434,7 +440,11 @@ def test_plan_stage_check_skips_packages_unchanged_since_a_passed_branch_point(
     git(tmp_path, "config", "user.name", "Fixture")
     git(tmp_path, "config", "user.email", "fixture@example.invalid")
     head = commit(tmp_path, "main")
-    (tmp_path / "PLAN.md").write_text(plan_document().replace("Complete", "Draft", 1))
+    (tmp_path / "features/task/evidence").mkdir(parents=True)
+    (tmp_path / "features/task/PLAN.md").write_text(
+        plan_document().replace("Complete", "Draft", 1)
+    )
+    (tmp_path / "features/task/evidence/shot.png").write_bytes(b"\x89PNG")
 
     def passed(_root: Path) -> str | None:
         return head if point else None
