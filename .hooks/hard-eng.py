@@ -722,6 +722,49 @@ def plan_base(base: str | None, plan_stage: str | None) -> str | None:
     return point
 
 
+def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool | None:
+    """Parallel gates share the CPUs; serial ones wait; None when dependency setup failed."""
+    from reports import early_scan
+
+    output_lock = threading.Lock()
+    failed = False
+    pending: set[Future[bool]] = set()
+    scans: set[Future[bool]] = set()
+    checks = [(group, gate) for group in groups for gate in group["checks"]]
+    lockfiles = [item for item in checks if item[1].get("role") == "lockfiles"]
+    ordered = lockfiles + sorted(
+        (item for item in checks if item not in lockfiles),
+        key=lambda item: not early_scan(item[1]),
+    )
+    workers = os.cpu_count() or 2
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for group, gate in ordered:
+            if gate.get("parallel", False) and gate.get("role") != "lockfiles":
+                if len(pending) == workers:
+                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    for future in done:
+                        failed |= future.result()
+                future = pool.submit(
+                    run_gate, group, gate, timeout, output_lock, groups, related
+                )
+                # Serial suites wait for other gates, not for read-only scans.
+                (scans if early_scan(gate) else pending).add(future)
+            else:
+                if gate.get("role") == "performance":
+                    pending |= scans
+                    scans.clear()
+                for future in pending:
+                    failed |= future.result()
+                pending.clear()
+                result = run_gate(group, gate, timeout, output_lock, groups, related)
+                failed |= result
+                if result and gate.get("role") == "lockfiles":
+                    return None
+        for future in pending | scans:
+            failed |= future.result()
+    return failed
+
+
 def check(
     timeout: float | None = None,
     base: str | None = None,
@@ -734,7 +777,7 @@ def check(
 ) -> int:
     from ci_setup import require_ci_base
     from gate_config import load_groups, parse_config
-    from reports import early_scan, quick_groups
+    from reports import quick_groups
     from shipping import gate_budget
 
     require_ci_base(base)
@@ -755,58 +798,27 @@ def check(
         validate_suppressions(ROOT, base)
         validate_decisions(ROOT, base)
         provision_tools(ROOT, groups, timeout)
-        output_lock = threading.Lock()
         related = base if related_tests else None
 
-        failed = False
-        pending: set[Future[bool]] = set()
-        scans: set[Future[bool]] = set()
-        checks = [(group, gate) for group in groups for gate in group["checks"]]
-        lockfiles = [item for item in checks if item[1].get("role") == "lockfiles"]
-        ordered = lockfiles + sorted(
-            (item for item in checks if item not in lockfiles),
-            key=lambda item: not early_scan(item[1]),
-        )
-        workers = os.cpu_count() or 2
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            for group, gate in ordered:
-                if gate.get("parallel", False) and gate.get("role") != "lockfiles":
-                    if len(pending) == workers:
-                        done, pending = wait(pending, return_when=FIRST_COMPLETED)
-                        for future in done:
-                            failed |= future.result()
-                    future = pool.submit(
-                        run_gate, group, gate, timeout, output_lock, groups, related
-                    )
-                    # Serial suites wait for other gates, not for read-only scans.
-                    (scans if early_scan(gate) else pending).add(future)
-                else:
-                    for future in pending:
-                        failed |= future.result()
-                    pending.clear()
-                    result = run_gate(
-                        group, gate, timeout, output_lock, groups, related
-                    )
-                    failed |= result
-                    if result and gate.get("role") == "lockfiles":
-                        print("Dependency setup failed; remaining checks were not run.")
-                        report_stage(True, plan_stage)
-                        return 1
-            for future in pending | scans:
-                failed |= future.result()
+        failed = run_gates(groups, timeout, related)
+        if failed is None:
+            print("Dependency setup failed; remaining checks were not run.")
+            report_stage(True, plan_stage)
+            return 1
         report_stage(failed, plan_stage)
         return int(failed)
 
 
 def impact(base: str) -> int:
     """Tell CI whether the check will run only the secret scan, before tools."""
-    from contextlib import redirect_stdout
+    from contextlib import redirect_stdout, suppress
 
     from ci_setup import impact_tools, require_ci_base
     from gate_config import affected_groups, parse_config
 
     require_ci_base(base)
-    with redirect_stdout(sys.stderr):
+    proven = False
+    with redirect_stdout(sys.stderr), suppress(OSError, subprocess.SubprocessError):
         proven = proven_elsewhere(base)
     if proven:
         print("docs_only=true")
