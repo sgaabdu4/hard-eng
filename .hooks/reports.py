@@ -63,6 +63,36 @@ def early_scan(gate: Gate) -> bool:
     return gate.get("role") in SCAN_ROLES and gate.get("parallel", False) is True
 
 
+QUICK_ROLES = frozenset(
+    {
+        "format",
+        "lint",
+        "format-lint",
+        "types",
+        "annotations",
+        "typing-style",
+        "imports",
+        "tests",
+        "focused-tests",
+        "secrets-files",
+    }
+)
+
+
+def quick_groups(groups: list[Group], quick: bool = True) -> list[Group]:
+    if not quick:
+        return groups
+    return [
+        {
+            **group,
+            "checks": [
+                gate for gate in group["checks"] if gate.get("role") in QUICK_ROLES
+            ],
+        }
+        for group in groups
+    ]
+
+
 def related_test_flags(
     gate: Gate, groups: list[Group], directory: Path, base: str
 ) -> list[str]:
