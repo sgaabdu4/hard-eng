@@ -246,7 +246,11 @@ def scaffold_files(source: Path) -> set[str]:
         }
         | {
             str(path.relative_to(source))
-            for pattern in (".agents/biome.json", ".claude/rules/*.md")
+            for pattern in (
+                ".agents/biome.json",
+                ".claude/rules/*.md",
+                ".claude/output-styles/*.md",
+            )
             for path in source.glob(pattern)
         }
     )
@@ -852,7 +856,13 @@ INSTALLED_FILES = {
 def maybe_installed(name: str) -> bool:
     """A path a Hard Eng update can write, checked before any network proof."""
     return name in INSTALLED_FILES | {".agents/biome.json"} or name.startswith(
-        (".hooks/", ".agents/skills/", ".claude/skills/", ".claude/rules/")
+        (
+            ".hooks/",
+            ".agents/skills/",
+            ".claude/skills/",
+            ".claude/rules/",
+            ".claude/output-styles/",
+        )
     )
 
 
