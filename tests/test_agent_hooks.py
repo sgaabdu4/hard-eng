@@ -484,7 +484,7 @@ def test_only_claude_is_told_to_read_override(
     context = json.loads(capsys.readouterr().out)["hookSpecificOutput"][
         "additionalContext"
     ]
-    told = "AGENTS.override.md exists → read + follow it." in context
+    told = "AGENTS.override.md → read it now + follow it." in context
     assert told == (override and agent == "claude")
 
 
