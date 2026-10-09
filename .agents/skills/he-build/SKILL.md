@@ -5,7 +5,8 @@ description: Implement and verify a ready, authorized plan through focused fixes
 
 # Hard Eng Build
 
-- Input = existing Ready + authorized plan from [HE Plan](../he-plan/SKILL.md); inspect its readiness evidence (passing baseline, applicable UX, blockers), not Status alone. Failed-baseline repairs alone may use its [authorized Draft repair route](../he/references/gates.md#baseline-repair); feature work remains blocked until repair delivery. Other missing, pending or contradictory readiness → that owner before production edits. Material scope change → same owner; preserve accepted decisions + completed work. Participation and project context → [HE workflow](../he/references/workflow.md).
+- Baseline (checks before your edits) fails → repair only that, as its own change + PR; no feature edits until it merges ([repair route](../he/references/gates.md#baseline-repair)).
+- Input = Ready + authorized plan from [HE Plan](../he-plan/SKILL.md); check its evidence (passing baseline, UX, blockers), not Status alone. Other missing, pending or contradictory readiness → that owner before production edits. Material scope change → same owner; preserve accepted decisions + completed work. Participation and project context → [HE workflow](../he/references/workflow.md).
 - Output = locally implemented + verified behavior, Complete plan (none for a change `check` rates `Size: small`) and explicit Ready for ship handoff. Build adds no authority to commit, push, publish, merge or deploy; delivery is a separate stage.
 
 ## Implement + verify
@@ -29,8 +30,8 @@ flowchart TD
 ```
 
 - Behavior = required connected callers, persistence, API and interface work; a skeleton or file checklist is not an accepted outcome. Keep changes at existing owners; apply relevant stack/design/security guidance only for the changed boundary.
-- Proof = [test quality](../he/references/testing.md) + [actual-diff review](../code-review/SKILL.md); required runtime journeys, visual evidence and applicable accessibility states → [E2E](../e2e/SKILL.md). PR evidence selection → [HE Ship](../he-ship/references/checks.md#ui-evidence-in-the-pr). Reuse these owners for regression, defect reopening and review findings; no duplicate checker or mandatory test/agent count.
-- Direct runs = test/build/check commands run outside the gate get a time limit of about 3× their normal run time, at least 15 minutes; without `timeout` (macOS) use `perl -e 'alarm shift; exec @ARGV' <seconds> <command>`. On a hit, read the log and kill leftover child processes before rerunning.
+- Proof = [test quality](../he/references/testing.md) + [actual-diff review](../code-review/SKILL.md); outside service → fake at its boundary from real responses, tests never call the real one; required runtime journeys, visual evidence and applicable accessibility states → [E2E](../e2e/SKILL.md). PR evidence selection → [HE Ship](../he-ship/references/checks.md#ui-evidence-in-the-pr). Reuse these owners for regression, defect reopening and review findings; no duplicate checker or mandatory test/agent count.
+- Direct test/build/check runs = limit ≈3× normal, ≥15 min (macOS: `perl -e 'alarm shift; exec @ARGV' <s> <cmd>`); hit → read log, kill leftover children, rerun.
 - Progress = same plan + remaining work. Retain the actual starting-baseline outcome + evidence; record later build results in Verification. Keep Status Ready and Verification Pending during an unblocked feature build; baseline repair follows HE Plan's Draft route above. A material decision or unavailable prerequisite → Draft + exact blocker/resume condition; preserve completed steps and continue independent authorized work. Never replace missing proof with a pass or N/A.
 
 ## Parallel work + integration
