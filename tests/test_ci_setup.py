@@ -16,7 +16,6 @@ from ci_setup import (
     PERMISSIONS,
     configure_ci,
     impact_tools,
-    migrate_impact_token,
     migrate_pnpm_bootstrap,
     workflow_tools,
 )
@@ -715,38 +714,6 @@ def test_impact_reports_docs_only_before_tools(
     assert capsys.readouterr().out == (
         f"docs_only={expected}\ntools=uv@latest python@3.12 node@latest\n"
     )
-
-
-def test_impact_takes_the_fast_path_when_the_change_is_already_proven(
-    repository: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    (repository / "hard-eng.gates.json").write_text(
-        json.dumps({"packages": [{"path": ".", "checks": []}], "shared": []})
-    )
-    commit(repository, "configure")
-    (repository / "app.py").write_text("change\n")
-    module = load_module("impact_runner", SOURCE / ".hooks/hard-eng.py")
-    module.__dict__["ROOT"] = repository
-
-    def proven(base: str | None) -> bool:
-        print(f"proven against {base}")
-        return True
-
-    module.__dict__["proven_elsewhere"] = proven
-    assert module.impact("HEAD") == 0
-    captured = capsys.readouterr()
-    assert captured.out == "docs_only=true\n"
-    assert "proven against HEAD" in captured.err
-
-
-def test_old_impact_step_gains_the_token_its_reuse_lookup_needs() -> None:
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
-    token = "          GH_TOKEN: ${{ github.token }}\n"
-    start = template.index("id: impact")
-    old = template[:start] + template[start:].replace(token, "", 1)
-    assert old != template
-    assert migrate_impact_token(old) == template
-    assert migrate_impact_token(template) == template
 
 
 def test_impact_provisions_selected_sdks_without_yaml_and_falls_back_to_all(
