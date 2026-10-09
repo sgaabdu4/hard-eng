@@ -81,6 +81,11 @@ def verdicts(report: dict[str, object]) -> Callable[[str, str], dict[str, object
         (DRAFT_PLAN, [], None),
         (READY_PLAN.replace("0.0", "None"), [BASELINE], "no plan addresses"),
         (READY_PLAN, [BASELINE], None),
+        (
+            READY_PLAN,
+            [BASELINE._replace(output="PASS tests (exit 0; elapsed 0.087s) @ .")],
+            None,
+        ),
         (READY_PLAN, [BASELINE._replace(output="PASS tests (exit 0)\nexit=0")], None),
         (
             READY_PLAN,
