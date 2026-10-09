@@ -715,9 +715,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         if notice and planning_only(root, set(changed.splitlines())):
             return with_freshness(
                 root,
-                {
-                    "systemMessage": notice + ". Planning-only; no code checks run."
-                },
+                {"systemMessage": notice + ". Planning-only; no code checks run."},
             )
         claim = str(
             payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
@@ -785,7 +783,9 @@ def handle_event(root: Path, event: str, agent: str) -> int:
                     message.splitlines()[:2]
                 )
     except (OSError, ValueError, TypeError) as error:
-        message = f"Hard Eng hook failed: {error}. Continue; don't claim verification passed."
+        message = (
+            f"Hard Eng hook failed: {error}. Continue; don't claim verification passed."
+        )
         output = (
             {"systemMessage": message}
             if event != "stop"
