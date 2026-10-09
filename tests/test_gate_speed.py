@@ -10,7 +10,7 @@ import pytest
 from ci_setup import migrate_impact_token
 from conftest import SOURCE, commit, configure, gate, load_module
 from gate_config import Gate, Group
-from reports import scan_blockers
+from reports import gate_order, scan_blockers
 
 
 def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
@@ -160,3 +160,11 @@ def test_a_suite_waits_only_for_scans_its_cleanup_or_timing_could_disturb() -> N
     assert scan_blockers(javascript, tests, scans) == {root}
     assert scan_blockers(python, tests, scans) == set()
     assert scan_blockers(python, performance, scans) == {root, web}
+
+
+def test_performance_still_follows_a_parallel_build() -> None:
+    build: Gate = {"name": "build", "role": "build", "command": ["x"], "parallel": True}
+    performance: Gate = {"name": "perf", "role": "performance", "command": ["x"]}
+    group: Group = {"path": ".", "checks": []}
+    order = gate_order([(group, build), (group, performance)])
+    assert [gate["name"] for _, gate in order] == ["build", "perf"]
