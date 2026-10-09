@@ -19,7 +19,7 @@ Authority: The user asked to fix it, file and close the issue, and run a GPT-6 A
 ## Acceptance + steps
 
 - [x] A Husky project's background update succeeds when the temporary directory is reached through a symlink → `test_husky_update_succeeds_when_the_temporary_directory_is_a_symlink` (fails on main with the issue's error).
-- [ ] Full check passes.
+- [x] Full check passes.
 
 ## Baseline + execution
 
@@ -37,8 +37,9 @@ N/A — hook path validation.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+E2E: Passed — a scratch Husky project (`core.hooksPath .husky/_`) installed from main 060868e with a bare origin, on macOS's default `/var/folders` temporary directory. `python3 .hooks/hard-eng.py update` on main's `.hooks` exited 1 with "Git hooks point outside this repository: /private/var/folders/.../candidate/.husky/_ is not under /var/folders/.../candidate"; with this branch's `agent_hooks.py` it exited 0 with "No newer CI-verified Hard Eng revision is available; installed the missing pre-push hook" and left one worktree.
+Evidence: `hard-eng.py check --base origin/main --plan-stage Ready` exit 0: 18 checks passed, 1453 tests, 91.07% line coverage. Codex adversarial review on GPT-6 Astra, round 1: approve, no material findings.
 
 Delivery target: Merge
 Delivery: Pending

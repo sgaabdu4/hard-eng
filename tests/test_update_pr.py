@@ -152,7 +152,7 @@ def test_update_from_a_linked_worktree_ignores_its_inherited_hooks_path(
 def test_husky_update_succeeds_when_the_temporary_directory_is_a_symlink(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    source, target, _ = release
+    _, target, _ = release
     husky_project(target)
     add_origin(target)
     monkeypatch.setattr(update_runner.signal, "signal", Mock())
