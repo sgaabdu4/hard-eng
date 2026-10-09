@@ -98,7 +98,8 @@ READ_ONLY_ROLES = (
 
 
 def gate_order(checks: list[tuple[Group, Gate]]) -> list[tuple[Group, Gate]]:
-    """Setup first; scans start after the last serial gate that may write files they read."""
+    """Setup first; scans start after the last serial gate that may write files they read,
+    and after performance suites, which must run alone."""
     setup = [item for item in checks if item[1].get("role") == "lockfiles"]
     scans = [item for item in checks if early_scan(item[1])]
     others = [item for item in checks if item not in setup and item not in scans]
@@ -108,7 +109,9 @@ def gate_order(checks: list[tuple[Group, Gate]]) -> list[tuple[Group, Gate]]:
         if not gate.get("parallel", False) and gate.get("role") not in READ_ONLY_ROLES
     ]
     cut = producers[-1] + 1 if producers else 0
-    return setup + others[:cut] + scans + others[cut:]
+    later = others[cut:]
+    timed = [item for item in later if item[1].get("role") == "performance"]
+    return setup + others[:cut] + timed + scans + [i for i in later if i not in timed]
 
 
 def scan_blockers(
