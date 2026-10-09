@@ -315,11 +315,10 @@ def record_gate_time(root: Path, key: str, seconds: float) -> None:
     path = gate_times(root)
     with GATE_TIMES_LOCK:
         try:
-            times = json.loads(path.read_text())
+            loaded = json.loads(path.read_text())
         except (OSError, ValueError):
-            times = {}
-        if not isinstance(times, dict):
-            times = {}
+            loaded = None
+        times: dict[str, JsonValue] = loaded if isinstance(loaded, dict) else {}
         times[key] = round(seconds, 3)
         temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
         temporary.write_text(json.dumps(times))
