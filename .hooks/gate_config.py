@@ -4,7 +4,7 @@ import json
 import os
 import re
 import subprocess
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
 from dependency_graph import (
@@ -12,6 +12,7 @@ from dependency_graph import (
     dependency_review_guidance,
     expand_dependents,
     impact_inputs,
+    is_workflow,
     shared_only,
 )
 
@@ -564,14 +565,6 @@ def runs_checks(root: Path, base: str, name: str) -> bool:
     if (root / name).is_file():
         text += (root / name).read_text(errors="replace")
     return not text or "hard-eng.py" in text
-
-
-def is_workflow(name: str) -> bool:
-    path = PurePosixPath(name)
-    return path.parent == PurePosixPath(".github/workflows") and path.suffix in {
-        ".yml",
-        ".yaml",
-    }
 
 
 def packages_for(

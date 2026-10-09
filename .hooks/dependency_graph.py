@@ -113,6 +113,14 @@ def cycle_members(
     }
 
 
+def is_workflow(name: str) -> bool:
+    path = PurePosixPath(name)
+    return path.parent == PurePosixPath(".github/workflows") and path.suffix in {
+        ".yml",
+        ".yaml",
+    }
+
+
 def shared_only(shared: Group, names: set[str]) -> Group:
     """No package reads the change; workflow edits still need workflow linting."""
     roles = {"secrets-files", "secrets-history"}
