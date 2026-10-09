@@ -18,7 +18,7 @@
 - Verification: run applicable gates + prove affected behavior; never hide findings, weaken checks or claim unrun checks passed. Repair every reported finding in code, unrelated too, as its own commit before continuing; never baseline/tolerate/suppress. Gates stay required even when Hard Eng or its updater fails.
 - Before done: review the diff vs the latest request, remove unsupported additions + report remaining expansion. Passing tools/metrics never prove necessity or test quality.
 - Reuse settled approvals; ask only if missing info changes the result or a consequential action lacks approval.
-- Report ~80% ASD-STE100: short active sentences, one idea each; changes, proof, gaps.
+- Output ~80% ASD-STE100: short active sentences, one idea each; reports = changes, proof, gaps.
 - Setup prints `Gap:` (missing check/language) → file without asking: `python3 .hooks/hard-eng.py gap-issue "<missing check, generic>"`; never include project names, code, paths or data.
 - Reproduced fault in Hard Eng's own `.hooks/`, `.agents/skills/he*` or setup → tell user, check [issues](https://github.com/sgaabdu4/hard-eng/issues) for duplicates, then with approval file a terse one: Problem, Reproduction, installed revision, Suggestion; apply publication privacy.
 - Follow `.agents/skills/he/SKILL.md`; commands: `python3 .hooks/hard-eng.py --help`.
