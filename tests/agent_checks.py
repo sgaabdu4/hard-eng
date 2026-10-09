@@ -224,7 +224,7 @@ BASELINE_FAILED = re.compile(
 
 PASSED = {
     "any": re.compile(
-        r"^(PASS \S+ \(exit 0\)|Hard Eng: \w+ checks passed)", re.MULTILINE
+        r"^(PASS \S+ \(exit 0[;)]|Hard Eng: \w+ checks passed)", re.MULTILINE
     ),
     "build": re.compile(r"^Hard Eng: build checks passed", re.MULTILINE),
 }
