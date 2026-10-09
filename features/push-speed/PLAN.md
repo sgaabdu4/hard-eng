@@ -18,13 +18,14 @@ Authority: The user approved group 1 of the push-speed proposal on 2026-10-09. S
 
 ## Acceptance + steps
 
-- [x] Secret, vulnerability, security, workflow and shell scans start right after dependency setup, beside the other gates, not after the test suite → `test_scans_start_beside_a_serial_suite_listed_before_them` failed before (suite waited 10 s for a scan that never started), passes after.
+- [x] Secret, vulnerability, security, workflow and shell scans start after dependency setup and the last file-producing gate, beside the test suites, not after them → `test_scans_start_beside_a_serial_suite_listed_before_them` failed before (suite waited 10 s for a scan that never started), passes after.
 - [x] A gate with a recorded passing time stops at 3 times that time (at least 600 s, at most the budget) → `test_a_hung_gate_stops_at_three_times_its_last_passing_time`.
 - [x] An unchanged turn end during a build reuses the last passing check for the same stage → `test_unchanged_turn_during_a_build_reuses_the_pass_for_that_stage` failed before (second turn reran), passes after.
 - [x] `impact` reports the fast path when a merged PR or a verified Hard Eng update already proved the change, so CI skips the SDK install; installed workflows gain the token the impact step needs → `test_impact_takes_the_fast_path_when_the_change_is_already_proven`, `test_old_impact_step_gains_the_token_its_reuse_lookup_needs`.
 - [x] Pre-push mutation for a verified Hard Eng update → not changed: `mutation.targets` selects only changed package production lines, so a scaffold-only update has no targets and ends at once.
 - [x] uv interpreter-cache race → not changed: seen once in CI, not reproduced locally, and no matching uv report found; a guessed fix without a failing test is not shipped. A CI rerun clears it.
 - [x] Guidance: one full check at the end of a build, not before each push; no CI polling when auto-merge is on → `he-build`, `he-ship`, `checks.md`, `gates.md`.
+- [x] Codex adversarial review (gpt-6-astra) loop. Round 1: performance suites overlapped scans → they now wait (`test_performance_suites_still_run_alone_after_early_scans`); impact crashed when the reuse probe lacked uv → falls back (`test_impact_keeps_the_normal_path_when_the_reuse_probe_cannot_run`). Round 2: JavaScript runners clear coverage/ while scans write there → they wait for same-folder scans (`test_a_suite_waits_only_for_scans_its_cleanup_or_timing_could_disturb`). Round 3: scans ran before a serial generator → scans start after the last producer (`test_scans_still_read_what_a_serial_generator_produced`). Round 4: a parallel generator could race scans → skipped: guidance requires ordering for generators, every installed generator is serial, and a parallel one already races other parallel gates.
 - [ ] Full gate passes → `python3 .hooks/hard-eng.py check --plan-stage Complete` exits 0.
 
 ## Baseline + execution
