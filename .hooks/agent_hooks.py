@@ -152,7 +152,7 @@ def project_pre_push(root: Path, hook: Path) -> Path:
     A linked worktree may run the hooks of the repository's common checkout.
     """
     owner = root
-    if not hook.parent.resolve().is_relative_to(root):
+    if not hook.parent.resolve().is_relative_to(root.resolve()):
         common = Path(
             subprocess.check_output(
                 ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
