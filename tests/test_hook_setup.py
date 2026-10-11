@@ -61,8 +61,6 @@ def test_hook_registrations_invoke_shared_runner(
             {
                 "advisorModel": "fable",
                 "outputStyle": "Plain STE",
-                "promptCacheTtl": "1h",
-                "subagentPromptCacheTtl": "1h",
                 "attribution": {"commit": "", "pr": "", "sessionUrl": False},
             },
         ),
@@ -70,15 +68,11 @@ def test_hook_registrations_invoke_shared_runner(
             {
                 "advisorModel": "opus",
                 "outputStyle": "Concise",
-                "promptCacheTtl": "5m",
-                "subagentPromptCacheTtl": "5m",
                 "attribution": {"pr": "By the team"},
             },
             {
                 "advisorModel": "opus",
                 "outputStyle": "Concise",
-                "promptCacheTtl": "5m",
-                "subagentPromptCacheTtl": "5m",
                 "attribution": {"pr": "By the team"},
             },
         ),
