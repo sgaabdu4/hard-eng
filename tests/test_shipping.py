@@ -542,8 +542,9 @@ def test_unchanged_ui_needs_comparison_note_without_uploads(
         (_NATIVE_VIDEO_BODY, "video/mp4"),
         (_NATIVE_VIDEO_BODY_CRLF, "video/mp4"),
         (_MIXED_UI_BODY, "image/png"),
+        (_UI_BODY + "\n\n" + _NATIVE_VIDEO_BODY, "image/png"),
     ],
-    ids=["images", "native-video", "native-video-crlf", "mixed-image-video"],
+    ids=["images", "native-video", "native-video-crlf", "mixed", "two-pairs"],
 )
 def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, content_type: str
@@ -555,7 +556,7 @@ def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
     shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
     assert shipment.delivery_target == "PR"
     requests = [call for call in fake.calls if "--method" in call]
-    assert len(requests) == 2
+    assert len(requests) == body.count("user-attachments")
     assert all(
         call[:-1]
         == ("api", "--method", "GET", "--include", "--silent", "-H", "Range: bytes=0-0")
@@ -566,6 +567,9 @@ def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
 @pytest.mark.parametrize(
     "body",
     [
+        _UI_BODY + "\n\n" + _UI_BODY,
+        _UI_BODY
+        + "\nBefore: ![old](https://github.com/user-attachments/assets/other-old)",
         "UI appearance: unchanged — ",
         "UI appearance: unchanged — compared dashboard\nUI appearance: unchanged — compared dashboard",
         "UI appearance: unchanged — compared dashboard\n" + _UI_BODY,

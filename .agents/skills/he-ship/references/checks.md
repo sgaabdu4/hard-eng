@@ -45,7 +45,7 @@ Allowed targets: `PR`, `Merge`, `Deploy`. Local build acceptance stays in the ex
 
 ## UI evidence in the PR
 
-For changes matching `ui_paths`, compare the actual baseline and final appearance at the same route, state and viewport. Publish a before/after pair only when appearance differs, using distinct, inspected GitHub attachments:
+For changes matching `ui_paths`, compare the actual baseline and final appearance at the same route, state and viewport. Publish a before/after pair only when appearance differs, using distinct, inspected GitHub attachments. Use one pair per route, state or viewport that changed. The verifier needs at least one pair, equal counts of `Before:` and `After:`, and no repeated URL:
 
 ```markdown
 Before: ![Before](https://github.com/user-attachments/assets/actual-before-id)
