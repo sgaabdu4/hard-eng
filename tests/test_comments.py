@@ -328,6 +328,40 @@ def test_planned_removal_with_a_reason_allows_only_the_named_test(
             validate_suppressions(root, "HEAD")
 
 
+KEEP = "test('keeps a', () => {\n  expect(a()).toBe(1);\n});\n"
+
+
+@pytest.mark.parametrize(
+    ("before", "passes"),
+    [
+        (
+            KEEP
+            + "test(\n  'duplicate of a',\n  () => {\n    expect(a()).toBe(1);\n  },\n);\n",
+            True,
+        ),
+        (
+            "test('keeps a', () => {\n  expect(a()).toBe(1);\n"
+            "  expect('duplicate of a').toBe(name());\n});\n",
+            False,
+        ),
+    ],
+)
+def test_planned_removal_names_only_a_deleted_declaration(
+    tmp_path: Path, before: str, passes: bool
+) -> None:
+    root = switch_root(tmp_path, "src/a.test.ts", before)
+    (root / "src/a.test.ts").write_text(KEEP)
+    (root / "features/x").mkdir(parents=True)
+    (root / "features/x/PLAN.md").write_text(
+        "Removed test: src/a.test.ts :: duplicate of a :: keeps a proves it\n"
+    )
+    if passes:
+        validate_suppressions(root, "HEAD")
+    else:
+        with pytest.raises(ValueError, match=r"tests lose 1 assertion lines net"):
+            validate_suppressions(root, "HEAD")
+
+
 def retiring_root(tmp_path: Path) -> Path:
     root = switch_root(tmp_path, "app.py", "def keep():\n    return 1\n")
     (root / "migrate_users.py").write_text("def run():\n    return 2\n")
