@@ -338,3 +338,31 @@ def test_python_mutation_reports_real_survivors_on_changed_lines(
     output = capsys.readouterr().out
     assert "src/shop/price.py:2  if total >= 100 and member: → " in output
     assert "label" not in output
+
+
+@pytest.mark.parametrize(
+    ("tests", "command"),
+    [
+        (["dart", "test"], "dart test"),
+        (
+            [
+                "env",
+                "PHONE=+15550100001",
+                "KEY=local",
+                "dart",
+                "run",
+                "coverage:test_with_coverage",
+            ],
+            "env PHONE=+15550100001 KEY=local dart test",
+        ),
+        (
+            ["env", "MODE=ci", "flutter", "test", "--coverage"],
+            "env MODE=ci flutter test --no-pub",
+        ),
+        (["flutter", "test"], "flutter test --no-pub"),
+    ],
+)
+def test_dart_mutation_runs_tests_with_the_gate_settings(
+    tests: list[str], command: str
+) -> None:
+    assert mutation.dart_test_command(tests) == command
