@@ -24,8 +24,6 @@ from shipping import (
 )
 from update import require_current
 
-MUTATION_SECONDS = 180
-
 
 def remote_base(root: Path, branch: str | None) -> str | None:
     """The remote base revision, or None when the remote has no branches yet."""
@@ -227,9 +225,8 @@ def pre_push(root: Path) -> int:
                 return returncode
             if base is not None:
                 began = time.monotonic()
-                limit = str(MUTATION_SECONDS)
-                arguments = ["mutation", "--base", base, "--seconds", limit]
-                run_hard_eng(checkout, [*arguments, "--in-place"], environment)
+                arguments = ["mutation", "--base", base, "--in-place"]
+                run_hard_eng(checkout, arguments, environment)
                 mutating += time.monotonic() - began
         elapsed = time.monotonic() - started - mutating
         if elapsed > policy["pre_push_seconds"]:
