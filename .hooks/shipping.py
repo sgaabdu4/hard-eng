@@ -776,17 +776,18 @@ def _required_checks(
     protection: dict[str, JsonValue], rules: list[dict[str, JsonValue]]
 ) -> set[str]:
     contexts = protection.get("requiredStatusCheckContexts")
-    names = set(contexts) if isinstance(contexts, list) else set()
+    names: list[JsonValue] = list(contexts) if isinstance(contexts, list) else []
     for rule in rules:
         parameters = rule.get("parameters")
         checks = (
             parameters.get("requiredStatusChecks")
             if isinstance(parameters, dict)
-            else []
+            else None
         )
-        names.update(
-            check.get("context") for check in checks or [] if isinstance(check, dict)
-        )
+        if isinstance(checks, list):
+            names += [
+                check.get("context") for check in checks if isinstance(check, dict)
+            ]
     return {name for name in names if isinstance(name, str)}
 
 
