@@ -317,9 +317,9 @@ def provision_latest(
 
 
 def bun_node(storage: Path, environment: dict[str, str]) -> None:
-    """Run tools with `#!/usr/bin/env node` on Bun when Node is not installed."""
+    """Run every `#!/usr/bin/env node` tool on Bun, so checks prove the Bun runtime."""
     bun = shutil.which("bun", path=environment.get("PATH"))
-    if bun is None or shutil.which("node", path=environment.get("PATH")):
+    if bun is None:
         return
     directory = storage / "bun-node"
     directory.mkdir(parents=True, exist_ok=True)

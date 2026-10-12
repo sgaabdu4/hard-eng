@@ -1,5 +1,6 @@
 import fcntl
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -328,3 +329,22 @@ def test_configured_uvx_scanners_are_pinned_like_bare_ones(
     tool_setup.provision_tools(tmp_path, [group], 30)
     assert pinned == ["ruff"]
     assert tool_setup.managed_command(command) == ["uvx", "ruff@9.9.9", "check", "src"]
+
+
+def test_node_runs_on_bun_even_when_node_is_installed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    bin_directory = tmp_path / "bin"
+    bin_directory.mkdir()
+    for name in ("bun", "node"):
+        (bin_directory / name).write_text("#!/bin/sh\n")
+        (bin_directory / name).chmod(0o755)
+    environment = {"PATH": str(bin_directory)}
+    monkeypatch.setenv("PATH", str(bin_directory))
+    tool_setup.bun_node(tmp_path / "storage", environment)
+    for path in (environment["PATH"], os.environ["PATH"]):
+        node = shutil.which("node", path=path)
+        assert node is not None
+        assert Path(node).resolve() == (bin_directory / "bun").resolve()

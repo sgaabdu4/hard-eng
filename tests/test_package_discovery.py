@@ -160,3 +160,14 @@ def test_bun_lockfile_is_optional_only_without_dependencies(
             javascript_manager(tmp_path)
     else:
         assert javascript_manager(tmp_path)[0] == "bun"
+
+
+def test_migration_instruction_names_pnpm_settings_and_the_bun_runtime(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text("{}")
+    (tmp_path / "pnpm-workspace.yaml").write_text("minimumReleaseAge: 1440\n")
+    with pytest.raises(ValueError) as error:
+        javascript_manager(tmp_path)
+    for text in ("minimumReleaseAge", "trustedDependencies", "bunfig.toml", "bun test"):
+        assert text in str(error.value)

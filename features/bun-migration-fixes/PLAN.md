@@ -16,14 +16,15 @@ Blockers: None
 Handoff: Approval
 Authority: The user asked to fix the raised issues, dig for further issues, run the Codex adversarial review loop with GPT-6 Astra and open a PR.
 
-Bun prints help for `bun --cwd DIR run`, so Hard Eng writes `--cwd=DIR` and rejects the spaced form before `run`. JavaScript packages keep `node@latest` in CI, because their own tools (Vitest with jsdom) fail on Bun. The migration message names pnpm settings that `bun install` does not carry.
+Bun prints help for `bun --cwd DIR run`, so Hard Eng writes `--cwd=DIR` and rejects the spaced form before `run`. The user asked for Bun as the runtime too: during checks `node` always resolves to Bun, CI provides no Node, and projects move to `bun test` (Vitest with jsdom fails on Bun). The migration message names pnpm settings that `bun install` does not carry and the move to `bun test`.
 
 ## Acceptance + steps
 
 - [x] A pnpm setup step with `if:` before or after `uses:` migrates to one Bun step.
 - [x] The Fallow dependency chain uses `bun --cwd=DIR run`; the spaced form before `run` is rejected; `bun run --cwd DIR` is read.
-- [x] JavaScript packages get `node@latest` in CI tool lists.
-- [x] The migration message names trustedDependencies, minimumReleaseAge and bunfig.toml.
+- [x] `node` resolves to Bun during checks even when Node is installed; CI tool lists carry no Node.
+- [x] Lighthouse CI, Stryker, TypeScript, Fallow, jscpd and React Doctor run on Bun.
+- [x] The migration message names trustedDependencies, minimumReleaseAge, bunfig.toml and `bun test`.
 - [x] A pnpm tool that ends a tool list line is removed.
 - [x] Full gate passes.
 
