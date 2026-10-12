@@ -310,6 +310,8 @@ TWO_TESTS = (
         ("Removed test: src/a.test.ts :: duplicate of a ::", False),
         ("Removed test: src/a.test.ts :: keeps a :: wrong test named", False),
         ("Removed test: src/b.test.ts :: duplicate of a :: wrong file", False),
+        ("Removed test: src/a.test.ts :: duplicate :: shared prefix only", False),
+        ("Removed test: src/a.test.ts :: toBe :: name only in the body", False),
     ],
 )
 def test_planned_removal_with_a_reason_allows_only_the_named_test(

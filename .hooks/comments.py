@@ -437,6 +437,14 @@ REMOVAL = re.compile(
 )
 
 
+TEST_NAME = re.compile(r"(?:def|class)\s+(\w+)|\(\s*(['\"`])(.*?)\2")
+
+
+def test_name(test: list[tuple[int, str]]) -> str | None:
+    match = TEST_NAME.search(test[0][1]) if test else None
+    return match and (match[1] or match[3])
+
+
 def recorded_removals(added: dict[str, list[tuple[int, str]]]) -> set[tuple[str, str]]:
     return {
         (match[1].strip("`"), match[2].strip("`'\""))
@@ -466,7 +474,7 @@ def lost_assertions(
         gone = names | imported[name] - SYNTAX
         for test in split_tests(block):
             text = "\n".join(t for _, t in test)
-            if any(path == name and title in text for path, title in recorded):
+            if (name, test_name(test)) in recorded:
                 continue
             if not gone.intersection(WORD.findall(text)):
                 lost += [f"{name}:{n}" for n, _ in assertion_lines(name, test)]
