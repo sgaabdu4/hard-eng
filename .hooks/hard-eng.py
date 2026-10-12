@@ -565,12 +565,8 @@ def run_limited_gate(
         command, coverage_path = related_command(
             command, coverage_path, gate, groups or [group], directory, related_base
         )
-        bun_lockfile = (
-            scanner == "osv"
-            and "--allow-no-lockfiles" in command
-            and [arg for arg in command if arg.startswith("--lockfile")]
-            == ["--lockfile=bun.lock"]
-        )
+        lockfiles = [arg for arg in command if arg.startswith("--lockfile")]
+        bun_lockfile = scanner == "osv" and lockfiles == ["--lockfile=bun.lock"]
         if bun_lockfile and not (directory / "bun.lock").exists():
             command = [arg for arg in command if arg != "--lockfile=bun.lock"]
         capture = (tests and kind == "dart-tests" and report.get("stdout", True)) or (
