@@ -340,8 +340,7 @@ KEEP = "test('keeps a', () => {\n  expect(a()).toBe(1);\n});\n"
             True,
         ),
         (
-            "test('keeps a', () => {\n  expect(a()).toBe(1);\n"
-            "  expect('duplicate of a').toBe(name());\n});\n",
+            KEEP.replace("});", "  expect('duplicate of a').toBe(name());\n});"),
             False,
         ),
     ],
