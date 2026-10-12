@@ -237,19 +237,18 @@ def native_typecheck(scripts: JsonObject, checks: list[Gate]) -> bool:
 
 def dependency_free(directory: Path) -> bool:
     """Bun deletes the lockfile of a package that declares nothing to install."""
-    manifest = json.loads((directory / "package.json").read_text())
+    path = directory / "package.json"
+    manifest = json.loads(path.read_text()) if path.is_file() else None
+    fields = (
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies",
+    )
     return (
         isinstance(manifest, dict)
         and not manifest.get("workspaces")
-        and not any(
-            manifest.get(key)
-            for key in (
-                "dependencies",
-                "devDependencies",
-                "optionalDependencies",
-                "peerDependencies",
-            )
-        )
+        and not any(manifest.get(key) for key in fields)
     )
 
 
