@@ -438,14 +438,16 @@ REMOVAL = re.compile(
 
 
 TEST_NAME = re.compile(
-    r"\s*(?:async\s+)?(?:def|class)\s+(\w+)|\s*[\w.]+\(\s*(['\"`])(.*?)\2"
+    r"\s*(?:async\s+)?(?:def|class)\s+(\w+)"
+    r"|\s*[\w.]+(?:\.each\b.*?\)\s*)?\(\s*(['\"`])(.*?)\2",
+    re.DOTALL,
 )
 
 
 def test_name(test: list[tuple[int, str]]) -> str | None:
     if not test or not TEST_START.match(test[0][1]):
         return None
-    match = TEST_NAME.match("\n".join(text for _, text in test[:3]))
+    match = TEST_NAME.match("\n".join(text for _, text in test))
     return match and (match[1] or match[3])
 
 
