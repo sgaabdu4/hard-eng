@@ -45,7 +45,7 @@ N/A — hook and CI behaviour with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Focused suites pass; full gate result recorded at delivery.
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` → exit 0; 18 checks passed, 91.35% line coverage. Codex adversarial review (GPT-6 Astra) round 1 approved. A Bun fixture passed all 13 gates with Node installed while `node` resolved to Bun; Lighthouse CI collected a report on Bun.
 E2E: Passed — scratch clone of a real Next.js project converted to Bun, installed with this branch and checked; Hard Eng gates passed, remaining failures were the project's own pnpm tests and two published advisories.
 
 Delivery target: PR
