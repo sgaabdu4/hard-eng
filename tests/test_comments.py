@@ -340,6 +340,17 @@ KEEP = "test('keeps a', () => {\n  expect(a()).toBe(1);\n});\n"
             True,
         ),
         (
+            KEEP
+            + "test.each([null, ''])(\n  'duplicate of a',\n  (v) => {\n"
+            + "    expect(a(v)).toBe(1);\n  },\n);\n",
+            True,
+        ),
+        (
+            KEEP
+            + "test.each([1])('duplicate of a again', (v) => {\n  expect(a(v)).toBe(1);\n});\n",
+            False,
+        ),
+        (
             KEEP.replace("});", "  expect('duplicate of a').toBe(name());\n});"),
             False,
         ),
