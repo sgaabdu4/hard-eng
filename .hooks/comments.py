@@ -3,6 +3,7 @@
 Installed agent skills under .agents/ are vendored tooling and are not checked.
 """
 
+import codecs
 import io
 import re
 import subprocess
@@ -307,6 +308,14 @@ def diff_base(root: Path, base: str) -> str:
     return initial_base(root) if unborn or re.fullmatch("0{40}|0{64}", base) else base
 
 
+def header_path(text: str) -> str:
+    """Git ends a name holding a space with a tab and C-quotes unusual names."""
+    text = text.removesuffix("\t")
+    if len(text) > 1 and text[0] == text[-1] == '"':
+        text = codecs.escape_decode(text[1:-1].encode())[0].decode(errors="replace")
+    return text[2:]
+
+
 def diff_lines(
     root: Path, base: str
 ) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[tuple[int, str]]]]:
@@ -319,6 +328,8 @@ def diff_lines(
             "diff",
             "-U0",
             "--no-color",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
             diff_base(root, base),
             "--",
         ],
@@ -341,8 +352,9 @@ def diff_lines(
         elif in_hunk and line[:1] == "-":
             removed.setdefault(name, []).append((old, line[1:]))
             old += 1
-        elif not in_hunk and line.startswith(("+++ b/", "--- a/")):
-            name = line[6:]
+        elif not in_hunk and line.startswith(("+++ ", "--- ")):
+            if line[4:] != "/dev/null":
+                name = header_path(line[4:])
     untracked = subprocess.check_output(
         ["git", "ls-files", "--others", "--exclude-standard", "-z"],
         cwd=root,

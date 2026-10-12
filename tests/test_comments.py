@@ -283,6 +283,21 @@ def test_net_loss_of_assertions_fails_naming_lines_and_count(
     assert re.search(rf"removed at {re.escape(name)}:\d+", str(error.value))
 
 
+@pytest.mark.parametrize(
+    "name", ["tests/test_my file.py", "tests/test_tab\tfile.py", 'tests/test_"q" é.py']
+)
+def test_tracked_paths_git_quotes_still_fail_suppressions_and_lost_assertions(
+    tmp_path: Path, name: str
+) -> None:
+    text = "def test_a():\n    assert f()\n    assert g()\n"
+    root = switch_root(tmp_path, name, text)
+    (root / name).write_text(text.replace("assert g()", "g()  # no" + "qa"))
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"{name}:3 adds '# no" + "qa'" in str(error.value)
+    assert f"removed at {name}:3" in str(error.value)
+
+
 def test_deleting_a_test_file_without_replacement_fails(tmp_path: Path) -> None:
     root = switch_root(tmp_path, "tests/test_a.py", "def t():\n    assert f()\n")
     (root / "tests/test_a.py").unlink()
