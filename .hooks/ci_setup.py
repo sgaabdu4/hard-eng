@@ -147,7 +147,7 @@ def migrate_bun(source: Path, content: str) -> str:
     if launcher is None:
         raise ValueError("Hard Eng workflow template has no Bun mise launcher")
     content = re.sub(
-        r"(?m)^      - uses: pnpm/setup@[^\n]*\n(?:        with:\n(?:          [^\n]*\n)*)?",
+        r"(?m)^      - uses: pnpm/setup@[^\n]*\n(?:        [^\n]*\n)*",
         lambda _: setup,
         content,
     )

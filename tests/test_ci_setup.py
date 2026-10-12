@@ -54,6 +54,19 @@ def test_pnpm_bootstrap_migrates_to_the_template_bun_steps() -> None:
     assert migrate_bun(SOURCE, template) == template
 
 
+def test_pnpm_setup_step_with_a_condition_migrates_as_one_step() -> None:
+    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    old = template.replace(
+        "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0\n"
+        "        with:\n          bun-version: latest\n",
+        "      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0\n"
+        "        if: runner.environment != 'self-hosted'\n"
+        "        with:\n          install: false\n",
+    )
+    assert old != template
+    assert migrate_bun(SOURCE, old) == template
+
+
 @pytest.mark.parametrize("wrapped", [False, True])
 @pytest.mark.parametrize("location", ["local", "runner", "configured"])
 def test_native_tool_bootstrap_preserves_ci_sdk_executables(
