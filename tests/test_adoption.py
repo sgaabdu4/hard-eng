@@ -746,7 +746,7 @@ def test_install_refuses_linked_local_settings_that_run_the_old_copy(
 
 
 def test_update_fetches_each_revisions_pinned_skill_submodule(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
 ) -> None:
     canonical, upstream = tmp_path / "canonical", tmp_path / "upstream"
     init(canonical)
@@ -801,7 +801,11 @@ def test_update_fetches_each_revisions_pinned_skill_submodule(
     monkeypatch.setenv("GIT_CONFIG_VALUE_1", "always")
     checkout = tmp_path / "checkout"
     checkout.mkdir()
+    capfd.readouterr()
     source, old = update.fetch_sources(checkout, current, previous)
+    output = capfd.readouterr()
+    assert output.out == ""
+    assert "Submodule path" in output.err
     name = ".agents/skills/canonical/SKILL.md"
     assert (source / name).read_text() == "second revision\n"
     assert (old / name).read_text() == "first revision\n"

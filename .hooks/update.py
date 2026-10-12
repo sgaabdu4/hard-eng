@@ -186,6 +186,7 @@ def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, 
             subprocess.run(
                 ["git", "submodule", "update", "--init", "--recursive", "--depth=1"],
                 cwd=tree,
+                stdout=sys.stderr,
                 check=True,
                 timeout=120,
             )
