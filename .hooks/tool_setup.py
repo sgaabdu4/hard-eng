@@ -355,6 +355,7 @@ def mise_launcher(
 ) -> Generator[Path]:
     """Yield the newest published mise, installed once per version and held while used."""
     launchers.mkdir(parents=True, exist_ok=True)
+    (launchers / "package.json").write_text('{"private": true}\n')
     version = json.loads(
         subprocess.run(
             ["bun", "pm", "view", MISE_LATEST, "version", "--json"],
@@ -375,12 +376,14 @@ def mise_launcher(
             try:
                 fcntl.flock(
                     install,
-                    fcntl.LOCK_EX | (fcntl.LOCK_NB if installation.is_dir() else 0),
+                    fcntl.LOCK_EX
+                    | (fcntl.LOCK_NB if (installation / MISE_BINARY).is_file() else 0),
                 )
             except BlockingIOError:
                 pass
             else:
-                if not installation.is_dir():
+                if not (installation / MISE_BINARY).is_file():
+                    shutil.rmtree(installation, ignore_errors=True)
                     install_launcher(installation, environment, timeout)
                 prune_launchers(launchers, version)
         yield installation / MISE_BINARY
