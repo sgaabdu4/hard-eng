@@ -87,8 +87,7 @@ def _dependency_coverage_commands(
             [
                 [
                     "bun",
-                    "--cwd",
-                    os.path.relpath(dependency, start=group["path"]),
+                    "--cwd=" + os.path.relpath(dependency, start=group["path"]),
                     "run",
                     *command[2:],
                 ]
