@@ -132,25 +132,37 @@ def test_fallow_named_arguments_do_not_imply_tool_invocation(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize(
-    "prefix",
+    "command",
     [
-        ["bun", "--cwd", "child"],
-        ["bun", "--cwd=child"],
-        ["npm", "--prefix", "child"],
+        ["bun", "--cwd=child", "run", "unit"],
+        ["bun", "run", "--cwd", "child", "unit"],
+        ["bun", "run", "--cwd=child", "unit"],
+        ["npm", "--prefix", "child", "run", "unit"],
     ],
 )
 def test_package_directory_options_cannot_hide_suppression(
-    tmp_path: Path, prefix: list[str]
+    tmp_path: Path, command: list[str]
 ) -> None:
     child = tmp_path / "child"
     child.mkdir()
     manifest = child / "package.json"
     manifest.write_text(json.dumps({"scripts": {"unit": "node --no-warnings --test"}}))
-    gate: Gate = {"name": "unit", "command": [*prefix, "run", "unit"]}
+    gate: Gate = {"name": "unit", "command": command}
     with pytest.raises(ValueError, match="suppress all Node warnings"):
         validate_gate(gate, tmp_path, set())
     manifest.write_text(json.dumps({"scripts": {"unit": "node --test"}}))
     validate_gate(gate, tmp_path, set())
+
+
+def test_bun_spaced_cwd_before_run_is_rejected(tmp_path: Path) -> None:
+    (tmp_path / "child").mkdir()
+    (tmp_path / "child/package.json").write_text('{"scripts": {"unit": "bun test"}}')
+    with pytest.raises(ValueError, match="--cwd=child"):
+        validate_gate(
+            {"name": "unit", "command": ["bun", "--cwd", "child", "run", "unit"]},
+            tmp_path,
+            set(),
+        )
 
 
 def test_unresolved_package_selectors_fail_instead_of_skipping_validation(

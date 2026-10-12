@@ -158,6 +158,26 @@ def package_script_arguments(
     return package_script_invocation(command, directory, bun_only)[0]
 
 
+def package_directory(arguments: list[str], directory: Path) -> tuple[list[str], Path]:
+    """Apply directory flags written before `run` or right after it."""
+    at = 2 if arguments[1:2] in (["run"], ["run-script"]) else 1
+    while len(arguments) > at + 1 and arguments[at].split("=", 1)[0] in {
+        "--cwd",
+        "--dir",
+        "--prefix",
+        "-C",
+    }:
+        flag, separator, value = arguments[at].partition("=")
+        if Path(arguments[0]).name == "bun" and at == 1 and not separator:
+            raise ValueError(
+                f"Bun prints help for `bun {flag} {arguments[2]} run`; "
+                f"write `bun --cwd={arguments[2]} run`"
+            )
+        directory = (directory / (value or arguments[at + 1])).resolve()
+        arguments = [*arguments[:at], *arguments[at + (1 if separator else 2) :]]
+    return arguments, directory
+
+
 def package_script_invocation(
     command: list[str], directory: Path, bun_only: bool = False
 ) -> tuple[list[str], Path]:
@@ -168,17 +188,7 @@ def package_script_invocation(
         if bun_only and executable in PACKAGE_MANAGERS - {"bun", "bunx"}:
             raise ValueError(f"JavaScript checks must use Bun, not: {executable}")
         if executable in {"npm", "pnpm", "yarn", "bun"}:
-            while len(arguments) > 2 and arguments[1].split("=", 1)[0] in {
-                "--cwd",
-                "--dir",
-                "--prefix",
-                "-C",
-            }:
-                _, separator, value = arguments[1].partition("=")
-                directory = (
-                    directory / (value if separator else arguments[2])
-                ).resolve()
-                arguments = [arguments[0], *arguments[2 if separator else 3 :]]
+            arguments, directory = package_directory(arguments, directory)
             if (
                 len(arguments) > 1
                 and arguments[1].startswith("-")
