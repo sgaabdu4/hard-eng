@@ -39,7 +39,7 @@ N/A — hook behaviour with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Pending full gate result below.
+Evidence: `python3 .hooks/hard-eng.py check` → exit 0; 1,507 tests passed.
 E2E: N/A — command text covered by unit cases.
 
 Delivery target: Merge
