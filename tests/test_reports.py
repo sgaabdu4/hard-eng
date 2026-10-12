@@ -34,7 +34,7 @@ def test_delegated_fallow_reuses_only_its_completed_coverage_owner(
     manifest = {
         "scripts": {
             "test:coverage": "node --test",
-            "check:fallow": "pnpm run test:coverage && pnpm run scan",
+            "check:fallow": "bun run test:coverage && bun run scan",
             "scan": "fallow audit --gate all --max-crap 30 --format json --output-file coverage/fallow.json",
         }
     }
@@ -42,12 +42,12 @@ def test_delegated_fallow_reuses_only_its_completed_coverage_owner(
     coverage: Gate = {
         "name": "coverage",
         "role": "tests",
-        "command": ["pnpm", "run", "test:coverage"],
+        "command": ["bun", "run", "test:coverage"],
     }
     scan: Gate = {
         "name": "scan",
         "role": "dead-code-duplicates",
-        "command": ["pnpm", "run", "scan"],
+        "command": ["bun", "run", "scan"],
         "report": {"type": "fallow", "path": "coverage/fallow.json"},
     }
     group: Group = {
@@ -115,14 +115,14 @@ def test_delegated_fallow_reuses_only_selected_declared_coverage_owners(
             {
                 "name": "coverage",
                 "role": "tests",
-                "command": ["pnpm", "run", "test:coverage"],
+                "command": ["bun", "run", "test:coverage"],
             }
         ],
     }
     scan: Gate = {
         "name": "scan",
         "role": "dead-code-duplicates",
-        "command": ["pnpm", "run", "scan"],
+        "command": ["bun", "run", "scan"],
         "report": {"type": "fallow", "path": "coverage/fallow.json"},
     }
     consumer: Group = {
@@ -133,16 +133,16 @@ def test_delegated_fallow_reuses_only_selected_declared_coverage_owners(
             {
                 "name": "coverage",
                 "role": "tests",
-                "command": ["pnpm", "run", "test:coverage"],
+                "command": ["bun", "run", "test:coverage"],
             },
             scan,
         ],
     }
-    scripts = "pnpm run test:coverage && pnpm --dir ../website run test:coverage && pnpm run scan"
+    scripts = "bun run test:coverage && bun --cwd ../website run test:coverage && bun run scan"
     if invalid == "extra":
-        scripts = "pnpm run test:coverage && echo stale && pnpm --dir ../website run test:coverage && pnpm run scan"
+        scripts = "bun run test:coverage && echo stale && bun --cwd ../website run test:coverage && bun run scan"
     elif invalid == "wrong-directory":
-        scripts = "pnpm run test:coverage && pnpm --dir packages/website run test:coverage && pnpm run scan"
+        scripts = "bun run test:coverage && bun --cwd packages/website run test:coverage && bun run scan"
     elif invalid == "missing-owner-edge":
         owner["depends_on"] = []
     elif invalid == "missing-consumer-edge":
@@ -188,11 +188,8 @@ REPORTS = {
 
 
 @pytest.fixture
-def empty_pnpm(tmp_path: Path) -> Path:
+def empty_bun(tmp_path: Path) -> Path:
     (tmp_path / "package.json").write_text('{"private":true}')
-    (tmp_path / "pnpm-lock.yaml").write_text(
-        "lockfileVersion: '9.0'\nimporters:\n  .: {}\n"
-    )
     return tmp_path
 
 
@@ -269,25 +266,24 @@ def test_fallow_audit_requires_active_crap_enforcement(
         reports.validate_fallow(path)
 
 
-def test_osv_accepts_native_empty_only_with_dependency_free_pnpm(
-    empty_pnpm: Path,
+def test_osv_accepts_native_empty_only_with_dependency_free_bun(
+    empty_bun: Path,
 ) -> None:
-    path = empty_pnpm / "report.json"
+    path = empty_bun / "report.json"
     path.write_text('{"results":null}')
     with pytest.raises(ValueError):
         reports.validate_osv(path)
-    reports.validate_osv(path, empty_pnpm=empty_pnpm)
+    reports.validate_osv(path, empty_bun=empty_bun)
     subprocess.run(
         [
             sys.executable,
             "-S",
             "-c",
             (
-                "import importlib.util,sys; from pathlib import Path; "
-                "assert importlib.util.find_spec('yaml') is None; "
+                "import sys; from pathlib import Path; "
                 f"sys.path.insert(0, {str(Path(reports.__file__).parent)!r}); "
                 "import reports; "
-                f"reports.validate_osv(Path({str(path)!r}), empty_pnpm=Path({str(empty_pnpm)!r}))"
+                f"reports.validate_osv(Path({str(path)!r}), empty_bun=Path({str(empty_bun)!r}))"
             ),
         ],
         check=True,
@@ -301,35 +297,25 @@ def test_osv_accepts_native_empty_only_with_dependency_free_pnpm(
         ("package.json", '{"devDependencies":{"test":"1"}}'),
         ("package.json", '{"peerDependencies":{"peer":"1"}}'),
         ("package.json", '{"optionalDependencies":{"optional":"1"}}'),
+        ("package.json", '{"workspaces":["packages/*"]}'),
         ("package.json", "[]"),
-        (
-            "pnpm-lock.yaml",
-            "lockfileVersion: '9.0'\npackages: {hidden: {}}\nimporters: {.: {}}",
-        ),
-        ("pnpm-lock.yaml", "lockfileVersion: '9.0'\nimporters: {.: {}, child: {}}"),
-        (
-            "pnpm-lock.yaml",
-            "lockfileVersion: '9.0'\nimporters: {.: {dependencies: {hidden: '1'}}}",
-        ),
-        ("pnpm-lock.yaml", "broken: ["),
-        ("pnpm-lock.yaml", "[]"),
-        ("pnpm-lock.yaml", None),
-        ("pnpm-workspace.yaml", "packages: ['packages/*']"),
+        ("bun.lock", '{"lockfileVersion": 1}'),
+        ("bun.lock", ""),
         ("report.json", '{"results":null,"errors":["scan failed"]}'),
         ("report.json", "{}"),
     ],
 )
 def test_osv_empty_cannot_hide_dependency_or_scan_gaps(
-    empty_pnpm: Path, name: str, content: str | None
+    empty_bun: Path, name: str, content: str | None
 ) -> None:
-    path = empty_pnpm / "report.json"
+    path = empty_bun / "report.json"
     path.write_text('{"results":null}')
     if content is None:
-        (empty_pnpm / name).unlink()
+        (empty_bun / name).unlink()
     else:
-        (empty_pnpm / name).write_text(content)
+        (empty_bun / name).write_text(content)
     with pytest.raises(ValueError):
-        reports.validate_osv(path, empty_pnpm=empty_pnpm)
+        reports.validate_osv(path, empty_bun=empty_bun)
 
 
 @pytest.mark.parametrize(
@@ -706,7 +692,7 @@ def test_junit_rejects_entities(tmp_path: Path) -> None:
         ("dart-decimate check . --boundary-violations", "add --strict"),
         ("dart-decimate check lib --strict --tolerance 1", "tolerate"),
         ("dart-decimate check . --strict --regression-baseline=x", "tolerate"),
-        ("pnpm dlx dart-decimate@latest check . --fail-on-regression", "tolerate"),
+        ("bun x dart-decimate@latest check . --fail-on-regression", "tolerate"),
         ("react-doctor --scope full --blocking warning", "no-respect-inline-disables"),
         ("react-doctor --blocking error --no-respect-inline-disables", "--blocking"),
         ("react-doctor --no-respect-inline-disables", "--blocking warning"),
@@ -752,6 +738,11 @@ def test_gate_accepts_strict_scanner_commands(tmp_path: Path, command: str) -> N
             "lcov-tests",
             ["--changedSince=b", "--coverage=false", "--passWithNoTests"],
         ),
+        (
+            "bun test --coverage",
+            "lcov-tests",
+            ["--changed=b", "--pass-with-no-tests"],
+        ),
         ("vitest run && node check.js", "lcov-tests", []),
         ("node --test", "lcov-tests", []),
         ("vitest run --coverage", "python-tests", []),
@@ -766,14 +757,14 @@ def test_related_test_flags_follow_the_native_runner(
     tests: Gate = {
         "name": "tests",
         "role": "tests",
-        "command": ["pnpm", "run", "test:coverage"],
+        "command": ["bun", "run", "test:coverage"],
         "report": {"type": kind},
     }
     group: Group = {"path": ".", "checks": [tests]}
     assert reports.related_test_flags(tests, [group], tmp_path, "b") == expected
     scan: Gate = {
         "name": "scan",
-        "command": ["pnpm", "run", "check:fallow"],
+        "command": ["bun", "run", "check:fallow"],
         "report": {"type": "fallow", "path": "coverage/fallow.json"},
     }
     other: Group = {"path": "web", "checks": [scan]}

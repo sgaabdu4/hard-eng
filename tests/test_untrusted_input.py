@@ -215,7 +215,7 @@ def test_fresh_install_ships_and_includes_the_untrusted_input_declarations(
 ) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "package.json").write_text('{"private":true}')
-    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (tmp_path / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     (tmp_path / "index.ts").write_text("export {};\n")
     changes = installer.plan_install(tmp_path.resolve())[0]
     assert changes[UNTRUSTED] == (installer.SOURCE / UNTRUSTED).read_text()

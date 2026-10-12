@@ -102,9 +102,9 @@ def import_linter_project(tmp_path: Path) -> Path:
     "prefix",
     [
         ["fallow"],
-        ["pnpm", "exec", "fallow"],
-        ["pnpm", "dlx", "fallow@3.0.0"],
-        ["pnpm", "dlx", "--package=fallow@latest", "--allow-build=fallow", "fallow"],
+        ["bunx", "fallow"],
+        ["bun", "x", "fallow@3.0.0"],
+        ["bun", "x", "--package=fallow@latest", "fallow"],
     ],
 )
 def test_gate_rejects_disabled_fallow_metric_before_execution(
@@ -134,9 +134,8 @@ def test_fallow_named_arguments_do_not_imply_tool_invocation(tmp_path: Path) -> 
 @pytest.mark.parametrize(
     "prefix",
     [
-        ["pnpm", "--dir", "child"],
-        ["pnpm", "--dir=child"],
-        ["pnpm", "-C", "child"],
+        ["bun", "--cwd", "child"],
+        ["bun", "--cwd=child"],
         ["npm", "--prefix", "child"],
     ],
 )
@@ -159,7 +158,7 @@ def test_unresolved_package_selectors_fail_instead_of_skipping_validation(
 ) -> None:
     with pytest.raises(ValueError, match="package selectors are not supported"):
         validate_gate(
-            {"name": "unit", "command": ["pnpm", "--filter", "child", "run", "unit"]},
+            {"name": "unit", "command": ["bun", "--filter", "child", "run", "unit"]},
             tmp_path,
             set(),
         )
@@ -169,9 +168,9 @@ def test_unresolved_package_selectors_fail_instead_of_skipping_validation(
     "prefix",
     [
         "fallow",
-        "pnpm exec fallow",
-        "pnpm dlx fallow@3.0.0",
-        "pnpm dlx --package=fallow@latest --allow-build=fallow fallow",
+        "bunx fallow",
+        "bun x fallow@3.0.0",
+        "bun x --package=fallow@latest fallow",
     ],
 )
 def test_existing_fallow_audit_must_be_the_enforced_gate(
@@ -203,7 +202,7 @@ def test_existing_fallow_audit_must_be_the_enforced_gate(
     inherited = {"lockfiles", "vulnerabilities", "security"}
     with pytest.raises(ValueError, match="Wire check:fallow"):
         validate_package_services(tmp_path, group, {}, {}, inherited)
-    adapt_javascript(tmp_path, group, "pnpm")
+    adapt_javascript(tmp_path, group, "bun")
     assert len(group["checks"]) == 1
     assert group["checks"][0]["report"]["path"] == "reports/fallow.json"
     validate_package_services(tmp_path, group, {}, {}, inherited)
@@ -237,8 +236,8 @@ def test_gate_rejects_blanket_warnings_in_nested_package_scripts(
     tmp_path: Path, script: str
 ) -> None:
     manifest = tmp_path / "package.json"
-    gate: Gate = {"name": "tests", "command": ["pnpm", "run", "verify"]}
-    scripts = {"verify": "pnpm run unit", "unit": script}
+    gate: Gate = {"name": "tests", "command": ["bun", "run", "verify"]}
+    scripts = {"verify": "bun run unit", "unit": script}
     manifest.write_text(json.dumps({"scripts": scripts}))
     with pytest.raises(ValueError, match="suppress all Node warnings"):
         validate_gate(gate, tmp_path, set())
@@ -281,7 +280,7 @@ def test_native_tools_install_before_reading_environment(
 
     def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
-        assert "MISE_NPM_PACKAGE_MANAGER=pnpm" in command
+        assert "MISE_NPM_PACKAGE_MANAGER=bun" in command
         environment = kwargs["env"]
         assert isinstance(environment, dict)
         if "install" in command:
@@ -296,7 +295,7 @@ def test_native_tools_install_before_reading_environment(
         assert environment["MISE_FETCH_REMOTE_VERSIONS_CACHE"] == "1h"
         assert command[-2:] == [
             "aqua:gitleaks/gitleaks@latest",
-            'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest',
+            "npm:dart-decimate@latest",
         ]
         return subprocess.CompletedProcess(command, 0, '{"PATH":""}', "")
 
@@ -330,7 +329,7 @@ def test_native_tools_install_before_reading_environment(
         (
             "dart-decimate",
             "dart-decimate check . --threshold 0 --strict --format json",
-            'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest',
+            "npm:dart-decimate@latest",
             ["check", ".", "--threshold", "0", "--strict", "--format", "json"],
         ),
         (
@@ -364,7 +363,7 @@ def test_package_script_scanner_executes_provisioned_native_executable(
     (tmp_path / "package.json").write_text(json.dumps({"scripts": {"audit": script}}))
     group: Group = {
         "path": ".",
-        "checks": [{"name": scanner, "command": ["pnpm", "run", "audit"]}],
+        "checks": [{"name": scanner, "command": ["bun", "run", "audit"]}],
     }
     assert execute_provisioned_scanner(
         runner,
@@ -535,7 +534,7 @@ def test_package_script_dart_boundary_gate_checks_native_configuration(
         )
     )
     group: Group = {"path": ".", "language": "dart", "checks": []}
-    gate: Gate = {"name": "boundaries", "command": ["pnpm", "run", "audit"]}
+    gate: Gate = {"name": "boundaries", "command": ["bun", "run", "audit"]}
     calls: list[list[str]] = []
 
     def native_config(command: list[str], **_kwargs: object) -> str:
@@ -648,8 +647,7 @@ def test_installed_check_provisions_yaml_and_keeps_real_gate_failures(
     shutil.copytree(original / ".hooks", tmp_path / ".hooks")
     for name in ("PRODUCT.md", "DESIGN.md"):
         shutil.copyfile(original / name, tmp_path / name)
-    (tmp_path / "package.json").write_text('{"private":true}')
-    (tmp_path / "pnpm-workspace.yaml").write_text("packages: ['apps/*']\n")
+    (tmp_path / "pubspec.yaml").write_text("name: fixture\nworkspace:\n  - apps/*\n")
     (tmp_path / "hard-eng.gates.json").write_text(
         json.dumps(
             {

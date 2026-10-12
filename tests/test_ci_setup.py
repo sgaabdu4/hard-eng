@@ -16,7 +16,7 @@ from ci_setup import (
     PERMISSIONS,
     configure_ci,
     impact_tools,
-    migrate_pnpm_bootstrap,
+    migrate_bun,
     workflow_tools,
 )
 from conftest import commit, load_module, use_installed_mise
@@ -26,37 +26,32 @@ from shipping import ShippingError, ShippingPolicy
 SOURCE = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize(
-    "manifest,pinned",
-    [
-        ({}, False),
-        ({"packageManager": "pnpm@12.4.1+sha512.abc"}, True),
-        ({"devEngines": {"packageManager": {"name": "pnpm", "version": "^12"}}}, True),
-    ],
-)
-def test_pnpm_bootstrap_uses_root_declaration(
-    tmp_path: Path,
-    manifest: dict[str, object],
-    pinned: bool,
-) -> None:
-    original = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
-    assert migrate_pnpm_bootstrap(tmp_path, original) == original
-    (tmp_path / "package.json").write_text(json.dumps(manifest))
-    migrated = migrate_pnpm_bootstrap(tmp_path, original)
-    job = yaml.safe_load(migrated)["jobs"]["hard-eng"]
-    bootstrap = next(
-        step["with"] for step in job["steps"] if "pnpm/setup@" in step.get("uses", "")
+def test_pnpm_bootstrap_migrates_to_the_template_bun_steps() -> None:
+    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    launcher = 'bun x --package="@jdxcode/mise-linux-${RUNNER_ARCH,,}@latest" mise'
+    old = (
+        template.replace(
+            "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0\n"
+            "        with:\n          bun-version: latest\n",
+            "      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0\n"
+            "        with:\n          version: latest\n          runtime: node@latest\n"
+            "          install: false\n",
+        )
+        .replace(
+            launcher,
+            "pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise "
+            "--package=@jdxcode/mise@latest mise",
+        )
+        .replace(
+            '            echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/bun/cache"\n',
+            '            echo "PNPM_CONFIG_STORE_DIR=$RUNNER_TEMP/hard-eng-tools/pnpm/store"\n'
+            '            echo "PNPM_CONFIG_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/pnpm/cache"\n',
+        )
+        .replace("'uv@latest python@3.12'", "'uv@latest python@3.12 node@latest'")
     )
-    assert bootstrap.get("version") == (None if pinned else "latest")
-    assert bootstrap["install"] is False
-    assert migrate_pnpm_bootstrap(tmp_path, migrated) == migrated
-    custom = original.replace("version: latest", "version: 11.24.0")
-    assert migrate_pnpm_bootstrap(tmp_path, custom) == custom
-    custom = original.replace(
-        "          install: false\n",
-        "          install: false\n          working-directory: web\n",
-    )
-    assert migrate_pnpm_bootstrap(tmp_path, custom) == custom
+    assert "pnpm" in old and old != template
+    assert migrate_bun(SOURCE, old) == template
+    assert migrate_bun(SOURCE, template) == template
 
 
 @pytest.mark.parametrize("wrapped", [False, True])
@@ -70,8 +65,7 @@ def test_native_tool_bootstrap_preserves_ci_sdk_executables(
         "MISE_DATA_DIR",
         "MISE_CACHE_DIR",
         "MISE_STATE_DIR",
-        "PNPM_CONFIG_STORE_DIR",
-        "PNPM_CONFIG_CACHE_DIR",
+        "BUN_INSTALL_CACHE_DIR",
         "NPM_CONFIG_CACHE",
     ):
         monkeypatch.delenv(name, raising=False)
@@ -83,7 +77,7 @@ def test_native_tool_bootstrap_preserves_ci_sdk_executables(
     if location == "configured":
         data = tmp_path / "configured/data"
         monkeypatch.setenv("MISE_DATA_DIR", str(data))
-        monkeypatch.setenv("PNPM_CONFIG_STORE_DIR", str(tmp_path / "configured/store"))
+        monkeypatch.setenv("BUN_INSTALL_CACHE_DIR", str(tmp_path / "configured/cache"))
     sdk, scanner = tmp_path / "sdk", data / "installs/gitleaks/test/bin"
     for directory, executable in ((sdk, "uv"), (scanner, "gitleaks")):
         directory.mkdir(parents=True)
@@ -101,12 +95,11 @@ def test_native_tool_bootstrap_preserves_ci_sdk_executables(
         environment = _kwargs["env"]
         assert isinstance(environment, dict)
         assert environment["MISE_DATA_DIR"] == str(data)
-        assert environment["PNPM_CONFIG_STORE_DIR"] == str(
-            tmp_path / "configured/store"
+        assert environment["BUN_INSTALL_CACHE_DIR"] == str(
+            tmp_path / "configured/cache"
             if location == "configured"
-            else storage / "pnpm/store"
+            else storage / "bun/cache"
         )
-        assert environment["PNPM_CONFIG_CACHE_DIR"] == str(storage / "pnpm/cache")
         return subprocess.CompletedProcess(
             command, 0, json.dumps({"PATH": str(scanner)}), ""
         )
@@ -180,7 +173,7 @@ def test_generated_ci_timeout(
     tmp_path: Path, seconds: int | None, minutes: int
 ) -> None:
     config: GateConfig = {"packages": [], "shared": []}
-    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@12.4.1"}')
+    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
     if seconds is not None:
         config["shipping"] = {
             "base": "main",
@@ -437,12 +430,10 @@ jobs:
     assert len(commands) == 2
     assert " install uv@latest" in commands[0] and commands[0].endswith("&&")
     assert commands[1].startswith("MISE_FETCH_REMOTE_VERSIONS_CACHE=1h ")
-    assert (
-        " exec uv@latest python@3.12 node@latest flutter@latest pnpm@11.18.0"
-        in commands[1]
-    )
-    assert "flutter@latest pnpm@11.18.0" in commands[0]
-    assert all("dlx --config.ignore-scripts=false --allow-build" in c for c in commands)
+    assert " exec uv@latest python@3.12 flutter@latest" in commands[1]
+    assert "flutter@latest" in commands[0]
+    assert not any("node@latest" in c or "pnpm" in c for c in commands)
+    assert all(c.count("bun x --package=") == 1 for c in commands)
     path.write_text(migrated)
     changes.clear()
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
@@ -462,10 +453,6 @@ def test_known_action_pins_migrate_without_replacing_custom_workflow(
         .replace(
             "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
             "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5",
-        )
-        .replace(
-            "703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0",
-            "c9883cc79df532ad1a7b81bf9ab944ceb090d65c # v2.0.0",
         )
     )
     custom = "# Project-owned note\n" + old.replace(
@@ -487,9 +474,7 @@ def test_known_action_pins_migrate_without_replacing_custom_workflow(
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, repeated)
     assert repeated == {}
     path.write_text(
-        custom.replace("fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09", "a" * 40).replace(
-            "c9883cc79df532ad1a7b81bf9ab944ceb090d65c", "b" * 40
-        )
+        custom.replace("fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09", "a" * 40)
     )
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, repeated)
     assert repeated == {}
@@ -512,7 +497,7 @@ def generated_tools(
     checks = job["steps"][-1]
     fallback = checks["env"]["SDK_TOOLS"].split(" || '", 1)[1].split("'", 1)[0]
     output = subprocess.check_output(
-        ["bash", "-c", 'pnpm() { printf "%s\\n" "$*"; }\n' + checks["run"]],
+        ["bash", "-c", 'bun() { printf "%s\\n" "$*"; }\n' + checks["run"]],
         env={
             **os.environ,
             "SDK_TOOLS": " ".join(impact_tools(root, selected))
@@ -559,7 +544,7 @@ def test_dart_workflow_uses_packaged_scanner_without_rust(
     )
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
     workflow, installed, executed = generated_tools(tmp_path, config)
-    tools = ["uv@latest", "python@3.12", "node@latest", manager + "@latest"]
+    tools = ["uv@latest", "python@3.12", manager + "@latest"]
     assert installed == executed == tools
     assert "rust@latest" not in workflow
 
@@ -660,7 +645,7 @@ def test_old_workflow_gains_docs_only_steps(
     template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
     impact = template[
         template.index("      - name: Find whether") : template.index(
-            "      - uses: pnpm/setup@"
+            "      - uses: oven-sh/setup-bun@"
         )
     ]
     scan = template[
@@ -712,7 +697,7 @@ def test_impact_reports_docs_only_before_tools(
     module.__dict__["ROOT"] = repository
     assert module.impact("HEAD") == 0
     assert capsys.readouterr().out == (
-        f"docs_only={expected}\ntools=uv@latest python@3.12 node@latest\n"
+        f"docs_only={expected}\ntools=uv@latest python@3.12\n"
     )
 
 
@@ -736,7 +721,7 @@ def test_impact_provisions_selected_sdks_without_yaml_and_falls_back_to_all(
     ]
     for group in groups:
         (repository / group["path"]).mkdir()
-    (repository / "web/package.json").write_text('{"packageManager":"pnpm@12.4.1"}')
+    (repository / "web/package.json").write_text('{"packageManager":"bun@1.3.0"}')
     (repository / "hard-eng.gates.json").write_text(
         json.dumps({"packages": groups, "shared": []})
     )
@@ -745,13 +730,10 @@ def test_impact_provisions_selected_sdks_without_yaml_and_falls_back_to_all(
     module = load_module("selected_impact_runner", SOURCE / ".hooks/hard-eng.py")
     module.__dict__["ROOT"] = repository
     assert module.impact("HEAD") == 0
-    assert (
-        "tools=uv@latest python@3.12 node@latest pnpm@12.4.1\n"
-        in capsys.readouterr().out
-    )
+    assert "tools=uv@latest python@3.12 bun@1.3.0\n" in capsys.readouterr().out
     assert module.impact("missing-base") == 0
     assert (
-        "tools=uv@latest python@3.12 node@latest pnpm@12.4.1 flutter@latest\n"
+        "tools=uv@latest python@3.12 bun@1.3.0 flutter@latest\n"
         in capsys.readouterr().out
     )
     code = (
@@ -768,19 +750,19 @@ def test_impact_provisions_selected_sdks_without_yaml_and_falls_back_to_all(
     support: Group = {"path": "function", "checks": groups[2]["checks"]}
     assert impact_tools(repository, [support])[-1] == "dart@latest"
     (repository / "web/package.json").write_text(
-        '{"packageManager":"pnpm@12.4.1;echo injected"}'
+        '{"packageManager":"bun@1.3.0;echo injected"}'
     )
-    with pytest.raises(ValueError, match="valid pnpm"):
+    with pytest.raises(ValueError, match="valid bun"):
         impact_tools(repository, groups)
 
 
 @pytest.mark.parametrize(
     ("declared", "own_lock", "own_install", "expected"),
     [
-        (None, False, False, ["pnpm@11.24.0"]),
-        ("pnpm@12.4.1", True, True, ["pnpm@11.24.0", "pnpm@12.4.1"]),
-        (None, True, True, ["pnpm@11.24.0", "pnpm@latest"]),
-        (None, False, True, ["pnpm@11.24.0", "pnpm@latest"]),
+        (None, False, False, ["bun@1.3.0"]),
+        ("bun@1.4.0", True, True, ["bun@1.3.0", "bun@1.4.0"]),
+        (None, True, True, ["bun@1.3.0", "bun@latest"]),
+        (None, False, True, ["bun@1.3.0", "bun@latest"]),
     ],
 )
 def test_workspace_sdks_reuse_the_dependency_install_owners_pin(
@@ -790,20 +772,19 @@ def test_workspace_sdks_reuse_the_dependency_install_owners_pin(
     own_install: bool,
     expected: list[str],
 ) -> None:
-    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@11.24.0"}')
-    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: 9.0\n")
-    (tmp_path / "pnpm-workspace.yaml").write_text("packages: [packages/*]\n")
+    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
+    (tmp_path / "bun.lock").write_text("{}\n")
     member = tmp_path / "packages/member"
     member.mkdir(parents=True)
     (member / "package.json").write_text(
         json.dumps({"packageManager": declared} if declared else {})
     )
     if own_lock:
-        (member / "pnpm-lock.yaml").write_text("lockfileVersion: 9.0\n")
+        (member / "bun.lock").write_text("{}\n")
     install = {
         "name": "dependencies",
         "role": "lockfiles",
-        "command": ["pnpm", "install", "--frozen-lockfile"],
+        "command": ["bun", "install", "--frozen-lockfile"],
     }
     groups: list[Group] = [
         {"path": ".", "language": "javascript", "checks": [install]},
@@ -814,10 +795,10 @@ def test_workspace_sdks_reuse_the_dependency_install_owners_pin(
         },
     ]
     config: GateConfig = {"packages": groups, "shared": []}
-    assert impact_tools(tmp_path, groups)[3:] == expected
-    assert workflow_tools(tmp_path, config)[3:] == expected
+    assert impact_tools(tmp_path, groups)[2:] == expected
+    assert workflow_tools(tmp_path, config)[2:] == expected
     inherited = impact_tools(tmp_path, [{"path": ".", "checks": [install]}, groups[1]])
-    assert inherited[3:] == expected[-1:]
+    assert inherited[2:] == expected[-1:]
 
 
 def flutter_app_config(root: Path) -> GateConfig:
@@ -847,21 +828,21 @@ def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> 
     start, end = old.index("    env:\n"), old.index("    steps:\n")
     old = old[:start] + old[end:]
     old = old.replace(
-        "          SDK_TOOLS: ${{ steps.impact.outputs.tools || 'uv@latest python@3.12 node@latest' }}\n",
+        "          SDK_TOOLS: ${{ steps.impact.outputs.tools || 'uv@latest python@3.12' }}\n",
         "",
     ).replace('          read -r -a tools <<< "$SDK_TOOLS ${EXTRA_SDK_TOOLS:-}"\n', "")
     old = old.replace(
-        '"${tools[@]}"', "uv@latest python@3.12 pnpm@12.4.1 dart@latest rust@latest"
+        '"${tools[@]}"', "uv@latest python@3.12 bun@1.3.0 dart@latest rust@latest"
     )
     old = old.replace(
-        "      - uses: pnpm/setup@",
+        "      - uses: oven-sh/setup-bun@",
         "      - name: Cache native tool downloads\n"
         "        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0\n"
         "        with:\n"
         "          path: ${{ runner.temp }}/hard-eng-tools\n"
         "          key: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-${{ hashFiles('hard-eng.gates.json') }}\n"
         "          restore-keys: ${{ runner.os }}-${{ runner.arch }}-hard-eng-tools-\n"
-        "      - uses: pnpm/setup@",
+        "      - uses: oven-sh/setup-bun@",
         1,
     )
     before, checks = old.split("      - name: Run required checks\n", 1)
@@ -875,9 +856,8 @@ def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> 
     tools = [
         "uv@latest",
         "python@3.12",
-        "node@latest",
         "flutter@latest",
-        "pnpm@12.4.1",
+        "bun@1.3.0",
         "rust@latest",
     ]
     assert installed == executed == tools
@@ -886,13 +866,13 @@ def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> 
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, config, changes)
     assert not changes
-    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@12.4.1"}')
-    (tmp_path / "pnpm-lock.yaml").touch()
+    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
+    (tmp_path / "bun.lock").touch()
     config["packages"].insert(0, {"path": ".", "language": "javascript", "checks": []})
-    path.write_text(old.replace("pnpm@12.4.1", "pnpm@12.4.1 pnpm@latest"))
+    path.write_text(old.replace("bun@1.3.0", "bun@1.3.0 bun@latest"))
     workflow, installed, executed = generated_tools(tmp_path, config)
     assert installed == executed
-    assert [tool for tool in installed if tool.startswith("pnpm@")] == ["pnpm@12.4.1"]
+    assert [tool for tool in installed if tool.startswith("bun@")] == ["bun@1.3.0"]
     assert "          version: latest\n" not in workflow
     assert "actions/cache@" not in workflow
     path.write_text(old.replace("python@3.12", "python@3.11"))
@@ -950,19 +930,6 @@ def test_customised_workflow_names_missing_sdk(
     )
 
 
-def test_installed_launcher_gains_ignore_scripts_override(tmp_path: Path) -> None:
-    """A project's pnpm ignoreScripts must not skip mise's binary download in CI."""
-    path = tmp_path / ".github/workflows/hard-eng.yml"
-    path.parent.mkdir(parents=True)
-    installed = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
-    path.write_text(installed.replace("--config.ignore-scripts=false ", ""))
-    changes: dict[str, str] = {}
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    migrated = changes[str(path.relative_to(tmp_path))]
-    assert "pnpm dlx --allow-build" not in migrated
-    assert migrated.count("pnpm dlx --config.ignore-scripts=false --allow-build") == 4
-
-
 @pytest.mark.parametrize("existing", ["", "  pull-requests: write\n"])
 def test_workflow_holds_one_pr_permission(tmp_path: Path, existing: str) -> None:
     (path := tmp_path / ".github/workflows/hard-eng.yml").parent.mkdir(parents=True)
@@ -977,7 +944,7 @@ def test_generated_tool_cache_is_removed_from_existing_workflows(
     tmp_path: Path,
 ) -> None:
     template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
-    setup = "      - uses: pnpm/setup@"
+    setup = "      - uses: oven-sh/setup-bun@"
     cache = (
         "      - name: Cache native tool downloads\n"
         "        if: steps.impact.outputs.docs_only != 'true'\n"

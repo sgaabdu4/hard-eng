@@ -346,6 +346,9 @@ def prepare_command(
     group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
 ) -> list[str]:
     command = managed_command(gate["command"], ROOT / group["path"])
+    lockfile = ROOT / group["path"] / "bun.lock"
+    if "--lockfile=bun.lock" in command and not lockfile.exists():
+        command = [value for value in command if value != "--lockfile=bun.lock"]
     if gate.get("role") == "security" and "p/python" in command:
         index = command.index("p/python") + 1
         command = [
@@ -565,10 +568,6 @@ def run_limited_gate(
         command, coverage_path = related_command(
             command, coverage_path, gate, groups or [group], directory, related_base
         )
-        lockfiles = [arg for arg in command if arg.startswith("--lockfile")]
-        bun_lockfile = scanner == "osv" and lockfiles == ["--lockfile=bun.lock"]
-        if bun_lockfile and not (directory / "bun.lock").exists():
-            command = [arg for arg in command if arg != "--lockfile=bun.lock"]
         capture = (tests and kind == "dart-tests" and report.get("stdout", True)) or (
             scanner and report.get("stdout") is True
         )
@@ -600,7 +599,7 @@ def run_limited_gate(
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
         if result.returncode == 0 and scanner and report_path is not None:
-            if bun_lockfile:
+            if scanner == "osv" and "--lockfile=bun.lock" in gate["command"]:
                 from reports import validate_osv
 
                 validate_osv(report_path, empty_bun=directory)
