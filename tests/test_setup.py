@@ -82,6 +82,17 @@ def test_non_bun_declaration_requires_migration(tmp_path: Path, manager: str) ->
         javascript_manager(tmp_path)
 
 
+def test_migration_instruction_names_pnpm_settings_bun_does_not_carry(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text("{}")
+    (tmp_path / "pnpm-workspace.yaml").write_text("minimumReleaseAge: 1440\n")
+    with pytest.raises(ValueError) as error:
+        javascript_manager(tmp_path)
+    for setting in ("minimumReleaseAge", "trustedDependencies", "bunfig.toml"):
+        assert setting in str(error.value)
+
+
 @pytest.mark.parametrize(
     "lockfile",
     [

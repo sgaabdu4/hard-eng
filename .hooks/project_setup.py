@@ -276,7 +276,11 @@ def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
             f"{directory}: Bun is required. Run `bun install` to convert the lockfile, "
             "move pnpm-workspace.yaml packages and catalogs into package.json "
             "`workspaces`, set packageManager to bun@VERSION, run scripts with "
-            "`bun run` and `bun x`, then delete: "
+            "`bun run` and `bun x` (`bun --cwd=DIR run`, not `--cwd DIR`). Bun does not "
+            "carry pnpm settings: move onlyBuiltDependencies or allowBuilds to "
+            "package.json trustedDependencies, minimumReleaseAge (minutes) to "
+            "bunfig.toml [install] minimumReleaseAge (seconds), and overrides or "
+            "patchedDependencies to package.json. Then delete: "
             + ", ".join(legacy or ["the old packageManager value"])
         )
     lockfile = "bun.lock"
