@@ -290,6 +290,42 @@ def test_deleting_a_test_file_without_replacement_fails(tmp_path: Path) -> None:
         validate_suppressions(root, "HEAD")
 
 
+TWO_TESTS = (
+    "test('keeps a', () => {\n  expect(a()).toBe(1);\n});\n"
+    "test('duplicate of a', () => {\n  expect(a()).toBe(1);\n});\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("entry", "passes"),
+    [
+        (
+            "Removed test: src/a.test.ts :: duplicate of a :: 'keeps a' proves the same",
+            True,
+        ),
+        (
+            "- Removed test: `src/a.test.ts` :: `duplicate of a` :: same as keeps a",
+            True,
+        ),
+        ("Removed test: src/a.test.ts :: duplicate of a ::", False),
+        ("Removed test: src/a.test.ts :: keeps a :: wrong test named", False),
+        ("Removed test: src/b.test.ts :: duplicate of a :: wrong file", False),
+    ],
+)
+def test_planned_removal_with_a_reason_allows_only_the_named_test(
+    tmp_path: Path, entry: str, passes: bool
+) -> None:
+    root = switch_root(tmp_path, "src/a.test.ts", TWO_TESTS)
+    (root / "src/a.test.ts").write_text(TWO_TESTS.split("test('duplicate")[0])
+    (root / "features/x").mkdir(parents=True)
+    (root / "features/x/PLAN.md").write_text(f"# Plan\n\n{entry}\n")
+    if passes:
+        validate_suppressions(root, "HEAD")
+    else:
+        with pytest.raises(ValueError, match=r"tests lose 1 assertion lines net"):
+            validate_suppressions(root, "HEAD")
+
+
 def retiring_root(tmp_path: Path) -> Path:
     root = switch_root(tmp_path, "app.py", "def keep():\n    return 1\n")
     (root / "migrate_users.py").write_text("def run():\n    return 2\n")

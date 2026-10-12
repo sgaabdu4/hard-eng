@@ -432,9 +432,25 @@ def split_tests(block: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
     return tests
 
 
+REMOVAL = re.compile(
+    r"^\s*(?:[-*]\s+)?Removed test:\s*(.+?)\s*::\s*(.+?)\s*::\s*(\S.*)$"
+)
+
+
+def recorded_removals(added: dict[str, list[tuple[int, str]]]) -> set[tuple[str, str]]:
+    return {
+        (match[1].strip("`"), match[2].strip("`'\""))
+        for name, lines in added.items()
+        if PurePosixPath(name).name == "PLAN.md"
+        for _, text in lines
+        if (match := REMOVAL.match(text))
+    }
+
+
 def lost_assertions(
     blocks: list[tuple[str, list[tuple[int, str]]]],
     retired: tuple[set[str], set[str]],
+    recorded: set[tuple[str, str]],
 ) -> list[str]:
     names, modules = retired
     imported: dict[str, set[str]] = {}
@@ -449,7 +465,10 @@ def lost_assertions(
     for name, block in blocks:
         gone = names | imported[name] - SYNTAX
         for test in split_tests(block):
-            if not gone.intersection(WORD.findall("\n".join(t for _, t in test))):
+            text = "\n".join(t for _, t in test)
+            if any(path == name and title in text for path, title in recorded):
+                continue
+            if not gone.intersection(WORD.findall(text)):
                 lost += [f"{name}:{n}" for n, _ in assertion_lines(name, test)]
     return lost
 
@@ -482,13 +501,16 @@ def validate_suppressions(root: Path, base: str | None) -> None:
         if is_test_path(PurePosixPath(name)):
             gained += len(assertion_lines(name, added.get(name, [])))
             blocks += [(name, b) for b in removed_blocks(removed.get(name, []))]
-    lost = lost_assertions(blocks, (set(), set()))
+    recorded = recorded_removals(added)
+    lost = lost_assertions(blocks, (set(), set()), recorded)
     if len(lost) > gained:
-        lost = lost_assertions(blocks, retired_names(root, removed))
+        lost = lost_assertions(blocks, retired_names(root, removed), recorded)
     if len(lost) > gained:
         found.append(
             f"tests lose {len(lost) - gained} assertion lines net "
-            f"({len(lost)} removed, {gained} added); removed at {', '.join(lost)}"
+            f"({len(lost)} removed, {gained} added); removed at {', '.join(lost)}. "
+            "To remove an unneeded test, add `Removed test: <path> :: <test name> :: "
+            "<what still proves it or why it is unneeded>` to the plan"
         )
     if found:
         raise ValueError(

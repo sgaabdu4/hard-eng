@@ -11,7 +11,7 @@ Apply when designing, changing or reviewing tests, alongside the AGENTS.md Tests
 | Cases | Cover relevant boundaries, invalid/empty inputs, denied access, failure/recovery, concurrency + state/time transitions. Use realistic minimal data; isolate mutable state and avoid timing/order-dependent assertions. No mandatory matrix of unrelated cases. |
 | Regression | Write the test before the fix, with the expected result from the report or contract, not the fixed code. Show it fails on the original defective behavior for the expected reason, then passes with the fix. Use an available defective revision or existing controlled reproduction; unavailable red evidence remains a stated gap. Setup/compiler/fixture failures are not valid regression proof. |
 | Runtime contract | Compiler/interpreter/runner behavior needs compatible tool execution. Source-text checks establish wiring only. UI/device/API/CLI journey proof → [E2E](../../e2e/SKILL.md). |
-| Strength | Coverage, execution, snapshots, existence checks + aggregate counts alone cannot establish the intended behavior. Judge whether a realistic wrong result would fail the assertion; remove duplicate or implementation-coupled proof only within task scope. |
+| Strength | Coverage, execution, snapshots, existence checks + aggregate counts alone cannot establish the intended behavior. Judge whether a realistic wrong result would fail the assertion; remove duplicate or implementation-coupled proof only within task scope; record each removal in the plan as `Removed test: <path> :: <test name> :: <what still proves it or why it is unneeded>`. |
 
 ## Explicit TDD
 
