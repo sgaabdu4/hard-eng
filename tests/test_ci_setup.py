@@ -42,6 +42,7 @@ def test_pnpm_bootstrap_migrates_to_the_template_bun_steps() -> None:
             "pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise "
             "--package=@jdxcode/mise@latest mise",
         )
+        .replace("'uv@latest python@3.12'", "'uv@latest python@3.12 node@latest'")
         .replace(
             '            echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/bun/cache"\n',
             '            echo "PNPM_CONFIG_STORE_DIR=$RUNNER_TEMP/hard-eng-tools/pnpm/store"\n'
@@ -457,9 +458,9 @@ jobs:
     assert len(commands) == 2
     assert " install uv@latest" in commands[0] and commands[0].endswith("&&")
     assert commands[1].startswith("MISE_FETCH_REMOTE_VERSIONS_CACHE=1h ")
-    assert " exec uv@latest python@3.12 node@latest flutter@latest" in commands[1]
+    assert " exec uv@latest python@3.12 flutter@latest" in commands[1]
     assert "flutter@latest" in commands[0]
-    assert not any("pnpm" in c for c in commands)
+    assert not any("node@latest" in c or "pnpm" in c for c in commands)
     assert all(c.count("bun x --package=") == 1 for c in commands)
     path.write_text(migrated)
     changes.clear()
@@ -757,12 +758,10 @@ def test_impact_provisions_selected_sdks_without_yaml_and_falls_back_to_all(
     module = load_module("selected_impact_runner", SOURCE / ".hooks/hard-eng.py")
     module.__dict__["ROOT"] = repository
     assert module.impact("HEAD") == 0
-    assert (
-        "tools=uv@latest python@3.12 node@latest bun@1.3.0\n" in capsys.readouterr().out
-    )
+    assert "tools=uv@latest python@3.12 bun@1.3.0\n" in capsys.readouterr().out
     assert module.impact("missing-base") == 0
     assert (
-        "tools=uv@latest python@3.12 node@latest bun@1.3.0 flutter@latest\n"
+        "tools=uv@latest python@3.12 bun@1.3.0 flutter@latest\n"
         in capsys.readouterr().out
     )
     code = (
@@ -824,10 +823,10 @@ def test_workspace_sdks_reuse_the_dependency_install_owners_pin(
         },
     ]
     config: GateConfig = {"packages": groups, "shared": []}
-    assert impact_tools(tmp_path, groups)[2:] == ["node@latest", *expected]
-    assert workflow_tools(tmp_path, config)[2:] == ["node@latest", *expected]
+    assert impact_tools(tmp_path, groups)[2:] == expected
+    assert workflow_tools(tmp_path, config)[2:] == expected
     inherited = impact_tools(tmp_path, [{"path": ".", "checks": [install]}, groups[1]])
-    assert inherited[2:] == ["node@latest", expected[-1]]
+    assert inherited[2:] == expected[-1:]
 
 
 def flutter_app_config(root: Path) -> GateConfig:

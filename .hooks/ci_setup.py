@@ -77,7 +77,7 @@ def impact_tools(root: Path, groups: list[Group]) -> list[str]:
         if language == "python" and (directory / "poetry.lock").exists():
             tools.append("poetry@latest")
         if language == "javascript":
-            tools += ["node@latest", bun_specification(root, group, groups)]
+            tools.append(bun_specification(root, group, groups))
     if "flutter@latest" in tools:
         tools = [tool for tool in tools if tool != "dart@latest"]
     return list(dict.fromkeys(tools))
@@ -162,7 +162,7 @@ def migrate_bun(source: Path, content: str) -> str:
         r'\1echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/bun/cache"\n',
         content,
     )
-    tool = r"pnpm@[\w.+-]+"
+    tool = r"(?:node@latest|pnpm@[\w.+-]+)"
     return "".join(
         re.sub(rf"(?<=['\"]){tool} ?| {tool}(?=[ '\"\n])", "", line)
         if "mise --no-config" in line or "SDK_TOOLS" in line
@@ -247,9 +247,8 @@ def workflow_tools(root: Path, config: GateConfig) -> list[str]:
                 raise ValueError(
                     "CI SDK specifications must contain a tool and version"
                 )
-            for tool in ["node@latest"] * (language == "javascript") + [specification]:
-                if tool not in tools:
-                    tools.append(tool)
+            if specification not in tools:
+                tools.append(specification)
     if "flutter@latest" in tools and "dart@latest" in tools:
         tools.remove("dart@latest")
     return tools
