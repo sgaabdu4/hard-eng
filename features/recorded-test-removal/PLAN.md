@@ -1,6 +1,6 @@
 # Allow recorded removal of unneeded tests
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -21,7 +21,9 @@ Authority: The user asked to fix #277, run an adversarial review loop, then open
 - [x] A plan line with path, name and reason lets that deleted test pass the check.
 - [x] A missing reason, a different test name or a different file still fails.
 - [x] The failure message shows the accepted form.
-- [ ] Full gate passes.
+- [x] A shared name prefix, a name only in a test body, and a body line quoting the name do not exempt a test.
+- [x] Multi-line and `test.each` declarations can be recorded.
+- [x] Full gate passes.
 
 ## Baseline + execution
 
@@ -39,9 +41,9 @@ N/A — check behaviour with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending full gate.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check` → exit 0; 1,503 tests passed. Four Codex adversarial review rounds on gpt-6-astra: rounds 1-3 findings fixed (exact names, declaration-only names, multi-line and `test.each` declarations); escaped quotes in names and assertions inside a deleted `afterEach` hook skipped as rare, with the check failing safe.
 E2E: N/A — hook logic covered by fixture repositories in the test suite.
 
 Delivery target: Merge
-Delivery: Pending
+Delivery: Pending — PR checks, rebase merge, main CI.
