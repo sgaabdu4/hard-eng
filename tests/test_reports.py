@@ -293,6 +293,13 @@ def test_osv_accepts_native_empty_only_with_dependency_free_bun(
     )
 
 
+def test_osv_empty_result_without_a_manifest_fails_cleanly(tmp_path: Path) -> None:
+    path = tmp_path / "report.json"
+    path.write_text('{"results":[]}')
+    with pytest.raises(ValueError):
+        reports.validate_osv(path, empty_bun=tmp_path)
+
+
 @pytest.mark.parametrize(
     ("name", "content"),
     [
