@@ -1,5 +1,6 @@
 """Keep deployment copies out of package ownership without hiding real owners."""
 
+import json
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -10,6 +11,7 @@ from gate_config import (
     validate_manifest_groups,
     validate_required_checks,
 )
+from project_setup import javascript_manager
 
 
 @pytest.mark.parametrize("manifest", ["pubspec.yaml", "package.json", "pyproject.toml"])
@@ -138,3 +140,23 @@ def test_requirements_only_project_is_told_how_to_declare_itself(
     assert "uv init --bare" in str(error.value)
     assert "uv add -r requirements.txt" in str(error.value)
     assert "New project" not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    ("manifest", "required"),
+    [
+        ({}, False),
+        ({"dependencies": {"left-pad": "1.3.0"}}, True),
+        ({"devDependencies": {"typescript": "6.0.0"}}, True),
+        ({"workspaces": ["packages/*"]}, True),
+    ],
+)
+def test_bun_lockfile_is_optional_only_without_dependencies(
+    tmp_path: Path, manifest: dict[str, object], required: bool
+) -> None:
+    (tmp_path / "package.json").write_text(json.dumps(manifest))
+    if required:
+        with pytest.raises(ValueError, match="bun.lock is required"):
+            javascript_manager(tmp_path)
+    else:
+        assert javascript_manager(tmp_path)[0] == "bun"

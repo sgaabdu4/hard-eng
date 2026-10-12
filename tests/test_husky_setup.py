@@ -90,7 +90,7 @@ def test_shell_bootstrap_installs_verified_main(
         target = target.parent / "fresh"
         init(target)
         (target / "package.json").write_text('{"private":true}')
-        (target / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+        (target / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     result = subprocess.run(
         ["sh", str(source / "setup.sh")],
         cwd=target,

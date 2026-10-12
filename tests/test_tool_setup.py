@@ -9,23 +9,23 @@ from pathlib import Path
 import pytest
 
 SOURCE = Path(__file__).resolve().parents[1]
-PNPM = """#!{python}
+BUN = """#!{python}
 import json, os, sys, time
 from pathlib import Path
 state = Path({state!r})
-if sys.argv[1] == "view":
+if sys.argv[1] == "pm" and sys.argv[2] == "view":
     if (state / "offline").exists():
         raise SystemExit("network unreachable")
     print(json.dumps((state / "latest").read_text().strip()))
     raise SystemExit
-target = Path(sys.argv[sys.argv.index("--dir") + 1])
-version = sys.argv[-1].rsplit("@", 1)[1]
+target = Path.cwd()
+package, version = sys.argv[-1].rsplit("@", 1)
 with (state / "adds").open("a") as log:
     log.write(version + "\\n")
 time.sleep(float(os.environ.get("FAKE_ADD_SECONDS", "0")))
 if (state / "fail").exists():
     raise SystemExit("registry unavailable")
-binary = target / "node_modules/@jdxcode/mise/bin/mise"
+binary = target / "node_modules" / package / "bin/mise"
 binary.parent.mkdir(parents=True)
 reported = "0.0.0" if (state / "corrupt").exists() else version
 binary.write_text(
@@ -55,9 +55,9 @@ def registry(tmp_path: Path) -> Path:
     state.mkdir()
     bin_directory.mkdir()
     (state / "latest").write_text("2026.9.13")
-    pnpm = bin_directory / "pnpm"
-    pnpm.write_text(PNPM.format(python=sys.executable, state=str(state)))
-    pnpm.chmod(0o755)
+    bun = bin_directory / "bun"
+    bun.write_text(BUN.format(python=sys.executable, state=str(state)))
+    bun.chmod(0o755)
     return state
 
 
@@ -67,7 +67,7 @@ def launch(
     environment = {
         name: value
         for name, value in os.environ.items()
-        if not name.startswith(("MISE_", "PNPM_CONFIG_", "NPM_CONFIG_"))
+        if not name.startswith(("MISE_", "BUN_", "NPM_CONFIG_"))
     }
     return subprocess.Popen(
         [
@@ -133,7 +133,7 @@ def test_new_version_replaces_unheld_launchers_only(
     tmp_path: Path, registry: Path
 ) -> None:
     owned = tmp_path / "runner/hard-eng-tools"
-    unrelated = owned / "pnpm/cache/dlx/earlier/pkg"
+    unrelated = owned / "bun/cache/earlier/pkg"
     unrelated.mkdir(parents=True)
     (registry / "latest").write_text("2026.9.11")
     assert provision(tmp_path).returncode == 0
@@ -182,7 +182,23 @@ def test_interrupted_installation_is_replaced_cleanly(
     assert [path.name for path in storage.iterdir() if path.is_dir()] == ["2026.9.13"]
 
 
-def test_tools_are_provisioned_outside_a_project_that_pins_pnpm(
+def test_pnpm_era_launcher_folder_is_replaced(tmp_path: Path, registry: Path) -> None:
+    import tool_setup
+
+    storage = tmp_path / "runner/hard-eng-tools/mise-launcher"
+    old = storage / "2026.9.13/node_modules/@jdxcode/mise/bin/mise"
+    old.parent.mkdir(parents=True)
+    old.write_text("#!/bin/sh\nexit 0\n")
+    assert provision(tmp_path).returncode == 0
+    assert adds(registry) == ["2026.9.13"]
+    installed = storage / "2026.9.13" / tool_setup.MISE_BINARY
+    assert installed.is_file()
+    assert not old.exists()
+    assert provision(tmp_path).returncode == 0
+    assert adds(registry) == ["2026.9.13"]
+
+
+def test_tools_are_provisioned_outside_a_project_that_pins_bun(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from unittest.mock import Mock
@@ -193,7 +209,7 @@ def test_tools_are_provisioned_outside_a_project_that_pins_pnpm(
 
     project = tmp_path / "project"
     project.mkdir()
-    (project / "package.json").write_text('{"packageManager": "pnpm@11.8.0"}')
+    (project / "package.json").write_text('{"packageManager": "bun@1.3.0"}')
     use_installed_mise(tmp_path, monkeypatch)
     monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
     native = Mock(return_value=subprocess.CompletedProcess([], 0, '{"PATH": ""}', ""))

@@ -75,7 +75,7 @@ def test_installed_project_scans_skip_agent_worktrees(
     root = tmp_path / "project"
     init(root)
     (root / "package.json").write_text('{"private":true}')
-    (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (root / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     installer.install(root)
     commit(root, "installed")
     git(root, "worktree", "add", "-q", ".claude/worktrees/builder")
@@ -290,7 +290,7 @@ def test_install_commits_only_clean_installed_paths(
     tmp_path = tmp_path / "project"
     init(tmp_path)
     (tmp_path / "package.json").write_text('{"private":true}')
-    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (tmp_path / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     commit(tmp_path, "project")
     if case == "dirty":
         (tmp_path / "AGENTS.md").write_text("# Uncommitted project rules\n")

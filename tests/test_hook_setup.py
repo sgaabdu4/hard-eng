@@ -15,7 +15,7 @@ from test_setup import repository, snapshot
 
 def installer_project(repository: Path) -> Path:
     (repository / "package.json").write_text('{"private":true}')
-    (repository / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (repository / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     return repository
 
 

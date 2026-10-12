@@ -46,7 +46,7 @@ def test_native_instruction_paths_preserve_project_rules(
         tmp_path.mkdir()
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "package.json").write_text('{"private":true}')
-    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (tmp_path / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     if existing == "symlink":
         (tmp_path / "AGENTS.md").write_text("# Existing rules\nKeep these.\n")
         (tmp_path / "CLAUDE.md").symlink_to("AGENTS.md")
@@ -101,7 +101,7 @@ def test_native_instruction_conflicts_preserve_project_rules(
 ) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "package.json").write_text('{"private":true}')
-    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (tmp_path / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     if existing == "files":
         for name in ("CLAUDE.md", "AGENTS.override.md"):
             (tmp_path / name).write_bytes(b"# Custom rules\r\nPreserve these.\r\n")
@@ -181,14 +181,14 @@ def test_child_change_retains_parent_install_and_vulnerability_checks(
                 {
                     "name": "install",
                     "role": "lockfiles",
-                    "command": ["pnpm", "install"],
+                    "command": ["bun", "install"],
                 },
                 {
                     "name": "audit",
                     "role": "vulnerabilities",
                     "command": ["osv-scanner"],
                 },
-                {"name": "unrelated", "role": "tests", "command": ["pnpm", "test"]},
+                {"name": "unrelated", "role": "tests", "command": ["bun", "test"]},
             ],
         },
         {"path": "packages/child", "depends_on": ["."], "checks": []},
