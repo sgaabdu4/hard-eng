@@ -823,9 +823,14 @@ def test_committed_scaffold_exemption_preserves_application_boundary(
             git(target, "worktree", "remove", "--force", str(linked))
 
 
-@pytest.mark.parametrize("edited", [False, True])
+@pytest.mark.parametrize(
+    ("edited", "external"), [(False, False), (True, False), (False, True)]
+)
 def test_update_that_migrates_the_ci_workflow_is_scaffold_only_unless_edited(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, edited: bool
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    edited: bool,
+    external: bool,
 ) -> None:
     source, target, _ = release
     workflow = target / ".github/workflows/hard-eng.yml"
@@ -839,6 +844,8 @@ def test_update_that_migrates_the_ci_workflow_is_scaffold_only_unless_edited(
     if edited:
         workflow.write_text(workflow.read_text() + "# project edit\n")
         commit(target, "edit CI beside the update")
+    if external:
+        git(target, "config", "core.hooksPath", str(target.parent / "runner-hooks"))
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
     assert update.check_scaffold_update(target, base) is not edited
     assert git(target, "worktree", "list").count("\n") == 0
