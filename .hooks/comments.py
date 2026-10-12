@@ -352,9 +352,12 @@ def diff_lines(
         elif in_hunk and line[:1] == "-":
             removed.setdefault(name, []).append((old, line[1:]))
             old += 1
-        elif not in_hunk and line.startswith(("+++ ", "--- ")):
-            if line[4:] != "/dev/null":
-                name = header_path(line[4:])
+        elif (
+            not in_hunk
+            and line.startswith(("+++ ", "--- "))
+            and line[4:] != "/dev/null"
+        ):
+            name = header_path(line[4:])
     untracked = subprocess.check_output(
         ["git", "ls-files", "--others", "--exclude-standard", "-z"],
         cwd=root,
