@@ -514,6 +514,7 @@ def workflow_installed(
     root: Path, base: str, names: set[str], sources: tuple[Path, Path]
 ) -> bool:
     """Whether a changed workflow is what the release's setup writes from the base one."""
+    from hook_chain import own_hooks_env
     from update import update_plan
 
     name = ".github/workflows/hard-eng.yml"
@@ -530,7 +531,7 @@ def workflow_installed(
             timeout=120,
         )
         try:
-            planned = update_plan(tree, *sources)[0].get(name)
+            planned = update_plan(tree, *sources, own_hooks_env(tree))[0].get(name)
         finally:
             subprocess.run(
                 [*git, "remove", "--force", str(tree)],
