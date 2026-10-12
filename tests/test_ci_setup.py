@@ -57,12 +57,16 @@ def test_pnpm_bootstrap_migrates_to_the_template_bun_steps() -> None:
 @pytest.mark.parametrize(
     "step",
     [
-        "      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0\n"
-        "        if: runner.environment != 'self-hosted'\n"
-        "        with:\n          install: false\n",
-        "      - if: runner.environment != 'self-hosted'\n"
-        "        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0\n"
-        "        with:\n          install: false\n",
+        (
+            "      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0\n"
+            "        if: runner.environment != 'self-hosted'\n"
+            "        with:\n          install: false\n"
+        ),
+        (
+            "      - if: runner.environment != 'self-hosted'\n"
+            "        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0\n"
+            "        with:\n          install: false\n"
+        ),
     ],
 )
 def test_pnpm_setup_step_with_a_condition_migrates_as_one_step(step: str) -> None:
