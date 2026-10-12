@@ -46,7 +46,7 @@ N/A — hook and CI behaviour with no visual surface.
 
 Result: Passed
 Evidence: Fixture runs recorded in `DECISION.md`; focused suites pass.
-E2E: Temporary Bun project installed with `setup.py` and checked with `hard-eng.py check` on a Node-free PATH.
+E2E: Passed — temporary Bun project installed with `setup.py` and checked with `hard-eng.py check` on a Node-free PATH.
 
 Delivery target: PR
 Delivery: Pending — PR checks.
