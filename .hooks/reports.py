@@ -4,6 +4,7 @@ import json
 import math
 import re
 import subprocess
+import tomllib
 import xml.etree.ElementTree as ET
 from concurrent.futures import Future
 from pathlib import Path
@@ -160,6 +161,11 @@ def related_test_flags(
         return []
     runner = Path(arguments[0]).name
     if arguments[:2] == ["bun", "test"]:
+        bunfig = directory / "bunfig.toml"
+        settings = tomllib.loads(bunfig.read_text()) if bunfig.is_file() else {}
+        # Bun has no flag to lift a configured coverage threshold for a partial run.
+        if "coverageThreshold" in settings.get("test", {}):
+            return []
         return [f"--changed={base}", "--pass-with-no-tests"]
     if runner == "vitest":
         return ["--changed", base, "--coverage.enabled=false", "--passWithNoTests"]

@@ -771,6 +771,21 @@ def test_related_test_flags_follow_the_native_runner(
     assert reports.related_test_flags(tests, [group, other], tmp_path, "b") == []
 
 
+def test_bun_coverage_threshold_keeps_the_full_suite(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        json.dumps({"scripts": {"test:coverage": "bun test --coverage"}})
+    )
+    (tmp_path / "bunfig.toml").write_text("[test]\ncoverageThreshold = 0.9\n")
+    tests: Gate = {
+        "name": "tests",
+        "role": "tests",
+        "command": ["bun", "run", "test:coverage"],
+        "report": {"type": "lcov-tests"},
+    }
+    group: Group = {"path": ".", "checks": [tests]}
+    assert reports.related_test_flags(tests, [group], tmp_path, "b") == []
+
+
 @pytest.mark.parametrize(
     ("related", "fails", "failed"), [("b", 0, False), ("b", 1, True), (None, 0, True)]
 )
