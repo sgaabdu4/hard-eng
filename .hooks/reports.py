@@ -14,7 +14,7 @@ from dart_coverage import erased_dart
 from dart_test_report import dart_events, failure_summary
 from fallow_report import validate_fallow
 from gate_config import Gate, Group, JsonObject
-from project_setup import package_script_arguments
+from project_setup import dependency_free, package_script_arguments
 
 
 def dart_test_failure(
@@ -150,7 +150,7 @@ def related_test_flags(
     # A Fallow gate run through a package script may read this run's coverage.
     if any(
         other.get("report", {}).get("type") == "fallow"
-        and other["command"][:2] == ["pnpm", "run"]
+        and other["command"][:2] == ["bun", "run"]
         for selected in groups
         for other in selected["checks"]
     ):
@@ -159,6 +159,8 @@ def related_test_flags(
     if any(re.search(r"[;&|]", argument) for argument in arguments):
         return []
     runner = Path(arguments[0]).name
+    if arguments[:2] == ["bun", "test"]:
+        return [f"--changed={base}", "--pass-with-no-tests"]
     if runner == "vitest":
         return ["--changed", base, "--coverage.enabled=false", "--passWithNoTests"]
     if runner == "jest":
@@ -383,53 +385,8 @@ def osv_layers(report: JsonObject) -> list[JsonObject]:
     return cast(list[JsonObject], layers)
 
 
-def dependency_free_pnpm(directory: Path) -> bool:
-    try:
-        manifest = json.loads((directory / "package.json").read_text())
-        # uv supplies PyYAML's isolated runtime; a JavaScript consumer's Python may lack it.
-        lock = json.loads(
-            subprocess.check_output(
-                [
-                    "uv",
-                    "run",
-                    "--no-project",
-                    "--with",
-                    "pyyaml",
-                    "python",
-                    "-c",
-                    "import json,sys,yaml; json.dump(yaml.safe_load(sys.stdin),sys.stdout)",
-                ],
-                input=(directory / "pnpm-lock.yaml").read_text(),
-                text=True,
-                stderr=subprocess.PIPE,
-                timeout=30,
-            )
-        )
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return False
-    return (
-        isinstance(manifest, dict)
-        and isinstance(lock, dict)
-        and all(
-            manifest.get(key, {}) == {}
-            for key in (
-                "dependencies",
-                "devDependencies",
-                "optionalDependencies",
-                "peerDependencies",
-            )
-        )
-        and not manifest.get("workspaces")
-        and not (directory / "pnpm-workspace.yaml").exists()
-        and str(lock.get("lockfileVersion")) == "9.0"
-        and lock.get("importers") == {".": {}}
-        and lock.get("packages", {}) == {}
-        and lock.get("snapshots", {}) == {}
-    )
-
-
 def validate_osv(
-    path: Path, *, image: bool = False, empty_pnpm: Path | None = None
+    path: Path, *, image: bool = False, empty_bun: Path | None = None
 ) -> None:
     try:
         report = json.loads(path.read_text())
@@ -443,10 +400,11 @@ def validate_osv(
         if (
             results in (None, [])
             and not image
-            and empty_pnpm is not None
-            and dependency_free_pnpm(empty_pnpm)
+            and empty_bun is not None
+            and not (empty_bun / "bun.lock").exists()
+            and dependency_free(empty_bun)
         ):
-            print("OSV: standalone pnpm manifest and lockfile confirm no dependencies")
+            print("OSV: package.json declares no dependencies, so Bun keeps no lockfile")
             return
         if not isinstance(results, list):
             raise TypeError("OSV results must be a list")

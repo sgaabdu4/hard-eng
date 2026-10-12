@@ -133,7 +133,7 @@ LANGUAGES = {
 }
 LOCKFILES = {
     "python": ("uv.lock", "poetry.lock"),
-    "javascript": ("pnpm-lock.yaml",),
+    "javascript": ("bun.lock",),
     "dart": ("pubspec.lock",),
 }
 
@@ -733,7 +733,7 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
 
         javascript_manager(directory)
         for gate in group["checks"]:
-            package_script_arguments(gate["command"], directory, pnpm_only=True)
+            package_script_arguments(gate["command"], directory, bun_only=True)
     for gate in group["checks"]:
         validate_gate(gate, directory, report_paths)
     validate_performance(group)

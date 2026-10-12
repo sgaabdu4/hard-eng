@@ -565,6 +565,14 @@ def run_limited_gate(
         command, coverage_path = related_command(
             command, coverage_path, gate, groups or [group], directory, related_base
         )
+        bun_lockfile = (
+            scanner == "osv"
+            and "--allow-no-lockfiles" in command
+            and [arg for arg in command if arg.startswith("--lockfile")]
+            == ["--lockfile=bun.lock"]
+        )
+        if bun_lockfile and not (directory / "bun.lock").exists():
+            command = [arg for arg in command if arg != "--lockfile=bun.lock"]
         capture = (tests and kind == "dart-tests" and report.get("stdout", True)) or (
             scanner and report.get("stdout") is True
         )
@@ -596,15 +604,10 @@ def run_limited_gate(
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
         if result.returncode == 0 and scanner and report_path is not None:
-            if (
-                scanner == "osv"
-                and "--allow-no-lockfiles" in command
-                and [arg for arg in command if arg.startswith("--lockfile")]
-                == ["--lockfile=pnpm-lock.yaml"]
-            ):
+            if bun_lockfile:
                 from reports import validate_osv
 
-                validate_osv(report_path, empty_pnpm=directory)
+                validate_osv(report_path, empty_bun=directory)
             else:
                 SCANNERS[scanner](report_path)
         from reports import completed_tests, line_coverage, parallel_hint

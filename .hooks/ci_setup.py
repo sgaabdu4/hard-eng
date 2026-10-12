@@ -18,16 +18,16 @@ OLD_TRIGGERS = (
 )
 OLD_BASE = "${{ github.event.pull_request.base.sha || github.event.before }}"
 NEW_BASE = "${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}"
-BOOTSTRAP_TOOLS = ["uv@latest", "python@3.12", "node@latest"]
+BOOTSTRAP_TOOLS = ["uv@latest", "python@3.12"]
 
 
-def pnpm_specification(root: Path, package: Group, groups: list[Group]) -> str:
+def bun_specification(root: Path, package: Group, groups: list[Group]) -> str:
     """Reuse the pin of an established workspace dependency-install owner."""
     directory = root / package["path"]
     manifest = json.loads((directory / "package.json").read_text())
     if (
         "packageManager" not in manifest
-        and not (directory / "pnpm-lock.yaml").exists()
+        and not (directory / "bun.lock").exists()
         and not any(gate.get("role") == "lockfiles" for gate in package["checks"])
     ):
         owners = sorted(
@@ -37,7 +37,7 @@ def pnpm_specification(root: Path, package: Group, groups: list[Group]) -> str:
                 if root / group["path"] in directory.parents
                 and any(
                     gate.get("role") == "lockfiles"
-                    and gate["command"] == ["pnpm", "install", "--frozen-lockfile"]
+                    and gate["command"] == ["bun", "install", "--frozen-lockfile"]
                     for gate in group["checks"]
                 )
             ),
@@ -46,15 +46,15 @@ def pnpm_specification(root: Path, package: Group, groups: list[Group]) -> str:
         )
         if owners and (owners[0] / "package.json").is_file():
             manifest = json.loads((owners[0] / "package.json").read_text())
-    declared = manifest.get("packageManager", "pnpm@latest")
+    declared = manifest.get("packageManager", "bun@latest")
     if (
         not isinstance(declared, str)
         or re.fullmatch(
-            r"pnpm@(?:latest|\d+(?:\.\d+){0,2}(?:-[\w.-]+)?)(?:\+[\w.-]+)?", declared
+            r"bun@(?:latest|\d+(?:\.\d+){0,2}(?:-[\w.-]+)?)(?:\+[\w.-]+)?", declared
         )
         is None
     ):
-        raise ValueError("CI requires a valid pnpm packageManager version")
+        raise ValueError("CI requires a valid bun packageManager version")
     return declared.split("+", 1)[0]
 
 
@@ -77,7 +77,7 @@ def impact_tools(root: Path, groups: list[Group]) -> list[str]:
         if language == "python" and (directory / "poetry.lock").exists():
             tools.append("poetry@latest")
         if language == "javascript":
-            tools.append(pnpm_specification(root, group, groups))
+            tools.append(bun_specification(root, group, groups))
     if "flutter@latest" in tools:
         tools = [tool for tool in tools if tool != "dart@latest"]
     return list(dict.fromkeys(tools))
@@ -123,13 +123,6 @@ def migrate_workflow_pins(content: str) -> str:
             "v5",
             "v7.0.1",
         ),
-        (
-            "pnpm/setup",
-            "c9883cc79df532ad1a7b81bf9ab944ceb090d65c",
-            "703c52620218391530e48b9e8870d5c0082e1b9b",
-            "v2.0.0",
-            "v2.1.0",
-        ),
     ):
         content = re.sub(
             rf"(?m)^([ \t]*(?:-[ \t]+)?uses:[ \t]+){re.escape(action)}@{old}([ \t]*(?:#.*)?)$",
@@ -145,28 +138,36 @@ def migrate_workflow_pins(content: str) -> str:
     return content
 
 
-def migrate_pnpm_bootstrap(root: Path, content: str) -> str:
-    manifest = root / "package.json"
-    if not manifest.is_file():
-        return content
-    package = json.loads(manifest.read_text())
-    declared = package.get("packageManager", "")
-    engines = package.get("devEngines", {})
-    manager = engines.get("packageManager") if isinstance(engines, dict) else None
-    if not (
-        isinstance(declared, str)
-        and declared.startswith("pnpm@")
-        or isinstance(manager, dict)
-        and manager.get("name") == "pnpm"
-        and manager.get("version")
-    ):
-        return content
-    return re.sub(
-        r"(?m)^(      - uses: pnpm/setup@[^\n]+\n        with:\n)"
-        r"          version: latest\n"
-        r"(          runtime: [^\n]+\n          install: false\n)(?=      - |\Z)",
-        r"\1\2",
+def migrate_bun(source: Path, content: str) -> str:
+    """Replace the generated pnpm bootstrap with the template's Bun steps."""
+    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    start = template.index("      - uses: oven-sh/setup-bun@")
+    setup = template[start : template.index("      - name: ", start)]
+    launcher = re.search(r"bun x \S+ mise", template)
+    if launcher is None:
+        raise ValueError("Hard Eng workflow template has no Bun mise launcher")
+    content = re.sub(
+        r"(?m)^      - uses: pnpm/setup@[^\n]*\n(?:        with:\n(?:          [^\n]*\n)*)?",
+        lambda _: setup,
         content,
+    )
+    content = re.sub(
+        r"pnpm dlx (?:--config\.ignore-scripts=false )?--allow-build=@jdxcode/mise "
+        r"--package=@jdxcode/mise@latest mise",
+        lambda _: launcher[0],
+        content,
+    )
+    content = re.sub(
+        r'(?m)^( +)echo "PNPM_CONFIG_STORE_DIR=[^\n]*\n +echo "PNPM_CONFIG_CACHE_DIR=[^\n]*\n',
+        r'\1echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/bun/cache"\n',
+        content,
+    )
+    tool = r"(?:node@latest|pnpm@[\w.+-]+)"
+    return "".join(
+        re.sub(rf"(?<=['\"]){tool} ?| {tool}(?=[ '\"])", "", line)
+        if "mise --no-config" in line or "SDK_TOOLS" in line
+        else line
+        for line in content.splitlines(keepends=True)
     )
 
 
@@ -199,7 +200,7 @@ def migrate_workflow_tools(content: str) -> str:
 def migrate_docs_path(source: Path, content: str) -> str:
     """Add the template's docs-only steps to a generated workflow without them."""
     template = (source / ".github/workflows/hard-eng.yml").read_text()
-    setup = "      - uses: pnpm/setup@"
+    setup = "      - uses: oven-sh/setup-bun@"
     checks = "      - name: Run required checks\n"
     if "id: impact" in content:
         return content
@@ -236,9 +237,9 @@ def workflow_tools(root: Path, config: GateConfig) -> list[str]:
         if language not in {"python", "javascript", "dart"}:
             continue
         manager, _, _ = dependency_command(directory, language)
-        if manager in {"dart", "flutter", "pnpm", "yarn", "bun", "poetry"}:
+        if manager in {"dart", "flutter", "bun", "poetry"}:
             specification = (
-                pnpm_specification(root, package, groups)
+                bun_specification(root, package, groups)
                 if language == "javascript"
                 else manager + "@latest"
             )
@@ -265,7 +266,7 @@ def workflow_extra_tools(root: Path, config: GateConfig) -> list[str]:
 
 def migrate_workflow_sdks(root: Path, config: GateConfig, content: str) -> str:
     """Add SDKs that packages added after CI generation need; keep project tools."""
-    required = workflow_tools(root, config)[3:]
+    required = workflow_tools(root, config)[len(BOOTSTRAP_TOOLS) :]
     if "SDK_TOOLS: ${{ steps.impact.outputs.tools" in content:
         import yaml
 
@@ -293,7 +294,7 @@ def migrate_workflow_sdks(root: Path, config: GateConfig, content: str) -> str:
             content,
         )
     pattern = re.compile(
-        r"(?m)^(?P<indent> +)(?P<launcher>pnpm dlx (?:\S+ )+?mise --no-config) "
+        r"(?m)^(?P<indent> +)(?P<launcher>bun x (?:\S+ )+?mise --no-config) "
         r"install (?P<tools>[^&\n]+) &&\n"
         r"(?P=indent)MISE_FETCH_REMOTE_VERSIONS_CACHE=1h (?P=launcher) exec (?P=tools) -- "
     )
@@ -339,7 +340,7 @@ def migrate_affected_tools(
     ):
         return content
     pattern = re.compile(
-        r"(?m)^          (?P<launcher>pnpm dlx (?:\S+ )+?mise --no-config) "
+        r"(?m)^          (?P<launcher>bun x (?:\S+ )+?mise --no-config) "
         r"install (?P<tools>[\w@.+ -]+) &&\n"
         r"          MISE_FETCH_REMOTE_VERSIONS_CACHE=1h (?P=launcher) exec (?P=tools) -- "
         r'uv run --no-project --with pyyaml python \.hooks/hard-eng\.py check --base "\$BASE_SHA"\n'
@@ -353,13 +354,13 @@ def migrate_affected_tools(
     template = (source / ".github/workflows/hard-eng.yml").read_text()
     required = workflow_tools(root, config)
     known = {tool.split("@", 1)[0] for tool in required}
-    redundant_latest = "pnpm@latest" not in required and any(
-        tool.startswith("pnpm@") and tool in required for tool in match["tools"].split()
+    redundant_latest = "bun@latest" not in required and any(
+        tool.startswith("bun@") and tool in required for tool in match["tools"].split()
     )
     if any(
         tool.split("@", 1)[0] in known
         and tool not in required
-        and not (tool == "pnpm@latest" and redundant_latest)
+        and not (tool == "bun@latest" and redundant_latest)
         for tool in match["tools"].split()
     ):
         print(
@@ -396,7 +397,7 @@ def migrate_tool_cache(source: Path, content: str) -> str:
     template = (source / ".github/workflows/hard-eng.yml").read_text()
     old = '        run: python3 .hooks/hard-eng.py impact --base "$BASE_SHA" >> "$GITHUB_OUTPUT" || echo docs_only=false >> "$GITHUB_OUTPUT"\n'
     start = template.index("        run: |\n", template.index("id: impact"))
-    end = template.index("      - uses: pnpm/setup@", start)
+    end = template.index("      - uses: oven-sh/setup-bun@", start)
     return content.replace(old, template[start:end], 1)
 
 
@@ -553,15 +554,16 @@ def configure_ci(
     ]
     if (root / name).exists():
         original = (root / name).read_text()
-        migrated = migrate_workflow_tools(
-            migrate_workflow_pins(drop_tool_cache(original))
+        migrated = migrate_bun(
+            source,
+            migrate_workflow_tools(migrate_workflow_pins(drop_tool_cache(original))),
         )
         migrated = migrate_workflow_sdks(root, config, migrated)
         migrated = migrate_workflow_triggers(
             root, source, migrate_docs_path(source, migrated)
         )
         migrated = migrate_affected_tools(root, source, config, migrated)
-        migrated = migrate_impact_token(migrate_pnpm_bootstrap(root, migrated))
+        migrated = migrate_impact_token(migrated)
         if "\n  pull-requests:" not in migrated:
             migrated = migrated.replace(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
@@ -608,13 +610,13 @@ def configure_ci(
             1,
         )
         .replace(
-            " || 'uv@latest python@3.12 node@latest'",
+            " || '" + " ".join(BOOTSTRAP_TOOLS) + "'",
             " || '" + " ".join(tools) + "'",
             1,
         )
         .replace(block, triggers, 1)
     )
-    changes[name] = migrate_pnpm_bootstrap(root, workflow_budget(root, changes[name]))
+    changes[name] = workflow_budget(root, changes[name])
 
 
 RUNNER_MULTIPLIERS = {"windows": 2, "macos": 10}
