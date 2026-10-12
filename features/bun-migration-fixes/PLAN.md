@@ -48,7 +48,7 @@ N/A — hook and CI behaviour with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check --base origin/main` → exit 0; 18 checks passed, 91.35% line coverage. Codex adversarial review (GPT-6 Astra) round 1 approved. A Bun fixture passed all 13 gates with Node installed while `node` resolved to Bun; Lighthouse CI collected a report on Bun.
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` → exit 0; 18 checks passed, 91.34% line coverage. Codex adversarial review (GPT-6 Astra) round 3 approved; the round 2 finding (spaced `--cwd` before a file or `-e`) is fixed. Startup medians on this Mac: `bun run` 37 ms vs `pnpm run` 63 ms; `bun -e` 17 ms vs `node -e` 172 ms. A Bun fixture passed all 13 gates with Node installed while `node` resolved to Bun; Lighthouse CI collected a report on Bun.
 E2E: Passed — scratch clone of a real Next.js project converted to Bun, installed with this branch and checked; Hard Eng gates passed, remaining failures were the project's own pnpm tests and two published advisories.
 
 Delivery target: PR
