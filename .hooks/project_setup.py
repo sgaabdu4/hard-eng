@@ -273,15 +273,15 @@ def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
         and (not isinstance(declared, str) or not declared.startswith("bun@"))
     ):
         raise ValueError(
-            f"{directory}: Bun is required. Run `bun install` to convert the lockfile, "
-            "move pnpm-workspace.yaml packages and catalogs into package.json "
-            "`workspaces`, set packageManager to bun@VERSION, run scripts with "
-            "`bun run` and `bun x` (`bun --cwd=DIR run`, not `--cwd DIR`). Bun does not "
-            "carry pnpm settings: move onlyBuiltDependencies or allowBuilds to "
-            "package.json trustedDependencies, minimumReleaseAge (minutes) to "
-            "bunfig.toml [install] minimumReleaseAge (seconds), and overrides or "
-            "patchedDependencies to package.json. Then delete: "
-            + ", ".join(legacy or ["the old packageManager value"])
+            f"{directory}: Bun is required. Run `bun install` to convert the lockfile; "
+            "move pnpm-workspace.yaml packages and catalogs to package.json `workspaces`, "
+            "onlyBuiltDependencies/allowBuilds to trustedDependencies, overrides and "
+            "patchedDependencies to package.json, and minimumReleaseAge (minutes) to "
+            "bunfig.toml [install] minimumReleaseAge (seconds). Set packageManager to "
+            "bun@VERSION and use `bun run`, `bun x` and `bun --cwd=DIR run`. Checks run "
+            "every Node tool on Bun: use `bun test` (happy-dom for DOM tests), not "
+            "Vitest, Jest or `node --test`. "
+            "Then delete: " + ", ".join(legacy or ["the old packageManager value"])
         )
     lockfile = "bun.lock"
     if not (directory / lockfile).exists() and not (directory / ".git").exists():
