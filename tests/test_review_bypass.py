@@ -25,12 +25,13 @@ def required_rule(context: str, strict: JsonValue = False) -> JsonValue:
     parameters: dict[str, JsonValue] = {"requiredStatusChecks": [{"context": context}]}
     if strict is not None:
         parameters["strictRequiredStatusChecksPolicy"] = strict
-    rule = {"type": "REQUIRED_STATUS_CHECKS", "parameters": parameters}
+    rule: JsonValue = {"type": "REQUIRED_STATUS_CHECKS", "parameters": parameters}
     return {"branchProtectionRule": None, "rules": nodes(rule)}
 
 
 def ruleset(*types: str) -> JsonValue:
-    return {"rules": nodes(*({"type": kind} for kind in types))}
+    rules: list[JsonValue] = [{"type": kind} for kind in types]
+    return {"rules": nodes(*rules)}
 
 
 BUILD: JsonValue = {"name": "build", "conclusion": "SUCCESS"}
