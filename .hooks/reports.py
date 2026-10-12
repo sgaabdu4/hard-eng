@@ -162,9 +162,10 @@ def related_test_flags(
     runner = Path(arguments[0]).name
     if arguments[:2] == ["bun", "test"]:
         bunfig = directory / "bunfig.toml"
-        settings = tomllib.loads(bunfig.read_text()) if bunfig.is_file() else {}
         # Bun has no flag to lift a configured coverage threshold for a partial run.
-        if "coverageThreshold" in settings.get("test", {}):
+        if bunfig.is_file() and "coverageThreshold" in tomllib.loads(
+            bunfig.read_text()
+        ).get("test", ()):
             return []
         return [f"--changed={base}", "--pass-with-no-tests"]
     if runner == "vitest":
