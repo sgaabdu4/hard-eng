@@ -164,7 +164,7 @@ def migrate_bun(source: Path, content: str) -> str:
     )
     tool = r"pnpm@[\w.+-]+"
     return "".join(
-        re.sub(rf"(?<=['\"]){tool} ?| {tool}(?=[ '\"])", "", line)
+        re.sub(rf"(?<=['\"]){tool} ?| {tool}(?=[ '\"\n])", "", line)
         if "mise --no-config" in line or "SDK_TOOLS" in line
         else line
         for line in content.splitlines(keepends=True)
