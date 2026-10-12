@@ -4,7 +4,9 @@ import json
 import math
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from gate_config import GateConfig, Group, JsonValue
@@ -506,6 +508,37 @@ def integrated(workflows: list[Path]) -> bool:
         except yaml.YAMLError:
             continue
     return found and complete
+
+
+def workflow_installed(
+    root: Path, base: str, names: set[str], sources: tuple[Path, Path]
+) -> bool:
+    """Whether a changed workflow is what the release's setup writes from the base one."""
+    from update import update_plan
+
+    name = ".github/workflows/hard-eng.yml"
+    if name not in names:
+        return True
+    with tempfile.TemporaryDirectory(prefix="hard-eng-workflow-check-") as temporary:
+        tree = Path(temporary) / "base"
+        git = ["git", "-c", "core.hooksPath=/dev/null", "worktree"]
+        subprocess.run(
+            [*git, "add", "--quiet", "--detach", str(tree), base],
+            cwd=root,
+            stdout=sys.stderr,
+            check=True,
+            timeout=120,
+        )
+        try:
+            planned = update_plan(tree, *sources)[0].get(name)
+        finally:
+            subprocess.run(
+                [*git, "remove", "--force", str(tree)],
+                cwd=root,
+                check=False,
+                timeout=60,
+            )
+    return (root / name).is_file() and planned == (root / name).read_text()
 
 
 def configure_ci(

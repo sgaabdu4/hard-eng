@@ -828,7 +828,7 @@ def test_update_that_migrates_the_ci_workflow_is_scaffold_only_unless_edited(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, edited: bool
 ) -> None:
     source, target, _ = release
-    workflow = target / update.WORKFLOW
+    workflow = target / ".github/workflows/hard-eng.yml"
     token = "          GH_TOKEN: ${{ github.token }}\n"
     workflow.write_text(workflow.read_text().replace(token, "", 1))
     commit(target, "workflow from an older release")
