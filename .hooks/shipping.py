@@ -77,8 +77,19 @@ _REVIEW_QUERY = (
     "query($owner:String!,$name:String!,$number:Int!){viewer{login} "
     "repository(owner:$owner,name:$name){pullRequest(number:$number){"
     "viewerDidAuthor viewerCanMergeAsAdmin reviewDecision "
+    "reviewThreads(first:100){totalCount nodes{isResolved}} "
+    "baseRef{branchProtectionRule{requiresCommitSignatures requiresDeployments "
+    "lockBranch} rules(first:100){totalCount nodes{type}}} "
     "commits(last:1){nodes{commit{oid statusCheckRollup{state}}}}}}}"
 )
+_BYPASSABLE_RULES = {
+    "PULL_REQUEST",
+    "REQUIRED_STATUS_CHECKS",
+    "REQUIRED_LINEAR_HISTORY",
+    "NON_FAST_FORWARD",
+    "DELETION",
+    "CREATION",
+}
 
 
 @dataclass(frozen=True)
@@ -746,6 +757,36 @@ def _delivered(root: Path, pull: _PullRequest, base: str, remote_url: str) -> st
     return pull.merge_commit_sha
 
 
+def _complete_nodes(value: JsonValue) -> list[dict[str, JsonValue]] | None:
+    nodes = value.get("nodes") if isinstance(value, dict) else None
+    if not isinstance(value, dict) or not isinstance(nodes, list):
+        return None
+    if value.get("totalCount") != len(nodes):
+        return None
+    return [node for node in nodes if isinstance(node, dict)]
+
+
+def _other_merge_requirement(pull: dict[str, JsonValue]) -> str | None:
+    """Why something besides the review may block; admin merge would bypass it too."""
+    threads = _complete_nodes(pull.get("reviewThreads"))
+    if threads is None or any(node.get("isResolved") is not True for node in threads):
+        return "a review conversation is unresolved"
+    base = pull.get("baseRef")
+    rules = _complete_nodes(base.get("rules") if isinstance(base, dict) else None)
+    if not isinstance(base, dict) or rules is None:
+        return "the base branch rules are unreadable"
+    protection = base.get("branchProtectionRule")
+    if protection is not None and (
+        not isinstance(protection, dict)
+        or any(value is not False for value in protection.values())
+    ):
+        return "branch protection has another merge requirement"
+    other = {str(node.get("type")) for node in rules} - _BYPASSABLE_RULES
+    if other:
+        return "a ruleset has another merge requirement: " + ", ".join(sorted(other))
+    return None
+
+
 def _review_bypass_problem(
     root: Path, owner: str, name: str, number: int, head_sha: str
 ) -> str | None:
@@ -787,6 +828,8 @@ def _review_bypass_problem(
         isinstance(rollup, dict) and rollup.get("state") == "SUCCESS"
     ):
         return "not every head check succeeded"
+    if problem := _other_merge_requirement(pull):
+        return problem
     collaborators = _api_items(
         root,
         f"repos/{owner}/{name}/collaborators?per_page=100",

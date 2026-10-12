@@ -114,12 +114,33 @@ def _review(head: str, rollup: object = "SUCCESS", **changes: object) -> object:
         "viewerDidAuthor": True,
         "viewerCanMergeAsAdmin": True,
         "reviewDecision": "REVIEW_REQUIRED",
+        "reviewThreads": {"totalCount": 0, "nodes": []},
+        "baseRef": {
+            "branchProtectionRule": None,
+            "rules": {"totalCount": 1, "nodes": [{"type": "PULL_REQUEST"}]},
+        },
         "commits": {
             "nodes": [{"commit": {"oid": head, "statusCheckRollup": {"state": rollup}}}]
         },
     }
     pull.update(changes)
     return {"data": {"viewer": {"login": "owner"}, "repository": {"pullRequest": pull}}}
+
+
+def _threads(*resolved: bool) -> object:
+    return {
+        "totalCount": len(resolved),
+        "nodes": [{"isResolved": value} for value in resolved],
+    }
+
+
+def _base(*types: str, **protection: object) -> object:
+    rule = {"requiresCommitSignatures": False, "requiresDeployments": False}
+    rule |= {"lockBranch": False, **protection}
+    return {
+        "branchProtectionRule": rule,
+        "rules": {"totalCount": len(types), "nodes": [{"type": t} for t in types]},
+    }
 
 
 class FakeGitHub:
@@ -399,6 +420,12 @@ def test_ready_rejects_pr_identity_and_mergeability(
         ("blocked", {"reviewDecision": None}, [], "required review"),
         ("blocked", {"rollup": "FAILURE"}, [], "head check"),
         ("blocked", {"rollup": "PENDING"}, [], "head check"),
+        ("blocked", {"reviewThreads": _threads(True)}, [], None),
+        ("blocked", {"reviewThreads": _threads(True, False)}, [], "unresolved"),
+        ("blocked", {"baseRef": _base(requiresCommitSignatures=True)}, [], "protection"),
+        ("blocked", {"baseRef": _base(lockBranch=None)}, [], "protection"),
+        ("blocked", {"baseRef": _base("CODE_SCANNING")}, [], "CODE_SCANNING"),
+        ("blocked", {"baseRef": None}, [], "unreadable"),
         ("dirty", {}, [], "not clean"),
     ],
 )
