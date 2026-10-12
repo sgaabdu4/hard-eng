@@ -22,7 +22,7 @@ The workflow counts as installed only when the release's setup, run on the base 
 
 - [x] A verified update that migrates `.github/workflows/hard-eng.yml` passes the scaffold check; a project edit to that file beside the update does not.
 - [x] `git submodule update` output from `fetch_sources` goes to stderr.
-- [x] Review bypass refuses an unresolved review thread, unreadable base rules, signature, deployment or lock protection and unknown ruleset rules.
+- [x] Review bypass refuses an unresolved review thread, unreadable base rules, signature, deployment or lock protection, unknown ruleset rules, a required check that has not passed, strict up-to-date checks and a merge queue.
 - [x] Suppressions and lost assertions are found in tracked paths with spaces, tabs, quotes and non-ASCII letters.
 - [x] Full gate passes.
 
@@ -34,7 +34,7 @@ Execution: One builder; one owner change per issue.
 
 ## Risks + recovery
 
-The workflow proof runs setup in a temporary worktree of the base revision; a mismatch falls back to the full checks. Recovery: revert the owning commit.
+The workflow proof runs setup in a temporary worktree of the base revision; a mismatch falls back to the full checks. Repositories with strict checks or a merge queue now merge by hand when only a review blocks. Out of scope after review: required-check app matching, statuses on the test merge commit and squash-only merge rules. Recovery: revert the owning commit.
 
 ## ux_reference
 
@@ -43,8 +43,8 @@ N/A — hook behaviour with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Pending the full gate.
-E2E: N/A — real Git repositories in the tests cover the changed paths.
+Evidence: `python3 .hooks/hard-eng.py check` → exit 0; all 19 checks passed, 1,539 tests, 91.38% line coverage. Codex adversarial review (GPT-6 Astra) round 9 approved; rounds 1, 4, 5, 6 and 8 findings are fixed.
+E2E: N/A — real Git repositories in the tests cover the changed paths; the review query ran against a live PR.
 
-Delivery target: Merge
-Delivery: Pending — PR checks, rebase merge, main CI.
+Delivery target: PR
+Delivery: Pending — PR checks.
