@@ -163,6 +163,11 @@ def test_bun_spaced_cwd_before_run_is_rejected(tmp_path: Path) -> None:
             tmp_path,
             set(),
         )
+    validate_gate(
+        {"name": "file", "command": ["bun", "--cwd", "child", "check.ts"]},
+        tmp_path,
+        set(),
+    )
 
 
 def test_unresolved_package_selectors_fail_instead_of_skipping_validation(
