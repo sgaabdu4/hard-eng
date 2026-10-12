@@ -1,6 +1,6 @@
 # Run pre-push mutation testing to completion
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -21,7 +21,7 @@ Authority: The user asked to remove the 3-minute local mutation limit, run mutat
 - [x] Pre-push runs `mutation --base <base> --in-place` with no time limit.
 - [x] The existing pre-push test asserts the new arguments.
 - [x] README and workflow guidance describe the full run.
-- [ ] Full gate passes.
+- [x] Full gate passes.
 
 ## Baseline + execution
 
@@ -39,9 +39,9 @@ N/A — hook behaviour with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending full gate.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check` → exit 0; 1,503 tests passed.
 E2E: N/A — covered by the pre-push test with a stubbed runner.
 
 Delivery target: Merge
-Delivery: Pending
+Delivery: Pending — PR checks, rebase merge, main CI.
