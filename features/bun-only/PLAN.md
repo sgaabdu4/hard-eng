@@ -45,7 +45,7 @@ N/A — hook and CI behaviour with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Fixture runs recorded in `DECISION.md`; focused suites pass.
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` → exit 0; 18 checks passed, 91.20% line coverage. Fixture runs are recorded in `DECISION.md`. Codex adversarial review (GPT-6 Astra) round 3 approved; the round 1 finding is fixed and the round 2 custom-config case was skipped as unrealistic.
 E2E: Passed — temporary Bun project installed with `setup.py` and checked with `hard-eng.py check` on a Node-free PATH.
 
 Delivery target: PR
