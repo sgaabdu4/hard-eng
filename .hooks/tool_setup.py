@@ -4,6 +4,7 @@ import fcntl
 import importlib.util
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -24,9 +25,15 @@ NATIVE_SCANNERS = {
 }
 MANAGED_PYTHON_SCANNERS = {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "poetry"}
 SCANNER_VERSIONS: dict[str, str] = {}
-MISE_PACKAGE = "@jdxcode/mise"
+# The platform package installs without the npm-only preinstall of @jdxcode/mise.
+MISE_PACKAGE = "@jdxcode/mise-{}-{}".format(
+    {"darwin": "darwin", "linux": "linux"}[sys.platform],
+    {"arm64": "arm64", "aarch64": "arm64", "x86_64": "x64", "amd64": "x64"}[
+        platform.machine().lower()
+    ],
+)
 MISE_LATEST = MISE_PACKAGE + "@latest"
-MISE_BINARY = Path("node_modules/@jdxcode/mise/bin/mise")
+MISE_BINARY = Path("node_modules", MISE_PACKAGE, "bin/mise")
 NOT_INSTALLED = (
     "Tools are not installed yet and cannot be fetched now: {error}. "
     "Connect once or run the full check (python3 .hooks/hard-eng.py check) to install them."
@@ -142,7 +149,7 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         "biome": "npm:@biomejs/biome",
         "tsc": "npm:typescript",
         "fallow": "npm:fallow",
-        "dart-decimate": 'npm:dart-decimate[allow_builds=["dart-decimate"]]',
+        "dart-decimate": "npm:dart-decimate",
         "react-doctor": "npm:react-doctor",
         "jscpd": "npm:jscpd",
         "lhci": "npm:@lhci/cli",
@@ -213,10 +220,10 @@ def provision_batch(batch: list[str], timeout: float) -> None:
         "MISE_DATA_DIR": "mise/data",
         "MISE_CACHE_DIR": "mise/cache",
         "MISE_STATE_DIR": "mise/state",
-        "PNPM_CONFIG_STORE_DIR": "pnpm/store",
-        "PNPM_CONFIG_CACHE_DIR": "pnpm/cache",
+        "BUN_INSTALL_CACHE_DIR": "bun/cache",
     }.items():
         environment.setdefault(name, str(storage / directory))
+    bun_node(storage, environment)
     if shutil.which("gh"):
         environment.setdefault(
             "MISE_GITHUB_CREDENTIAL_COMMAND",
@@ -260,7 +267,7 @@ def use_installed_tools(
         timeout=timeout,
         capture_output=True,
         check=False,
-        env={**environment, "MISE_OFFLINE": "1", "MISE_NPM_PACKAGE_MANAGER": "pnpm"},
+        env={**environment, "MISE_OFFLINE": "1", "MISE_NPM_PACKAGE_MANAGER": "bun"},
     )
     if result.returncode != 0 or "Failed to resolve tool version" in result.stderr:
         return False
@@ -277,7 +284,7 @@ def provision_latest(
         )
         command = [
             "env",
-            "MISE_NPM_PACKAGE_MANAGER=pnpm",
+            "MISE_NPM_PACKAGE_MANAGER=bun",
             "MISE_PREFER_OFFLINE=false",
             "MISE_USE_VERSIONS_HOST=false",
             "MISE_MINIMUM_RELEASE_AGE=0s",
@@ -287,7 +294,7 @@ def provision_latest(
         for arguments in (["install", *batch], ["env", "--json", *batch]):
             result = subprocess.run(
                 [*command, *arguments],
-                # The project's packageManager pin would otherwise pick the pnpm mise drives.
+                # The project's packageManager pin would otherwise pick the Bun mise drives.
                 cwd=storage,
                 text=True,
                 timeout=timeout,
@@ -307,6 +314,25 @@ def provision_latest(
                     "Latest tool versions could not be resolved; retry provisioning"
                 )
     export_tool_paths(result.stdout, Path(environment["MISE_DATA_DIR"]))
+
+
+def bun_node(storage: Path, environment: dict[str, str]) -> None:
+    """Run tools with `#!/usr/bin/env node` on Bun when Node is not installed."""
+    bun = shutil.which("bun", path=environment.get("PATH"))
+    if bun is None or shutil.which("node", path=environment.get("PATH")):
+        return
+    directory = storage / "bun-node"
+    directory.mkdir(parents=True, exist_ok=True)
+    link = directory / "node"
+    if not link.is_symlink() or link.readlink() != Path(bun):
+        temporary = directory / f".node-{os.getpid()}"
+        temporary.unlink(missing_ok=True)
+        temporary.symlink_to(bun)
+        temporary.replace(link)
+    for target in (environment, os.environ):
+        target["PATH"] = os.pathsep.join(
+            [str(directory), target.get("PATH", os.defpath)]
+        )
 
 
 def export_tool_paths(output: str, data_directory: Path) -> None:
@@ -331,7 +357,7 @@ def mise_launcher(
     launchers.mkdir(parents=True, exist_ok=True)
     version = json.loads(
         subprocess.run(
-            ["pnpm", "view", MISE_LATEST, "version", "--json"],
+            ["bun", "pm", "view", MISE_LATEST, "version", "--json"],
             cwd=launchers,
             env=environment,
             text=True,
@@ -341,7 +367,7 @@ def mise_launcher(
         ).stdout
     )
     if not isinstance(version, str) or not re.fullmatch(r"\d[\w.+-]*", version):
-        raise TypeError("pnpm did not return a usable latest mise version")
+        raise TypeError("Bun did not return a usable latest mise version")
     installation = launchers / version
     with (launchers / f"{version}.lock").open("a") as use:
         fcntl.flock(use, fcntl.LOCK_SH)
@@ -368,12 +394,9 @@ def install_launcher(
         (staging / "package.json").write_text('{"private": true}\n')
         result = subprocess.run(
             [
-                "pnpm",
+                "bun",
                 "add",
-                "--dir",
-                str(staging),
-                "--config.ignore-scripts=false",
-                f"--allow-build={MISE_PACKAGE}",
+                "--minimum-release-age=0",
                 f"{MISE_PACKAGE}@{installation.name}",
             ],
             cwd=staging,
