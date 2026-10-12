@@ -102,6 +102,7 @@ def test_delegated_fallow_reuses_only_its_completed_coverage_owner(
         "late-owner",
         "parallel-owner",
         "wrong-directory",
+        "spaced-cwd",
     ],
 )
 def test_delegated_fallow_reuses_only_selected_declared_coverage_owners(
@@ -138,11 +139,13 @@ def test_delegated_fallow_reuses_only_selected_declared_coverage_owners(
             scan,
         ],
     }
-    scripts = "bun run test:coverage && bun --cwd ../website run test:coverage && bun run scan"
+    scripts = "bun run test:coverage && bun --cwd=../website run test:coverage && bun run scan"
     if invalid == "extra":
-        scripts = "bun run test:coverage && echo stale && bun --cwd ../website run test:coverage && bun run scan"
+        scripts = "bun run test:coverage && echo stale && bun --cwd=../website run test:coverage && bun run scan"
     elif invalid == "wrong-directory":
-        scripts = "bun run test:coverage && bun --cwd packages/website run test:coverage && bun run scan"
+        scripts = "bun run test:coverage && bun --cwd=packages/website run test:coverage && bun run scan"
+    elif invalid == "spaced-cwd":
+        scripts = "bun run test:coverage && bun --cwd ../website run test:coverage && bun run scan"
     elif invalid == "missing-owner-edge":
         owner["depends_on"] = []
     elif invalid == "missing-consumer-edge":
