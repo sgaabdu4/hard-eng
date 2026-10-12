@@ -26,12 +26,15 @@ Bun prints help for `bun --cwd DIR run`, so Hard Eng writes `--cwd=DIR` and reje
 - [x] Lighthouse CI, Stryker, TypeScript, Fallow, jscpd and React Doctor run on Bun.
 - [x] The migration message names trustedDependencies, minimumReleaseAge, bunfig.toml and `bun test`.
 - [x] A pnpm tool that ends a tool list line is removed.
+- [x] A missing Bun stops tool setup with how to install it; setup reports CI workflows that run Hard Eng without Bun.
+- [x] An empty OSV result in a directory without package.json fails as a normal OSV failure.
+- [x] All ten local Hard Eng projects, cloned and converted to Bun, install this branch and run the full check without a Hard Eng error.
 - [x] Full gate passes.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: Each new test failed on main 2864f6a9. Four real project workflows were migrated as copies; one project was converted to Bun in a scratch clone and checked.
+Evidence: Each new test failed on main 2864f6a9. Ten local projects were cloned, converted to Bun and checked: three passed every gate; the other failures were project-owned (`node --test`, Jest, Vitest with jsdom, project version rules, published advisories, pnpm-style overrides) apart from the OSV crash and missing-Bun failure fixed here.
 Execution: One builder; Codex adversarial review loop.
 
 ## Risks + recovery
