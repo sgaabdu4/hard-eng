@@ -354,6 +354,11 @@ def mise_launcher(
     launchers: Path, environment: dict[str, str], timeout: float
 ) -> Generator[Path]:
     """Yield the newest published mise, installed once per version and held while used."""
+    if shutil.which("bun", path=environment.get("PATH")) is None:
+        raise ValueError(
+            "Hard Eng installs its tools with Bun: install Bun, or in CI add an "
+            "oven-sh/setup-bun step before the check"
+        )
     launchers.mkdir(parents=True, exist_ok=True)
     (launchers / "package.json").write_text('{"private": true}\n')
     version = json.loads(
