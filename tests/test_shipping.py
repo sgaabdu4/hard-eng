@@ -109,6 +109,11 @@ def _check(revision: str, **changes: object) -> dict[str, object]:
 _OWNER = {"login": "owner", "permissions": {"push": True}}
 
 
+def _rollup(state: object) -> object:
+    build = {"name": "build", "conclusion": "SUCCESS"}
+    return {"state": state, "contexts": {"totalCount": 1, "nodes": [build]}}
+
+
 def _review(head: str, rollup: object = "SUCCESS", **changes: object) -> object:
     pull: dict[str, object] = {
         "viewerDidAuthor": True,
@@ -120,7 +125,7 @@ def _review(head: str, rollup: object = "SUCCESS", **changes: object) -> object:
             "rules": {"totalCount": 1, "nodes": [{"type": "PULL_REQUEST"}]},
         },
         "commits": {
-            "nodes": [{"commit": {"oid": head, "statusCheckRollup": {"state": rollup}}}]
+            "nodes": [{"commit": {"oid": head, "statusCheckRollup": _rollup(rollup)}}]
         },
     }
     pull.update(changes)
@@ -141,6 +146,12 @@ def _base(*types: str, **protection: object) -> object:
         "branchProtectionRule": rule,
         "rules": {"totalCount": len(types), "nodes": [{"type": t} for t in types]},
     }
+
+
+def _required_rule(context: str) -> object:
+    checks = {"requiredStatusChecks": [{"context": context}]}
+    rule = {"type": "REQUIRED_STATUS_CHECKS", "parameters": checks}
+    return {"branchProtectionRule": None, "rules": {"totalCount": 1, "nodes": [rule]}}
 
 
 class FakeGitHub:
@@ -422,10 +433,28 @@ def test_ready_rejects_pr_identity_and_mergeability(
         ("blocked", {"rollup": "PENDING"}, [], "head check"),
         ("blocked", {"reviewThreads": _threads(True)}, [], None),
         ("blocked", {"reviewThreads": _threads(True, False)}, [], "unresolved"),
-        ("blocked", {"baseRef": _base(requiresCommitSignatures=True)}, [], "protection"),
+        (
+            "blocked",
+            {"baseRef": _base(requiresCommitSignatures=True)},
+            [],
+            "protection",
+        ),
         ("blocked", {"baseRef": _base(lockBranch=None)}, [], "protection"),
         ("blocked", {"baseRef": _base("CODE_SCANNING")}, [], "CODE_SCANNING"),
         ("blocked", {"baseRef": None}, [], "unreadable"),
+        (
+            "blocked",
+            {"baseRef": _base(requiredStatusCheckContexts=["build"])},
+            [],
+            None,
+        ),
+        ("blocked", {"baseRef": _base(requiredStatusCheckContexts=["sec"])}, [], "sec"),
+        (
+            "blocked",
+            {"baseRef": _required_rule("sec")},
+            [],
+            "check has not passed: sec",
+        ),
         ("dirty", {}, [], "not clean"),
     ],
 )
