@@ -110,6 +110,34 @@ def test_managed_instruction_update_preserves_native_scaffold_proof(
         assert not update.preserved_instructions(target, base, {"AGENTS.md"})
 
 
+@pytest.mark.parametrize(
+    ("edited", "external"), [(False, False), (True, False), (False, True)]
+)
+def test_update_that_migrates_the_ci_workflow_is_scaffold_only_unless_edited(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    edited: bool,
+    external: bool,
+) -> None:
+    source, target, _ = release
+    workflow = target / ".github/workflows/hard-eng.yml"
+    token = "          GH_TOKEN: ${{ github.token }}\n"
+    workflow.write_text(workflow.read_text().replace(token, "", 1))
+    commit(target, "workflow from an older release")
+    base = git(target, "rev-parse", "HEAD")
+    select_release(source, monkeypatch)
+    update.update(target)
+    assert token in workflow.read_text()
+    if edited:
+        workflow.write_text(workflow.read_text() + "# project edit\n")
+        commit(target, "edit CI beside the update")
+    if external:
+        git(target, "config", "core.hooksPath", str(target.parent / "runner-hooks"))
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert update.check_scaffold_update(target, base) is not edited
+    assert git(target, "worktree", "list").count("\n") == 0
+
+
 def write_old_generation(root: Path) -> dict[str, str]:
     """Write the previous generation's wiring beside project-owned files."""
     for name, content in OLD_FILES.items():
