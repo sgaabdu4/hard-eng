@@ -119,6 +119,7 @@ def _review(head: str, rollup: object = "SUCCESS", **changes: object) -> object:
         "viewerDidAuthor": True,
         "viewerCanMergeAsAdmin": True,
         "reviewDecision": "REVIEW_REQUIRED",
+        "isMergeQueueEnabled": False,
         "reviewThreads": {"totalCount": 0, "nodes": []},
         "baseRef": {
             "compare": {"behindBy": 0},
@@ -446,6 +447,8 @@ def test_ready_rejects_pr_identity_and_mergeability(
         ("blocked", {"baseRef": _base(lockBranch=None)}, [], "protection"),
         ("blocked", {"baseRef": _base("CODE_SCANNING")}, [], "CODE_SCANNING"),
         ("blocked", {"baseRef": None}, [], "unreadable"),
+        ("blocked", {"isMergeQueueEnabled": True}, [], "merge queue"),
+        ("blocked", {"isMergeQueueEnabled": None}, [], "merge queue"),
         ("blocked", {"baseRef": _base(requiresStrictStatusChecks=False)}, [], None),
         ("blocked", {"baseRef": _base(requiresStrictStatusChecks=True)}, [], "latest"),
         ("blocked", {"baseRef": _required_rule("build", strict=True)}, [], "latest"),

@@ -76,7 +76,7 @@ _DELIVERY_TIMEOUT = 120.0
 _REVIEW_QUERY = (
     "query($owner:String!,$name:String!,$number:Int!,$head:String!){viewer{login} "
     "repository(owner:$owner,name:$name){pullRequest(number:$number){"
-    "viewerDidAuthor viewerCanMergeAsAdmin reviewDecision "
+    "viewerDidAuthor viewerCanMergeAsAdmin reviewDecision isMergeQueueEnabled "
     "reviewThreads(first:100){totalCount nodes{isResolved}} "
     "baseRef{compare(headRef:$head){behindBy} branchProtectionRule{"
     "requiresCommitSignatures requiresDeployments lockBranch requiresStrictStatusChecks "
@@ -794,6 +794,8 @@ def _other_merge_requirement(
     pull: dict[str, JsonValue], rollup: dict[str, JsonValue]
 ) -> str | None:
     """Why something besides the review may block; admin merge would bypass it too."""
+    if pull.get("isMergeQueueEnabled") is not False:
+        return "the base branch may require a merge queue"
     threads = _complete_nodes(pull.get("reviewThreads"))
     if threads is None or any(node.get("isResolved") is not True for node in threads):
         return "a review conversation is unresolved"
