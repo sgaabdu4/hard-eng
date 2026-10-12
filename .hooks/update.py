@@ -854,9 +854,12 @@ INSTALLED_FILES = {
 }
 
 
+WORKFLOW = ".github/workflows/hard-eng.yml"
+
+
 def maybe_installed(name: str) -> bool:
     """A path a Hard Eng update can write, checked before any network proof."""
-    return name in INSTALLED_FILES | {".agents/biome.json"} or name.startswith(
+    return name in INSTALLED_FILES | {".agents/biome.json", WORKFLOW} or name.startswith(
         (
             ".hooks/",
             ".agents/skills/",
@@ -922,7 +925,7 @@ def release_installed(
         env = hook_chain.own_hooks_env(root)
         changes, links, _, _ = update_plan(root, source, source, env)
         if (
-            not names <= allowed
+            not names - {WORKFLOW} <= allowed
             or (env is not None and ".husky/pre-push" in names)
             or changes
             or links
@@ -931,10 +934,45 @@ def release_installed(
                 for name in scaffold_files(old) - scaffold_files(source)
             )
             or not preserved_instructions(root, base, names)
+            or (WORKFLOW in names and not workflow_installed(root, base, source, old))
         ):
             return False
         validate_gates(root, source, {})
     return True
+
+
+def workflow_installed(root: Path, base: str, source: Path, old: Path) -> bool:
+    """Whether the release's setup turns the base workflow into the committed one."""
+    with tempfile.TemporaryDirectory(prefix="hard-eng-workflow-check-") as temporary:
+        tree = Path(temporary) / "base"
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "worktree",
+                "add",
+                "--quiet",
+                "--detach",
+                str(tree),
+                base,
+            ],
+            cwd=root,
+            stdout=sys.stderr,
+            check=True,
+            timeout=120,
+        )
+        try:
+            changes, _, _, _ = update_plan(tree, source, old)
+        finally:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(tree)],
+                cwd=root,
+                check=False,
+                timeout=60,
+            )
+    workflow = root / WORKFLOW
+    return workflow.is_file() and changes.get(WORKFLOW) == workflow.read_text()
 
 
 def check_scaffold_update(root: Path, base: str) -> bool:
