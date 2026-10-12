@@ -79,9 +79,13 @@ _REVIEW_QUERY = (
     "viewerDidAuthor viewerCanMergeAsAdmin reviewDecision "
     "reviewThreads(first:100){totalCount nodes{isResolved}} "
     "baseRef{branchProtectionRule{requiresCommitSignatures requiresDeployments "
-    "lockBranch} rules(first:100){totalCount nodes{type}}} "
-    "commits(last:1){nodes{commit{oid statusCheckRollup{state}}}}}}}"
+    "lockBranch requiredStatusCheckContexts} rules(first:100){totalCount nodes{type "
+    "parameters{...on RequiredStatusChecksParameters{requiredStatusChecks{context}}}}}} "
+    "commits(last:1){nodes{commit{oid statusCheckRollup{state contexts(first:100){"
+    "totalCount nodes{...on CheckRun{name conclusion} ...on StatusContext{context state}}"
+    "}}}}}}}}"
 )
+_PASSED = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 _BYPASSABLE_RULES = {
     "PULL_REQUEST",
     "REQUIRED_STATUS_CHECKS",
@@ -766,7 +770,27 @@ def _complete_nodes(value: JsonValue) -> list[dict[str, JsonValue]] | None:
     return [node for node in nodes if isinstance(node, dict)]
 
 
-def _other_merge_requirement(pull: dict[str, JsonValue]) -> str | None:
+def _required_checks(
+    protection: dict[str, JsonValue], rules: list[dict[str, JsonValue]]
+) -> set[str]:
+    contexts = protection.get("requiredStatusCheckContexts")
+    names = set(contexts) if isinstance(contexts, list) else set()
+    for rule in rules:
+        parameters = rule.get("parameters")
+        checks = (
+            parameters.get("requiredStatusChecks")
+            if isinstance(parameters, dict)
+            else []
+        )
+        names.update(
+            check.get("context") for check in checks or [] if isinstance(check, dict)
+        )
+    return {name for name in names if isinstance(name, str)}
+
+
+def _other_merge_requirement(
+    pull: dict[str, JsonValue], rollup: dict[str, JsonValue]
+) -> str | None:
     """Why something besides the review may block; admin merge would bypass it too."""
     threads = _complete_nodes(pull.get("reviewThreads"))
     if threads is None or any(node.get("isResolved") is not True for node in threads):
@@ -775,15 +799,25 @@ def _other_merge_requirement(pull: dict[str, JsonValue]) -> str | None:
     rules = _complete_nodes(base.get("rules") if isinstance(base, dict) else None)
     if not isinstance(base, dict) or rules is None:
         return "the base branch rules are unreadable"
-    protection = base.get("branchProtectionRule")
-    if protection is not None and (
-        not isinstance(protection, dict)
-        or any(value is not False for value in protection.values())
+    protection = base.get("branchProtectionRule") or {}
+    if not isinstance(protection, dict) or any(
+        value is not False
+        for key, value in protection.items()
+        if key != "requiredStatusCheckContexts"
     ):
         return "branch protection has another merge requirement"
     other = {str(node.get("type")) for node in rules} - _BYPASSABLE_RULES
     if other:
         return "a ruleset has another merge requirement: " + ", ".join(sorted(other))
+    contexts = _complete_nodes(rollup.get("contexts"))
+    passed = {
+        str(node.get("name") or node.get("context"))
+        for node in contexts or []
+        if node.get("conclusion") in _PASSED or node.get("state") == "SUCCESS"
+    }
+    missing = _required_checks(protection, rules) - passed
+    if contexts is None or missing:
+        return "a required check has not passed: " + ", ".join(sorted(missing))
     return None
 
 
@@ -828,7 +862,7 @@ def _review_bypass_problem(
         isinstance(rollup, dict) and rollup.get("state") == "SUCCESS"
     ):
         return "not every head check succeeded"
-    if problem := _other_merge_requirement(pull):
+    if problem := _other_merge_requirement(pull, rollup):
         return problem
     collaborators = _api_items(
         root,
