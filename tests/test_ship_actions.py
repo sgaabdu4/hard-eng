@@ -678,14 +678,7 @@ def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
     assert runner.pre_push() == 0
     assert hard_eng.call_args_list[0].args[1] == ["check", "--base", "2" * 40, *scope]
     mutating = hard_eng.call_args_list[1].args[1]
-    assert mutating == [
-        "mutation",
-        "--base",
-        "2" * 40,
-        "--seconds",
-        "180",
-        "--in-place",
-    ]
+    assert mutating == ["mutation", "--base", "2" * 40, "--in-place"]
     output = capsys.readouterr().out
     assert "checks passed in 2s, over the 1s pre_push_seconds budget" in output
     assert ("Switch to HTTPS" in output) is warned
