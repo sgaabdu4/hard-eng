@@ -161,14 +161,13 @@ def package_script_arguments(
 def package_directory(arguments: list[str], directory: Path) -> tuple[list[str], Path]:
     """Apply directory flags written before `run` or right after it."""
     at = 2 if arguments[1:2] in (["run"], ["run-script"]) else 1
-    while len(arguments) > at + 1 and arguments[at].split("=", 1)[0] in {
-        "--cwd",
-        "--dir",
-        "--prefix",
-        "-C",
-    }:
+    flags = {"--cwd", "--dir", "--prefix", "-C"}
+    while len(arguments) > at + 1 and arguments[at].split("=", 1)[0] in flags:
         flag, separator, value = arguments[at].partition("=")
-        if Path(arguments[0]).name == "bun" and at == 1 and not separator:
+        if not separator and (Path(arguments[0]).name, *arguments[3:4]) == (
+            "bun",
+            "run",
+        ):
             raise ValueError(
                 f"Bun prints help for `bun {flag} {arguments[2]} run`; "
                 f"write `bun --cwd={arguments[2]} run`"
