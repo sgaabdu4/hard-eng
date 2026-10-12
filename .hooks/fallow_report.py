@@ -19,9 +19,9 @@ def owns_package_fallow(
     command = gate["command"]
     if gate.get("report", {}).get("type") != "fallow":
         return False
-    if command[:3] == ["pnpm", "run", "check:fallow"]:
+    if command[:3] == ["bun", "run", "check:fallow"]:
         return True
-    if command[:2] != ["pnpm", "run"] or gate.get("parallel"):
+    if command[:2] != ["bun", "run"] or gate.get("parallel"):
         return False
     try:
         standalone = shlex.split(scripts.get("check:fallow", ""))
@@ -80,14 +80,14 @@ def _dependency_coverage_commands(
             return None
         owner_commands = _serial_test_prerequisites(owner_group, None)
         if not owner_commands or any(
-            command[:2] != ["pnpm", "run"] for command in owner_commands
+            command[:2] != ["bun", "run"] for command in owner_commands
         ):
             return None
         commands.extend(
             [
                 [
-                    "pnpm",
-                    "--dir",
+                    "bun",
+                    "--cwd",
                     os.path.relpath(dependency, start=group["path"]),
                     "run",
                     *command[2:],
@@ -121,9 +121,9 @@ TOLERANCE_FLAGS = {
 
 def native_scanner_command(arguments: list[str]) -> list[str] | None:
     """Return a scanner executable with its arguments behind package-manager prefixes."""
-    if arguments[:2] in (["pnpm", "dlx"], ["pnpm", "exec"]):
-        arguments = arguments[2:]
-        while arguments and arguments[0].startswith(("--package=", "--allow-build=")):
+    if arguments[:2] == ["bun", "x"] or arguments[:1] == ["bunx"]:
+        arguments = arguments[2 if arguments[0] == "bun" else 1 :]
+        while arguments and arguments[0].startswith(("--package=", "--bun")):
             arguments = arguments[1:]
     if not arguments:
         return None

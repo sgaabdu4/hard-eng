@@ -21,4 +21,4 @@ Visual Atomic Design does not apply. The interface consists of the installer, sk
 
 ## Do's and Don'ts
 
-Preserve existing instructions and configuration. Use pnpm for JavaScript/TypeScript, native Python/Dart package managers and tool reports; add no dashboard, result cache or alternative workflow.
+Preserve existing instructions and configuration. Use Bun for JavaScript/TypeScript, native Python/Dart package managers and tool reports; add no dashboard, result cache or alternative workflow.
