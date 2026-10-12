@@ -75,6 +75,12 @@ def test_pnpm_setup_step_with_a_condition_migrates_as_one_step(step: str) -> Non
     assert migrate_bun(SOURCE, old) == template
 
 
+def test_pnpm_tool_ending_a_tool_list_line_is_removed() -> None:
+    old = "    env:\n      SDK_TOOLS: uv@latest python@3.12 node@24 pnpm@12.4.1\n"
+    expected = "    env:\n      SDK_TOOLS: uv@latest python@3.12 node@24\n"
+    assert migrate_bun(SOURCE, old) == expected
+
+
 @pytest.mark.parametrize("wrapped", [False, True])
 @pytest.mark.parametrize("location", ["local", "runner", "configured"])
 def test_native_tool_bootstrap_preserves_ci_sdk_executables(
