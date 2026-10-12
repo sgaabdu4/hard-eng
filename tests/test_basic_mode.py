@@ -66,7 +66,7 @@ def test_go_project_installs_with_only_shared_gates(
     validate_required_checks(repository, installed)
     workflow = (repository / ".github/workflows/hard-eng.yml").read_text()
     assert "EXTRA_SDK_TOOLS: ''" in workflow or 'EXTRA_SDK_TOOLS: ""' in workflow
-    assert "|| 'uv@latest python@3.12 node@latest'" in workflow
+    assert "|| 'uv@latest python@3.12'" in workflow
     assert "dart@" not in workflow and "flutter@" not in workflow
     assert "poetry@" not in workflow and "pnpm@" not in workflow
 
@@ -109,9 +109,7 @@ def test_basic_mode_check_impact_and_mutation_run_without_packages(
         assert runner.check(base=base, quick=quick, verify_plan=False) == 0
     assert "PASS secrets-files" in capsys.readouterr().out
     assert runner.impact(base) == 0
-    assert capsys.readouterr().out == (
-        "docs_only=false\ntools=uv@latest python@3.12 node@latest\n"
-    )
+    assert capsys.readouterr().out == ("docs_only=false\ntools=uv@latest python@3.12\n")
     assert mutation.report(repository, base, None, lambda *_arguments: set()) == 0
     assert "Mutation testing" not in capsys.readouterr().out
 

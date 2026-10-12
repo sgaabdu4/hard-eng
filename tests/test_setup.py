@@ -41,13 +41,13 @@ def test_existing_lighthouse_config_runs_after_build(tmp_path: Path) -> None:
             {
                 "name": "performance",
                 "role": "performance",
-                "command": ["pnpm", "run", "test:performance"],
+                "command": ["bun", "run", "test:performance"],
             },
-            {"name": "build", "role": "build", "command": ["pnpm", "run", "build"]},
+            {"name": "build", "role": "build", "command": ["bun", "run", "build"]},
         ],
     }
     adapt_performance(tmp_path, package)
-    assert package["checks"][-1]["command"] == ["pnpm", "run", "test:performance"]
+    assert package["checks"][-1]["command"] == ["bun", "run", "test:performance"]
     (tmp_path / "lighthouserc.json").write_text('{"ci":{}}')
     adapt_performance(tmp_path, package)
     assert [gate["role"] for gate in package["checks"]] == ["build", "performance"]
@@ -65,40 +65,39 @@ def test_existing_lighthouse_config_runs_after_build(tmp_path: Path) -> None:
     }
 
 
-def test_pnpm_package_manager_is_required(tmp_path: Path) -> None:
-    (tmp_path / "package.json").write_text(
-        json.dumps({"packageManager": "pnpm@11.18.0"})
-    )
-    (tmp_path / "pnpm-lock.yaml").write_text("fixture\n")
+def test_bun_package_manager_is_required(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(json.dumps({"packageManager": "bun@1.3.0"}))
+    (tmp_path / "bun.lock").write_text("fixture\n")
     selected, command, selected_lock = javascript_manager(tmp_path)
-    assert selected == "pnpm" and selected_lock == "pnpm-lock.yaml"
-    assert command == ["pnpm", "install", "--frozen-lockfile"]
+    assert selected == "bun" and selected_lock == "bun.lock"
+    assert command == ["bun", "install", "--frozen-lockfile"]
 
 
-@pytest.mark.parametrize("manager", ["npm", "yarn", "bun"])
-def test_non_pnpm_declaration_requires_migration(tmp_path: Path, manager: str) -> None:
+@pytest.mark.parametrize("manager", ["npm", "yarn", "pnpm"])
+def test_non_bun_declaration_requires_migration(tmp_path: Path, manager: str) -> None:
     (tmp_path / "package.json").write_text(
         json.dumps({"packageManager": manager + "@2.0.0"})
     )
-    with pytest.raises(ValueError, match="migrate packageManager"):
+    with pytest.raises(ValueError, match="Bun is required"):
         javascript_manager(tmp_path)
 
 
 @pytest.mark.parametrize(
     "lockfile",
-    ["package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "bun.lock", "bun.lockb"],
+    [
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "package-lock.json",
+        "npm-shrinkwrap.json",
+        "yarn.lock",
+        "bun.lockb",
+    ],
 )
 def test_legacy_lockfile_requires_migration(tmp_path: Path, lockfile: str) -> None:
-    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@11.18.0"}')
-    (tmp_path / "pnpm-lock.yaml").touch()
+    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
+    (tmp_path / "bun.lock").touch()
     (tmp_path / lockfile).touch()
     with pytest.raises(ValueError, match=lockfile):
-        javascript_manager(tmp_path)
-
-
-def test_missing_pnpm_lockfile_requires_migration(tmp_path: Path) -> None:
-    (tmp_path / "package.json").write_text("{}")
-    with pytest.raises(ValueError, match="pnpm-lock.yaml is required"):
         javascript_manager(tmp_path)
 
 
@@ -149,7 +148,7 @@ def test_react_and_existing_project_scripts_are_gated(
     (tmp_path / "package.json").write_text(
         json.dumps(
             {
-                "packageManager": "pnpm@10.0.0",
+                "packageManager": "bun@1.3.0",
                 "dependencies": {"react": "19"},
                 "scripts": {
                     "build": "project-build",
@@ -164,13 +163,13 @@ def test_react_and_existing_project_scripts_are_gated(
     (tmp_path / "src/app.tsx").write_text("export const value = 1;\n")
     config = installer.gate_config(tmp_path)
     checks = {gate["role"]: gate for gate in config["packages"][0]["checks"]}
-    assert checks["lockfiles"]["command"] == ["pnpm", "install", "--frozen-lockfile"]
-    assert checks["build"]["command"] == ["pnpm", "run", "build"]
-    assert checks["integration"]["command"] == ["pnpm", "run", "test:integration"]
-    assert checks["generated"]["command"] == ["pnpm", "run", "check:generated"]
-    assert checks["boundaries"]["command"] == ["pnpm", "run", "lint:boundaries"]
+    assert checks["lockfiles"]["command"] == ["bun", "install", "--frozen-lockfile"]
+    assert checks["build"]["command"] == ["bun", "run", "build"]
+    assert checks["integration"]["command"] == ["bun", "run", "test:integration"]
+    assert checks["generated"]["command"] == ["bun", "run", "check:generated"]
+    assert checks["boundaries"]["command"] == ["bun", "run", "lint:boundaries"]
     assert checks["react"]["report"]["type"] == "react-doctor"
-    assert checks["tests"]["command"][0] == "pnpm"
+    assert checks["tests"]["command"][0] == "bun"
 
 
 @pytest.mark.parametrize(
@@ -210,7 +209,7 @@ def test_existing_gate_config_gets_boundary_gate_once(
 ) -> None:
     repository(tmp_path)
     (tmp_path / "app.ts").write_text("export const value = 1;\n")
-    command = ["pnpm", "run", "lint:boundaries"]
+    command = ["bun", "run", "lint:boundaries"]
     config = installer.gate_config(tmp_path)
     package = config["packages"][0]
     package["checks"] = [
@@ -593,18 +592,18 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
 ) -> None:
     repository(tmp_path)
     (tmp_path / "package.json").write_text(
-        json.dumps({"packageManager": "pnpm@10.0.0", "workspaces": ["packages/*"]})
+        json.dumps({"packageManager": "bun@1.3.0", "workspaces": ["packages/*"]})
     )
-    (tmp_path / "pnpm-lock.yaml").touch()
+    (tmp_path / "bun.lock").touch()
     child = tmp_path / "packages/app"
     (child / "src").mkdir(parents=True)
     (child / "package.json").write_text(
         '{"name":"app","packageManager":"pnpm@11.18.0"}'
     )
     (child / "src/main.ts").write_text("export const value = 1;\n")
-    with pytest.raises(ValueError, match="pnpm-workspace.yaml"):
+    with pytest.raises(ValueError, match="Bun is required"):
         installer.gate_config(tmp_path)
-    (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n  - packages/*\n")
+    (child / "package.json").write_text('{"name":"app","packageManager":"bun@1.3.0"}')
     config = installer.gate_config(tmp_path)
     root, app = config["packages"]
     assert "depends_on" not in root and "depends_on" not in app
@@ -622,7 +621,7 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
         == 1
     )
     tests = next(gate for gate in app["checks"] if gate.get("role") == "tests")
-    assert tests["command"] == ["pnpm", "run", "test:coverage"]
+    assert tests["command"] == ["bun", "run", "test:coverage"]
     installer.install(tmp_path)
     output = capsys.readouterr().out
     assert "Before verification, Review `depends_on`" in output
@@ -658,7 +657,7 @@ def repository(root: Path) -> None:
     with (root / ".git/config").open("a") as config:
         config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
     (root / "package.json").write_text('{"private":true}')
-    (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (root / "bun.lock").write_text('{"lockfileVersion": 1}\n')
 
 
 def snapshot(root: Path) -> dict[str, bytes]:
@@ -704,10 +703,9 @@ def test_install_preserves_project_and_repeats(
     assert not (tmp_path / ".mcp.json").exists()
     assert not (tmp_path / ".codex/config.toml").exists()
     workflow = (tmp_path / ".github/workflows/hard-eng.yml").read_text()
-    assert "pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b" in workflow
-    assert (
-        "pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise" in workflow
-    )
+    assert "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6" in workflow
+    assert 'bun x --package="@jdxcode/mise-linux-${RUNNER_ARCH,,}@latest"' in workflow
+    assert "pnpm" not in workflow.lower()
     assert "npm exec" not in workflow
     for entry in (installer.SOURCE / ".agents/skills").glob("*/SKILL.md"):
         canonical = entry.parent
@@ -872,7 +870,7 @@ def test_missing_project_manifest_fails(installer: ModuleType, tmp_path: Path) -
     "command",
     [
         ["react-doctor", "src", "--scope", "full", "--blocking", "warning", "--json"],
-        ["pnpm", "exec", "react-doctor", "--blocking", "warning"],
+        ["bun", "x", "react-doctor", "--blocking", "warning"],
         ["dart-decimate", "check", ".", "--boundary-violations"],
         ["fallow", "dead-code", "--format", "json"],
         ["fallow", "audit", "--format", "json"],
@@ -889,7 +887,7 @@ def test_update_gives_an_older_scanner_gate_its_required_strict_flags(
         "path": ".",
         "checks": [
             {"name": "scanner", "command": list(command)},
-            {"name": "script", "command": ["pnpm", "run", "audit"]},
+            {"name": "script", "command": ["bun", "run", "audit"]},
             {"name": "new-only", "command": ["fallow", "audit", "--gate", "new"]},
         ],
     }
@@ -899,7 +897,7 @@ def test_update_gives_an_older_scanner_gate_its_required_strict_flags(
     validate_scanner_command(upgraded, report)
     strict_scanner_flags(package)
     assert package["checks"][0]["command"] == upgraded
-    assert package["checks"][1]["command"] == ["pnpm", "run", "audit"]
+    assert package["checks"][1]["command"] == ["bun", "run", "audit"]
     assert package["checks"][2]["command"] == ["fallow", "audit", "--gate", "new"]
 
 

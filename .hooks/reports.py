@@ -404,7 +404,9 @@ def validate_osv(
             and not (empty_bun / "bun.lock").exists()
             and dependency_free(empty_bun)
         ):
-            print("OSV: package.json declares no dependencies, so Bun keeps no lockfile")
+            print(
+                "OSV: package.json declares no dependencies, so Bun keeps no lockfile"
+            )
             return
         if not isinstance(results, list):
             raise TypeError("OSV results must be a list")

@@ -395,13 +395,9 @@ def install_launcher(
     staging = Path(tempfile.mkdtemp(prefix=".staging-", dir=installation.parent))
     try:
         (staging / "package.json").write_text('{"private": true}\n')
+        package = f"{MISE_PACKAGE}@{installation.name}"
         result = subprocess.run(
-            [
-                "bun",
-                "add",
-                "--minimum-release-age=0",
-                f"{MISE_PACKAGE}@{installation.name}",
-            ],
+            ["bun", "add", "--minimum-release-age=0", package],
             cwd=staging,
             env=environment,
             text=True,

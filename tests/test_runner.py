@@ -63,7 +63,7 @@ def native_gate_fixture(root: Path, installer: ModuleType, language: str) -> Gat
         ),
     }[language]
     (root / name).write_text(content)
-    (root / "pnpm-lock.yaml").touch()
+    (root / "bun.lock").touch()
     (root / "uv.lock").touch()
     (root / source).parent.mkdir(parents=True, exist_ok=True)
     (root / source).write_text("# fixture\n")
@@ -212,11 +212,13 @@ def test_workspace_cannot_cover_unrelated_packages_or_child_security(
     runner: ModuleType, installer: ModuleType, tmp_path: Path
 ) -> None:
     native_gate_fixture(tmp_path, installer, "javascript")
-    workspace = tmp_path / "pnpm-workspace.yaml"
-    workspace.write_text("packages:\n  - packages/*\n")
+    manifest = json.loads((tmp_path / "package.json").read_text())
     child = tmp_path / "packages/app"
     (child / "src").mkdir(parents=True)
-    (child / "package.json").write_text((tmp_path / "package.json").read_text())
+    (child / "package.json").write_text(json.dumps(manifest))
+    (tmp_path / "package.json").write_text(
+        json.dumps({**manifest, "workspaces": ["packages/*"]})
+    )
     (child / "src/app.js").write_text("export const value = 1;\n")
     config: GateConfig = installer.gate_config(tmp_path)
     config["packages"][0]["depends_on"] = []
@@ -235,8 +237,8 @@ def test_workspace_cannot_cover_unrelated_packages_or_child_security(
         load_groups(tmp_path)
     app["checks"].append(security)
     path.write_text(json.dumps(config))
-    workspace.write_text("packages: []\n")
-    (child / "pnpm-lock.yaml").touch()
+    (tmp_path / "package.json").write_text(json.dumps({**manifest, "workspaces": []}))
+    (child / "bun.lock").touch()
     with pytest.raises(ValueError, match="lockfiles"):
         load_groups(tmp_path)
 
@@ -379,7 +381,7 @@ def test_impact_inputs_reject_ambiguous_paths(
 def test_tool_setup_failure_prevents_gate_execution(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, response: str
 ) -> None:
-    executable = tmp_path / "bin/pnpm"
+    executable = tmp_path / "bin/bun"
     executable.parent.mkdir()
     executable.write_text(f"#!{sys.executable}\n{response}\n")
     executable.chmod(0o755)
@@ -523,7 +525,7 @@ def test_nested_package_script_filter_rejected(
         json.dumps(
             {
                 "scripts": {
-                    "test:coverage": "pnpm run unit",
+                    "test:coverage": "bun run unit",
                     "unit": "vitest --testNamePattern=x",
                 }
             }
@@ -531,15 +533,15 @@ def test_nested_package_script_filter_rejected(
     )
     with pytest.raises(ValueError, match="Focused"):
         runner.reject_test_filters(
-            ["pnpm", "run", "test:coverage"], tmp_path, "javascript"
+            ["bun", "run", "test:coverage"], tmp_path, "javascript"
         )
 
 
 def test_gate_validation_rejects_javascript_package_manager_drift(
     tmp_path: Path,
 ) -> None:
-    (tmp_path / "package.json").write_text('{"packageManager":"pnpm@11.18.0"}')
-    (tmp_path / "pnpm-lock.yaml").touch()
+    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
+    (tmp_path / "bun.lock").touch()
     group: Group = {
         "path": ".",
         "language": "javascript",
@@ -582,22 +584,22 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
         validate_group(tmp_path, group, set())
     performance["report"] = report
     (tmp_path / "package-lock.json").touch()
-    with pytest.raises(ValueError, match="legacy lockfiles"):
+    with pytest.raises(ValueError, match="Bun is required"):
         validate_group(tmp_path, group, set())
     (tmp_path / "package-lock.json").unlink()
     group["checks"][0]["command"] = ["npm", "run", "typecheck"]
-    with pytest.raises(ValueError, match="must use pnpm"):
+    with pytest.raises(ValueError, match="must use Bun"):
         validate_group(tmp_path, group, set())
     (tmp_path / "package.json").write_text(
         json.dumps(
             {
-                "packageManager": "pnpm@11.18.0",
-                "scripts": {"typecheck": "pnpm run unit", "unit": "npx c8 test"},
+                "packageManager": "bun@1.3.0",
+                "scripts": {"typecheck": "bun run unit", "unit": "npx c8 test"},
             }
         )
     )
-    group["checks"][0]["command"] = ["pnpm", "run", "typecheck"]
-    with pytest.raises(ValueError, match="must use pnpm, not: npx"):
+    group["checks"][0]["command"] = ["bun", "run", "typecheck"]
+    with pytest.raises(ValueError, match="must use Bun, not: npx"):
         validate_group(tmp_path, group, set())
 
 
@@ -721,14 +723,13 @@ def test_wrapped_actionlint_and_decimate_use_latest_packages(
     }
     tool_setup.provision_tools(tmp_path, [group], 30)
     assert "aqua:rhysd/actionlint@latest" in commands[0]
-    assert 'npm:dart-decimate[allow_builds=["dart-decimate"]]@latest' in commands[0]
+    assert "npm:dart-decimate@latest" in commands[0]
     assert len(commands) == 2
     assert "install" in commands[0] and "--json" in commands[1]
-    assert all("MISE_NPM_PACKAGE_MANAGER=pnpm" in command for command in commands)
+    assert all("MISE_NPM_PACKAGE_MANAGER=bun" in command for command in commands)
     for environment in environments:
         assert isinstance(environment, dict)
-        assert "PNPM_CONFIG_STORE_DIR" in environment
-        assert "PNPM_CONFIG_CACHE_DIR" in environment
+        assert "BUN_INSTALL_CACHE_DIR" in environment
 
 
 @pytest.mark.parametrize(
@@ -812,7 +813,7 @@ def test_pre_push_tests_committed_code(
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     subprocess.run(["git", "init", "--bare", "-q", str(receiver)], check=True)
     (root / "package.json").write_text('{"private":true}')
-    (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (root / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     installer.install(root)
     (root / "PLAN.md").write_text(completed_plan)
     # This fixture tests the Git boundary with an ad-hoc command, not an app suite.

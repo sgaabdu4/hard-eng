@@ -218,7 +218,7 @@ def release_template(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, st
     old = commit(source, "source baseline")
     init(target)
     (target / "package.json").write_text('{"private":true}')
-    (target / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    (target / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     (target / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": [], "shipping": shipping_policy})
     )
