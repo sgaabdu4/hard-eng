@@ -122,7 +122,6 @@ def _review(head: str, rollup: object = "SUCCESS", **changes: object) -> object:
         "isMergeQueueEnabled": False,
         "reviewThreads": {"totalCount": 0, "nodes": []},
         "baseRef": {
-            "compare": {"behindBy": 0},
             "branchProtectionRule": None,
             "rules": {"totalCount": 1, "nodes": [{"type": "PULL_REQUEST"}]},
         },
@@ -145,7 +144,6 @@ def _base(*types: str, **protection: object) -> object:
     rule = {"requiresCommitSignatures": False, "requiresDeployments": False}
     rule |= {"lockBranch": False, **protection}
     return {
-        "compare": {"behindBy": 1},
         "branchProtectionRule": rule,
         "rules": {"totalCount": len(types), "nodes": [{"type": t} for t in types]},
     }
@@ -156,7 +154,7 @@ def _required_rule(context: str, *, strict: bool = False) -> object:
     checks["strictRequiredStatusChecksPolicy"] = strict
     rule = {"type": "REQUIRED_STATUS_CHECKS", "parameters": checks}
     nodes = {"totalCount": 1, "nodes": [rule]}
-    return {"compare": {"behindBy": 2}, "branchProtectionRule": None, "rules": nodes}
+    return {"branchProtectionRule": None, "rules": nodes}
 
 
 class FakeGitHub:
@@ -450,8 +448,18 @@ def test_ready_rejects_pr_identity_and_mergeability(
         ("blocked", {"isMergeQueueEnabled": True}, [], "merge queue"),
         ("blocked", {"isMergeQueueEnabled": None}, [], "merge queue"),
         ("blocked", {"baseRef": _base(requiresStrictStatusChecks=False)}, [], None),
-        ("blocked", {"baseRef": _base(requiresStrictStatusChecks=True)}, [], "latest"),
-        ("blocked", {"baseRef": _required_rule("build", strict=True)}, [], "latest"),
+        (
+            "blocked",
+            {"baseRef": _base(requiresStrictStatusChecks=True)},
+            [],
+            "protection",
+        ),
+        (
+            "blocked",
+            {"baseRef": _required_rule("build", strict=True)},
+            [],
+            "up to date",
+        ),
         (
             "blocked",
             {"baseRef": _base(requiredStatusCheckContexts=["build"])},
