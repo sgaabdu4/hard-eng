@@ -74,13 +74,15 @@ _GH_TIMEOUT = 30.0
 _GIT_TIMEOUT = 30.0
 _DELIVERY_TIMEOUT = 120.0
 _REVIEW_QUERY = (
-    "query($owner:String!,$name:String!,$number:Int!){viewer{login} "
+    "query($owner:String!,$name:String!,$number:Int!,$head:String!){viewer{login} "
     "repository(owner:$owner,name:$name){pullRequest(number:$number){"
     "viewerDidAuthor viewerCanMergeAsAdmin reviewDecision "
     "reviewThreads(first:100){totalCount nodes{isResolved}} "
-    "baseRef{branchProtectionRule{requiresCommitSignatures requiresDeployments "
-    "lockBranch requiredStatusCheckContexts} rules(first:100){totalCount nodes{type "
-    "parameters{...on RequiredStatusChecksParameters{requiredStatusChecks{context}}}}}} "
+    "baseRef{compare(headRef:$head){behindBy} branchProtectionRule{"
+    "requiresCommitSignatures requiresDeployments lockBranch requiresStrictStatusChecks "
+    "requiredStatusCheckContexts} rules(first:100){totalCount nodes{type parameters{"
+    "...on RequiredStatusChecksParameters{strictRequiredStatusChecksPolicy "
+    "requiredStatusChecks{context}}}}}} "
     "commits(last:1){nodes{commit{oid statusCheckRollup{state contexts(first:100){"
     "totalCount nodes{...on CheckRun{name conclusion} ...on StatusContext{context state}}"
     "}}}}}}}}"
@@ -803,12 +805,23 @@ def _other_merge_requirement(
     if not isinstance(protection, dict) or any(
         value is not False
         for key, value in protection.items()
-        if key != "requiredStatusCheckContexts"
+        if key not in {"requiredStatusCheckContexts", "requiresStrictStatusChecks"}
     ):
         return "branch protection has another merge requirement"
     other = {str(node.get("type")) for node in rules} - _BYPASSABLE_RULES
     if other:
         return "a ruleset has another merge requirement: " + ", ".join(sorted(other))
+    strict = protection.get("requiresStrictStatusChecks") is True or any(
+        isinstance(rule.get("parameters"), dict)
+        and cast(dict[str, JsonValue], rule["parameters"]).get(
+            "strictRequiredStatusChecksPolicy"
+        )
+        is True
+        for rule in rules
+    )
+    compare = base.get("compare")
+    if strict and not (isinstance(compare, dict) and compare.get("behindBy") == 0):
+        return "the branch must include the latest base before checks count"
     contexts = _complete_nodes(rollup.get("contexts"))
     passed = {
         str(node.get("name") or node.get("context"))
@@ -836,6 +849,8 @@ def _review_bypass_problem(
             f"name={name}",
             "-F",
             f"number={number}",
+            "-f",
+            f"head={head_sha}",
             "-f",
             f"query={_REVIEW_QUERY}",
         ),
