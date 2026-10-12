@@ -481,6 +481,15 @@ def runs_hard_eng_check(workflow: object, *, require_base: bool = False) -> bool
     )
 
 
+def report_missing_bun(path: Path) -> None:
+    if not re.search(r"setup-bun|\bbunx\b|\bbun (?:x|install|run)\b", path.read_text()):
+        print(
+            f"CI adaptation pending: {path.name} runs Hard Eng without setting up Bun; "
+            "add an oven-sh/setup-bun step before the check.",
+            file=sys.stderr,
+        )
+
+
 def integrated(workflows: list[Path]) -> bool:
     """Existing CI that already runs the check needs no integration reminder."""
     import yaml
@@ -491,6 +500,7 @@ def integrated(workflows: list[Path]) -> bool:
             workflow = yaml.safe_load(path.read_text())
             if runs_hard_eng_check(workflow):
                 found = True
+                report_missing_bun(path)
                 triggers = workflow.get("on", workflow.get(True))
                 if (isinstance(triggers, str) and triggers in MAINTENANCE_EVENTS) or (
                     isinstance(triggers, (list, dict))

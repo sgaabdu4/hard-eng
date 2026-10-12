@@ -348,3 +348,25 @@ def test_node_runs_on_bun_even_when_node_is_installed(
         node = shutil.which("node", path=path)
         assert node is not None
         assert Path(node).resolve() == (bin_directory / "bun").resolve()
+
+
+def test_missing_bun_names_how_to_install_it(tmp_path: Path) -> None:
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith(("MISE_", "BUN_", "NPM_CONFIG_"))
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", PROVISION, str(SOURCE / ".hooks"), str(tmp_path)],
+        env={
+            **environment,
+            "RUNNER_TEMP": str(tmp_path / "runner"),
+            "PATH": "/usr/bin:/bin",
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "oven-sh/setup-bun" in result.stderr
