@@ -913,7 +913,10 @@ def test_update_gives_an_older_scanner_gate_its_required_strict_flags(
 @pytest.mark.parametrize(
     ("dependency", "expected"),
     [
-        ("flutter:\n    sdk: flutter", ["flutter", "test", "--no-pub", "--machine", "test/performance"]),
+        (
+            "flutter:\n    sdk: flutter",
+            ["flutter", "test", "--no-pub", "--machine", "test/performance"],
+        ),
         ("path: ^1.9.0", ["dart", "test", "test/performance", "--reporter=json"]),
     ],
 )
@@ -921,13 +924,17 @@ def test_flutter_performance_suite_runs_without_package_test(
     installer: ModuleType, tmp_path: Path, dependency: str, expected: list[str]
 ) -> None:
     """`dart test` needs package:test, which Flutter's pinned test_api blocks beside build_runner."""
-    (tmp_path / "pubspec.yaml").write_text(f"name: app\ndependencies:\n  {dependency}\n")
+    (tmp_path / "pubspec.yaml").write_text(
+        f"name: app\ndependencies:\n  {dependency}\n"
+    )
     (tmp_path / "pubspec.lock").write_text("packages: {}\n")
     template = installer.SOURCE / ".agents/skills/he/templates/hard-eng.dart.json"
     package: Group = json.loads(template.read_text())["packages"][0]
     for _ in range(2):
         adapt_package(tmp_path, package)
-        performance = [gate for gate in package["checks"] if gate["role"] == "performance"]
+        performance = [
+            gate for gate in package["checks"] if gate["role"] == "performance"
+        ]
         assert performance[0]["command"] == expected
 
 

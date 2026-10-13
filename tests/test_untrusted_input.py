@@ -9,10 +9,10 @@ from types import ModuleType
 
 import pytest
 from gate_config import Gate, Group
-from project_setup import next_route_types
 from untrusted_input import (
     fallow_ignores_hooks,
     jsonc_config,
+    next_route_types,
     reject_jsdoc_casts,
     typescript_config,
     validate_typescript,
@@ -278,7 +278,10 @@ def test_update_repairs_a_solution_tsconfig_an_earlier_setup_broke(
     changes: dict[str, str] = {}
     typescript_config(tmp_path, tmp_path, ["src", "vite.config.ts"], changes)
     assert jsonc_config("tsconfig.json", changes["tsconfig.json"])["files"] == []
-    for name, source in (("tsconfig.app.json", "src"), ("tsconfig.node.json", "vite.config.ts")):
+    for name, source in (
+        ("tsconfig.app.json", "src"),
+        ("tsconfig.node.json", "vite.config.ts"),
+    ):
         assert jsonc_config(name, changes[name])["include"] == [UNTRUSTED, source]
     for name, text in changes.items():
         (tmp_path / name).write_text(text)
