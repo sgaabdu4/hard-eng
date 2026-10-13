@@ -2,16 +2,19 @@
 
 import json
 import subprocess
+import sys
+import threading
 from pathlib import Path
 from types import ModuleType
 
 import pytest
-from gate_config import Group
+from gate_config import Gate, Group
 from untrusted_input import (
     fallow_ignores_hooks,
     jsonc_config,
     reject_jsdoc_casts,
     typescript_config,
+    validate_typescript,
 )
 
 UNTRUSTED = ".hooks/untrusted-input.d.ts"
@@ -231,9 +234,60 @@ def test_fresh_install_ships_and_includes_the_untrusted_input_declarations(
     assert typing == [typing_template(installer)]
 
 
+def vite_react_ts(root: Path, root_files: list[str]) -> None:
+    """The tsconfig layout `bun create vite --template react-ts` writes."""
+    solution = {
+        "files": root_files,
+        "references": [
+            {"path": "./tsconfig.app.json"},
+            {"path": "./tsconfig.node.json"},
+        ],
+    }
+    (root / "tsconfig.json").write_text(json.dumps(solution, indent=2))
+    app = '{\n  "compilerOptions": {\n    /* Bundler mode */\n    "noEmit": true,\n    "jsx": "react-jsx"\n  },\n  "include": ["src"]\n}\n'
+    (root / "tsconfig.app.json").write_text(app)
+    node = '{\n  "compilerOptions": {"module": "nodenext", "noEmit": true},\n  "include": ["vite.config.ts"]\n}\n'
+    (root / "tsconfig.node.json").write_text(node)
+    (root / "src").mkdir()
+    (root / "src/main.tsx").write_text("export {};\n")
+    (root / "vite.config.ts").write_text("export default {};\n")
+
+
+def test_fresh_vite_install_keeps_the_solution_tsconfig_buildable(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    """`tsc -b` fails with TS6306/TS6310 once the solution root lists a file."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    scripts = {"build": "tsc -b && vite build"}
+    (tmp_path / "package.json").write_text(json.dumps({"scripts": scripts}))
+    (tmp_path / "bun.lock").write_text('{"lockfileVersion": 1}\n')
+    vite_react_ts(tmp_path, [])
+    changes = installer.plan_install(tmp_path.resolve())[0]
+    assert "tsconfig.json" not in changes
+    for name in ("tsconfig.app.json", "tsconfig.node.json"):
+        assert UNTRUSTED in jsonc_config(name, changes[name])["include"]
+    assert "/* Bundler mode */" in changes["tsconfig.app.json"]
+
+
+def test_update_repairs_a_solution_tsconfig_an_earlier_setup_broke(
+    tmp_path: Path,
+) -> None:
+    vite_react_ts(tmp_path, [UNTRUSTED])
+    (tmp_path / ".fallowrc.json").write_text('{"ignorePatterns": [".hooks/**"]}')
+    changes: dict[str, str] = {}
+    typescript_config(tmp_path, tmp_path, ["src", "vite.config.ts"], changes)
+    assert jsonc_config("tsconfig.json", changes["tsconfig.json"])["files"] == []
+    for name, source in (("tsconfig.app.json", "src"), ("tsconfig.node.json", "vite.config.ts")):
+        assert jsonc_config(name, changes[name])["include"] == [UNTRUSTED, source]
+    for name, text in changes.items():
+        (tmp_path / name).write_text(text)
+    rerun: dict[str, str] = {}
+    typescript_config(tmp_path, tmp_path, ["src", "vite.config.ts"], rerun)
+    assert rerun == {}
+
+
 @pytest.mark.parametrize("declared", [True, False])
 def test_typescript_check_requires_the_untrusted_input_declarations(
-    runner: ModuleType,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     declared: bool,
@@ -248,15 +302,48 @@ def test_typescript_check_requires_the_untrusted_input_declarations(
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(command, 0, json.dumps(shown))
 
-    monkeypatch.setattr(runner.subprocess, "run", show_config)
+    monkeypatch.setattr(subprocess, "run", show_config)
+    expected = {tmp_path / "src/app.ts"}
+    if declared:
+        validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
+    else:
+        with pytest.raises(ValueError, match="omits .hooks/untrusted-input.d.ts"):
+            validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
+
+
+FAKE_TSC = """
+import json, sys
+args = sys.argv[1:]
+project = args[args.index("-p") + 1] if "-p" in args else "tsconfig.json"
+untrusted = ".hooks/untrusted-input.d.ts"
+files = {
+    "tsconfig.json": [untrusted],
+    "tsconfig.app.json": ["src/main.tsx", untrusted],
+    "tsconfig.node.json": ["vite.config.ts", untrusted],
+}[project]
+if "--showConfig" in args:
+    print(json.dumps({"compilerOptions": {"strict": True, "checkJs": True}, "files": files}))
+else:
+    with open("runs.txt", "a") as runs:
+        runs.write(project + "\\n")
+    raise SystemExit(int(project == sys.argv[1]))
+"""
+
+
+@pytest.mark.parametrize("failing", ["", "tsconfig.app.json"])
+def test_types_gate_checks_each_config_a_solution_tsconfig_references(
+    runner: ModuleType, tmp_path: Path, failing: str
+) -> None:
+    """Checking the solution root alone compiles only the declarations, none of src."""
+    vite_react_ts(tmp_path, [])
     group: Group = {
         "path": ".",
         "language": "javascript",
-        "sources": ["src"],
+        "sources": ["src", "vite.config.ts"],
         "checks": [],
     }
-    if declared:
-        runner.validate_typescript(["tsc"], tmp_path, group, 10)
-    else:
-        with pytest.raises(ValueError, match="omits .hooks/untrusted-input.d.ts"):
-            runner.validate_typescript(["tsc"], tmp_path, group, 10)
+    command = [sys.executable, "-c", FAKE_TSC, failing]
+    types: Gate = {"name": "types", "role": "types", "command": command}
+    assert runner.run_gate(group, types, 30, threading.Lock()) is bool(failing)
+    runs = (tmp_path / "runs.txt").read_text().split()
+    assert runs == ["tsconfig.app.json", "tsconfig.node.json"]

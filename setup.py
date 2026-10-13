@@ -94,8 +94,14 @@ def gate_config(root: Path) -> GateConfig:
     if not packages:
         raise ValueError(
             "No supported project manifest found. New project: ask the user which type to create "
-            "(Python, Flutter, Next.js or OpenNext on Cloudflare) unless their request says, "
+            "(Python, Flutter, Next.js, OpenNext on Cloudflare or React + Vite) unless their request says, "
             "create it with that stack's official scaffold command, then rerun setup. "
+            "For a web app, never default to Next.js: suggest it only for public pages that need "
+            "search ranking or fast first load, and React + Vite for apps behind a login, internal "
+            "tools and apps with a separate backend. React + Vite: run "
+            "`bun create vite . --template react-ts`, delete oxlint, its lint script and "
+            ".oxlintrc.json (Biome checks replace them), then `bun update --latest --exact` pins "
+            "each package to the newest release minimumReleaseAge allows. "
             "A new Flutter app uses Riverpod per .agents/skills/building-flutter-apps."
         )
     config: GateConfig = {"version": 1, "packages": packages, "shared": shared}
