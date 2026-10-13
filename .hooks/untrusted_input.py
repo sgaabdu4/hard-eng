@@ -133,13 +133,31 @@ def inherited_lists(path: Path, seen: frozenset[Path] = frozenset()) -> set[str]
     return keys
 
 
+def next_route_types(directory: Path, timeout: float) -> None:
+    """Write Next.js route types (`PageProps`, `LayoutProps`) that a clean checkout lacks."""
+    if not (directory / "node_modules/next/dist/cli/next-typegen.js").is_file():
+        return
+    result = subprocess.run(
+        ["bun", "x", "next", "typegen"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"next typegen failed: {result.stderr or result.stdout}")
+
+
 def typescript_projects(
     root: Path, command: list[str], directory: Path
 ) -> list[list[str]]:
     """One `-p` per config a solution-style tsconfig references; [[]] runs the command as is."""
     target = directory / "tsconfig.json"
     selected = {argument.split("=")[0] for argument in command} & {"-p", "--project"}
-    configs = [target] if selected or not target.is_file() else project_configs(root, target)
+    configs = (
+        [target] if selected or not target.is_file() else project_configs(root, target)
+    )
     if configs == [target]:
         return [[]]
     return [["-p", os.path.relpath(config, directory)] for config in configs]
