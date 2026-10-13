@@ -1,6 +1,6 @@
 # Keep a same-run coverage map and match Fallow spans in one pass
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -22,7 +22,7 @@ A map older than the lcov is still removed as stale; only a map written after it
 
 - [x] A map written after the lcov stays when `fallow` is missing.
 - [x] A map from an earlier run is still removed when the listing fails.
-- [ ] Full gate passes.
+- [x] Full gate passes.
 
 ## Baseline + execution
 
@@ -40,8 +40,8 @@ N/A — hook behaviour with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: `tests/test_reports.py` 183 passed. On a real Bun suite of 1,744 covered files with `fallow` on PATH, the conversion took 14.7 seconds; before the fix a gate sat in it for over 20 minutes.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main --plan-stage Ready` → exit 0; 18 checks passed. `tests/test_reports.py` 183 passed. Codex adversarial review (GPT-6 Astra) rounds 1 and 2 approved with no findings. On a real Bun suite of 1,744 covered files with `fallow` on PATH, the conversion took 14.7 seconds; before the fix a gate sat in it for over 20 minutes.
 E2E: N/A — the hook behaviour is covered by the scenario run above.
 
 Delivery target: PR
