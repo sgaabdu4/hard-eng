@@ -862,8 +862,16 @@ def test_conflicting_python_typing_is_not_overwritten(
 
 def test_missing_project_manifest_fails(installer: ModuleType, tmp_path: Path) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    with pytest.raises(ValueError, match="ask the user which type to create"):
+    with pytest.raises(ValueError, match="ask the user which type to create") as error:
         installer.install(tmp_path)
+    for step in (
+        "React + Vite",
+        "never default to Next.js",
+        "bun create vite . --template react-ts",
+        ".oxlintrc.json",
+        "bun update --latest --exact",
+    ):
+        assert step in str(error.value)
 
 
 @pytest.mark.parametrize(

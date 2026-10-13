@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import subprocess
 from pathlib import Path
 
 from gate_config import JSONC, Group, json_file
@@ -132,6 +133,63 @@ def inherited_lists(path: Path, seen: frozenset[Path] = frozenset()) -> set[str]
     return keys
 
 
+def typescript_projects(
+    root: Path, command: list[str], directory: Path
+) -> list[list[str]]:
+    """One `-p` per config a solution-style tsconfig references; [[]] runs the command as is."""
+    target = directory / "tsconfig.json"
+    selected = {argument.split("=")[0] for argument in command} & {"-p", "--project"}
+    configs = [target] if selected or not target.is_file() else project_configs(root, target)
+    if configs == [target]:
+        return [[]]
+    return [["-p", os.path.relpath(config, directory)] for config in configs]
+
+
+def validate_typescript(
+    root: Path, command: list[str], directory: Path, expected: set[Path], timeout: float
+) -> None:
+    strict = (
+        "noImplicitAny",
+        "noImplicitThis",
+        "strictNullChecks",
+        "strictFunctionTypes",
+        "strictBindCallApply",
+        "strictPropertyInitialization",
+        "strictBuiltinIteratorReturn",
+        "useUnknownInCatchVariables",
+        "alwaysStrict",
+    )
+    files: set[Path] = set()
+    for project in typescript_projects(root, command, directory):
+        result = subprocess.run(
+            [*command, *project, "--showConfig"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=True,
+        )
+        actual = json.loads(result.stdout)
+        options = actual.get("compilerOptions", {})
+        if (
+            options.get("strict") is not True
+            or any(options.get(name, True) is not True for name in strict)
+            or options.get("checkJs") is not True
+            or options.get("noCheck", False) is not False
+        ):
+            raise ValueError(
+                "TypeScript requires all strict checks and JavaScript checking without noCheck"
+            )
+        listed = {(directory / name).resolve() for name in actual.get("files", [])}
+        if (root / DECLARATIONS).resolve() not in listed:
+            raise ValueError(
+                f"TypeScript configuration omits {DECLARATIONS}; rerun the Hard Eng installer"
+            )
+        files |= listed
+    if not {(directory / name).resolve() for name in expected} <= files:
+        raise ValueError("TypeScript configuration omits declared production files")
+
+
 JSDOC_CAST = re.compile(
     r"/\*\*(?:(?!\*/).)*?@type\s*\{((?:(?!\*/).)*?)\}(?:(?!\*/).)*?\*/\s*\(", re.DOTALL
 )
@@ -154,6 +212,52 @@ def reject_jsdoc_casts(directory: Path, files: list[str]) -> None:
         )
 
 
+def project_configs(
+    root: Path, path: Path, seen: frozenset[Path] = frozenset()
+) -> list[Path]:
+    """The tsconfigs a solution-style config builds through its references; [path] otherwise."""
+    config = jsonc_config(str(path), path.read_text())
+    declarations = Path(os.path.relpath(root / DECLARATIONS, path.parent)).as_posix()
+    references, files = config.get("references"), config.get("files")
+    if (
+        not isinstance(references, list)
+        or not references
+        or "include" in config
+        or not isinstance(files, list)
+        or not set(files) <= {declarations}
+        or path in seen
+    ):
+        return [path]
+    found: list[Path] = []
+    for reference in references:
+        named = reference.get("path") if isinstance(reference, dict) else None
+        target = path.parent / str(named)
+        target = target / "tsconfig.json" if target.is_dir() else target
+        if not isinstance(named, str) or not target.is_file():
+            raise ValueError(f"{path.name}: referenced config {named!r} is missing")
+        found += project_configs(root, target, seen | {path})
+    return found
+
+
+def declared_config(root: Path, target: Path, changes: dict[str, str]) -> None:
+    name = str(target.relative_to(root))
+    declarations = Path(os.path.relpath(root / DECLARATIONS, target.parent)).as_posix()
+    text = changes.get(name) or target.read_text()
+    config = jsonc_config(name, text)
+    key = "files" if "files" in config and "include" not in config else "include"
+    if "extends" in config and not {"include", "files"} & config.keys():
+        inherited = inherited_lists(target)
+        if inherited is None or "files" in inherited:
+            raise ValueError(
+                f"{name} inherits a file list setup cannot extend; add {declarations!r} beside it"
+            )
+        key = "files" if inherited else "include"
+    default = ["**/*"] if key == "include" else []
+    updated = json_listed(name, text, key, declarations, default)
+    if updated is not None:
+        changes[name] = updated
+
+
 def typescript_config(
     root: Path, directory: Path, sources: list[str], changes: dict[str, str]
 ) -> None:
@@ -162,20 +266,16 @@ def typescript_config(
     name = str(target.relative_to(root))
     declarations = Path(os.path.relpath(root / DECLARATIONS, directory)).as_posix()
     if target.exists():
-        text = changes.get(name) or target.read_text()
-        config = jsonc_config(name, text)
-        key = "files" if "files" in config and "include" not in config else "include"
-        if "extends" in config and not {"include", "files"} & config.keys():
-            inherited = inherited_lists(target)
-            if inherited is None or "files" in inherited:
-                raise ValueError(
-                    f"{name} inherits a file list setup cannot extend; add {declarations!r} beside it"
-                )
-            key = "files" if inherited else "include"
-        default = ["**/*"] if key == "include" else []
-        updated = json_listed(name, text, key, declarations, default)
-        if updated is not None:
-            changes[name] = updated
+        configs = project_configs(root, target)
+        text = target.read_text()
+        if configs != [target] and jsonc_config(name, text)["files"]:
+            # An earlier setup listed the file here, which breaks `tsc -b`.
+            repaired = text.replace(f'"{declarations}"', "", 1)
+            if jsonc_config(name, repaired)["files"] != []:
+                raise ValueError(f"{name}: remove {declarations!r} from files")
+            changes[name] = repaired
+        for config in configs:
+            declared_config(root, config, changes)
     else:
         options = {"strict": True, "allowJs": True, "checkJs": True, "noEmit": True}
         include = [*sources, "test", "tests", declarations]

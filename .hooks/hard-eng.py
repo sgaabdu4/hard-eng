@@ -34,7 +34,7 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from tool_setup import managed_command, provision_tools
-from untrusted_input import DECLARATIONS, reject_jsdoc_casts
+from untrusted_input import reject_jsdoc_casts, typescript_projects, validate_typescript
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -408,52 +408,10 @@ def prepare_command(
                 ),
             ]
         elif language == "javascript":
-            validate_typescript(command, directory, group, timeout)
+            expected = production_files(directory, group)
+            validate_typescript(ROOT, command, directory, expected, timeout)
     validate_dart_boundaries(command, ROOT / group["path"], timeout)
     return command
-
-
-def validate_typescript(
-    command: list[str], directory: Path, group: Group, timeout: float
-) -> None:
-    result = subprocess.run(
-        [*command, "--showConfig"],
-        cwd=directory,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=True,
-    )
-    actual = json.loads(result.stdout)
-    options = actual.get("compilerOptions", {})
-    strict = (
-        "noImplicitAny",
-        "noImplicitThis",
-        "strictNullChecks",
-        "strictFunctionTypes",
-        "strictBindCallApply",
-        "strictPropertyInitialization",
-        "strictBuiltinIteratorReturn",
-        "useUnknownInCatchVariables",
-        "alwaysStrict",
-    )
-    if (
-        options.get("strict") is not True
-        or any(options.get(name, True) is not True for name in strict)
-        or options.get("checkJs") is not True
-        or options.get("noCheck", False) is not False
-    ):
-        raise ValueError(
-            "TypeScript requires all strict checks and JavaScript checking without noCheck"
-        )
-    files = {(directory / name).resolve() for name in actual.get("files", [])}
-    expected = production_files(directory, group)
-    if not {(directory / name).resolve() for name in expected} <= files:
-        raise ValueError("TypeScript configuration omits declared production files")
-    if (ROOT / DECLARATIONS).resolve() not in files:
-        raise ValueError(
-            f"TypeScript configuration omits {DECLARATIONS}; rerun the Hard Eng installer"
-        )
 
 
 def prepare_reports(
@@ -583,14 +541,23 @@ def run_limited_gate(
                 ) as output:
                     from gitleaks_scan import run_gate_command
 
-                    result = run_gate_command(
-                        gate.get("role"),
-                        command,
-                        directory,
-                        timeout,
-                        output if capture else log,
-                        log,
+                    projects = (
+                        typescript_projects(ROOT, command, directory)
+                        if gate.get("role") == "types"
+                        and group.get("language") == "javascript"
+                        else [[]]
                     )
+                    for project in projects:
+                        ran = run_gate_command(
+                            gate.get("role"),
+                            [*command, *project],
+                            directory,
+                            timeout,
+                            output if capture else log,
+                            log,
+                        )
+                        if result is None or result.returncode == 0:
+                            result = ran
             finally:
                 with output_lock:
                     print(f"OUTPUT {group['path']}/{gate['name']}", flush=True)
