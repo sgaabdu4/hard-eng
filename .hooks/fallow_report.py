@@ -291,17 +291,24 @@ def write_istanbul(lcov: Path, directory: Path) -> None:
     fallow = shutil.which("fallow")
     if fallow is None:
         return
+    empty = lcov.parent / "fallow-function-listing.json"
+    empty.write_text("{}")
     listing = subprocess.run(
-        [fallow, "health", "--root", ".", "--max-crap", "0.001", "--format", "json"],
+        # An explicit empty map stops a configured, not yet written map from failing the listing.
+        [fallow, "health", "--root", ".", "--max-crap", "0.001"]
+        + ["--coverage", str(empty), "--format", "json"],
         cwd=directory,
         capture_output=True,
         text=True,
         timeout=600,
         check=False,
     )
+    empty.unlink()
     try:
-        findings = json.loads(listing.stdout).get("findings", [])
-    except ValueError:
+        findings = json.loads(listing.stdout)["findings"]
+    except (ValueError, KeyError, TypeError):
+        return
+    if listing.returncode not in {0, 1} or not isinstance(findings, list):
         return
     hits: dict[Path, dict[int, int]] = {}
     source = None
