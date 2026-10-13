@@ -370,3 +370,21 @@ def test_missing_bun_names_how_to_install_it(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert "oven-sh/setup-bun" in result.stderr
+
+
+def test_tool_dependencies_stay_off_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    tool = tmp_path / "data/installs/npm-react-doctor/latest"
+    (tool / "bin").mkdir(parents=True)
+    (tool / "node_modules/.bin").mkdir(parents=True)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    paths = [str(tool / "node_modules/.bin"), str(tool / "bin"), "/usr/bin"]
+    tool_setup.export_tool_paths(
+        '{"PATH": "' + os.pathsep.join(paths) + '"}', tmp_path / "data"
+    )
+    exported = os.environ["PATH"].split(os.pathsep)
+    assert str(tool / "bin") in exported
+    assert str(tool / "node_modules/.bin") not in exported
