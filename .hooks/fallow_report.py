@@ -4,6 +4,8 @@ import json
 import math
 import os
 import shlex
+import shutil
+import subprocess
 from pathlib import Path
 
 from gate_config import Gate, Group, JsonObject, Report
@@ -282,3 +284,75 @@ def validate_fallow(path: Path) -> None:
                 raise ValueError("Fallow report lacks a valid analysis scope")
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError("Fallow report is incomplete") from error
+
+
+def write_istanbul(lcov: Path, directory: Path) -> None:
+    """Give Fallow the Istanbul map Bun cannot write, with Fallow's own function spans."""
+    fallow = shutil.which("fallow")
+    if fallow is None:
+        return
+    listing = subprocess.run(
+        [fallow, "health", "--root", ".", "--max-crap", "0.001", "--format", "json"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    try:
+        findings = json.loads(listing.stdout).get("findings", [])
+    except ValueError:
+        return
+    hits: dict[Path, dict[int, int]] = {}
+    source = None
+    for record in lcov.read_text().splitlines():
+        if record.startswith("SF:"):
+            source = (directory / record[3:]).resolve()
+            hits.setdefault(source, {})
+        elif record.startswith("DA:") and source is not None:
+            line, count = (int(value) for value in record[3:].split(",")[:2])
+            hits[source][line] = count
+    coverage: dict[str, JsonObject] = {}
+    for path, lines in hits.items():
+        spans = [f for f in findings if (directory / f["path"]).resolve() == path]
+        ends = [f["line"] + f["line_count"] - 1 for f in spans]
+        coverage[str(path)] = {
+            "path": str(path),
+            "statementMap": {
+                str(index): {
+                    "start": {"line": line, "column": 0},
+                    "end": {"line": line, "column": 1_000_000},
+                }
+                for index, line in enumerate(lines)
+            },
+            "s": {str(index): lines[line] for index, line in enumerate(lines)},
+            "fnMap": {
+                str(index): {
+                    "name": span["name"],
+                    "line": span["line"],
+                    "decl": {
+                        "start": {"line": span["line"], "column": 0},
+                        "end": {"line": span["line"], "column": 1_000_000},
+                    },
+                    "loc": {
+                        "start": {"line": span["line"], "column": 0},
+                        "end": {"line": end, "column": 1_000_000},
+                    },
+                }
+                for index, (span, end) in enumerate(zip(spans, ends))
+            },
+            "f": {
+                str(index): max(
+                    (
+                        count
+                        for line, count in lines.items()
+                        if span["line"] <= line <= end
+                    ),
+                    default=0,
+                )
+                for index, (span, end) in enumerate(zip(spans, ends))
+            },
+            "branchMap": {},
+            "b": {},
+        }
+    (lcov.parent / "coverage-final.json").write_text(json.dumps(coverage))

@@ -840,3 +840,36 @@ def test_related_tests_skip_coverage_but_keep_failures(
     assert runner.run_gate(group, tests, 30, lock, [group], related) is failed
     flags = "--changed b --coverage.enabled=false --passWithNoTests"
     assert (flags in (tmp_path / "args.txt").read_text()) is (related is not None)
+
+
+def test_bun_lcov_gets_an_istanbul_map_fallow_can_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "src").mkdir()
+    source = "export function grade(score: number): string {\n  if (score > 5) return 'A';\n  return 'F';\n}\n"
+    (tmp_path / "src/grade.ts").write_text(source)
+    lcov = tmp_path / "coverage/lcov.info"
+    lcov.parent.mkdir()
+    lcov.write_text(
+        "TN:\nSF:src/grade.ts\nFNF:1\nFNH:1\nDA:1,3\nDA:2,3\nDA:3,0\nLF:3\nLH:2\nend_of_record\n"
+    )
+    listing = {
+        "findings": [
+            {"path": "src/grade.ts", "name": "grade", "line": 1, "line_count": 4}
+        ]
+    }
+    fallow = tmp_path / "bin/fallow"
+    fallow.parent.mkdir()
+    fallow.write_text(f"#!/bin/sh\necho '{json.dumps(listing)}'\nexit 1\n")
+    fallow.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fallow.parent}{os.pathsep}/usr/bin:/bin")
+    assert reports.line_coverage(
+        lcov, "lcov-tests", tmp_path, {tmp_path / "src/grade.ts"}
+    ) == (2, 3)
+    coverage = json.loads((tmp_path / "coverage/coverage-final.json").read_text())
+    entry = coverage[str((tmp_path / "src/grade.ts").resolve())]
+    assert entry["fnMap"]["0"]["name"] == "grade"
+    assert entry["fnMap"]["0"]["loc"]["start"]["line"] == 1
+    assert entry["fnMap"]["0"]["loc"]["end"]["line"] == 4
+    assert entry["f"] == {"0": 3}
+    assert sorted(entry["s"].values()) == [0, 3, 3]
