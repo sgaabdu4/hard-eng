@@ -10,12 +10,13 @@ import yaml
 from conftest import git
 from gate_config import (
     Gate,
+    Group,
     JsonObject,
     dart_scan_includes_boundaries,
     generated_sources,
     validate_dart_exclusions,
 )
-from project_setup import dependency_command
+from project_setup import adapt_package, dependency_command
 
 
 def dart_format_command(installer: ModuleType) -> list[str]:
@@ -578,3 +579,31 @@ def test_dart_package_with_comment_only_dependencies_is_accepted(
         "name: stock\ndependencies:\n  # none yet\ndev_dependencies:\n  lints: ^6.0.0\n"
     )
     assert dependency_command(tmp_path, "dart")[0] == "dart"
+
+
+@pytest.mark.parametrize(
+    ("dependency", "expected"),
+    [
+        (
+            "flutter:\n    sdk: flutter",
+            ["flutter", "test", "--no-pub", "--machine", "test/performance"],
+        ),
+        ("path: ^1.9.0", ["dart", "test", "test/performance", "--reporter=json"]),
+    ],
+)
+def test_flutter_performance_suite_runs_without_package_test(
+    installer: ModuleType, tmp_path: Path, dependency: str, expected: list[str]
+) -> None:
+    """`dart test` needs package:test, which Flutter's pinned test_api blocks beside build_runner."""
+    (tmp_path / "pubspec.yaml").write_text(
+        f"name: app\ndependencies:\n  {dependency}\n"
+    )
+    (tmp_path / "pubspec.lock").write_text("packages: {}\n")
+    template = installer.SOURCE / ".agents/skills/he/templates/hard-eng.dart.json"
+    package: Group = json.loads(template.read_text())["packages"][0]
+    for _ in range(2):
+        adapt_package(tmp_path, package)
+        performance = [
+            gate for gate in package["checks"] if gate["role"] == "performance"
+        ]
+        assert performance[0]["command"] == expected
