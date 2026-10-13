@@ -18,7 +18,7 @@ from collections.abc import Generator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import IO, TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
 from gate_config import (
@@ -479,6 +479,30 @@ def run_gate(
     return failed
 
 
+def run_projects(
+    group: Group,
+    gate: Gate,
+    command: list[str],
+    directory: Path,
+    timeout: float,
+    stdout: IO[str] | None,
+    stderr: IO[str],
+) -> subprocess.CompletedProcess[bytes]:
+    """Run the gate once, or a TypeScript types gate once per referenced config."""
+    from gitleaks_scan import run_gate_command
+
+    projects: list[list[str]] = [[]]
+    if gate.get("role") == "types" and group.get("language") == "javascript":
+        projects = typescript_projects(ROOT, command, directory)
+    results = [
+        run_gate_command(
+            gate.get("role"), [*command, *project], directory, timeout, stdout, stderr
+        )
+        for project in projects
+    ]
+    return next((result for result in results if result.returncode), results[-1])
+
+
 def run_limited_gate(
     group: Group,
     gate: Gate,
@@ -545,25 +569,15 @@ def run_limited_gate(
                     if capture and report_path is not None
                     else nullcontext()
                 ) as output:
-                    from gitleaks_scan import run_gate_command
-
-                    projects = (
-                        typescript_projects(ROOT, command, directory)
-                        if gate.get("role") == "types"
-                        and group.get("language") == "javascript"
-                        else [[]]
+                    result = run_projects(
+                        group,
+                        gate,
+                        command,
+                        directory,
+                        timeout,
+                        output if capture else log,
+                        log,
                     )
-                    for project in projects:
-                        ran = run_gate_command(
-                            gate.get("role"),
-                            [*command, *project],
-                            directory,
-                            timeout,
-                            output if capture else log,
-                            log,
-                        )
-                        if result is None or result.returncode == 0:
-                            result = ran
             finally:
                 with output_lock:
                     print(f"OUTPUT {group['path']}/{gate['name']}", flush=True)
