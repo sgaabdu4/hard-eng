@@ -20,7 +20,7 @@ curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | s
 
 | Starting point | What happens |
 | --- | --- |
-| Empty repository | Setup stops. The agent asks which project type to create (Python, Flutter, Next.js or OpenNext on Cloudflare) unless the request says, creates it, then reruns setup. New Flutter apps use Riverpod. |
+| Empty repository | Setup stops. The agent asks which project type to create (Python, Flutter, Next.js, OpenNext on Cloudflare or React + Vite with Bun) unless the request says, creates it, then reruns setup. For web apps it suggests Next.js only for public pages that need search ranking or fast first load, and React + Vite for apps behind a login, internal tools and apps with a separate backend. New React + Vite apps drop oxlint for Biome and pin each package to the newest release the Bun release-age rule allows. New Flutter apps use Riverpod. |
 | Other language (Go, Rust, Java/Kotlin, Ruby, PHP, .NET, Swift, C/C++, shell) | Basic mode: rules, skills, hooks, CI, current-files and history secret scans, a Semgrep security scan, and an OSV scan when a lockfile OSV reads exists. No built-in language checks; setup prints a `Gap:` line naming the missing checks. |
 | New project | Install the scaffold; establish product/design context, checks, and intended integrations. |
 | Existing project | Preserve custom instructions, skills, hooks, and configuration; report genuine conflicts. |
