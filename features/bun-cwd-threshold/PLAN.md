@@ -41,7 +41,7 @@ N/A — hook behaviour with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Focused suites, lint and pyrefly pass; on the issue's scenario with real Bun 1.4.3, Hard Eng returned no related flags and the full suite passed.
+Evidence: `python3 .hooks/hard-eng.py check --base origin/main` → exit 0; 18 checks passed, 91.30% line coverage. Codex adversarial review (GPT-6 Astra) round 1 approved; on the issue's scenario with real Bun 1.4.3, Hard Eng returned no related flags and the full suite passed.
 E2E: N/A — the selection is covered by the scenario run above.
 
 Delivery target: PR
