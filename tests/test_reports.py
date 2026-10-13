@@ -860,7 +860,10 @@ def test_bun_lcov_gets_an_istanbul_map_fallow_can_match(
     }
     fallow = tmp_path / "bin/fallow"
     fallow.parent.mkdir()
-    fallow.write_text(f"#!/bin/sh\necho '{json.dumps(listing)}'\nexit 1\n")
+    fallow.write_text(
+        '#!/bin/sh\ncase "$*" in *--coverage*) ;; *) echo \'{"error":"missing"}\'; exit 2;; esac\n'
+        f"echo '{json.dumps(listing)}'\nexit 1\n"
+    )
     fallow.chmod(0o755)
     monkeypatch.setenv("PATH", f"{fallow.parent}{os.pathsep}/usr/bin:/bin")
     assert reports.line_coverage(
@@ -873,3 +876,7 @@ def test_bun_lcov_gets_an_istanbul_map_fallow_can_match(
     assert entry["fnMap"]["0"]["loc"]["end"]["line"] == 4
     assert entry["f"] == {"0": 3}
     assert sorted(entry["s"].values()) == [0, 3, 3]
+    (tmp_path / "coverage/coverage-final.json").unlink()
+    fallow.write_text('#!/bin/sh\necho \'{"error":"bad"}\'\nexit 2\n')
+    reports.line_coverage(lcov, "lcov-tests", tmp_path, {tmp_path / "src/grade.ts"})
+    assert not (tmp_path / "coverage/coverage-final.json").exists()
