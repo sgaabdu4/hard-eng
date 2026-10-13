@@ -15,7 +15,10 @@ from dart_coverage import erased_dart
 from dart_test_report import dart_events, failure_summary
 from fallow_report import validate_fallow, write_istanbul
 from gate_config import Gate, Group, JsonObject
-from project_setup import dependency_free, package_script_arguments
+from project_setup import (
+    dependency_free,
+    package_script_invocation,
+)
 
 
 def dart_test_failure(
@@ -156,7 +159,7 @@ def related_test_flags(
         for other in selected["checks"]
     ):
         return []
-    arguments = package_script_arguments(gate["command"], directory)
+    arguments, directory = package_script_invocation(gate["command"], directory)
     if any(re.search(r"[;&|]", argument) for argument in arguments):
         return []
     runner = Path(arguments[0]).name
