@@ -865,13 +865,7 @@ def test_missing_project_manifest_fails(installer: ModuleType, tmp_path: Path) -
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     with pytest.raises(ValueError, match="ask the user which type to create") as error:
         installer.install(tmp_path)
-    for step in (
-        "React + Vite",
-        "never default to Next.js",
-        "bun create vite . --template react-ts",
-        ".oxlintrc.json",
-        "bun update --latest --exact",
-    ):
+    for step in ("React + Vite", "never default to Next.js", "--new STACK"):
         assert step in str(error.value)
 
 

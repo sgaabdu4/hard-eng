@@ -1,0 +1,17 @@
+{
+  "@@locale": "en",
+  "counterValue": "Count: {count}",
+  "@counterValue": {
+    "description": "Current counter value on the starter screen",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "counterIncrementTooltip": "Increment",
+  "@counterIncrementTooltip": {
+    "description": "Tooltip and accessibility label for the button that adds one to the counter"
+  }
+}
