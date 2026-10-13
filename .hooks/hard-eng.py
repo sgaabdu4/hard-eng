@@ -34,7 +34,12 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from tool_setup import managed_command, provision_tools
-from untrusted_input import reject_jsdoc_casts, typescript_projects, validate_typescript
+from untrusted_input import (
+    next_route_types,
+    reject_jsdoc_casts,
+    typescript_projects,
+    validate_typescript,
+)
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -408,8 +413,6 @@ def prepare_command(
                 ),
             ]
         elif language == "javascript":
-            from project_setup import next_route_types
-
             next_route_types(directory, timeout)
             expected = production_files(directory, group)
             validate_typescript(ROOT, command, directory, expected, timeout)

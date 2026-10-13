@@ -234,22 +234,6 @@ def native_typecheck(scripts: JsonObject, checks: list[Gate]) -> bool:
     )
 
 
-def next_route_types(directory: Path, timeout: float) -> None:
-    """Write Next.js route types (`PageProps`, `LayoutProps`) that a clean checkout lacks."""
-    if not (directory / "node_modules/next/dist/cli/next-typegen.js").is_file():
-        return
-    result = subprocess.run(
-        ["bun", "x", "next", "typegen"],
-        cwd=directory,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise ValueError(f"next typegen failed: {result.stderr or result.stdout}")
-
-
 def dependency_free(directory: Path) -> bool:
     """Bun deletes the lockfile of a package that declares nothing to install."""
     path = directory / "package.json"
@@ -567,7 +551,13 @@ def adapt_package(directory: Path, package: Group) -> None:
             gate["command"] = list(DART_TESTS)
             gate["report"]["stdout"] = False
         elif manager == "flutter" and gate["command"] == DART_PERFORMANCE:
-            gate["command"] = ["flutter", "test", "--no-pub", "--machine", "test/performance"]
+            gate["command"] = [
+                "flutter",
+                "test",
+                "--no-pub",
+                "--machine",
+                "test/performance",
+            ]
     if language == "javascript":
         adapt_javascript(directory, package, manager)
     elif language == "python" and not python_roots(directory, package):
@@ -578,20 +568,11 @@ def adapt_package(directory: Path, package: Group) -> None:
 
 
 def adapt_performance(directory: Path, package: Group) -> None:
+    extensions = ("js", "cjs", "json", "yml", "yaml")
     if any(
-        (directory / name).is_file()
-        for name in (
-            "lighthouserc.js",
-            "lighthouserc.cjs",
-            "lighthouserc.json",
-            "lighthouserc.yml",
-            "lighthouserc.yaml",
-            ".lighthouserc.js",
-            ".lighthouserc.cjs",
-            ".lighthouserc.json",
-            ".lighthouserc.yml",
-            ".lighthouserc.yaml",
-        )
+        (directory / f"{dot}lighthouserc.{extension}").is_file()
+        for dot in ("", ".")
+        for extension in extensions
     ):
         for gate in package["checks"]:
             if gate.get("role") == "performance":
