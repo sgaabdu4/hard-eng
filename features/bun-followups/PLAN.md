@@ -43,7 +43,7 @@ N/A — hook behaviour with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Focused suites, lint and pyrefly pass. Real runs: tools installed from an empty cache under a 7-day user bunfig; a website clone passed React Doctor, Fallow and types with tool dependencies off PATH; a pnpm clone landed setup with the migration pending and ran the Hard Eng gates after a migration commit; real Fallow matched the generated map and scored CRAP 7.1 instead of an estimated 56, including on a clean checkout with FALLOW_COVERAGE configured. Codex rounds 1 and 2 findings fixed (configured missing map; stale map after a failed listing).
+Evidence: Focused suites, lint and pyrefly pass. Real runs: tools installed from an empty cache under a 7-day user bunfig; a website clone passed React Doctor, Fallow and types with tool dependencies off PATH; a pnpm clone landed setup with the migration pending and ran the Hard Eng gates after a migration commit; real Fallow matched the generated map and scored CRAP 7.1 instead of an estimated 56, including on a clean checkout with FALLOW_COVERAGE configured. Codex rounds 1 to 3 findings fixed (configured missing map; stale map after a failed listing; repeated lcov records).
 E2E: Passed — real fixture and scratch project clone runs recorded per issue.
 
 Delivery target: PR
