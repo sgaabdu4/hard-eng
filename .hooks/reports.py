@@ -13,7 +13,7 @@ from typing import TextIO, cast
 from coverage_sources import erased_typescript
 from dart_coverage import erased_dart
 from dart_test_report import dart_events, failure_summary
-from fallow_report import validate_fallow
+from fallow_report import validate_fallow, write_istanbul
 from gate_config import Gate, Group, JsonObject
 from project_setup import dependency_free, package_script_arguments
 
@@ -275,6 +275,8 @@ def line_coverage(
 ) -> tuple[int, int]:
     reader = python_coverage if kind == "python-tests" else lcov_coverage
     files = reader(path, directory)
+    if kind == "lcov-tests" and "\nFN:" not in path.read_text():
+        write_istanbul(path, directory)
     if kind == "lcov-tests":
         expected = expected - erased_typescript(expected - files.keys())
     if kind == "dart-tests":
