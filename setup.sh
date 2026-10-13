@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-if [ "$#" -eq 0 ]; then
+if [ "$#" -eq 0 ] || [ "$1" = "--new" ]; then
     temporary=$(mktemp -d)
     trap 'rm -rf "$temporary"' EXIT HUP INT TERM
     git clone --quiet --depth 1 --branch main https://github.com/sgaabdu4/hard-eng.git "$temporary/source"
@@ -8,7 +8,7 @@ if [ "$#" -eq 0 ]; then
     git -C "$temporary/source" fetch --quiet --depth 1 origin "$revision"
     git -C "$temporary/source" checkout --quiet --detach "$revision"
     git -C "$temporary/source" submodule update --init --recursive --depth=1 --quiet
-    sh "$temporary/source/setup.sh" "$temporary/source"
+    sh "$temporary/source/setup.sh" "$temporary/source" "$@"
 elif [ -f "$PWD/.hooks/hard-eng-source.json" ]; then
     uv run --project "$1" --locked --no-dev python -I -c 'import subprocess, sys
 from pathlib import Path
@@ -19,5 +19,7 @@ try:
 except (OSError, TypeError, ValueError, subprocess.SubprocessError) as error:
     sys.exit(str(error))' "$1/.hooks"
 else
-    uv run --project "$1" --locked --no-dev python "$1/setup.py" "$PWD"
+    source=$1
+    shift
+    uv run --project "$source" --locked --no-dev python "$source/setup.py" "$PWD" "$@"
 fi

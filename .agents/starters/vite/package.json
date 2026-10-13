@@ -1,0 +1,13 @@
+{
+	"scripts": {
+		"lint": null,
+		"test:coverage": "bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=coverage/junit.xml",
+		"test:performance": "bun test ./tests/bundle.test.ts --reporter=junit --reporter-outfile=coverage/performance.xml",
+		"lint:boundaries": "fallow architecture --fail-on-issues"
+	},
+	"devDependencies": {
+		"oxlint": null,
+		"@happy-dom/global-registrator": "latest",
+		"@types/bun": "latest"
+	}
+}

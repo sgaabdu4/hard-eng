@@ -1,0 +1,16 @@
+{
+	"ignorePatterns": [".hooks/**"],
+	"boundaries": {
+		"zones": [
+			{ "name": "app", "patterns": ["index.html", "src/**"] },
+			{ "name": "build", "patterns": ["vite.config.ts"] },
+			{ "name": "tests", "patterns": ["tests/**"] }
+		],
+		"rules": [
+			{ "from": "app", "allow": [] },
+			{ "from": "build", "allow": [] },
+			{ "from": "tests", "allow": ["app", "build"] }
+		],
+		"coverage": { "requireAllFiles": true }
+	}
+}

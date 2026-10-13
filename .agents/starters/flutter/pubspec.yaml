@@ -1,0 +1,27 @@
+name: app
+description: "A new Flutter project."
+version: 0.1.0+1
+publish_to: 'none'
+
+environment:
+  sdk: SDK
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: any
+  intl: any
+  riverpod_annotation: any
+
+dev_dependencies:
+  build_runner: any
+  flutter_lints: any
+  flutter_test:
+    sdk: flutter
+  riverpod_generator: any
+
+flutter:
+  generate: true
+  uses-material-design: true

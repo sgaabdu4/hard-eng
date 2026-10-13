@@ -1,10 +1,13 @@
-# Offer React + Vite and fix solution-style tsconfig setup
+# New-project scaffolds, solution-style tsconfig fix and README rewrite
 
 Status: Draft
 
 ## Outcome + scope
 
-Empty-repository setup offers React + Vite (Bun) beside Next.js, with guidance on which web type fits, and setup no longer breaks a solution-style `tsconfig.json`; the `types` gate checks every referenced config. Non-goals: setup does not run the scaffold, edit package.json or replace oxlint by code; no flattening of user configs. Issue: sgaabdu4/hard-eng#295.
+1. Setup no longer breaks a solution-style `tsconfig.json`, and the `types` gate checks every referenced config (issue sgaabdu4/hard-eng#295).
+2. `setup.sh --new <stack>` (flutter, nextjs, opennext, vite) creates a complete greenfield project in an empty repository: official scaffold, Hard Eng starter files, exact pins, then normal setup, so every gate passes at once. PRODUCT.md and DESIGN.md stay for the agent to fill from the user's answers. The empty-repository message offers React + Vite and says when to suggest each web stack.
+3. README rewritten in ~80% ASD-STE100 with clearer diagrams; confusing or stale text removed.
+Non-goals: no flattening of user configs; no CI workflow or shipping budget for the new project; no new skill text.
 
 ## Repository context
 
@@ -15,8 +18,8 @@ Evidence: a fresh `bun create vite <dir> --template react-ts` scaffold plus this
 
 Blockers: None
 Handoff: Approval
-Authority: The user asked for both fixes in one PR referencing the issue, with a Codex adversarial review loop (gpt-6-astra) before the PR. Commit, push and PR follow this repository's merge-when-green practice.
-Decisions: per-reference declaration, not flattening (the Vite configs differ in `module`, `lib` and `types`). The runner expands one `types` gate into one `tsc -p <config>` run per referenced config, so gate configs and `configure_typing_checks` stay unchanged and existing installs are fixed by update. A root whose `files` holds only the declaration is an earlier setup's breakage and is repaired to `[]`. oxlint removal and version pins are scaffold instructions in the setup message. `bun update --latest --exact` can cross major versions (for example `@types/node` 24 to 26); this matches "newest version the release-age rule allows".
+Authority: The user asked for all three parts in one PR referencing the issue, with a Codex adversarial review loop (gpt-6-astra) before the PR. The user chose a setup option for the command and "every gate passes" as its scope (PRODUCT.md and DESIGN.md left to the agent). Commit, push and PR follow this repository's merge-when-green practice.
+Decisions: per-reference declaration, not flattening (the Vite configs differ in `module`, `lib` and `types`). The runner expands one `types` gate into one `tsc -p <config>` run per referenced config, so gate configs and `configure_typing_checks` stay unchanged and existing installs are fixed by update. A root whose `files` holds only the declaration is an earlier setup's breakage and is repaired to `[]`. oxlint removal and version pins happen inside `--new`; the setup message also states them for agents that scaffold by hand. `bun update --latest --exact` can cross major versions (for example `@types/node` 24 to 26); this matches "newest version the release-age rule allows".
 
 ## Acceptance + steps
 
@@ -26,17 +29,21 @@ Decisions: per-reference declaration, not flattening (the Vite configs differ in
 - [ ] Empty repository message names React + Vite, its scaffold, pin and oxlint steps and when to suggest each web type → `test_missing_project_manifest_fails` extended.
 - [ ] README row matches the message → link/Markdown gates.
 - [ ] Real run: fresh Vite scaffold plus this checkout's setup → `bun run build` passes; the `types` gate passes, then fails on a deliberate type error in `src/App.tsx`.
+- [ ] `setup.sh --new <stack>` refuses a non-empty repository or an unknown stack and changes nothing → setup tests.
+- [ ] `--new` applies the stack's starter files and pins on top of a scaffold → setup test with a stand-in scaffold command.
+- [ ] Real E2E per stack (flutter, nextjs, opennext, vite): `setup.sh --new <stack>` in an empty repository, add stand-in PRODUCT.md/DESIGN.md, then `python3 .hooks/hard-eng.py check` passes every gate.
+- [ ] README describes `--new`, the web-stack choice and every stage in plain short sentences; Markdown/link gates pass.
 - [ ] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
 
 Result: Passed
 Evidence: `python3 .hooks/hard-eng.py check --plan-stage Draft` on a1ec36b5 with only this plan added: exit 0; the base commit had passed required CI, so only the secret scan ran and passed.
-Execution: Single builder in this worktree; Codex adversarial review loop after all changes; then PR.
+Execution: Four Opus research agents, one per stack, find the smallest starter-file set that makes every gate pass on a fresh scaffold; the coordinator implements `--new` from their reports, then runs the real E2E per stack; Codex adversarial review loop after all changes; then PR.
 
 ## Risks + recovery
 
-A solution root whose references point at missing files: setup raises with the line to add, as it does for other configs it cannot extend. Recovery is reverting this branch.
+A solution root whose references point at missing files: setup raises with the line to add. Upstream scaffolds change over time and can break `--new`; the command fails loudly and the stack's E2E run is the proof to repeat. Recovery is reverting this branch.
 
 ## ux_reference
 
@@ -46,7 +53,7 @@ N/A — installer message, documentation and type-check wiring only; no product 
 
 Result: Pending
 Evidence: Pending
-E2E: Required — real run of this checkout's setup on a fresh Vite react-ts scaffold, then `bun run build` and the `types` gate (pass, then fail on a deliberate type error).
+E2E: Required — real run of this checkout's setup on a fresh Vite react-ts scaffold, then `bun run build` and the `types` gate (pass, then fail on a deliberate type error); `setup.sh --new <stack>` for all four stacks, then a full passing `check` in each.
 
 Delivery target: Merge
 Delivery: Pending — PR CI, merge and merged-main CI.

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from gate_config import Gate, GateConfig, Group, JsonObject
 
 SOURCE = Path(__file__).resolve().parent
-sys.path.insert(0, str(SOURCE / ".hooks"))
+sys.path[:0] = [str(SOURCE / ".hooks"), str(SOURCE)]
 
 
 def merge(
@@ -92,18 +92,9 @@ def gate_config(root: Path) -> GateConfig:
     if not packages and (basic := basic_config(SOURCE, root, files)) is not None:
         return basic
     if not packages:
-        raise ValueError(
-            "No supported project manifest found. New project: ask the user which type to create "
-            "(Python, Flutter, Next.js, OpenNext on Cloudflare or React + Vite) unless their request says, "
-            "create it with that stack's official scaffold command, then rerun setup. "
-            "For a web app, never default to Next.js: suggest it only for public pages that need "
-            "search ranking or fast first load, and React + Vite for apps behind a login, internal "
-            "tools and apps with a separate backend. React + Vite: run "
-            "`bun create vite . --template react-ts`, delete oxlint, its lint script and "
-            ".oxlintrc.json (Biome checks replace them), then `bun update --latest --exact` pins "
-            "each package to the newest release minimumReleaseAge allows. "
-            "A new Flutter app uses Riverpod per .agents/skills/building-flutter-apps."
-        )
+        from new_project import EMPTY_REPOSITORY
+
+        raise ValueError(EMPTY_REPOSITORY)
     config: GateConfig = {"version": 1, "packages": packages, "shared": shared}
     adapt_packages(root, config)
     for package in packages:
@@ -978,6 +969,7 @@ if __name__ == "__main__":
         action="store_true",
         help="Print the installation plan without writing files",
     )
+    parser.add_argument("--new", choices=["flutter", "nextjs", "opennext", "vite"])
     try:
         args = parser.parse_args()
         if args.plan:
@@ -998,6 +990,10 @@ if __name__ == "__main__":
                 )
             )
         else:
+            if args.new:
+                from new_project import create
+
+                create(args.repository.resolve(), args.new)
             install(args.repository.resolve(), args.previous_source)
     except (OSError, TypeError, ValueError, subprocess.SubprocessError) as error:
         parser.exit(1, f"{error}\n")
