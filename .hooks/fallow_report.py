@@ -288,6 +288,7 @@ def validate_fallow(path: Path) -> None:
 
 def write_istanbul(lcov: Path, directory: Path) -> None:
     """Give Fallow the Istanbul map Bun cannot write, with Fallow's own function spans."""
+    (lcov.parent / "coverage-final.json").unlink(missing_ok=True)
     fallow = shutil.which("fallow")
     if fallow is None:
         return
