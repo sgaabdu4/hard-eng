@@ -423,7 +423,12 @@ def configure_javascript(
     from project_setup import javascript_manager, native_typecheck
     from untrusted_input import typescript_config
 
-    manager = javascript_manager(directory)[0]
+    try:
+        manager = javascript_manager(directory)[0]
+    except ValueError as error:
+        # Land the update so the migration can be committed under the new gates.
+        print(f"Bun migration pending: {error}", file=sys.stderr)
+        manager = "bun"
     typescript_config(root, directory, package["sources"], changes)
     scripts = json.loads((directory / "package.json").read_text()).get("scripts", {})
     if native_typecheck(scripts, package["checks"]):

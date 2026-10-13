@@ -171,3 +171,23 @@ def test_migration_instruction_names_pnpm_settings_and_the_bun_runtime(
         javascript_manager(tmp_path)
     for text in ("minimumReleaseAge", "trustedDependencies", "bunfig.toml", "bun test"):
         assert text in str(error.value)
+
+
+def test_install_lands_with_a_pending_bun_migration(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    with (tmp_path / ".git/config").open("a") as config:
+        config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
+    (tmp_path / "package.json").write_text('{"private":true}')
+    (tmp_path / "bun.lock").write_text('{"lockfileVersion": 1}\n')
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps(installer.gate_config(tmp_path))
+    )
+    (tmp_path / "bun.lock").unlink()
+    (tmp_path / "package.json").write_text(
+        '{"private":true,"packageManager":"pnpm@11.0.0","dependencies":{"a":"1"}}'
+    )
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    installer.install(tmp_path)
+    assert "Bun migration pending" in capsys.readouterr().err

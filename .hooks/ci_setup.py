@@ -47,6 +47,8 @@ def bun_specification(root: Path, package: Group, groups: list[Group]) -> str:
         if owners and (owners[0] / "package.json").is_file():
             manifest = json.loads((owners[0] / "package.json").read_text())
     declared = manifest.get("packageManager", "bun@latest")
+    if isinstance(declared, str) and not declared.startswith("bun@"):
+        declared = "bun@latest"
     if (
         not isinstance(declared, str)
         or re.fullmatch(
@@ -236,7 +238,12 @@ def workflow_tools(root: Path, config: GateConfig) -> list[str]:
         language = package.get("language")
         if language not in {"python", "javascript", "dart"}:
             continue
-        manager, _, _ = dependency_command(directory, language)
+        try:
+            manager = dependency_command(directory, language)[0]
+        except ValueError:
+            if language != "javascript":
+                raise
+            manager = "bun"
         if manager in {"dart", "flutter", "bun", "poetry"}:
             specification = (
                 bun_specification(root, package, groups)
