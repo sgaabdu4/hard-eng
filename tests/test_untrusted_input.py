@@ -9,6 +9,7 @@ from types import ModuleType
 
 import pytest
 from gate_config import Gate, Group
+from project_setup import next_route_types
 from untrusted_input import (
     fallow_ignores_hooks,
     jsonc_config,
@@ -347,3 +348,24 @@ def test_types_gate_checks_each_config_a_solution_tsconfig_references(
     assert runner.run_gate(group, types, 30, threading.Lock()) is bool(failing)
     runs = (tmp_path / "runs.txt").read_text().split()
     assert runs == ["tsconfig.app.json", "tsconfig.node.json"]
+
+
+@pytest.mark.parametrize("typegen", [True, False])
+def test_types_gate_writes_next_route_types_before_a_clean_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, typegen: bool
+) -> None:
+    """A clean checkout lacks Next's generated `LayoutProps`, so `tsc` fails without typegen."""
+    (tmp_path / "package.json").write_text('{"dependencies": {"next": "16.4.0"}}')
+    cli = tmp_path / "node_modules/next/dist/cli"
+    cli.mkdir(parents=True)
+    if typegen:
+        (cli / "next-typegen.js").write_text("")
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    next_route_types(tmp_path, 10)
+    assert calls == ([["bun", "x", "next", "typegen"]] if typegen else [])
