@@ -781,11 +781,18 @@ def test_related_test_flags_follow_the_native_runner(
     assert reports.related_test_flags(tests, [group, other], tmp_path, "b") == []
 
 
-def test_bun_coverage_threshold_keeps_the_full_suite(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("script", "folder"),
+    [("bun test --coverage", "."), ("bun --cwd=sub test --coverage", "sub")],
+)
+def test_bun_coverage_threshold_keeps_the_full_suite(
+    tmp_path: Path, script: str, folder: str
+) -> None:
     (tmp_path / "package.json").write_text(
-        json.dumps({"scripts": {"test:coverage": "bun test --coverage"}})
+        json.dumps({"scripts": {"test:coverage": script}})
     )
-    (tmp_path / "bunfig.toml").write_text("[test]\ncoverageThreshold = 0.9\n")
+    (tmp_path / folder).mkdir(exist_ok=True)
+    (tmp_path / folder / "bunfig.toml").write_text("[test]\ncoverageThreshold = 0.9\n")
     tests: Gate = {
         "name": "tests",
         "role": "tests",
