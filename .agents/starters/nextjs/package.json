@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "test:coverage": "bun test --path-ignore-patterns='performance/**' --coverage --coverage-reporter=lcov --coverage-dir=coverage --reporter=junit --reporter-outfile=coverage/junit.xml",
+    "test:performance": "bun test ./performance --reporter=junit --reporter-outfile=coverage/performance.xml",
+    "lint:boundaries": "fallow architecture --boundaries --fail-on-issues"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

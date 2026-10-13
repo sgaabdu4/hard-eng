@@ -1,0 +1,4 @@
+{
+  "ignore_patterns": [".agents/**"],
+  "boundaries": [{ "from": "lib/core", "disallow": "lib/features" }]
+}
