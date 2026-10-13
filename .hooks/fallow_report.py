@@ -7,7 +7,6 @@ import shlex
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
 
 from gate_config import Gate, Group, JsonObject, Report
 
@@ -324,13 +323,13 @@ def write_istanbul(lcov: Path, directory: Path) -> None:
         elif record.startswith("DA:") and source is not None:
             line, count = (int(value) for value in record[3:].split(",")[:2])
             hits[source][line] = hits[source].get(line, 0) + count
-    spans_by_path: dict[Path, list[Any]] = {}
-    for finding in findings:
+    spans_by_path: dict[Path, list[int]] = {}
+    for index, finding in enumerate(findings):
         finding_path = (directory / finding["path"]).resolve()
-        spans_by_path.setdefault(finding_path, []).append(finding)
+        spans_by_path.setdefault(finding_path, []).append(index)
     coverage: dict[str, JsonObject] = {}
     for path, lines in hits.items():
-        spans = spans_by_path.get(path, [])
+        spans = [findings[index] for index in spans_by_path.get(path, [])]
         ends = [f["line"] + f["line_count"] - 1 for f in spans]
         coverage[str(path)] = {
             "path": str(path),
