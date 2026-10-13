@@ -1,6 +1,6 @@
 # Keep a same-run coverage map and match Fallow spans in one pass
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
