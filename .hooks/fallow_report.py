@@ -288,7 +288,10 @@ def validate_fallow(path: Path) -> None:
 
 def write_istanbul(lcov: Path, directory: Path) -> None:
     """Give Fallow the Istanbul map Bun cannot write, with Fallow's own function spans."""
-    (lcov.parent / "coverage-final.json").unlink(missing_ok=True)
+    istanbul = lcov.parent / "coverage-final.json"
+    # A map written after this lcov came from the same test run; only an older one is stale.
+    if istanbul.exists() and istanbul.stat().st_mtime_ns < lcov.stat().st_mtime_ns:
+        istanbul.unlink()
     fallow = shutil.which("fallow")
     if fallow is None:
         return
@@ -320,9 +323,12 @@ def write_istanbul(lcov: Path, directory: Path) -> None:
         elif record.startswith("DA:") and source is not None:
             line, count = (int(value) for value in record[3:].split(",")[:2])
             hits[source][line] = hits[source].get(line, 0) + count
+    spans_by_path: dict[Path, list[JsonObject]] = {}
+    for finding in findings:
+        spans_by_path.setdefault((directory / finding["path"]).resolve(), []).append(finding)
     coverage: dict[str, JsonObject] = {}
     for path, lines in hits.items():
-        spans = [f for f in findings if (directory / f["path"]).resolve() == path]
+        spans = spans_by_path.get(path, [])
         ends = [f["line"] + f["line_count"] - 1 for f in spans]
         coverage[str(path)] = {
             "path": str(path),
@@ -363,4 +369,4 @@ def write_istanbul(lcov: Path, directory: Path) -> None:
             "branchMap": {},
             "b": {},
         }
-    (lcov.parent / "coverage-final.json").write_text(json.dumps(coverage))
+    istanbul.write_text(json.dumps(coverage))

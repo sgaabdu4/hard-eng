@@ -885,5 +885,21 @@ def test_bun_lcov_gets_an_istanbul_map_fallow_can_match(
     assert entry["f"] == {"0": 3}
     assert sorted(entry["s"].values()) == [0, 3, 3]
     fallow.write_text('#!/bin/sh\necho \'{"error":"bad"}\'\nexit 2\n')
+    lcov.write_text(lcov.read_text())
     reports.line_coverage(lcov, "lcov-tests", tmp_path, {tmp_path / "src/grade.ts"})
     assert not (tmp_path / "coverage/coverage-final.json").exists()
+
+
+def test_bun_lcov_keeps_a_map_the_test_run_wrote_when_fallow_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/a.ts").write_text("export const a = 1;\n")
+    lcov = tmp_path / "coverage/lcov.info"
+    lcov.parent.mkdir()
+    lcov.write_text("TN:\nSF:src/a.ts\nDA:1,1\nend_of_record\n")
+    written = tmp_path / "coverage/coverage-final.json"
+    written.write_text('{"project": "map"}')
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    reports.line_coverage(lcov, "lcov-tests", tmp_path, {tmp_path / "src/a.ts"})
+    assert written.read_text() == '{"project": "map"}'
