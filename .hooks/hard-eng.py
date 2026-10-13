@@ -408,6 +408,9 @@ def prepare_command(
                 ),
             ]
         elif language == "javascript":
+            from project_setup import next_route_types
+
+            next_route_types(directory, timeout)
             expected = production_files(directory, group)
             validate_typescript(ROOT, command, directory, expected, timeout)
     validate_dart_boundaries(command, ROOT / group["path"], timeout)
