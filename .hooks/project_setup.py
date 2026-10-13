@@ -234,6 +234,22 @@ def native_typecheck(scripts: JsonObject, checks: list[Gate]) -> bool:
     )
 
 
+def next_route_types(directory: Path, timeout: float) -> None:
+    """Write Next.js route types (`PageProps`, `LayoutProps`) that a clean checkout lacks."""
+    if not (directory / "node_modules/next/dist/cli/next-typegen.js").is_file():
+        return
+    result = subprocess.run(
+        ["bun", "x", "next", "typegen"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"next typegen failed: {result.stderr or result.stdout}")
+
+
 def dependency_free(directory: Path) -> bool:
     """Bun deletes the lockfile of a package that declares nothing to install."""
     path = directory / "package.json"
@@ -550,6 +566,8 @@ def adapt_package(directory: Path, package: Group) -> None:
         elif language == "dart" and manager == "dart" and gate.get("role") == "tests":
             gate["command"] = list(DART_TESTS)
             gate["report"]["stdout"] = False
+        elif manager == "flutter" and gate["command"] == DART_PERFORMANCE:
+            gate["command"] = ["flutter", "test", "--no-pub", "--machine", "test/performance"]
     if language == "javascript":
         adapt_javascript(directory, package, manager)
     elif language == "python" and not python_roots(directory, package):
@@ -639,6 +657,7 @@ FLUTTER_TESTS = [
     "--coverage",
     "--coverage-path=coverage/lcov.info",
 ]
+DART_PERFORMANCE = ["dart", "test", "test/performance", "--reporter=json"]
 DART_TESTS = [
     "dart",
     "run",
