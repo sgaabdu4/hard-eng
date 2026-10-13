@@ -212,6 +212,15 @@ def pin_python_scanners(names: list[str], timeout: float) -> None:
 
 
 def provision_batch(batch: list[str], timeout: float) -> None:
+    # Bun reads a user bunfig release-age limit and ignores MISE_MINIMUM_RELEASE_AGE.
+    batch = [
+        re.sub(
+            r"^(npm:[^\[]+?)(@latest)$",
+            r'\1[bun_args="--minimum-release-age=0"]\2',
+            tool,
+        )
+        for tool in batch
+    ]
     storage = (
         Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hard-eng-tools"
     )
@@ -345,6 +354,7 @@ def export_tool_paths(output: str, data_directory: Path) -> None:
         path
         for path in environment["PATH"].split(os.pathsep)
         if Path(path).resolve().is_relative_to(data_directory.resolve())
+        and Path(path).parts[-2:] != ("node_modules", ".bin")
     ]
     os.environ["PATH"] = os.pathsep.join([*tool_paths, os.environ["PATH"]])
 

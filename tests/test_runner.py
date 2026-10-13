@@ -723,7 +723,7 @@ def test_wrapped_actionlint_and_decimate_use_latest_packages(
     }
     tool_setup.provision_tools(tmp_path, [group], 30)
     assert "aqua:rhysd/actionlint@latest" in commands[0]
-    assert "npm:dart-decimate@latest" in commands[0]
+    assert 'npm:dart-decimate[bun_args="--minimum-release-age=0"]@latest' in commands[0]
     assert len(commands) == 2
     assert "install" in commands[0] and "--json" in commands[1]
     assert all("MISE_NPM_PACKAGE_MANAGER=bun" in command for command in commands)
