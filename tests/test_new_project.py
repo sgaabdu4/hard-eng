@@ -4,14 +4,17 @@ import json
 import subprocess
 from pathlib import Path
 
-import new_project
 import pytest
+
+import new_project
 
 
 def test_new_project_refuses_a_repository_that_holds_files(tmp_path: Path) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "notes.txt").write_text("keep\n")
-    with pytest.raises(ValueError, match="needs an empty repository; it holds notes.txt"):
+    with pytest.raises(
+        ValueError, match="needs an empty repository; it holds notes.txt"
+    ):
         new_project.create(tmp_path, "vite")
     assert sorted(path.name for path in tmp_path.iterdir()) == [".git", "notes.txt"]
 
@@ -49,7 +52,11 @@ def test_vite_starter_replaces_oxlint_and_pins_after_the_scaffold(
     assert (tmp_path / "tests/app.test.tsx").is_file()
     assert ran[1] == ["bun", "update", "--latest", "--exact"]
     status = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=tmp_path, capture_output=True, text=True
+        ["git", "status", "--porcelain"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     assert status.stdout == ""
 

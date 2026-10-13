@@ -266,7 +266,8 @@ def test_fresh_vite_install_keeps_the_solution_tsconfig_buildable(
     changes = installer.plan_install(tmp_path.resolve())[0]
     assert "tsconfig.json" not in changes
     for name in ("tsconfig.app.json", "tsconfig.node.json"):
-        assert UNTRUSTED in jsonc_config(name, changes[name])["include"]
+        include = jsonc_config(name, changes[name])["include"]
+        assert isinstance(include, list) and UNTRUSTED in include
     assert "/* Bundler mode */" in changes["tsconfig.app.json"]
 
 
