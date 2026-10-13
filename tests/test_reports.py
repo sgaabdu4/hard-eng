@@ -851,7 +851,8 @@ def test_bun_lcov_gets_an_istanbul_map_fallow_can_match(
     lcov = tmp_path / "coverage/lcov.info"
     lcov.parent.mkdir()
     lcov.write_text(
-        "TN:\nSF:src/grade.ts\nFNF:1\nFNH:1\nDA:1,3\nDA:2,3\nDA:3,0\nLF:3\nLH:2\nend_of_record\n"
+        "TN:\nSF:src/grade.ts\nDA:1,3\nDA:2,3\nDA:3,0\nend_of_record\n"
+        "TN:\nSF:src/grade.ts\nDA:1,0\nDA:2,0\nDA:3,0\nend_of_record\n"
     )
     listing = {
         "findings": [

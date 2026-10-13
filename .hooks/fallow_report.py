@@ -319,7 +319,7 @@ def write_istanbul(lcov: Path, directory: Path) -> None:
             hits.setdefault(source, {})
         elif record.startswith("DA:") and source is not None:
             line, count = (int(value) for value in record[3:].split(",")[:2])
-            hits[source][line] = count
+            hits[source][line] = hits[source].get(line, 0) + count
     coverage: dict[str, JsonObject] = {}
     for path, lines in hits.items():
         spans = [f for f in findings if (directory / f["path"]).resolve() == path]
