@@ -62,7 +62,7 @@ You or your agent still write `PRODUCT.md` and `DESIGN.md`, because only you kno
 
 | Your repository | What setup does |
 | --- | --- |
-| Empty | Stops and asks for a stack. Rerun with `--new STACK`. For Python, run `uv init`, then rerun setup. |
+| Empty | Stops and asks for a stack. Rerun with `--new STACK`. For Python, run `uv init` and `uv lock`, then rerun setup. |
 | Python, JavaScript/TypeScript or Dart/Flutter | Installs rules, skills, hooks and checks. Keeps your own instructions, skills, hooks and settings. Reports real conflicts. |
 | Another language (Go, Rust, Java/Kotlin, Ruby, PHP, .NET, Swift, C/C++, shell) | Basic mode: rules, skills, hooks, CI, secret scans, a Semgrep security scan, and an OSV scan when a lockfile exists. Setup prints a `Gap:` line for each missing language check. |
 | Hard Eng already installed | Prepares an update when a newer CI-verified version exists. See [Updates](#updates). |
