@@ -18,7 +18,7 @@ import pytest
 import ship_actions
 import update
 import update_pr
-from conftest import SOURCE, commit, init
+from conftest import SOURCE, add_origin, commit, init
 from shipping import PendingCheck, Shipment, ShippingError, ShippingPolicy, git
 
 
@@ -825,3 +825,30 @@ def test_new_branch_behind_its_base_is_judged_on_its_own_changes(
         StringIO(f"refs/heads/feature {revision} refs/heads/feature {'0' * 40}\n"),
     )
     assert runner.pre_push() == 0
+
+
+def test_push_base_ignores_a_merged_update_branch_left_on_the_remote(
+    tmp_path: Path,
+) -> None:
+    """Diffing from the old tip would charge the update with main's product work."""
+    root = tmp_path / "project"
+    init(root)
+    (root / "app.dart").write_text("void main() {}\n")
+    commit(root, "app")
+    add_origin(root)
+    git(root, "switch", "-q", "-c", "hard-eng/update")
+    (root / "hooks.py").write_text("one = 1\n")
+    stale = commit(root, "Update Hard Eng")
+    git(root, "push", "-q", "origin", "hard-eng/update")
+    git(root, "switch", "-q", "main")
+    (root / "hooks.py").write_text("one = 1\n")
+    commit(root, "Update Hard Eng (rebase-merged)")
+    (root / "app.dart").write_text("void main() => print(1);\n")
+    merged = commit(root, "product work")
+    git(root, "push", "-q", "origin", "main")
+    git(root, "switch", "-q", "-C", "hard-eng/update", "main")
+    (root / "hooks.py").write_text("one = 2\n")
+    update = commit(root, "Update Hard Eng")
+    target = "refs/heads/hard-eng/update"
+    assert ship_actions.push_base(root, "main", target, stale, update) == merged
+    assert ship_actions.push_base(root, "main", target, merged, update) == merged
