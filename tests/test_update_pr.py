@@ -619,3 +619,30 @@ def test_manual_setup_rerun_prints_a_refusal_as_a_message(
     assert result.returncode == 1, result.stderr
     assert "Another Hard Eng update is already running" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_update_branch_needs_no_plan_for_files_the_update_wrote(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue 299: setup's own edits outside the scaffold made update PRs demand a plan."""
+    import plans
+
+    source, target, _ = release
+    ignore = target / ".gitignore"
+    current = ignore.read_text()
+    ignore.write_text("".join(current.splitlines(keepends=True)[:-1]))
+    commit(target, "ignore list from an older release")
+    git(target, "update-ref", "refs/heads/main", "HEAD")
+    git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH)
+    select_release(source, monkeypatch)
+    update.update(target)
+    assert ignore.read_text() == current
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    small, reason = plans.size_verdict(target)
+    assert small, reason
+    (target / "package.json").write_text('{"private":true,"type":"module"}')
+    commit(target, "project edit beside the update")
+    assert plans.size_verdict(target) == (
+        False,
+        "it changes package.json, which always needs a plan",
+    )
