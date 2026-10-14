@@ -1,6 +1,6 @@
 # New-project scaffolds, solution-style tsconfig fix and README rewrite
 
-Status: Draft
+Status: Complete
 
 ## Outcome + scope
 
@@ -34,7 +34,7 @@ Decisions: starter files live in `.agents/starters/<stack>/`: discovery skips `.
 - [x] Real E2E per stack: `sh setup.sh <checkout> --new <stack>` in an empty repository, stand-in PRODUCT.md/DESIGN.md committed, then `python3 .hooks/hard-eng.py check` passes every gate → vite 15/15, nextjs 15/15, opennext 15/15, flutter 10/10.
 - [x] Real run: the Vite project's types gate fails on a deliberate type error in `src/App.tsx` and in `tests/bundle.test.ts`, and passes once removed.
 - [x] README describes `--new`, the web-stack choice and every stage in plain short sentences with simpler diagrams.
-- [ ] Full `python3 .hooks/hard-eng.py check` passes.
+- [x] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
 
@@ -52,9 +52,9 @@ N/A — installer message, documentation and type-check wiring only; no product 
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Required — real run of this checkout's setup on a fresh Vite react-ts scaffold, then `bun run build` and the `types` gate (pass, then fail on a deliberate type error); `setup.sh --new <stack>` for all four stacks, then a full passing `check` in each.
+Result: Passed
+Evidence: Focused tests went red before each fix and green after. This repo's Draft check passed every gate (line coverage above 90 percent). After the final code change, `sh setup.sh <checkout> --new <stack>` plus a full `check` passed in fresh repositories: vite 15/15, nextjs 15/15, opennext 15/15 (also from a fresh clone, plus a local `wrangler dev` 200 on `/`), flutter 10/10. Real-compiler probes: a composite library that is not strict is rejected; strict composites build and check. Codex adversarial review (gpt-6-astra) ran 12 rounds; 15 findings fixed, each with a regression test. Skipped as narrow: an explicit `-p` gate whose app references a library that is not referenced from the root (round 9 partly, now covered by the build-graph strictness check).
+E2E: Passed — `setup.sh --new` for all four stacks, then a full passing `check` in each; the Vite types gate failed on deliberate type errors in `src` and `tests`, then passed once removed.
 
 Delivery target: Merge
 Delivery: Pending — PR CI, merge and merged-main CI.
