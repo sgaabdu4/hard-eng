@@ -277,6 +277,17 @@ def build_composites(
                 f"{name}: a composite tsconfig must set strict (and checkJs with allowJs) itself "
                 "without noCheck, because `tsc -b` ignores the gate's flags"
             )
+        listed = own.get("files")
+        names: list[JsonValue] = listed if isinstance(listed, list) else []
+        resolved = {(config.parent / str(item)).resolve() for item in names}
+        if (
+            own.get("composite") is True
+            and (root / DECLARATIONS).resolve() not in resolved
+        ):
+            raise ValueError(
+                f"{name}: a composite tsconfig must include {DECLARATIONS}, "
+                "because its built declarations are what dependent projects check"
+            )
     if not composite:
         return
     build = subprocess.run(

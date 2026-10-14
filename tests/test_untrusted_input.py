@@ -566,7 +566,12 @@ def test_types_gate_reads_an_explicit_project_folder_from_that_folder(
 
 @pytest.mark.parametrize(
     "library",
-    [{"strict": False}, {"noCheck": True}, {"allowJs": True, "checkJs": False}],
+    [
+        {"strict": False},
+        {"noCheck": True},
+        {"allowJs": True, "checkJs": False},
+        {"files": ["src/app.ts"]},
+    ],
 )
 def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, library: dict[str, bool]
@@ -582,6 +587,9 @@ def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
                 **(library if "lib/tsconfig.json" in command else {}),
             },
             "files": ["src/app.ts", UNTRUSTED],
+            **(
+                library if "lib/tsconfig.json" in command and "files" in library else {}
+            ),
         },
     )
     command = ["tsc", "--noEmit", "--strict", "-p", "."]
@@ -627,7 +635,11 @@ def test_an_explicit_project_builds_the_composite_library_it_references(
                 **STRICT_JS,
                 "composite": "lib/tsconfig.json" in command,
             },
-            "files": ["src/app.ts", UNTRUSTED],
+            "files": (
+                ["src/lib.ts", f"../{UNTRUSTED}"]
+                if "lib/tsconfig.json" in command
+                else ["src/app.ts", UNTRUSTED]
+            ),
         },
     )
     command = ["tsc", "--noEmit", "-p", "."]
