@@ -45,7 +45,7 @@ N/A — gate command and CI workflow only; no product appearance.
 
 Result: Passed
 Evidence: Each new test failed before its fix and passed after. Codex adversarial review (gpt-6-astra): round 1 found that a docs-only step with its own `GITHUB_TOKEN` value would get a duplicate key, fixed with a regression case; round 2 found nothing. The full check passed every gate (line coverage 91.32 percent).
-E2E: Passed — gitleaks 8.30.1 in a scratch repository: the old `--all` scan failed on a commit held only by a private ref; the new ref list skipped it and still failed on a leak in a detached `HEAD` commit. `check --plan-stage Complete` in this checkout runs the history scan with the new list.
+E2E: Passed — gitleaks 8.30.1 in a scratch repository: the old `--all` scan failed on a commit held only by a private ref; the command `new_commits_command` builds without a base failed on a leak in a detached `HEAD` commit, and passed on a branch whose only leak sat behind the private ref. This repository sets `scan_git_history` to false, so its own check does not run that gate.
 
 Delivery target: Merge
 Delivery: Pending
