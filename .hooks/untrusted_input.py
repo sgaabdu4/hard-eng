@@ -344,8 +344,9 @@ def project_configs(
     references: list[object] = (
         listed_references if isinstance(listed_references, list) else []
     )
-    effective = effective_lists(path)
-    lists: list[object] = list(effective.values()) if effective is not None else []
+    local = {key: config[key] for key in ("files", "include") if key in config}
+    # An unresolvable base (a package's tsconfig field) leaves the root's own lists.
+    lists: list[object] = list((effective_lists(path) or local).values())
     names = [name for listed in lists if isinstance(listed, list) for name in listed]
     solution = (
         bool(references and lists)
