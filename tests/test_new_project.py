@@ -78,3 +78,25 @@ def test_flutter_pins_each_any_constraint_to_the_resolved_version() -> None:
     assert "  build_runner: 2.16.2\n" in pinned
     assert "  sdk: ^3.13.4\n" in pinned
     assert ": any" not in pinned
+
+
+def test_opennext_keeps_the_scaffold_next_release_after_the_upgrade(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Newer Next.js releases build but fail at runtime on OpenNext's Worker."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    ran: list[list[str]] = []
+
+    def run(root: Path, command: list[str]) -> None:
+        ran.append(command)
+        if command == new_project.SCAFFOLDS["opennext"]:
+            manifest = {"dependencies": {"next": "16.3.8"}, "scripts": {}}
+            (root / "package.json").write_text(json.dumps(manifest))
+            (root / "eslint.config.mjs").write_text("export default [];\n")
+
+    monkeypatch.setattr(new_project, "run", run)
+    new_project.create(tmp_path, "opennext")
+    upgrade = ran.index(["bun", "update", "--latest", "--exact"])
+    assert ran[upgrade + 1] == ["bun", "add", "--exact", "next@16.3.8"]
+    assert ran[upgrade + 2] == ["bun", "run", "cf-typegen"]
+    assert not (tmp_path / "eslint.config.mjs").exists()

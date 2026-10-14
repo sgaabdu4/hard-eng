@@ -16,9 +16,16 @@ SCAFFOLDS = {
         *("--biome", "--tailwind", "--no-src-dir", "--import-alias", "@/*"),
         *("--disable-git", "--no-agent-feedback", "--yes"),
     ],
+    "opennext": [
+        *("bun", "x", "create-cloudflare@2.73.3", "."),
+        "--template=github:opennextjs/opennextjs-cloudflare/create-cloudflare/next#2c37a8a4e0679e442dc5232c8b2a58bdbf8189c2",
+        *("--no-deploy", "--no-git", "--no-agents", "--no-auto-update"),
+    ],
     "vite": ["bun", "x", "create-vite@9.2.1", ".", "--template", "react-ts"],
 }
-REMOVED = {"vite": [".oxlintrc.json"]}
+REMOVED = {"opennext": ["eslint.config.mjs"], "vite": [".oxlintrc.json"]}
+SCAFFOLD_VERSIONS = {"opennext": ["next"]}
+GENERATED = {"opennext": [["bun", "run", "cf-typegen"]]}
 EMPTY_REPOSITORY = (
     "No supported project manifest found. New project: ask the user which type to create "
     "(Python, Flutter, Next.js, OpenNext on Cloudflare or React + Vite) unless their request says. "
@@ -47,6 +54,18 @@ def merged_package(text: str, starter: dict[str, dict[str, str | None]]) -> str:
             else:
                 current[key] = value
     return json.dumps(manifest, indent=2) + "\n"
+
+
+def scaffold_versions(root: Path, names: list[str]) -> list[str]:
+    """The scaffold's own pins for packages that newer releases break."""
+    if not names:
+        return []
+    manifest = json.loads((root / "package.json").read_text())
+    versions = {
+        **manifest.get("dependencies", {}),
+        **manifest.get("devDependencies", {}),
+    }
+    return [f"{name}@{versions[name]}" for name in names]
 
 
 def pinned_pubspec(text: str, lock: dict[str, dict[str, dict[str, str]]]) -> str:
@@ -97,10 +116,15 @@ def create(root: Path, stack: str) -> None:
     run(root, SCAFFOLDS[stack])
     for name in REMOVED.get(stack, []):
         (root / name).unlink()
+    kept = scaffold_versions(root, SCAFFOLD_VERSIONS.get(stack, []))
     copy_starter(root, stack)
     if stack == "flutter":
         finish_flutter(root)
     else:
         run(root, ["bun", "update", "--latest", "--exact"])
+        if kept:
+            run(root, ["bun", "add", "--exact", *kept])
+    for command in GENERATED.get(stack, []):
+        run(root, command)
     run(root, ["git", "add", "--all"])
     run(root, ["git", "commit", "--quiet", "-m", f"Create the {stack} project"])
