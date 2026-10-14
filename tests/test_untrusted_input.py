@@ -637,6 +637,20 @@ def test_setup_stops_on_a_solution_whose_base_it_cannot_resolve(tmp_path: Path) 
     assert (tmp_path / "tsconfig.json").read_text() == text
 
 
+def test_a_config_listing_its_own_sources_needs_no_resolvable_base(
+    tmp_path: Path,
+) -> None:
+    """Package `exports` subpaths stay unresolved here; local sources settle it."""
+    root = tmp_path / "tsconfig.json"
+    root.write_text(
+        '{"extends": "@acme/tsconfig/base", "include": ["src"],'
+        ' "references": [{"path": "./lib"}]}'
+    )
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
+    assert project_configs(tmp_path, root) == [root, tmp_path / "lib/tsconfig.json"]
+
+
 def test_an_explicit_project_builds_the_composite_library_it_references(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
