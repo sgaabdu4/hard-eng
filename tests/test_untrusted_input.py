@@ -414,3 +414,25 @@ def test_types_gate_reads_nested_config_files_from_their_own_folder(
     monkeypatch.setattr(subprocess, "run", show_config)
     expected = {tmp_path / "client/src/app.ts"}
     validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
+
+
+@pytest.mark.parametrize("composite", [True, False])
+def test_types_gate_builds_composite_references_before_checking_dependents(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, composite: bool
+) -> None:
+    """A dependent `--noEmit` check fails with TS6305 until its composite reference is built."""
+    vite_react_ts(tmp_path, [])
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        project = command[command.index("-p") + 1] if "-p" in command else ""
+        source = "src/main.tsx" if "app" in project else "vite.config.ts"
+        options = {"strict": True, "checkJs": True, "composite": composite}
+        shown = {"compilerOptions": options, "files": [source, UNTRUSTED]}
+        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    expected = {tmp_path / "src/main.tsx", tmp_path / "vite.config.ts"}
+    validate_typescript(tmp_path, ["tsc", "--noEmit"], tmp_path, expected, 10)
+    assert (["tsc", "-b"] in calls) is composite

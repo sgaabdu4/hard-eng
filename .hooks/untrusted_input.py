@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+from itertools import takewhile
 from pathlib import Path
 
 from gate_config import JSONC, Group, json_file
@@ -178,6 +179,7 @@ def validate_typescript(
         "alwaysStrict",
     )
     files: set[Path] = set()
+    composite = False
     for project in typescript_projects(root, command, directory):
         result = subprocess.run(
             [*command, *project, "--showConfig"],
@@ -189,6 +191,7 @@ def validate_typescript(
         )
         actual = json.loads(result.stdout)
         options = actual.get("compilerOptions", {})
+        composite = composite or options.get("composite") is True
         if (
             options.get("strict") is not True
             or any(options.get(name, True) is not True for name in strict)
@@ -207,6 +210,18 @@ def validate_typescript(
         files |= listed
     if not {(directory / name).resolve() for name in expected} <= files:
         raise ValueError("TypeScript configuration omits declared production files")
+    if composite:
+        # Dependent --noEmit checks need the declarations a solution build writes.
+        compiler = list(
+            takewhile(lambda argument: not argument.startswith("-"), command)
+        )
+        subprocess.run(
+            [*compiler, "-b"],
+            cwd=directory,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
 
 
 JSDOC_CAST = re.compile(
