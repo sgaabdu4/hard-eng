@@ -257,30 +257,31 @@ def reject_jsdoc_casts(directory: Path, files: list[str]) -> None:
 def project_configs(
     root: Path, path: Path, seen: frozenset[Path] = frozenset()
 ) -> list[Path]:
-    """The tsconfigs a solution-style config builds through its references; [path] otherwise."""
+    """The tsconfigs that compile sources: this one unless it is a solution, plus its references."""
+    if path in seen:
+        return []
     config = jsonc_config(str(path), path.read_text())
     declarations = Path(os.path.relpath(root / DECLARATIONS, path.parent)).as_posix()
-    references = config.get("references")
+    listed_references = config.get("references")
+    references: list[object] = (
+        listed_references if isinstance(listed_references, list) else []
+    )
     lists = [config[key] for key in ("files", "include") if key in config]
     names = [name for listed in lists if isinstance(listed, list) for name in listed]
-    if (
-        not isinstance(references, list)
-        or not references
-        or not lists
-        or any(not isinstance(listed, list) for listed in lists)
-        or not set(names) <= {declarations}
-        or path in seen
-    ):
-        return [path]
-    found: list[Path] = []
+    solution = (
+        bool(references and lists)
+        and all(isinstance(listed, list) for listed in lists)
+        and set(names) <= {declarations}
+    )
+    found: list[Path] = [] if solution else [path]
     for reference in references:
         named = reference.get("path") if isinstance(reference, dict) else None
-        target = path.parent / str(named)
+        target = Path(os.path.normpath(path.parent / str(named)))
         target = target / "tsconfig.json" if target.is_dir() else target
         if not isinstance(named, str) or not target.is_file():
             raise ValueError(f"{path.name}: referenced config {named!r} is missing")
         found += project_configs(root, target, seen | {path})
-    return found
+    return list(dict.fromkeys(found))
 
 
 def declared_config(root: Path, target: Path, changes: dict[str, str]) -> None:
@@ -313,7 +314,7 @@ def typescript_config(
         configs = project_configs(root, target)
         text = target.read_text()
         listed = jsonc_config(name, text)
-        if configs != [target] and (listed.get("files") or listed.get("include")):
+        if target not in configs and (listed.get("files") or listed.get("include")):
             # An earlier setup listed the file here, which breaks `tsc -b`.
             repaired = jsonc_config(name, text.replace(f'"{declarations}"', "", 1))
             if repaired.get("files") or repaired.get("include"):
