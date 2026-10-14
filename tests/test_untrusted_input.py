@@ -518,3 +518,21 @@ def test_types_gate_fails_when_the_composite_solution_build_fails(
     expected = {tmp_path / "src/main.tsx", tmp_path / "vite.config.ts"}
     with pytest.raises(ValueError, match="TS6202"):
         validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
+
+
+def test_types_gate_keeps_an_explicit_project_for_the_composite_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        selected = "tsconfig.lib.json" in command
+        options = {"strict": selected, "checkJs": True, "composite": True}
+        shown = {"compilerOptions": options, "files": ["src/lib.ts", UNTRUSTED]}
+        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    command = ["tsc", "--noEmit", "-p", "tsconfig.lib.json"]
+    validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/lib.ts"}, 10)
+    assert ["tsc", "-b", "tsconfig.lib.json"] in calls
