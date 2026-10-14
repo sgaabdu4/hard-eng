@@ -90,7 +90,7 @@ def test_opennext_keeps_the_scaffold_next_release_after_the_upgrade(
     def run(root: Path, command: list[str]) -> None:
         ran.append(command)
         if command == new_project.SCAFFOLDS["opennext"]:
-            manifest = {"dependencies": {"next": "16.3.8"}, "scripts": {}}
+            manifest = {"dependencies": {"next": "16.3.8"}}
             (root / "package.json").write_text(json.dumps(manifest))
             (root / "eslint.config.mjs").write_text("export default [];\n")
 
