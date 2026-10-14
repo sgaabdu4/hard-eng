@@ -704,3 +704,25 @@ def test_types_gate_builds_only_composites_another_project_reads(
     )
     validate_typescript(tmp_path, ["tsc"], tmp_path, set(), 10)
     assert [call for call in calls if "-b" in call] == []
+
+
+def test_types_gate_builds_a_library_behind_an_intermediate_solution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An app reading a library through a `files: []` group fails with TS6305 unbuilt."""
+    (tmp_path / "tsconfig.json").write_text(
+        '{"include": ["src"], "references": [{"path": "./group"}]}'
+    )
+    (tmp_path / "group").mkdir()
+    (tmp_path / "group/tsconfig.json").write_text(
+        '{"files": [], "references": [{"path": "../lib"}]}'
+    )
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
+    calls = fake_tsc(
+        monkeypatch, lambda command: library_options(command, {"composite": True})
+    )
+    validate_typescript(tmp_path, ["tsc", "--noEmit"], tmp_path, set(), 10)
+    assert [call for call in calls if "-b" in call] == [
+        ["tsc", "-b", "lib/tsconfig.json"]
+    ]
