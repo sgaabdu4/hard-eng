@@ -1,5 +1,10 @@
 """`release_canary.py`: which releases need a try on installed projects, and what it publishes."""
 
+import sys
+from pathlib import Path
+
+import pytest
+
 import release_canary
 
 
@@ -26,3 +31,22 @@ def test_published_status_names_no_project() -> None:
     text = release_canary.status_text(results)
     assert text == "1 of 2 installed projects passed"
     assert "owner" not in text
+
+
+def test_a_run_that_finds_no_project_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty search must not certify a release."""
+    posted: list[str] = []
+    replies = {"rev-parse": "a" * 40, "diff": ".hooks/update.py"}
+
+    def output(command: list[str], cwd: Path = release_canary.SOURCE) -> str:
+        return replies.get(command[1], "")
+
+    def post_status(revision: str, state: str, description: str) -> None:
+        posted.append(state)
+
+    monkeypatch.setattr(release_canary, "output", output)
+    monkeypatch.setattr(release_canary, "installed_projects", list)
+    monkeypatch.setattr(release_canary, "post_status", post_status)
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--post-status"])
+    assert release_canary.main() == 1
+    assert posted == ["failure"]
