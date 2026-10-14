@@ -14,7 +14,7 @@ import release_canary
 
 def test_only_changes_to_installed_files_need_a_canary_run() -> None:
     assert not release_canary.needs_canary(
-        ["README.md", "tests/test_setup.py", "features/x/PLAN.md", "docs/a.md"]
+        ["README.md", "release_canary.py", "features/x/PLAN.md", "docs/a.md"]
     )
     for installed in (
         ".hooks/update.py",

@@ -35,7 +35,7 @@ Execution: Red test, fix, focused tests; canary script, unit tests and a one-pro
 
 ## Risks + recovery
 
-A project installed on a branch other than its default branch is not found; the run prints how many repositories it read. A project whose own main branch is already failing blocks the run until that project is fixed. Project code runs as the maintainer on this Mac with the GitHub CLI token in its environment; any process of this user can already read that token, so isolation would need a container per project, which is out of scope. Recovery is reverting this branch.
+A project installed on a branch other than its default branch is not found; the run prints how many repositories it read. A project that already fails on the current release fails the run but does not block the merge; it is fixed in its own repository. Project code runs as the maintainer on this Mac with the GitHub CLI token in its environment; any process of this user can already read that token, so isolation would need a container per project, which is out of scope. Recovery is reverting this branch.
 
 ## ux_reference
 
