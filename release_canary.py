@@ -25,6 +25,7 @@ SOURCE_ONLY_FILES = {
     "DECISION.md",
     "actor-prompt.md",
     "AGENTS.override.md",
+    "release_canary.py",
 }
 # Runs the project's own installed updater, told that this release is the newest verified one.
 UPDATE = """
@@ -111,9 +112,7 @@ def try_project(name: str, revision: str, run: Path) -> tuple[bool, str]:
     log_path = work.with_suffix(".log")
     with log_path.open("w") as log:
         url = f"https://github.com/{name}.git"
-        if not step(
-            ["git", "clone", "-q", "--filter=blob:none", url, str(work)], run, log, 900
-        ):
+        if not step(["git", "clone", "-q", url, str(work)], run, log, 1800):
             return False, f"clone failed; log {log_path}"
         for command in (
             ["git", "remote", "set-url", "--push", "origin", "no-push"],
