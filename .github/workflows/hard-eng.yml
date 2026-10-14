@@ -58,6 +58,7 @@ jobs:
         if: steps.impact.outputs.docs_only == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}
         run: |
           bun x --package="@jdxcode/mise-linux-${RUNNER_ARCH,,}@latest" mise --no-config install uv@latest &&
