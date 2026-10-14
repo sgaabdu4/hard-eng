@@ -595,15 +595,18 @@ def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
         ('["src"]', '"files": []', False),
         ('["src"]', '"files": [], "include": []', True),
         ("[]", '"files": []', True),
+        (None, '"files": []', True),
     ],
 )
 def test_a_root_is_a_solution_only_when_its_effective_file_lists_are_empty(
-    tmp_path: Path, base: str, lists: str, solution: bool
+    tmp_path: Path, base: str | None, lists: str, solution: bool
 ) -> None:
     """An inherited `include` compiles sources unless the root overrides it."""
-    (tmp_path / "base.json").write_text(f'{{"include": {base}}}')
+    if base is not None:
+        (tmp_path / "base.json").write_text(f'{{"include": {base}}}')
+    extends = "./base.json" if base is not None else "@acme/tsconfig"
     (tmp_path / "tsconfig.json").write_text(
-        f'{{"extends": "./base.json", {lists}, "references": [{{"path": "./lib"}}]}}'
+        f'{{"extends": "{extends}", {lists}, "references": [{{"path": "./lib"}}]}}'
     )
     (tmp_path / "lib").mkdir()
     (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
