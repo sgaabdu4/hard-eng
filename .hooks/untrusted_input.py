@@ -287,7 +287,12 @@ def build_composites(
     if not graph.is_file():
         return
     configs = project_configs(root, graph)
-    read = {target for config in configs for target in referenced(config)}
+    read = {
+        reached
+        for config in configs
+        for target in referenced(config)
+        for reached in project_configs(root, target)
+    }
     composites: list[str] = []
     for config in [config for config in configs if config in read]:
         name = os.path.relpath(config, directory)
