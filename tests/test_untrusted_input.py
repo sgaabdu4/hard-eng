@@ -396,7 +396,8 @@ def test_types_gate_checks_each_config_a_solution_tsconfig_references(
         "sources": ["src", "vite.config.ts"],
         "checks": [],
     }
-    command = [sys.executable, "-c", FAKE_TSC, failing]
+    (tmp_path / "tsc.py").write_text(FAKE_TSC)
+    command = [sys.executable, str(tmp_path / "tsc.py"), failing]
     types: Gate = {"name": "types", "role": "types", "command": command}
     assert runner.run_gate(group, types, 30, threading.Lock()) is bool(failing)
     runs = (tmp_path / "runs.txt").read_text().split()
@@ -588,12 +589,40 @@ def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
         validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
 
 
-def test_a_root_that_inherits_its_sources_is_not_a_solution(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("lists", "solution"),
+    [('"files": []', False), ('"files": [], "include": []', True)],
+)
+def test_a_root_is_a_solution_only_when_its_effective_file_lists_are_empty(
+    tmp_path: Path, lists: str, solution: bool
+) -> None:
+    """An inherited `include` compiles sources unless the root overrides it."""
     (tmp_path / "base.json").write_text('{"include": ["src"]}')
     (tmp_path / "tsconfig.json").write_text(
-        '{"extends": "./base.json", "files": [], "references": [{"path": "./lib"}]}'
+        f'{{"extends": "./base.json", {lists}, "references": [{{"path": "./lib"}}]}}'
     )
     (tmp_path / "lib").mkdir()
     (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
-    root = tmp_path / "tsconfig.json"
-    assert project_configs(tmp_path, root) == [root, tmp_path / "lib/tsconfig.json"]
+    root, library = tmp_path / "tsconfig.json", tmp_path / "lib/tsconfig.json"
+    expected = [library] if solution else [root, library]
+    assert project_configs(tmp_path, root) == expected
+
+
+def test_an_explicit_project_builds_the_composite_library_it_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-composite app still reads its composite library's built declarations."""
+    library_solution(tmp_path)
+    calls = fake_tsc(
+        monkeypatch,
+        lambda command: {
+            "compilerOptions": {
+                **STRICT_JS,
+                "composite": "lib/tsconfig.json" in command,
+            },
+            "files": ["src/app.ts", UNTRUSTED],
+        },
+    )
+    command = ["tsc", "--noEmit", "-p", "."]
+    validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
+    assert ["tsc", "-b", "."] in calls
