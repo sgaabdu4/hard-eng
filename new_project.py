@@ -35,7 +35,7 @@ EMPTY_REPOSITORY = (
     "`sh -s -- --new STACK` (flutter, nextjs, opennext or vite): it creates the project with "
     "the official scaffold, adds starter tests and checks, pins each package to the newest "
     "release minimumReleaseAge allows, commits, and installs Hard Eng. A Python project: "
-    "`uv init`, then rerun setup."
+    "`uv init` and `uv lock`, then rerun setup."
 )
 
 
