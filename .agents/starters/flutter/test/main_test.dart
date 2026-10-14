@@ -8,7 +8,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final l10n = lookupAppLocalizations(const Locale('en'));
-    await app.main();
+    app.main();
     await tester.pump();
     expect(find.text(l10n.counterValue(0)), findsOneWidget);
 
