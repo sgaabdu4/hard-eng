@@ -669,10 +669,12 @@ def test_docs_only_step_gains_the_token_mise_reads(tmp_path: Path) -> None:
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     assert changes[".github/workflows/hard-eng.yml"] == template
-    path.write_text(template)
-    changes.clear()
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes == {}
+    own = template.replace(token, "          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}\n")
+    for current in (template, own):
+        path.write_text(current)
+        changes.clear()
+        configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+        assert changes == {}
 
 
 @pytest.mark.parametrize(

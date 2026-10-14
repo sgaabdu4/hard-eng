@@ -435,7 +435,7 @@ def migrate_docs_token(content: str) -> str:
     start = content.find(DOCS_SCAN)
     end = content.find("      - ", start + 1)
     step = content[start:end]
-    if start < 0 or end < 0 or MISE_TOKEN in step or IMPACT_TOKEN not in step:
+    if start < 0 or end < 0 or "GITHUB_TOKEN:" in step or IMPACT_TOKEN not in step:
         return content
     step = step.replace(IMPACT_TOKEN, IMPACT_TOKEN + MISE_TOKEN, 1)
     return content[:start] + step + content[end:]
