@@ -198,7 +198,8 @@ def validate_typescript(
             raise ValueError(
                 "TypeScript requires all strict checks and JavaScript checking without noCheck"
             )
-        listed = {(directory / name).resolve() for name in actual.get("files", [])}
+        base = (directory / project[1]).parent if project else directory
+        listed = {(base / name).resolve() for name in actual.get("files", [])}
         if (root / DECLARATIONS).resolve() not in listed:
             raise ValueError(
                 f"TypeScript configuration omits {DECLARATIONS}; rerun the Hard Eng installer"
