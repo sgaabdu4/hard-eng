@@ -643,6 +643,38 @@ def test_old_workflow_gains_docs_only_steps(
     assert "Docs-only CI steps not added" in capsys.readouterr().err
 
 
+def test_every_template_step_that_runs_mise_has_a_token_mise_reads() -> None:
+    """mise ignores GH_TOKEN; unauthenticated runners share a 60-call hourly limit."""
+    workflow = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
+    steps = [
+        step
+        for job in workflow["jobs"].values()
+        for step in job["steps"]
+        if " mise --no-config " in step.get("run", "")
+    ]
+    assert steps
+    for step in steps:
+        assert step["env"]["GITHUB_TOKEN"] == "${{ github.token }}", step["name"]
+
+
+def test_docs_only_step_gains_the_token_mise_reads(tmp_path: Path) -> None:
+    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    start = template.index("      - name: Run the secret scan for docs-only changes")
+    token = "          GITHUB_TOKEN: ${{ github.token }}\n"
+    old = template[:start] + template[start:].replace(token, "", 1)
+    assert old.count(token) == template.count(token) - 1
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(old)
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes[".github/workflows/hard-eng.yml"] == template
+    path.write_text(template)
+    changes.clear()
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes == {}
+
+
 @pytest.mark.parametrize(
     "changed,packages,expected",
     [
