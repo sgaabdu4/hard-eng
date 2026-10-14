@@ -224,7 +224,6 @@ def validate_typescript(
     compiler = list(takewhile(lambda argument: not argument.startswith("-"), command))
     selected = explicit_project(command)
     files: set[Path] = set()
-    composite = False
     for project in typescript_projects(root, command, directory):
         options = shown_config([*command, *project], directory, timeout)
         target = project or selected
@@ -236,7 +235,6 @@ def validate_typescript(
             raise ValueError(
                 "TypeScript requires all strict checks and JavaScript checking without noCheck"
             )
-        composite = composite or options.get("composite") is True
         config = directory / target[1] if target else directory / "tsconfig.json"
         base = config if config.is_dir() else config.parent
         listed = options.get("files", [])
@@ -249,8 +247,7 @@ def validate_typescript(
         files |= resolved
     if not {(directory / name).resolve() for name in expected} <= files:
         raise ValueError("TypeScript configuration omits declared production files")
-    if composite:
-        build_composites(root, compiler, selected, directory, timeout)
+    build_composites(root, compiler, selected, directory, timeout)
 
 
 def build_composites(
@@ -263,9 +260,13 @@ def build_composites(
     """Write the declarations dependent --noEmit checks read; `tsc -b` ignores the gate's flags."""
     graph = directory / selected[1] if selected else directory / "tsconfig.json"
     graph = graph / "tsconfig.json" if graph.is_dir() else graph
+    if not graph.is_file():
+        return
+    composite = False
     for config in project_configs(root, graph):
         name = os.path.relpath(config, directory)
         own = shown_config([*compiler, "-p", name], directory, timeout)
+        composite = composite or own.get("composite") is True
         loose = (
             not strict_options(own)
             or own.get("noCheck", False) is not False
@@ -276,6 +277,8 @@ def build_composites(
                 f"{name}: a composite tsconfig must set strict (and checkJs with allowJs) itself "
                 "without noCheck, because `tsc -b` ignores the gate's flags"
             )
+    if not composite:
+        return
     build = subprocess.run(
         [*compiler, "-b", *selected[1:]],
         cwd=directory,
@@ -325,6 +328,7 @@ def project_configs(
     lists = [config[key] for key in ("files", "include") if key in config]
     names = [name for listed in lists if isinstance(listed, list) for name in listed]
     inherited = inherited_lists(path) if "extends" in config else set()
+    inherited = None if inherited is None else inherited - config.keys()
     solution = (
         bool(references and lists)
         and inherited == set()
