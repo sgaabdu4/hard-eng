@@ -1,6 +1,7 @@
 """`release_canary.py`: which releases need a try on installed projects, and what it publishes."""
 
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -70,3 +71,22 @@ def test_a_step_past_its_limit_stops_every_process_it_started(tmp_path: Path) ->
     time.sleep(0.5)
     with pytest.raises(ProcessLookupError):
         os.kill(child, 0)
+
+
+def test_an_install_without_the_update_runner_uses_its_older_entry_point(
+    tmp_path: Path,
+) -> None:
+    hooks = tmp_path / ".hooks"
+    hooks.mkdir()
+    (hooks / "update.py").write_text(
+        "def latest_verified(previous):\n    return None\n\n\n"
+        "def update(root):\n    return f'updated to {latest_verified(None)}'\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", release_canary.UPDATE, "a" * 40],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert done.stdout == f"updated to {'a' * 40}\n"

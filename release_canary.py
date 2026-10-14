@@ -31,7 +31,10 @@ from pathlib import Path
 sys.path.insert(0, ".hooks")
 import update
 update.latest_verified = lambda previous: sys.argv[1]
-from update_runner import locked_update
+try:
+    from update_runner import locked_update
+except ImportError:
+    locked_update = update.update
 print(locked_update(Path(".").resolve()))
 """
 
