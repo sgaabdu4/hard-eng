@@ -37,8 +37,11 @@ def test_published_status_names_no_project() -> None:
     assert "owner" not in text
 
 
-def test_a_run_that_finds_no_project_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_run_that_finds_no_project_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An empty search must not certify a release."""
+    monkeypatch.setattr(release_canary, "LOCK", tmp_path / "canary.lock")
     posted: list[str] = []
     replies = {"rev-parse": "a" * 40, "diff": ".hooks/update.py"}
 
