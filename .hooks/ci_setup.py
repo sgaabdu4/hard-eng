@@ -547,12 +547,17 @@ def workflow_installed(
     root: Path, base: str, names: set[str], sources: tuple[Path, Path]
 ) -> bool:
     """Whether a changed workflow is what the release's setup writes from the base one."""
+    name = ".github/workflows/hard-eng.yml"
+    return name not in names or name in setup_written(root, base, {name}, sources)
+
+
+def setup_written(
+    root: Path, base: str, names: set[str], sources: tuple[Path, Path]
+) -> set[str]:
+    """The changed paths the release's setup writes exactly when it updates the base tree."""
     from hook_chain import own_hooks_env
     from update import update_plan
 
-    name = ".github/workflows/hard-eng.yml"
-    if name not in names:
-        return True
     with tempfile.TemporaryDirectory(prefix="hard-eng-workflow-check-") as temporary:
         tree = Path(temporary) / "base"
         git = ["git", "-c", "core.hooksPath=/dev/null", "worktree"]
@@ -564,7 +569,7 @@ def workflow_installed(
             timeout=120,
         )
         try:
-            planned = update_plan(tree, *sources, own_hooks_env(tree))[0].get(name)
+            planned = update_plan(tree, *sources, own_hooks_env(tree))[0]
         finally:
             subprocess.run(
                 [*git, "remove", "--force", str(tree)],
@@ -572,7 +577,12 @@ def workflow_installed(
                 check=False,
                 timeout=60,
             )
-    return (root / name).is_file() and planned == (root / name).read_text()
+    return {
+        name
+        for name in names
+        if (root / name).is_file()
+        and planned.get(name) == (root / name).read_text()
+    }
 
 
 def configure_ci(
