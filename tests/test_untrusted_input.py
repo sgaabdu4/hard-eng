@@ -536,3 +536,23 @@ def test_types_gate_keeps_an_explicit_project_for_the_composite_build(
     command = ["tsc", "--noEmit", "-p", "tsconfig.lib.json"]
     validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/lib.ts"}, 10)
     assert ["tsc", "-b", "tsconfig.lib.json"] in calls
+
+
+@pytest.mark.parametrize("selection", [".", "tsconfig.json"])
+def test_types_gate_reads_an_explicit_project_folder_from_that_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selection: str
+) -> None:
+    (tmp_path / "tsconfig.json").write_text('{"include": ["src"]}')
+    shown = {
+        "compilerOptions": {"strict": True, "checkJs": True},
+        "files": ["./src/app.ts", f"./{UNTRUSTED}"],
+    }
+
+    def show_config(
+        command: list[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
+
+    monkeypatch.setattr(subprocess, "run", show_config)
+    command = ["tsc", "--noEmit", "-p", selection]
+    validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
