@@ -379,6 +379,7 @@ def test_types_gate_checks_each_config_a_solution_tsconfig_references(
         (".", {"next": "15.0.0"}, None, False),
         ("apps/web", {"next": "16.4.0"}, "node_modules", True),
         (".", {}, "node_modules", False),
+        ("packages/ui", {"next": "16.4.0"}, "node_modules", False),
     ],
 )
 def test_types_gate_writes_next_route_types_before_a_clean_check(
@@ -394,6 +395,8 @@ def test_types_gate_writes_next_route_types_before_a_clean_check(
     directory.mkdir(parents=True, exist_ok=True)
     manifest = {"dependencies": dependencies}
     (directory / "package.json").write_text(json.dumps(manifest))
+    if package != "packages/ui":
+        (directory / "app").mkdir()
     if cli is not None:
         typegen_cli = tmp_path / cli / "next/dist/cli/next-typegen.js"
         typegen_cli.parent.mkdir(parents=True)
@@ -494,3 +497,24 @@ def test_types_gate_requires_composite_configs_to_set_strict_themselves(
     expected = {tmp_path / "src/main.tsx", tmp_path / "vite.config.ts"}
     with pytest.raises(ValueError, match="composite tsconfig must set strict"):
         validate_typescript(tmp_path, ["tsc", "--strict"], tmp_path, expected, 10)
+
+
+def test_types_gate_fails_when_the_composite_solution_build_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stale declarations from an earlier build would let dependent checks pass."""
+    vite_react_ts(tmp_path, [])
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if "-b" in command:
+            return subprocess.CompletedProcess(command, 1, "error TS6202: cycle", "")
+        project = command[command.index("-p") + 1] if "-p" in command else ""
+        source = "src/main.tsx" if "app" in project else "vite.config.ts"
+        options = {"strict": True, "checkJs": True, "composite": True}
+        shown = {"compilerOptions": options, "files": [source, UNTRUSTED]}
+        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    expected = {tmp_path / "src/main.tsx", tmp_path / "vite.config.ts"}
+    with pytest.raises(ValueError, match="TS6202"):
+        validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
