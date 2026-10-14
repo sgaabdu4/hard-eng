@@ -371,25 +371,44 @@ def test_types_gate_checks_each_config_a_solution_tsconfig_references(
     assert runs == ["tsconfig.app.json", "tsconfig.node.json"]
 
 
-@pytest.mark.parametrize("typegen", [True, False])
+@pytest.mark.parametrize(
+    ("package", "dependencies", "cli", "typegen"),
+    [
+        (".", {"next": "16.4.0"}, "node_modules", True),
+        (".", {"next": "15.0.0"}, None, False),
+        ("apps/web", {"next": "16.4.0"}, "node_modules", True),
+        (".", {}, "node_modules", False),
+    ],
+)
 def test_types_gate_writes_next_route_types_before_a_clean_check(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, typegen: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    package: str,
+    dependencies: dict[str, str],
+    cli: str | None,
+    typegen: bool,
 ) -> None:
-    """A clean checkout lacks Next's generated `LayoutProps`, so `tsc` fails without typegen."""
-    (tmp_path / "package.json").write_text('{"dependencies": {"next": "16.4.0"}}')
-    cli = tmp_path / "node_modules/next/dist/cli"
-    cli.mkdir(parents=True)
-    if typegen:
-        (cli / "next-typegen.js").write_text("")
-    calls: list[list[str]] = []
+    """A clean checkout lacks Next's `LayoutProps`; Bun workspaces hoist Next to the root."""
+    directory = tmp_path / package
+    directory.mkdir(parents=True, exist_ok=True)
+    manifest = {"dependencies": dependencies}
+    (directory / "package.json").write_text(json.dumps(manifest))
+    if cli is not None:
+        typegen_cli = tmp_path / cli / "next/dist/cli/next-typegen.js"
+        typegen_cli.parent.mkdir(parents=True)
+        typegen_cli.write_text("")
+    calls: list[tuple[list[str], object]] = []
 
-    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
+    def run(command: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, options.get("cwd")))
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", run)
-    next_route_types(tmp_path, 10)
-    assert calls == ([["bun", "x", "next", "typegen"]] if typegen else [])
+    next_route_types(directory, 10)
+    expected: list[tuple[list[str], object]] = []
+    if typegen:
+        expected.append((["bun", "x", "next", "typegen"], directory))
+    assert calls == expected
 
 
 def test_types_gate_reads_nested_config_files_from_their_own_folder(
