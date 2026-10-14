@@ -51,26 +51,37 @@ def output(command: list[str], cwd: Path = SOURCE) -> str:
     return subprocess.check_output(command, cwd=cwd, text=True, timeout=300).strip()
 
 
-def installed_projects() -> list[str]:
-    owners = [output(["gh", "api", "user", "-q", ".login"])]
-    owners += output(["gh", "api", "user/orgs", "-q", ".[].login"]).split()
-    found = {
-        name
-        for owner in owners
-        for name in output(
-            [
-                *("gh", "search", "code", "--owner", owner),
-                *("--filename", "hard-eng-source.json", "--limit", "200"),
-                *("--json", "repository", "-q", ".[].repository.nameWithOwner"),
-            ]
-        ).split()
-    }
-    print(f"Found {len(found)} installed projects across {len(owners)} owners.")
-    return sorted(
-        name
-        for name in found - {UPSTREAM}
-        if output(["gh", "api", f"repos/{name}", "-q", ".archived"]) == "false"
+def installed(name: str) -> bool:
+    """Whether the default branch holds Hard Eng's marker; other errors stop the run."""
+    marker = f"repos/{name}/contents/.hooks/hard-eng-source.json"
+    found = subprocess.run(
+        ["gh", "api", marker, "--silent"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
     )
+    if found.returncode and "HTTP 404" not in found.stderr:
+        raise RuntimeError(f"cannot read {marker}: {found.stderr.strip()}")
+    return found.returncode == 0
+
+
+def installed_projects() -> list[str]:
+    names = output(
+        [
+            *(
+                "gh",
+                "api",
+                "--paginate",
+                "-q",
+                ".[] | select(.archived | not) | .full_name",
+            ),
+            "user/repos?affiliation=owner,collaborator,organization_member&per_page=100",
+        ]
+    ).split()
+    found = [name for name in names if name != UPSTREAM and installed(name)]
+    print(f"{len(found)} of {len(names)} accessible repositories have Hard Eng.")
+    return found
 
 
 def step(command: list[str], cwd: Path, log: IO[str], limit: int) -> bool:
@@ -158,6 +169,8 @@ def main() -> int:
         if args.post_status:
             post_status(revision, "success", "No installed file changed")
         return 0
+    if args.post_status:
+        post_status(revision, "pending", "Trying the release on installed projects")
     projects = args.project or installed_projects()
     if not projects:
         print("No installed project found; the release is untested.")

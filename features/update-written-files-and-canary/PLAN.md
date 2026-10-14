@@ -18,7 +18,7 @@ Evidence: In a Flutter project the update wrote the Flutter skill files and rais
 Blockers: None
 Handoff: Approval
 Authority: The user asked to fix every open Hard Eng issue and to test each release on all projects that use Hard Eng before it ships, choosing a local run on this Mac (option 1). The user ruled that a project failure is fixed in that project by its own PR, never by loosening Hard Eng. Codex adversarial review loop (gpt-6-astra) before the PR; merge when green.
-Decisions: Generalize `workflow_installed` into `setup_written` rather than adding a second base-worktree proof. Exempt setup-written files only from plan sizing, not from package scope, so a raised lint pin still runs its package's gates. The canary runs each project's installed updater (patched only to treat the candidate as the newest verified release), because that old code is what really applies a release; it needs the candidate's CI to have passed, so it runs on the PR head after CI. Projects are found with GitHub code search across the user and their organisations; archived ones are skipped. Clones live in `~/Library/Caches/hard-eng-canary`, push is disabled in each clone, passing clones are deleted and the previous run is removed at the next start. The rule lives in `AGENTS.override.md`, which is never installed.
+Decisions: Generalize `workflow_installed` into `setup_written` rather than adding a second base-worktree proof. Exempt setup-written files only from plan sizing, not from package scope, so a raised lint pin still runs its package's gates. The canary runs each project's installed updater (patched only to treat the candidate as the newest verified release), because that old code is what really applies a release; it needs the candidate's CI to have passed, so it runs on the PR head after CI. Projects are every non-archived repository the user can access (owned, collaborator, organisation, forks included) whose default branch holds Hard Eng's marker; any lookup error other than not-found stops the run. With `--post-status` the run marks the commit pending first, so a failed rerun cannot leave an earlier success. Clones live in `~/Library/Caches/hard-eng-canary`, push is disabled in each clone, passing clones are deleted and the previous run is removed at the next start. The rule lives in `AGENTS.override.md`, which is never installed.
 
 ## Acceptance + steps
 
@@ -36,7 +36,7 @@ Execution: Red test, fix, focused tests; canary script, unit tests and a one-pro
 
 ## Risks + recovery
 
-GitHub code search can lag for a newly set-up repository, so a run may miss it; the run prints how many projects and owners it covered. A project whose own main branch is already failing blocks the run until that project is fixed. Recovery is reverting this branch.
+A project installed on a branch other than its default branch is not found; the run prints how many repositories it read. A project whose own main branch is already failing blocks the run until that project is fixed. Recovery is reverting this branch.
 
 ## ux_reference
 

@@ -49,4 +49,4 @@ def test_a_run_that_finds_no_project_fails(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(release_canary, "post_status", post_status)
     monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--post-status"])
     assert release_canary.main() == 1
-    assert posted == ["failure"]
+    assert posted == ["pending", "failure"]
