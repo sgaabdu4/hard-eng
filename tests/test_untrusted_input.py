@@ -578,23 +578,19 @@ def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
 ) -> None:
     """Its build emits declarations, which an explicit project's callers trust unchecked."""
     library_solution(tmp_path)
-    fake_tsc(
-        monkeypatch,
-        lambda command: {
-            "compilerOptions": {
-                **STRICT_JS,
-                "composite": True,
-                **(library if "lib/tsconfig.json" in command else {}),
-            },
-            "files": ["src/app.ts", UNTRUSTED],
-            **(
-                library if "lib/tsconfig.json" in command and "files" in library else {}
-            ),
-        },
-    )
-    command = ["tsc", "--noEmit", "--strict", "-p", "."]
-    with pytest.raises(ValueError, match="lib/tsconfig.json: a composite tsconfig"):
-        validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
+
+    def shown(command: list[str]) -> dict[str, object]:
+        own = library if "lib/tsconfig.json" in command else {}
+        flags = {"strict": True, "checkJs": True, "noCheck": False}
+        overrides = {key: on for key, on in flags.items() if f"--{key}" in command}
+        files = [f"../{UNTRUSTED}"] if "lib/tsconfig.json" in command else [UNTRUSTED]
+        options = {**STRICT_JS, "composite": True, **own, **overrides}
+        return {"compilerOptions": options, "files": own.get("files", files)}
+
+    fake_tsc(monkeypatch, shown)
+    command = ["tsc", "--noEmit", "--strict", "--checkJs", "--noCheck", "false"]
+    with pytest.raises(ValueError, match="lib/tsconfig.json: a composite|omits"):
+        validate_typescript(tmp_path, [*command, "-p", "."], tmp_path, set(), 10)
 
 
 @pytest.mark.parametrize(
@@ -663,3 +659,23 @@ def test_an_explicit_project_builds_the_composite_library_it_references(
     command = ["tsc", "--noEmit", "-p", "."]
     validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
     assert ["tsc", "-b", "."] in calls
+
+
+@pytest.mark.parametrize("selection", ["tsconfig.json", "."])
+def test_an_explicitly_selected_solution_root_checks_each_reference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selection: str
+) -> None:
+    vite_react_ts(tmp_path, [])
+    calls = fake_tsc(
+        monkeypatch,
+        lambda command: {"compilerOptions": STRICT_JS, "files": vite_files(command)},
+    )
+    command = ["tsc", "--noEmit", "-p", selection]
+    expected = {tmp_path / name for name in VITE_SOURCES}
+    validate_typescript(tmp_path, command, tmp_path, expected, 10)
+    shown = [call for call in calls if "--showConfig" in call]
+    assert all(call.count("-p") == 1 for call in shown)
+    assert {call[call.index("-p") + 1] for call in shown} == {
+        "tsconfig.app.json",
+        "tsconfig.node.json",
+    }

@@ -176,15 +176,29 @@ def next_route_types(directory: Path, timeout: float) -> None:
 def typescript_projects(
     root: Path, command: list[str], directory: Path
 ) -> list[list[str]]:
-    """One `-p` per config a solution-style tsconfig references; [[]] runs the command as is."""
-    target = directory / "tsconfig.json"
-    selected = {argument.split("=")[0] for argument in command} & {"-p", "--project"}
-    configs = (
-        [target] if selected or not target.is_file() else project_configs(root, target)
-    )
+    """One `-p` per config the selected tsconfig builds; [[]] runs the command as is."""
+    selected = explicit_project(command)
+    target = directory / selected[1] if selected else directory / "tsconfig.json"
+    target = target / "tsconfig.json" if target.is_dir() else target
+    configs = project_configs(root, target) if target.is_file() else [target]
     if configs == [target]:
         return [[]]
     return [["-p", os.path.relpath(config, directory)] for config in configs]
+
+
+def project_command(command: list[str], project: list[str]) -> list[str]:
+    """The command with its own project selection replaced by `project`."""
+    if not project:
+        return command
+    kept: list[str] = []
+    skip = False
+    for argument in command:
+        name, _, value = argument.partition("=")
+        if skip or name in {"-p", "--project"}:
+            skip = not skip and name in {"-p", "--project"} and not value
+            continue
+        kept.append(argument)
+    return [*kept, *project]
 
 
 STRICT = (
@@ -235,7 +249,7 @@ def validate_typescript(
     selected = explicit_project(command)
     files: set[Path] = set()
     for project in typescript_projects(root, command, directory):
-        options = shown_config([*command, *project], directory, timeout)
+        options = shown_config(project_command(command, project), directory, timeout)
         target = project or selected
         if (
             not strict_options(options)
