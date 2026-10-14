@@ -136,7 +136,15 @@ def inherited_lists(path: Path, seen: frozenset[Path] = frozenset()) -> set[str]
 
 def next_route_types(directory: Path, timeout: float) -> None:
     """Write Next.js route types (`PageProps`, `LayoutProps`) that a clean checkout lacks."""
-    if not (directory / "node_modules/next/dist/cli/next-typegen.js").is_file():
+    path = directory / "package.json"
+    manifest = json.loads(path.read_text()) if path.is_file() else {}
+    declared = {
+        **manifest.get("dependencies", {}),
+        **manifest.get("devDependencies", {}),
+    }
+    cli = "node_modules/next/dist/cli/next-typegen.js"
+    folders = (directory, *directory.parents)
+    if "next" not in declared or not any((f / cli).is_file() for f in folders):
         return
     result = subprocess.run(
         ["bun", "x", "next", "typegen"],
