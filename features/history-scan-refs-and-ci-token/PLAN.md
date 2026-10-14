@@ -1,6 +1,6 @@
 # History scan refs and docs-only CI token
 
-Status: Draft
+Status: Complete
 
 ## Outcome + scope
 
@@ -22,15 +22,15 @@ Decisions: Rewrite at run time in `new_commits_command`, like the based scan, so
 
 ## Acceptance + steps
 
-- [ ] No base, an all-zero base or an unresolvable base scans `--branches --remotes --tags HEAD`; git lists a detached `HEAD` commit and omits a commit reachable only from a private ref → `test_history_scan_covers_only_commits_a_known_base_lacks`, `test_full_history_scan_skips_private_refs_and_keeps_detached_head`, red before. The first test's old "unknown base keeps the command unchanged" assertion is replaced: it protected the full scan, which the new list still gives for every pushable commit.
-- [ ] Every template step that runs mise sets `GITHUB_TOKEN` → `test_every_template_step_that_runs_mise_has_a_token_mise_reads`, red before.
-- [ ] An installed workflow whose docs-only step lacks `GITHUB_TOKEN` gains it once at update; a current one is unchanged → `test_docs_only_step_gains_the_token_mise_reads`, red before.
-- [ ] Full `python3 .hooks/hard-eng.py check` passes.
+- [x] No base, an all-zero base or an unresolvable base scans `--branches --remotes --tags HEAD`; git lists a detached `HEAD` commit and omits a commit reachable only from a private ref → `test_history_scan_covers_only_commits_a_known_base_lacks`, `test_full_history_scan_skips_private_refs_and_keeps_detached_head`, red before. The first test's old "unknown base keeps the command unchanged" assertion is replaced: it protected the full scan, which the new list still gives for every pushable commit.
+- [x] Every template step that runs mise sets `GITHUB_TOKEN` → `test_every_template_step_that_runs_mise_has_a_token_mise_reads`, red before.
+- [x] An installed workflow whose docs-only step lacks `GITHUB_TOKEN` gains it once at update; a current one, or one with its own `GITHUB_TOKEN` value, is unchanged → `test_docs_only_step_gains_the_token_mise_reads`, red before (the own-value case came from review round 1).
+- [x] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: The base commit passed required CI on main.
 Execution: Red tests first, then the fixes at the owners above, then the Codex adversarial review loop, then PR.
 
 ## Risks + recovery
@@ -43,9 +43,9 @@ N/A — gate command and CI workflow only; no product appearance.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Pending
+Result: Passed
+Evidence: Each new test failed before its fix and passed after. Codex adversarial review (gpt-6-astra): round 1 found that a docs-only step with its own `GITHUB_TOKEN` value would get a duplicate key, fixed with a regression case; round 2 found nothing. The full check passed every gate (line coverage 91.32 percent).
+E2E: Passed — gitleaks 8.30.1 in a scratch repository: the old `--all` scan failed on a commit held only by a private ref; the new ref list skipped it and still failed on a leak in a detached `HEAD` commit. `check --plan-stage Complete` in this checkout runs the history scan with the new list.
 
 Delivery target: Merge
 Delivery: Pending
