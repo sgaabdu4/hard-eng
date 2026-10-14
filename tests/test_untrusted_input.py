@@ -590,14 +590,18 @@ def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
 
 
 @pytest.mark.parametrize(
-    ("lists", "solution"),
-    [('"files": []', False), ('"files": [], "include": []', True)],
+    ("base", "lists", "solution"),
+    [
+        ('["src"]', '"files": []', False),
+        ('["src"]', '"files": [], "include": []', True),
+        ("[]", '"files": []', True),
+    ],
 )
 def test_a_root_is_a_solution_only_when_its_effective_file_lists_are_empty(
-    tmp_path: Path, lists: str, solution: bool
+    tmp_path: Path, base: str, lists: str, solution: bool
 ) -> None:
     """An inherited `include` compiles sources unless the root overrides it."""
-    (tmp_path / "base.json").write_text('{"include": ["src"]}')
+    (tmp_path / "base.json").write_text(f'{{"include": {base}}}')
     (tmp_path / "tsconfig.json").write_text(
         f'{{"extends": "./base.json", {lists}, "references": [{{"path": "./lib"}}]}}'
     )

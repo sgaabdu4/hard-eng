@@ -313,6 +313,25 @@ def reject_jsdoc_casts(directory: Path, files: list[str]) -> None:
         )
 
 
+def effective_lists(
+    path: Path, seen: frozenset[Path] = frozenset()
+) -> dict[str, object] | None:
+    """A tsconfig's `files` and `include` after `extends`; None when a base is missing."""
+    config = jsonc_config(str(path), path.read_text())
+    lists: dict[str, object] = {}
+    if "extends" in config:
+        bases = extended(path.parent, config["extends"])
+        if bases is None or path in seen:
+            return None
+        for base in bases:
+            inherited = effective_lists(base, seen | {path})
+            if inherited is None:
+                return None
+            lists.update(inherited)
+    lists.update({key: config[key] for key in ("files", "include") if key in config})
+    return lists
+
+
 def project_configs(
     root: Path, path: Path, seen: frozenset[Path] = frozenset()
 ) -> list[Path]:
@@ -325,13 +344,11 @@ def project_configs(
     references: list[object] = (
         listed_references if isinstance(listed_references, list) else []
     )
-    lists = [config[key] for key in ("files", "include") if key in config]
+    effective = effective_lists(path)
+    lists: list[object] = list(effective.values()) if effective is not None else []
     names = [name for listed in lists if isinstance(listed, list) for name in listed]
-    inherited = inherited_lists(path) if "extends" in config else set()
-    inherited = None if inherited is None else inherited - config.keys()
     solution = (
         bool(references and lists)
-        and inherited == set()
         and all(isinstance(listed, list) for listed in lists)
         and set(names) <= {declarations}
     )
