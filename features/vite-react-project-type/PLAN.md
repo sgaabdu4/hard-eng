@@ -39,6 +39,7 @@ Decisions: starter files live in `.agents/starters/<stack>/`: discovery skips `.
 - [x] Solution detection uses effective file lists after `extends` → `test_a_root_is_a_solution_only_when_its_effective_file_lists_are_empty`, red before.
 - [x] Fresh clones of the Vite (15/15), Next.js (15/15) and Flutter (10/10) starters pass the full check after install; the Flutter starter passes a real integration run on macOS desktop (0, then 1 after a tap).
 - [x] Flutter starter without the placeholder `Crash` facade, on flutter_skill_lints ^0.13.4 (crash rule fires only with error reporting; `prefer_type_over_var` restored, user decision: ban `var`, keep inferred `final`) and the Flutter skill pinned at v5.12.2 → new project and fresh clone 10/10; a deliberate `var` failed types-lint with `prefer_type_over_var`.
+- [x] A pushed branch whose old remote tip is not an ancestor (a merged `hard-eng/update` branch left on the remote) is diffed from its branch point, so `update-pr` passes as scaffold-only instead of demanding a plan → `test_push_base_ignores_a_merged_update_branch_left_on_the_remote`, red before (returned the stale tip); found by the lint-package run and reproduced end to end in a scratch project.
 - [x] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
