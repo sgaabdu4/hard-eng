@@ -850,6 +850,8 @@ def javascript_files(directory: Path, excluded: tuple[Path, ...] = ()) -> list[s
         and not {"node_modules", "vendor", ".hooks", ".agents"}
         & set(path.relative_to(directory).parts)
     ]
+    generated = generated_sources(directory, files)
+    files = [name for name in files if name not in generated]
     if not files and not excluded:
         raise ValueError("No JavaScript or TypeScript source files found")
     return files

@@ -632,10 +632,12 @@ def test_javascript_file_scope_keeps_application_tests_and_declarations(
 ) -> None:
     repository(tmp_path)
     (tmp_path / ".gitignore").write_text("coverage/\n")
+    (tmp_path / ".gitattributes").write_text("env.d.ts linguist-generated=true\n")
     for name in (
         "src/app.ts",
         "tests/app.test.ts",
         "types/app.d.ts",
+        "env.d.ts",
         "coverage/generated.js",
         "vendor/copied.js",
         ".hooks/helper.js",
