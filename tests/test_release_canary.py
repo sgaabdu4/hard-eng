@@ -1,5 +1,6 @@
 """`release_canary.py`: which releases need a try on installed projects, and what it publishes."""
 
+import fcntl
 import os
 import subprocess
 import sys
@@ -90,3 +91,20 @@ def test_an_install_without_the_update_runner_uses_its_older_entry_point(
         check=True,
     )
     assert done.stdout == f"updated to {'a' * 40}\n"
+
+
+def test_a_second_run_waits_and_keeps_the_active_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Parallel agents must not delete each other's checkouts and logs."""
+    active = tmp_path / "cache/run-active/project.log"
+    active.parent.mkdir(parents=True)
+    active.write_text("running\n")
+    lock = tmp_path / "canary.lock"
+    monkeypatch.setattr(release_canary, "CACHE", tmp_path / "cache")
+    monkeypatch.setattr(release_canary, "LOCK", lock)
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD"])
+    with lock.open("a") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        assert release_canary.main() == 1
+    assert active.read_text() == "running\n"
