@@ -1,7 +1,7 @@
 {
   "scripts": {
     "lint": null,
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv --include-runtime=false ./cloudflare-env.d.ts && biome format --write ./cloudflare-env.d.ts",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv --include-runtime=false ./cloudflare-env.d.ts",
     "test:coverage": "bun test --path-ignore-patterns='performance/**' --coverage --coverage-reporter=lcov --coverage-dir=coverage --reporter=junit --reporter-outfile=coverage/junit.xml",
     "test:performance": "bun test ./performance --reporter=junit --reporter-outfile=coverage/performance.xml",
     "lint:boundaries": "fallow architecture --boundaries --fail-on-issues"
@@ -15,8 +15,7 @@
     "eslint-config-next": null,
     "@cloudflare/workers-types": "latest",
     "@opennextjs/cloudflare": "latest",
-    "@types/bun": "latest",
-    "@biomejs/biome": "latest"
+    "@types/bun": "latest"
   },
   "overrides": {
     "sharp": ">=0.35.5"
