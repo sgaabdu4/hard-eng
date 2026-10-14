@@ -13,6 +13,7 @@ from untrusted_input import (
     fallow_ignores_hooks,
     jsonc_config,
     next_route_types,
+    project_configs,
     reject_jsdoc_casts,
     typescript_config,
     typescript_projects,
@@ -580,3 +581,38 @@ def test_types_gate_checks_the_strictness_of_references_an_explicit_project_buil
     command = ["tsc", "--noEmit", "--strict", "-p", "."]
     with pytest.raises(ValueError, match="lib/tsconfig.json: a composite tsconfig"):
         validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
+
+
+def test_types_gate_rejects_a_composite_reference_that_skips_type_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "tsconfig.json").write_text(
+        '{"include": ["src"], "references": [{"path": "./lib"}]}'
+    )
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        unchecked = "lib/tsconfig.json" in command
+        options = {"strict": True, "checkJs": True, "composite": True}
+        shown = {
+            "compilerOptions": {**options, "noCheck": unchecked},
+            "files": ["src/app.ts", UNTRUSTED],
+        }
+        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    command = ["tsc", "--noEmit", "-p", "."]
+    with pytest.raises(ValueError, match="lib/tsconfig.json: a composite tsconfig"):
+        validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
+
+
+def test_a_root_that_inherits_its_sources_is_not_a_solution(tmp_path: Path) -> None:
+    (tmp_path / "base.json").write_text('{"include": ["src"]}')
+    (tmp_path / "tsconfig.json").write_text(
+        '{"extends": "./base.json", "files": [], "references": [{"path": "./lib"}]}'
+    )
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
+    root = tmp_path / "tsconfig.json"
+    assert project_configs(tmp_path, root) == [root, tmp_path / "lib/tsconfig.json"]
