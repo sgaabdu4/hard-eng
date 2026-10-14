@@ -475,3 +475,22 @@ def test_setup_and_types_gate_follow_references_through_an_app_to_its_library(
         ["-p", "app/tsconfig.json"],
         ["-p", "lib/tsconfig.json"],
     ]
+
+
+def test_types_gate_requires_composite_configs_to_set_strict_themselves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`tsc -b` ignores the gate's flags, so a loose composite emits declarations without null."""
+    vite_react_ts(tmp_path, [])
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        project = command[command.index("-p") + 1] if "-p" in command else ""
+        source = "src/main.tsx" if "app" in project else "vite.config.ts"
+        options = {"strict": "--strict" in command, "checkJs": True, "composite": True}
+        shown = {"compilerOptions": options, "files": [source, UNTRUSTED]}
+        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    expected = {tmp_path / "src/main.tsx", tmp_path / "vite.config.ts"}
+    with pytest.raises(ValueError, match="composite tsconfig must set strict"):
+        validate_typescript(tmp_path, ["tsc", "--strict"], tmp_path, expected, 10)

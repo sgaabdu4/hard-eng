@@ -7,7 +7,7 @@ import subprocess
 from itertools import takewhile
 from pathlib import Path
 
-from gate_config import JSONC, Group, json_file
+from gate_config import JSONC, Group, JsonObject, JsonValue, json_file
 
 DECLARATIONS = Path(".hooks/untrusted-input.d.ts")
 CAST_RULE = "--only=nursery/noUnsafeTypeAssertion"
@@ -172,57 +172,77 @@ def typescript_projects(
     return [["-p", os.path.relpath(config, directory)] for config in configs]
 
 
+STRICT = (
+    "noImplicitAny",
+    "noImplicitThis",
+    "strictNullChecks",
+    "strictFunctionTypes",
+    "strictBindCallApply",
+    "strictPropertyInitialization",
+    "strictBuiltinIteratorReturn",
+    "useUnknownInCatchVariables",
+    "alwaysStrict",
+)
+
+
+def shown_config(command: list[str], directory: Path, timeout: float) -> JsonObject:
+    result = subprocess.run(
+        [*command, "--showConfig"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=True,
+    )
+    config = json.loads(result.stdout)
+    options = config.get("compilerOptions", {}) if isinstance(config, dict) else {}
+    return {"files": config.get("files", []), **options}
+
+
+def strict_options(options: JsonObject) -> bool:
+    return options.get("strict") is True and all(
+        options.get(name, True) is True for name in STRICT
+    )
+
+
 def validate_typescript(
     root: Path, command: list[str], directory: Path, expected: set[Path], timeout: float
 ) -> None:
-    strict = (
-        "noImplicitAny",
-        "noImplicitThis",
-        "strictNullChecks",
-        "strictFunctionTypes",
-        "strictBindCallApply",
-        "strictPropertyInitialization",
-        "strictBuiltinIteratorReturn",
-        "useUnknownInCatchVariables",
-        "alwaysStrict",
-    )
+    compiler = list(takewhile(lambda argument: not argument.startswith("-"), command))
     files: set[Path] = set()
     composite = False
     for project in typescript_projects(root, command, directory):
-        result = subprocess.run(
-            [*command, *project, "--showConfig"],
-            cwd=directory,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=True,
-        )
-        actual = json.loads(result.stdout)
-        options = actual.get("compilerOptions", {})
-        composite = composite or options.get("composite") is True
+        options = shown_config([*command, *project], directory, timeout)
         if (
-            options.get("strict") is not True
-            or any(options.get(name, True) is not True for name in strict)
+            not strict_options(options)
             or options.get("checkJs") is not True
             or options.get("noCheck", False) is not False
         ):
             raise ValueError(
                 "TypeScript requires all strict checks and JavaScript checking without noCheck"
             )
+        if options.get("composite") is True:
+            composite = True
+            if not strict_options(
+                shown_config([*compiler, *project], directory, timeout)
+            ):
+                raise ValueError(
+                    f"{project[1] if project else 'tsconfig.json'}: a composite tsconfig must set "
+                    "strict itself, because `tsc -b` ignores the gate's flags"
+                )
         base = (directory / project[1]).parent if project else directory
-        listed = {(base / name).resolve() for name in actual.get("files", [])}
-        if (root / DECLARATIONS).resolve() not in listed:
+        listed = options.get("files", [])
+        names: list[JsonValue] = listed if isinstance(listed, list) else []
+        resolved = {(base / str(name)).resolve() for name in names}
+        if (root / DECLARATIONS).resolve() not in resolved:
             raise ValueError(
                 f"TypeScript configuration omits {DECLARATIONS}; rerun the Hard Eng installer"
             )
-        files |= listed
+        files |= resolved
     if not {(directory / name).resolve() for name in expected} <= files:
         raise ValueError("TypeScript configuration omits declared production files")
     if composite:
         # Dependent --noEmit checks need the declarations a solution build writes.
-        compiler = list(
-            takewhile(lambda argument: not argument.startswith("-"), command)
-        )
         subprocess.run(
             [*compiler, "-b"],
             cwd=directory,
