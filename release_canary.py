@@ -1,6 +1,7 @@
 """Try a Hard Eng release on every installed project before it merges; results stay on this machine."""
 
 import argparse
+import fcntl
 import json
 import os
 import shutil
@@ -16,6 +17,7 @@ from typing import IO
 SOURCE = Path(__file__).resolve().parent
 UPSTREAM = "sgaabdu4/hard-eng"
 CACHE = Path.home() / "Library/Caches/hard-eng-canary"
+LOCK = CACHE.with_name("hard-eng-canary.lock")
 SOURCE_ONLY = ("tests/", "features/", "docs/", "assets/")
 SOURCE_ONLY_FILES = {
     "README.md",
@@ -152,7 +154,7 @@ def post_status(revision: str, state: str, description: str) -> None:
     )
 
 
-def main() -> int:
+def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("revision", help="Hard Eng commit whose CI already passed")
     parser.add_argument(
@@ -163,6 +165,22 @@ def main() -> int:
     args = parser.parse_args()
     if args.project and args.post_status:
         parser.error("--post-status needs a full run, not --project")
+    return args
+
+
+def main() -> int:
+    args = arguments()
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK.open("a") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("Another canary run is active; wait for it to finish.")
+            return 1
+        return canary(args)
+
+
+def canary(args: argparse.Namespace) -> int:
     revision = output(["git", "rev-parse", "--verify", args.revision + "^{commit}"])
     names = output(["git", "diff", "--name-only", f"origin/main...{revision}"]).split()
     if not needs_canary(names):
