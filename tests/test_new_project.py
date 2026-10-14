@@ -19,6 +19,18 @@ def test_new_project_refuses_a_repository_that_holds_files(tmp_path: Path) -> No
     assert sorted(path.name for path in tmp_path.iterdir()) == [".git", "notes.txt"]
 
 
+def test_new_project_refuses_a_folder_inside_another_repository(
+    tmp_path: Path,
+) -> None:
+    """`git add --all` there would commit the parent repository's unrelated work."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    child = tmp_path / "apps/web"
+    child.mkdir(parents=True)
+    with pytest.raises(ValueError, match="Git repository root"):
+        new_project.create(child, "vite")
+    assert list(child.iterdir()) == []
+
+
 def test_vite_starter_replaces_oxlint_and_pins_after_the_scaffold(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

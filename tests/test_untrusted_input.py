@@ -373,3 +373,27 @@ def test_types_gate_writes_next_route_types_before_a_clean_check(
     monkeypatch.setattr(subprocess, "run", run)
     next_route_types(tmp_path, 10)
     assert calls == ([["bun", "x", "next", "typegen"]] if typegen else [])
+
+
+def test_types_gate_reads_nested_config_files_from_their_own_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`tsc -p client/tsconfig.json --showConfig` lists files relative to client/."""
+    solution = {"files": [], "references": [{"path": "./client"}]}
+    (tmp_path / "tsconfig.json").write_text(json.dumps(solution))
+    (tmp_path / "client/src").mkdir(parents=True)
+    (tmp_path / "client/tsconfig.json").write_text('{"include": ["src"]}')
+    (tmp_path / "client/src/app.ts").write_text("export {};\n")
+    shown = {
+        "compilerOptions": {"strict": True, "checkJs": True},
+        "files": ["./src/app.ts", f"../{UNTRUSTED}"],
+    }
+
+    def show_config(
+        command: list[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
+
+    monkeypatch.setattr(subprocess, "run", show_config)
+    expected = {tmp_path / "client/src/app.ts"}
+    validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)

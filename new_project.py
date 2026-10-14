@@ -108,6 +108,8 @@ def finish_flutter(root: Path) -> None:
 
 
 def create(root: Path, stack: str) -> None:
+    if not (root / ".git").exists():
+        raise ValueError(f"--new must run at the Git repository root, not {root}")
     present = sorted(path.name for path in root.iterdir() if path.name != ".git")
     if present:
         raise ValueError(
