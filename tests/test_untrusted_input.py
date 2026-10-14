@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
@@ -310,6 +311,42 @@ def test_update_repairs_a_solution_tsconfig_an_earlier_setup_broke(
     assert rerun == {}
 
 
+def fake_tsc(
+    monkeypatch: pytest.MonkeyPatch,
+    shown: Callable[[list[str]], dict[str, object]],
+    build_exit: int = 0,
+) -> list[list[str]]:
+    """Answer `--showConfig` with `shown(command)`; record every compiler call."""
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if "-b" in command:
+            output = "error TS6202: cycle" if build_exit else ""
+            return subprocess.CompletedProcess(command, build_exit, output, "")
+        return subprocess.CompletedProcess(command, 0, json.dumps(shown(command)))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    return calls
+
+
+def vite_files(command: list[str]) -> list[str]:
+    project = command[command.index("-p") + 1] if "-p" in command else ""
+    return ["src/main.tsx" if "app" in project else "vite.config.ts", UNTRUSTED]
+
+
+def library_solution(root: Path) -> None:
+    (root / "tsconfig.json").write_text(
+        '{"include": ["src"], "references": [{"path": "./lib"}]}'
+    )
+    (root / "lib").mkdir()
+    (root / "lib/tsconfig.json").write_text('{"include": ["src"]}')
+
+
+STRICT_JS = {"strict": True, "checkJs": True}
+VITE_SOURCES = ("src/main.tsx", "vite.config.ts")
+
+
 @pytest.mark.parametrize("declared", [True, False])
 def test_typescript_check_requires_the_untrusted_input_declarations(
     tmp_path: Path,
@@ -319,14 +356,7 @@ def test_typescript_check_requires_the_untrusted_input_declarations(
     (tmp_path / "src").mkdir()
     (tmp_path / "src/app.ts").write_text("export {};\n")
     files = ["src/app.ts", *([UNTRUSTED] if declared else [])]
-    shown = {"compilerOptions": {"strict": True, "checkJs": True}, "files": files}
-
-    def show_config(
-        command: list[str], **_: object
-    ) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
-
-    monkeypatch.setattr(subprocess, "run", show_config)
+    fake_tsc(monkeypatch, lambda _: {"compilerOptions": STRICT_JS, "files": files})
     expected = {tmp_path / "src/app.ts"}
     if declared:
         validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
@@ -424,18 +454,8 @@ def test_types_gate_reads_nested_config_files_from_their_own_folder(
     (tmp_path / "tsconfig.json").write_text(solution)
     (tmp_path / "client/src").mkdir(parents=True)
     (tmp_path / "client/tsconfig.json").write_text('{"include": ["src"]}')
-    (tmp_path / "client/src/app.ts").write_text("export {};\n")
-    shown = {
-        "compilerOptions": {"strict": True, "checkJs": True},
-        "files": ["./src/app.ts", f"../{UNTRUSTED}"],
-    }
-
-    def show_config(
-        command: list[str], **_: object
-    ) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
-
-    monkeypatch.setattr(subprocess, "run", show_config)
+    files = ["./src/app.ts", f"../{UNTRUSTED}"]
+    fake_tsc(monkeypatch, lambda _: {"compilerOptions": STRICT_JS, "files": files})
     expected = {tmp_path / "client/src/app.ts"}
     validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
 
@@ -446,18 +466,12 @@ def test_types_gate_builds_composite_references_before_checking_dependents(
 ) -> None:
     """A dependent `--noEmit` check fails with TS6305 until its composite reference is built."""
     vite_react_ts(tmp_path, [])
-    calls: list[list[str]] = []
-
-    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        project = command[command.index("-p") + 1] if "-p" in command else ""
-        source = "src/main.tsx" if "app" in project else "vite.config.ts"
-        options = {"strict": True, "checkJs": True, "composite": composite}
-        shown = {"compilerOptions": options, "files": [source, UNTRUSTED]}
-        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
-
-    monkeypatch.setattr(subprocess, "run", run)
-    expected = {tmp_path / "src/main.tsx", tmp_path / "vite.config.ts"}
+    options = {**STRICT_JS, "composite": composite}
+    calls = fake_tsc(
+        monkeypatch,
+        lambda command: {"compilerOptions": options, "files": vite_files(command)},
+    )
+    expected = {tmp_path / name for name in VITE_SOURCES}
     validate_typescript(tmp_path, ["tsc", "--noEmit"], tmp_path, expected, 10)
     assert (["tsc", "-b"] in calls) is composite
 
@@ -486,16 +500,18 @@ def test_types_gate_requires_composite_configs_to_set_strict_themselves(
 ) -> None:
     """`tsc -b` ignores the gate's flags, so a loose composite emits declarations without null."""
     vite_react_ts(tmp_path, [])
-
-    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        project = command[command.index("-p") + 1] if "-p" in command else ""
-        source = "src/main.tsx" if "app" in project else "vite.config.ts"
-        options = {"strict": "--strict" in command, "checkJs": True, "composite": True}
-        shown = {"compilerOptions": options, "files": [source, UNTRUSTED]}
-        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
-
-    monkeypatch.setattr(subprocess, "run", run)
-    expected = {tmp_path / "src/main.tsx", tmp_path / "vite.config.ts"}
+    fake_tsc(
+        monkeypatch,
+        lambda command: {
+            "compilerOptions": {
+                **STRICT_JS,
+                "strict": "--strict" in command,
+                "composite": True,
+            },
+            "files": vite_files(command),
+        },
+    )
+    expected = {tmp_path / name for name in VITE_SOURCES}
     with pytest.raises(ValueError, match="composite tsconfig must set strict"):
         validate_typescript(tmp_path, ["tsc", "--strict"], tmp_path, expected, 10)
 
@@ -505,18 +521,13 @@ def test_types_gate_fails_when_the_composite_solution_build_fails(
 ) -> None:
     """Stale declarations from an earlier build would let dependent checks pass."""
     vite_react_ts(tmp_path, [])
-
-    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        if "-b" in command:
-            return subprocess.CompletedProcess(command, 1, "error TS6202: cycle", "")
-        project = command[command.index("-p") + 1] if "-p" in command else ""
-        source = "src/main.tsx" if "app" in project else "vite.config.ts"
-        options = {"strict": True, "checkJs": True, "composite": True}
-        shown = {"compilerOptions": options, "files": [source, UNTRUSTED]}
-        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
-
-    monkeypatch.setattr(subprocess, "run", run)
-    expected = {tmp_path / "src/main.tsx", tmp_path / "vite.config.ts"}
+    options = {**STRICT_JS, "composite": True}
+    fake_tsc(
+        monkeypatch,
+        lambda command: {"compilerOptions": options, "files": vite_files(command)},
+        build_exit=1,
+    )
+    expected = {tmp_path / name for name in VITE_SOURCES}
     with pytest.raises(ValueError, match="TS6202"):
         validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
 
@@ -524,16 +535,17 @@ def test_types_gate_fails_when_the_composite_solution_build_fails(
 def test_types_gate_keeps_an_explicit_project_for_the_composite_build(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    calls: list[list[str]] = []
-
-    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        selected = "tsconfig.lib.json" in command
-        options = {"strict": selected, "checkJs": True, "composite": True}
-        shown = {"compilerOptions": options, "files": ["src/lib.ts", UNTRUSTED]}
-        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
-
-    monkeypatch.setattr(subprocess, "run", run)
+    calls = fake_tsc(
+        monkeypatch,
+        lambda command: {
+            "compilerOptions": {
+                **STRICT_JS,
+                "strict": "tsconfig.lib.json" in command,
+                "composite": True,
+            },
+            "files": ["src/lib.ts", UNTRUSTED],
+        },
+    )
     (tmp_path / "tsconfig.lib.json").write_text('{"include": ["src"]}')
     command = ["tsc", "--noEmit", "-p", "tsconfig.lib.json"]
     validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/lib.ts"}, 10)
@@ -545,68 +557,33 @@ def test_types_gate_reads_an_explicit_project_folder_from_that_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selection: str
 ) -> None:
     (tmp_path / "tsconfig.json").write_text('{"include": ["src"]}')
-    shown = {
-        "compilerOptions": {"strict": True, "checkJs": True},
-        "files": ["./src/app.ts", f"./{UNTRUSTED}"],
-    }
-
-    def show_config(
-        command: list[str], **_: object
-    ) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
-
-    monkeypatch.setattr(subprocess, "run", show_config)
+    files = ["./src/app.ts", f"./{UNTRUSTED}"]
+    fake_tsc(monkeypatch, lambda _: {"compilerOptions": STRICT_JS, "files": files})
     command = ["tsc", "--noEmit", "-p", selection]
     validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
 
 
-def test_types_gate_checks_the_strictness_of_references_an_explicit_project_builds(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A loose referenced library emits declarations that hide null from its callers."""
-    (tmp_path / "tsconfig.json").write_text(
-        '{"include": ["src"], "references": [{"path": "./lib"}]}'
-    )
-    (tmp_path / "lib").mkdir()
-    (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
-
-    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        library = "lib/tsconfig.json" in command
-        strict = "--strict" in command or not library
-        options = {"strict": strict, "checkJs": True, "composite": True}
-        shown = {"compilerOptions": options, "files": ["src/app.ts", UNTRUSTED]}
-        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
-
-    monkeypatch.setattr(subprocess, "run", run)
-    command = ["tsc", "--noEmit", "--strict", "-p", "."]
-    with pytest.raises(ValueError, match="lib/tsconfig.json: a composite tsconfig"):
-        validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
-
-
 @pytest.mark.parametrize(
-    "unchecked", [{"noCheck": True}, {"allowJs": True, "checkJs": False}]
+    "library",
+    [{"strict": False}, {"noCheck": True}, {"allowJs": True, "checkJs": False}],
 )
-def test_types_gate_rejects_a_composite_reference_that_skips_type_checks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, unchecked: dict[str, bool]
+def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, library: dict[str, bool]
 ) -> None:
-    """Its build would emit declarations that callers trust without a check."""
-    (tmp_path / "tsconfig.json").write_text(
-        '{"include": ["src"], "references": [{"path": "./lib"}]}'
-    )
-    (tmp_path / "lib").mkdir()
-    (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
-
-    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        library = unchecked if "lib/tsconfig.json" in command else {}
-        options = {"strict": True, "checkJs": True, "composite": True}
-        shown = {
-            "compilerOptions": {**options, **library},
+    """Its build emits declarations, which an explicit project's callers trust unchecked."""
+    library_solution(tmp_path)
+    fake_tsc(
+        monkeypatch,
+        lambda command: {
+            "compilerOptions": {
+                **STRICT_JS,
+                "composite": True,
+                **(library if "lib/tsconfig.json" in command else {}),
+            },
             "files": ["src/app.ts", UNTRUSTED],
-        }
-        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
-
-    monkeypatch.setattr(subprocess, "run", run)
-    command = ["tsc", "--noEmit", "-p", "."]
+        },
+    )
+    command = ["tsc", "--noEmit", "--strict", "-p", "."]
     with pytest.raises(ValueError, match="lib/tsconfig.json: a composite tsconfig"):
         validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
 
