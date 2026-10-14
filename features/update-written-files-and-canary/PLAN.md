@@ -24,7 +24,7 @@ Decisions: Generalize `workflow_installed` into `setup_written` rather than addi
 
 - [x] An update branch whose only other change is a file setup wrote is small; a project edit to a protected file, or a binary file, beside it still needs a plan → `test_update_branch_needs_no_plan_for_files_the_update_wrote`, red before with the issue's exact message (the binary case crashed before; review round 1).
 - [x] Existing workflow proof keeps passing through `setup_written` → `test_update_that_migrates_the_ci_workflow_is_scaffold_only_unless_edited` and the CI setup tests.
-- [x] Only changes to installed files need a canary run; the posted status names no project → `tests/test_release_canary.py`.
+- [x] Only changes to installed files need a canary run; the posted status names no project; a run that finds no project fails; a timed-out step stops every process it started; an install without the update runner uses its older entry point; a second run refuses while one is active → `tests/test_release_canary.py`.
 - [ ] Real canary run on the PR head across every installed project.
 - [ ] Full `python3 .hooks/hard-eng.py check` passes.
 
@@ -36,7 +36,7 @@ Execution: Red test, fix, focused tests; canary script, unit tests and a one-pro
 
 ## Risks + recovery
 
-A project installed on a branch other than its default branch is not found; the run prints how many repositories it read. A project whose own main branch is already failing blocks the run until that project is fixed. Recovery is reverting this branch.
+A project installed on a branch other than its default branch is not found; the run prints how many repositories it read. A project whose own main branch is already failing blocks the run until that project is fixed. Project code runs as the maintainer on this Mac with the GitHub CLI token in its environment; any process of this user can already read that token, so isolation would need a container per project, which is out of scope. Recovery is reverting this branch.
 
 ## ux_reference
 
