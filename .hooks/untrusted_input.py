@@ -381,7 +381,10 @@ def project_configs(
     )
     local = {key: config[key] for key in ("files", "include") if key in config}
     effective = effective_lists(path)
-    if effective is None and references and len(local) < 2:
+    own = {
+        name for listed in local.values() if isinstance(listed, list) for name in listed
+    }
+    if effective is None and references and len(local) < 2 and own <= {declarations}:
         raise ValueError(
             f"{path.name}: setup cannot resolve the config it extends; set both files and "
             "include in it, or add the untrusted-input declaration to each referenced config"
