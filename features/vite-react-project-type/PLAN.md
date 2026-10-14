@@ -19,20 +19,21 @@ Evidence: a fresh `bun create vite <dir> --template react-ts` scaffold plus this
 Blockers: None
 Handoff: Approval
 Authority: The user asked for all three parts in one PR referencing the issue, with a Codex adversarial review loop (gpt-6-astra) before the PR. The user chose a setup option for the command and "every gate passes" as its scope (PRODUCT.md and DESIGN.md left to the agent). Commit, push and PR follow this repository's merge-when-green practice.
-Decisions: per-reference declaration, not flattening (the Vite configs differ in `module`, `lib` and `types`). The runner expands one `types` gate into one `tsc -p <config>` run per referenced config, so gate configs and `configure_typing_checks` stay unchanged and existing installs are fixed by update. A root whose `files` holds only the declaration is an earlier setup's breakage and is repaired to `[]`. oxlint removal and version pins happen inside `--new`; the setup message also states them for agents that scaffold by hand. `bun update --latest --exact` can cross major versions (for example `@types/node` 24 to 26); this matches "newest version the release-age rule allows".
+Decisions: starter files live in `.agents/starters/<stack>/`: discovery skips `.agents` and setup installs only `.agents/skills`, so they never reach projects. Scaffold tools are pinned (create-vite 9.2.1, create-next-app 16.4.0, create-cloudflare 2.73.3 with the OpenNext template at a fixed commit) so stored starter files match their template. OpenNext keeps the template's `next` release, because newer releases build but return HTTP 500 on the Worker. OpenNext generates only Worker binding types (`--include-runtime=false`) with `@cloudflare/workers-types`, because Hard Eng's Bun shim makes the full `wrangler types` fetch a parked domain. OpenNext adds a `sharp >=0.35.5` floor until wrangler 4.149 clears the release-age window. Per-reference declaration, not flattening (the Vite configs differ in `module`, `lib` and `types`). The runner expands one `types` gate into one `tsc -p <config>` run per referenced config, so gate configs and `configure_typing_checks` stay unchanged and existing installs are fixed by update. A root whose `files` holds only the declaration is an earlier setup's breakage and is repaired to `[]`. oxlint removal and version pins happen inside `--new`; the setup message also states them for agents that scaffold by hand. `bun update --latest --exact` can cross major versions (for example `@types/node` 24 to 26); this matches "newest version the release-age rule allows".
 
 ## Acceptance + steps
 
-- [ ] Vite react-ts fixture: setup leaves the root solution `files` empty and adds the declaration to `tsconfig.app.json` and `tsconfig.node.json` → new test in `tests/test_untrusted_input.py`, red before the fix.
-- [ ] Rerun on an earlier broken install (root `files` holds only the declaration) repairs the root and fills the references → same fixture test, red before.
-- [ ] `types` gate on a solution root validates strictness and the declaration per referenced config, requires the union of their files to cover the sources, and runs `tsc -p` once per config → runner tests with a command-keyed fake, red before.
-- [ ] Empty repository message names React + Vite, its scaffold, pin and oxlint steps and when to suggest each web type → `test_missing_project_manifest_fails` extended.
-- [ ] README row matches the message → link/Markdown gates.
-- [ ] Real run: fresh Vite scaffold plus this checkout's setup → `bun run build` passes; the `types` gate passes, then fails on a deliberate type error in `src/App.tsx`.
-- [ ] `setup.sh --new <stack>` refuses a non-empty repository or an unknown stack and changes nothing → setup tests.
-- [ ] `--new` applies the stack's starter files and pins on top of a scaffold → setup test with a stand-in scaffold command.
-- [ ] Real E2E per stack (flutter, nextjs, opennext, vite): `setup.sh --new <stack>` in an empty repository, add stand-in PRODUCT.md/DESIGN.md, then `python3 .hooks/hard-eng.py check` passes every gate.
-- [ ] README describes `--new`, the web-stack choice and every stage in plain short sentences; Markdown/link gates pass.
+- [x] Vite react-ts fixture: setup leaves the root solution `files` empty and adds the declaration to each referenced config → `test_fresh_vite_install_keeps_the_solution_tsconfig_buildable`, red before the fix.
+- [x] Rerun on an earlier broken install repairs the root and fills the references → `test_update_repairs_a_solution_tsconfig_an_earlier_setup_broke`, red before.
+- [x] `types` gate on a solution root validates each referenced config, requires the union of their files to cover the sources, and runs `tsc -p` once per config → `test_types_gate_checks_each_config_a_solution_tsconfig_references`, red before.
+- [x] Next.js route types exist before `tsc` on a clean checkout (found by the Next.js research run) → `test_types_gate_writes_next_route_types_before_a_clean_check`, red before.
+- [x] A Flutter app's performance gate runs without `package:test` (found by the Flutter research run) → `test_flutter_performance_suite_runs_without_package_test`, red before.
+- [x] Empty repository message offers React + Vite, says when to suggest each web stack, and names `--new STACK` → `test_missing_project_manifest_fails`.
+- [x] `--new` refuses a non-empty repository and changes nothing; argparse rejects an unknown stack → `test_new_project_refuses_a_repository_that_holds_files`.
+- [x] `--new` applies starter files, removes the template's other linter, pins, and commits → `test_vite_starter_replaces_oxlint_and_pins_after_the_scaffold`, `test_opennext_keeps_the_scaffold_next_release_after_the_upgrade`, `test_flutter_pins_each_any_constraint_to_the_resolved_version`.
+- [x] Real E2E per stack: `sh setup.sh <checkout> --new <stack>` in an empty repository, stand-in PRODUCT.md/DESIGN.md committed, then `python3 .hooks/hard-eng.py check` passes every gate → vite 15/15, nextjs 15/15, opennext 15/15, flutter 10/10.
+- [x] Real run: the Vite project's types gate fails on a deliberate type error in `src/App.tsx` and in `tests/bundle.test.ts`, and passes once removed.
+- [x] README describes `--new`, the web-stack choice and every stage in plain short sentences with simpler diagrams.
 - [ ] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
