@@ -626,21 +626,23 @@ def test_old_workflow_gains_docs_only_steps(
     ]
     old = template.replace(impact, "").replace(scan, "")
     old = old.replace("        if: steps.impact.outputs.docs_only != 'true'\n", "")
-    path = tmp_path / ".github/workflows/hard-eng.yml"
-    path.parent.mkdir(parents=True)
-    path.write_text(old)
-    changes: dict[str, str] = {}
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes[".github/workflows/hard-eng.yml"] == template
-    path.write_text(template)
-    changes.clear()
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes == {}
+    assert migrated_workflow(tmp_path, old) == {
+        ".github/workflows/hard-eng.yml": template
+    }
+    assert migrated_workflow(tmp_path, template) == {}
     assert "Docs-only CI steps not added" not in capsys.readouterr().err
-    path.write_text(old.replace("Run required checks", "Run project checks"))
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes == {}
+    custom = old.replace("Run required checks", "Run project checks")
+    assert migrated_workflow(tmp_path, custom) == {}
     assert "Docs-only CI steps not added" in capsys.readouterr().err
+
+
+def migrated_workflow(root: Path, content: str) -> dict[str, str]:
+    path = root / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    changes: dict[str, str] = {}
+    configure_ci(root, SOURCE, {"packages": [], "shared": []}, changes)
+    return changes
 
 
 def test_every_template_step_that_runs_mise_has_a_token_mise_reads() -> None:
@@ -663,18 +665,12 @@ def test_docs_only_step_gains_the_token_mise_reads(tmp_path: Path) -> None:
     token = "          GITHUB_TOKEN: ${{ github.token }}\n"
     old = template[:start] + template[start:].replace(token, "", 1)
     assert old.count(token) == template.count(token) - 1
-    path = tmp_path / ".github/workflows/hard-eng.yml"
-    path.parent.mkdir(parents=True)
-    path.write_text(old)
-    changes: dict[str, str] = {}
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes[".github/workflows/hard-eng.yml"] == template
+    assert migrated_workflow(tmp_path, old) == {
+        ".github/workflows/hard-eng.yml": template
+    }
     own = template.replace(token, "          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}\n")
     for current in (template, own):
-        path.write_text(current)
-        changes.clear()
-        configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-        assert changes == {}
+        assert migrated_workflow(tmp_path, current) == {}
 
 
 @pytest.mark.parametrize(
