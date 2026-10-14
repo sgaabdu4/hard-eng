@@ -1,6 +1,7 @@
 """Try a Hard Eng release on every installed project before it merges; results stay on this machine."""
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -91,7 +92,7 @@ def step(command: list[str], cwd: Path, log: IO[str], limit: int) -> bool:
 
 
 def try_project(name: str, revision: str, run: Path) -> tuple[bool, str]:
-    """Clone, update with the project's own updater, then run its CI check on the update."""
+    """Clone, update with the project's own updater, then run its update PR check and every gate."""
     work = run / name.replace("/", "__")
     log_path = work.with_suffix(".log")
     with log_path.open("w") as log:
@@ -109,15 +110,22 @@ def try_project(name: str, revision: str, run: Path) -> tuple[bool, str]:
         if not step([sys.executable, "-c", UPDATE, revision], work, log, 1800):
             return False, f"update failed; log {log_path}"
         # Older updaters commit on the checked-out branch instead of hard-eng/update.
-        if output(["git", "branch", "--list", "hard-eng/update"], work):
-            step(["git", "checkout", "-q", "hard-eng/update"], work, log, 300)
+        if output(["git", "branch", "--list", "hard-eng/update"], work) and not step(
+            ["git", "checkout", "-q", "hard-eng/update"], work, log, 300
+        ):
+            return False, f"update branch checkout failed; log {log_path}"
+        marker = json.loads((work / ".hooks/hard-eng-source.json").read_text())
+        if marker.get("revision") != revision:
+            return False, f"update did not apply; log {log_path}"
         base = output(["git", "rev-parse", "origin/HEAD"], work)
-        if output(["git", "rev-parse", "HEAD"], work) == base:
-            shutil.rmtree(work)
-            return True, "no update needed"
-        check = [sys.executable, ".hooks/hard-eng.py", "check", "--base", base]
-        if not step(check, work, log, 2700):
-            return False, f"check failed; log {log_path}"
+        check = [sys.executable, ".hooks/hard-eng.py", "check"]
+        # The update PR's check can skip gates for a proven update, so every gate runs after it.
+        for label, command in (
+            ("update PR check", [*check, "--base", base]),
+            ("full check", check),
+        ):
+            if not step(command, work, log, 3600):
+                return False, f"{label} failed; log {log_path}"
     shutil.rmtree(work)
     return True, "update and check passed"
 

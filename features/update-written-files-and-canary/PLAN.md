@@ -5,7 +5,7 @@ Status: Draft
 ## Outcome + scope
 
 1. An update PR needs no PLAN.md for files the verified update wrote: scaffold files and the project files setup itself edits during the update (issue sgaabdu4/hard-eng#299). The packages those setup edits touch still run their checks.
-2. `release_canary.py` (source-only) tries a release on every installed project before it merges: each project's own updater applies the release, then its CI check runs. Results and project names stay on the maintainer's machine; GitHub gets a `canary` commit status with counts only.
+2. `release_canary.py` (source-only) tries a release on every installed project before it merges: each project's own updater applies the release, the project must then be on that release, and both its update PR check and a full check of every gate must pass. Results and project names stay on the maintainer's machine; GitHub gets a `canary` commit status with counts only.
 Non-goals: no change to the package scope of setup edits; no required status or branch protection change; no CI job.
 
 ## Repository context
@@ -22,7 +22,7 @@ Decisions: Generalize `workflow_installed` into `setup_written` rather than addi
 
 ## Acceptance + steps
 
-- [x] An update branch whose only other change is a file setup wrote is small; a project edit to a protected file beside it still needs a plan → `test_update_branch_needs_no_plan_for_files_the_update_wrote`, red before with the issue's exact message.
+- [x] An update branch whose only other change is a file setup wrote is small; a project edit to a protected file, or a binary file, beside it still needs a plan → `test_update_branch_needs_no_plan_for_files_the_update_wrote`, red before with the issue's exact message (the binary case crashed before; review round 1).
 - [x] Existing workflow proof keeps passing through `setup_written` → `test_update_that_migrates_the_ci_workflow_is_scaffold_only_unless_edited` and the CI setup tests.
 - [x] Only changes to installed files need a canary run; the posted status names no project → `tests/test_release_canary.py`.
 - [ ] Real canary run on the PR head across every installed project.
