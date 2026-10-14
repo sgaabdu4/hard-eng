@@ -474,7 +474,9 @@ def test_types_gate_builds_composite_references_before_checking_dependents(
     )
     expected = {tmp_path / name for name in VITE_SOURCES}
     validate_typescript(tmp_path, ["tsc", "--noEmit"], tmp_path, expected, 10)
-    assert (["tsc", "-b"] in calls) is composite
+    builds = [call for call in calls if "-b" in call]
+    expected_builds = [["tsc", "-b", "tsconfig.app.json", "tsconfig.node.json"]]
+    assert builds == (expected_builds if composite else [])
 
 
 def test_setup_and_types_gate_follow_references_through_an_app_to_its_library(
@@ -672,7 +674,9 @@ def test_an_explicit_project_builds_the_composite_library_it_references(
     )
     command = ["tsc", "--noEmit", "-p", "."]
     validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
-    assert ["tsc", "-b", "."] in calls
+    assert [call for call in calls if "-b" in call] == [
+        ["tsc", "-b", "lib/tsconfig.json"]
+    ]
 
 
 @pytest.mark.parametrize("selection", ["tsconfig.json", "."])

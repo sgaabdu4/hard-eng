@@ -286,11 +286,12 @@ def build_composites(
     graph = graph / "tsconfig.json" if graph.is_dir() else graph
     if not graph.is_file():
         return
-    composite = False
+    composites: list[str] = []
     for config in project_configs(root, graph):
         name = os.path.relpath(config, directory)
         own = shown_config([*compiler, "-p", name], directory, timeout)
-        composite = composite or own.get("composite") is True
+        if own.get("composite") is True:
+            composites.append(name)
         loose = (
             not strict_options(own)
             or own.get("noCheck", False) is not False
@@ -312,10 +313,10 @@ def build_composites(
                 f"{name}: a composite tsconfig must include {DECLARATIONS}, "
                 "because its built declarations are what dependent projects check"
             )
-    if not composite:
+    if not composites:
         return
     build = subprocess.run(
-        [*compiler, "-b", *selected[1:]],
+        [*compiler, "-b", *composites],
         cwd=directory,
         capture_output=True,
         text=True,
