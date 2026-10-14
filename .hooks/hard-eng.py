@@ -36,6 +36,7 @@ from project_setup import package_script_arguments as test_arguments
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
+    project_command,
     reject_jsdoc_casts,
     typescript_projects,
     validate_typescript,
@@ -496,7 +497,12 @@ def run_projects(
         projects = typescript_projects(ROOT, command, directory)
     results = [
         run_gate_command(
-            gate.get("role"), [*command, *project], directory, timeout, stdout, stderr
+            gate.get("role"),
+            project_command(command, project),
+            directory,
+            timeout,
+            stdout,
+            stderr,
         )
         for project in projects
     ]
