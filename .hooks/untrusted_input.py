@@ -266,9 +266,10 @@ def build_composites(
     for config in project_configs(root, graph):
         name = os.path.relpath(config, directory)
         own = shown_config([*compiler, "-p", name], directory, timeout)
-        if own.get("composite") is True and not strict_options(own):
+        loose = not strict_options(own) or own.get("noCheck", False) is not False
+        if own.get("composite") is True and loose:
             raise ValueError(
-                f"{name}: a composite tsconfig must set strict itself, "
+                f"{name}: a composite tsconfig must set strict itself without noCheck, "
                 "because `tsc -b` ignores the gate's flags"
             )
     build = subprocess.run(
@@ -319,8 +320,10 @@ def project_configs(
     )
     lists = [config[key] for key in ("files", "include") if key in config]
     names = [name for listed in lists if isinstance(listed, list) for name in listed]
+    inherited = inherited_lists(path) if "extends" in config else set()
     solution = (
         bool(references and lists)
+        and inherited == set()
         and all(isinstance(listed, list) for listed in lists)
         and set(names) <= {declarations}
     )
