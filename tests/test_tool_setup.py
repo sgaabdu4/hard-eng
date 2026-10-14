@@ -331,23 +331,39 @@ def test_configured_uvx_scanners_are_pinned_like_bare_ones(
     assert tool_setup.managed_command(command) == ["uvx", "ruff@9.9.9", "check", "src"]
 
 
-def test_node_runs_on_bun_even_when_node_is_installed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("tool", "installed", "runtime"),
+    [
+        ("node_modules/vite/bin/vite.js", ("bun", "node"), "bun"),
+        ("node_modules/wrangler/bin/wrangler.js", ("bun", "node"), "node"),
+        ("node_modules/.bin/wrangler", ("bun", "node"), "node"),
+        ("node_modules/miniflare/dist/src/index.js", ("bun", "node"), "node"),
+        ("node_modules/wrangler/bin/wrangler.js", ("bun",), "bun"),
+    ],
+)
+def test_node_runs_on_bun_except_for_cloudflare_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tool: str,
+    installed: tuple[str, ...],
+    runtime: str,
 ) -> None:
+    """Under Bun, miniflare's typegen fetch reaches a real parked domain, not workerd."""
     import tool_setup
 
     bin_directory = tmp_path / "bin"
     bin_directory.mkdir()
-    for name in ("bun", "node"):
-        (bin_directory / name).write_text("#!/bin/sh\n")
+    for name in installed:
+        (bin_directory / name).write_text(f'#!/bin/sh\necho {name} "$@"\n')
         (bin_directory / name).chmod(0o755)
-    environment = {"PATH": str(bin_directory)}
-    monkeypatch.setenv("PATH", str(bin_directory))
+    environment = {"PATH": f"{bin_directory}{os.pathsep}/usr/bin{os.pathsep}/bin"}
+    monkeypatch.setenv("PATH", environment["PATH"])
     tool_setup.bun_node(tmp_path / "storage", environment)
     for path in (environment["PATH"], os.environ["PATH"]):
         node = shutil.which("node", path=path)
         assert node is not None
-        assert Path(node).resolve() == (bin_directory / "bun").resolve()
+        ran = subprocess.run([node, tool], capture_output=True, text=True, check=True)
+        assert ran.stdout.split() == [runtime, tool]
 
 
 def test_missing_bun_names_how_to_install_it(tmp_path: Path) -> None:
