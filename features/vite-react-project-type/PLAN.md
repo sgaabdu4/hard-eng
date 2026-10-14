@@ -34,6 +34,10 @@ Decisions: starter files live in `.agents/starters/<stack>/`: discovery skips `.
 - [x] Real E2E per stack: `sh setup.sh <checkout> --new <stack>` in an empty repository, stand-in PRODUCT.md/DESIGN.md committed, then `python3 .hooks/hard-eng.py check` passes every gate → vite 15/15, nextjs 15/15, opennext 15/15, flutter 10/10.
 - [x] Real run: the Vite project's types gate fails on a deliberate type error in `src/App.tsx` and in `tests/bundle.test.ts`, and passes once removed.
 - [x] README describes `--new`, the web-stack choice and every stage in plain short sentences with simpler diagrams.
+- [x] Follow-up (user: "fix all the problems"): Biome leaves `linguist-generated` files out, like the size and comment checks → `test_javascript_file_scope_keeps_application_tests_and_declarations` extended, red before; the OpenNext starter drops its Biome format step and still passes 15/15.
+- [x] The Bun shim runs wrangler and miniflare on Node when Node is installed → `test_node_runs_on_bun_except_for_cloudflare_tools`, red before; real `wrangler types` through the shim wrote the full 16,248-line file instead of 73 lines of parked-domain HTML.
+- [x] Solution detection uses effective file lists after `extends` → `test_a_root_is_a_solution_only_when_its_effective_file_lists_are_empty`, red before.
+- [x] Fresh clones of the Vite (15/15), Next.js (15/15) and Flutter (10/10) starters pass the full check after install; the Flutter starter passes a real integration run on macOS desktop (0, then 1 after a tap).
 - [x] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
