@@ -583,9 +583,13 @@ def test_types_gate_checks_the_strictness_of_references_an_explicit_project_buil
         validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
 
 
+@pytest.mark.parametrize(
+    "unchecked", [{"noCheck": True}, {"allowJs": True, "checkJs": False}]
+)
 def test_types_gate_rejects_a_composite_reference_that_skips_type_checks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, unchecked: dict[str, bool]
 ) -> None:
+    """Its build would emit declarations that callers trust without a check."""
     (tmp_path / "tsconfig.json").write_text(
         '{"include": ["src"], "references": [{"path": "./lib"}]}'
     )
@@ -593,10 +597,10 @@ def test_types_gate_rejects_a_composite_reference_that_skips_type_checks(
     (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
 
     def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        unchecked = "lib/tsconfig.json" in command
+        library = unchecked if "lib/tsconfig.json" in command else {}
         options = {"strict": True, "checkJs": True, "composite": True}
         shown = {
-            "compilerOptions": {**options, "noCheck": unchecked},
+            "compilerOptions": {**options, **library},
             "files": ["src/app.ts", UNTRUSTED],
         }
         return subprocess.CompletedProcess(command, 0, json.dumps(shown))

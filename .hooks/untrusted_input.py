@@ -266,11 +266,15 @@ def build_composites(
     for config in project_configs(root, graph):
         name = os.path.relpath(config, directory)
         own = shown_config([*compiler, "-p", name], directory, timeout)
-        loose = not strict_options(own) or own.get("noCheck", False) is not False
+        loose = (
+            not strict_options(own)
+            or own.get("noCheck", False) is not False
+            or (own.get("allowJs") is True and own.get("checkJs") is not True)
+        )
         if own.get("composite") is True and loose:
             raise ValueError(
-                f"{name}: a composite tsconfig must set strict itself without noCheck, "
-                "because `tsc -b` ignores the gate's flags"
+                f"{name}: a composite tsconfig must set strict (and checkJs with allowJs) itself "
+                "without noCheck, because `tsc -b` ignores the gate's flags"
             )
     build = subprocess.run(
         [*compiler, "-b", *selected[1:]],
