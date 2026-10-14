@@ -159,6 +159,11 @@ def main() -> int:
             post_status(revision, "success", "No installed file changed")
         return 0
     projects = args.project or installed_projects()
+    if not projects:
+        print("No installed project found; the release is untested.")
+        if args.post_status:
+            post_status(revision, "failure", "No installed project found")
+        return 1
     token = output(["gh", "auth", "token"])
     os.environ.update(GH_TOKEN=token, GITHUB_TOKEN=token)
     if CACHE.is_dir():
