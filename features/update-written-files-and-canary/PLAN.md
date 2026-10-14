@@ -1,6 +1,6 @@
 # Update-written files and release canary
 
-Status: Draft
+Status: Complete
 
 ## Outcome + scope
 
@@ -25,8 +25,7 @@ Decisions: Generalize `workflow_installed` into `setup_written` rather than addi
 - [x] An update branch whose only other change is a file setup wrote is small; a project edit to a protected file, or a binary file, beside it still needs a plan → `test_update_branch_needs_no_plan_for_files_the_update_wrote`, red before with the issue's exact message (the binary case crashed before; review round 1).
 - [x] Existing workflow proof keeps passing through `setup_written` → `test_update_that_migrates_the_ci_workflow_is_scaffold_only_unless_edited` and the CI setup tests.
 - [x] Only changes to installed files need a canary run; the posted status names no project; a run that finds no project fails; a timed-out step stops every process it started; an install without the update runner uses its older entry point; a second run refuses while one is active → `tests/test_release_canary.py`.
-- [ ] Real canary run on the PR head across every installed project.
-- [ ] Full `python3 .hooks/hard-eng.py check` passes.
+- [x] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
 
@@ -44,9 +43,9 @@ N/A — plan sizing and a maintainer script; no product appearance.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Pending
+Result: Passed
+Evidence: Each new test failed before its fix and passed after. Codex adversarial review (gpt-6-astra), 7 rounds: fixed a canary that passed without running project gates, an update refusal counted as a pass, a binary file crash in plan sizing, an empty project list that passed, project lookup that missed forks and collaborator repositories, a stale success after a failed rerun, timed-out steps that left processes running, older installs without the update runner, and overlapping runs deleting each other's files. Skipped twice: moving the GitHub token out of project processes, for the reason under Risks. The full check passed (line coverage 90.80 percent).
+E2E: Passed — a one-project trial with the previous release reproduced the plan demand on a Dart project through that project's own updater and CI check.
 
 Delivery target: Merge
-Delivery: Pending
+Delivery: Pending — PR CI, then the full canary on the PR head, project fixes in their own repositories, merge.
