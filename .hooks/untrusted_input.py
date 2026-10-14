@@ -87,6 +87,15 @@ def fallow_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
         changes[name] = updated
 
 
+def package_tsconfig(directory: Path) -> list[Path]:
+    """The config a package names in its package.json `tsconfig` field."""
+    manifest = directory / "package.json"
+    field = (
+        json.loads(manifest.read_text()).get("tsconfig") if manifest.is_file() else None
+    )
+    return [directory / field] if isinstance(field, str) else []
+
+
 def extended(directory: Path, value: object) -> list[Path] | None:
     """The config files a tsconfig extends, or None when one is missing."""
     found: list[Path] = []
@@ -107,6 +116,7 @@ def extended(directory: Path, value: object) -> list[Path] | None:
             for path in (
                 base,
                 base.with_name(base.name + ".json"),
+                *package_tsconfig(base),
                 base / "tsconfig.json",
             )
         ]
@@ -356,8 +366,13 @@ def project_configs(
         listed_references if isinstance(listed_references, list) else []
     )
     local = {key: config[key] for key in ("files", "include") if key in config}
-    # An unresolvable base (a package's tsconfig field) leaves the root's own lists.
-    lists: list[object] = list((effective_lists(path) or local).values())
+    effective = effective_lists(path)
+    if effective is None and references and len(local) < 2:
+        raise ValueError(
+            f"{path.name}: setup cannot resolve the config it extends; set both files and "
+            "include in it, or add the untrusted-input declaration to each referenced config"
+        )
+    lists: list[object] = list((local if effective is None else effective).values())
     names = [name for listed in lists if isinstance(listed, list) for name in listed]
     solution = (
         bool(references and lists)
