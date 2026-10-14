@@ -15,6 +15,7 @@ from untrusted_input import (
     next_route_types,
     reject_jsdoc_casts,
     typescript_config,
+    typescript_projects,
     validate_typescript,
 )
 
@@ -455,3 +456,22 @@ def test_types_gate_builds_composite_references_before_checking_dependents(
     expected = {tmp_path / "src/main.tsx", tmp_path / "vite.config.ts"}
     validate_typescript(tmp_path, ["tsc", "--noEmit"], tmp_path, expected, 10)
     assert (["tsc", "-b"] in calls) is composite
+
+
+def test_setup_and_types_gate_follow_references_through_an_app_to_its_library(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "tsconfig.json").write_text(
+        '{"files": [], "references": [{"path": "./app"}]}'
+    )
+    for name, extra in (("app", ', "references": [{"path": "../lib"}]'), ("lib", "")):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "tsconfig.json").write_text(f'{{"include": ["src"]{extra}}}')
+    (tmp_path / ".fallowrc.json").write_text('{"ignorePatterns": [".hooks/**"]}')
+    changes: dict[str, str] = {}
+    typescript_config(tmp_path, tmp_path, ["app/src", "lib/src"], changes)
+    assert sorted(changes) == ["app/tsconfig.json", "lib/tsconfig.json"]
+    assert typescript_projects(tmp_path, ["tsc"], tmp_path) == [
+        ["-p", "app/tsconfig.json"],
+        ["-p", "lib/tsconfig.json"],
+    ]
