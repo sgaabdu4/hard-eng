@@ -286,8 +286,10 @@ def build_composites(
     graph = graph / "tsconfig.json" if graph.is_dir() else graph
     if not graph.is_file():
         return
+    configs = project_configs(root, graph)
+    read = {target for config in configs for target in referenced(config)}
     composites: list[str] = []
-    for config in project_configs(root, graph):
+    for config in [config for config in configs if config in read]:
         name = os.path.relpath(config, directory)
         own = shown_config([*compiler, "-p", name], directory, timeout)
         if own.get("composite") is True:
@@ -368,6 +370,21 @@ def effective_lists(
     return lists
 
 
+def referenced(path: Path) -> list[Path]:
+    """The tsconfigs a config's `references` name."""
+    config = jsonc_config(str(path), path.read_text())
+    listed = config.get("references")
+    targets: list[Path] = []
+    for reference in listed if isinstance(listed, list) else []:
+        named = reference.get("path") if isinstance(reference, dict) else None
+        target = Path(os.path.normpath(path.parent / str(named)))
+        target = target / "tsconfig.json" if target.is_dir() else target
+        if not isinstance(named, str) or not target.is_file():
+            raise ValueError(f"{path.name}: referenced config {named!r} is missing")
+        targets.append(target)
+    return targets
+
+
 def project_configs(
     root: Path, path: Path, seen: frozenset[Path] = frozenset()
 ) -> list[Path]:
@@ -398,12 +415,7 @@ def project_configs(
         and set(names) <= {declarations}
     )
     found: list[Path] = [] if solution else [path]
-    for reference in references:
-        named = reference.get("path") if isinstance(reference, dict) else None
-        target = Path(os.path.normpath(path.parent / str(named)))
-        target = target / "tsconfig.json" if target.is_dir() else target
-        if not isinstance(named, str) or not target.is_file():
-            raise ValueError(f"{path.name}: referenced config {named!r} is missing")
+    for target in referenced(path):
         found += project_configs(root, target, seen | {path})
     return list(dict.fromkeys(found))
 

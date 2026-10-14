@@ -335,6 +335,16 @@ def vite_files(command: list[str]) -> list[str]:
     return ["src/main.tsx" if "app" in project else "vite.config.ts", UNTRUSTED]
 
 
+def library_options(
+    command: list[str], library: dict[str, object]
+) -> dict[str, object]:
+    lib = "lib/tsconfig.json" in command
+    return {
+        "compilerOptions": {**STRICT_JS, **(library if lib else {})},
+        "files": [f"../{UNTRUSTED}"] if lib else ["src/app.ts", UNTRUSTED],
+    }
+
+
 def library_solution(root: Path) -> None:
     (root / "tsconfig.json").write_text(
         '{"include": ["src"], "references": [{"path": "./lib"}]}'
@@ -466,17 +476,13 @@ def test_types_gate_builds_composite_references_before_checking_dependents(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, composite: bool
 ) -> None:
     """A dependent `--noEmit` check fails with TS6305 until its composite reference is built."""
-    vite_react_ts(tmp_path, [])
-    options = {**STRICT_JS, "composite": composite}
+    library_solution(tmp_path)
     calls = fake_tsc(
-        monkeypatch,
-        lambda command: {"compilerOptions": options, "files": vite_files(command)},
+        monkeypatch, lambda command: library_options(command, {"composite": composite})
     )
-    expected = {tmp_path / name for name in VITE_SOURCES}
-    validate_typescript(tmp_path, ["tsc", "--noEmit"], tmp_path, expected, 10)
+    validate_typescript(tmp_path, ["tsc", "--noEmit"], tmp_path, set(), 10)
     builds = [call for call in calls if "-b" in call]
-    expected_builds = [["tsc", "-b", "tsconfig.app.json", "tsconfig.node.json"]]
-    assert builds == (expected_builds if composite else [])
+    assert builds == ([["tsc", "-b", "lib/tsconfig.json"]] if composite else [])
 
 
 def test_setup_and_types_gate_follow_references_through_an_app_to_its_library(
@@ -502,57 +508,44 @@ def test_types_gate_requires_composite_configs_to_set_strict_themselves(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`tsc -b` ignores the gate's flags, so a loose composite emits declarations without null."""
-    vite_react_ts(tmp_path, [])
+    library_solution(tmp_path)
     fake_tsc(
         monkeypatch,
-        lambda command: {
-            "compilerOptions": {
-                **STRICT_JS,
-                "strict": "--strict" in command,
-                "composite": True,
-            },
-            "files": vite_files(command),
-        },
+        lambda command: library_options(
+            command, {"composite": True, "strict": "--strict" in command}
+        ),
     )
-    expected = {tmp_path / name for name in VITE_SOURCES}
     with pytest.raises(ValueError, match="composite tsconfig must set strict"):
-        validate_typescript(tmp_path, ["tsc", "--strict"], tmp_path, expected, 10)
+        validate_typescript(tmp_path, ["tsc", "--strict"], tmp_path, set(), 10)
 
 
 def test_types_gate_fails_when_the_composite_solution_build_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Stale declarations from an earlier build would let dependent checks pass."""
-    vite_react_ts(tmp_path, [])
-    options = {**STRICT_JS, "composite": True}
+    library_solution(tmp_path)
     fake_tsc(
         monkeypatch,
-        lambda command: {"compilerOptions": options, "files": vite_files(command)},
+        lambda command: library_options(command, {"composite": True}),
         build_exit=1,
     )
-    expected = {tmp_path / name for name in VITE_SOURCES}
     with pytest.raises(ValueError, match="TS6202"):
-        validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
+        validate_typescript(tmp_path, ["tsc"], tmp_path, set(), 10)
 
 
-def test_types_gate_keeps_an_explicit_project_for_the_composite_build(
+def test_an_explicit_standalone_composite_project_is_not_built(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """No other project reads its declarations, so the gate's --noEmit check is enough."""
+    options = {**STRICT_JS, "composite": True}
     calls = fake_tsc(
         monkeypatch,
-        lambda command: {
-            "compilerOptions": {
-                **STRICT_JS,
-                "strict": "tsconfig.lib.json" in command,
-                "composite": True,
-            },
-            "files": ["src/lib.ts", UNTRUSTED],
-        },
+        lambda _: {"compilerOptions": options, "files": ["src/lib.ts", UNTRUSTED]},
     )
     (tmp_path / "tsconfig.lib.json").write_text('{"include": ["src"]}')
     command = ["tsc", "--noEmit", "-p", "tsconfig.lib.json"]
     validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/lib.ts"}, 10)
-    assert ["tsc", "-b", "tsconfig.lib.json"] in calls
+    assert [call for call in calls if "-b" in call] == []
 
 
 @pytest.mark.parametrize("selection", [".", "tsconfig.json"])
@@ -697,3 +690,17 @@ def test_an_explicitly_selected_solution_root_checks_each_reference(
         "tsconfig.app.json",
         "tsconfig.node.json",
     }
+
+
+def test_types_gate_builds_only_composites_another_project_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Building a standalone JavaScript composite without outDir overwrites its sources."""
+    (tmp_path / "tsconfig.json").write_text('{"include": ["src"]}')
+    options = {**STRICT_JS, "composite": True}
+    calls = fake_tsc(
+        monkeypatch,
+        lambda _: {"compilerOptions": options, "files": ["src/app.js", UNTRUSTED]},
+    )
+    validate_typescript(tmp_path, ["tsc"], tmp_path, set(), 10)
+    assert [call for call in calls if "-b" in call] == []
