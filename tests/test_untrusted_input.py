@@ -603,16 +603,23 @@ def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
         ('["src"]', '"files": []', False),
         ('["src"]', '"files": [], "include": []', True),
         ("[]", '"files": []', True),
-        (None, '"files": []', True),
+        (None, '"files": [], "include": []', True),
+        ("package", '"files": []', False),
     ],
 )
 def test_a_root_is_a_solution_only_when_its_effective_file_lists_are_empty(
     tmp_path: Path, base: str | None, lists: str, solution: bool
 ) -> None:
     """An inherited `include` compiles sources unless the root overrides it."""
-    if base is not None:
+    shared = tmp_path / "node_modules/@acme/tsconfig"
+    if base == "package":
+        shared.mkdir(parents=True)
+        (shared / "package.json").write_text('{"tsconfig": "./shared.json"}')
+        (shared / "shared.json").write_text('{"include": ["src"]}')
+    elif base is not None:
         (tmp_path / "base.json").write_text(f'{{"include": {base}}}')
-    extends = "./base.json" if base is not None else "@acme/tsconfig"
+    local = base is not None and base != "package"
+    extends = "./base.json" if local else "@acme/tsconfig"
     (tmp_path / "tsconfig.json").write_text(
         f'{{"extends": "{extends}", {lists}, "references": [{{"path": "./lib"}}]}}'
     )
@@ -621,6 +628,17 @@ def test_a_root_is_a_solution_only_when_its_effective_file_lists_are_empty(
     root, library = tmp_path / "tsconfig.json", tmp_path / "lib/tsconfig.json"
     expected = [library] if solution else [root, library]
     assert project_configs(tmp_path, root) == expected
+
+
+def test_setup_stops_on_a_solution_whose_base_it_cannot_resolve(tmp_path: Path) -> None:
+    """Guessing either way could hide inherited sources or break `tsc -b`."""
+    text = '{"extends": "@acme/tsconfig", "include": [], "references": [{"path": "./lib"}]}'
+    (tmp_path / "tsconfig.json").write_text(text)
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
+    with pytest.raises(ValueError, match="cannot resolve the config it extends"):
+        typescript_config(tmp_path, tmp_path, ["src"], {})
+    assert (tmp_path / "tsconfig.json").read_text() == text
 
 
 def test_an_explicit_project_builds_the_composite_library_it_references(
