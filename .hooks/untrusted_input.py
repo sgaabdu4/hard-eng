@@ -237,13 +237,15 @@ def project_configs(
     """The tsconfigs a solution-style config builds through its references; [path] otherwise."""
     config = jsonc_config(str(path), path.read_text())
     declarations = Path(os.path.relpath(root / DECLARATIONS, path.parent)).as_posix()
-    references, files = config.get("references"), config.get("files")
+    references = config.get("references")
+    lists = [config[key] for key in ("files", "include") if key in config]
+    names = [name for listed in lists if isinstance(listed, list) for name in listed]
     if (
         not isinstance(references, list)
         or not references
-        or "include" in config
-        or not isinstance(files, list)
-        or not set(files) <= {declarations}
+        or not lists
+        or any(not isinstance(listed, list) for listed in lists)
+        or not set(names) <= {declarations}
         or path in seen
     ):
         return [path]
@@ -287,12 +289,13 @@ def typescript_config(
     if target.exists():
         configs = project_configs(root, target)
         text = target.read_text()
-        if configs != [target] and jsonc_config(name, text)["files"]:
+        listed = jsonc_config(name, text)
+        if configs != [target] and (listed.get("files") or listed.get("include")):
             # An earlier setup listed the file here, which breaks `tsc -b`.
-            repaired = text.replace(f'"{declarations}"', "", 1)
-            if jsonc_config(name, repaired)["files"] != []:
-                raise ValueError(f"{name}: remove {declarations!r} from files")
-            changes[name] = repaired
+            repaired = jsonc_config(name, text.replace(f'"{declarations}"', "", 1))
+            if repaired.get("files") or repaired.get("include"):
+                raise ValueError(f"{name}: remove {declarations!r} from its file list")
+            changes[name] = text.replace(f'"{declarations}"', "", 1)
         for config in configs:
             declared_config(root, config, changes)
     else:

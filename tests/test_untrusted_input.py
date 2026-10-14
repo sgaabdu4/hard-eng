@@ -235,10 +235,12 @@ def test_fresh_install_ships_and_includes_the_untrusted_input_declarations(
     assert typing == [typing_template(installer)]
 
 
-def vite_react_ts(root: Path, root_files: list[str]) -> None:
+def vite_react_ts(
+    root: Path, root_files: list[str], lists: dict[str, list[str]] | None = None
+) -> None:
     """The tsconfig layout `bun create vite --template react-ts` writes."""
     solution = {
-        "files": root_files,
+        **(lists or {"files": root_files}),
         "references": [
             {"path": "./tsconfig.app.json"},
             {"path": "./tsconfig.node.json"},
@@ -271,14 +273,29 @@ def test_fresh_vite_install_keeps_the_solution_tsconfig_buildable(
     assert "/* Bundler mode */" in changes["tsconfig.app.json"]
 
 
+@pytest.mark.parametrize(
+    ("root", "repaired"),
+    [
+        ({"files": [UNTRUSTED]}, {"files": []}),
+        ({"files": [], "include": [UNTRUSTED]}, {"files": [], "include": []}),
+        ({"files": [], "include": []}, None),
+    ],
+)
 def test_update_repairs_a_solution_tsconfig_an_earlier_setup_broke(
     tmp_path: Path,
+    root: dict[str, list[str]],
+    repaired: dict[str, list[str]] | None,
 ) -> None:
-    vite_react_ts(tmp_path, [UNTRUSTED])
+    """Nx-style roots list `include: []` beside `files: []`; both stay solution roots."""
+    vite_react_ts(tmp_path, [], root)
     (tmp_path / ".fallowrc.json").write_text('{"ignorePatterns": [".hooks/**"]}')
     changes: dict[str, str] = {}
     typescript_config(tmp_path, tmp_path, ["src", "vite.config.ts"], changes)
-    assert jsonc_config("tsconfig.json", changes["tsconfig.json"])["files"] == []
+    if repaired is None:
+        assert "tsconfig.json" not in changes
+    else:
+        solution = jsonc_config("tsconfig.json", changes["tsconfig.json"])
+        assert {key: solution[key] for key in repaired} == repaired
     for name, source in (
         ("tsconfig.app.json", "src"),
         ("tsconfig.node.json", "vite.config.ts"),
@@ -379,8 +396,8 @@ def test_types_gate_reads_nested_config_files_from_their_own_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`tsc -p client/tsconfig.json --showConfig` lists files relative to client/."""
-    solution = {"files": [], "references": [{"path": "./client"}]}
-    (tmp_path / "tsconfig.json").write_text(json.dumps(solution))
+    solution = '{"files": [], "references": [{"path": "./client"}]}'
+    (tmp_path / "tsconfig.json").write_text(solution)
     (tmp_path / "client/src").mkdir(parents=True)
     (tmp_path / "client/tsconfig.json").write_text('{"include": ["src"]}')
     (tmp_path / "client/src/app.ts").write_text("export {};\n")
