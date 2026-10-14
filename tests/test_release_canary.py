@@ -1,6 +1,8 @@
 """`release_canary.py`: which releases need a try on installed projects, and what it publishes."""
 
+import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -50,3 +52,21 @@ def test_a_run_that_finds_no_project_fails(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--post-status"])
     assert release_canary.main() == 1
     assert posted == ["pending", "failure"]
+
+
+def test_a_step_past_its_limit_stops_every_process_it_started(tmp_path: Path) -> None:
+    """Hung tests and installers must not outlive the step."""
+    pid_file = tmp_path / "child.pid"
+    spawn = (
+        "import subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        "open(sys.argv[1], 'w').write(str(child.pid))\n"
+        "time.sleep(60)\n"
+    )
+    with (tmp_path / "step.log").open("w") as log:
+        command = [sys.executable, "-c", spawn, str(pid_file)]
+        assert not release_canary.step(command, tmp_path, log, 2)
+    child = int(pid_file.read_text())
+    time.sleep(0.5)
+    with pytest.raises(ProcessLookupError):
+        os.kill(child, 0)
