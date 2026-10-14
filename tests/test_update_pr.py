@@ -646,3 +646,6 @@ def test_update_branch_needs_no_plan_for_files_the_update_wrote(
         False,
         "it changes package.json, which always needs a plan",
     )
+    (target / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n\xff\xfe")
+    commit(target, "binary file beside the update")
+    assert plans.size_verdict(target) == (False, "it adds, deletes or renames a file")
