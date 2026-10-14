@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -87,19 +88,16 @@ def installed_projects() -> list[str]:
 def step(command: list[str], cwd: Path, log: IO[str], limit: int) -> bool:
     log.write(f"\n$ {' '.join(command)}\n")
     log.flush()
+    process = subprocess.Popen(
+        command, cwd=cwd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True
+    )
     try:
-        done = subprocess.run(
-            command,
-            check=False,
-            cwd=cwd,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            timeout=limit,
-        )
+        return process.wait(timeout=limit) == 0
     except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
         log.write(f"Stopped after {limit} seconds.\n")
         return False
-    return done.returncode == 0
 
 
 def try_project(name: str, revision: str, run: Path) -> tuple[bool, str]:
