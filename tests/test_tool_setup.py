@@ -359,11 +359,11 @@ def test_node_runs_on_bun_except_for_cloudflare_tools(
     environment = {"PATH": f"{bin_directory}{os.pathsep}/usr/bin{os.pathsep}/bin"}
     monkeypatch.setenv("PATH", environment["PATH"])
     tool_setup.bun_node(tmp_path / "storage", environment)
+    shim = tmp_path / "storage/bun-node/node"
     for path in (environment["PATH"], os.environ["PATH"]):
-        node = shutil.which("node", path=path)
-        assert node is not None
-        ran = subprocess.run([node, tool], capture_output=True, text=True, check=True)
-        assert ran.stdout.split() == [runtime, tool]
+        assert shutil.which("node", path=path) == str(shim)
+    ran = subprocess.run([shim, tool], capture_output=True, text=True, check=True)
+    assert ran.stdout.split() == [runtime, tool]
 
 
 def test_missing_bun_names_how_to_install_it(tmp_path: Path) -> None:
