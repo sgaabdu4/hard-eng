@@ -38,6 +38,7 @@ Decisions: starter files live in `.agents/starters/<stack>/`: discovery skips `.
 - [x] The Bun shim runs wrangler and miniflare on Node when Node is installed → `test_node_runs_on_bun_except_for_cloudflare_tools`, red before; real `wrangler types` through the shim wrote the full 16,248-line file instead of 73 lines of parked-domain HTML.
 - [x] Solution detection uses effective file lists after `extends` → `test_a_root_is_a_solution_only_when_its_effective_file_lists_are_empty`, red before.
 - [x] Fresh clones of the Vite (15/15), Next.js (15/15) and Flutter (10/10) starters pass the full check after install; the Flutter starter passes a real integration run on macOS desktop (0, then 1 after a tap).
+- [x] Flutter starter without the placeholder `Crash` facade, on flutter_skill_lints ^0.13.4 (crash rule fires only with error reporting; `prefer_type_over_var` restored, user decision: ban `var`, keep inferred `final`) and the Flutter skill pinned at v5.12.2 → new project and fresh clone 10/10; a deliberate `var` failed types-lint with `prefer_type_over_var`.
 - [x] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
