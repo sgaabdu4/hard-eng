@@ -533,6 +533,7 @@ def test_types_gate_keeps_an_explicit_project_for_the_composite_build(
         return subprocess.CompletedProcess(command, 0, json.dumps(shown))
 
     monkeypatch.setattr(subprocess, "run", run)
+    (tmp_path / "tsconfig.lib.json").write_text('{"include": ["src"]}')
     command = ["tsc", "--noEmit", "-p", "tsconfig.lib.json"]
     validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/lib.ts"}, 10)
     assert ["tsc", "-b", "tsconfig.lib.json"] in calls
@@ -556,3 +557,26 @@ def test_types_gate_reads_an_explicit_project_folder_from_that_folder(
     monkeypatch.setattr(subprocess, "run", show_config)
     command = ["tsc", "--noEmit", "-p", selection]
     validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
+
+
+def test_types_gate_checks_the_strictness_of_references_an_explicit_project_builds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A loose referenced library emits declarations that hide null from its callers."""
+    (tmp_path / "tsconfig.json").write_text(
+        '{"include": ["src"], "references": [{"path": "./lib"}]}'
+    )
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/tsconfig.json").write_text('{"include": ["src"]}')
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        library = "lib/tsconfig.json" in command
+        strict = "--strict" in command or not library
+        options = {"strict": strict, "checkJs": True, "composite": True}
+        shown = {"compilerOptions": options, "files": ["src/app.ts", UNTRUSTED]}
+        return subprocess.CompletedProcess(command, 0, json.dumps(shown))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    command = ["tsc", "--noEmit", "--strict", "-p", "."]
+    with pytest.raises(ValueError, match="lib/tsconfig.json: a composite tsconfig"):
+        validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)

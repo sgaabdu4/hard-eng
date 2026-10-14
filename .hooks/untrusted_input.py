@@ -236,15 +236,7 @@ def validate_typescript(
             raise ValueError(
                 "TypeScript requires all strict checks and JavaScript checking without noCheck"
             )
-        if options.get("composite") is True:
-            composite = True
-            if not strict_options(
-                shown_config([*compiler, *target], directory, timeout)
-            ):
-                raise ValueError(
-                    f"{target[1] if target else 'tsconfig.json'}: a composite tsconfig must set "
-                    "strict itself, because `tsc -b` ignores the gate's flags"
-                )
+        composite = composite or options.get("composite") is True
         config = directory / target[1] if target else directory / "tsconfig.json"
         base = config if config.is_dir() else config.parent
         listed = options.get("files", [])
@@ -258,17 +250,37 @@ def validate_typescript(
     if not {(directory / name).resolve() for name in expected} <= files:
         raise ValueError("TypeScript configuration omits declared production files")
     if composite:
-        # Dependent --noEmit checks need the declarations a solution build writes.
-        build = subprocess.run(
-            [*compiler, "-b", *selected[1:]],
-            cwd=directory,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-        if build.returncode != 0:
-            raise ValueError(f"tsc -b failed: {build.stdout or build.stderr}")
+        build_composites(root, compiler, selected, directory, timeout)
+
+
+def build_composites(
+    root: Path,
+    compiler: list[str],
+    selected: list[str],
+    directory: Path,
+    timeout: float,
+) -> None:
+    """Write the declarations dependent --noEmit checks read; `tsc -b` ignores the gate's flags."""
+    graph = directory / selected[1] if selected else directory / "tsconfig.json"
+    graph = graph / "tsconfig.json" if graph.is_dir() else graph
+    for config in project_configs(root, graph):
+        name = os.path.relpath(config, directory)
+        own = shown_config([*compiler, "-p", name], directory, timeout)
+        if own.get("composite") is True and not strict_options(own):
+            raise ValueError(
+                f"{name}: a composite tsconfig must set strict itself, "
+                "because `tsc -b` ignores the gate's flags"
+            )
+    build = subprocess.run(
+        [*compiler, "-b", *selected[1:]],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if build.returncode != 0:
+        raise ValueError(f"tsc -b failed: {build.stdout or build.stderr}")
 
 
 JSDOC_CAST = re.compile(
