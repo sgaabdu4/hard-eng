@@ -144,7 +144,12 @@ def next_route_types(directory: Path, timeout: float) -> None:
     }
     cli = "node_modules/next/dist/cli/next-typegen.js"
     folders = (directory, *directory.parents)
-    if "next" not in declared or not any((f / cli).is_file() for f in folders):
+    routes = ("app", "pages", "src/app", "src/pages")
+    if (
+        "next" not in declared
+        or not any((directory / route).is_dir() for route in routes)
+        or not any((f / cli).is_file() for f in folders)
+    ):
         return
     result = subprocess.run(
         ["bun", "x", "next", "typegen"],
@@ -243,13 +248,16 @@ def validate_typescript(
         raise ValueError("TypeScript configuration omits declared production files")
     if composite:
         # Dependent --noEmit checks need the declarations a solution build writes.
-        subprocess.run(
+        build = subprocess.run(
             [*compiler, "-b"],
             cwd=directory,
             capture_output=True,
+            text=True,
             timeout=timeout,
             check=False,
         )
+        if build.returncode != 0:
+            raise ValueError(f"tsc -b failed: {build.stdout or build.stderr}")
 
 
 JSDOC_CAST = re.compile(
