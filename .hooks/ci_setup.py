@@ -426,6 +426,21 @@ def migrate_impact_token(content: str) -> str:
     return content[:start] + step + content[end:]
 
 
+DOCS_SCAN = "      - name: Run the secret scan for docs-only changes\n"
+MISE_TOKEN = "          GITHUB_TOKEN: ${{ github.token }}\n"
+
+
+def migrate_docs_token(content: str) -> str:
+    """mise reads GITHUB_TOKEN, not GH_TOKEN; without it runners hit the anonymous limit."""
+    start = content.find(DOCS_SCAN)
+    end = content.find("      - ", start + 1)
+    step = content[start:end]
+    if start < 0 or end < 0 or MISE_TOKEN in step or IMPACT_TOKEN not in step:
+        return content
+    step = step.replace(IMPACT_TOKEN, IMPACT_TOKEN + MISE_TOKEN, 1)
+    return content[:start] + step + content[end:]
+
+
 def drop_tool_cache(content: str) -> str:
     """Remove the generated tool cache; measured restores were no faster than installs."""
     start = content.find("      - name: Cache native tool downloads\n")
@@ -580,7 +595,7 @@ def configure_ci(
             root, source, migrate_docs_path(source, migrated)
         )
         migrated = migrate_affected_tools(root, source, config, migrated)
-        migrated = migrate_impact_token(migrated)
+        migrated = migrate_docs_token(migrate_impact_token(migrated))
         if "\n  pull-requests:" not in migrated:
             migrated = migrated.replace(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
