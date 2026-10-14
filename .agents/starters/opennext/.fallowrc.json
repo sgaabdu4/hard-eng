@@ -1,0 +1,16 @@
+{
+  "ignorePatterns": [".hooks/**"],
+  "boundaries": {
+    "zones": [
+      { "name": "tests", "patterns": ["**/*.test.ts"] },
+      {
+        "name": "app",
+        "patterns": ["src/**", "next.config.ts", "open-next.config.ts", "postcss.config.mjs"]
+      }
+    ],
+    "rules": [
+      { "from": "app", "allow": [] },
+      { "from": "tests", "allow": ["app"] }
+    ]
+  }
+}
