@@ -245,7 +245,8 @@ def validate_typescript(
                     f"{target[1] if target else 'tsconfig.json'}: a composite tsconfig must set "
                     "strict itself, because `tsc -b` ignores the gate's flags"
                 )
-        base = (directory / target[1]).parent if target else directory
+        config = directory / target[1] if target else directory / "tsconfig.json"
+        base = config if config.is_dir() else config.parent
         listed = options.get("files", [])
         names: list[JsonValue] = listed if isinstance(listed, list) else []
         resolved = {(base / str(name)).resolve() for name in names}
