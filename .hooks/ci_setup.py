@@ -580,9 +580,12 @@ def setup_written(
     return {
         name
         for name in names
-        if planned.get(name) is not None
-        and (root / name).is_file()
-        and planned[name] == (root / name).read_text()
+        if name in planned
+        and (
+            not (root / name).exists()
+            if planned[name] is None
+            else (root / name).is_file() and planned[name] == (root / name).read_text()
+        )
     }
 
 

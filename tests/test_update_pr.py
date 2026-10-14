@@ -631,12 +631,15 @@ def test_update_branch_needs_no_plan_for_files_the_update_wrote(
     ignore = target / ".gitignore"
     current = ignore.read_text()
     ignore.write_text("".join(current.splitlines(keepends=True)[:-1]))
-    commit(target, "ignore list from an older release")
+    retired = {"mcpServers": {"context-mode": {"command": "context-mode"}}}
+    (target / ".mcp.json").write_text(json.dumps(retired))
+    commit(target, "ignore list and MCP file from an older release")
     git(target, "update-ref", "refs/heads/main", "HEAD")
     git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH)
     select_release(source, monkeypatch)
     update.update(target)
     assert ignore.read_text() == current
+    assert not (target / ".mcp.json").exists()
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
     small, reason = plans.size_verdict(target)
     assert small, reason
