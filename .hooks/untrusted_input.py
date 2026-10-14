@@ -210,14 +210,24 @@ def strict_options(options: JsonObject) -> bool:
     )
 
 
+def explicit_project(command: list[str]) -> list[str]:
+    for index, argument in enumerate(command):
+        name, _, value = argument.partition("=")
+        if name in {"-p", "--project"}:
+            return ["-p", value or command[index + 1]]
+    return []
+
+
 def validate_typescript(
     root: Path, command: list[str], directory: Path, expected: set[Path], timeout: float
 ) -> None:
     compiler = list(takewhile(lambda argument: not argument.startswith("-"), command))
+    selected = explicit_project(command)
     files: set[Path] = set()
     composite = False
     for project in typescript_projects(root, command, directory):
         options = shown_config([*command, *project], directory, timeout)
+        target = project or selected
         if (
             not strict_options(options)
             or options.get("checkJs") is not True
@@ -229,13 +239,13 @@ def validate_typescript(
         if options.get("composite") is True:
             composite = True
             if not strict_options(
-                shown_config([*compiler, *project], directory, timeout)
+                shown_config([*compiler, *target], directory, timeout)
             ):
                 raise ValueError(
-                    f"{project[1] if project else 'tsconfig.json'}: a composite tsconfig must set "
+                    f"{target[1] if target else 'tsconfig.json'}: a composite tsconfig must set "
                     "strict itself, because `tsc -b` ignores the gate's flags"
                 )
-        base = (directory / project[1]).parent if project else directory
+        base = (directory / target[1]).parent if target else directory
         listed = options.get("files", [])
         names: list[JsonValue] = listed if isinstance(listed, list) else []
         resolved = {(base / str(name)).resolve() for name in names}
@@ -249,7 +259,7 @@ def validate_typescript(
     if composite:
         # Dependent --noEmit checks need the declarations a solution build writes.
         build = subprocess.run(
-            [*compiler, "-b"],
+            [*compiler, "-b", *selected[1:]],
             cwd=directory,
             capture_output=True,
             text=True,
