@@ -505,3 +505,37 @@ def test_full_history_scan_skips_private_refs_and_keeps_detached_head(
     ).split()
     assert detached in scanned
     assert private not in scanned
+
+
+@pytest.mark.parametrize("visibility", ["PUBLIC", "PRIVATE"])
+@pytest.mark.parametrize(
+    "project", [None, "rules:\n  unpinned-uses:\n    disable: true\n"]
+)
+def test_ci_security_gate_turns_off_only_audits_that_cannot_apply(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    project: str | None,
+    visibility: str,
+) -> None:
+    """Issue 303: outside forks cannot run jobs on a private repository's own runners."""
+    import yaml
+    from gitleaks_scan import run_gate_command
+
+    (tmp_path / "gh").write_text(f"#!/bin/sh\necho {visibility}\n")
+    (tmp_path / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    if project:
+        (tmp_path / ".github").mkdir()
+        (tmp_path / ".github/zizmor.yml").write_text(project)
+    show = [
+        sys.executable,
+        "-c",
+        "import os; print(open(os.environ['ZIZMOR_CONFIG']).read())",
+    ]
+    with (tmp_path / "log").open("w+") as log:
+        run_gate_command("ci-security", show, tmp_path, 30, log, log)
+        log.seek(0)
+        rules = yaml.safe_load(log.read())["rules"]
+    assert rules["self-repository"] == {"disable": True}
+    assert ("self-hosted-runner" in rules) == (visibility == "PRIVATE")
+    assert ("unpinned-uses" in rules) == bool(project)
