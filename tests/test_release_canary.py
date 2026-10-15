@@ -77,6 +77,25 @@ def test_a_step_past_its_limit_stops_every_process_it_started(tmp_path: Path) ->
         os.kill(child, 0)
 
 
+def test_projects_with_dotted_names_keep_their_own_log_and_clone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cloned: list[str] = []
+
+    def step(command: list[str], cwd: Path, log: object, limit: int) -> bool:
+        cloned.append(command[-1])
+        return False
+
+    monkeypatch.setattr(release_canary, "step", step)
+    messages = [
+        release_canary.try_project(name, "a" * 40, tmp_path)[1]
+        for name in ("owner/app.api", "owner/app.web", "owner/app.log")
+    ]
+    logs = [message.rsplit("log ", 1)[1] for message in messages]
+    assert len(set(logs)) == 3
+    assert not set(logs) & set(cloned)
+
+
 def test_an_install_without_the_update_runner_uses_its_older_entry_point(
     tmp_path: Path,
 ) -> None:
