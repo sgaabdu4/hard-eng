@@ -258,7 +258,7 @@ Skills guide the agent. Hooks and checks enforce. Plan checks validate the plan'
 | When | What runs |
 | --- | --- |
 | Session start | Reports the last update result. Starts the next update in the background. |
-| Agent stops | Checks the plan handoff. After code changes, runs quick checks: format, lint, types, tests and the current-files secret scan. A failure shows the failed checks and the first one's output. |
+| Agent stops | Checks the plan handoff. After code changes, runs quick checks on this session's changes: format, lint, types and the current-files secret scan. Tests run at pre-push and in CI. A failure shows the failed checks and the first one's output. |
 | `git push` | Checks the pushed commits in a separate worktree, for the changed packages. With Vitest or Jest, runs only the related tests. Then reports changed lines whose tests miss small deliberate bugs (mutation report; it never blocks the push). |
 | CI | Runs every configured check. Fails the job on any failure. |
 | Every `check` | Fails when a change adds a lint or type suppression, a skipped or focused test, or removes more test assertions than it adds. Old lines are never flagged. There is no allow-list. |
