@@ -24,7 +24,7 @@ Decisions: Use the branch point when it is not already behind the session base: 
 
 - [x] Others' merged work after the session started is not checked; a later session edit is → `test_work_merged_by_others_after_the_session_started_is_not_checked`, red before.
 - [x] The quick set leaves out `tests` → `test_quick_set_is_chosen_by_role`.
-- [ ] Consumer project at its default branch: old hook starts a broad check with no session edits; fixed hook runs none; a real two-file edit is timed with and without test suites.
+- [x] Consumer project at its default branch: with a week-old session base and no session edits, the old hook started `check --quick` over 2378 changed files; the fixed hook ran no check and returned in 1.1 s. On a real two-file edit (one TypeScript, one Dart), the old quick check passed in 114 s and the new one in 19 s, both at a 1-minute load of 64 to 86.
 - [ ] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
