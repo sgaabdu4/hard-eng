@@ -509,7 +509,12 @@ def test_full_history_scan_skips_private_refs_and_keeps_detached_head(
 
 @pytest.mark.parametrize("visibility", ["PUBLIC", "PRIVATE"])
 @pytest.mark.parametrize(
-    "project", [None, "rules:\n  unpinned-uses:\n    disable: true\n"]
+    "project",
+    [
+        None,
+        "rules:\n  unpinned-uses:\n    disable: true\n",
+        "rules:\n  self-hosted-runner:\n    disable: false\n",
+    ],
 )
 def test_ci_security_gate_turns_off_only_audits_that_cannot_apply(
     tmp_path: Path,
@@ -537,5 +542,7 @@ def test_ci_security_gate_turns_off_only_audits_that_cannot_apply(
         log.seek(0)
         rules = yaml.safe_load(log.read())["rules"]
     assert rules["self-repository"] == {"disable": True}
-    assert ("self-hosted-runner" in rules) == (visibility == "PRIVATE")
-    assert ("unpinned-uses" in rules) == bool(project)
+    own = yaml.safe_load(project or "rules: {}")["rules"]
+    off = {"disable": True} if visibility == "PRIVATE" else None
+    assert rules.get("self-hosted-runner") == own.get("self-hosted-runner", off)
+    assert rules.get("unpinned-uses") == own.get("unpinned-uses")
