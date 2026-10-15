@@ -347,6 +347,16 @@ ship_actions.mutate(Path({str(root)!r}), "HEAD~1", None, True, production)
         os.kill(tool, 0)
 
 
+def test_mutmut_settings_keep_the_rest_of_setup_cfg(tmp_path: Path) -> None:
+    original = "[tool:pytest]\nDJANGO_SETTINGS_MODULE = app.settings\n"
+    (tmp_path / "setup.cfg").write_text(original)
+    mutation.configure_mutmut(tmp_path, ["main.py"])
+    written = (tmp_path / "setup.cfg").read_text()
+    assert written.startswith(original)
+    assert "[mutmut]\nsource_paths =\n\tmain.py\n" in written
+    assert "also_copy" not in written
+
+
 def test_mutmut_keeps_the_projects_own_source_paths(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text('[tool.mutmut]\nsource_paths = ["app"]\n')
     mutation.configure_mutmut(tmp_path, ["main.py"])
