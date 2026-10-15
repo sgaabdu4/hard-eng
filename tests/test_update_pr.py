@@ -219,6 +219,19 @@ def test_background_update_keeps_a_fix_committed_while_it_ran(
     assert git(target.parent / "fixing", "status", "--porcelain") == ""
 
 
+def test_background_update_keeps_a_fix_committed_and_left_while_it_ran(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixed: list[str] = []
+
+    def fix_and_leave(target: Path) -> None:
+        fixed.append(fix_update_branch(target))
+        git(target.parent / "fixing", "switch", "-q", "--detach")
+
+    target = second_update_after(feature, monkeypatch, fix_and_leave)
+    assert git(target, "rev-parse", BRANCH) == fixed[0]
+
+
 def test_background_update_reports_a_branch_it_could_not_write(
     feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
