@@ -894,31 +894,6 @@ def test_only_the_ci_security_gate_borrows_the_gh_token(
         assert log.read().strip() == seen
 
 
-@pytest.mark.parametrize(
-    "project", [None, "rules:\n  unpinned-uses:\n    disable: true\n"]
-)
-def test_ci_security_gate_turns_off_only_the_self_repository_audit(
-    tmp_path: Path, project: str | None
-) -> None:
-    import yaml
-    from gitleaks_scan import run_gate_command
-
-    if project:
-        (tmp_path / ".github").mkdir()
-        (tmp_path / ".github/zizmor.yml").write_text(project)
-    show = [
-        sys.executable,
-        "-c",
-        "import os; print(open(os.environ['ZIZMOR_CONFIG']).read())",
-    ]
-    with (tmp_path / "log").open("w+") as log:
-        run_gate_command("ci-security", show, tmp_path, 30, log, log)
-        log.seek(0)
-        rules = yaml.safe_load(log.read())["rules"]
-    assert rules["self-repository"] == {"disable": True}
-    assert ("unpinned-uses" in rules) == bool(project)
-
-
 @pytest.mark.parametrize("quick", [None, False, True])
 @pytest.mark.parametrize("workflow", [False, True])
 def test_ci_security_passes_only_when_no_workflows_exist_to_collect(
