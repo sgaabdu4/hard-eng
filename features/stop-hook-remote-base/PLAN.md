@@ -1,6 +1,6 @@
 # Stop hook starts from the last pushed commit
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -30,7 +30,7 @@ Decisions: Commits already on a remote passed the pushing machine's pre-push gat
 
 Result: Passed
 Evidence: The base commit passed required CI on main.
-Execution: Red test, fix, focused tests, full check, Codex loop, PR.
+Execution: Red test, fix, focused tests, consumer run, full check, Codex loop, PR.
 
 ## Risks + recovery
 
@@ -42,9 +42,9 @@ N/A — hook scope only; no product appearance.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending the full check.
-E2E: Pending — the real Stop hook on a consumer project.
+Result: Passed
+Evidence: The new test failed before the fix and passes after; 240 focused hook, plan and update tests pass; the full check passes.
+E2E: Passed — a consumer project clone at its default branch, with a local shared branch holding another task's code commit and a task branch changing one workflow file: the real Stop hook ran `check --quick --base <shared branch tip>` and reported only the workflow file.
 
 Delivery target: Merge
 Delivery: Pending — PR CI, then merge.
