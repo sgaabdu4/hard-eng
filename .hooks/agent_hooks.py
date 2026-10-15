@@ -670,7 +670,7 @@ def session_scope(root: Path, base: str) -> str:
     """Others' merges into the default branch are not this session's change."""
     from plans import default_branch_point
 
-    point = default_branch_point(root)
+    point = default_branch_point(root, local=False)
     if point is None:
         return base
     older = subprocess.run(
