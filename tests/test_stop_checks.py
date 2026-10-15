@@ -7,7 +7,7 @@ from pathlib import Path
 
 import agent_hooks
 import pytest
-from conftest import SOURCE
+from conftest import SOURCE, add_origin, commit, git
 from gate_config import JsonObject
 
 
@@ -59,6 +59,23 @@ def test_unchanged_turn_during_a_build_reuses_the_pass_for_that_stage(
     monkeypatch.setattr(plans, "build_in_progress", finished)
     assert "not rerun" not in str(agent_hooks.completion(repository, payload))
     assert runs.read_text().count("run") == 2
+
+
+def test_work_merged_by_others_after_the_session_started_is_not_checked(
+    repository: Path,
+) -> None:
+    runs = install_check(repository, "raise SystemExit(1)\n")
+    add_origin(repository)
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "other.py").write_text("value = \n")
+    commit(repository, "Merged by someone else")
+    git(repository, "push", "-q", "origin", "main")
+    assert "decision" not in agent_hooks.completion(repository, payload)
+    assert not runs.exists()
+    (repository / "work.py").write_text("value = 1\n")
+    assert agent_hooks.completion(repository, payload)["decision"] == "block"
+    assert runs.read_text().count("run") == 1
 
 
 def test_failed_check_is_rerun_on_the_next_turn(repository: Path) -> None:
