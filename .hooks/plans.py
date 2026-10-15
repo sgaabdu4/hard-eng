@@ -421,13 +421,13 @@ def _file_reason(name: str, added: str, removed: str) -> str | None:
     return None
 
 
-def default_branch_point(root: Path) -> str | None:
+def default_branch_point(root: Path, *, local: bool = True) -> str | None:
     try:
         policy = load_policy(root, required=False)
     except ShippingError:
         policy = None
     name = policy["base"] if policy else "main"
-    for reference in (f"origin/{name}", name):
+    for reference in (f"origin/{name}", name)[: 2 if local else 1]:
         try:
             return _git_output(root, "merge-base", "HEAD", reference).strip()
         except (subprocess.CalledProcessError, OSError):
