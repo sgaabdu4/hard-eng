@@ -227,7 +227,9 @@ def test_stryker_runs_one_project_test_command_at_a_time(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Project test commands already use every core; parallel Stryker workers multiplied them."""
-    config = json.loads(write_stryker_config(tmp_path, monkeypatch, "src/a.ts").read_text())
+    config = json.loads(
+        write_stryker_config(tmp_path, monkeypatch, "src/a.ts").read_text()
+    )
     assert config["concurrency"] == 1
 
 
