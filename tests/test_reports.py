@@ -937,19 +937,15 @@ def test_bun_lcov_marks_a_function_with_a_hit_body_line_but_no_call_uncalled(
             {"path": "src/unused.ts", "name": "called", "line": 6, "line_count": 4},
         ],
     )
-    reports.line_coverage(lcov, "lcov-tests", tmp_path, {tmp_path / "src/unused.ts"})
-    coverage = json.loads((tmp_path / "coverage/coverage-final.json").read_text())
-    assert coverage[str((tmp_path / "src/unused.ts").resolve())]["f"] == {
-        "0": 0,
-        "1": 12,
-    }
+    assert function_calls(tmp_path, lcov) == {"0": 0, "1": 12}
     # Module-level arrow functions hit their first line at load; Bun's FNH:0 still rules out calls.
     lcov.write_text(
         "TN:\nSF:src/unused.ts\nFNF:2\nFNH:0\nDA:1,1\nDA:6,1\nend_of_record\n"
     )
-    reports.line_coverage(lcov, "lcov-tests", tmp_path, {tmp_path / "src/unused.ts"})
-    coverage = json.loads((tmp_path / "coverage/coverage-final.json").read_text())
-    assert coverage[str((tmp_path / "src/unused.ts").resolve())]["f"] == {
-        "0": 0,
-        "1": 0,
-    }
+    assert function_calls(tmp_path, lcov) == {"0": 0, "1": 0}
+
+
+def function_calls(root: Path, lcov: Path) -> dict[str, int]:
+    reports.line_coverage(lcov, "lcov-tests", root, {root / "src/unused.ts"})
+    coverage = json.loads((root / "coverage/coverage-final.json").read_text())
+    return coverage[str((root / "src/unused.ts").resolve())]["f"]
