@@ -1,6 +1,7 @@
 """Report changed lines whose tests still pass after a small deliberate bug."""
 
 import ast
+import configparser
 import fnmatch
 import json
 import os
@@ -258,7 +259,12 @@ def configure_mutmut(directory: Path, files: Iterable[str]) -> None:
     ):
         return
     existing = setup.read_text() if setup.is_file() else ""
-    if re.search(r"^\[mutmut\]\s*$", existing, re.MULTILINE):
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    try:
+        parser.read_string(existing)
+    except configparser.Error:
+        return
+    if parser.has_section("mutmut"):
         return
     sources = {Path(name).parts[0] for name in files}
     tracked = subprocess.run(
