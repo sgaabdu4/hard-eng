@@ -186,26 +186,49 @@ def test_background_update_keeps_an_update_branch_being_fixed(
     assert "unfinished work" in (target / update_runner.RESULT_FILE).read_text()
 
 
-def test_background_update_keeps_a_fix_committed_while_it_ran(
-    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
-) -> None:
+def second_update_after(
+    feature: tuple[Path, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    during: Callable[[Path], None],
+) -> Path:
     source, target, _ = feature
     newer_release(source, monkeypatch, "first update")
     assert update_runner.apply_update(target) == 0
-    fixed: list[str] = []
     original = update.update
 
-    def fix_during_update(
+    def update_with(
         root: Path, repair: bool = False, *, remember: Path | None = None
     ) -> str:
-        fixed.append(fix_update_branch(target))
+        during(target)
         return original(root, repair, remember=remember)
 
-    monkeypatch.setattr(update, "update", fix_during_update)
+    monkeypatch.setattr(update, "update", update_with)
     newer_release(source, monkeypatch, "second update")
-    assert update_runner.apply_update(target) == 0
+    update_runner.apply_update(target)
+    return target
+
+
+def test_background_update_keeps_a_fix_committed_while_it_ran(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixed: list[str] = []
+    target = second_update_after(
+        feature, monkeypatch, lambda target: fixed.append(fix_update_branch(target))
+    )
     assert git(target, "rev-parse", BRANCH) == fixed[0]
     assert git(target.parent / "fixing", "status", "--porcelain") == ""
+
+
+def test_background_update_reports_a_branch_it_could_not_write(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def lock(target: Path) -> None:
+        (target / ".git/refs/heads" / f"{BRANCH}.lock").write_text("")
+
+    target = second_update_after(feature, monkeypatch, lock)
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "Hard Eng update failed" in result
+    assert f"{BRANCH}.lock" in result
 
 
 def test_background_update_names_a_clean_checked_out_update_branch(
