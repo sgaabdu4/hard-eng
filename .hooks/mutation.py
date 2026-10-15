@@ -1,7 +1,6 @@
 """Report changed lines whose tests still pass after a small deliberate bug."""
 
 import ast
-import configparser
 import fnmatch
 import json
 import os
@@ -258,9 +257,8 @@ def configure_mutmut(directory: Path, files: Iterable[str]) -> None:
         "tool", {}
     ):
         return
-    parser = configparser.ConfigParser()
-    parser.read(setup)
-    if parser.has_section("mutmut"):
+    existing = setup.read_text() if setup.is_file() else ""
+    if re.search(r"^\[mutmut\]\s*$", existing, re.MULTILINE):
         return
     sources = {Path(name).parts[0] for name in files}
     tracked = subprocess.run(
@@ -272,12 +270,15 @@ def configure_mutmut(directory: Path, files: Iterable[str]) -> None:
     ).stdout.split("\0")
     # Tests may read any tracked file, and mutmut copies only tests/ and lockfiles.
     copies = {Path(name).parts[0] for name in tracked if name} - sources
-    parser["mutmut"] = {
-        "source_paths": "\n".join(sorted(sources)),
-        "also_copy": "\n".join(sorted(copies)),
-    }
-    with setup.open("w") as handle:
-        parser.write(handle)
+    settings = {"source_paths": sources, "also_copy": copies}
+    section = "".join(
+        f"{key} =\n" + "".join(f"\t{path}\n" for path in sorted(paths))
+        for key, paths in settings.items()
+        if paths
+    )
+    setup.write_text(
+        f"{existing}\n[mutmut]\n{section}" if existing else f"[mutmut]\n{section}"
+    )
 
 
 def mutmut(manager: str, *arguments: str) -> list[str]:
