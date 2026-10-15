@@ -109,7 +109,7 @@ def step(command: list[str], cwd: Path, log: IO[str], limit: int) -> bool:
 def try_project(name: str, revision: str, run: Path) -> tuple[bool, str]:
     """Clone, update with the project's own updater, then run its update PR check and every gate."""
     work = run / name.replace("/", "__")
-    log_path = work.with_suffix(".log")
+    log_path = work.with_name(f"{work.name}.log")
     with log_path.open("w") as log:
         url = f"https://github.com/{name}.git"
         if not step(["git", "clone", "-q", url, str(work)], run, log, 1800):
