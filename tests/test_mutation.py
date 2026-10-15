@@ -362,9 +362,10 @@ def test_mutmut_keeps_the_projects_own_source_paths(tmp_path: Path) -> None:
     mutation.configure_mutmut(tmp_path, ["main.py"])
     assert not (tmp_path / "setup.cfg").exists()
     (tmp_path / "pyproject.toml").unlink()
-    (tmp_path / "setup.cfg").write_text("[mutmut]\nsource_paths = app\n")
-    mutation.configure_mutmut(tmp_path, ["main.py"])
-    assert (tmp_path / "setup.cfg").read_text() == "[mutmut]\nsource_paths = app\n"
+    for own in ("[mutmut]\n", "[mutmut] # settings\n", "  [mutmut]\n"):
+        (tmp_path / "setup.cfg").write_text(f"{own}source_paths = app\n")
+        mutation.configure_mutmut(tmp_path, ["main.py"])
+        assert (tmp_path / "setup.cfg").read_text() == f"{own}source_paths = app\n"
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="mutmut runs through uv")
