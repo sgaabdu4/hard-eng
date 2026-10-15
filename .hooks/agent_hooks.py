@@ -673,14 +673,9 @@ def session_scope(root: Path, base: str) -> str:
         cwd=root,
         text=True,
     ).split()
+    pushed = unpushed[-1] + "^" if unpushed else "HEAD"
     point = subprocess.run(
-        [
-            "git",
-            "rev-parse",
-            "--verify",
-            "-q",
-            f"{unpushed[-1]}^" if unpushed else "HEAD",
-        ],
+        ["git", "rev-parse", "--verify", "-q", pushed],
         cwd=root,
         check=False,
         capture_output=True,
