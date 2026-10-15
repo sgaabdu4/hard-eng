@@ -849,6 +849,21 @@ def test_related_tests_skip_coverage_but_keep_failures(
     assert (flags in (tmp_path / "args.txt").read_text()) is (related is not None)
 
 
+def fake_fallow(
+    root: Path, monkeypatch: pytest.MonkeyPatch, findings: list[dict[str, object]]
+) -> Path:
+    """A Fallow that lists these function spans only when given a coverage map."""
+    fallow = root / "bin/fallow"
+    fallow.parent.mkdir()
+    fallow.write_text(
+        '#!/bin/sh\ncase "$*" in *--coverage*) ;; *) echo \'{"error":"missing"}\'; exit 2;; esac\n'
+        f"echo '{json.dumps({'findings': findings})}'\nexit 1\n"
+    )
+    fallow.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fallow.parent}{os.pathsep}/usr/bin:/bin")
+    return fallow
+
+
 def test_bun_lcov_gets_an_istanbul_map_fallow_can_match(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -861,19 +876,11 @@ def test_bun_lcov_gets_an_istanbul_map_fallow_can_match(
         "TN:\nSF:src/grade.ts\nDA:1,3\nDA:2,3\nDA:3,0\nend_of_record\n"
         "TN:\nSF:src/grade.ts\nDA:1,0\nDA:2,0\nDA:3,0\nend_of_record\n"
     )
-    listing = {
-        "findings": [
-            {"path": "src/grade.ts", "name": "grade", "line": 1, "line_count": 4}
-        ]
-    }
-    fallow = tmp_path / "bin/fallow"
-    fallow.parent.mkdir()
-    fallow.write_text(
-        '#!/bin/sh\ncase "$*" in *--coverage*) ;; *) echo \'{"error":"missing"}\'; exit 2;; esac\n'
-        f"echo '{json.dumps(listing)}'\nexit 1\n"
+    fallow = fake_fallow(
+        tmp_path,
+        monkeypatch,
+        [{"path": "src/grade.ts", "name": "grade", "line": 1, "line_count": 4}],
     )
-    fallow.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{fallow.parent}{os.pathsep}/usr/bin:/bin")
     assert reports.line_coverage(
         lcov, "lcov-tests", tmp_path, {tmp_path / "src/grade.ts"}
     ) == (2, 3)
@@ -903,3 +910,46 @@ def test_bun_lcov_keeps_a_map_the_test_run_wrote_when_fallow_is_unavailable(
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     reports.line_coverage(lcov, "lcov-tests", tmp_path, {tmp_path / "src/a.ts"})
     assert written.read_text() == '{"project": "map"}'
+
+
+def test_bun_lcov_marks_a_function_with_a_hit_body_line_but_no_call_uncalled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue 302: Bun counts a line inside a never-called function, so a body hit proves no call."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/unused.ts").write_text("export const used = 1;\n")
+    lcov = tmp_path / "coverage/lcov.info"
+    lcov.parent.mkdir()
+    lcov.write_text(
+        "TN:\nSF:src/unused.ts\nFNF:2\nFNH:1\nDA:1,0\nDA:2,0\nDA:3,0\nDA:4,1\n"
+        "DA:6,12\nDA:7,30\nDA:8,1\nDA:10,29\nend_of_record\n"
+    )
+    fake_fallow(
+        tmp_path,
+        monkeypatch,
+        [
+            {
+                "path": "src/unused.ts",
+                "name": "neverCalled",
+                "line": 1,
+                "line_count": 5,
+            },
+            {"path": "src/unused.ts", "name": "called", "line": 6, "line_count": 4},
+        ],
+    )
+    reports.line_coverage(lcov, "lcov-tests", tmp_path, {tmp_path / "src/unused.ts"})
+    coverage = json.loads((tmp_path / "coverage/coverage-final.json").read_text())
+    assert coverage[str((tmp_path / "src/unused.ts").resolve())]["f"] == {
+        "0": 0,
+        "1": 12,
+    }
+    # Module-level arrow functions hit their first line at load; Bun's FNH:0 still rules out calls.
+    lcov.write_text(
+        "TN:\nSF:src/unused.ts\nFNF:2\nFNH:0\nDA:1,1\nDA:6,1\nend_of_record\n"
+    )
+    reports.line_coverage(lcov, "lcov-tests", tmp_path, {tmp_path / "src/unused.ts"})
+    coverage = json.loads((tmp_path / "coverage/coverage-final.json").read_text())
+    assert coverage[str((tmp_path / "src/unused.ts").resolve())]["f"] == {
+        "0": 0,
+        "1": 0,
+    }
