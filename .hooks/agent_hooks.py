@@ -666,6 +666,22 @@ def saved_session(state: Path | None) -> tuple[str, JsonObject]:
     return base, before
 
 
+def session_scope(root: Path, base: str) -> str:
+    """Others' merges into the default branch are not this session's change."""
+    from plans import default_branch_point
+
+    point = default_branch_point(root)
+    if point is None:
+        return base
+    older = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", point, base],
+        cwd=root,
+        check=False,
+        capture_output=True,
+    )
+    return base if older.returncode == 0 else point
+
+
 def with_freshness(root: Path, output: JsonObject) -> JsonObject:
     from update_runner import freshness_note
 
@@ -715,6 +731,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
             cwd=root,
             text=True,
         ).strip()
+        base = session_scope(root, base)
         current = dirty_files(root, base)
         changed = "".join(
             f"{name}\n"
