@@ -21,11 +21,11 @@ def test_quick_set_is_chosen_by_role(runner: ModuleType) -> None:
         "annotations",
         "typing-style",
         "imports",
-        "tests",
         "focused-tests",
         "secrets-files",
     ]
     slow = [
+        "tests",
         "performance",
         "complexity",
         "dead-code",
