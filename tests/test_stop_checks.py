@@ -78,6 +78,28 @@ def test_work_merged_by_others_after_the_session_started_is_not_checked(
     assert runs.read_text().count("run") == 1
 
 
+def test_a_branch_on_a_shared_branch_checks_only_its_own_commits(
+    repository: Path,
+) -> None:
+    seen = repository.parent / "argv.txt"
+    install_check(
+        repository,
+        f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv))\n",
+    )
+    add_origin(repository)
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    git(repository, "checkout", "-qb", "develop")
+    (repository / "other.py").write_text("value = 1\n")
+    shared = commit(repository, "Another task")
+    git(repository, "push", "-q", "origin", "develop")
+    git(repository, "checkout", "-qb", "task")
+    (repository / "work.py").write_text("value = 1\n")
+    commit(repository, "This task")
+    agent_hooks.completion(repository, payload)
+    assert f"--base {shared}" in seen.read_text()
+
+
 def test_failed_check_is_rerun_on_the_next_turn(repository: Path) -> None:
     runs = install_check(repository, "raise SystemExit(1)\n")
     payload: JsonObject = {"session_id": "known"}
