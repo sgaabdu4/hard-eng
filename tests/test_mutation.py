@@ -30,20 +30,21 @@ class Basket:
 """
 
 
-def project(root: Path, tests: list[str]) -> None:
+def project(root: Path, tests: list[str], module: str = "src/shop/price.py") -> None:
     init(root)
     checks = [{"name": "tests", "role": "tests", "command": tests}]
     package = {"path": ".", "language": "python", "sources": ["src"], "checks": checks}
     config = {"packages": [{"name": "shop", **package}], "shared": list[str]()}
     (root / "hard-eng.gates.json").write_text(json.dumps(config))
-    (root / "src/shop").mkdir(parents=True)
-    (root / "src/shop/__init__.py").write_text("")
-    (root / "src/shop/price.py").write_text(PRICE.replace("total >= 100 and ", ""))
+    if (package := (root / module).parent) != root:
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("")
+    (root / module).write_text(PRICE.replace("total >= 100 and ", ""))
     (root / "tests").mkdir()
     (root / "tests/test_price.py").write_text(
-        textwrap.dedent("""\
+        textwrap.dedent(f"""\
             import pytest
-            from shop.price import Basket, discount
+            from {mutation.module_name(module)} import Basket, discount
 
 
             def test_members_over_100_get_ten_percent_off() -> None:
@@ -60,12 +61,14 @@ def project(root: Path, tests: list[str]) -> None:
         '[project]\nname = "shop"\nversion = "0"\nrequires-python = ">=3.12"\n'
     )
     commit(root, "base")
-    (root / "src/shop/price.py").write_text(PRICE)
+    (root / module).write_text(PRICE)
     commit(root, "require a total of 100")
 
 
 def sources(directory: Path, group: Group) -> set[Path]:
-    return {path.resolve() for path in (directory / "src").rglob("*.py")}
+    return {
+        path.resolve() for path in directory.rglob("*.py") if "tests" not in path.parts
+    }
 
 
 def test_changed_lines_become_the_ranges_the_tools_mutate() -> None:
@@ -344,15 +347,26 @@ ship_actions.mutate(Path({str(root)!r}), "HEAD~1", None, True, production)
         os.kill(tool, 0)
 
 
+def test_mutmut_keeps_the_projects_own_source_paths(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('[tool.mutmut]\nsource_paths = ["app"]\n')
+    mutation.configure_mutmut(tmp_path, ["main.py"])
+    assert not (tmp_path / "setup.cfg").exists()
+    (tmp_path / "pyproject.toml").unlink()
+    (tmp_path / "setup.cfg").write_text("[mutmut]\nsource_paths = app\n")
+    mutation.configure_mutmut(tmp_path, ["main.py"])
+    assert (tmp_path / "setup.cfg").read_text() == "[mutmut]\nsource_paths = app\n"
+
+
 @pytest.mark.skipif(shutil.which("uv") is None, reason="mutmut runs through uv")
+@pytest.mark.parametrize("module", ["src/shop/price.py", "price.py"])
 def test_python_mutation_reports_real_survivors_on_changed_lines(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], module: str
 ) -> None:
     root = tmp_path / "repo"
-    project(root, ["uv", "run", "--no-sync", "pytest"])
+    project(root, ["uv", "run", "--no-sync", "pytest"], module)
     assert mutation.report(root, "HEAD~1", None, sources) == 0
     output = capsys.readouterr().out
-    assert "src/shop/price.py:2  if total >= 100 and member: → " in output
+    assert f"{module}:2  if total >= 100 and member: → " in output
     assert "label" not in output
 
 
