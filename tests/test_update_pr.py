@@ -186,6 +186,28 @@ def test_background_update_keeps_an_update_branch_being_fixed(
     assert "unfinished work" in (target / update_runner.RESULT_FILE).read_text()
 
 
+def test_background_update_keeps_a_fix_committed_while_it_ran(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    newer_release(source, monkeypatch, "first update")
+    assert update_runner.apply_update(target) == 0
+    fixed: list[str] = []
+    original = update.update
+
+    def fix_during_update(
+        root: Path, repair: bool = False, *, remember: Path | None = None
+    ) -> str:
+        fixed.append(fix_update_branch(target))
+        return original(root, repair, remember=remember)
+
+    monkeypatch.setattr(update, "update", fix_during_update)
+    newer_release(source, monkeypatch, "second update")
+    assert update_runner.apply_update(target) == 0
+    assert git(target, "rev-parse", BRANCH) == fixed[0]
+    assert git(target.parent / "fixing", "status", "--porcelain") == ""
+
+
 def test_background_update_names_a_clean_checked_out_update_branch(
     feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
