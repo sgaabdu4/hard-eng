@@ -47,4 +47,4 @@ Evidence: Each new test failed before its fix and passed after; 61 updater tests
 E2E: N/A — the race needs two processes at one moment; the repository-level test drives the real updater and git.
 
 Delivery target: Merge
-Delivery: Pending — PR CI, release canary on the PR head, merge.
+Delivery: Merge — PR CI passed; the release canary on the PR head passed 5 of 29 installed projects. All 24 failures also occur on the current release and are fixed in their own repositories: 11 need the Bun migration and 13 fail a newer workflow scanner rule on self-hosted runners.
