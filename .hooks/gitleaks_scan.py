@@ -278,7 +278,7 @@ def zizmor_config(directory: Path, temporary: Path) -> str:
     if not isinstance(rules, dict):
         raise TypeError("zizmor configuration must map rules to settings")
     rules["self-repository"] = {"disable": True}
-    if private_repository(directory):
+    if "self-hosted-runner" not in rules and private_repository(directory):
         rules["self-hosted-runner"] = {"disable": True}
     path = temporary / "zizmor.yml"
     path.write_text(yaml.safe_dump(config))
