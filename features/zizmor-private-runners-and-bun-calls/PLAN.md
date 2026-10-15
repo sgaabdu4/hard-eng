@@ -18,11 +18,11 @@ Evidence: zizmor 1.31.0 with Hard Eng's `--persona=auditor` reported low-confide
 Blockers: None
 Handoff: Approval
 Authority: The user asked to fix the new Hard Eng issues and merge, and to run the release canary afterwards. Codex adversarial review loop (gpt-6-astra) before the PR; merge when green.
-Decisions: A private repository's runners cannot be reached by outside fork PRs, which is the risk the audit guards; the visibility comes from `gh repo view`, and any lookup failure keeps the audit on. A pin would only delay the same audit. For Bun calls the entry line is the closest signal Bun gives; Bun's per-file FNH:0 rules out calls where a module-level arrow function's first line ran at load.
+Decisions: A private repository's runners cannot be reached by outside fork PRs, which is the risk the audit guards; the visibility comes from `gh repo view`, and any lookup failure keeps the audit on. A project's own `self-hosted-runner` rule wins. The private-repository fork-PR workflow setting is not checked: reading it needs administration access the CI token lacks, so local and CI gates would disagree; GitHub keeps it off by default. A pin would only delay the same audit. For Bun calls the entry line is the closest signal Bun gives; Bun's per-file FNH:0 rules out calls where a module-level arrow function's first line ran at load.
 
 ## Acceptance + steps
 
-- [x] Private repository → `self-hosted-runner` off; public → on; project rules kept → `test_ci_security_gate_turns_off_only_audits_that_cannot_apply`, red before.
+- [x] Private repository → `self-hosted-runner` off; public → on; a project's own rules, including its own `self-hosted-runner` rule, kept → `test_ci_security_gate_turns_off_only_audits_that_cannot_apply`, red before.
 - [x] A never-called function whose body line Bun counted gets 0 calls; a called one gets its entry-line count; FNH:0 gives 0 → `test_bun_lcov_marks_a_function_with_a_hit_body_line_but_no_call_uncalled`, red before.
 - [x] Full `python3 .hooks/hard-eng.py check` passes.
 
