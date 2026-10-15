@@ -203,9 +203,9 @@ def test_node_failure_keeps_its_error_above_the_stack_frames(tmp_path: Path) -> 
     assert "code: 'ERR_MODULE_NOT_FOUND'" in message
 
 
-def test_stryker_patterns_match_route_files_literally(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def write_stryker_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> Path:
     import tool_setup
 
     monkeypatch.setattr(tool_setup, "provision_batch", Mock())
@@ -219,11 +219,25 @@ def test_stryker_patterns_match_route_files_literally(
         return 0
 
     monkeypatch.setattr(mutation, "run", run)
+    mutation.javascript(package, {name: {2}}, ["pnpm", "test"], None, work)
+    return work / "stryker.json"
+
+
+def test_stryker_runs_one_project_test_command_at_a_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Project test commands already use every core; parallel Stryker workers multiplied them."""
+    config = json.loads(write_stryker_config(tmp_path, monkeypatch, "src/a.ts").read_text())
+    assert config["concurrency"] == 1
+
+
+def test_stryker_patterns_match_route_files_literally(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     route = "app/(shop)/[...slug]/route.ts"
-    mutation.javascript(package, {route: {2}}, ["pnpm", "test"], None, work)
-    config = json.loads((work / "stryker.json").read_text())
+    config = json.loads(write_stryker_config(tmp_path, monkeypatch, route).read_text())
     assert config["inPlace"] is True
-    assert not Path(config["tempDirName"]).is_relative_to(package)
+    assert not Path(config["tempDirName"]).is_relative_to(tmp_path / "package")
     [pattern] = config["mutate"]
     path, _, lines = pattern.rpartition(":")
     assert lines == "2-2"

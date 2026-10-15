@@ -25,6 +25,7 @@ Decisions: Generalize `workflow_installed` into `setup_written` rather than addi
 - [x] An update branch whose only other change is a file setup wrote is small; a project edit to a protected file, or a binary file, beside it still needs a plan → `test_update_branch_needs_no_plan_for_files_the_update_wrote`, red before with the issue's exact message (the binary case crashed before; review round 1). A file setup deletes, such as a retired `.mcp.json`, also counts as written (independent challenge).
 - [x] Existing workflow proof keeps passing through `setup_written` → `test_update_that_migrates_the_ci_workflow_is_scaffold_only_unless_edited` and the CI setup tests.
 - [x] Only changes to installed files need a canary run; the posted status names no project; a run that finds no project fails; a timed-out step stops every process it started; an install without the update runner uses its older entry point; a second run refuses while one is active; a dotted project name keeps its own log (independent challenge) → `tests/test_release_canary.py`.
+- [x] Report-only JavaScript mutation runs one project test command at a time; a test command that is itself parallel, multiplied by Stryker workers, overloaded the machine during a canary run → `test_stryker_runs_one_project_test_command_at_a_time`.
 - [x] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
