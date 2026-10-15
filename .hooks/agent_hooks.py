@@ -667,11 +667,26 @@ def saved_session(state: Path | None) -> tuple[str, JsonObject]:
 
 
 def session_scope(root: Path, base: str) -> str:
-    """Others' merges into the default branch are not this session's change."""
-    from plans import default_branch_point
-
-    point = default_branch_point(root, local=False)
-    if point is None:
+    """Commits already on a remote passed pre-push and are not this session's change."""
+    unpushed = subprocess.check_output(
+        ["git", "rev-list", "--first-parent", "HEAD", "--not", "--remotes"],
+        cwd=root,
+        text=True,
+    ).split()
+    point = subprocess.run(
+        [
+            "git",
+            "rev-parse",
+            "--verify",
+            "-q",
+            f"{unpushed[-1]}^" if unpushed else "HEAD",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if not point:
         return base
     older = subprocess.run(
         ["git", "merge-base", "--is-ancestor", point, base],
