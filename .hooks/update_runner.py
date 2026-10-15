@@ -756,12 +756,10 @@ def update_branch_tip(root: Path) -> str:
 
 
 def set_update_branch(root: Path, commit: str, expected: str) -> bool:
-    moved = subprocess.run(
-        ["git", "update-ref", UPDATE_REF, commit, expected],
-        cwd=root,
-        capture_output=True,
-        check=False,
-    )
+    command = ["git", "update-ref", UPDATE_REF, commit, expected]
+    moved = subprocess.run(command, cwd=root, capture_output=True, check=False)
+    if moved.returncode and update_branch_tip(root) == expected:
+        raise ValueError(moved.stderr.decode().strip())
     return moved.returncode == 0
 
 

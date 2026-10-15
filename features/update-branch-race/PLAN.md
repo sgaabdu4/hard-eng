@@ -17,11 +17,12 @@ Evidence: `set_update_branch` read the branch tip at the end of the build and us
 Blockers: None
 Handoff: Approval
 Authority: The user approved fixing Hard Eng's own faults found during the release canary and consumer updates; merge when green after the canary.
-Decisions: Read the branch tip before the guards and use it for the final compare-and-swap; check again that no worktree holds the branch just before moving it. A refused move returns a message and keeps the branch, instead of raising.
+Decisions: Read the branch tip before the guards and use it for the final compare-and-swap; check again that no worktree holds the branch just before moving it. A move refused because the branch changed returns a message and keeps the branch; any other write failure still fails the update.
 
 ## Acceptance + steps
 
 - [x] A commit made on the update branch while an update is built stays on the branch, and its worktree stays clean → `test_background_update_keeps_a_fix_committed_while_it_ran`, red before (the branch moved to the new update).
+- [x] A branch write that fails for any other reason, such as a stale lock file, is still reported as a failed update with git's message → `test_background_update_reports_a_branch_it_could_not_write`, red before (Codex review round 1: it was reported as a concurrent edit).
 - [x] Existing update branch behaviour keeps passing → `tests/test_update_pr.py`, `tests/test_update_runner.py`.
 - [x] Full `python3 .hooks/hard-eng.py check` passes.
 
@@ -42,7 +43,7 @@ N/A — background updater; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: The new test failed before the fix and passed after; 60 updater tests passed.
+Evidence: Each new test failed before its fix and passed after; 61 updater tests passed. Skipped from the independent challenge: a `git switch` that overlaps the final branch move by milliseconds, too narrow to be realistic.
 E2E: N/A — the race needs two processes at one moment; the repository-level test drives the real updater and git.
 
 Delivery target: Merge
