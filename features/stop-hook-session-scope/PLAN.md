@@ -1,6 +1,6 @@
 # Stop hook checks only the session's own change, without test suites
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -25,7 +25,7 @@ Decisions: Use the branch point when it is not already behind the session base: 
 - [x] Others' merged work after the session started is not checked; a later session edit is → `test_work_merged_by_others_after_the_session_started_is_not_checked`, red before.
 - [x] The quick set leaves out `tests` → `test_quick_set_is_chosen_by_role`.
 - [x] Consumer project at its default branch: with a week-old session base and no session edits, the old hook started `check --quick` over 2378 changed files; the fixed hook ran no check and returned in 1.1 s. On a real two-file edit (one TypeScript, one Dart), the old quick check passed in 114 s and the new one in 19 s, both at a 1-minute load of 64 to 86.
-- [ ] Full `python3 .hooks/hard-eng.py check` passes.
+- [x] Full `python3 .hooks/hard-eng.py check` passes.
 
 ## Baseline + execution
 
@@ -43,9 +43,9 @@ N/A — hook scope and gate selection only; no product appearance.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending the consumer run and the full check.
-E2E: Pending — the real Stop hook on a consumer project.
+Result: Passed
+Evidence: The new Stop hook test failed before the fix and passes after; the focused hook, plan and quick-check tests pass; the full check passes.
+E2E: Passed — the real Stop hook ran on a consumer project at its default branch, before and after the fix, as listed above.
 
 Delivery target: Merge
 Delivery: Pending — PR CI, then merge.
