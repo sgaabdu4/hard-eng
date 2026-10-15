@@ -49,4 +49,4 @@ Evidence: Each new test failed before its fix and passed after. Codex adversaria
 E2E: Passed — a one-project trial with the previous release reproduced the plan demand on a Dart project through that project's own updater and CI check.
 
 Delivery target: Merge
-Delivery: Pending — PR CI, then the full canary on the PR head, project fixes in their own repositories, merge.
+Delivery: Merge — PR CI passed; the full canary on the PR head passed 8 of 29 installed projects. All 21 failures also occur on the current release, so they are fixed in their own repositories: 11 need the Bun migration, 1 runs a Node test runner under Bun, and 9 fail a newer workflow scanner rule on self-hosted runners.
