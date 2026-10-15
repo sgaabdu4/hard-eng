@@ -22,7 +22,7 @@ Decisions: When the project has no mutmut section, append one into the throwaway
 ## Acceptance + steps
 
 - [x] A changed root-level module gets real survivors reported, like a `src/` package → `test_python_mutation_reports_real_survivors_on_changed_lines[price.py]`, red before with mutmut's "Could not figure out where the code to mutate is".
-- [x] A project's own mutmut settings win → `test_mutmut_keeps_the_projects_own_source_paths`.
+- [x] A project's own mutmut settings win, including a `[mutmut]` header with a trailing comment or indent → `test_mutmut_keeps_the_projects_own_source_paths`, red before for those headers (Codex review round 2).
 - [x] The rest of setup.cfg stays byte for byte, so case-sensitive keys such as `DJANGO_SETTINGS_MODULE` survive, and an empty copy list is left out → `test_mutmut_settings_keep_the_rest_of_setup_cfg`, red before (Codex review round 1: ConfigParser lowercased the keys).
 - [x] Full `python3 .hooks/hard-eng.py check` passes.
 
