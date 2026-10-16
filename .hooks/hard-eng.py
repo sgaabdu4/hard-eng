@@ -30,9 +30,10 @@ from gate_config import (
     generated_sources,
     nonproduction_source,
     validate_dart_boundaries,
-    validate_dart_exclusions,
 )
 from project_setup import package_script_arguments as test_arguments
+from project_setup import validate_dart_exclusions
+from swift_setup import reject_test_filters as reject_swift_filters
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -61,6 +62,7 @@ DartOptions = TypedDict(
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TEST_REPORTS = {"python-tests", "lcov-tests", "dart-tests", "xcode-tests"}
 DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
     "analyzer": {
         "exclude": [],
@@ -208,6 +210,8 @@ def validate_dart_typing(
 def reject_test_filters(
     command: list[str], directory: Path, language: str | None
 ) -> None:
+    if language == "swift":
+        return reject_swift_filters(command)
     arguments = test_arguments(command, directory)
     if language == "python":
         short_flags = ()
@@ -310,6 +314,7 @@ def production_files(
         "python": {".py"},
         "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
         "dart": {".dart"},
+        "swift": {".swift"},
     }
     language, sources = group.get("language"), group.get("sources")
     if language not in extensions or not isinstance(sources, list) or not sources:
@@ -431,7 +436,7 @@ def prepare_reports(
 ) -> tuple[Path, Path | None, Path, set[Path]]:
     coverage_path = None
     expected_sources = set()
-    supported = {"python-tests", "lcov-tests", "dart-tests"} if tests else {scanner}
+    supported = TEST_REPORTS if tests else {scanner}
     names = ("tests", "coverage") if tests else ("path",)
     if kind not in supported or any(
         not isinstance(report.get(name), str) or not report[name] for name in names
@@ -552,6 +557,7 @@ def run_limited_gate(
             ("python", "imports"): "import-linter",
             ("python", "dependencies"): "deptry",
             ("python", "duplicates"): "jscpd",
+            ("swift", "duplicates"): "jscpd",
             ("dart", "dead-code-duplicates"): "dart-decimate",
             ("javascript", "dead-code-duplicates"): "fallow",
         }.get((group.get("language", ""), gate.get("role", "")), scanner)
@@ -804,7 +810,7 @@ def impact(base: str) -> int:
     """Tell CI whether the check will run only the secret scan, before tools."""
     from contextlib import redirect_stdout, suppress
 
-    from ci_setup import impact_tools, require_ci_base
+    from ci_setup import impact_runner, impact_tools, require_ci_base
     from gate_config import affected_groups, parse_config
 
     require_ci_base(base)
@@ -812,7 +818,7 @@ def impact(base: str) -> int:
     with redirect_stdout(sys.stderr), suppress(OSError, subprocess.SubprocessError):
         proven = proven_elsewhere(base)
     if proven:
-        print("docs_only=true")
+        print("docs_only=true\nrunner=" + impact_runner([]))
         return 0
     config = parse_config((ROOT / "hard-eng.gates.json").read_text())
     groups: list[Group] = [
@@ -824,6 +830,7 @@ def impact(base: str) -> int:
     docs_only = bool(config["packages"]) and len(selected) == 1
     print(f"docs_only={str(docs_only).lower()}")
     print("tools=" + " ".join(impact_tools(ROOT, selected)))
+    print("runner=" + impact_runner(selected))
     return 0
 
 

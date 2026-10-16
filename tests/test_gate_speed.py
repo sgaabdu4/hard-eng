@@ -123,7 +123,7 @@ def test_impact_takes_the_fast_path_when_the_change_is_already_proven(
     module.__dict__["proven_elsewhere"] = proven
     assert module.impact("HEAD") == 0
     captured = capsys.readouterr()
-    assert captured.out == "docs_only=true\n"
+    assert captured.out == "docs_only=true\nrunner=ubuntu-latest\n"
     assert "proven against HEAD" in captured.err
 
 

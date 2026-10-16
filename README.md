@@ -64,7 +64,7 @@ You or your agent still write `PRODUCT.md` and `DESIGN.md`, because only you kno
 | --- | --- |
 | Empty | Stops and asks for a stack. Rerun with `--new STACK`. For Python, run `uv init` and `uv lock`, then rerun setup. |
 | Python, JavaScript/TypeScript or Dart/Flutter | Installs rules, skills, hooks and checks. Keeps your own instructions, skills, hooks and settings. Reports real conflicts. |
-| Another language (Go, Rust, Java/Kotlin, Ruby, PHP, .NET, Swift, C/C++, shell) | Basic mode: rules, skills, hooks, CI, secret scans, a Semgrep security scan, and an OSV scan when a lockfile exists. Setup prints a `Gap:` line for each missing language check. |
+| Another language (Go, Rust, Java/Kotlin, Ruby, PHP, .NET, Swift outside a Flutter app, C/C++, shell) | Basic mode: rules, skills, hooks, CI, secret scans, a Semgrep security scan, and an OSV scan when a lockfile exists. Setup prints a `Gap:` line for each missing language check. |
 | Hard Eng already installed | Prepares an update when a newer CI-verified version exists. See [Updates](#updates). |
 
 Setup also:
@@ -108,7 +108,7 @@ Start Codex with `codex --enable hooks`, trust the project, then review Hard Eng
 
 ### Requirements
 
-Git, curl, uv, Python 3.12 or later, and the project's SDK and package manager (Bun for JavaScript, Flutter for Dart). Dart Decimate needs npm 11.16 or later. Details: [entry command](setup.sh), [installer](setup.py), [new projects](new_project.py), [integrations](.agents/skills/he/references/integrations.md).
+Git, curl, uv, Python 3.12 or later, and the project's SDK and package manager (Bun for JavaScript, Flutter for Dart, Xcode on macOS for Swift in Flutter apps). Dart Decimate needs npm 11.16 or later. Details: [entry command](setup.sh), [installer](setup.py), [new projects](new_project.py), [integrations](.agents/skills/he/references/integrations.md).
 
 ## 2. Plan
 
@@ -223,6 +223,7 @@ Each project has a `hard-eng.gates.json` file. It lists the check commands, thei
 | Python | Format, lint, complexity, strict types, annotations, tests with coverage, dead code, duplicate code, dependencies, performance. | Ruff, Pyrefly, Pytest with coverage, Vulture, jscpd, Deptry. | Import Linter, when the package has real import roots. |
 | JavaScript and TypeScript | Format and lint, focused-test detection, types, typing style, tests with coverage, dead code and duplicates, performance. TypeScript packages also need architecture boundaries. | Biome, TypeScript, the project test runner, Fallow. Zod is the suggested validator. | React Doctor for React. Existing `build`, integration-test, UI-test, generated-code, boundary and `check:fallow` scripts join the gate. |
 | Dart and Flutter | Format, analyzer, tests with coverage, dead code and duplicates, architecture boundaries, performance. | Dart format and analyzer, Dart test with coverage, Dart Decimate. | A boundary rule needs real project prefixes. Flutter build or device proof stays a project task. |
+| Swift in a Flutter app (`ios/`, `macos/`) | One group per platform: Swift format and lint, Xcode build and tests with coverage, duplicates, a Swift Semgrep scan, a reviewed `performance_exception`. | `swift format`, `xcodebuild` with `xcresulttool` and `xccov`, jscpd, Semgrep. | CocoaPods adds `pod install --deployment`. Needs macOS: CI picks `macos-latest` only when a Swift group is selected. Plain SwiftPM packages and pure Xcode apps stay in basic mode. |
 
 Rules for every language:
 

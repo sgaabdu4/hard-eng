@@ -14,9 +14,8 @@ from gate_config import (
     JsonObject,
     dart_scan_includes_boundaries,
     generated_sources,
-    validate_dart_exclusions,
 )
-from project_setup import adapt_package, dependency_command
+from project_setup import adapt_package, dependency_command, validate_dart_exclusions
 
 
 def dart_format_command(installer: ModuleType) -> list[str]:
