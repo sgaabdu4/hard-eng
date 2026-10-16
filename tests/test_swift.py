@@ -184,10 +184,31 @@ def test_swift_group_in_a_dart_workspace_takes_its_roles_from_the_workspace(
     write(root, {"apps/mobile/ios/Runner/Box.swift": CODE})
     config = installer.gate_config(root)
     add_swift_groups(root, config)
+    assert swift_group(config, "apps/mobile/ios")["impact_inputs"][2:] == [
+        "pubspec.yaml",
+        "pubspec.lock",
+    ]
     app = swift_group(config, "apps/mobile")
     assert not {"lockfiles", "vulnerabilities"} & {g.get("role") for g in app["checks"]}
     for group in config["packages"]:
         group["depends_on"] = []
+    validate_required_checks(root, config)
+
+
+def test_plugin_added_after_setup_must_be_watched(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "app"
+    flutter_app(root)
+    config = app_config(installer, root)
+    validate_required_checks(root, config)
+    write(root, {"pubspec.yaml": PUBSPEC + "  local_plugin:\n    path: plugin\n"})
+    with pytest.raises(
+        ValueError, match="ios: impact_inputs must list plugin/darwin, plugin/ios"
+    ):
+        validate_required_checks(root, config)
+    group = swift_group(config)
+    group["impact_inputs"] += ["plugin/ios", "plugin/darwin"]
     validate_required_checks(root, config)
 
 
