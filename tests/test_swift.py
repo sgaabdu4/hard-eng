@@ -135,25 +135,20 @@ def test_setup_writes_swift_gates(installer: ModuleType, tmp_path: Path) -> None
     assert gates["security"]["command"][-2:] == ["Runner", "RunnerTests"]
 
 
-def test_swift_group_depends_on_what_its_flutter_app_depends_on(
+def test_swift_group_in_a_monorepo_reads_only_its_apps_pubspec_files(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     root = tmp_path / "mono"
     init(root)
-    write(
-        root,
-        {
-            "apps/mobile/pubspec.yaml": PUBSPEC,
-            "apps/mobile/pubspec.lock": "packages: {}\n",
-        },
-    )
+    pubspecs = {"apps/mobile/pubspec.yaml": PUBSPEC, "apps/mobile/pubspec.lock": ""}
+    write(root, pubspecs)
     write(root, {"apps/mobile/ios/Runner.xcodeproj/project.pbxproj": PBXPROJ})
     write(root, {"apps/mobile/ios/Runner/Box.swift": CODE})
     config = installer.gate_config(root)
     swift_group(config, "apps/mobile")["depends_on"] = ["packages/core"]
     add_swift_groups(root, config)
     group = swift_group(config, "apps/mobile/ios")
-    assert group["depends_on"] == ["packages/core"]
+    assert group["depends_on"] == []
     assert group["impact_inputs"] == [
         "apps/mobile/pubspec.yaml",
         "apps/mobile/pubspec.lock",
