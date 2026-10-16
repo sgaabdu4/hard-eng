@@ -114,7 +114,7 @@ def add_swift_groups(root: Path, config: GateConfig) -> None:
         app = Path(path).parent
         parent = declared.get(str(app))
         group = swift_group(root, path, project)
-        group["depends_on"] = list(parent.get("depends_on", [])) if parent else []
+        group["depends_on"] = []
         group["impact_inputs"] = [str(app / "pubspec.yaml"), str(app / "pubspec.lock")]
         if parent is not None and single:
             parent.setdefault("depends_on", [])
