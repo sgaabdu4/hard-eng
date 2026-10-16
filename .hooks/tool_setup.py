@@ -16,6 +16,7 @@ import tomllib
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import IO
 
 from fallow_report import native_scanner_command
 from gate_config import Group
@@ -37,6 +38,9 @@ MISE_PACKAGE = "@jdxcode/mise-{}-{}".format(
 MISE_LATEST = MISE_PACKAGE + "@latest"
 MISE_BINARY = Path("node_modules", MISE_PACKAGE, "bin/mise")
 CHECKOUT = Path(__file__).resolve().parents[1]
+TOOL_OWNER = "HARD_ENG_TOOL_OWNER"
+VISIBLE_TEMP = Path("/tmp")
+HELD: list[IO[str]] = []
 NOT_INSTALLED = (
     "Tools are not installed yet and cannot be fetched now: {error}. "
     "Connect once or run the full check (python3 .hooks/hard-eng.py check) to install them."
@@ -224,14 +228,9 @@ def provision_batch(batch: list[str], timeout: float) -> None:
         )
         for tool in batch
     ]
-    shared = (
-        Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hard-eng-tools"
-    )
-    storage = shared
-    if "RUNNER_TEMP" not in os.environ:
-        # Checkouts on other Hard Eng revisions rewrite these files while this one runs.
-        key = hashlib.sha256(str(CHECKOUT).encode()).hexdigest()[:16]
-        storage = shared / "checkouts" / key
+    shared = Path(os.environ.get("RUNNER_TEMP") or temporary_root()) / "hard-eng-tools"
+    # Checkouts on other Hard Eng revisions rewrite these files while this one runs.
+    storage = shared if "RUNNER_TEMP" in os.environ else checkout_storage(shared)
     environment = os.environ.copy()
     for name, directory in {
         "MISE_DATA_DIR": storage / "mise/data",
@@ -257,6 +256,47 @@ def provision_batch(batch: list[str], timeout: float) -> None:
         return
     print("Prepare latest native tools: " + ", ".join(batch), flush=True)
     provision_latest(batch, storage, environment, timeout)
+
+
+def temporary_root() -> Path:
+    """Biome skips its React rules for files below a hidden folder, so avoid one."""
+    root = Path(tempfile.gettempdir())
+    hidden = any(part.startswith(".") for part in root.resolve().parts)
+    return VISIBLE_TEMP if hidden else root
+
+
+def checkout_storage(shared: Path) -> Path:
+    """This checkout's tool folder, held until exit; a push snapshot uses its owner's."""
+    snapshot, _, owner = os.environ.get(TOOL_OWNER, "").partition(os.pathsep)
+    checkout = Path(owner) if snapshot == str(CHECKOUT) else CHECKOUT
+    checkouts = shared / "checkouts"
+    storage = checkouts / hashlib.sha256(str(checkout).encode()).hexdigest()[:16]
+    if not HELD:
+        storage.mkdir(parents=True, exist_ok=True)
+        lock = (storage / "lock").open("a")
+        fcntl.flock(lock, fcntl.LOCK_SH)
+        HELD.append(lock)
+        storage.mkdir(parents=True, exist_ok=True)
+        replace_file(storage / "checkout", str(checkout))
+        prune_checkouts(checkouts)
+    return storage
+
+
+def prune_checkouts(checkouts: Path) -> None:
+    """Drop tool folders of deleted checkouts that no running check holds."""
+    for path in checkouts.iterdir():
+        try:
+            owner = Path((path / "checkout").read_text())
+        except OSError:
+            continue
+        if owner.exists():
+            continue
+        with (path / "lock").open("a") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def newest_launcher(launchers: Path) -> Path | None:
@@ -338,12 +378,11 @@ def bun_node(storage: Path, environment: dict[str, str]) -> None:
     bun = shutil.which("bun", path=environment.get("PATH"))
     if bun is None:
         return
-    directory = storage / "bun-node"
-    directory.mkdir(parents=True, exist_ok=True)
+    shims = storage / "bun-node"
     search = os.pathsep.join(
         entry
         for entry in environment.get("PATH", "").split(os.pathsep)
-        if Path(entry) != directory
+        if Path(entry).parent != shims
     )
     node = shutil.which("node", path=search)
     script = "#!/bin/sh\n"
@@ -364,6 +403,9 @@ def bun_node(storage: Path, environment: dict[str, str]) -> None:
         f'  printf "%s\\n" "$source" | {shlex.quote(bun)} "$@" -\n  exit $?\nfi\n'
     )
     script += f'exec {shlex.quote(bun)} "$@"\n'
+    # Another Hard Eng revision in this checkout, such as a pushed update, writes its own.
+    directory = shims / hashlib.sha256(script.encode()).hexdigest()[:16]
+    directory.mkdir(parents=True, exist_ok=True)
     shim = directory / "node"
     if shim.is_symlink() or not shim.is_file() or shim.read_text() != script:
         replace_file(shim, script, 0o755)
