@@ -439,3 +439,96 @@ def test_tool_dependencies_stay_off_path(
     exported = os.environ["PATH"].split(os.pathsep)
     assert str(tool / "bin") in exported
     assert str(tool / "node_modules/.bin") not in exported
+
+
+SHIM_PATH = (
+    PROVISION
+    + """import shutil
+node = shutil.which("node")
+print("shim:" + node)
+print(Path(node).read_text(), end="")
+"""
+)
+
+
+def test_checkouts_on_different_revisions_keep_their_own_shims(
+    tmp_path: Path, registry: Path
+) -> None:
+    """Two checkouts once rewrote one shared node shim, so a running check ran the other's."""
+    old = tmp_path / "tmp/hard-eng-tools"
+    (old / "bun-node").mkdir(parents=True)
+    (old / "bun-node/node").write_text("#!/bin/sh\nexit 0\n")
+    old_launcher = old / "mise-launcher/2026.9.13/node_modules"
+    shutil.copytree(SOURCE / ".hooks", tmp_path / "a/.hooks")
+    shutil.copytree(SOURCE / ".hooks", tmp_path / "b/.hooks")
+    other = tmp_path / "b/.hooks/tool_setup.py"
+    other.write_text(
+        other.read_text().replace(
+            'script = "#!/bin/sh\\n"', 'script = "#!/bin/sh\\n# other revision\\n"'
+        )
+    )
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith(("MISE_", "BUN_", "NPM_CONFIG_", "RUNNER_"))
+    }
+    environment.update(
+        TMPDIR=str(tmp_path / "tmp"),
+        PATH=str(tmp_path / "bin") + os.pathsep + environment["PATH"],
+    )
+    processes = [
+        subprocess.Popen(
+            [sys.executable, "-c", SHIM_PATH, str(tmp_path / name / ".hooks"), "."],
+            cwd=tmp_path / name,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for name in ("a", "b")
+    ]
+    results = [process.communicate(timeout=60) for process in processes]
+    assert [process.returncode for process in processes] == [0, 0], results
+    (a_shim, a_script), (b_shim, b_script) = (
+        output.split("shim:", 1)[1].split("\n", 1) for output, _ in results
+    )
+    assert len({a_shim, b_shim, str(old / "bun-node/node")}) == 3
+    assert "# other revision" not in a_script and "# other revision" in b_script
+    assert Path(a_shim).read_text() == a_script
+    assert adds(registry) == ["2026.9.13", "2026.9.13"]
+    assert not old_launcher.exists()
+
+
+def test_a_running_check_never_reads_a_partly_written_shim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+
+    import tool_setup
+
+    bun, node = tmp_path / "bun/bun", tmp_path / "node/node"
+    for path in (bun, node):
+        path.parent.mkdir()
+        path.write_text("#!/bin/sh\n")
+        path.chmod(0o755)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    paths = [str(bun.parent), os.pathsep.join([str(bun.parent), str(node.parent)])]
+    shim = tmp_path / "storage/bun-node/node"
+    scripts = set()
+    for path in paths:
+        tool_setup.bun_node(tmp_path / "storage", {"PATH": path})
+        scripts.add(shim.read_text())
+    seen: set[str] = set()
+    done = threading.Event()
+
+    def read() -> None:
+        while not done.is_set():
+            seen.add(shim.read_text())
+
+    reader = threading.Thread(target=read)
+    reader.start()
+    for index in range(400):
+        tool_setup.bun_node(tmp_path / "storage", {"PATH": paths[index % 2]})
+    done.set()
+    reader.join()
+    assert len(scripts) == 2 and seen <= scripts
