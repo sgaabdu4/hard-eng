@@ -104,6 +104,25 @@ def swift_group(root: Path, path: str, project: SwiftProject) -> Group:
     return package
 
 
+def local_plugin_folders(root: Path, app: Path, path: str) -> list[str]:
+    """Native folders of the path dependencies, whose Swift builds into the app."""
+    import yaml
+
+    manifest = yaml.safe_load((root / app / "pubspec.yaml").read_text()) or {}
+    folders: list[str] = []
+    for section in ("dependencies", "dev_dependencies", "dependency_overrides"):
+        for value in (manifest.get(section) or {}).values():
+            if isinstance(value, dict) and isinstance(value.get("path"), str):
+                plugin = Path(os.path.normpath(root / app / value["path"]))
+                if plugin.is_relative_to(root):
+                    relative = plugin.relative_to(root)
+                    folders += [
+                        str(relative / Path(path).name),
+                        str(relative / "darwin"),
+                    ]
+    return folders
+
+
 def add_swift_groups(root: Path, config: GateConfig) -> None:
     """Add a group for each Swift platform folder the configuration lacks."""
     declared = {str(Path(group["path"])): group for group in config["packages"]}
@@ -115,7 +134,11 @@ def add_swift_groups(root: Path, config: GateConfig) -> None:
         parent = declared.get(str(app))
         group = swift_group(root, path, project)
         group["depends_on"] = []
-        group["impact_inputs"] = [str(app / "pubspec.yaml"), str(app / "pubspec.lock")]
+        group["impact_inputs"] = [
+            str(app / "pubspec.yaml"),
+            str(app / "pubspec.lock"),
+            *local_plugin_folders(root, app, path),
+        ]
         if parent is not None and single:
             parent.setdefault("depends_on", [])
         config["packages"].append(group)
@@ -151,10 +174,20 @@ def parent_roles(
     directory: Path, by_directory: dict[tuple[Path, str], Group]
 ) -> set[str]:
     """Roles a Flutter app supplies to the Swift group in its ios/ or macos/ folder."""
-    parent = by_directory.get((directory.parent, "dart"))
+    from project_setup import workspace_matches, workspace_members
+
+    app = directory.parent
+    parent = by_directory.get((app, "dart"))
     if directory.name not in PLATFORMS or parent is None:
         return set()
-    return {gate.get("role", "") for gate in parent["checks"]}
+    roles = {gate.get("role", "") for gate in parent["checks"]}
+    for owner in app.parents:
+        workspace = by_directory.get((owner, "dart"))
+        if workspace is not None and workspace_matches(
+            str(app.relative_to(owner)), workspace_members(owner, "dart")
+        ):
+            roles |= {gate.get("role", "") for gate in workspace["checks"]}
+    return roles
 
 
 def unscanned(group: Group, project: SwiftProject) -> list[str]:
