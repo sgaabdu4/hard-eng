@@ -46,7 +46,7 @@ N/A — tool storage only; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: The checkout test failed on the old code (one shared shim path for both checkouts and the old folder) and passes now. The atomic-write test failed with a direct write and passes now. The hidden-folder test failed when the snapshot used the hidden folder. All 28 tool setup tests pass. Codex round 1 found that push snapshots got a new folder on every push; fixed with the owner key and pruning. Round 2 found that two checks pruning one stale folder could crash the second; fixed and tested.
+Evidence: The checkout test failed on the old code (one shared shim path for both checkouts and the old folder) and passes now. The atomic-write test failed with a direct write and passes now. The hidden-folder test failed when the snapshot used the hidden folder. All 28 tool setup tests pass. Codex round 1 found that push snapshots got a new folder on every push; fixed with the owner key and pruning. Round 2 found that two checks pruning one stale folder could crash the second; fixed and tested. Round 3 raised only the older `node -r` shim handling, outside this change. The full check passed on the rebased branch (1712 tests).
 E2E: Passed — real subprocess provisioning from two copied checkouts with a fake registry.
 
 Delivery target: Merge
