@@ -21,7 +21,7 @@ Decisions: Treat a call as piped when every argument starts with `-` and none na
 
 ## Acceptance + steps
 
-- [x] `--input-type=module` with a piped script feeds it to `bun --input-type=module -`; `-e`, a script name and `-` pass through unchanged → `test_node_with_a_script_on_stdin_runs_it_on_bun`, red before.
+- [x] `--input-type=module` with a piped script feeds it to `bun --input-type=module -`; `-e`, attached `-e…`/`-p…` expressions, a script name and `-` pass through unchanged → `test_node_with_a_script_on_stdin_runs_it_on_bun`, red before.
 - [x] Real Bun through the shim: piped scripts return their exit codes with no flags, `--input-type=module` and `--no-warnings`; empty stdin exits 0; `-e`, `-`, `--version` and `-r` with `-e` behave as before.
 - [x] Full `python3 .hooks/hard-eng.py check` passes.
 
@@ -42,7 +42,7 @@ N/A — tool shim only; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: The extended test failed before the fix and passed after; real Bun 1.4.3 runs through the generated shim matched Node's exit codes in every case above.
+Evidence: The extended test failed before the fix and passed after; real Bun 1.4.3 runs through the generated shim matched Node's exit codes in every case above, including `-eprocess.exit(3)` (3) and `-p1+1` (prints 2). Codex round 1 found the attached-expression case, fixed with test cases.
 E2E: Passed — real Bun through the generated shim.
 
 Delivery target: Merge
