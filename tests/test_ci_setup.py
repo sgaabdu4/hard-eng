@@ -39,6 +39,7 @@ def test_native_tool_bootstrap_preserves_ci_sdk_executables(
         "MISE_STATE_DIR",
         "BUN_INSTALL_CACHE_DIR",
         "NPM_CONFIG_CACHE",
+        tool_setup.TOOL_OWNER,
     ):
         monkeypatch.delenv(name, raising=False)
     shared = tmp_path / "hard-eng-tools"
