@@ -252,7 +252,8 @@ def apply_dart_typing(
     required: dict[str, JsonObject],
     directory: Path,
 ) -> None:
-    from gate_config import dart_rule_settings, validate_dart_exclusions
+    from gate_config import dart_rule_settings
+    from project_setup import validate_dart_exclusions
 
     for section, groups in required.items():
         # A key holding only comments, as in `flutter create` output, parses as null.
@@ -524,6 +525,8 @@ def validate_destinations(root: Path, changes: dict[str, str], hook: Path) -> No
 
 
 def configure_workflows(root: Path, config: GateConfig) -> None:
+    from ci_setup import add_workflow_checks
+
     workflows = root / ".github/workflows"
     if not any(
         path.is_file() and path.suffix in {".yml", ".yaml"}
@@ -531,36 +534,6 @@ def configure_workflows(root: Path, config: GateConfig) -> None:
     ):
         return
     add_workflow_checks(config)
-
-
-def add_workflow_checks(config: GateConfig) -> None:
-    for role, command in (
-        ("workflows", ["actionlint", "-no-color"]),
-        (
-            "ci-security",
-            [
-                "zizmor",
-                "--strict-collection",
-                "--persona=auditor",
-                "--format=plain",
-                ".",
-            ],
-        ),
-    ):
-        if any(
-            gate.get("role") == role
-            or (gate.get("command") and Path(gate["command"][0]).name == command[0])
-            for gate in config["shared"]
-        ):
-            continue
-        config["shared"].append(
-            {
-                "name": command[0],
-                "role": role,
-                "parallel": True,
-                "command": command,
-            }
-        )
 
 
 def configure_shellcheck(
@@ -803,6 +776,16 @@ def retired_config(root: Path) -> GateConfig | None:
     return config
 
 
+def configure_semgrep_ignore(
+    root: Path, package: Group, changes: dict[str, str]
+) -> None:
+    ignore = Path(package["path"]) / ".semgrepignore"
+    if not (root / ignore).exists():
+        changes[str(ignore)] = (
+            "# Include production and tests; replace Semgrep's default test exclusions.\n"
+        )
+
+
 def plan_install(
     root: Path, previous: Path | None = None
 ) -> tuple[dict[str, str], dict[str, str], Path, str, list[str]]:
@@ -857,6 +840,9 @@ def plan_install(
         or (root / "hard-eng.gates.json").read_text(),
         require_impact_review=False,
     )
+    from swift_setup import add_swift_groups
+
+    add_swift_groups(root, config)
     from project_setup import (
         adapt_boundaries,
         browser_test_coverage,
@@ -868,11 +854,7 @@ def plan_install(
         strict_scanner_flags(package)
         adapt_boundaries(package, typescript)
         browser_test_coverage(root / package["path"], package)
-        ignore = Path(package["path"]) / ".semgrepignore"
-        if not (root / ignore).exists():
-            changes[str(ignore)] = (
-                "# Include production and tests; replace Semgrep's default test exclusions.\n"
-            )
+        configure_semgrep_ignore(root, package, changes)
         configure_typing_checks(package)
         configure = {
             "python": configure_python,
@@ -881,7 +863,7 @@ def plan_install(
         }.get(package.get("language", ""))
         if configure is not None:
             configure(root, root / package["path"], package, changes)
-    from ci_setup import configure_ci
+    from ci_setup import add_workflow_checks, configure_ci
 
     configure_ci(root, SOURCE, config, changes)
     if ".github/workflows/hard-eng.yml" in changes:

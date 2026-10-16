@@ -706,7 +706,7 @@ def test_install_preserves_project_and_repeats(
     assert not (tmp_path / ".codex/config.toml").exists()
     workflow = (tmp_path / ".github/workflows/hard-eng.yml").read_text()
     assert "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6" in workflow
-    assert 'bun x --package="@jdxcode/mise-linux-${RUNNER_ARCH,,}@latest"' in workflow
+    assert 'bun x --package="$MISE_PACKAGE"' in workflow
     assert "pnpm" not in workflow.lower()
     assert "npm exec" not in workflow
     for entry in (installer.SOURCE / ".agents/skills").glob("*/SKILL.md"):
