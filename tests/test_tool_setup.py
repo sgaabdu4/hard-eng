@@ -359,7 +359,7 @@ def test_node_runs_on_bun_except_for_cloudflare_tools(
     environment = {"PATH": f"{bin_directory}{os.pathsep}/usr/bin{os.pathsep}/bin"}
     monkeypatch.setenv("PATH", environment["PATH"])
     tool_setup.bun_node(tmp_path / "storage", environment)
-    shim = tmp_path / "storage/bun-node/node"
+    shim = Path(str(shutil.which("node", path=environment["PATH"])))
     for path in (environment["PATH"], os.environ["PATH"]):
         assert shutil.which("node", path=path) == str(shim)
     ran = subprocess.run([shim, tool], capture_output=True, text=True, check=True)
@@ -379,7 +379,7 @@ def test_node_with_a_script_on_stdin_runs_it_on_bun(
     environment = {"PATH": f"{bun.parent}{os.pathsep}/usr/bin{os.pathsep}/bin"}
     monkeypatch.setenv("PATH", environment["PATH"])
     tool_setup.bun_node(tmp_path / "storage", environment)
-    shim = tmp_path / "storage/bun-node/node"
+    shim = Path(str(shutil.which("node", path=environment["PATH"])))
     ran = subprocess.run(
         [shim], input="process.exit(3)", capture_output=True, text=True, check=False
     )
@@ -499,36 +499,110 @@ def test_checkouts_on_different_revisions_keep_their_own_shims(
     assert not old_launcher.exists()
 
 
-def test_a_running_check_never_reads_a_partly_written_shim(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_running_check_never_reads_a_partly_written_file(tmp_path: Path) -> None:
     import threading
 
     import tool_setup
 
-    bun, node = tmp_path / "bun/bun", tmp_path / "node/node"
-    for path in (bun, node):
-        path.parent.mkdir()
-        path.write_text("#!/bin/sh\n")
-        path.chmod(0o755)
-    monkeypatch.setenv("PATH", "/usr/bin")
-    paths = [str(bun.parent), os.pathsep.join([str(bun.parent), str(node.parent)])]
-    shim = tmp_path / "storage/bun-node/node"
-    scripts = set()
-    for path in paths:
-        tool_setup.bun_node(tmp_path / "storage", {"PATH": path})
-        scripts.add(shim.read_text())
+    target = tmp_path / "node"
+    scripts = ["#!/bin/sh\n" + "a" * 50000, "#!/bin/sh\n" + "b" * 50000]
+    tool_setup.replace_file(target, scripts[0], 0o755)
     seen: set[str] = set()
     done = threading.Event()
 
     def read() -> None:
         while not done.is_set():
-            seen.add(shim.read_text())
+            seen.add(target.read_text())
 
     reader = threading.Thread(target=read)
     reader.start()
     for index in range(400):
-        tool_setup.bun_node(tmp_path / "storage", {"PATH": paths[index % 2]})
+        tool_setup.replace_file(target, scripts[index % 2], 0o755)
     done.set()
     reader.join()
-    assert len(scripts) == 2 and seen <= scripts
+    assert seen <= set(scripts)
+    assert os.access(target, os.X_OK)
+    assert [path.name for path in tmp_path.iterdir()] == ["node"]
+
+
+def test_push_snapshots_reuse_their_checkout_tools(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A push checks a fresh temporary copy; its own folder would reinstall every tool."""
+    import ship_actions
+    import tool_setup
+    from conftest import commit, init
+
+    root = tmp_path / "project"
+    init(root)
+    (root / "README.md").write_text("x")
+    revision = commit(root, "start")
+    shared = tmp_path / "tools"
+    environment = os.environ.copy()
+    with ship_actions.snapshot(root, revision, environment) as checkout:
+        storages = []
+        for path, env in (
+            (root, os.environ.copy()),
+            (checkout, environment),
+            (tmp_path / "other", environment),
+        ):
+            monkeypatch.setattr(tool_setup, "CHECKOUT", path.resolve())
+            monkeypatch.setattr(tool_setup, "HELD", [])
+            monkeypatch.setattr(os, "environ", env)
+            storages.append(tool_setup.checkout_storage(shared))
+            tool_setup.HELD[0].close()
+    assert storages[0] == storages[1] != storages[2]
+    assert (storages[1] / "checkout").read_text() == str(root.resolve())
+
+
+def test_deleted_checkouts_lose_their_tools_unless_a_check_holds_them(
+    tmp_path: Path,
+) -> None:
+    import tool_setup
+
+    checkouts = tmp_path / "checkouts"
+    for name, owner in (
+        ("gone", tmp_path / "deleted"),
+        ("held", tmp_path / "deleted"),
+        ("live", tmp_path),
+    ):
+        (checkouts / name / "mise").mkdir(parents=True)
+        (checkouts / name / "checkout").write_text(str(owner))
+    with (checkouts / "held/lock").open("a") as running_check:
+        fcntl.flock(running_check, fcntl.LOCK_SH)
+        tool_setup.prune_checkouts(checkouts)
+    assert sorted(path.name for path in checkouts.iterdir()) == ["held", "live"]
+
+
+def test_push_copies_and_tools_stay_out_of_a_hidden_temporary_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Biome skipped its React rules below a hidden TMPDIR and failed every suppression."""
+    from unittest.mock import Mock
+
+    import ship_actions
+    import tool_setup
+    from conftest import commit, init, use_installed_mise
+
+    hidden, visible = tmp_path / ".cache/tmp", tmp_path / "visible"
+    for directory in (hidden, visible):
+        directory.mkdir(parents=True)
+    monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(hidden))
+    monkeypatch.setattr(tool_setup, "VISIBLE_TEMP", visible)
+    monkeypatch.setattr(tool_setup, "HELD", [])
+    for name in ("RUNNER_TEMP", "MISE_DATA_DIR", "BUN_INSTALL_CACHE_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    root = tmp_path / "project"
+    init(root)
+    (root / "README.md").write_text("x")
+    revision = commit(root, "start")
+    with ship_actions.snapshot(root, revision, os.environ.copy()) as checkout:
+        assert checkout.is_relative_to(visible)
+    use_installed_mise(tmp_path, monkeypatch)
+    native = Mock(return_value=subprocess.CompletedProcess([], 0, '{"PATH": ""}', ""))
+    monkeypatch.setattr(subprocess, "run", native)
+    tool_setup.provision_batch(["aqua:gitleaks/gitleaks@latest"], 30)
+    tool_setup.HELD[0].close()
+    environment = native.call_args.kwargs["env"]
+    for name in ("MISE_DATA_DIR", "BUN_INSTALL_CACHE_DIR"):
+        assert Path(environment[name]).is_relative_to(visible)
