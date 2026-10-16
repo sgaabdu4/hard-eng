@@ -1,7 +1,12 @@
 """Swift groups for the Xcode projects in a Flutter app's ios/ and macos/ folders."""
 
+import hashlib
 import json
 import os
+import re
+import shutil
+from collections.abc import Iterable
+from functools import cache
 from pathlib import Path
 from typing import NamedTuple
 
@@ -22,6 +27,33 @@ TEST_FLAGS = (
     "-skip-test-configuration",
     "-testPlan",
 )
+STARTER_NAMES = {
+    "AppDelegate.swift",
+    "SceneDelegate.swift",
+    "MainFlutterWindow.swift",
+    "RunnerTests.swift",
+}
+# Fingerprints of the released Flutter app templates for the files above.
+RELEASED_STARTERS = frozenset(
+    {
+        "1eff988992eb32b0",
+        "25fb1e3fb54302ea",
+        "6251df1a8fde5169",
+        "6928c708042f490b",
+        "815cfc0b59f4cb43",
+        "86f43c5b2d1d3c55",
+        "968d685a6b01ce2a",
+        "9f5a4831570b4f04",
+        "a4d2c4a98ede38d7",
+        "a73afd9acac29914",
+        "bf11566752275639",
+        "c0d7b928e905c1bc",
+        "d71330b02bace6a0",
+        "dfb836aa6951c81d",
+        "e5fecc57b992ed4a",
+        "f22e19fc036a16ef",
+    }
+)
 TEMPLATE = Path(__file__).resolve().parents[1] / (
     ".agents/skills/he/templates/hard-eng.swift.json"
 )
@@ -31,6 +63,42 @@ class SwiftProject(NamedTuple):
     sources: list[str]
     tests: list[str]
     pods: bool
+
+
+def fingerprint(text: str) -> str:
+    """The text without comments, whitespace and the plugin-only template sections."""
+    text = re.sub(r"\{\{\^(\w+)\}\}(.*?)\{\{/\1\}\}", r"\2", text, flags=re.DOTALL)
+    text = re.sub(r"\{\{#(\w+)\}\}.*?\{\{/\1\}\}", "", text, flags=re.DOTALL)
+    text = re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.DOTALL)
+    return hashlib.sha256(re.sub(r"\s+", "", text).encode()).hexdigest()[:16]
+
+
+@cache
+def installed_templates() -> frozenset[str]:
+    """Fingerprints of the app templates in the installed Flutter SDK, newer than the list."""
+    flutter = shutil.which("flutter")
+    if flutter is None:
+        return frozenset()
+    templates = Path(flutter).resolve().parents[1] / "packages/flutter_tools/templates"
+    return frozenset(
+        fingerprint(path.read_text(errors="replace"))
+        for path in templates.glob("app*/*/*/*.swift*")
+        if path.name.removesuffix(".tmpl") in STARTER_NAMES
+    )
+
+
+def unchanged_starters(files: Iterable[Path]) -> set[Path]:
+    """Swift files that `flutter create` wrote and the project has not changed."""
+    known = RELEASED_STARTERS | installed_templates()
+    return {
+        file
+        for file in files
+        if file.name == "GeneratedPluginRegistrant.swift"
+        or (
+            file.name in STARTER_NAMES
+            and fingerprint(file.read_text(errors="replace")) in known
+        )
+    }
 
 
 def flutter_apps(root: Path, files: list[Path]) -> list[str]:
@@ -57,13 +125,23 @@ def swift_projects(
             base = Path(app) / platform
             if str(base / "Runner.xcodeproj/project.pbxproj") not in authored:
                 continue
-            folders = {
-                Path(name).relative_to(base).parts[0]
+            swift = [
+                name
                 for name in authored
                 if name.endswith(".swift") and Path(name).is_relative_to(base)
-            } - NOT_AUTHORED
-            tests = {f for f in folders if f.removesuffix(".swift").endswith("Tests")}
-            if sources := sorted(folders - tests):
+            ]
+            starters = {
+                str(file.relative_to(root))
+                for file in unchanged_starters(root / name for name in swift)
+            }
+
+            def folders(names: Iterable[str], base: Path = base) -> set[str]:
+                return {Path(name).relative_to(base).parts[0] for name in names}
+
+            tests = {
+                f for f in folders(swift) if f.removesuffix(".swift").endswith("Tests")
+            }
+            if sources := sorted(folders(set(swift) - starters) - tests - NOT_AUTHORED):
                 found[str(base)] = SwiftProject(
                     sources,
                     sorted(tests),
@@ -138,9 +216,19 @@ def watched_inputs(root: Path, app: Path, path: str) -> list[str]:
 
 def add_swift_groups(root: Path, config: GateConfig) -> None:
     """Add a group for each Swift platform folder the configuration lacks."""
+    projects = swift_projects(root)
+    config["packages"][:] = [
+        group
+        for group in config["packages"]
+        if not (
+            group.get("language") == "swift"
+            and Path(group["path"]).name in PLATFORMS
+            and str(Path(group["path"])) not in projects
+        )
+    ]
     declared = {str(Path(group["path"])): group for group in config["packages"]}
     single = len(declared) == 1
-    for path, project in swift_projects(root).items():
+    for path, project in projects.items():
         if path in declared:
             continue
         app = Path(path).parent
@@ -156,6 +244,15 @@ def add_swift_groups(root: Path, config: GateConfig) -> None:
 def require_swift_groups(root: Path, config: GateConfig, files: list[Path]) -> None:
     declared = {str(Path(group["path"])): group for group in config["packages"]}
     projects = swift_projects(root, files)
+    for path, group in declared.items():
+        if (
+            group.get("language") == "swift"
+            and Path(path).name in PLATFORMS
+            and path not in projects
+        ):
+            raise ValueError(
+                f"{path}: all of its Swift is Flutter starter code; rerun setup to remove the group"
+            )
     if missing := sorted(set(projects) - declared.keys()):
         raise ValueError(
             f"Swift code is missing from gate configuration: {', '.join(missing)}; "
