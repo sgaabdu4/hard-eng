@@ -922,3 +922,19 @@ def test_xccov_coverage_keeps_the_larger_denominator_per_file(tmp_path: Path) ->
     path = xccov(root / "c.json", {"app": {file: (7, 100)}, "tests": {file: (8, 10)}})
     expected = {root / "Runner/A.swift"}
     assert reports.line_coverage(path, "xcode-tests", root, expected) == (7, 100)
+
+
+def test_flutter_dependency_setup_runs_before_the_pods_gate(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "app"
+    flutter_app(root)
+    write(root, {"ios/Podfile": "platform :ios, '13.0'\n"})
+    config = app_config(installer, root)
+    checks = [(group, gate) for group in config["packages"] for gate in group["checks"]]
+    setup = [
+        gate["name"]
+        for _, gate in reports.gate_order(checks)
+        if gate["role"] == "lockfiles"
+    ]
+    assert setup == ["lockfile", "pods-locked"]
