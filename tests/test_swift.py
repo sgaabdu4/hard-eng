@@ -103,13 +103,16 @@ def test_nested_flutter_app_names_its_platform_folder(tmp_path: Path) -> None:
 def test_setup_writes_swift_gates(installer: ModuleType, tmp_path: Path) -> None:
     root = tmp_path / "app"
     flutter_app(root)
-    group = swift_group(app_config(installer, root))
+    config = app_config(installer, root)
+    group = swift_group(config)
     assert (group["name"], group["language"], group["sources"]) == (
         "ios",
         "swift",
         ["Runner"],
     )
-    assert "depends_on" not in group and "performance_exception" not in group
+    assert "performance_exception" not in group
+    assert group["depends_on"] == [] and swift_group(config, ".")["depends_on"] == []
+    assert group["impact_inputs"] == ["pubspec.yaml", "pubspec.lock"]
     gates = {gate["name"]: gate for gate in group["checks"]}
     assert list(gates) == ["format-lint", "tests", "duplicates", "security"]
     assert gates["format-lint"]["command"] == [
@@ -130,6 +133,31 @@ def test_setup_writes_swift_gates(installer: ModuleType, tmp_path: Path) -> None
     assert gates["duplicates"]["command"][1:3] == ["Runner", "--format"]
     assert gates["security"]["command"][3] == "../.agents/skills/he/security"
     assert gates["security"]["command"][-2:] == ["Runner", "RunnerTests"]
+
+
+def test_swift_group_depends_on_what_its_flutter_app_depends_on(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "mono"
+    init(root)
+    write(
+        root,
+        {
+            "apps/mobile/pubspec.yaml": PUBSPEC,
+            "apps/mobile/pubspec.lock": "packages: {}\n",
+        },
+    )
+    write(root, {"apps/mobile/ios/Runner.xcodeproj/project.pbxproj": PBXPROJ})
+    write(root, {"apps/mobile/ios/Runner/Box.swift": CODE})
+    config = installer.gate_config(root)
+    swift_group(config, "apps/mobile")["depends_on"] = ["packages/core"]
+    add_swift_groups(root, config)
+    group = swift_group(config, "apps/mobile/ios")
+    assert group["depends_on"] == ["packages/core"]
+    assert group["impact_inputs"] == [
+        "apps/mobile/pubspec.yaml",
+        "apps/mobile/pubspec.lock",
+    ]
 
 
 def test_setup_adds_the_pods_gate_only_with_a_podfile(
