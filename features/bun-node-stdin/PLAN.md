@@ -42,7 +42,7 @@ N/A — tool shim only; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: The new test failed before the fix and passed after; a real Bun 1.4.3 run through the shim ran a piped script and returned exit code 3.
+Evidence: The new test failed before the fix and passed after; real Bun 1.4.3 through the shim ran a piped script and returned exit code 3, exited 0 on empty stdin, kept blank lines, and left `-e` unchanged. Codex adversarial review (gpt-6-astra): round 1 found the empty-stdin regression, fixed with a test; round 2 approved. The full check passed (line coverage 90.89 percent), including two unrelated fixes for a stricter pyrefly release.
 E2E: Passed — real Bun through the generated shim.
 
 Delivery target: Merge
