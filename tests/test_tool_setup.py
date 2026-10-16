@@ -606,3 +606,23 @@ def test_push_copies_and_tools_stay_out_of_a_hidden_temporary_folder(
     environment = native.call_args.kwargs["env"]
     for name in ("MISE_DATA_DIR", "BUN_INSTALL_CACHE_DIR"):
         assert Path(environment[name]).is_relative_to(visible)
+
+
+def test_a_check_skips_a_stale_folder_another_check_just_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    stale = tmp_path / "checkouts/gone"
+    stale.mkdir(parents=True)
+    (stale / "checkout").write_text(str(tmp_path / "deleted"))
+    exists = Path.exists
+
+    def other_check_prunes_first(path: Path) -> bool:
+        if path == tmp_path / "deleted":
+            shutil.rmtree(stale)
+        return exists(path)
+
+    monkeypatch.setattr(Path, "exists", other_check_prunes_first)
+    tool_setup.prune_checkouts(tmp_path / "checkouts")
+    assert not stale.exists()
