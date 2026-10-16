@@ -109,7 +109,9 @@ def test_basic_mode_check_impact_and_mutation_run_without_packages(
         assert runner.check(base=base, quick=quick, verify_plan=False) == 0
     assert "PASS secrets-files" in capsys.readouterr().out
     assert runner.impact(base) == 0
-    assert capsys.readouterr().out == ("docs_only=false\ntools=uv@latest python@3.12\n")
+    assert capsys.readouterr().out == (
+        "docs_only=false\ntools=uv@latest python@3.12\nrunner=ubuntu-latest\n"
+    )
     assert mutation.report(repository, base, None, lambda *_arguments: set()) == 0
     assert "Mutation testing" not in capsys.readouterr().out
 

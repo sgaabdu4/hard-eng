@@ -698,7 +698,7 @@ def test_impact_reports_docs_only_before_tools(
     module.__dict__["ROOT"] = repository
     assert module.impact("HEAD") == 0
     assert capsys.readouterr().out == (
-        f"docs_only={expected}\ntools=uv@latest python@3.12\n"
+        f"docs_only={expected}\ntools=uv@latest python@3.12\nrunner=ubuntu-latest\n"
     )
 
 
