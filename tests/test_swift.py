@@ -135,15 +135,18 @@ def test_setup_writes_swift_gates(installer: ModuleType, tmp_path: Path) -> None
     assert gates["security"]["command"][-2:] == ["Runner", "RunnerTests"]
 
 
+def monorepo_app(root: Path, pubspec: str = PUBSPEC) -> None:
+    init(root)
+    write(root, {"apps/mobile/pubspec.yaml": pubspec})
+    write(root, {"apps/mobile/ios/Runner.xcodeproj/project.pbxproj": PBXPROJ})
+    write(root, {"apps/mobile/ios/Runner/Box.swift": CODE})
+
+
 def test_swift_group_in_a_monorepo_reads_only_its_apps_pubspec_files(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     root = tmp_path / "mono"
-    init(root)
-    pubspecs = {"apps/mobile/pubspec.yaml": PUBSPEC, "apps/mobile/pubspec.lock": ""}
-    write(root, pubspecs)
-    write(root, {"apps/mobile/ios/Runner.xcodeproj/project.pbxproj": PBXPROJ})
-    write(root, {"apps/mobile/ios/Runner/Box.swift": CODE})
+    monorepo_app(root)
     config = installer.gate_config(root)
     swift_group(config, "apps/mobile")["depends_on"] = ["packages/core"]
     add_swift_groups(root, config)
@@ -159,12 +162,10 @@ def test_swift_group_watches_the_native_folders_of_local_plugins(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     root = tmp_path / "mono"
-    init(root)
-    pubspec = PUBSPEC + "  local_plugin:\n    path: ../../plugins/local_plugin\n"
-    write(root, {"apps/mobile/pubspec.yaml": pubspec, "apps/mobile/pubspec.lock": ""})
+    monorepo_app(
+        root, PUBSPEC + "  local_plugin:\n    path: ../../plugins/local_plugin\n"
+    )
     write(root, {"plugins/local_plugin/pubspec.yaml": "name: local_plugin\n"})
-    write(root, {"apps/mobile/ios/Runner.xcodeproj/project.pbxproj": PBXPROJ})
-    write(root, {"apps/mobile/ios/Runner/Box.swift": CODE})
     config = installer.gate_config(root)
     add_swift_groups(root, config)
     assert swift_group(config, "apps/mobile/ios")["impact_inputs"][2:] == [
@@ -177,11 +178,8 @@ def test_swift_group_in_a_dart_workspace_takes_its_roles_from_the_workspace(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     root = tmp_path / "mono"
-    init(root)
+    monorepo_app(root)
     write(root, {"pubspec.yaml": "name: mono\nworkspace:\n  - apps/mobile\n"})
-    write(root, {"apps/mobile/pubspec.yaml": PUBSPEC, "apps/mobile/lib/main.dart": ""})
-    write(root, {"apps/mobile/ios/Runner.xcodeproj/project.pbxproj": PBXPROJ})
-    write(root, {"apps/mobile/ios/Runner/Box.swift": CODE})
     config = installer.gate_config(root)
     add_swift_groups(root, config)
     assert swift_group(config, "apps/mobile/ios")["impact_inputs"][2:] == [
