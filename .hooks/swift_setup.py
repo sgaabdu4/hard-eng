@@ -106,10 +106,19 @@ def swift_group(root: Path, path: str, project: SwiftProject) -> Group:
 
 def add_swift_groups(root: Path, config: GateConfig) -> None:
     """Add a group for each Swift platform folder the configuration lacks."""
-    declared = {str(Path(group["path"])) for group in config["packages"]}
+    declared = {str(Path(group["path"])): group for group in config["packages"]}
+    single = len(declared) == 1
     for path, project in swift_projects(root).items():
-        if path not in declared:
-            config["packages"].append(swift_group(root, path, project))
+        if path in declared:
+            continue
+        app = Path(path).parent
+        parent = declared.get(str(app))
+        group = swift_group(root, path, project)
+        group["depends_on"] = list(parent.get("depends_on", [])) if parent else []
+        group["impact_inputs"] = [str(app / "pubspec.yaml"), str(app / "pubspec.lock")]
+        if parent is not None and single:
+            parent.setdefault("depends_on", [])
+        config["packages"].append(group)
 
 
 def require_swift_groups(root: Path, config: GateConfig, files: list[Path]) -> None:
