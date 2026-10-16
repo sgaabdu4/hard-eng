@@ -8,6 +8,7 @@ import sys
 import urllib.request
 from pathlib import Path
 from types import ModuleType
+from typing import override
 from unittest.mock import Mock
 
 import agent_hooks
@@ -231,9 +232,13 @@ def test_release_lookup_supports_account_free_setup_and_existing_auth(
     monkeypatch.setattr(urllib.request, "urlopen", Mock(side_effect=OSError("offline")))
     with pytest.raises(OSError, match="offline"):
         update.github_json("repos/example/fixture/check-runs")
-    cut = io.BytesIO()
-    cut.read = Mock(side_effect=http.client.IncompleteRead(b"{", 10))
-    monkeypatch.setattr(urllib.request, "urlopen", Mock(return_value=cut))
+
+    class CutShort(io.BytesIO):
+        @override
+        def read(self, size: int | None = -1, /) -> bytes:
+            raise http.client.IncompleteRead(b"{", 10)
+
+    monkeypatch.setattr(urllib.request, "urlopen", Mock(return_value=CutShort()))
     with pytest.raises(OSError, match="cut short"):
         update.github_json("repos/example/fixture/check-runs")
 
