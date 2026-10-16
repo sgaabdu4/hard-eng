@@ -348,7 +348,10 @@ def bun_node(storage: Path, environment: dict[str, str]) -> None:
             f'exec {shlex.quote(node)} "$@";; esac\n'
         )
     # Node runs a script piped on stdin; bare `bun` prints its help and exits 0.
-    script += f'[ "$#" -eq 0 ] && exec {shlex.quote(bun)} -\n'
+    script += (
+        'if [ "$#" -eq 0 ]; then\n  source=$(cat)\n  [ -z "$source" ] && exit 0\n'
+        f'  printf "%s\\n" "$source" | {shlex.quote(bun)} -\n  exit $?\nfi\n'
+    )
     script += f'exec {shlex.quote(bun)} "$@"\n'
     shim = directory / "node"
     if shim.is_symlink() or not shim.is_file() or shim.read_text() != script:

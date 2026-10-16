@@ -374,16 +374,18 @@ def test_node_with_a_script_on_stdin_runs_it_on_bun(
 
     bun = tmp_path / "bin/bun"
     bun.parent.mkdir()
-    bun.write_text('#!/bin/sh\necho bun "$@"\n')
+    bun.write_text('#!/bin/sh\necho bun "$@"\ncat\nexit 3\n')
     bun.chmod(0o755)
     environment = {"PATH": f"{bun.parent}{os.pathsep}/usr/bin{os.pathsep}/bin"}
     monkeypatch.setenv("PATH", environment["PATH"])
     tool_setup.bun_node(tmp_path / "storage", environment)
     shim = tmp_path / "storage/bun-node/node"
     ran = subprocess.run(
-        [shim], input="process.exit(3)", capture_output=True, text=True, check=True
+        [shim], input="process.exit(3)", capture_output=True, text=True, check=False
     )
-    assert ran.stdout.split() == ["bun", "-"]
+    assert (ran.returncode, ran.stdout) == (3, "bun -\nprocess.exit(3)\n")
+    empty = subprocess.run([shim], input="", capture_output=True, text=True, check=True)
+    assert empty.stdout == ""
 
 
 def test_missing_bun_names_how_to_install_it(tmp_path: Path) -> None:
