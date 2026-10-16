@@ -145,7 +145,11 @@ def test_installed_sdk_templates_count_as_starters(
             "packages/flutter_tools/templates/app/ios.tmpl/Runner/AppDelegate.swift": future,
         },
     )
-    monkeypatch.setattr(shutil, "which", lambda _name: str(sdk / "bin/flutter"))
+
+    def which(_name: str) -> str:
+        return str(sdk / "bin/flutter")
+
+    monkeypatch.setattr(shutil, "which", which)
     cached = swift_setup.installed_templates
     cached.cache_clear()
     try:
