@@ -351,7 +351,7 @@ def bun_node(storage: Path, environment: dict[str, str]) -> None:
     script += (
         "piped=1\n"
         'for argument in "$@"; do\n  case "$argument" in\n'
-        "    -e|-p|-c|-i|-h|-v|-|--eval*|--print*|--check|--interactive|--help"
+        "    -e*|-p*|-c|-i|-h|-v|-|--eval*|--print*|--check|--interactive|--help"
         "|--version|--test*) piped=0;;\n    -*) ;;\n    *) piped=0;;\n  esac\ndone\n"
         'if [ "$piped" = 1 ]; then\n  source=$(cat)\n  [ -z "$source" ] && exit 0\n'
         f'  printf "%s\\n" "$source" | {shlex.quote(bun)} "$@" -\n  exit $?\nfi\n'
