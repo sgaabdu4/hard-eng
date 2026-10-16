@@ -347,10 +347,14 @@ def bun_node(storage: Path, environment: dict[str, str]) -> None:
             "*node_modules/.bin/miniflare*|*node_modules/miniflare/*) "
             f'exec {shlex.quote(node)} "$@";; esac\n'
         )
-    # Node runs a script piped on stdin; bare `bun` prints its help and exits 0.
+    # Node runs a piped script when no script or -e/-p is named; Bun prints help and exits 0.
     script += (
-        'if [ "$#" -eq 0 ]; then\n  source=$(cat)\n  [ -z "$source" ] && exit 0\n'
-        f'  printf "%s\\n" "$source" | {shlex.quote(bun)} -\n  exit $?\nfi\n'
+        "piped=1\n"
+        'for argument in "$@"; do\n  case "$argument" in\n'
+        "    -e|-p|-c|-i|-h|-v|-|--eval*|--print*|--check|--interactive|--help"
+        "|--version|--test*) piped=0;;\n    -*) ;;\n    *) piped=0;;\n  esac\ndone\n"
+        'if [ "$piped" = 1 ]; then\n  source=$(cat)\n  [ -z "$source" ] && exit 0\n'
+        f'  printf "%s\\n" "$source" | {shlex.quote(bun)} "$@" -\n  exit $?\nfi\n'
     )
     script += f'exec {shlex.quote(bun)} "$@"\n'
     shim = directory / "node"
