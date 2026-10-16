@@ -42,7 +42,7 @@ N/A — tool shim only; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: The extended test failed before the fix and passed after; real Bun 1.4.3 runs through the generated shim matched Node's exit codes in every case above, including `-eprocess.exit(3)` (3) and `-p1+1` (prints 2). Codex round 1 found the attached-expression case, fixed with test cases.
+Evidence: The extended test failed before the fix and passed after; real Bun 1.4.3 runs through the generated shim matched Node's exit codes in every case above, including `-eprocess.exit(3)` (3) and `-p1+1` (prints 2). Codex round 1 found the attached-expression case, fixed with test cases; round 2 approved. The full check passed (line coverage 90.89 percent).
 E2E: Passed — real Bun through the generated shim.
 
 Delivery target: Merge
