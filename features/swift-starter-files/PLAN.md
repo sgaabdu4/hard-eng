@@ -57,7 +57,7 @@ Evidence: End-to-end on this Mac (Xcode 27, Flutter 3.47.5, iOS 18.5 simulator) 
 - Adding `ios/Runner/Greeter.swift` and rerunning setup created the `ios` group with sources `Runner` and no `macos` group; format-lint, security and duplicates passed, and `tests` failed only with "Coverage report omits production files: Runner/Greeter.swift" because the file is not in the Xcode target. The unchanged `AppDelegate.swift` and `SceneDelegate.swift` were not asked for.
 - Removing that file and editing `AppDelegate.swift` (with a real test) passed: 10 of 10 lines.
 - Restoring the starter text and rerunning setup removed the `ios` group.
-- On the copy of 11 real Flutter apps the rule gave 5 template-only apps and 6 with a group (see the PR for the canary result).
+- Release canary on the 11 Flutter apps (`--jobs 1`, PR head `1a83e1a4`): 5 pass update and full check (no Swift group); 6 install the update and stop at the missing `performance_exception`. Three of those six hold project-added Swift files (an app with an extension target, a macOS app with credential code, an app with a live-activity target); three hold project code in `AppDelegate.swift` or `SceneDelegate.swift` (notification delegates, a method channel, deep links), so they correctly keep a group. The expected three were therefore not the full set.
 - Codex review (gpt-6-astra): round 1 found that other groups could still list a removed group in `depends_on`; the challenge review found the same; fixed. The review loop stopped there.
 E2E: Passed — the fresh-app runs above, with logs in the session scratchpad.
 Not checked: a real macOS GitHub runner.
