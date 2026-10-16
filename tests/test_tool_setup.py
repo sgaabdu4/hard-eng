@@ -386,6 +386,19 @@ def test_node_with_a_script_on_stdin_runs_it_on_bun(
     assert (ran.returncode, ran.stdout) == (3, "bun -\nprocess.exit(3)\n")
     empty = subprocess.run([shim], input="", capture_output=True, text=True, check=True)
     assert empty.stdout == ""
+    flagged = subprocess.run(
+        [shim, "--input-type=module"],
+        input="process.exit(3)",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert flagged.stdout == "bun --input-type=module -\nprocess.exit(3)\n"
+    for own in (["-e", "1"], ["app.js"], ["-"]):
+        named = subprocess.run(
+            [shim, *own], input="", capture_output=True, text=True, check=False
+        )
+        assert named.stdout == f"bun {' '.join(own)}\n"
 
 
 def test_missing_bun_names_how_to_install_it(tmp_path: Path) -> None:
