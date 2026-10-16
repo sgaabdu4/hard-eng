@@ -1,5 +1,6 @@
 """Generated job deadlines honor the consumer's existing shipping budget."""
 
+import hashlib
 import json
 import os
 import shlex
@@ -40,10 +41,12 @@ def test_native_tool_bootstrap_preserves_ci_sdk_executables(
         "NPM_CONFIG_CACHE",
     ):
         monkeypatch.delenv(name, raising=False)
-    storage = tmp_path / "hard-eng-tools"
+    shared = tmp_path / "hard-eng-tools"
+    checkout = hashlib.sha256(str(tool_setup.CHECKOUT).encode()).hexdigest()[:16]
+    storage = shared / "checkouts" / checkout
     if location != "local":
         monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
-        storage = tmp_path / "runner/hard-eng-tools"
+        shared = storage = tmp_path / "runner/hard-eng-tools"
     data = storage / "mise/data"
     if location == "configured":
         data = tmp_path / "configured/data"
@@ -69,7 +72,7 @@ def test_native_tool_bootstrap_preserves_ci_sdk_executables(
         assert environment["BUN_INSTALL_CACHE_DIR"] == str(
             tmp_path / "configured/cache"
             if location == "configured"
-            else storage / "bun/cache"
+            else shared / "bun/cache"
         )
         return subprocess.CompletedProcess(
             command, 0, json.dumps({"PATH": str(scanner)}), ""

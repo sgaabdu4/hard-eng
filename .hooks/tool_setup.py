@@ -1,6 +1,7 @@
 """Provision current native tools before concurrent gate execution."""
 
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -35,6 +36,7 @@ MISE_PACKAGE = "@jdxcode/mise-{}-{}".format(
 )
 MISE_LATEST = MISE_PACKAGE + "@latest"
 MISE_BINARY = Path("node_modules", MISE_PACKAGE, "bin/mise")
+CHECKOUT = Path(__file__).resolve().parents[1]
 NOT_INSTALLED = (
     "Tools are not installed yet and cannot be fetched now: {error}. "
     "Connect once or run the full check (python3 .hooks/hard-eng.py check) to install them."
@@ -222,17 +224,22 @@ def provision_batch(batch: list[str], timeout: float) -> None:
         )
         for tool in batch
     ]
-    storage = (
+    shared = (
         Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hard-eng-tools"
     )
+    storage = shared
+    if "RUNNER_TEMP" not in os.environ:
+        # Checkouts on other Hard Eng revisions rewrite these files while this one runs.
+        key = hashlib.sha256(str(CHECKOUT).encode()).hexdigest()[:16]
+        storage = shared / "checkouts" / key
     environment = os.environ.copy()
     for name, directory in {
-        "MISE_DATA_DIR": "mise/data",
-        "MISE_CACHE_DIR": "mise/cache",
-        "MISE_STATE_DIR": "mise/state",
-        "BUN_INSTALL_CACHE_DIR": "bun/cache",
+        "MISE_DATA_DIR": storage / "mise/data",
+        "MISE_CACHE_DIR": storage / "mise/cache",
+        "MISE_STATE_DIR": storage / "mise/state",
+        "BUN_INSTALL_CACHE_DIR": shared / "bun/cache",
     }.items():
-        environment.setdefault(name, str(storage / directory))
+        environment.setdefault(name, str(directory))
     bun_node(storage, environment)
     if shutil.which("gh"):
         environment.setdefault(
@@ -359,15 +366,24 @@ def bun_node(storage: Path, environment: dict[str, str]) -> None:
     script += f'exec {shlex.quote(bun)} "$@"\n'
     shim = directory / "node"
     if shim.is_symlink() or not shim.is_file() or shim.read_text() != script:
-        temporary = directory / f".node-{os.getpid()}"
-        temporary.unlink(missing_ok=True)
-        temporary.write_text(script)
-        temporary.chmod(0o755)
-        temporary.replace(shim)
+        replace_file(shim, script, 0o755)
     for target in (environment, os.environ):
         target["PATH"] = os.pathsep.join(
             [str(directory), target.get("PATH", os.defpath)]
         )
+
+
+def replace_file(path: Path, text: str, mode: int = 0o644) -> None:
+    """A concurrent reader sees the old or the new file, never a partial one."""
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w") as file:
+            file.write(text)
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
 
 
 def export_tool_paths(output: str, data_directory: Path) -> None:
@@ -396,7 +412,8 @@ def mise_launcher(
             "oven-sh/setup-bun step before the check"
         )
     launchers.mkdir(parents=True, exist_ok=True)
-    (launchers / "package.json").write_text('{"private": true}\n')
+    if not (launchers / "package.json").is_file():
+        replace_file(launchers / "package.json", '{"private": true}\n')
     version = json.loads(
         subprocess.run(
             ["bun", "pm", "view", MISE_LATEST, "version", "--json"],
