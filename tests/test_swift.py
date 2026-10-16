@@ -155,6 +155,42 @@ def test_swift_group_in_a_monorepo_reads_only_its_apps_pubspec_files(
     ]
 
 
+def test_swift_group_watches_the_native_folders_of_local_plugins(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "mono"
+    init(root)
+    pubspec = PUBSPEC + "  local_plugin:\n    path: ../../plugins/local_plugin\n"
+    write(root, {"apps/mobile/pubspec.yaml": pubspec, "apps/mobile/pubspec.lock": ""})
+    write(root, {"plugins/local_plugin/pubspec.yaml": "name: local_plugin\n"})
+    write(root, {"apps/mobile/ios/Runner.xcodeproj/project.pbxproj": PBXPROJ})
+    write(root, {"apps/mobile/ios/Runner/Box.swift": CODE})
+    config = installer.gate_config(root)
+    add_swift_groups(root, config)
+    assert swift_group(config, "apps/mobile/ios")["impact_inputs"][2:] == [
+        "plugins/local_plugin/ios",
+        "plugins/local_plugin/darwin",
+    ]
+
+
+def test_swift_group_in_a_dart_workspace_takes_its_roles_from_the_workspace(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "mono"
+    init(root)
+    write(root, {"pubspec.yaml": "name: mono\nworkspace:\n  - apps/mobile\n"})
+    write(root, {"apps/mobile/pubspec.yaml": PUBSPEC, "apps/mobile/lib/main.dart": ""})
+    write(root, {"apps/mobile/ios/Runner.xcodeproj/project.pbxproj": PBXPROJ})
+    write(root, {"apps/mobile/ios/Runner/Box.swift": CODE})
+    config = installer.gate_config(root)
+    add_swift_groups(root, config)
+    app = swift_group(config, "apps/mobile")
+    assert not {"lockfiles", "vulnerabilities"} & {g.get("role") for g in app["checks"]}
+    for group in config["packages"]:
+        group["depends_on"] = []
+    validate_required_checks(root, config)
+
+
 def test_setup_adds_the_pods_gate_only_with_a_podfile(
     installer: ModuleType, tmp_path: Path
 ) -> None:
