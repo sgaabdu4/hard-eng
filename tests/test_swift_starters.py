@@ -211,8 +211,10 @@ def test_setup_removes_a_group_for_a_template_only_folder(
     (root / "ios/Runner/Box.swift").unlink()
     write(root, {"ios/Runner/AppDelegate.swift": IOS_APP})
     (root / "ios/RunnerTests/RunnerTests.swift").write_text(IOS_TESTS)
+    config["packages"][0]["depends_on"] = ["ios"]
     add_swift_groups(root, config)
     assert [g["path"] for g in config["packages"]] == ["."]
+    assert config["packages"][0]["depends_on"] == []
 
 
 def test_group_for_a_template_only_folder_fails(

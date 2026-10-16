@@ -1,6 +1,6 @@
 # Check Swift in a Flutter app only beyond Flutter's starter files
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -24,13 +24,13 @@ Authority: Autonomous. The user decided the three rules (no group for starter-on
 
 ## Acceptance + steps
 
-- [ ] Starter files are recognised by text across template versions; edits, added statements and renamed files are not → `test_starter_text_matches_flutter_templates`, `test_edited_starter_text_is_not_a_starter`, `test_installed_sdk_templates_count_as_starters`.
-- [ ] A template-only folder gets no group; one added Swift file, or an edited `AppDelegate.swift`, creates it; a test-only edit does not → `test_template_only_folder_has_no_swift_group`, `test_project_swift_creates_the_group`.
-- [ ] Setup removes a group for a folder that is now template-only, and validation names it → `test_setup_removes_a_group_for_a_template_only_folder`, `test_group_for_a_template_only_folder_fails`.
-- [ ] Unchanged starter files are left out of the expected coverage files; edited ones stay in → `test_unchanged_starters_are_not_production_files`.
-- [ ] A group's sources are the folders that hold project Swift, so a starter-only `Runner` is not scanned until it is edited → `test_sources_skip_starter_only_folders`.
-- [ ] On this Mac a fresh `flutter create` app has no Swift group and passes `check`; one added Swift file or an edited `AppDelegate.swift` creates the group and its gates run → E2E below.
-- [ ] The 11 installed Flutter apps are tried with the release canary → report.
+- [x] Starter files are recognised by text across template versions; edits, added statements and renamed files are not → `test_starter_text_matches_flutter_templates`, `test_edited_starter_text_is_not_a_starter`, `test_installed_sdk_templates_count_as_starters`.
+- [x] A template-only folder gets no group; one added Swift file, or an edited `AppDelegate.swift`, creates it; a test-only edit does not → `test_template_only_folder_has_no_swift_group`, `test_project_swift_creates_the_group`.
+- [x] Setup removes a group for a folder that is now template-only, and validation names it → `test_setup_removes_a_group_for_a_template_only_folder` (also drops `depends_on` references to it), `test_group_for_a_template_only_folder_fails`.
+- [x] Unchanged starter files are left out of the expected coverage files; edited ones stay in → `test_unchanged_starters_are_not_production_files`.
+- [x] A group's sources are the folders that hold project Swift, so a starter-only `Runner` is not scanned until it is edited → `test_sources_skip_starter_only_folders`.
+- [x] On this Mac a fresh `flutter create` app has no Swift group and passes `check`; one added Swift file or an edited `AppDelegate.swift` creates the group and its gates run → E2E below.
+- [x] The 11 installed Flutter apps are tried with the release canary → report.
 
 ## Baseline + execution
 
@@ -48,9 +48,16 @@ N/A — hooks and gate configuration; no product appearance.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Required — a fresh Flutter app on this Mac: no group and a passing check; then an added Swift file and an edited `AppDelegate.swift`, each creating the group and running its gates → `tests/test_swift.py` for the logic and the recorded run for Xcode.
+Result: Passed
+Evidence: End-to-end on this Mac (Xcode 27, Flutter 3.47.5, iOS 18.5 simulator) with a fresh `flutter create` app (`ios` and `macos`):
+- After setup the configuration holds only the Dart group and no Swift group, and `check` passed all gates.
+- Adding `ios/Runner/Greeter.swift` and rerunning setup created the `ios` group with sources `Runner` and no `macos` group; format-lint, security and duplicates passed, and `tests` failed only with "Coverage report omits production files: Runner/Greeter.swift" because the file is not in the Xcode target. The unchanged `AppDelegate.swift` and `SceneDelegate.swift` were not asked for.
+- Removing that file and editing `AppDelegate.swift` (with a real test) passed: 10 of 10 lines.
+- Restoring the starter text and rerunning setup removed the `ios` group.
+- On the copy of 11 real Flutter apps the rule gave 5 template-only apps and 6 with a group (see the PR for the canary result).
+- Codex review (gpt-6-astra): round 1 found that other groups could still list a removed group in `depends_on`; the challenge review found the same; fixed. The review loop stopped there.
+E2E: Passed — the fresh-app runs above, with logs in the session scratchpad.
+Not checked: a real macOS GitHub runner.
 
 Delivery target: Merge
 Delivery: Pending — PR checks, rebase merge, a green main run and the canary report.
