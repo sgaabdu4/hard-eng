@@ -766,7 +766,7 @@ BOOTED = "BBBBBBBB-1111-2222-3333-444444444444"
 FIRST = "AAAAAAAA-1111-2222-3333-444444444444"
 DEVICES = {
     "booted": f"    iPhone 16 ({FIRST}) (Shutdown)\n    iPhone 15 ({BOOTED}) (Booted)\n",
-    "shutdown": f"    iPhone 16 ({FIRST}) (Shutdown)\n    iPhone 15 ({BOOTED}) (Shutdown)\n",
+    "shutdown": f"-- iOS 18.5 --\n    iPhone 16 ({FIRST}) (Shutdown)\n-- iOS 26.0 --\n    iPhone 15 ({BOOTED}) (Shutdown)\n",
     "none": "    iPad (CCCCCCCC-1111-2222-3333-444444444444) (Shutdown)\n",
 }
 FAKE_TOOLS = {
@@ -811,7 +811,7 @@ def run_tests_script(
 
 @pytest.mark.parametrize(
     ("devices", "destination"),
-    [("booted", BOOTED), ("shutdown", FIRST)],
+    [("booted", BOOTED), ("shutdown", BOOTED)],
 )
 def test_ios_tests_script_picks_a_simulator_by_id(
     installer: ModuleType, tmp_path: Path, devices: str, destination: str
