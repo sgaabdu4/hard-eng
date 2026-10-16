@@ -123,6 +123,19 @@ def local_plugin_folders(root: Path, app: Path, path: str) -> list[str]:
     return folders
 
 
+def watched_inputs(root: Path, app: Path, path: str) -> list[str]:
+    """Files whose change can alter the Swift build: dependency files and local plugins."""
+    from project_setup import workspace_matches, workspace_members
+
+    files = [app / "pubspec.yaml", app / "pubspec.lock"]
+    for owner in app.parents:
+        if (root / owner / "pubspec.yaml").is_file() and workspace_matches(
+            str(app.relative_to(owner)), workspace_members(root / owner, "dart")
+        ):
+            files += [owner / "pubspec.yaml", owner / "pubspec.lock"]
+    return [*map(str, files), *local_plugin_folders(root, app, path)]
+
+
 def add_swift_groups(root: Path, config: GateConfig) -> None:
     """Add a group for each Swift platform folder the configuration lacks."""
     declared = {str(Path(group["path"])): group for group in config["packages"]}
@@ -134,11 +147,7 @@ def add_swift_groups(root: Path, config: GateConfig) -> None:
         parent = declared.get(str(app))
         group = swift_group(root, path, project)
         group["depends_on"] = []
-        group["impact_inputs"] = [
-            str(app / "pubspec.yaml"),
-            str(app / "pubspec.lock"),
-            *local_plugin_folders(root, app, path),
-        ]
+        group["impact_inputs"] = watched_inputs(root, app, path)
         if parent is not None and single:
             parent.setdefault("depends_on", [])
         config["packages"].append(group)
@@ -157,7 +166,17 @@ def require_swift_groups(root: Path, config: GateConfig, files: list[Path]) -> N
             raise ValueError(
                 f"{path}: the group holding Swift code must declare language swift"
             )
-        roles = {gate.get("role") for gate in declared[path]["checks"]}
+        app = Path(path).parent
+        group = declared[path]
+        stale = set(watched_inputs(root, app, path)) - set(
+            group.get("impact_inputs", [])
+        )
+        if stale and str(app) not in group.get("depends_on", []):
+            raise ValueError(
+                f"{path}: impact_inputs must list {', '.join(sorted(stale))} "
+                "so a change to them selects the Swift checks"
+            )
+        roles = {gate.get("role") for gate in group["checks"]}
         if project.pods and "lockfiles" not in roles:
             raise ValueError(
                 f"{path}: a Podfile needs the pods-locked gate (`pod install --deployment`) "
