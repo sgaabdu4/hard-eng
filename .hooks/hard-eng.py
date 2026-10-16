@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import IO, TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
+import swift_setup
 from gate_config import (
     Gate,
     Group,
@@ -33,7 +34,6 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
-from swift_setup import reject_test_filters as reject_swift_filters
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -211,7 +211,7 @@ def reject_test_filters(
     command: list[str], directory: Path, language: str | None
 ) -> None:
     if language == "swift":
-        return reject_swift_filters(command)
+        return swift_setup.reject_test_filters(command)
     arguments = test_arguments(command, directory)
     if language == "python":
         short_flags = ()
@@ -347,7 +347,9 @@ def production_files(
         directory,
         [] if include_tests else [str(file.relative_to(directory)) for file in files],
     )
-    files -= {directory / name for name in excluded}
+    files -= {directory / name for name in excluded} | swift_setup.unchanged_starters(
+        files
+    )
     if not files:
         raise ValueError("Production sources contain no supported source files")
     return files

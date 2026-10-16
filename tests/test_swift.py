@@ -37,20 +37,26 @@ def write(root: Path, files: dict[str, str]) -> None:
         path.write_text(text)
 
 
-def flutter_app(root: Path, platforms: tuple[str, ...] = ("ios",)) -> None:
+PROJECT_SWIFT = {
+    "Runner/Box.swift": CODE,
+    "RunnerTests/RunnerTests.swift": TESTS,
+    "Flutter/Generated.swift": CODE,
+    "Pods/Lib/Lib.swift": CODE,
+}
+
+
+def flutter_app(
+    root: Path,
+    platforms: tuple[str, ...] = ("ios",),
+    swift: dict[str, str] = PROJECT_SWIFT,
+) -> None:
     init(root)
     write(root, {"pubspec.yaml": PUBSPEC, "pubspec.lock": "packages: {}\n"})
     write(root, {"lib/main.dart": "void main() {}\n"})
     for platform in platforms:
+        files = {f"{platform}/Runner.xcodeproj/project.pbxproj": PBXPROJ}
         write(
-            root,
-            {
-                f"{platform}/Runner.xcodeproj/project.pbxproj": PBXPROJ,
-                f"{platform}/Runner/Box.swift": CODE,
-                f"{platform}/RunnerTests/RunnerTests.swift": TESTS,
-                f"{platform}/Flutter/Generated.swift": CODE,
-                f"{platform}/Pods/Lib/Lib.swift": CODE,
-            },
+            root, files | {f"{platform}/{name}": text for name, text in swift.items()}
         )
 
 
