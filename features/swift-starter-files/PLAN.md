@@ -16,6 +16,8 @@ How to tell "unchanged" (decision, with evidence from a copy of 11 real Flutter 
 - Chosen: the file's text, with comments and whitespace removed, equals a Flutter template text, either one of the 16 released template versions listed in `swift_setup.py` (taken from the Flutter repository history of the `AppDelegate`, `SceneDelegate`, `MainFlutterWindow` and `RunnerTests` templates), or a template in the installed Flutter SDK, which covers versions newer than the list. It does not depend on history, so migrations, reformatting and older templates still match, while any added or changed statement does not.
 - Measured on the 11 real apps: 5 are template-only; 6 keep a group (3 with project-added Swift files, 3 whose `AppDelegate.swift` or `SceneDelegate.swift` holds notification, method-channel or deep-link code).
 
+Pods ordering (checked, not a defect): the Podfile reads `ios/Flutter/Generated.xcconfig`, which is gitignored and created by `flutter pub get`. The runner runs every `lockfiles` gate first, one at a time, in configuration order, and a Swift group is always added after its Flutter app's group, so `lockfile` (`flutter pub get`) runs before `pods-locked`. `selected_services` keeps the app's lockfile gate when only the Swift group is selected. I deleted the file and confirmed `flutter pub get` recreates it. `flutter precache` does not cover this, and does not need to. Guard: `test_flutter_dependency_setup_runs_before_the_pods_gate`.
+
 ## Decisions + authorization
 
 Blockers: None
@@ -30,6 +32,7 @@ Authority: Autonomous. The user decided the three rules (no group for starter-on
 - [x] Unchanged starter files are left out of the expected coverage files; edited ones stay in → `test_unchanged_starters_are_not_production_files`.
 - [x] A group's sources are the folders that hold project Swift, so a starter-only `Runner` is not scanned until it is edited → `test_sources_skip_starter_only_folders`.
 - [x] On this Mac a fresh `flutter create` app has no Swift group and passes `check`; one added Swift file or an edited `AppDelegate.swift` creates the group and its gates run → E2E below.
+- [x] The Podfile reads a file `flutter pub get` creates, so the app's dependency setup must run before the pods gate → `test_flutter_dependency_setup_runs_before_the_pods_gate`.
 - [x] The 11 installed Flutter apps are tried with the release canary → report.
 
 ## Baseline + execution
