@@ -217,15 +217,17 @@ def watched_inputs(root: Path, app: Path, path: str) -> list[str]:
 def add_swift_groups(root: Path, config: GateConfig) -> None:
     """Add a group for each Swift platform folder the configuration lacks."""
     projects = swift_projects(root)
-    config["packages"][:] = [
-        group
+    stale = {
+        group["path"]
         for group in config["packages"]
-        if not (
-            group.get("language") == "swift"
-            and Path(group["path"]).name in PLATFORMS
-            and str(Path(group["path"])) not in projects
-        )
-    ]
+        if group.get("language") == "swift"
+        and Path(group["path"]).name in PLATFORMS
+        and str(Path(group["path"])) not in projects
+    }
+    config["packages"][:] = [g for g in config["packages"] if g["path"] not in stale]
+    for group in config["packages"]:
+        if "depends_on" in group:
+            group["depends_on"] = [d for d in group["depends_on"] if d not in stale]
     declared = {str(Path(group["path"])): group for group in config["packages"]}
     single = len(declared) == 1
     for path, project in projects.items():
