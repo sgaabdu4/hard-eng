@@ -291,7 +291,11 @@ def prune_checkouts(checkouts: Path) -> None:
             continue
         if owner.exists():
             continue
-        with (path / "lock").open("a") as lock:
+        try:
+            lock = (path / "lock").open("a")
+        except FileNotFoundError:
+            continue
+        with lock:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:

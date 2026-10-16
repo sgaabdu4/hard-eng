@@ -25,6 +25,7 @@ Decisions: The folder key is a hash of the checkout root that `hard-eng.py` alre
 - [x] A reader never sees a partly written file while it is rewritten → `test_a_running_check_never_reads_a_partly_written_file`, red with a direct write.
 - [x] A push snapshot reuses its owner's tool folder; another checkout does not → `test_push_snapshots_reuse_their_checkout_tools`.
 - [x] Deleted checkouts lose their tool folders unless a check holds them → `test_deleted_checkouts_lose_their_tools_unless_a_check_holds_them`.
+- [x] A check skips a stale folder another check removed first → `test_a_check_skips_a_stale_folder_another_check_just_removed`, red before.
 - [x] A hidden temporary folder never holds push snapshots or tool folders → `test_push_copies_and_tools_stay_out_of_a_hidden_temporary_folder`, red before.
 - [x] Full `python3 .hooks/hard-eng.py check` passes.
 
@@ -45,7 +46,7 @@ N/A — tool storage only; no product appearance.
 ## Verification
 
 Result: Passed
-Evidence: The checkout test failed on the old code (one shared shim path for both checkouts and the old folder) and passes now. The atomic-write test failed with a direct write and passes now. The hidden-folder test failed when the snapshot used the hidden folder. All 27 tool setup tests pass. Codex round 1 found that push snapshots got a new folder on every push; fixed with the owner key and pruning.
+Evidence: The checkout test failed on the old code (one shared shim path for both checkouts and the old folder) and passes now. The atomic-write test failed with a direct write and passes now. The hidden-folder test failed when the snapshot used the hidden folder. All 28 tool setup tests pass. Codex round 1 found that push snapshots got a new folder on every push; fixed with the owner key and pruning. Round 2 found that two checks pruning one stale folder could crash the second; fixed and tested.
 E2E: Passed — real subprocess provisioning from two copied checkouts with a fake registry.
 
 Delivery target: Merge
