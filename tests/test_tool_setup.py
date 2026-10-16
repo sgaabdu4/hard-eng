@@ -366,6 +366,26 @@ def test_node_runs_on_bun_except_for_cloudflare_tools(
     assert ran.stdout.split() == [runtime, tool]
 
 
+def test_node_with_a_script_on_stdin_runs_it_on_bun(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bare `bun` prints its help and exits 0, so `node <<EOF` scripts passed unrun."""
+    import tool_setup
+
+    bun = tmp_path / "bin/bun"
+    bun.parent.mkdir()
+    bun.write_text('#!/bin/sh\necho bun "$@"\n')
+    bun.chmod(0o755)
+    environment = {"PATH": f"{bun.parent}{os.pathsep}/usr/bin{os.pathsep}/bin"}
+    monkeypatch.setenv("PATH", environment["PATH"])
+    tool_setup.bun_node(tmp_path / "storage", environment)
+    shim = tmp_path / "storage/bun-node/node"
+    ran = subprocess.run(
+        [shim], input="process.exit(3)", capture_output=True, text=True, check=True
+    )
+    assert ran.stdout.split() == ["bun", "-"]
+
+
 def test_missing_bun_names_how_to_install_it(tmp_path: Path) -> None:
     environment = {
         name: value
