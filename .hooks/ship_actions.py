@@ -248,7 +248,12 @@ def pre_push(root: Path) -> int:
 def worktrees(root: Path) -> list[dict[str, str]]:
     records = git(root, "worktree", "list", "--porcelain", "-z")
     return [
-        dict(field.partition(" ")[::2] for field in record.split("\0") if field)
+        {
+            key: value
+            for key, _, value in (
+                field.partition(" ") for field in record.split("\0") if field
+            )
+        }
         for record in records.split("\0\0")
         if record
     ]
