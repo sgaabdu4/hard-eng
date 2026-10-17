@@ -42,6 +42,7 @@ N/A — template helper name and gate configuration; no product appearance.
 Result: Passed
 Evidence: Biome 2.5.15. The gate command on the old `engine.js` exited 1 with two "Don't focus the test" findings at lines 109 and 112; after the rename it exited 0. The new `shipped-focused-tests` command exited 1 with a copy of the old file placed in `.agents/skills`, and 0 without it. `node --check` passes on the template.
 E2E: N/A — no user journey changes; the gate command itself is the proof.
+Canary at `a0bf66dd`: 22 of 30 installed projects pass update and full check. `focused-tests` passes in every project that has it, including the root gate that hit the issue. The 8 failures are project tests, types, builds, version and audit gates this change does not touch.
 Not checked: rendering a video with the template.
 
 Delivery target: Merge
