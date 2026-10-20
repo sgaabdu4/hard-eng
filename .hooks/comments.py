@@ -269,7 +269,7 @@ def validate_comments(root: Path, base: str | None) -> None:
     ]
     if found:
         raise ValueError(
-            "Code comments are none by default: delete each block below, and add one "
+            "HE-COMMENT-LINES: Code comments are none by default: delete each block below, and add one "
             "terse line of why only where naming, types, structure or a test cannot "
             "carry a needed non-obvious constraint. " + "; ".join(found)
         )
@@ -583,6 +583,6 @@ def validate_suppressions(root: Path, base: str | None) -> None:
         )
     if found:
         raise ValueError(
-            "A change must not switch a check off: fix the cause instead of "
+            "HE-NO-SWITCH-OFF: A change must not switch a check off: fix the cause instead of "
             "suppressing, skipping or deleting the check. " + "; ".join(found)
         )

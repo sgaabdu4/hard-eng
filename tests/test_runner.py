@@ -27,6 +27,7 @@ from shipping import ShippingPolicy, git
 def test_file_size_boundary_and_narrow_exceptions(
     runner: ModuleType, tmp_path: Path
 ) -> None:
+    """HE-FILE-LENGTH: a 1001-line file fails unless a narrow exception covers it."""
     path = tmp_path / "large.py"
     path.write_text("value = 1\n" * 1000)
     validate_file_sizes(tmp_path, {})
@@ -540,6 +541,7 @@ def test_nested_package_script_filter_rejected(
 def test_gate_validation_rejects_javascript_package_manager_drift(
     tmp_path: Path,
 ) -> None:
+    """HE-PERFORMANCE-SUITE: a package needs a performance suite or a reviewed exception."""
     (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
     (tmp_path / "bun.lock").touch()
     group: Group = {
@@ -763,6 +765,7 @@ def test_pytest_empty_priority_config_does_not_inherit_unused_filters(
 def test_real_runner_coverage_threshold(
     runner: ModuleType, tmp_path: Path, covered: int, expected: bool
 ) -> None:
+    """HE-COVERAGE-MIN: coverage below the minimum fails the test gate."""
     (tmp_path / "main.py").write_text("value = 1\n")
     report = {
         "files": {

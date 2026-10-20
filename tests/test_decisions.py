@@ -21,6 +21,7 @@ def adr_root(tmp_path: Path, status: str = "Accepted", applies: str = "") -> Pat
 
 
 def test_changed_decision_without_applies_to_line_fails(tmp_path: Path) -> None:
+    """HE-ADR-SCOPE: a changed decision record must name the paths it governs."""
     root = adr_root(tmp_path)
     validate_decisions(root, "HEAD")
     (root / "docs/adr/0002-new.md").write_text("# 0002\n\nStatus: Accepted\n")
