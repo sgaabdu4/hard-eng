@@ -827,9 +827,11 @@ def validate_required_checks(root: Path, config: GateConfig) -> None:
     files = repository_files(root)
     manifests = package_manifests(root, files)
     validate_manifest_groups(root, config, manifests)
+    from python_setup import require_listed_python_sources
     from swift_setup import require_swift_groups
 
     require_swift_groups(root, config, files)
+    require_listed_python_sources(root, config["packages"], files)
     if not config["packages"] and not manifests:
         return  # Ad-hoc command groups without a supported application manifest.
     shared_roles = {gate.get("role", "") for gate in config["shared"]}
@@ -892,10 +894,10 @@ def validate_package_services(
 ) -> None:
     from project_setup import (
         dependency_command,
-        python_roots,
         workspace_matches,
         workspace_members,
     )
+    from python_setup import python_roots
     from swift_setup import parent_roles
 
     directory = (root / group["path"]).resolve()

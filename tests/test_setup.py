@@ -24,11 +24,11 @@ from project_setup import (
     adapt_performance,
     browser_test_coverage,
     dependency_command,
-    import_configuration,
     javascript_files,
     javascript_manager,
     strict_scanner_flags,
 )
+from python_setup import import_configuration
 from reports import completed_tests, line_coverage, parallel_hint
 from shipping import ShippingPolicy
 
@@ -422,6 +422,25 @@ def test_tests_import_root_modules_of_a_project_uv_does_not_install(
         )
         installer.install(tmp_path)
         assert (tmp_path / "pyproject.toml").read_text() == content
+
+
+def test_python_code_added_after_setup_must_join_the_checked_sources(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "uv.lock").touch()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
+    (tmp_path / "main.py").write_text("value = 1\n")
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
+    (tmp_path / "calc.py").write_text("value = 2\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_calc.py").write_text("value = 3\n")
+    with pytest.raises(ValueError, match="outside its sources: calc.py;"):
+        validate_required_checks(tmp_path, config)
+    config["packages"][0]["sources"].append("calc.py")
+    validate_required_checks(tmp_path, config)
 
 
 def test_standalone_python_does_not_invent_import_architecture(
