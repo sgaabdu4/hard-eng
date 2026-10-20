@@ -11,6 +11,7 @@ from types import ModuleType
 import gitleaks_scan
 import pytest
 from conftest import git as git_output
+from conftest import running, spawner
 from gate_config import validate_gate
 from gitleaks_scan import run_current_files, snapshot_command
 
@@ -546,3 +547,12 @@ def test_ci_security_gate_turns_off_only_audits_that_cannot_apply(
     off = {"disable": True} if visibility == "PRIVATE" else None
     assert rules.get("self-hosted-runner") == own.get("self-hosted-runner", off)
     assert rules.get("unpinned-uses") == own.get("unpinned-uses")
+
+
+def test_a_timed_out_gate_leaves_no_process_behind(tmp_path: Path) -> None:
+    from gitleaks_scan import run_gate_command
+
+    pid_file = tmp_path / "child.pid"
+    with (tmp_path / "log").open("w") as log, pytest.raises(subprocess.TimeoutExpired):
+        run_gate_command("tests", spawner(pid_file), tmp_path, 2, log, log)
+    assert not running(pid_file)

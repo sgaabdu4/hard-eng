@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 from plans import default_branch_point, size_verdict
+from process_group import run_in_group
 
 TIMEOUT_SECONDS = 1800
 READ_ONLY_GIT = ("diff", "log", "show", "status", "merge-base", "ls-files")
@@ -95,15 +96,14 @@ def review(
             "",
         )
     try:
-        result = subprocess.run(
+        result = run_in_group(
             command(reviewer, PROMPT.format(point=point, revision=revision), root),
             cwd=root,
             env=reviewer_environment(),
             stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             timeout=TIMEOUT_SECONDS,
-            check=False,
         )
     except FileNotFoundError:
         return f"not done: {reviewer} is not installed", ""

@@ -42,6 +42,30 @@ def isolate_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tempfile, "tempdir", None)
 
 
+def spawner(pid_file: Path) -> list[str]:
+    """A command whose own child outlives it unless its whole process group is stopped."""
+    child = "import time; time.sleep(60)"
+    return [
+        sys.executable,
+        "-c",
+        (
+            "import subprocess, sys, time; "
+            f"child = subprocess.Popen([sys.executable, '-c', {child!r}]); "
+            f"open({str(pid_file)!r}, 'w').write(str(child.pid)); time.sleep(60)"
+        ),
+    ]
+
+
+def running(pid_file: Path) -> bool:
+    state = subprocess.run(
+        ["ps", "-o", "stat=", "-p", pid_file.read_text()],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    return bool(state) and not state.startswith("Z")
+
+
 def load_module(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
