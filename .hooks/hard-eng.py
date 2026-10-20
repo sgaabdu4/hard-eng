@@ -33,7 +33,7 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
-from python_setup import locks_nothing, pytest_options
+from python_setup import pytest_options
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -307,14 +307,13 @@ def production_files(
 def prepare_command(
     group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
 ) -> list[str]:
-    command = managed_command(gate["command"], ROOT / group["path"])
-    lockfile = ROOT / group["path"] / "bun.lock"
-    if "--lockfile=bun.lock" in command and not lockfile.exists():
-        command = [value for value in command if value != "--lockfile=bun.lock"]
-    if "--lockfile=uv.lock" in command and locks_nothing(ROOT / group["path"]):
-        command = [value for value in command if value != "--lockfile=uv.lock"]
-        if not any(value.startswith("--lockfile=") for value in command):
-            return []
+    from reports import osv_lockfiles
+
+    command = osv_lockfiles(
+        managed_command(gate["command"], ROOT / group["path"]), ROOT / group["path"]
+    )
+    if not command:
+        return []
     if gate.get("role") == "security" and "p/python" in command:
         index = command.index("p/python") + 1
         command = [
@@ -478,29 +477,6 @@ def run_projects(
     return next((result for result in results if result.returncode), results[-1])
 
 
-def jscpd_below_minimum(command: list[str], directory: Path, timeout: float) -> bool:
-    """An empty jscpd scope is real only if the smallest --min-tokens still scans nothing."""
-    from reports import jscpd_scanned
-
-    options = {"--min-tokens", "-k", "--output", "-o"}
-    rescan = [
-        argument
-        for index, argument in enumerate(command)
-        if argument.split("=", 1)[0] not in options
-        and (index == 0 or command[index - 1] not in options)
-    ]
-    with tempfile.TemporaryDirectory(prefix="hard-eng-jscpd-") as output:
-        subprocess.run(
-            [*rescan, "--min-tokens", "1", "--output", output],
-            cwd=directory,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=timeout,
-            check=False,
-        )
-        return jscpd_scanned(Path(output) / "jscpd-report.json")
-
-
 def run_limited_gate(
     group: Group,
     gate: Gate,
@@ -531,6 +507,7 @@ def run_limited_gate(
             emit_dart_test_failure,
             related_command,
             validate_scanner_log,
+            validate_scanner_report,
         )
 
         report = gate.get("report", {})
@@ -590,19 +567,9 @@ def run_limited_gate(
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
         if result.returncode == 0 and scanner and report_path is not None:
-            if scanner == "osv" and "--lockfile=bun.lock" in gate["command"]:
-                from reports import validate_osv
-
-                validate_osv(report_path, empty_bun=directory)
-            elif scanner == "jscpd":
-                from reports import validate_jscpd
-
-                validate_jscpd(
-                    report_path,
-                    lambda: jscpd_below_minimum(command, directory, timeout),
-                )
-            else:
-                SCANNERS[scanner](report_path)
+            validate_scanner_report(
+                scanner, gate, report_path, command, directory, timeout
+            )
         from reports import completed_tests, line_coverage, parallel_hint
 
         if (
