@@ -53,8 +53,8 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
     ]
 
 
-def reviewer_environment() -> dict[str, str]:
-    """The host's environment without the markers that would make the reviewer think it is the host."""
+def without_host_markers() -> dict[str, str]:
+    """The host's environment without the markers that would make a nested agent think it is the host."""
     return {
         name: value
         for name, value in os.environ.items()
@@ -96,7 +96,7 @@ def review(
         result = run_in_group(
             command(reviewer, PROMPT.format(point=point, revision=revision), root),
             cwd=root,
-            env=reviewer_environment(),
+            env=without_host_markers(),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
