@@ -262,7 +262,8 @@ def hard_eng_passed(work: Path) -> bool:
 
 def try_agent(agent: str, work: Path, log: IO[str]) -> tuple[bool, str]:
     copy = work.with_name(f"{work.name}.{agent}")
-    shutil.copytree(work, copy, symlinks=True)
+    # Git's background maintenance creates and removes lock files while the copy runs.
+    shutil.copytree(work, copy, symlinks=True, ignore=shutil.ignore_patterns("*.lock"))
     try:
         head = output(["git", "rev-parse", "HEAD"], copy)
         if not step(agent_command(agent, copy), copy, log, 3600):
