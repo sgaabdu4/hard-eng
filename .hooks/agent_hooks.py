@@ -271,6 +271,42 @@ HOOK_FILES = {
 }
 
 
+CLAUDE_ATTRIBUTION = re.compile(
+    r"^Co-Authored-By: Claude\b.*|^Claude-Session:.*|Generated with \[?Claude Code.*|.*noreply@anthropic\.com.*",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def reject_attribution(root: Path, kind: str, text: str, where: str) -> None:
+    """Enforce the committed Claude setting that turns this attribution off."""
+    try:
+        settings = json.loads((root / HOOK_FILES["claude"]).read_text())
+    except (OSError, ValueError):
+        return
+    attribution = settings.get("attribution") if isinstance(settings, dict) else None
+    if not isinstance(attribution, dict) or attribution.get(kind) != "":
+        return
+    if found := CLAUDE_ATTRIBUTION.search(text):
+        raise ValueError(
+            f"{where} has Claude attribution, which .claude/settings.json turns off: "
+            f"{found.group().strip()}"
+        )
+
+
+def validate_attribution(root: Path, base: str | None = None) -> None:
+    from plans import default_branch_point
+
+    point = base or default_branch_point(root) or "HEAD"
+    log = subprocess.check_output(
+        ["git", "log", "--format=%x1e%h%n%an <%ae>%n%cn <%ce>%n%B", f"{point}..HEAD"],
+        cwd=root,
+        text=True,
+    )
+    for entry in filter(None, log.split("\x1e")):
+        revision, _, text = entry.partition("\n")
+        reject_attribution(root, "commit", text, f"Commit {revision}")
+
+
 def retired_copilot_entry(native: str, entry: JsonValue, command: str) -> bool:
     events = {
         "sessionStart": ("session", 3600),

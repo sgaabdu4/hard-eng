@@ -792,6 +792,7 @@ def check(
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(groups, quick)
         timeout = timeout or gate_budget(ROOT)
+        from agent_hooks import validate_attribution
         from comments import validate_comments, validate_suppressions
         from plans import report_stage, validate_decisions, validate_plans
 
@@ -800,6 +801,7 @@ def check(
         validate_comments(ROOT, base)
         validate_suppressions(ROOT, base)
         validate_decisions(ROOT, base)
+        validate_attribution(ROOT, base)
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
 
