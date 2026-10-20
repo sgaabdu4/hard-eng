@@ -335,6 +335,24 @@ def test_dart_test_failure_surfaces_machine_context(
     assert "Dart test failure: rejects malformed input: Expected valid input" in output
 
 
+def test_missing_performance_suite_names_the_requirement(
+    runner: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-PERFORMANCE-SUITE: a missing suite folder fails with the rule, not a test-runner usage error."""
+    group = {"path": ".", "language": "python", "sources": ["main.py"]}
+    performance = gate(
+        "performance",
+        "raise SystemExit(4)",
+        role="performance",
+        report={"type": "performance-junit", "path": "coverage/performance.xml"},
+    )
+    performance["command"].append("tests/performance")
+    assert runner.run_gate(group, performance, 5, threading.Lock()) is True
+    output = capsys.readouterr().out
+    assert "HE-PERFORMANCE-SUITE: tests/performance does not exist" in output
+    assert "performance_exception" in output
+
+
 def test_missing_command_and_timeout_fail(
     runner: ModuleType, capsys: pytest.CaptureFixture[str]
 ) -> None:
