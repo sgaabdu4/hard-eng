@@ -22,6 +22,8 @@ SOURCE = Path(__file__).resolve().parents[1]
 # Local fixture commands must not inherit the hosting workflow's event.
 os.environ.pop("GITHUB_ACTIONS", None)
 os.environ.pop("GITHUB_EVENT_NAME", None)
+# Fixture repositories must not take signing, hooks or branch names from the developer.
+os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
 sys.path[:0] = [str(SOURCE / ".hooks"), str(SOURCE)]
 CODEBASE_MEMORY = {
     "command": "sh",
