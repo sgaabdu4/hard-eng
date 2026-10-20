@@ -251,6 +251,22 @@ def pre_push(root: Path) -> int:
             check = ["check", *(["--base", base, *narrow] if base else [])]
             if returncode := run_hard_eng(checkout, check, environment):
                 return returncode
+            changed = subprocess.run(
+                ["git", "diff", "--name-only"],
+                cwd=checkout,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.split()
+            if changed:
+                print(
+                    "Hard Eng: a gate changed pushed files: "
+                    + ", ".join(changed)
+                    + ". The push differs from what passed; apply the change, commit it and push again.",
+                    flush=True,
+                )
+                return 1
             if base is not None:
                 began = time.monotonic()
                 arguments = ["mutation", "--base", base, "--in-place"]
