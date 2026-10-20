@@ -988,3 +988,15 @@ def test_second_check_waits_for_the_first_in_the_same_checkout(
     second.join(timeout=60)
     assert results == [0]
     assert (tmp_path / "ran").is_file()
+
+
+def test_fixture_git_ignores_the_developers_global_config(tmp_path: Path) -> None:
+    init(tmp_path / "repo")
+    found = subprocess.run(
+        ["git", "config", "--global", "--list"],
+        cwd=tmp_path / "repo",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert found.stdout == ""
