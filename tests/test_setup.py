@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -389,6 +390,38 @@ def test_python_tests_run_in_parallel_unless_a_project_opts_out(
     assert "-n 0" in parallel_hint(1, True, parallel)
     assert parallel_hint(0, True, parallel) == parallel_hint(1, True, gate["command"])
     assert parallel_hint(1, True, gate["command"]) == ""
+
+
+@pytest.mark.parametrize("installed", [False, True])
+def test_tests_import_root_modules_of_a_project_uv_does_not_install(
+    installer: ModuleType, tmp_path: Path, installed: bool
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "uv.lock").touch()
+    project = '[project]\nname="fixture"\nversion="1"\n'
+    if installed:
+        project += (
+            '[build-system]\nrequires = ["uv_build"]\nbuild-backend = "uv_build"\n'
+        )
+    (tmp_path / "pyproject.toml").write_text(project)
+    (tmp_path / "calc.py").write_text(
+        "def add(a: int, b: int) -> int:\n    return a + b\n"
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_calc.py").write_text(
+        "from calc import add\n\n\ndef test_add() -> None:\n    assert add(2, 3) == 5\n"
+    )
+    installer.install(tmp_path)
+    content = (tmp_path / "pyproject.toml").read_text()
+    assert ('pythonpath = ["."]' in content) is not installed
+    if not installed:
+        pytest_script = Path(sys.executable).with_name("pytest")
+        subprocess.run(
+            [pytest_script, "-q", "-p", "no:cacheprovider"], cwd=tmp_path, check=True
+        )
+        installer.install(tmp_path)
+        assert (tmp_path / "pyproject.toml").read_text() == content
 
 
 def test_standalone_python_does_not_invent_import_architecture(
