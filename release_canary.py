@@ -248,6 +248,9 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
     new = ["--new", value] if kind == "scaffold" else []
     must(work, log, "setup failed", ["sh", str(source / "setup.sh"), str(source), *new])
     add_documents(work)
+    if kind == "brownfield":
+        # Old findings become shrink-only debt in the install commit, as for a real adoption.
+        must(work, log, "adopt failed", [sys.executable, ".hooks/hard-eng.py", "adopt"])
     must(
         work,
         log,
