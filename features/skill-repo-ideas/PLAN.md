@@ -18,8 +18,9 @@ Authority: Autonomous. Abid asked to use the six repos' ideas to improve Hard En
 
 ## Acceptance + steps
 
-- [x] `tests/agent_checks.py` stays under 1000 lines → the `check` line-limit gate. A `--bare` fixture has no `AGENTS.md`, `.agents/`, `.claude/`, `.codex/` or pre-push hook, and its `.hooks/hard-eng.py check --plan-stage Ready` still passes; a normal fixture keeps them → `tests/test_agent_checks.py`.
-- [x] `results.json` records whether the run was bare → `tests/test_agent_checks.py`.
+- [x] A `--bare` fixture has no `AGENTS.md`, `.agents/`, `.claude/`, `.codex/` or pre-push hook, and its `.hooks/hard-eng.py check --plan-stage Ready` still passes; a normal fixture keeps them → `tests/test_agent_checks.py::test_a_bare_fixture_hides_hard_eng_from_the_agent_but_keeps_its_checks`.
+- [x] `tests/agent_checks.py` stays under 1000 lines → N/A — the `check` line-limit gate proves it, not a test.
+- [x] `results.json` records whether the run was bare → `tests/test_agent_checks.py::test_results_record_a_bare_run`.
 - [x] HE Learn states the helped / hurt / no effect / confounded verdicts; decisions.md allows Status Rejected → `tests/test_skill_links.py::test_distributed_skill_links_resolve` and `tests/test_skill_routing.py::test_every_request_picks_its_own_skill` pass.
 - [x] No remaining link points at a deleted plan → `tests/test_skill_links.py::test_distributed_skill_links_resolve` + `git grep` for `features/` paths.
 
