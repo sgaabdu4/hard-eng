@@ -32,6 +32,9 @@ reported = "0.0.0" if (state / "corrupt").exists() else version
 binary.write_text(
     "#!/bin/sh\\n"
     f'[ "$1" = --version ] && echo "{{reported}} test" && exit 0\\n'
+    f'[ -e {{state}}/github-denied ] && [ "$2" = install ] && [ "$MISE_USE_VERSIONS_HOST" = false ] '
+    '&& echo "HTTP status client error (403 Forbidden) for url (https://api.github.com/repos/a/b/releases)" >&2 '
+    '&& exit 1\\n'
     '[ "$2" = env ] && echo \\'{{"PATH": ""}}\\'\\n'
     "exit 0\\n"
 )
@@ -252,6 +255,15 @@ def test_quick_check_uses_installed_tools_while_offline(
     result = provision(tmp_path, quick=True)
     assert result.returncode == 0, result.stdout
     assert adds(registry) == ["2026.9.13"]
+
+
+def test_tools_install_from_the_mise_host_when_github_refuses_release_lists(
+    tmp_path: Path, registry: Path
+) -> None:
+    (registry / "github-denied").touch()
+    result = provision(tmp_path)
+    assert result.returncode == 0, result.stdout
+    assert "403 Forbidden" not in result.stdout
 
 
 def test_quick_check_offline_without_tools_says_to_connect_once(
