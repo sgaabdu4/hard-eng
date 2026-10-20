@@ -1,7 +1,7 @@
 """Run Hard Eng's agent-behaviour cases through a real agent, on demand.
 
 Usage: uv run python tests/agent_checks.py [--client codex|claude] [--model M]
-    [--effort E] [--case NAME] [--repeat N] [--source REV] [--judge]
+    [--effort E] [--case NAME] [--repeat N] [--source REV] [--bare] [--judge]
 
 Each case installs this source (or --source REV) into a disposable Git fixture,
 runs one non-interactive agent session kept apart from the user's own agent
@@ -16,6 +16,9 @@ reports. Without it such a case is BLOCKED, never PASS.
 To compare a skill change, run the same --client, --model, --effort and --case
 with --repeat N twice, once with --source set to the old revision, and compare
 the two results.json files. The judge sees one report at a time with no revision.
+To see what Hard Eng adds, compare a normal run with a --bare run: the agent then
+gets no Hard Eng instructions, skills or hooks, while the judges still use its
+checks.
 
 Results and evidence go to coverage/agent-checks/<UTC time>-<client>-<model>/,
 which Git ignores and setup never installs. pytest and CI do not run agents.
@@ -566,7 +569,12 @@ CASES = [
 ]
 
 
-def fixture(root: Path, case: Case, source: Path = SOURCE) -> str:
+BARE_REMOVED = ("AGENTS.md", ".agents", ".claude", ".codex", ".git/hooks/pre-push")
+
+
+def fixture(
+    root: Path, case: Case, source: Path = SOURCE, *, bare: bool = False
+) -> str:
     """A committed project with this source installed, then the case's own state."""
     init(root)
     for name, text in {
@@ -586,6 +594,12 @@ def fixture(root: Path, case: Case, source: Path = SOURCE) -> str:
     )
     # Without the marker, SessionStart and Stop cannot fetch a newer upstream over the tested source.
     (root / ".hooks/hard-eng-source.json").unlink()
+    for name in BARE_REMOVED if bare else ():
+        path = root / name
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
     commit(root, "Install Hard Eng")
     case.prepare(root)
     return git(root, "rev-parse", "HEAD")
@@ -877,7 +891,7 @@ def execute(
     evidence.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix="hard-eng-agent-") as temporary:
         root = Path(temporary).resolve() / "project"
-        base = fixture(root, case, options.installed)
+        base = fixture(root, case, options.installed, bare=options.bare)
         agent = client.run(root, evidence, options, case.prompt, True)
         (evidence / "actions.json").write_text(
             json.dumps([action._asdict() for action in agent.actions], indent=2) + "\n"
@@ -926,6 +940,11 @@ def main() -> int:
         "--source", help="install this revision instead of the checkout"
     )
     parser.add_argument(
+        "--bare",
+        action="store_true",
+        help="remove Hard Eng's instructions, skills and hooks; keep its checks",
+    )
+    parser.add_argument(
         "--judge", action="store_true", help="grade diagnoses with the same client"
     )
     options = parser.parse_args()
@@ -967,6 +986,7 @@ def main() -> int:
         "tested_commit": tested,
         "uncommitted_changes": dirty,
         "source": options.source or "checkout",
+        "bare": options.bare,
         "started": started.isoformat(),
         "client": {
             "name": options.client,

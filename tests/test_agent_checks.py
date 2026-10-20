@@ -8,6 +8,7 @@ from argparse import Namespace
 from collections.abc import Callable
 from pathlib import Path
 
+import agent_checks
 import pytest
 from agent_checks import (
     CASES,
@@ -33,6 +34,7 @@ from agent_checks import (
     loads_skill,
     main,
 )
+from conftest import commit, init
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
 BASELINE = Action(
@@ -513,3 +515,39 @@ def test_a_run_that_would_test_nothing_is_refused(
         main()
     assert refused.value.code == 2
     assert "--repeat" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("bare", [False, True])
+def test_a_bare_fixture_hides_hard_eng_from_the_agent_but_keeps_its_checks(
+    tmp_path: Path, bare: bool
+) -> None:
+    root = tmp_path / "project"
+    fixture(
+        root,
+        next(case for case in CASES if case.name == "continue-approved"),
+        bare=bare,
+    )
+    hidden = ["AGENTS.md", ".agents", ".claude", ".codex", ".git/hooks/pre-push"]
+    assert [(root / name).exists() for name in hidden] == [not bare] * len(hidden)
+    stage = [sys.executable, ".hooks/hard-eng.py", "check", "--plan-stage", "Ready"]
+    assert (
+        subprocess.run(stage, cwd=root, capture_output=True, check=False).returncode
+        == 0
+    )
+
+
+def test_results_record_a_bare_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init(tmp_path / "source")
+    (tmp_path / "source/README.md").write_text("source\n")
+    commit(tmp_path / "source", "Source")
+    monkeypatch.setattr(agent_checks, "SOURCE", tmp_path / "source")
+    blocked = Client("m", lambda: Ready("1", "not signed in"), codex_run, "none")
+    monkeypatch.setitem(agent_checks.CLIENTS, "codex", blocked)
+    monkeypatch.setattr(
+        sys, "argv", ["agent_checks.py", "--bare", "--case", "review-only"]
+    )
+    assert main() == 1
+    [results] = (tmp_path / "source/coverage/agent-checks").glob("*/results.json")
+    assert json.loads(results.read_text())["bare"] is True
