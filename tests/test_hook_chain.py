@@ -9,7 +9,8 @@ from unittest.mock import Mock
 import agent_hooks
 import hook_chain
 import pytest
-from conftest import git
+import update
+from conftest import commit, git
 from shipping import ShippingPolicy
 from test_basic_mode import go_project
 
@@ -209,3 +210,69 @@ def test_update_candidate_runs_its_own_copy_of_the_inherited_hooks_path(
     git(candidate, "config", "--worktree", "core.hooksPath", copied.format(**paths))
     hook_chain.use_own_hooks(repository, candidate)
     assert git(candidate, "config", "core.hooksPath") == own.format(**paths)
+
+
+LOCAL_FILES = (
+    ".env",
+    "app/.env.local",
+    ".claude/settings.local.json",
+    "CLAUDE.local.md",
+)
+
+
+@pytest.mark.parametrize("husky", [False, True], ids=["git-hooks", "husky"])
+def test_a_new_worktree_matches_the_main_checkout(
+    installer: ModuleType,
+    repository: Path,
+    shipping_policy: ShippingPolicy,
+    husky: bool,
+) -> None:
+    go_project(repository)
+    project_hook = repository / ".git/hooks/post-checkout"
+    if husky:
+        shims = repository / ".husky/_"
+        shims.mkdir(parents=True)
+        for name in ("pre-push", "post-checkout"):
+            (shims / name).write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
+            (shims / name).chmod(0o755)
+        (shims / "h").write_text(
+            'n=$(basename "$0")\ns=$(dirname "$(dirname "$0")")/$n\nsh -e "$s" "$@"\n'
+        )
+        (shims / ".gitignore").write_text("*\n")
+        git(repository, "config", "core.hooksPath", ".husky/_")
+        project_hook = repository / ".husky/post-checkout"
+    project_hook.parent.mkdir(parents=True, exist_ok=True)
+    project_hook.write_text('#!/bin/sh\necho "$1" > project.args\n')
+    project_hook.chmod(0o755)
+    config = installer.gate_config(repository)
+    config["shipping"] = shipping_policy
+    (repository / "hard-eng.gates.json").write_text(json.dumps(config))
+    installer.install(repository)
+    with (repository / ".gitignore").open("a") as ignores:
+        ignores.write(".env*\n.claude/settings.local.json\nCLAUDE.local.md\n")
+        ignores.write("dist/\nproject.args\n")
+    (repository / "app").mkdir()
+    (repository / "app/page.txt").write_text("committed\n")
+    commit(repository, "ignore local files")
+    for name in LOCAL_FILES:
+        (repository / name).write_text(f"{name} stays on this machine\n")
+    (repository / "dist").mkdir()
+    (repository / "dist/bundle.js").write_text("build output\n")
+    linked = repository.parent / "linked"
+    git(repository, "worktree", "add", "-q", str(linked))
+    for name in LOCAL_FILES:
+        assert (linked / name).is_symlink()
+        assert (linked / name).resolve() == (repository / name).resolve()
+    assert not (linked / "dist").exists()
+    assert set((linked / "project.args").read_text().strip()) == {"0"}
+    hook, target = hook_chain.locate(linked)
+    assert hook.is_file()
+    assert hook_chain.is_own(linked, target)
+    for skill in (linked / ".claude/skills").iterdir():
+        assert skill.resolve() == linked / ".agents/skills" / skill.name
+    assert git(linked, "status", "--porcelain") == ""
+    installed = hook_chain.worktree_hook(repository)[0]
+    installed.unlink()
+    message = update.repair_current_hook(repository, "unused")
+    assert message.endswith("; installed the worktree hook.")
+    assert hook_chain.is_own(repository, installed)
