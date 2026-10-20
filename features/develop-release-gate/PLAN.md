@@ -32,6 +32,8 @@ Decisions: Extend `release_canary.py`, not a new tool. Scaffold = every `--new` 
 - [x] Project lock files such as pubspec.lock reach the agent copy; only Git's own lock files are skipped → `tests/test_release_canary.py::test_project_lock_files_reach_the_agent_copy`.
 - [x] The agent task lets agents commit on a local branch, never push, and leave failures that predate their change → N/A — task text only; the Claude trial on the Mac failed Vite (Stop hook blocked on an unfinished plan) and brownfield (agent stopped to ask about old failures) under "do not commit", and the next Mac canary run is the proof.
 - [x] An interrupted pre-push still counts its killed gate as stopped where the container never reaps zombies → `tests/test_ship_actions.py::test_interrupted_pre_push_removes_its_snapshot`; it failed in the cloud container before.
+- [x] Codex runs the release's project hooks in the canary; without the hook-trust bypass it lists them but runs none → N/A — only a real `codex exec` run can prove it; a throwaway repo showed SessionStart and Stop ran only with the flag.
+- [x] Pushes to `develop` run the `hard-eng` check here, so installed projects accept a develop release; projects get only their base branch → `tests/test_ci_setup.py::test_workflow_runs_once_per_change`.
 
 ## Baseline + execution
 
