@@ -52,5 +52,8 @@ N/A — gate and documentation change with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Branch full suite: 1748 passed, the same 8 failed as on `develop`; line coverage 89%, `plans.py` 95%. Ruff format, lint, complexity and annotations, Pyrefly, Vulture and jscpd (0 clones) pass. The repository passes its own registry, comment, switch-off, decision and attribution checks. Deliberately breaking the copy, retired, installed and sentence-length logic each fails `tests/test_requirements.py`. `hard-eng.py` stays at 999 lines: one `validate_records` call runs the decision, attribution and registry checks.
+Evidence: Branch full suite after rebasing on `develop` e62b742: 1771 passed, the same 8 environment failures as `develop`; line coverage 89%, `plans.py` 95%. Ruff format, lint, complexity and annotations, Pyrefly, Vulture and jscpd (0 clones) pass. The repository passes its own registry, comment, switch-off, decision and attribution checks. Deliberately breaking the copy, retired, installed and sentence-length logic each fails `tests/test_requirements.py`. `hard-eng.py` stays at 999 lines: one `validate_records` call runs the decision, attribution and registry checks.
 E2E: N/A — the check runs inside the existing `check` command, proven by the quick-check test; no new user journey.
+
+Delivery target: Merge
+Delivery: Pending — PR #332 into `develop` with the `hard-eng` CI check green.
