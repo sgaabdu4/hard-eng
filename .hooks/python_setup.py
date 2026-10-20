@@ -271,3 +271,15 @@ def require_listed_python_sources(
                 "add each to the package's sources and to every check that names them "
                 "(tests --cov=, annotations, dead-code, duplicates)"
             )
+
+
+def locks_nothing(directory: Path) -> bool:
+    """OSV scans only registry, Git and URL packages; uv.lock also lists the project itself."""
+    lockfile = directory / "uv.lock"
+    if not lockfile.is_file():
+        return False
+    packages = tomllib.loads(lockfile.read_text()).get("package", [])
+    return all(
+        not {"registry", "git", "url"} & set(package.get("source", {}))
+        for package in packages
+    )
