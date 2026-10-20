@@ -1,0 +1,37 @@
+name: PR text
+
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+
+permissions: {}
+
+concurrency:
+  group: pr-text-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  remove-claude-footer:
+    name: remove-claude-footer
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read # Read the footer rule from .hooks.
+      pull-requests: write # Rewrite the PR body without the footer.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .hooks
+      - name: Remove the Claude footer that the cloud GitHub proxy appends
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$REPO/pulls/$PR" --jq '.body // ""' > "$RUNNER_TEMP/body.md"
+          python3 -I -c 'import sys; sys.path.insert(0, ".hooks"); from agent_hooks import without_attribution_footer as clean; sys.stdout.write(clean(sys.stdin.read()))' < "$RUNNER_TEMP/body.md" > "$RUNNER_TEMP/clean.md"
+          if ! cmp -s "$RUNNER_TEMP/body.md" "$RUNNER_TEMP/clean.md"; then
+            gh api -X PATCH "repos/$REPO/pulls/$PR" -F "body=@$RUNNER_TEMP/clean.md" > /dev/null
+          fi

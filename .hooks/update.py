@@ -854,6 +854,7 @@ INSTALLED_FILES = {
     "AGENTS.override.md",
     ".husky/pre-push",
     ".github/workflows/hard-eng.yml",
+    ".github/workflows/pr-text.yml",
 }
 
 
