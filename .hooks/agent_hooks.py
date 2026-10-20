@@ -181,13 +181,13 @@ def project_pre_push(root: Path, hook: Path) -> Path:
             owner, hook = common.parent, directory / hook.name
     shim = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"'
     if (
-        hook == owner / ".husky/_/pre-push"
+        hook == owner / ".husky/_" / hook.name
         and not hook.is_symlink()
         and hook.is_file()
         and hook.read_text().rstrip("\n") == shim
         and (hook.parent / "h").is_file()
     ):
-        return root / ".husky/pre-push"
+        return root / ".husky" / hook.name
     return hook
 
 
@@ -470,6 +470,7 @@ def gate_status(root: Path) -> str:
                     ".agents/skills",
                     "hard-eng.gates.json",
                     ".husky/pre-push",
+                    ".husky/post-checkout",
                 ],
                 cwd=root,
                 text=True,
