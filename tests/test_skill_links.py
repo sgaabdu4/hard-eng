@@ -117,14 +117,14 @@ def frontmatter_failures(root: Path) -> list[str]:
     return failures
 
 
-# Codex cuts a skill's body after 8,000 bytes (codex-rs/ext/skills/src/render.rs).
+# Codex's skills extension cuts an invoked skill after 8,000 bytes (ext/skills/src/render.rs).
 SKILL_BYTES = 8000
 
 
 def size_failures(root: Path) -> list[str]:
     """Symlinked skills come from submodules that own their own size."""
     return [
-        f"{skill.name}: SKILL.md has {size} bytes; Codex reads only {SKILL_BYTES}"
+        f"{skill.name}: SKILL.md has {size} bytes; Codex may cut it at {SKILL_BYTES}"
         for skill in sorted((root / ".agents/skills").iterdir())
         if not skill.is_symlink()
         and (size := (skill / "SKILL.md").stat().st_size) > SKILL_BYTES
@@ -224,5 +224,5 @@ def test_an_oversized_skill_fails_unless_a_submodule_owns_it(tmp_path: Path) -> 
     (skills / "linked").symlink_to(tmp_path / "submodule/linked")
 
     assert size_failures(tmp_path) == [
-        f"over: SKILL.md has {SKILL_BYTES + 1} bytes; Codex reads only {SKILL_BYTES}"
+        f"over: SKILL.md has {SKILL_BYTES + 1} bytes; Codex may cut it at {SKILL_BYTES}"
     ]
