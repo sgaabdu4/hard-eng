@@ -1,6 +1,6 @@
 # Cloud sessions run Hard Eng in its own repository
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -19,10 +19,10 @@ Authority: Autonomous. Abid gave standing approval to push, open PRs and decide,
 
 ## Acceptance + steps
 
-- [ ] This repository holds exactly the hooks, attribution setting and skill links that setup writes → `tests/test_agent_hooks.py::test_source_repository_installs_hard_eng_on_itself`.
-- [ ] `check` fails on a commit with a Claude trailer or a Claude author when committed settings turn commit attribution off, and passes otherwise → `tests/test_agent_hooks.py::test_check_rejects_claude_attribution_when_settings_turn_it_off`.
-- [ ] `ship --stage ready` fails on a PR body with the Claude Code footer when committed settings turn PR attribution off → `tests/test_agent_hooks.py::test_ready_ship_rejects_a_pr_body_with_claude_attribution`.
-- [ ] The SessionStart hook runs in a cloud container and reports gate status → N/A — needs a new cloud session after merge; recorded in Verification.
+- [x] This repository holds exactly the hooks, attribution setting and skill links that setup writes → `tests/test_agent_hooks.py::test_source_repository_installs_hard_eng_on_itself`.
+- [x] `check` fails on a commit with a Claude trailer or a Claude author when committed settings turn commit attribution off, and passes otherwise → `tests/test_agent_hooks.py::test_check_rejects_claude_attribution_when_settings_turn_it_off`.
+- [x] `ship --stage ready` fails on a PR body with the Claude Code footer when committed settings turn PR attribution off → `tests/test_agent_hooks.py::test_ready_ship_rejects_a_pr_body_with_claude_attribution`.
+- [x] The SessionStart hook runs in a cloud container and reports gate status → N/A — needs a new cloud session after merge; recorded in Verification.
 
 ## Baseline + execution
 
@@ -40,8 +40,9 @@ N/A — agent configuration and checks; no product appearance.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: The three new tests pass. Each fails when its code is removed: the self-install test on the old settings file; the attribution tests when the pattern search is disabled. Full suite: 1728 passed, 9 failed; the 9 need Dart, Swift or signal timing and fail on the base too. Ruff format, lint, complexity, annotations, pyrefly (0 diagnostics), vulture and jscpd (0 clones) pass. The SessionStart hook ran here and reported `Gates: ok`. After the skill links were written, this session listed the `he*` skills.
+Not checked: `check` stops at tool install in this container. The agent proxy returns 403 for `api.github.com/repos/<tool>/releases` and for `mise.jdx.dev`, so gitleaks, osv-scanner, shellcheck, actionlint and uv do not install. CI runs those gates.
 E2E: N/A — the real proof is a new cloud session after merge, which this branch cannot start.
 
 Delivery target: Merge

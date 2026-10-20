@@ -666,8 +666,10 @@ def validate_decisions(root: Path, base: str | None = None) -> None:
 
 
 def validate_attribution(root: Path, base: str | None = None) -> None:
-    from agent_hooks import reject_attribution
+    from agent_hooks import attribution_off, reject_attribution
 
+    if not attribution_off(root, "commit"):
+        return
     point = base or default_branch_point(root) or "HEAD"
     log = _git_output(
         root, "log", "--format=%x1e%h%n%an <%ae>%n%cn <%ce>%n%B", f"{point}..HEAD"
