@@ -272,7 +272,8 @@ HOOK_FILES = {
 
 
 CLAUDE_ATTRIBUTION = re.compile(
-    r"^Co-Authored-By: Claude\b.*|^Claude-Session:.*|Generated with \[?Claude Code.*|.*noreply@anthropic\.com.*",
+    r"^(?:Co-Authored-By:.*noreply@anthropic\.com|Claude-Session:.*"
+    r"|[ \t]*(?:🤖[ \t]*|_)?Generated (?:with|by) \[Claude Code\]\(.*|https://claude\.ai/code/session_\S+)",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -286,12 +287,28 @@ def attribution_off(root: Path, kind: str) -> bool:
     return isinstance(attribution, dict) and attribution.get(kind) == ""
 
 
-def reject_attribution(root: Path, kind: str, text: str, where: str) -> None:
+def without_attribution_footer(text: str) -> str:
+    """The cloud GitHub proxy appends this footer to every PR body it writes."""
+    lines = text.rstrip().splitlines()
+    end = len(lines)
+    while end and (
+        CLAUDE_ATTRIBUTION.search(lines[end - 1])
+        or lines[end - 1].strip() in {"", "---"}
+    ):
+        end -= 1
+    if not any(CLAUDE_ATTRIBUTION.search(line) for line in lines[end:]):
+        return text
+    return "\n".join(lines[:end]) + "\n"
+
+
+def reject_attribution(
+    root: Path, kind: str, text: str, where: str, error: type[ValueError] = ValueError
+) -> None:
     """Enforce the committed Claude setting that turns this attribution off."""
     if not attribution_off(root, kind):
         return
     if found := CLAUDE_ATTRIBUTION.search(text):
-        raise ValueError(
+        raise error(
             f"{where} has Claude attribution, which .claude/settings.json turns off: "
             f"{found.group().strip()}"
         )

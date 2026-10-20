@@ -668,12 +668,27 @@ def validate_decisions(root: Path, base: str | None = None) -> None:
 def validate_attribution(root: Path, base: str | None = None) -> None:
     from agent_hooks import attribution_off, reject_attribution
 
-    if not attribution_off(root, "commit"):
+    if (
+        not attribution_off(root, "commit")
+        or subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
+            cwd=root,
+            stdout=subprocess.DEVNULL,
+            check=False,
+        ).returncode
+    ):
         return
     point = base or default_branch_point(root) or "HEAD"
-    log = _git_output(
-        root, "log", "--format=%x1e%h%n%an <%ae>%n%cn <%ce>%n%B", f"{point}..HEAD"
-    )
+    span = "HEAD" if re.fullmatch(r"0{40}|0{64}", point) else f"{point}..HEAD"
+    try:
+        log = _git_output(root, "log", "--format=%x1e%h%x1f%ae%x1f%ce%n%B", span)
+    except subprocess.CalledProcessError as error:
+        raise ValueError(
+            "Cannot verify commit attribution; fetch or supply a valid Git --base"
+        ) from error
     for entry in filter(None, log.split("\x1e")):
-        revision, _, text = entry.partition("\n")
+        header, _, text = entry.partition("\n")
+        revision, *emails = header.split("\x1f")
+        if "noreply@anthropic.com" in emails:
+            raise ValueError(f"Commit {revision} has a Claude author or committer")
         reject_attribution(root, "commit", text, f"Commit {revision}")

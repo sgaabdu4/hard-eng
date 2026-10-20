@@ -106,10 +106,15 @@ def test_shell_bootstrap_installs_verified_main(
         assert (target / "project.txt").read_text() == "preserved local work\n"
         metadata = json.loads(git(target, "show", marker))
         assert (target / ".github/workflows/hard-eng.yml").is_file()
+        workflow = ".github/workflows/pr-text.yml"
+        assert git(target, "show", f"{update_runner.UPDATE_BRANCH}:{workflow}") == (
+            (source / workflow).read_text().strip()
+        )
     else:
         assert "Installed Hard Eng" in result.stdout
         metadata = json.loads((target / update.SOURCE_FILE).read_text())
         assert not (target / ".github/workflows/hard-eng.yml").exists()
+        assert not (target / ".github/workflows/pr-text.yml").exists()
         assert "CI setup pending" in result.stderr
     assert metadata["revision"] == revision
     assert (target / ".git/hooks/pre-push").stat().st_mode & 0o111
