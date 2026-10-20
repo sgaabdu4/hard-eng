@@ -32,8 +32,9 @@ if [ -x "$0.project" ]; then
   "$0.project" "$@" || exit $?
 fi
 case "$1" in ""|*[!0]*) exit 0 ;; esac
-root=$(git rev-parse --show-toplevel)
-[ ! -f "$root/.hooks/ship_actions.py" ] || python3 "$root/.hooks/ship_actions.py" "$root" || echo "Hard Eng could not prepare this worktree." >&2
+common=$(git rev-parse --path-format=absolute --git-common-dir)
+case "$common" in */.git) runner="${common%/.git}/.hooks/ship_actions.py" ;; *) exit 0 ;; esac
+[ ! -f "$runner" ] || python3 "$runner" "$(git rev-parse --show-toplevel)" || echo "Hard Eng could not prepare this worktree." >&2
 """
 HUSKY_WORKTREE_LAUNCHER = WORKTREE_LAUNCHER.replace(
     'if [ -x "$0.project" ]; then\n  "$0.project" "$@"',
