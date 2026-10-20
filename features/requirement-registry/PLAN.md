@@ -9,6 +9,7 @@ Each Hard Eng rule has one definition under a stable ID in `.agents/skills/he/re
 ## Repository context
 
 Owners: `validate_decisions` in `.hooks/plans.py` is the existing records check that `check` in `.hooks/hard-eng.py` runs on Stop, pre-push and CI; the new `validate_requirements` sits beside it. Enforcer messages live in `.hooks/hard-eng.py`, `gate_config.py`, `comments.py`, `untrusted_input.py` and `plans.py`. Setup ships every file under `.agents/skills`, so the registry reaches installed projects. The "Plan acceptance linked to tests" work resolves acceptance IDs through `requirement_tests`.
+Same cause: N/A — new check, not a fault fix.
 
 ## Decisions + authorization
 

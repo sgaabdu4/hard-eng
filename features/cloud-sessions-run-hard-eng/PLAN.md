@@ -10,6 +10,7 @@ A cloud session that clones this repository loads Hard Eng's hooks, skills and a
 
 Owners: `setup.py` `configure_hooks` and `prepare_skill_links` write `.claude/settings.json`, `.codex/hooks.json` and `.claude/skills/*` in installed projects. This repository's `.claude/settings.json` held only `outputStyle`, so cloud sessions had no SessionStart or Stop hook, no `/he` skills and default attribution. PRs 320-323 carried attribution trailers and skipped the Stop gate and `ship --stage ready`.
 Checks: `.hooks/hard-eng.py` `check` runs branch validators; `.hooks/shipping.py` `verify` reads the PR body.
+Same cause: N/A — first fault of this kind; this repository had never installed its own settings, and no other repository is set up from here.
 
 ## Decisions + authorization
 
