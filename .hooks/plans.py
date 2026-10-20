@@ -337,21 +337,37 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     return status
 
 
-def acceptance_tests(sections: dict[str, str]) -> list[tuple[str, str]]:
-    """Each acceptance checkbox names its `path::test`, or N/A — reason if none can prove it."""
-    references = []
+def acceptance_tests(
+    sections: dict[str, str],
+) -> tuple[list[tuple[str, str]], set[str]]:
+    """Each acceptance checkbox names its `path::test` or requirement ID, or N/A — reason."""
+    references: list[tuple[str, str]] = []
+    requirements: set[str] = set()
     for line in re.findall(
         r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\[[^]\n]*\](.*)$",
         sections["Acceptance + steps"],
     ):
         found = re.findall(r"`([^`\s]+?)::(?:[^`\n]*::)?([^`\n]+)`", line)
-        if not found and not re.search(r"\bN/A — \S", line):
+        named = set(REQUIREMENT_ID.findall(line))
+        if not found and not named and not re.search(r"\bN/A — \S", line):
             raise ValueError(
-                "Acceptance + steps line needs a `path::test name` reference "
-                f"or N/A — reason:{line[:80]}"
+                "Acceptance + steps line needs a `path::test name` reference, "
+                f"a requirement ID or N/A — reason:{line[:80]}"
             )
         references.extend((path, name.split("[", 1)[0]) for path, name in found)
-    return references
+        requirements |= named
+    return references, requirements
+
+
+def untested_requirements(root: Path, requirements: set[str]) -> list[str]:
+    entries, _ = registry_entries(root)
+    tests = requirement_tests(root)
+    return sorted(
+        requirement
+        for requirement in requirements
+        if entries.get(requirement, ("retired",))[0] == "retired"
+        or requirement not in tests
+    )
 
 
 def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
@@ -396,9 +412,15 @@ def plan_stage(root: Path, path: Path, changed: set[str]) -> str:
         status = validate_plan(path, changed=edited)
         if status == "Complete" and edited:
             sections = plan_sections(path.read_text())
-            if missing := missing_tests(root, acceptance_tests(sections)):
+            references, requirements = acceptance_tests(sections)
+            if missing := missing_tests(root, references):
                 raise ValueError(
                     "acceptance names tests that do not exist: " + ", ".join(missing)
+                )
+            if untested := untested_requirements(root, requirements):
+                raise ValueError(
+                    "acceptance names unknown, retired or untested requirements: "
+                    + ", ".join(untested)
                 )
         _validate_shipping(root, path, status)
     except ValueError as error:
@@ -605,7 +627,11 @@ def plan_tests(root: Path, base: str | None) -> set[str]:
         content = path.read_text()
         if plan_status(content) in {"Ready", "Complete"}:
             sections = plan_sections(content, allow_placeholders=True)
-            names.update(name for _, name in acceptance_tests(sections))
+            references, requirements = acceptance_tests(sections)
+            names.update(name for _, name in references)
+            tests = requirement_tests(root) if requirements else {}
+            for requirement in requirements:
+                names.update(name for _, _, name in tests.get(requirement, []))
     return names
 
 
