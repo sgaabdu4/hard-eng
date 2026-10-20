@@ -205,7 +205,8 @@ def test_linked_worktree_may_use_the_common_checkout_hooks(
     try:
         git(linked, "config", "--worktree", "core.hooksPath", str(shim.parent))
         assert not update.pre_push_missing(linked)
-        assert update.repair_current_hook(linked, revision).endswith("available.")
+        repaired = update.repair_current_hook(linked, revision)
+        assert repaired.endswith("available; installed the worktree hook.")
         assert update.check_scaffold_update(linked, base)
         git(linked, "config", "--worktree", "core.hooksPath", str(target.parent))
         with pytest.raises(ValueError, match=f"{target.parent} is not under {linked}"):

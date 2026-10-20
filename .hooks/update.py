@@ -674,10 +674,11 @@ def validate_gates(root: Path, source: Path, changes: dict[str, str | None]) -> 
 
 
 def repair_current_hook(root: Path, previous: str) -> str:
+    worktree = hook_chain.install_worktree_hook(root)
     if not pre_push_missing(root) and not hook_chain.foreign_hook(
         root, hook_chain.locate(root)[1]
     ):
-        return "No newer CI-verified Hard Eng revision is available."
+        return f"No newer CI-verified Hard Eng revision is available{worktree}."
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), previous, previous)
         _, _, hook, _ = update_plan(root, source, old)
@@ -711,6 +712,7 @@ def repair_installation(root: Path, previous: str) -> str:
     status = "No newer CI-verified Hard Eng revision is available"
     if install_planned_hook(root, hook):
         status += "; installed the missing pre-push hook"
+    status += hook_chain.install_worktree_hook(root)
     names = sorted({*missing, *added})
     clean = bool(names) and not local_state(root, names)
     moved = {name for name in missing if retired_parent(root, name)}
