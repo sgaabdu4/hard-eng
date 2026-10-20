@@ -1,7 +1,7 @@
 """Run Hard Eng's agent-behaviour cases through a real agent, on demand.
 
 Usage: uv run python tests/agent_checks.py [--client codex|claude] [--model M]
-    [--effort E] [--case NAME] [--repeat N] [--source REV] [--judge]
+    [--effort E] [--case NAME] [--repeat N] [--source REV] [--bare] [--judge]
 
 Each case installs this source (or --source REV) into a disposable Git fixture,
 runs one non-interactive agent session kept apart from the user's own agent
@@ -16,6 +16,9 @@ reports. Without it such a case is BLOCKED, never PASS.
 To compare a skill change, run the same --client, --model, --effort and --case
 with --repeat N twice, once with --source set to the old revision, and compare
 the two results.json files. The judge sees one report at a time with no revision.
+To see what Hard Eng adds, compare a normal run with a --bare run: the agent then
+gets no Hard Eng instructions, skills or hooks, while the judges still use its
+checks.
 
 Results and evidence go to coverage/agent-checks/<UTC time>-<client>-<model>/,
 which Git ignores and setup never installs. pytest and CI do not run agents.
@@ -50,6 +53,8 @@ from agent_fixtures import (
     SERVICE_DESIGN,
     SERVICE_PRODUCT,
     TESTS,
+    install_hard_eng,
+    installed_source,
 )
 from conftest import SOURCE, commit, git, init
 
@@ -566,7 +571,9 @@ CASES = [
 ]
 
 
-def fixture(root: Path, case: Case, source: Path = SOURCE) -> str:
+def fixture(
+    root: Path, case: Case, source: Path = SOURCE, *, bare: bool = False
+) -> str:
     """A committed project with this source installed, then the case's own state."""
     init(root)
     for name, text in {
@@ -578,14 +585,7 @@ def fixture(root: Path, case: Case, source: Path = SOURCE) -> str:
         (root / name).write_text(text)
     (root / "hard-eng.gates.json").write_text(GATES)
     commit(root, "Project baseline")
-    subprocess.run(
-        [sys.executable, str(source / "setup.py"), str(root)],
-        cwd=root,
-        capture_output=True,
-        check=True,
-    )
-    # Without the marker, SessionStart and Stop cannot fetch a newer upstream over the tested source.
-    (root / ".hooks/hard-eng-source.json").unlink()
+    install_hard_eng(root, source, bare=bare)
     commit(root, "Install Hard Eng")
     case.prepare(root)
     return git(root, "rev-parse", "HEAD")
@@ -877,7 +877,7 @@ def execute(
     evidence.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix="hard-eng-agent-") as temporary:
         root = Path(temporary).resolve() / "project"
-        base = fixture(root, case, options.installed)
+        base = fixture(root, case, options.installed, bare=options.bare)
         agent = client.run(root, evidence, options, case.prompt, True)
         (evidence / "actions.json").write_text(
             json.dumps([action._asdict() for action in agent.actions], indent=2) + "\n"
@@ -900,18 +900,6 @@ def execute(
     return Outcome(status, failures, agent.settings)
 
 
-def installed_source(stack: ExitStack, revision: str | None) -> Path:
-    """This checkout, or a disposable worktree of an earlier revision for comparison."""
-    if revision is None:
-        return SOURCE
-    temporary = stack.enter_context(tempfile.TemporaryDirectory(prefix="hard-eng-rev-"))
-    checkout = Path(temporary).resolve() / "source"
-    git(SOURCE, "worktree", "add", "--detach", "-q", str(checkout), revision)
-    stack.callback(git, SOURCE, "worktree", "remove", "--force", str(checkout))
-    git(checkout, "submodule", "update", "--init", "--recursive", "-q")
-    return checkout
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--client", choices=sorted(CLIENTS), default="codex")
@@ -924,6 +912,11 @@ def main() -> int:
     parser.add_argument("--repeat", type=int, default=1, help="runs per case")
     parser.add_argument(
         "--source", help="install this revision instead of the checkout"
+    )
+    parser.add_argument(
+        "--bare",
+        action="store_true",
+        help="remove Hard Eng's instructions, skills and hooks; keep its checks",
     )
     parser.add_argument(
         "--judge", action="store_true", help="grade diagnoses with the same client"
@@ -967,6 +960,7 @@ def main() -> int:
         "tested_commit": tested,
         "uncommitted_changes": dirty,
         "source": options.source or "checkout",
+        "bare": options.bare,
         "started": started.isoformat(),
         "client": {
             "name": options.client,
