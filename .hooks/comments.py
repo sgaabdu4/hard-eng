@@ -289,6 +289,8 @@ SWIFT_OFF = re.compile(
     r"swift-format-ignore|\bXCTSkip|<(Skipped|Selected)Tests>"
     r'|"(skipped|selected)Tests"|\bskipped\s*=\s*"YES"'
 )
+SECURITY_OFF = re.compile(r"\bno(semgrep|sem)\b|gitleaks:allow", re.IGNORECASE)
+SCAN_IGNORES = {".gitleaksignore", ".semgrepignore"}
 UNOWNED = (".hooks/", ".agents/", ".claude/")
 
 
@@ -535,6 +537,24 @@ def lost_assertions(
     return lost
 
 
+def security_switch_offs(
+    root: Path, added: dict[str, list[tuple[int, str]]]
+) -> list[str]:
+    """Inline markers and ignore entries in any file hide Semgrep or Gitleaks findings."""
+    names = sorted(name for name in added if not name.startswith(UNOWNED))
+    skipped = generated_sources(root, names)
+    found: list[str] = []
+    for name in (name for name in names if name not in skipped):
+        ignore = PurePosixPath(name).name in SCAN_IGNORES
+        for number, text in added[name]:
+            entry = text.strip()
+            if hit := SECURITY_OFF.search(text):
+                found.append(f"{name}:{number} adds {hit[0]!r}")
+            elif ignore and entry and not entry.startswith("#"):
+                found.append(f"{name}:{number} adds {entry!r}")
+    return found
+
+
 def validate_suppressions(root: Path, base: str | None) -> None:
     try:
         added, removed = diff_lines(root, base or branch_point(root))
@@ -548,7 +568,7 @@ def validate_suppressions(root: Path, base: str | None) -> None:
         if not name.startswith(UNOWNED) and switch_off_pattern(name) is not None
     )
     skipped = generated_sources(root, names)
-    found: list[str] = []
+    found = security_switch_offs(root, added)
     gained = 0
     blocks: list[tuple[str, list[tuple[int, str]]]] = []
     for name in names:
