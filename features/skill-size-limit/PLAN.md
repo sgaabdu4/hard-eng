@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-A test fails when a Hard Eng SKILL.md passes 8,000 bytes, because Codex cuts a skill body after 8,000 bytes (`MAX_SKILL_PROMPT_BYTES` in `codex-rs/ext/skills/src/render.rs`, openai/codex `e18a20d`). HE Plan drops from 9,047 to under 8,000 bytes and puts Participation + Readiness + authorization right after Routes, so the authorization rules can never be cut. Non-goals: skills from submodules (`appwrite-backend`, `building-flutter-apps`; their own repositories own their size), new rules, other skills.
+A test fails when a Hard Eng SKILL.md passes 8,000 bytes. Codex cuts an invoked skill's body after 8,000 bytes (`MAX_SKILL_PROMPT_BYTES` in `codex-rs/ext/skills/src/render.rs`, openai/codex `e18a20d`). Its skills extension (`extension.rs`) applies the cut to every explicitly invoked skill, disk skills included. Its core fallback (`host_prompt.rs`) cuts only plugin skills, and a skill the agent reads with a shell command is never cut. So the cut depends on the path, but a skill over the limit can lose its end. HE Plan drops from 9,047 to under 8,000 bytes and puts Participation + Readiness + authorization right after Routes, so the authorization rules can never be cut. Non-goals: skills from submodules (`appwrite-backend`, `building-flutter-apps`; their own repositories own their size), new rules, other skills.
 
 ## Repository context
 
