@@ -20,10 +20,10 @@ Authority: Abid asked that every scaffolded project's worktrees work like the ma
 ## Acceptance + steps
 
 - [x] A fresh worktree links each ignored local file to the main checkout's file, leaves build output out, keeps skill links and a clean status, and has a working Hard Eng pre-push hook, for plain Git hooks and Husky → `tests/test_hook_chain.py::test_a_new_worktree_matches_the_main_checkout` (red before: no `.env` link).
-- [x] Creating a worktree of another branch never runs that branch's code; the main checkout's copy prepares it → the same test (`review` worktree, red before).
-- [x] A project's own `post-checkout` hook is kept and still runs → the same test (`project.args`).
-- [x] An existing install without the worktree hook gets it at the next session repair → the same test (`repair_current_hook`).
-- [x] The pre-push snapshot still links env files and initializes submodules → `test_pre_push_snapshot_has_its_own_git_environment`.
+- [x] Creating a worktree of another branch never runs that branch's code; the main checkout's copy prepares it → `tests/test_hook_chain.py::test_a_new_worktree_matches_the_main_checkout` (`review` worktree, red before).
+- [x] A project's own `post-checkout` hook is kept and still runs → `tests/test_hook_chain.py::test_a_new_worktree_matches_the_main_checkout` (`project.args`).
+- [x] An existing install without the worktree hook gets it at the next session repair → `tests/test_hook_chain.py::test_a_new_worktree_matches_the_main_checkout` (`repair_current_hook`).
+- [x] The pre-push snapshot still links env files and initializes submodules → `tests/test_ship_actions.py::test_pre_push_snapshot_has_its_own_git_environment`.
 
 ## Baseline + execution
 
@@ -46,4 +46,4 @@ Evidence: The new test failed before the change (no `.env` link) and passes for 
 E2E: Passed — real `git worktree add` on an installed project with plain Git hooks and with Husky → `test_a_new_worktree_matches_the_main_checkout`.
 
 Delivery target: PR
-Delivery: Pending — CI `hard-eng` check on the PR.
+Delivery: Pending — CI `hard-eng` check on PR #326.
