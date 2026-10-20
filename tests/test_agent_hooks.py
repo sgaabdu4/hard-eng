@@ -12,6 +12,7 @@ from typing import override
 from unittest.mock import Mock
 
 import agent_hooks
+import plans
 import pytest
 import update
 import update_runner
@@ -802,15 +803,15 @@ def test_check_rejects_claude_attribution_when_settings_turn_it_off(
     base = git(repository, "rev-parse", "HEAD")
     trailer = "Change\n\nCo-Authored-By: Claude Opus <noreply@anthropic.com>"
     git(repository, "commit", "--allow-empty", "-qm", trailer)
-    agent_hooks.validate_attribution(repository, base)
+    plans.validate_attribution(repository, base)
     (repository / ".claude").mkdir()
     (repository / ".claude/settings.json").write_text(
         json.dumps({"attribution": {"commit": "", "pr": ""}})
     )
     clean = commit(repository, "Turn attribution off")
     with pytest.raises(ValueError, match="Co-Authored-By: Claude"):
-        agent_hooks.validate_attribution(repository, base)
-    agent_hooks.validate_attribution(repository, clean)
+        plans.validate_attribution(repository, base)
+    plans.validate_attribution(repository, clean)
     git(
         repository,
         "-c",
@@ -823,7 +824,7 @@ def test_check_rejects_claude_attribution_when_settings_turn_it_off(
         "Plain message",
     )
     with pytest.raises(ValueError, match="noreply@anthropic.com"):
-        agent_hooks.validate_attribution(repository, clean)
+        plans.validate_attribution(repository, clean)
 
 
 def test_ready_ship_rejects_a_pr_body_with_claude_attribution(
