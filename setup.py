@@ -885,6 +885,7 @@ def install(root: Path, previous: Path | None = None) -> None:
     import hook_chain
     from update import (
         commit_install,
+        install_planned_hook,
         local_state,
         retire_local_generation,
         write_changes,
@@ -892,13 +893,25 @@ def install(root: Path, previous: Path | None = None) -> None:
 
     changes, links, hook, launcher, deleted = plan_install(root, previous)
     names = sorted({*changes, *links, *deleted})
-    if hook.is_relative_to(root) and ".git" not in hook.relative_to(root).parts:
-        names.append(str(hook.relative_to(root)))  # A Husky launcher lives in the tree.
-        if launcher in {
-            hook_chain.CHAINED_LAUNCHER,
-            hook_chain.HUSKY_CHAINED_LAUNCHER,
-        }:
-            names.append(str(hook_chain.project_copy(hook).relative_to(root)))
+    worktree, worktree_launcher = hook_chain.worktree_hook(root)
+    for path, chained in (
+        (
+            hook,
+            launcher
+            in {hook_chain.CHAINED_LAUNCHER, hook_chain.HUSKY_CHAINED_LAUNCHER},
+        ),
+        (
+            worktree,
+            hook_chain.foreign_hook(root, worktree)
+            or hook_chain.project_copy(worktree).exists(),
+        ),
+    ):
+        if path.is_relative_to(root) and ".git" not in path.relative_to(root).parts:
+            names.append(
+                str(path.relative_to(root))
+            )  # A Husky launcher lives in the tree.
+            if chained:
+                names.append(str(hook_chain.project_copy(path).relative_to(root)))
     # Commit only paths without prior local state, so no project edit joins the commit.
     clean = not local_state(root, names)
     retire_local_generation(root)
@@ -915,6 +928,7 @@ def install(root: Path, previous: Path | None = None) -> None:
     hook.parent.mkdir(parents=True, exist_ok=True)
     hook.write_text(launcher)
     hook.chmod(0o755)
+    install_planned_hook(root, (str(worktree), worktree_launcher))
     if kept:
         print(hook_chain.KEPT)
     from dependency_graph import dependency_review_guidance
