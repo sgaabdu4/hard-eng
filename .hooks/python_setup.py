@@ -54,21 +54,21 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
 
 
 def python_roots(directory: Path, package: Group) -> list[str]:
+    """Packages with a submodule; Import Linter rejects a `root.**` that matches nothing."""
     roots = set()
     for name in package["sources"]:
         path = directory / name
         if not path.is_dir():
             continue
-        if (path / "__init__.py").exists() and name.isidentifier():
-            roots.add(name)
-        elif name == "src":
-            roots.update(
-                child.name
-                for child in path.iterdir()
-                if child.is_dir()
-                and child.name.isidentifier()
-                and (child / "__init__.py").exists()
-            )
+        candidates = [path] if name != "src" else list(path.iterdir())
+        roots.update(
+            child.name
+            for child in candidates
+            if child.is_dir()
+            and child.name.isidentifier()
+            and (child / "__init__.py").exists()
+            and any(file != child / "__init__.py" for file in child.rglob("*.py"))
+        )
     return sorted(roots)
 
 
