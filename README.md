@@ -227,10 +227,10 @@ Each project has a `hard-eng.gates.json` file. It lists the check commands, thei
 
 Rules for every language:
 
-- Tests must run, and they must cover **at least 70% of executable lines**.
-- A performance suite runs alone, with a real workload, a time budget and a native report. A package may skip it only with a reviewed `performance_exception` ([rules](.agents/skills/he/references/gates.md)).
-- Untrusted JSON in JavaScript and TypeScript (`.json()`, `JSON.parse`) has the type `unknown`. Code must validate it before use. Type casts fail, except `as const`.
-- A handwritten source or test file longer than 1000 lines needs a reviewed exception.
+- [HE-COVERAGE-MIN](.agents/skills/he/references/requirements.md#he-coverage-min): tests cover at least 70% of lines.
+- [HE-PERFORMANCE-SUITE](.agents/skills/he/references/requirements.md#he-performance-suite): a performance suite, or a reviewed exception ([how to review](.agents/skills/he/references/gates.md)).
+- [HE-UNTRUSTED-JSON](.agents/skills/he/references/requirements.md#he-untrusted-json): parsed JSON is `unknown` until validated. Type casts fail, except `as const`.
+- [HE-FILE-LENGTH](.agents/skills/he/references/requirements.md#he-file-length): files longer than 1000 lines need a reviewed exception.
 - Checks read each tool's report as well as its exit code. A missing, old, partial or failing report fails.
 - Fill in [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md) for your project.
 
@@ -262,7 +262,7 @@ Skills guide the agent. Hooks and checks enforce. Plan checks validate the plan'
 | Agent stops | Checks the plan handoff. After code changes, runs quick checks on this session's changes: format, lint, types and the current-files secret scan. Tests run at pre-push and in CI. A failure shows the failed checks and the first one's output. |
 | `git push` | Checks the pushed commits in a separate worktree, for the changed packages. With Vitest or Jest, runs only the related tests. Then reports changed lines whose tests miss small deliberate bugs (mutation report; it never blocks the push). |
 | CI | Runs every configured check. Fails the job on any failure. |
-| Every `check` | Fails when a change adds a lint or type suppression, a skipped or focused test, or removes more test assertions than it adds. Old lines are never flagged. There is no allow-list. |
+| Every `check` | Enforces [HE-NO-SWITCH-OFF](.agents/skills/he/references/requirements.md#he-no-switch-off), [HE-COMMENT-LINES](.agents/skills/he/references/requirements.md#he-comment-lines) and the [requirement registry](.agents/skills/he/references/requirements.md). |
 
 Shipping blocks when the installed Hard Eng is out of date or its version cannot be confirmed. It names the next step: run `update-pr`, fix the failing update PR, wait for it, or rebase after it merges.
 
