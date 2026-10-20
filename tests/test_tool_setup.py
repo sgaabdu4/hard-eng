@@ -394,6 +394,18 @@ def test_node_with_a_script_on_stdin_runs_it_on_bun(
         check=False,
     )
     assert flagged.stdout == "bun --input-type=module -\nprocess.exit(3)\n"
+    for flag in ("-r", "--require", "--import", "--loader"):
+        valued = subprocess.run(
+            [shim, flag, "node:fs"],
+            input="process.exit(3)",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert (valued.returncode, valued.stdout) == (
+            3,
+            f"bun {flag} node:fs -\nprocess.exit(3)\n",
+        )
     for own in (["-e", "1"], ["-eprocess.exit(3)"], ["-p1+1"], ["app.js"], ["-"]):
         named = subprocess.run(
             [shim, *own], input="", capture_output=True, text=True, check=False
