@@ -891,3 +891,21 @@ def require_ci_base(base: str | None) -> None:
             "pass github.event.pull_request.base.sha || github.event.before. "
             "Manual full checks may omit --base."
         )
+
+
+PR_TEXT = ".github/workflows/pr-text.yml"
+
+
+def configure_github_ci(
+    root: Path, source: Path, config: GateConfig, changes: dict[str, str]
+) -> None:
+    workflow = ".github/workflows/hard-eng.yml"
+    configure_ci(root, source, config, changes)
+    if workflow in changes:
+        add_workflow_checks(config)
+    if workflow not in changes and not (root / workflow).is_file():
+        return
+    # The cloud GitHub proxy adds a Claude footer to PR bodies; this workflow removes it.
+    content = (source / PR_TEXT).read_text()
+    if not (root / PR_TEXT).is_file() or (root / PR_TEXT).read_text() != content:
+        changes[PR_TEXT] = content
