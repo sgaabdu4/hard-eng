@@ -221,7 +221,11 @@ def run_gate_command(
         if role == "ci-security":
             from update import github_token
 
-            if token := github_token():
+            if os.environ.get("CCR_AGENT_PROXY_ENABLED"):
+                # The cloud agent proxy serves anonymous GitHub git reads but rejects its token there.
+                environment.pop("GH_TOKEN", None)
+                environment.pop("GITHUB_TOKEN", None)
+            elif token := github_token():
                 environment["GH_TOKEN"] = token
             environment["ZIZMOR_CONFIG"] = zizmor_config(directory, Path(temporary))
         if role == "deployment":
