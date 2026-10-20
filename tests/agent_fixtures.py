@@ -109,6 +109,7 @@ Status: Ready
 ## Repository context
 
 Owners: `average` in `calc.py`; tests in `test_calc.py`.
+Same cause: No earlier fix of this error; `average` is the only division in `calc.py`.
 
 ## Decisions + authorization
 

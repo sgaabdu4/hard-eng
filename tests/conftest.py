@@ -122,6 +122,7 @@ Status: Complete
 Verify fixture command exits; no product release.
 ## Repository context
 The test creates commands in a temporary Git repository.
+Same cause: N/A — fixture command, not a fix.
 ## Decisions + authorization
 Blockers: None
 Handoff: Approval
