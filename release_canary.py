@@ -290,10 +290,15 @@ def hard_eng_passed(work: Path) -> bool:
     return any("verified" in json.loads(path.read_text()) for path in sessions)
 
 
+def git_locks(folder: str, names: list[str]) -> set[str]:
+    """Git's background maintenance creates and removes these while the copy runs."""
+    inside_git = ".git" in Path(folder).parts
+    return {name for name in names if inside_git and name.endswith(".lock")}
+
+
 def try_agent(agent: str, work: Path, log: IO[str]) -> tuple[bool, str]:
     copy = work.with_name(f"{work.name}.{agent}")
-    # Git's background maintenance creates and removes lock files while the copy runs.
-    shutil.copytree(work, copy, symlinks=True, ignore=shutil.ignore_patterns("*.lock"))
+    shutil.copytree(work, copy, symlinks=True, ignore=git_locks)
     try:
         head = output(["git", "rev-parse", "HEAD"], copy)
         if not step(agent_command(agent, copy), copy, log, 3600):
