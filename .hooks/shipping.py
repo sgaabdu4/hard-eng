@@ -726,7 +726,7 @@ def _plan_target(root: Path, plan: Path) -> tuple[Path, str]:
 def _delivery_scope(root: Path, plan: Path | None) -> tuple[Path | None, str]:
     if plan is not None:
         return _plan_target(root, plan)
-    from plans import size_verdict
+    from change_size import size_verdict
 
     small, reason = size_verdict(root)
     if not small:
