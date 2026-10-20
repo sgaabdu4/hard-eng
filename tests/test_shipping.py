@@ -426,7 +426,7 @@ def test_ready_bypasses_only_a_review_nobody_but_the_author_can_give(
         return
     shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
     assert shipment.review_bypass is (state == "blocked")
-    assert any(call[1] == "graphql" for call in fake.calls) is (state == "blocked")
+    assert any(call[1] == "graphql" for call in fake.calls)
 
 
 @pytest.mark.parametrize(
