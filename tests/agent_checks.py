@@ -53,6 +53,8 @@ from agent_fixtures import (
     SERVICE_DESIGN,
     SERVICE_PRODUCT,
     TESTS,
+    install_hard_eng,
+    installed_source,
 )
 from conftest import SOURCE, commit, git, init
 
@@ -569,9 +571,6 @@ CASES = [
 ]
 
 
-BARE_REMOVED = ("AGENTS.md", ".agents", ".claude", ".codex", ".git/hooks/pre-push")
-
-
 def fixture(
     root: Path, case: Case, source: Path = SOURCE, *, bare: bool = False
 ) -> str:
@@ -586,20 +585,7 @@ def fixture(
         (root / name).write_text(text)
     (root / "hard-eng.gates.json").write_text(GATES)
     commit(root, "Project baseline")
-    subprocess.run(
-        [sys.executable, str(source / "setup.py"), str(root)],
-        cwd=root,
-        capture_output=True,
-        check=True,
-    )
-    # Without the marker, SessionStart and Stop cannot fetch a newer upstream over the tested source.
-    (root / ".hooks/hard-eng-source.json").unlink()
-    for name in BARE_REMOVED if bare else ():
-        path = root / name
-        if path.is_dir():
-            shutil.rmtree(path)
-        else:
-            path.unlink(missing_ok=True)
+    install_hard_eng(root, source, bare=bare)
     commit(root, "Install Hard Eng")
     case.prepare(root)
     return git(root, "rev-parse", "HEAD")
@@ -912,18 +898,6 @@ def execute(
         git(root, "add", "--all")
         (evidence / "diff.patch").write_text(git(root, "diff", "--cached", base) + "\n")
     return Outcome(status, failures, agent.settings)
-
-
-def installed_source(stack: ExitStack, revision: str | None) -> Path:
-    """This checkout, or a disposable worktree of an earlier revision for comparison."""
-    if revision is None:
-        return SOURCE
-    temporary = stack.enter_context(tempfile.TemporaryDirectory(prefix="hard-eng-rev-"))
-    checkout = Path(temporary).resolve() / "source"
-    git(SOURCE, "worktree", "add", "--detach", "-q", str(checkout), revision)
-    stack.callback(git, SOURCE, "worktree", "remove", "--force", str(checkout))
-    git(checkout, "submodule", "update", "--init", "--recursive", "-q")
-    return checkout
 
 
 def main() -> int:
