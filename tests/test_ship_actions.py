@@ -671,7 +671,9 @@ def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
     monkeypatch.setattr(ship_actions.time, "monotonic", lambda: next(clock))
     monkeypatch.setattr(ship_actions, "git", Mock(return_value=origin))
     monkeypatch.setattr(
-        runner.subprocess, "run", Mock(return_value=subprocess.CompletedProcess([], 0))
+        runner.subprocess,
+        "run",
+        Mock(return_value=subprocess.CompletedProcess([], 0, "")),
     )
     hard_eng = Mock(side_effect=[0, 1])
     monkeypatch.setattr(ship_actions, "run_hard_eng", hard_eng)
@@ -777,6 +779,46 @@ def test_first_push_to_an_empty_remote_checks_everything(
     )
     with pytest.raises(ValueError, match="direct base updates are blocked"):
         runner.pre_push()
+
+
+def test_pre_push_fails_when_a_gate_rewrites_a_pushed_file(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, remote = tmp_path, tmp_path.parent / f"{tmp_path.name}-rewrite.git"
+    shutil.copytree(
+        SOURCE / ".hooks", root / ".hooks", ignore=shutil.ignore_patterns("__pycache__")
+    )
+    (root / ".gitignore").write_text("__pycache__/\n")
+    (root / "app.py").write_text("x  =  1\n")
+    formatter = {
+        "name": "format-in-place",
+        "command": [
+            sys.executable,
+            "-c",
+            "from pathlib import Path; Path('app.py').write_text('x = 1\\n')",
+        ],
+    }
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shipping": shipping_policy, "shared": [formatter]})
+    )
+    git(root, "config", "user.name", "Hook Fixture")
+    git(root, "config", "user.email", "hook@example.invalid")
+    git(root, "branch", "-M", "main")
+    revision = commit(root, "unformatted file").strip()
+    git(root, "init", "--bare", "-q", str(remote))
+    git(root, "remote", "add", "origin", str(remote))
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        StringIO(f"refs/heads/main {revision} refs/heads/main {'0' * 40}\n"),
+    )
+    assert runner.pre_push() == 1
+    assert "a gate changed pushed files: app.py" in capsys.readouterr().out
+    assert (root / "app.py").read_text() == "x  =  1\n"
 
 
 def test_new_branch_behind_its_base_is_judged_on_its_own_changes(
