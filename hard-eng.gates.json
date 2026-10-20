@@ -2,7 +2,7 @@
   "version": 1,
   "scan_git_history": false,
   "shipping": {
-    "base": "main",
+    "base": "develop",
     "checks": ["hard-eng"],
     "ui_paths": [],
     "ci_seconds": 300,
