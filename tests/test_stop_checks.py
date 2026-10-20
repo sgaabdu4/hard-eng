@@ -206,6 +206,7 @@ def test_failure_reason_lists_failed_gates_and_starts_at_the_first_error(
     assert reason.index("FIRST ERROR") < reason.index("Verification failed")
     assert "second error" not in reason
     assert len(reason) < 10000
+    assert "[gate output cut; rerun check for the full log]" in reason
 
 
 def test_failure_reason_shows_the_failing_packages_output_not_a_passing_one_of_the_same_gate(
