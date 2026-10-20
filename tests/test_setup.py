@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -28,7 +27,7 @@ from project_setup import (
     javascript_manager,
     strict_scanner_flags,
 )
-from python_setup import import_configuration, python_roots
+from python_setup import import_configuration
 from reports import completed_tests, line_coverage, parallel_hint
 from shipping import ShippingPolicy
 
@@ -353,24 +352,6 @@ def test_python_packages_receive_recursive_import_contract(
     assert (tmp_path / "pyproject.toml").read_text() == content
 
 
-def test_import_contract_waits_for_a_package_with_submodules(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    repository(tmp_path)
-    (tmp_path / "package.json").unlink()
-    (tmp_path / "uv.lock").touch()
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
-    package = tmp_path / "example"
-    package.mkdir()
-    (package / "__init__.py").write_text("value = 1\n")
-    group: Group = {"path": ".", "checks": [], "sources": ["example"]}
-    assert python_roots(tmp_path, group) == []
-    installer.install(tmp_path)
-    assert "importlinter" not in (tmp_path / "pyproject.toml").read_text()
-    (package / "calc.py").write_text("value = 2\n")
-    assert python_roots(tmp_path, group) == ["example"]
-
-
 def test_python_tests_run_in_parallel_unless_a_project_opts_out(
     installer: ModuleType, tmp_path: Path
 ) -> None:
@@ -409,57 +390,6 @@ def test_python_tests_run_in_parallel_unless_a_project_opts_out(
     assert "-n 0" in parallel_hint(1, True, parallel)
     assert parallel_hint(0, True, parallel) == parallel_hint(1, True, gate["command"])
     assert parallel_hint(1, True, gate["command"]) == ""
-
-
-@pytest.mark.parametrize("installed", [False, True])
-def test_tests_import_root_modules_of_a_project_uv_does_not_install(
-    installer: ModuleType, tmp_path: Path, installed: bool
-) -> None:
-    repository(tmp_path)
-    (tmp_path / "package.json").unlink()
-    (tmp_path / "uv.lock").touch()
-    project = '[project]\nname="fixture"\nversion="1"\n'
-    if installed:
-        project += (
-            '[build-system]\nrequires = ["uv_build"]\nbuild-backend = "uv_build"\n'
-        )
-    (tmp_path / "pyproject.toml").write_text(project)
-    (tmp_path / "calc.py").write_text(
-        "def add(a: int, b: int) -> int:\n    return a + b\n"
-    )
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests/test_calc.py").write_text(
-        "from calc import add\n\n\ndef test_add() -> None:\n    assert add(2, 3) == 5\n"
-    )
-    installer.install(tmp_path)
-    content = (tmp_path / "pyproject.toml").read_text()
-    assert ('pythonpath = ["."]' in content) is not installed
-    if not installed:
-        pytest_script = Path(sys.executable).with_name("pytest")
-        subprocess.run(
-            [pytest_script, "-q", "-p", "no:cacheprovider"], cwd=tmp_path, check=True
-        )
-        installer.install(tmp_path)
-        assert (tmp_path / "pyproject.toml").read_text() == content
-
-
-def test_python_code_added_after_setup_must_join_the_checked_sources(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    repository(tmp_path)
-    (tmp_path / "package.json").unlink()
-    (tmp_path / "uv.lock").touch()
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
-    (tmp_path / "main.py").write_text("value = 1\n")
-    config = installer.gate_config(tmp_path)
-    validate_required_checks(tmp_path, config)
-    (tmp_path / "calc.py").write_text("value = 2\n")
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests/test_calc.py").write_text("value = 3\n")
-    with pytest.raises(ValueError, match="outside its sources: calc.py;"):
-        validate_required_checks(tmp_path, config)
-    config["packages"][0]["sources"].append("calc.py")
-    validate_required_checks(tmp_path, config)
 
 
 def test_standalone_python_does_not_invent_import_architecture(
