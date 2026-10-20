@@ -322,6 +322,8 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     )
     if errors:
         raise ValueError("; ".join(errors))
+    if not (status == "Complete" and not changed):
+        acceptance_tests(sections)
     if status == "Complete":
         markers = re.findall(
             r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\[([^]\n]*)\](?:\s|$)", content
@@ -333,6 +335,42 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
         except ValueError as error:
             raise ValueError(f"Verification: {error}") from error
     return status
+
+
+def acceptance_tests(sections: dict[str, str]) -> list[tuple[str, str]]:
+    """Each acceptance checkbox names its `path::test`, or N/A — reason if none can prove it."""
+    references = []
+    for line in re.findall(
+        r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\[[^]\n]*\](.*)$",
+        sections["Acceptance + steps"],
+    ):
+        found = re.findall(r"`([^`\s]+?)::(?:[^`\n]*::)?([^`\n]+)`", line)
+        if not found and not re.search(r"\bN/A — \S", line):
+            raise ValueError(
+                "Acceptance + steps line needs a `path::test name` reference "
+                f"or N/A — reason:{line[:80]}"
+            )
+        references.extend((path, name.split("[", 1)[0]) for path, name in found)
+    return references
+
+
+def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
+    missing = []
+    for path, name in references:
+        file = (root / path).resolve()
+        definition = (
+            rf"\bdef\s+{re.escape(name)}\s*\("
+            if file.suffix == ".py"
+            else rf"[\"'`]{re.escape(name)}[\"'`]"
+        )
+        if not (
+            file.is_relative_to(root.resolve())
+            and _is_test(PurePosixPath(path))
+            and file.is_file()
+            and re.search(definition, file.read_text())
+        ):
+            missing.append(f"{path}::{name}")
+    return missing
 
 
 def _validate_shipping(root: Path, path: Path, status: str) -> None:
@@ -354,7 +392,14 @@ def _validate_shipping(root: Path, path: Path, status: str) -> None:
 
 def plan_stage(root: Path, path: Path, changed: set[str]) -> str:
     try:
-        status = validate_plan(path, changed=str(path.relative_to(root)) in changed)
+        edited = str(path.relative_to(root)) in changed
+        status = validate_plan(path, changed=edited)
+        if status == "Complete" and edited:
+            sections = plan_sections(path.read_text())
+            if missing := missing_tests(root, acceptance_tests(sections)):
+                raise ValueError(
+                    "acceptance names tests that do not exist: " + ", ".join(missing)
+                )
         _validate_shipping(root, path, status)
     except ValueError as error:
         raise ValueError(f"{path.relative_to(root)}: {error}") from error
@@ -540,6 +585,39 @@ def plan_not_needed(root: Path) -> bool:
     return small
 
 
+def applicable_plans(root: Path, paths: list[Path], changed: set[str]) -> list[Path]:
+    applicable = [path for path in paths if str(path.relative_to(root)) in changed]
+    return applicable or [
+        path
+        for path in paths
+        if plan_status(path.read_text()) not in {None, "Complete"}
+    ]
+
+
+def plan_tests(root: Path, base: str | None) -> set[str]:
+    """Test names that the active plans' acceptance lines depend on."""
+    changed = changed_files(root, base or "HEAD") or set()
+    paths = [
+        path for path in repository_files(root) if is_plan_path(path.relative_to(root))
+    ]
+    names = set()
+    for path in applicable_plans(root, paths, changed):
+        content = path.read_text()
+        if plan_status(content) in {"Ready", "Complete"}:
+            sections = plan_sections(content, allow_placeholders=True)
+            names.update(name for _, name in acceptance_tests(sections))
+    return names
+
+
+def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) -> bool:
+    from reports import skipped_tests
+
+    skipped = sorted(plan_tests(root, base) & skipped_tests(root, groups, since))
+    if skipped:
+        print("FAIL plan acceptance tests were skipped: " + ", ".join(skipped))
+    return bool(skipped)
+
+
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
@@ -552,13 +630,7 @@ def validate_plans(
     paths = [
         path for path in repository_files(root) if is_plan_path(path.relative_to(root))
     ]
-    applicable = [path for path in paths if str(path.relative_to(root)) in changed]
-    if not applicable:
-        applicable = [
-            path
-            for path in paths
-            if plan_status(path.read_text()) not in {None, "Complete"}
-        ]
+    applicable = applicable_plans(root, paths, changed)
     if not applicable and explicit_stage:
         applicable = paths
     if (

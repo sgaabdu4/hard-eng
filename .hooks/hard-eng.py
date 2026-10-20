@@ -793,7 +793,7 @@ def check(
         groups = quick_groups(groups, quick)
         timeout = timeout or gate_budget(ROOT)
         from comments import validate_comments, validate_suppressions
-        from plans import report_stage, validate_decisions, validate_plans
+        from plans import plan_skips, report_stage, validate_decisions, validate_plans
 
         if verify_plan:
             plan_stage = validate_plans(ROOT, base, plan_stage)
@@ -803,7 +803,8 @@ def check(
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
 
-        failed = run_gates(groups, timeout, related) is not False
+        started, failed = time.time(), run_gates(groups, timeout, related) is not False
+        failed |= verify_plan and plan_skips(ROOT, base, groups, int(started))
         report_stage(failed, plan_stage)
         return int(failed)
 
