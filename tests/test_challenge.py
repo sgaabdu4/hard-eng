@@ -11,7 +11,7 @@ from unittest.mock import Mock
 import challenge
 import pytest
 import ship_actions
-from conftest import commit, git
+from conftest import commit, git, running, spawner
 from plans import validate_plans
 from shipping import Shipment
 from test_plans import edit, sized_branch
@@ -381,3 +381,20 @@ def test_nested_markdown_in_a_javascript_package_counts_as_code_size(
     with suppress(ValueError):
         validate_plans(repository)
     assert verdict in capsys.readouterr().out
+
+
+def test_a_timed_out_reviewer_leaves_no_process_behind(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    pid_file = tmp_path / "child.pid"
+
+    def hanging(_reviewer: str, _prompt: str, _root: Path) -> list[str]:
+        return spawner(pid_file)
+
+    monkeypatch.setattr(challenge, "command", hanging)
+    monkeypatch.setattr(challenge, "TIMEOUT_SECONDS", 2)
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 1
+    assert "timed out" in record_of(branch)["outcome"]
+    assert not running(pid_file)

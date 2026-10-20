@@ -7,6 +7,8 @@ import tempfile
 from pathlib import Path
 from typing import IO
 
+from process_group import run_in_group
+
 
 def scan_paths(repository: Path) -> list[Path]:
     """Return tracked files plus nonignored working-tree files."""
@@ -231,14 +233,16 @@ def run_gate_command(
         if role == "deployment":
             copy_scan_tree(directory, Path(temporary))
             command = [temporary if value == "." else value for value in command]
-        result = subprocess.run(
+        result = subprocess.CompletedProcess(
             command,
-            cwd=directory,
-            check=False,
-            timeout=timeout,
-            env=environment,
-            stdout=stdout,
-            stderr=stderr,
+            run_in_group(
+                command,
+                cwd=directory,
+                timeout=timeout,
+                env=environment,
+                stdout=stdout,
+                stderr=stderr,
+            ).returncode,
         )
     if role == "ci-security" and result.returncode == 3:
         from gate_config import has_workflows, repository_files
