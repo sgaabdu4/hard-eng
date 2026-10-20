@@ -624,7 +624,7 @@ def run_limited_gate(
                 f"Line coverage: {covered}/{total} ({100 * covered / total:.2f}%; minimum 70%)"
             )
             if covered * 100 < total * 70:
-                raise ValueError("Line coverage is below the required 70%")
+                raise ValueError("HE-COVERAGE-MIN: Line coverage is below 70%")
         print(
             f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} "
             f"(exit {result.returncode}; elapsed {time.monotonic() - started:.3f}s)"
@@ -799,8 +799,7 @@ def check(
             plan_stage = plans.validate_plans(ROOT, base, plan_stage)
         validate_comments(ROOT, base)
         validate_suppressions(ROOT, base)
-        plans.validate_decisions(ROOT, base)
-        plans.validate_attribution(ROOT, base)
+        plans.validate_records(ROOT, base)
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False

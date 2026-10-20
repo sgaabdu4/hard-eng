@@ -363,6 +363,7 @@ def test_typescript_check_requires_the_untrusted_input_declarations(
     monkeypatch: pytest.MonkeyPatch,
     declared: bool,
 ) -> None:
+    """HE-UNTRUSTED-JSON: TypeScript must load the declarations that type JSON as unknown."""
     (tmp_path / "src").mkdir()
     (tmp_path / "src/app.ts").write_text("export {};\n")
     files = ["src/app.ts", *([UNTRUSTED] if declared else [])]
