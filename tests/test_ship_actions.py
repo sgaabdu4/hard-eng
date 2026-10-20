@@ -724,8 +724,11 @@ def test_interrupted_pre_push_removes_its_snapshot(
     assert hook.wait(timeout=30) != 0
     assert len(ship_actions.worktrees(root)) == 1
     assert not Path(checkout).parent.exists()
-    with pytest.raises(ProcessLookupError):
-        os.kill(int(child), 0)
+    # A killed orphan stays a zombie where the container's first process never reaps it.
+    state = subprocess.run(
+        ["ps", "-o", "stat=", "-p", child], check=False, capture_output=True, text=True
+    )
+    assert state.stdout.strip() in {"", "Z"}
 
 
 @pytest.mark.parametrize("gate_passes", [True, False])
