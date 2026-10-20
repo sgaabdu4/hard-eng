@@ -1,6 +1,7 @@
 """`release_canary.py`: which releases need a try on installed projects, and what it publishes."""
 
 import fcntl
+import json
 import subprocess
 import sys
 import time
@@ -32,7 +33,7 @@ def test_published_status_names_no_project() -> None:
         "owner/other-app": (False, "check failed; log /cache/owner__other-app.log"),
     }
     text = release_canary.status_text(results)
-    assert text == "1 of 2 installed projects passed"
+    assert text == "1 of 2 canary runs passed"
     assert "owner" not in text
 
 
@@ -51,6 +52,8 @@ def test_a_run_that_finds_no_project_fails(
         posted.append(state)
 
     monkeypatch.setattr(release_canary, "output", output)
+    monkeypatch.setattr(release_canary, "repositories", list)
+    monkeypatch.setattr(release_canary, "public_text", str)
     monkeypatch.setattr(release_canary, "installed_projects", list)
     monkeypatch.setattr(release_canary, "post_status", post_status)
     monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--post-status"])
@@ -90,7 +93,9 @@ def test_projects_with_dotted_names_keep_their_own_log_and_clone(
 
     monkeypatch.setattr(release_canary, "step", step)
     messages = [
-        release_canary.try_project(name, "a" * 40, tmp_path)[1]
+        release_canary.try_target(
+            ("installed", name), "a" * 40, tmp_path, tmp_path, ()
+        )[f"installed {name}"][1]
         for name in ("owner/app.api", "owner/app.web", "owner/app.log")
     ]
     logs = [message.rsplit("log ", 1)[1] for message in messages]
@@ -132,3 +137,83 @@ def test_a_second_run_waits_and_keeps_the_active_run(
         fcntl.flock(holder, fcntl.LOCK_EX)
         assert release_canary.main() == 1
     assert active.read_text() == "running\n"
+
+
+def test_a_release_that_names_a_private_project_fails_without_publishing_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The source repository is public; private project names must not reach it."""
+    monkeypatch.setattr(release_canary, "LOCK", tmp_path / "canary.lock")
+    posted: list[str] = []
+    found = [("owner/secret-app", True, False), ("owner/open-tool", False, False)]
+
+    def output(command: list[str], cwd: Path = release_canary.SOURCE) -> str:
+        return "a" * 40
+
+    def post_status(revision: str, state: str, description: str) -> None:
+        posted.append(description)
+
+    monkeypatch.setattr(release_canary, "output", output)
+    monkeypatch.setattr(release_canary, "repositories", lambda: found)
+    monkeypatch.setattr(release_canary, "public_text", "Seen in secret-app {}.".format)
+    monkeypatch.setattr(release_canary, "post_status", post_status)
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--post-status"])
+    assert release_canary.main() == 1
+    assert posted == ["The release names a private project"]
+
+
+def test_only_whole_private_names_count_as_leaks() -> None:
+    private = ["owner/secret-app"]
+    for text in ("see owner/secret-app", "in secret-app.", "SECRET-APP fails"):
+        assert release_canary.leaked_names(text, private), text
+    for text in ("secret-apps", "my-secret-app", "secret-app.py", "x/secret-app/y"):
+        assert not release_canary.leaked_names(text, private), text
+
+
+@pytest.mark.parametrize(
+    ("session", "expected"),
+    [
+        ({"base": "x", "verified": {}}, (True, "codex passed")),
+        ({"base": "x"}, (False, "codex ended without a passing Hard Eng check")),
+    ],
+)
+def test_an_agent_run_passes_only_when_hard_eng_recorded_a_passing_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    session: dict[str, object],
+    expected: tuple[bool, str],
+) -> None:
+    """Agent exit status alone cannot prove the hooks loaded and the gate passed."""
+    work = tmp_path / "target"
+    work.mkdir()
+    for command in (
+        ["git", "init", "-q"],
+        [
+            "git",
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "base",
+        ],
+    ):
+        subprocess.run(command, cwd=work, check=True)
+    agent = (
+        "import json, pathlib, sys\n"
+        "pathlib.Path('sum.py').write_text('def add(a, b):\\n    return a + b\\n')\n"
+        "state = pathlib.Path('.hard-eng/sessions/s.json')\n"
+        "state.parent.mkdir(parents=True)\n"
+        "state.write_text(sys.argv[1])\n"
+    )
+
+    def agent_command(name: str, copy: Path) -> list[str]:
+        return [sys.executable, "-c", agent, json.dumps(session)]
+
+    monkeypatch.setattr(release_canary, "agent_command", agent_command)
+    with (tmp_path / "agent.log").open("w") as log:
+        assert release_canary.try_agent("codex", work, log) == expected
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["agent.log", "target"]
