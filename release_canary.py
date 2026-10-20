@@ -87,20 +87,21 @@ def leaked_names(text: str, projects: list[str]) -> list[str]:
 def public_text(revision: str) -> str:
     """Commit messages, diff and the titles and bodies of every PR in the release."""
     span = f"origin/main..{revision}"
-    pulls = {
-        output(
-            [
-                "gh",
-                "api",
-                f"repos/{UPSTREAM}/commits/{sha}/pulls",
-                "-q",
-                ".[] | .title, .body",
-            ]
-        )
-        for sha in output(["git", "rev-list", span]).split()
-    }
+    pulls = {pulls_of(sha) for sha in output(["git", "rev-list", span]).split()}
     diff = output(["git", "diff", f"origin/main...{revision}"])
     return "\n".join([output(["git", "log", "--format=%B", span]), diff, *pulls])
+
+
+def pulls_of(sha: str) -> str:
+    """GitHub sometimes cuts a reply short, so one failed read is retried."""
+    command = ["gh", "api", f"repos/{UPSTREAM}/commits/{sha}/pulls"]
+    command += ["-q", ".[] | .title, .body"]
+    for _ in range(2):
+        try:
+            return output(command)
+        except subprocess.CalledProcessError:
+            time.sleep(5)
+    return output(command)
 
 
 def output(command: list[str], cwd: Path = SOURCE) -> str:

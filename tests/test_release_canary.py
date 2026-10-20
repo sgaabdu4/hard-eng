@@ -170,6 +170,27 @@ def test_only_whole_private_names_count_as_leaks() -> None:
         assert not release_canary.leaked_names(text, private), text
 
 
+def test_a_cut_github_reply_is_retried_before_reading_release_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GitHub sometimes cuts a reply short; one cut reply must not stop a full run."""
+    failed: set[str] = set()
+
+    def output(command: list[str], cwd: Path = release_canary.SOURCE) -> str:
+        if command[0] == "gh":
+            if command[2] not in failed:
+                failed.add(command[2])
+                raise subprocess.CalledProcessError(1, command)
+            return f"PR for {command[2]}"
+        return "c1 c2" if command[1] == "rev-list" else ""
+
+    monkeypatch.setattr(release_canary, "output", output)
+    monkeypatch.setattr(time, "sleep", float)
+    text = release_canary.public_text("HEAD")
+    assert "commits/c1/pulls" in text
+    assert "commits/c2/pulls" in text
+
+
 def test_a_private_repository_named_after_a_public_owner_is_no_leak() -> None:
     private = ["school/sgaabdu4"]
     assert not release_canary.leaked_names('"github_login":"sgaabdu4"', private)
