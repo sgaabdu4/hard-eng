@@ -70,7 +70,7 @@ OUTPUTS: dict[str, str] = {}
 def remember(group: Group, gate: Gate, text: str) -> str:
     """Keep a gate's output for the debt comparison and pass it on."""
     key = f"{group['path']}/{gate['name']}"
-    OUTPUTS[key] = OUTPUTS.get(key, "") + text
+    OUTPUTS[key] = f"{OUTPUTS.get(key, '')}\n{text}"
     return text
 
 
@@ -131,7 +131,8 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     current = fingerprints(root, group, gate, output) if failed else Counter()
     if new := current - debt:
         print(f"FAIL {gate['name']}: findings beyond {DEBT_FILE}:")
-        print("".join(f"  {line}\n" for line in list(new.elements())[:20]), end="")
+        shown = sorted(new.elements(), key=lambda line: not re.search(r"\w", line))
+        print("".join(f"  {line}\n" for line in shown[:20]), end="")
         return True
     if fixed := debt - current:
         print(
@@ -140,7 +141,8 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
         )
         return True
     print(
-        f"DEBT {gate['name']}: only the {debt.total()} recorded lines remain; no new finding"
+        f"DEBT {gate['name']}: the failure above holds only the {debt.total()} lines "
+        f"recorded in {DEBT_FILE}; no new finding"
     )
     return False
 
@@ -180,14 +182,12 @@ def record(
 
 
 def git_file(root: Path, base: str, name: str) -> str | None:
-    result = subprocess.run(
-        ["git", "show", f"{base}:{name}"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return result.stdout if result.returncode == 0 else None
+    from plans import _git_output
+
+    try:
+        return _git_output(root, "show", f"{base}:{name}")
+    except subprocess.CalledProcessError:
+        return None
 
 
 def require_shrink(root: Path, base: str | None) -> None:

@@ -617,7 +617,7 @@ def run_limited_gate(
         subprocess.CalledProcessError,
     ) as error:
         print(
-            f"FAIL {gate['name']}: {remember(group, gate, f'\n{error}')}; "
+            f"FAIL {gate['name']}: {remember(group, gate, str(error))}; "
             f"elapsed {time.monotonic() - started:.3f}s @ {group['path']}"
         )
         return True
