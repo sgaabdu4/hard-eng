@@ -14,7 +14,7 @@ import pytest
 import tool_setup
 from conftest import SOURCE, use_installed_mise
 from gate_config import Gate, Group, validate_gate, validate_package_services
-from project_setup import import_configuration
+from python_setup import import_configuration
 
 RECURSIVE_IMPORT_LINTER = """[importlinter]
 root_package = example

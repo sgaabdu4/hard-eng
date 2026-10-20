@@ -449,63 +449,6 @@ def configure_javascript(
         )
 
 
-def configure_python(
-    root: Path, directory: Path, package: Group, changes: dict[str, str]
-) -> None:
-    from project_setup import dependency_command, import_configuration, parallel_pytest
-
-    dependency_command(directory, "python")  # Existing configurations need a lock too.
-    parallel_pytest(package)
-    native = directory / "pyrefly.toml"
-    project = directory / "pyproject.toml"
-    content = project.read_text()
-    options = (
-        tomllib.loads(native.read_text())
-        if native.exists()
-        else tomllib.loads(content).get("tool", {}).get("pyrefly")
-    )
-    if options is not None:
-        if (
-            options.get("preset") not in {"strict", "all"}
-            or options.get("check-unannotated-defs", True) is not True
-        ):
-            raise ValueError(
-                f"{package['path']}: existing Pyrefly settings need strict checking; preserve them and ask before changing them"
-            )
-    else:
-        changes[str(project.relative_to(root))] = (
-            content
-            + '\n[tool.pyrefly]\npreset = "strict"\ncheck-unannotated-defs = true\n'
-        )
-    name = str(project.relative_to(root))
-    current = test_import_path(directory, package, changes.get(name, content))
-    updated = import_configuration(directory, package, current)
-    if updated != content:
-        changes[name] = updated
-
-
-def test_import_path(directory: Path, package: Group, content: str) -> str:
-    """uv installs only a packaged project, so pytest needs the folder of root modules."""
-    project = tomllib.loads(content)
-    packaged = project.get("tool", {}).get("uv", {}).get("package")
-    if (
-        (packaged if isinstance(packaged, bool) else "build-system" in project)
-        or "pytest" in project.get("tool", {})
-        or any(
-            (directory / name).is_file()
-            for name in ("pytest.toml", ".pytest.toml", "pytest.ini", ".pytest.ini")
-        )
-        or any(
-            (directory / name).is_file()
-            and f"[{section}]" in (directory / name).read_text()
-            for name, section in (("tox.ini", "pytest"), ("setup.cfg", "tool:pytest"))
-        )
-    ):
-        return content
-    paths = sorted({"src" if name == "src" else "." for name in package["sources"]})
-    return content + f"\n[tool.pytest.ini_options]\npythonpath = {json.dumps(paths)}\n"
-
-
 def prepare_hook(root: Path) -> tuple[Path, str]:
     import hook_chain
 
@@ -873,6 +816,8 @@ def plan_install(
     )
 
     typescript = typescript_packages(root, repository_files(root))
+    from python_setup import configure_python
+
     for package in config.get("packages", []):
         strict_scanner_flags(package)
         adapt_boundaries(package, typescript)
