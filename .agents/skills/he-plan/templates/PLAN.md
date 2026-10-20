@@ -18,7 +18,7 @@ Authority: [TODO: Task mode + user's actual scope/approval; pending if absent]
 
 ## Acceptance + steps
 
-- [ ] [TODO: Observable behavior → `path::test name` + expected result, or N/A — why no test can prove it; repeat only for distinct requirements.]
+- [ ] [TODO: Observable behavior → `path::test name` or requirement ID + expected result, or N/A — why no test can prove it; repeat only for distinct requirements.]
 
 ## Baseline + execution
 
