@@ -274,13 +274,10 @@ def prepare(
 def agent_command(agent: str, work: Path) -> list[str]:
     if agent == "claude":
         return ["claude", "-p", "--dangerously-skip-permissions", TASK]
-    trust = f'projects."{work}".trust_level="trusted"'
+    # Codex lists untrusted project hooks but runs none; this release's hooks are under test.
     return [
-        *("codex", "exec", "--enable", "hooks"),
-        "--dangerously-bypass-approvals-and-sandbox",
-        "-c",
-        trust,
-        TASK,
+        *("codex", "exec", "--enable", "hooks", "--dangerously-bypass-hook-trust"),
+        *("--dangerously-bypass-approvals-and-sandbox", TASK),
     ]
 
 
