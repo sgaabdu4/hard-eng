@@ -215,6 +215,16 @@ SWITCHES = [
         "ski" + "p:",
     ),
     ("test/a_test.dart", "@Sk" + "ip('why')\nlibrary a;\n", "@Sk" + "ip("),
+    ("app.py", "x = 1  # no" + "semgrep\n", "no" + "semgrep"),
+    ("deploy.sh", "curl x  # no" + "sem\n", "no" + "sem"),
+    ("a.ts", "const k = 'x'; // gitleaks" + ":allow\n", "gitleaks" + ":allow"),
+    ("config.yml", "key: x  # gitleaks" + ":allow\n", "gitleaks" + ":allow"),
+    (
+        ".gitleaksignore",
+        "abc:config.yml:generic-api-key:1\n",
+        "abc:config.yml:generic-api-key:1",
+    ),
+    ("app/.semgrepignore", "src/\n", "src/"),
 ]
 
 
@@ -248,7 +258,7 @@ def test_switch_off_already_in_the_project_is_not_flagged(
     tmp_path: Path, name: str, text: str, pattern: str
 ) -> None:
     root = switch_root(tmp_path, name, text)
-    (root / name).write_text(text + "extra = 1\n")
+    (root / name).write_text(text + "\n")
     validate_suppressions(root, "HEAD")
 
 
@@ -259,6 +269,8 @@ def test_scaffold_paths_and_ordinary_words_are_not_flagged(tmp_path: Path) -> No
     (root / "app.py").write_text("skip = True\nskipped = pytest_skip_reason\n")
     (root / "lib").mkdir()
     (root / "lib/a.dart").write_text("final f = Foo(ski" + "p: false);\n")
+    (root / ".semgrepignore").write_text("# Include production and tests.\n\n")
+    (root / "notes.md").write_text("Nosy semantics.\n")
     validate_suppressions(root, "HEAD")
 
 
