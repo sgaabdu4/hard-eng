@@ -154,19 +154,18 @@ def test_pre_push_rejects_a_pushed_comment_block(
     assert accepted.returncode == 0, accepted.stderr[-2000:]
 
 
+@pytest.mark.parametrize("shipping", [True, False])
 def test_check_without_base_covers_committed_branch_changes(
-    tmp_path: Path, shipping_policy: ShippingPolicy
+    tmp_path: Path, shipping_policy: ShippingPolicy, shipping: bool
 ) -> None:
     root = tmp_path / "repo"
     init(root)
-    gates: dict[str, object] = {
-        "packages": [],
-        "shared": [],
-        "shipping": shipping_policy,
-    }
+    gates: dict[str, object] = {"packages": [], "shared": []}
+    if shipping:
+        gates["shipping"] = shipping_policy
     (root / "hard-eng.gates.json").write_text(json.dumps(gates))
     commit(root, "baseline")
-    git(root, "branch", "-M", shipping_policy["base"])
+    git(root, "branch", "-M", shipping_policy["base"] if shipping else "main")
     git(root, "switch", "-qc", "feature")
     (root / "app.py").write_text("# narrates\n# the next line\nx = 1\n")
     commit(root, "add app")
