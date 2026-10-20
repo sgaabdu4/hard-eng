@@ -232,6 +232,47 @@ def completed_tests(path: Path, kind: str) -> int:
     return sum(test.find("skipped") is None for test in tree.iter("testcase"))
 
 
+def reported_skips(path: Path, kind: str) -> set[str]:
+    if kind == "dart-tests":
+        events = dart_events(path)
+        names = {
+            test.get("id"): test.get("name")
+            for event in events
+            if event.get("type") == "testStart"
+            and isinstance(test := event.get("test"), dict)
+        }
+        return {
+            str(names.get(event.get("testID")))
+            for event in events
+            if event.get("type") == "testDone" and event.get("skipped") is True
+        }
+    if kind == "xcode-tests":
+        return set()
+    # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse
+    tree = ET.parse(path)
+    return {
+        test.get("name", "").split("[", 1)[0]
+        for test in tree.iter("testcase")
+        if test.find("skipped") is not None
+    }
+
+
+def skipped_tests(root: Path, groups: list[Group], since: float) -> set[str]:
+    """Skips in the test reports that this run wrote."""
+    names: set[str] = set()
+    for group in groups:
+        for gate in group["checks"]:
+            report = gate.get("report", {})
+            path = root / group["path"] / report.get("tests", "")
+            if (
+                gate.get("role") == "tests"
+                and path.is_file()
+                and path.stat().st_mtime >= since
+            ):
+                names |= reported_skips(path, report["type"])
+    return names
+
+
 def python_coverage(path: Path, directory: Path) -> dict[Path, tuple[int, int]]:
     files = {}
     report = json.loads(path.read_text())
