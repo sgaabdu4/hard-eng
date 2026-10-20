@@ -1,7 +1,6 @@
 """`release_canary.py`: which releases need a try on installed projects, and what it publishes."""
 
 import fcntl
-import os
 import subprocess
 import sys
 import time
@@ -71,10 +70,13 @@ def test_a_step_past_its_limit_stops_every_process_it_started(tmp_path: Path) ->
     with (tmp_path / "step.log").open("w") as log:
         command = [sys.executable, "-c", spawn, str(pid_file)]
         assert not release_canary.step(command, tmp_path, log, 2)
-    child = int(pid_file.read_text())
+    child = pid_file.read_text()
     time.sleep(0.5)
-    with pytest.raises(ProcessLookupError):
-        os.kill(child, 0)
+    # A killed orphan stays a zombie where the container's first process never reaps it.
+    state = subprocess.run(
+        ["ps", "-o", "stat=", "-p", child], check=False, capture_output=True, text=True
+    )
+    assert state.stdout.strip() in {"", "Z"}
 
 
 def test_projects_with_dotted_names_keep_their_own_log_and_clone(
