@@ -9,7 +9,6 @@ from plans import default_branch_point, size_verdict
 from process_group import run_in_group
 
 TIMEOUT_SECONDS = 1800
-READ_ONLY_GIT = ("diff", "log", "show", "status", "merge-base", "ls-files")
 VERDICTS = {"VERDICT: clean": "clean", "VERDICT: findings": "findings"}
 PROMPT = (
     "Adversarially review the change on this branch: `git diff {point} {revision}`. "
@@ -38,9 +37,7 @@ def reviewer_for(host: str | None) -> str:
 def command(reviewer: str, prompt: str, root: Path) -> list[str]:
     if reviewer == "codex":
         return ["codex", "exec", "--sandbox", "read-only", "--cd", str(root), prompt]
-    allowed = " ".join(
-        ["Read", "Grep", "Glob"] + [f"Bash(git {g} *)" for g in READ_ONLY_GIT]
-    )
+    # A Bash(git diff *) rule would also allow --output=<file>; built-in read-only git forms refuse it.
     return [
         "claude",
         "--print",
@@ -49,7 +46,7 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
         "--tools",
         "Read,Grep,Glob,Bash",
         "--allowedTools",
-        allowed,
+        "Read Grep Glob",
         "--permission-mode",
         "dontAsk",
         "--no-session-persistence",
