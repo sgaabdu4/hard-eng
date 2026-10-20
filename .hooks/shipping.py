@@ -78,7 +78,6 @@ _REVIEW_QUERY = (
     "query($owner:String!,$name:String!,$number:Int!){viewer{login} "
     "repository(owner:$owner,name:$name){pullRequest(number:$number){"
     "viewerDidAuthor viewerCanMergeAsAdmin reviewDecision isMergeQueueEnabled "
-    "reviewThreads(first:100){totalCount nodes{isResolved}} "
     "baseRef{branchProtectionRule{"
     "requiresCommitSignatures requiresDeployments lockBranch requiresStrictStatusChecks "
     "requiredStatusCheckContexts} rules(first:100){totalCount nodes{type parameters{"
@@ -87,6 +86,11 @@ _REVIEW_QUERY = (
     "commits(last:1){nodes{commit{oid statusCheckRollup{state contexts(first:100){"
     "totalCount nodes{...on CheckRun{name conclusion} ...on StatusContext{context state}}"
     "}}}}}}}}"
+)
+_THREADS_QUERY = (
+    "query($owner:String!,$name:String!,$number:Int!){"
+    "repository(owner:$owner,name:$name){pullRequest(number:$number){"
+    "reviewThreads(first:100){totalCount nodes{isResolved}}}}}"
 )
 _PASSED = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 _BYPASSABLE_RULES = {
@@ -798,9 +802,6 @@ def _other_merge_requirement(
     """Why something besides the review may block; admin merge would bypass it too."""
     if pull.get("isMergeQueueEnabled") is not False:
         return "the base branch may require a merge queue"
-    threads = _complete_nodes(pull.get("reviewThreads"))
-    if threads is None or any(node.get("isResolved") is not True for node in threads):
-        return "a review conversation is unresolved"
     base = pull.get("baseRef")
     rules = _complete_nodes(base.get("rules") if isinstance(base, dict) else None)
     if not isinstance(base, dict) or rules is None:
@@ -839,30 +840,24 @@ def _other_merge_requirement(
     return None
 
 
+def _graphql_pull(
+    root: Path, owner: str, name: str, number: int, query: str
+) -> tuple[dict[str, JsonValue], dict[str, JsonValue]]:
+    """The query's data and its pull request object."""
+    fields = [f"owner={owner}", f"name={name}", f"number={number}"]
+    flags = [part for field in fields for part in ("-F", field)]
+    value = _json(gh(root, "api", "graphql", *flags, "-f", f"query={query}"), "query")
+    data = _object(_object(value, "review response").get("data"), "review data")
+    repository = _object(data.get("repository"), "review repository")
+    return data, _object(repository.get("pullRequest"), "review PR")
+
+
 def _review_bypass_problem(
     root: Path, owner: str, name: str, number: int, head_sha: str
 ) -> str | None:
     """Why a blocked PR is not blocked solely by a review only its author could give."""
-    value = _json(
-        gh(
-            root,
-            "api",
-            "graphql",
-            "-F",
-            f"owner={owner}",
-            "-F",
-            f"name={name}",
-            "-F",
-            f"number={number}",
-            "-f",
-            f"query={_REVIEW_QUERY}",
-        ),
-        "review query",
-    )
-    data = _object(_object(value, "review response").get("data"), "review data")
+    data, pull = _graphql_pull(root, owner, name, number, _REVIEW_QUERY)
     viewer = _text(_object(data.get("viewer"), "viewer"), "login", "viewer")
-    repository = _object(data.get("repository"), "review repository")
-    pull = _object(repository.get("pullRequest"), "review PR")
     nodes = _object(pull.get("commits"), "review commits").get("nodes")
     commit = (
         _object(_object(nodes[0], "review commit").get("commit"), "review commit")
@@ -914,6 +909,11 @@ def _ready_state(
         raise ShippingError("local task branch or HEAD does not match PR")
     if branch == policy["base"]:
         raise ShippingError("shipping requires a task branch distinct from base")
+    threads = _complete_nodes(
+        _graphql_pull(root, *identity, _THREADS_QUERY)[1].get("reviewThreads")
+    )
+    if threads is None or any(node.get("isResolved") is not True for node in threads):
+        raise ShippingError("a review conversation is unresolved or uncounted")
     bypass = pull.mergeable is True and pull.mergeable_state == "blocked"
     if bypass:
         problem = _review_bypass_problem(root, *identity, pull.head_sha)

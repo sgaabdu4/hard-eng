@@ -1,8 +1,11 @@
 """Admin review bypass refuses any merge requirement besides the review."""
 
+from pathlib import Path
+
 import pytest
 import shipping
 from gate_config import JsonValue
+from test_shipping import _PR_URL, FakeGitHub, _check, _fixture, _pull, _review
 
 EMPTY: JsonValue = {"totalCount": 0, "nodes": []}
 
@@ -41,9 +44,6 @@ BUILD: JsonValue = {"name": "build", "conclusion": "SUCCESS"}
     ("pull", "contexts", "message"),
     [
         ({}, nodes(BUILD), None),
-        ({"reviewThreads": nodes({"isResolved": True})}, nodes(BUILD), None),
-        ({"reviewThreads": nodes({"isResolved": False})}, nodes(BUILD), "unresolved"),
-        ({"reviewThreads": {"totalCount": 2, "nodes": []}}, nodes(BUILD), "unresolved"),
         ({"isMergeQueueEnabled": True}, nodes(BUILD), "merge queue"),
         ({"isMergeQueueEnabled": None}, nodes(BUILD), "merge queue"),
         ({"baseRef": None}, nodes(BUILD), "unreadable"),
@@ -102,3 +102,22 @@ def test_bypass_needs_every_other_merge_requirement_satisfied(
         assert problem is None
     else:
         assert problem is not None and message in problem
+
+
+@pytest.mark.parametrize(
+    ("state", "threads"),
+    [
+        ("clean", nodes({"isResolved": False})),
+        ("clean", {"totalCount": 2, "nodes": [{"isResolved": True}]}),
+        ("blocked", nodes({"isResolved": False})),
+    ],
+)
+def test_ready_refuses_an_open_or_uncounted_review_thread_on_every_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: str, threads: JsonValue
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture, mergeable_state=state), [_check(fixture.head)])
+    fake.review = _review(fixture.head, reviewThreads=threads)
+    monkeypatch.setattr(shipping, "gh", fake)
+    with pytest.raises(shipping.ShippingError, match="review conversation"):
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
