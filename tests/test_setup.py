@@ -28,7 +28,7 @@ from project_setup import (
     javascript_manager,
     strict_scanner_flags,
 )
-from python_setup import import_configuration
+from python_setup import import_configuration, python_roots
 from reports import completed_tests, line_coverage, parallel_hint
 from shipping import ShippingPolicy
 
@@ -329,6 +329,7 @@ def test_python_packages_receive_recursive_import_contract(
     package = tmp_path / "src/example"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("value = 1\n")
+    (package / "api.py").write_text("value = 2\n")
     installer.install(tmp_path)
     content = (tmp_path / "pyproject.toml").read_text()
     assert 'root_packages = ["example"]' in content
@@ -350,6 +351,24 @@ def test_python_packages_receive_recursive_import_contract(
     (tmp_path / "pyproject.toml").write_text(content)
     installer.install(tmp_path)
     assert (tmp_path / "pyproject.toml").read_text() == content
+
+
+def test_import_contract_waits_for_a_package_with_submodules(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "uv.lock").touch()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
+    package = tmp_path / "example"
+    package.mkdir()
+    (package / "__init__.py").write_text("value = 1\n")
+    group: Group = {"path": ".", "checks": [], "sources": ["example"]}
+    assert python_roots(tmp_path, group) == []
+    installer.install(tmp_path)
+    assert "importlinter" not in (tmp_path / "pyproject.toml").read_text()
+    (package / "calc.py").write_text("value = 2\n")
+    assert python_roots(tmp_path, group) == ["example"]
 
 
 def test_python_tests_run_in_parallel_unless_a_project_opts_out(
