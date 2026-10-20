@@ -29,6 +29,7 @@ Decisions: Extend `release_canary.py`, not a new tool. Scaffold = every `--new` 
 - [x] The leak check reads only added diff lines, so deleting text `main` already published does not fail the release → `tests/test_release_canary.py::test_release_text_holds_added_lines_but_not_lines_main_already_published`.
 - [x] New targets get filled PRODUCT.md and DESIGN.md, so a fresh install can pass its first check → `tests/test_release_canary.py::test_new_targets_get_the_project_documents_the_check_requires`.
 - [x] Target folders are valid create-cloudflare project names → `tests/test_release_canary.py::test_a_target_folder_is_a_valid_cloudflare_project_name`.
+- [x] Project lock files such as pubspec.lock reach the agent copy; only Git's own lock files are skipped → `tests/test_release_canary.py::test_project_lock_files_reach_the_agent_copy`.
 
 ## Baseline + execution
 

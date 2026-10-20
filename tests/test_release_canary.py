@@ -291,3 +291,20 @@ def test_git_locks_in_the_target_never_reach_the_agent_copy(
     (work / ".git/index.lock").touch()
     with (tmp_path / "agent.log").open("w") as log:
         assert release_canary.try_agent("codex", work, log) == (True, "codex passed")
+
+
+def test_project_lock_files_reach_the_agent_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dependency lock files such as pubspec.lock are project files the checks need."""
+    work = agent_target(tmp_path, monkeypatch, {"base": "x", "verified": {}})
+    (work / "pubspec.lock").write_text("packages: {}\n")
+    command = release_canary.agent_command
+
+    def agent_command(name: str, copy: Path) -> list[str]:
+        assert (copy / "pubspec.lock").is_file()
+        return command(name, copy)
+
+    monkeypatch.setattr(release_canary, "agent_command", agent_command)
+    with (tmp_path / "agent.log").open("w") as log:
+        assert release_canary.try_agent("codex", work, log) == (True, "codex passed")
