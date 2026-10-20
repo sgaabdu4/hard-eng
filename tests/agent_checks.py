@@ -56,6 +56,7 @@ from agent_fixtures import (
     install_hard_eng,
     installed_source,
 )
+from challenge import without_host_markers
 from conftest import SOURCE, commit, git, init
 from process_group import run_in_group
 
@@ -631,7 +632,7 @@ def stream(
     root: Path,
     evidence: Path,
     timeout: int,
-    environment: dict[str, str] | None = None,
+    overrides: dict[str, str] | None = None,
 ) -> list[dict[str, object]] | None:
     """The client's JSON event stream, or None when it exceeded the timeout."""
     try:
@@ -642,7 +643,7 @@ def stream(
             run_in_group(
                 command,
                 cwd=root,
-                env=environment,
+                env={**without_host_markers(), **(overrides or {})},
                 stdin=subprocess.DEVNULL,
                 stdout=out,
                 stderr=err,
@@ -718,8 +719,7 @@ def codex_run(
         str(evidence / "last-message.md"),
         prompt,
     ]
-    environment = {**os.environ, "CODEX_HOME": str(home)}
-    found = stream(command, root, evidence, options.timeout, environment)
+    found = stream(command, root, evidence, options.timeout, {"CODEX_HOME": str(home)})
     if found is None:
         return Agent(False, "", {}, [f"codex exec exceeded {options.timeout}s"], [])
     thread = next((e.get("thread_id") for e in found if "thread_id" in e), None)
