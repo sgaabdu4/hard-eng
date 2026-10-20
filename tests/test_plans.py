@@ -889,6 +889,26 @@ def test_small_change_needs_no_plan(
     )
 
 
+@pytest.mark.parametrize("default", ["master", "trunk"])
+def test_small_change_without_a_remote_compares_with_the_local_default_branch(
+    repository: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    default: str,
+) -> None:
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(repository.parent / "no-global-config"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    sized_branch(repository)
+    git(repository, "branch", "-m", "main", default)
+    if default != "master":
+        git(repository, "config", "init.defaultBranch", default)
+    edit(repository, "a.py", 2)
+    validate_plans(repository)
+    assert "Size: small (1 file, 4 changed lines); no plan needed." in (
+        capsys.readouterr().out
+    )
+
+
 def test_documentation_only_change_needs_no_plan(
     repository: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

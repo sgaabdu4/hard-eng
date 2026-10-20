@@ -711,7 +711,7 @@ def test_update_branch_needs_no_plan_for_files_the_update_wrote(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Issue 299: setup's own edits outside the scaffold made update PRs demand a plan."""
-    import plans
+    import change_size
 
     source, target, _ = release
     ignore = target / ".gitignore"
@@ -727,14 +727,17 @@ def test_update_branch_needs_no_plan_for_files_the_update_wrote(
     assert ignore.read_text() == current
     assert not (target / ".mcp.json").exists()
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
-    small, reason = plans.size_verdict(target)
+    small, reason = change_size.size_verdict(target)
     assert small, reason
     (target / "package.json").write_text('{"private":true,"type":"module"}')
     commit(target, "project edit beside the update")
-    assert plans.size_verdict(target) == (
+    assert change_size.size_verdict(target) == (
         False,
         "it changes package.json, which always needs a plan",
     )
     (target / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n\xff\xfe")
     commit(target, "binary file beside the update")
-    assert plans.size_verdict(target) == (False, "it adds, deletes or renames a file")
+    assert change_size.size_verdict(target) == (
+        False,
+        "it adds, deletes or renames a file",
+    )

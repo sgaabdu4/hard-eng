@@ -5,7 +5,8 @@ import os
 import subprocess
 from pathlib import Path
 
-from plans import default_branch_point, size_verdict
+from change_size import size_verdict
+from plans import default_branch_point
 from process_group import run_in_group
 
 TIMEOUT_SECONDS = 1800
