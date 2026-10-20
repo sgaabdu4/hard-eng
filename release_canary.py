@@ -23,7 +23,6 @@ SOURCE_ONLY_FILES = {
     "README.md",
     "PLAN.md",
     "DECISION.md",
-    "actor-prompt.md",
     "AGENTS.override.md",
     "release_canary.py",
 }
