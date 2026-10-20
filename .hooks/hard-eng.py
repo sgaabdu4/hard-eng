@@ -624,7 +624,7 @@ def run_limited_gate(
                 f"Line coverage: {covered}/{total} ({100 * covered / total:.2f}%; minimum 70%)"
             )
             if covered * 100 < total * 70:
-                raise ValueError("Line coverage is below the required 70%")
+                raise ValueError("HE-COVERAGE-MIN: Line coverage is below 70%")
         print(
             f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} "
             f"(exit {result.returncode}; elapsed {time.monotonic() - started:.3f}s)"
@@ -792,19 +792,20 @@ def check(
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(groups, quick)
         timeout = timeout or gate_budget(ROOT)
+        import plans
         from comments import validate_comments, validate_suppressions
-        from plans import report_stage, validate_decisions, validate_plans
 
         if verify_plan:
-            plan_stage = validate_plans(ROOT, base, plan_stage)
+            plan_stage = plans.validate_plans(ROOT, base, plan_stage)
         validate_comments(ROOT, base)
         validate_suppressions(ROOT, base)
-        validate_decisions(ROOT, base)
+        plans.validate_decisions(ROOT, base)
+        plans.validate_requirements(ROOT)
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
 
         failed = run_gates(groups, timeout, related) is not False
-        report_stage(failed, plan_stage)
+        plans.report_stage(failed, plan_stage)
         return int(failed)
 
 
