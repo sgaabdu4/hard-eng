@@ -170,20 +170,9 @@ def test_only_whole_private_names_count_as_leaks() -> None:
         assert not release_canary.leaked_names(text, private), text
 
 
-@pytest.mark.parametrize(
-    ("session", "expected"),
-    [
-        ({"base": "x", "verified": {}}, (True, "codex passed")),
-        ({"base": "x"}, (False, "codex ended without a passing Hard Eng check")),
-    ],
-)
-def test_an_agent_run_passes_only_when_hard_eng_recorded_a_passing_check(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    session: dict[str, object],
-    expected: tuple[bool, str],
-) -> None:
-    """Agent exit status alone cannot prove the hooks loaded and the gate passed."""
+def agent_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, session: dict[str, object]
+) -> Path:
     work = tmp_path / "target"
     work.mkdir()
     for command in (
@@ -214,6 +203,34 @@ def test_an_agent_run_passes_only_when_hard_eng_recorded_a_passing_check(
         return [sys.executable, "-c", agent, json.dumps(session)]
 
     monkeypatch.setattr(release_canary, "agent_command", agent_command)
+    return work
+
+
+@pytest.mark.parametrize(
+    ("session", "expected"),
+    [
+        ({"base": "x", "verified": {}}, (True, "codex passed")),
+        ({"base": "x"}, (False, "codex ended without a passing Hard Eng check")),
+    ],
+)
+def test_an_agent_run_passes_only_when_hard_eng_recorded_a_passing_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    session: dict[str, object],
+    expected: tuple[bool, str],
+) -> None:
+    """Agent exit status alone cannot prove the hooks loaded and the gate passed."""
+    work = agent_target(tmp_path, monkeypatch, session)
     with (tmp_path / "agent.log").open("w") as log:
         assert release_canary.try_agent("codex", work, log) == expected
     assert sorted(path.name for path in tmp_path.iterdir()) == ["agent.log", "target"]
+
+
+def test_git_locks_in_the_target_never_reach_the_agent_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Background git maintenance holds and drops lock files while the target is copied."""
+    work = agent_target(tmp_path, monkeypatch, {"base": "x", "verified": {}})
+    (work / ".git/index.lock").touch()
+    with (tmp_path / "agent.log").open("w") as log:
+        assert release_canary.try_agent("codex", work, log) == (True, "codex passed")
