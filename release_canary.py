@@ -74,6 +74,7 @@ def status_text(results: dict[str, tuple[bool, str]]) -> str:
 def leaked_names(text: str, projects: list[str]) -> list[str]:
     """Private project names in public release text; owners are public already."""
     names = {part for name in projects for part in (name, name.split("/")[-1])}
+    names.discard(UPSTREAM.split("/")[0])
     return sorted(
         name
         for name in names
