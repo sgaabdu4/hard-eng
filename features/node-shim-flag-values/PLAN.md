@@ -20,7 +20,7 @@ Authority: Autonomous. The user approved the push, the PR and the remaining deci
 ## Acceptance + steps
 
 - [x] A piped script that exits 3 after each of `-r`, `--require`, `--import` and `--loader` reaches Bun as `-`, and the shim exits 3 → `tests/test_tool_setup.py::test_node_with_a_script_on_stdin_runs_it_on_bun`.
-- [x] Real Bun exits 1 for a piped `throw` after `-r node:fs` and `--require node:fs` → manual run in Verification.
+- [x] Real Bun exits 1 for a piped `throw` after `-r node:fs` and `--require node:fs` → N/A — real Bun is not in the test run; the manual run in Verification proves it.
 
 ## Baseline + execution
 
