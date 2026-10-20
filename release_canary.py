@@ -55,6 +55,21 @@ TASK = (
 )
 
 
+DOCUMENTS = {
+    "PRODUCT.md": (
+        "# Canary\n\nA throwaway project for a Hard Eng release trial.\n\n"
+        "## Users\n\nThe Hard Eng maintainer.\n\n"
+        "## Problem\n\nA release must install and pass in a real project.\n\n"
+        "## Product Purpose\n\nGive the release a project to install into.\n\n"
+        "## Boundaries\n\nNo users, data or deployment.\n"
+    ),
+    "DESIGN.md": (
+        "# Canary\n\n## Overview\n\nNo visual design.\n\n"
+        "## Components\n\nNone.\n\n## Do's and Don'ts\n\nKeep it minimal.\n"
+    ),
+}
+
+
 class Failed(Exception):
     pass
 
@@ -193,6 +208,17 @@ def update_installed(name: str, revision: str, work: Path, log: IO[str]) -> str:
     return output(["git", "rev-parse", "origin/HEAD"], work)
 
 
+def add_documents(work: Path) -> None:
+    """The documents an agent would fill from the project, so the first check can pass."""
+    for name, text in DOCUMENTS.items():
+        if not (work / name).exists():
+            (work / name).write_text(text)
+
+
+def folder(label: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", label.lower())
+
+
 def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -> str:
     """Create the target, install Hard Eng from the release and commit; returns the pre-install commit."""
     if kind == "brownfield":
@@ -219,11 +245,12 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
         )
     base = output(["git", "rev-parse", "HEAD"], work) if kind == "brownfield" else ""
     new = ["--new", value] if kind == "scaffold" else []
+    must(work, log, "setup failed", ["sh", str(source / "setup.sh"), str(source), *new])
+    add_documents(work)
     must(
         work,
         log,
         "setup failed",
-        ["sh", str(source / "setup.sh"), str(source), *new],
         ["git", "add", "--all"],
         ["git", "commit", "-q", "--allow-empty", "-m", "Install Hard Eng"],
     )
@@ -292,7 +319,7 @@ def try_target(
 ) -> dict[str, tuple[bool, str]]:
     """Prepare one target and run its checks, then one agent session per agent CLI."""
     label = " ".join(target)
-    work = run / label.replace(" ", "__").replace("/", "__")
+    work = run / folder(label)
     log_path = work.with_name(f"{work.name}.log")
     with log_path.open("w") as log:
         try:
