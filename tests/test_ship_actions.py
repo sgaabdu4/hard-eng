@@ -583,7 +583,11 @@ def test_pre_push_rejects_missing_shipping_before_commands(
 
 
 def update_pull(*checks: dict[str, str]) -> str:
-    pull = {"url": "https://github.com/fixture/project/pull/9", "title": "Update"}
+    pull = {
+        "url": "https://github.com/fixture/project/pull/9",
+        "title": "Update",
+        "isCrossRepository": False,
+    }
     return json.dumps([{**pull, "statusCheckRollup": list(checks)}])
 
 
