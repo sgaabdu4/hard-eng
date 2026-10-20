@@ -57,6 +57,7 @@ from agent_fixtures import (
     installed_source,
 )
 from conftest import SOURCE, commit, git, init
+from process_group import run_in_group
 
 
 class Action(NamedTuple):
@@ -637,7 +638,7 @@ def stream(
             (evidence / "events.jsonl").open("w") as out,
             (evidence / "stderr.log").open("w") as err,
         ):
-            subprocess.run(
+            run_in_group(
                 command,
                 cwd=root,
                 env=environment,
@@ -645,7 +646,6 @@ def stream(
                 stdout=out,
                 stderr=err,
                 timeout=timeout,
-                check=False,
             )
     except subprocess.TimeoutExpired:
         return None
