@@ -84,7 +84,7 @@ def recordable(gate: Gate) -> bool:
 def fingerprints(root: Path, group: Group, gate: Gate, output: str) -> Counter[str]:
     """Output lines with line numbers, counts and the checkout path made neutral."""
     report = gate.get("report", {})
-    path = root / group["path"] / str(report.get("path", ""))
+    path = root / group["path"] / report.get("path", "")
     lines = output.splitlines()
     if report.get("stdout") is True and path.is_file():
         lines += path.read_text().splitlines()
