@@ -76,8 +76,8 @@ Authority: The user approved this plan and authorized implementation and local v
 
 ## Acceptance + steps
 
-- [ ] `average([])` returns `0.0` → new unittest in `test_calc.py` passes.
-- [ ] Existing averages unchanged → existing tests still pass.
+- [ ] `average([])` returns `0.0` → new `test_calc.py::CalcTest::test_empty_average` passes.
+- [ ] Existing averages unchanged → `test_calc.py::CalcTest::test_average` still passes.
 
 ## Baseline + execution
 
