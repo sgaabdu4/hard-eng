@@ -114,6 +114,30 @@ def frontmatter_failures(root: Path) -> list[str]:
         description = fields.get("description")
         if not isinstance(description, str) or not 0 < len(description.strip()) <= 1024:
             failures.append(f"{skill.name}: description must be 1-1024 characters")
+        raw = next(
+            (
+                line[12:].strip()
+                for line in head.splitlines()
+                if line.startswith("description:")
+            ),
+            "",
+        )
+        if raw[:1] not in "\"'|>" and " #" in raw:
+            failures.append(
+                f"{skill.name}: description must be quoted: ' #' starts a YAML comment"
+            )
+        codex = skill / "agents/openai.yaml"
+        policy = (
+            (yaml.safe_load(codex.read_text()) or {}).get("policy", {})
+            if codex.is_file()
+            else {}
+        )
+        if "allow_implicit_invocation" in policy and policy[
+            "allow_implicit_invocation"
+        ] is bool(fields.get("disable-model-invocation")):
+            failures.append(
+                f"{skill.name}: disable-model-invocation and Codex allow_implicit_invocation disagree"
+            )
     return failures
 
 
@@ -201,10 +225,28 @@ def test_unreadable_frontmatter_fails_and_valid_equivalent_passes(
     skill(skills, "renamed", "---\nname: other\ndescription: Wrong name.\n---\n")
     skill(skills, "silent", "---\nname: silent\n---\n")
     skill(skills, "long", f"---\nname: long\ndescription: {'x' * 1025}\n---\n")
+    skill(skills, "hashed", "---\nname: hashed\ndescription: Use for C #1 work.\n---\n")
+    skill(
+        skills, "quoted", '---\nname: quoted\ndescription: "Use for C #1 work."\n---\n'
+    )
+    skill(
+        skills,
+        "manual",
+        "---\nname: manual\ndescription: Manual.\ndisable-model-invocation: true\n---\n",
+    )
+    skill(skills, "implicit", "---\nname: implicit\ndescription: Implicit.\n---\n")
+    for name, implicit in (("manual", "true"), ("implicit", "false")):
+        (skills / name / "agents").mkdir()
+        (skills / name / "agents/openai.yaml").write_text(
+            f"policy:\n  allow_implicit_invocation: {implicit}\n"
+        )
 
     assert frontmatter_failures(tmp_path) == [
+        "hashed: description must be quoted: ' #' starts a YAML comment",
+        "implicit: disable-model-invocation and Codex allow_implicit_invocation disagree",
         "late: frontmatter must open on line 1 and close",
         "long: description must be 1-1024 characters",
+        "manual: disable-model-invocation and Codex allow_implicit_invocation disagree",
         "renamed: name must match its directory",
         "silent: description must be 1-1024 characters",
         "unclosed: frontmatter must open on line 1 and close",
