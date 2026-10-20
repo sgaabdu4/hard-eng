@@ -1,3 +1,45 @@
+import shutil
+import subprocess
+import sys
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from conftest import SOURCE, git
+
+BARE_REMOVED = ("AGENTS.md", ".agents", ".claude", ".codex", ".git/hooks/pre-push")
+
+
+def install_hard_eng(root: Path, source: Path, *, bare: bool) -> None:
+    """Install the source; a bare install keeps only the checks the judges run."""
+    subprocess.run(
+        [sys.executable, str(source / "setup.py"), str(root)],
+        cwd=root,
+        capture_output=True,
+        check=True,
+    )
+    # Without the marker, SessionStart and Stop cannot fetch a newer upstream over the tested source.
+    (root / ".hooks/hard-eng-source.json").unlink()
+    for name in BARE_REMOVED if bare else ():
+        path = root / name
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
+
+
+def installed_source(stack: ExitStack, revision: str | None) -> Path:
+    """This checkout, or a disposable worktree of an earlier revision for comparison."""
+    if revision is None:
+        return SOURCE
+    temporary = stack.enter_context(TemporaryDirectory(prefix="hard-eng-rev-"))
+    checkout = Path(temporary).resolve() / "source"
+    git(SOURCE, "worktree", "add", "--detach", "-q", str(checkout), revision)
+    stack.callback(git, SOURCE, "worktree", "remove", "--force", str(checkout))
+    git(checkout, "submodule", "update", "--init", "--recursive", "-q")
+    return checkout
+
+
 CALC = """def add(a: int, b: int) -> int:
     return a + b
 
@@ -76,8 +118,8 @@ Authority: The user approved this plan and authorized implementation and local v
 
 ## Acceptance + steps
 
-- [ ] `average([])` returns `0.0` → new unittest in `test_calc.py` passes.
-- [ ] Existing averages unchanged → existing tests still pass.
+- [ ] `average([])` returns `0.0` → new `test_calc.py::CalcTest::test_empty_average` passes.
+- [ ] Existing averages unchanged → `test_calc.py::CalcTest::test_average` still passes.
 
 ## Baseline + execution
 

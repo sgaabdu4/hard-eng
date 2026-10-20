@@ -416,8 +416,10 @@ def bun_node(storage: Path, environment: dict[str, str]) -> None:
         )
     # Node runs a piped script when no script or -e/-p is named; Bun prints help and exits 0.
     script += (
-        "piped=1\n"
-        'for argument in "$@"; do\n  case "$argument" in\n'
+        "piped=1\nvalue=0\n"
+        'for argument in "$@"; do\n  [ "$value" = 1 ] && { value=0; continue; }\n'
+        '  case "$argument" in\n'
+        "    -r|--require|--import|--loader) value=1;;\n"
         "    -e*|-p*|-c|-i|-h|-v|-|--eval*|--print*|--check|--interactive|--help"
         "|--version|--test*) piped=0;;\n    -*) ;;\n    *) piped=0;;\n  esac\ndone\n"
         'if [ "$piped" = 1 ]; then\n  source=$(cat)\n  [ -z "$source" ] && exit 0\n'

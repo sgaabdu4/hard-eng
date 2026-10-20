@@ -949,3 +949,19 @@ def function_calls(root: Path, lcov: Path) -> dict[str, int]:
     reports.line_coverage(lcov, "lcov-tests", root, {root / "src/unused.ts"})
     coverage = json.loads((root / "coverage/coverage-final.json").read_text())
     return coverage[str((root / "src/unused.ts").resolve())]["f"]
+
+
+def test_report_names_its_skipped_tests(tmp_path: Path) -> None:
+    path = tmp_path / "tests.xml"
+    path.write_text(
+        '<testsuite><testcase name="test_run"/><testcase name="test_off[0]"><skipped/>'
+        "</testcase></testsuite>"
+    )
+    assert reports.reported_skips(path, "python-tests") == {"test_off"}
+    path.write_text(
+        '{"type":"testStart","test":{"id":1,"name":"group runs"}}\n'
+        '{"type":"testStart","test":{"id":2,"name":"group is off"}}\n'
+        '{"type":"testDone","testID":1,"skipped":false,"hidden":false}\n'
+        '{"type":"testDone","testID":2,"skipped":true,"hidden":false}\n'
+    )
+    assert reports.reported_skips(path, "dart-tests") == {"group is off"}

@@ -803,8 +803,8 @@ def check(
         plans.validate_attribution(ROOT, base)
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
-
-        failed = run_gates(groups, timeout, related) is not False
+        started, failed = time.time(), run_gates(groups, timeout, related) is not False
+        failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))
         plans.report_stage(failed, plan_stage)
         return int(failed)
 
