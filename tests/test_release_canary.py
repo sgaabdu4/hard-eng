@@ -191,6 +191,21 @@ def test_a_cut_github_reply_is_retried_before_reading_release_text(
     assert "commits/c2/pulls" in text
 
 
+def test_release_text_holds_added_lines_but_not_lines_main_already_published(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A release that deletes an old mention must not fail for publishing it."""
+    diff = "--- a/plan.md\n+++ b/plan.md\n-old secret-app note\n+new text\n context"
+
+    def output(command: list[str], cwd: Path = release_canary.SOURCE) -> str:
+        return diff if command[1] == "diff" else ""
+
+    monkeypatch.setattr(release_canary, "output", output)
+    text = release_canary.public_text("HEAD")
+    assert "new text" in text
+    assert "secret-app" not in text
+
+
 def test_a_private_repository_named_after_a_public_owner_is_no_leak() -> None:
     private = ["school/sgaabdu4"]
     assert not release_canary.leaked_names('"github_login":"sgaabdu4"', private)
