@@ -529,7 +529,7 @@ def test_workflow_runs_once_per_change(tmp_path: Path) -> None:
     template = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
     triggers = template.get("on", template.get(True))
     assert "pull_request" in triggers
-    assert triggers["push"] == {"branches": ["main"]}
+    assert triggers["push"] == {"branches": ["main", "develop"]}
     config: GateConfig = {
         "packages": [],
         "shared": [],
@@ -599,8 +599,10 @@ def test_generated_triggers_migrate_with_customizations(tmp_path: Path) -> None:
     configure_ci(tmp_path, SOURCE, config, changes)
     migrated = changes[str(path.relative_to(tmp_path))]
     assert migrated == "# Project-owned note\n" + template.replace(
-        "      - main\n", "      - trunk\n", 1
-    ).replace("timeout-minutes: 5", "timeout-minutes: 10")
+        "      - develop\n", "", 1
+    ).replace("      - main\n", "      - trunk\n", 1).replace(
+        "timeout-minutes: 5", "timeout-minutes: 10"
+    )
     path.write_text(migrated)
     changes.clear()
     configure_ci(tmp_path, SOURCE, config, changes)
