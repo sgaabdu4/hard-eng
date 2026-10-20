@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 
 from gate_config import changed_files, generated_sources, initial_base
 from plans import _is_test as is_test_path
+from plans import default_branch_point
 
 HASH = {".py", ".pyi", ".sh", ".bash", ".zsh"}
 JAVASCRIPT = {".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx"}
@@ -225,29 +226,8 @@ def comment_blocks(path: Path) -> list[tuple[int, int]]:
     return blocks
 
 
-def branch_point(root: Path) -> str:
-    """Where HEAD left the shipping base, so committed branch changes count; else HEAD."""
-    from shipping import ShippingError, load_policy
-
-    try:
-        policy = load_policy(root, required=False)
-    except ShippingError:
-        policy = None
-    for reference in (f"origin/{policy['base']}", policy["base"]) if policy else ():
-        found = subprocess.run(
-            ["git", "merge-base", "HEAD", reference],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if found.returncode == 0:
-            return found.stdout.strip()
-    return "HEAD"
-
-
 def validate_comments(root: Path, base: str | None) -> None:
-    names = changed_files(root, base or branch_point(root))
+    names = changed_files(root, base or default_branch_point(root) or "HEAD")
     if names is None:
         raise ValueError(
             "Cannot verify comment scope; fetch or supply a valid Git --base"
@@ -557,7 +537,7 @@ def security_switch_offs(
 
 def validate_suppressions(root: Path, base: str | None) -> None:
     try:
-        added, removed = diff_lines(root, base or branch_point(root))
+        added, removed = diff_lines(root, base or default_branch_point(root) or "HEAD")
     except subprocess.CalledProcessError as error:
         raise ValueError(
             "Cannot verify suppression scope; fetch or supply a valid Git --base"
