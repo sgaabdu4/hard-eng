@@ -75,6 +75,7 @@ BLOCK = "Code comments are none by default"
 def test_changed_source_holds_one_line_comments_only(
     tmp_path: Path, name: str, text: str, line: int | None
 ) -> None:
+    """HE-COMMENT-LINES: a changed source file may hold only one-line comments."""
     init(tmp_path / "repo")
     root = tmp_path / "repo"
     (root / "README.md").write_text("fixture\n")
@@ -232,6 +233,7 @@ def switch_root(tmp_path: Path, name: str, before: str) -> Path:
 def test_added_switch_off_fails_naming_file_line_and_pattern(
     tmp_path: Path, name: str, text: str, pattern: str
 ) -> None:
+    """HE-NO-SWITCH-OFF: an added suppression, skip or focus fails."""
     root = switch_root(tmp_path, name, "")
     (root / name).parent.mkdir(parents=True, exist_ok=True)
     (root / name).write_text("ok = 1\n" + text)
@@ -271,6 +273,7 @@ ASSERTS = [
 def test_net_loss_of_assertions_fails_naming_lines_and_count(
     tmp_path: Path, name: str, text: str
 ) -> None:
+    """HE-NO-SWITCH-OFF: a net loss of test assertions fails."""
     root = switch_root(tmp_path, name, text)
     (root / name).write_text(
         text.replace("assert g()\n", "")
@@ -537,4 +540,13 @@ def test_quick_check_runs_the_decision_staleness_guard(runner: ModuleType) -> No
     (root / "docs/adr").mkdir(parents=True)
     (root / "docs/adr/0001-x.md").write_text("# 0001\n\nStatus: Accepted\n")
     with pytest.raises(ValueError, match="needs an 'Applies to:'"):
+        runner.check(quick=True, base="HEAD")
+
+
+def test_quick_check_runs_the_requirement_registry_guard(runner: ModuleType) -> None:
+    root = noop_gates_root(runner)
+    (root / "docs").mkdir(exist_ok=True)
+    entry = f"## {'REQ'}-PAY-LIMIT\n\nPayments stop at the daily limit.\n"
+    (root / "docs/requirements.md").write_text(entry)
+    with pytest.raises(ValueError, match="needs a definition and a 'Proof"):
         runner.check(quick=True, base="HEAD")
