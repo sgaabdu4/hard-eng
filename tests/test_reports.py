@@ -965,3 +965,79 @@ def test_report_names_its_skipped_tests(tmp_path: Path) -> None:
         '{"type":"testDone","testID":2,"skipped":true,"hidden":false}\n'
     )
     assert reports.reported_skips(path, "dart-tests") == {"group is off"}
+
+
+@pytest.mark.parametrize(("rescanned", "failed"), [(1, False), (0, True)])
+def test_jscpd_passes_files_below_its_minimum_only_when_a_rescan_finds_them(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    rescanned: int,
+    failed: bool,
+) -> None:
+    summary = {
+        key: 0
+        for key in (
+            "clones",
+            "duplicatedLines",
+            "duplicatedTokens",
+            "newClones",
+            "newDuplicatedLines",
+            "percentage",
+            "percentageTokens",
+        )
+    }
+    small = {
+        "duplicates": [],
+        "statistics": {
+            "formats": {},
+            "total": {**summary, "sources": 0, "lines": 0, "tokens": 0},
+        },
+    }
+    scope = {**summary, "sources": rescanned, "lines": 3, "tokens": 9}
+    full = {
+        "duplicates": [{}],
+        "statistics": {
+            "formats": {"python": scope} if rescanned else {},
+            "total": scope,
+        },
+    }
+    tool = tmp_path / "bin/jscpd"
+    tool.parent.mkdir()
+    tool.write_text(
+        f"#!{sys.executable}\nimport json, sys, pathlib\n"
+        "arguments = sys.argv[1:]\n"
+        "output = pathlib.Path(arguments[arguments.index('--output') + 1])\n"
+        "output.mkdir(parents=True, exist_ok=True)\n"
+        f"report = {full!r} if '--min-tokens' in arguments else {small!r}\n"
+        "(output / 'jscpd-report.json').write_text(json.dumps(report))\n"
+    )
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool.parent}:{os.environ['PATH']}")
+    (tmp_path / "main.py").write_text("print(1)\n")
+    duplicates: Gate = {
+        "name": "duplicates",
+        "role": "duplicates",
+        "command": [
+            "jscpd",
+            "main.py",
+            "--format",
+            "python",
+            "--output",
+            "coverage/jscpd",
+        ],
+        "report": {"type": "jscpd", "path": "coverage/jscpd/jscpd-report.json"},
+    }
+    group: Group = {
+        "path": ".",
+        "language": "python",
+        "sources": ["main.py"],
+        "checks": [duplicates],
+    }
+    assert runner.run_gate(group, duplicates, 30, threading.Lock()) is failed
+    output = capsys.readouterr().out
+    assert ("below jscpd's --min-tokens" in output) is not failed
+    assert (
+        json.loads((tmp_path / "coverage/jscpd/jscpd-report.json").read_text()) == small
+    )
