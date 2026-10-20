@@ -197,6 +197,7 @@ def test_package_features_require_their_checks(
     if language == "python":
         (tmp_path / "src/library").mkdir()
         (tmp_path / "src/library/__init__.py").touch()
+        (tmp_path / "src/library/api.py").touch()
     else:
         path = tmp_path / "package.json"
         manifest = json.loads(path.read_text())

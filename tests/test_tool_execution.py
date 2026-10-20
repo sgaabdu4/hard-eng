@@ -91,6 +91,7 @@ def import_linter_project(tmp_path: Path) -> Path:
     source = tmp_path / "src/example"
     source.mkdir(parents=True)
     (source / "__init__.py").write_text("value = 1\n")
+    (source / "api.py").write_text("value = 2\n")
     project = tmp_path / "pyproject.toml"
     project.write_text('[project]\nname = "fixture"\nversion = "1"\n')
     (tmp_path / "uv.lock").touch()
@@ -628,6 +629,7 @@ def test_unrelated_setup_cfg_does_not_block_toml_import_contract(
     source = tmp_path / "src/example"
     source.mkdir(parents=True)
     (source / "__init__.py").write_text("value = 1\n")
+    (source / "api.py").write_text("value = 2\n")
     (tmp_path / "setup.cfg").write_text("[metadata]\nname = fixture\n")
 
     content = import_configuration(
