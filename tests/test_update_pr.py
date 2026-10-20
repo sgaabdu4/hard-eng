@@ -39,10 +39,19 @@ class FakeGh:
             return json.dumps(self.merging)
         if args[:2] == ("pr", "create"):
             title = args[args.index("--title") + 1]
-            self.pulls = [{"url": PULL, "title": title, "statusCheckRollup": []}]
+            self.pulls = [
+                *(pull for pull in self.pulls if pull.get("isCrossRepository")),
+                {
+                    "url": PULL,
+                    "title": title,
+                    "statusCheckRollup": [],
+                    "isCrossRepository": False,
+                },
+            ]
             return f"Creating pull request\n{PULL}\n"
         if args[:2] == ("pr", "edit"):
-            self.pulls[0]["title"] = args[args.index("--title") + 1]
+            pull = next(pull for pull in self.pulls if pull["url"] == args[2])
+            pull["title"] = args[args.index("--title") + 1]
         return ""
 
     def verbs(self) -> list[str]:
@@ -338,6 +347,25 @@ def test_update_pr_pushes_opens_one_pr_and_turns_on_auto_merge(
     assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
     assert gh.verbs().count("pr create") == 1
     assert gh.pulls[0]["title"] == f"Update Hard Eng to {second[:12]}"
+
+
+def test_update_pr_ignores_a_fork_pr_from_a_branch_with_the_same_name(
+    feature: tuple[Path, Path, Path], gh: FakeGh, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    fork: dict[str, object] = {
+        "url": f"{PULL}0",
+        "title": "Fork",
+        "statusCheckRollup": [],
+        "isCrossRepository": True,
+    }
+    gh.pulls = [fork]
+    newer_release(source, monkeypatch, "first update")
+    assert update_runner.apply_update(target) == 0
+    assert publish(target, monkeypatch) == 0
+    assert gh.verbs().count("pr create") == 1
+    assert fork["title"] == "Fork"
+    assert not any(fork["url"] in call for call in gh.calls)
 
 
 def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
