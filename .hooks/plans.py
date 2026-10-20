@@ -488,13 +488,17 @@ def _file_reason(name: str, added: str, removed: str) -> str | None:
     return None
 
 
-def default_branch_point(root: Path) -> str | None:
+def release_references(root: Path) -> tuple[str, str]:
     try:
         policy = load_policy(root, required=False)
     except ShippingError:
         policy = None
     name = policy["base"] if policy else "main"
-    for reference in (f"origin/{name}", name):
+    return f"origin/{name}", name
+
+
+def default_branch_point(root: Path) -> str | None:
+    for reference in release_references(root):
         try:
             return _git_output(root, "merge-base", "HEAD", reference).strip()
         except (subprocess.CalledProcessError, OSError):
@@ -616,9 +620,31 @@ def applicable_plans(root: Path, paths: list[Path], changed: set[str]) -> list[P
     ]
 
 
+def _revision(root: Path, reference: str) -> str | None:
+    try:
+        return _git_output(
+            root, "rev-parse", "--verify", "-q", f"{reference}^{{commit}}"
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
+def released_plans(root: Path, base: str | None) -> set[str]:
+    """Plans changed since the release base, so a feature check sees what the release checks."""
+    tips = {_revision(root, reference) for reference in release_references(root)}
+    point = default_branch_point(root)
+    if point is None or _revision(root, base or "HEAD") in tips:
+        return set()
+    return {
+        name for name in changed_files(root, point) or () if is_plan_path(Path(name))
+    }
+
+
 def plan_tests(root: Path, base: str | None) -> set[str]:
     """Test names that the active plans' acceptance lines depend on."""
-    changed = changed_files(root, base or "HEAD") or set()
+    changed = (changed_files(root, base or "HEAD") or set()) | released_plans(
+        root, base
+    )
     paths = [
         path for path in repository_files(root) if is_plan_path(path.relative_to(root))
     ]
@@ -653,6 +679,7 @@ def validate_plans(
         raise ValueError("Cannot verify plan scope; fetch or supply a valid Git --base")
     if stage is None:
         stage = "Draft" if planning_only(root, changed) else "Complete"
+    changed |= released_plans(root, base)
     paths = [
         path for path in repository_files(root) if is_plan_path(path.relative_to(root))
     ]
