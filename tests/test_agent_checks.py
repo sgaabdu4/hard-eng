@@ -34,7 +34,7 @@ from agent_checks import (
     loads_skill,
     main,
 )
-from conftest import commit, init
+from conftest import commit, init, running, spawner
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
 BASELINE = Action(
@@ -551,3 +551,9 @@ def test_results_record_a_bare_run(
     assert main() == 1
     [results] = (tmp_path / "source/coverage/agent-checks").glob("*/results.json")
     assert json.loads(results.read_text())["bare"] is True
+
+
+def test_a_timed_out_agent_leaves_no_process_behind(tmp_path: Path) -> None:
+    pid_file = tmp_path / "child.pid"
+    assert agent_checks.stream(spawner(pid_file), tmp_path, tmp_path, 2) is None
+    assert not running(pid_file)
