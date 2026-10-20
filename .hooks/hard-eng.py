@@ -5,7 +5,6 @@ import fcntl
 import json
 import os
 import shlex
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -21,6 +20,7 @@ from typing import IO, TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
 import swift_setup
+from debt import OUTPUTS, remember
 from gate_config import (
     Gate,
     Group,
@@ -63,6 +63,7 @@ DartOptions = TypedDict(
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILED_GATES: list[str] = []
+RECORDING = threading.Event()
 TEST_REPORTS = {"python-tests", "lcov-tests", "dart-tests", "xcode-tests"}
 DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
     "analyzer": {
@@ -440,7 +441,13 @@ def run_gate(
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
     started = time.monotonic()
     limit = gate_limit(ROOT, key, timeout)
+    name = f"{group['path']}/{gate['name']}"
+    OUTPUTS.pop(name, None)
     failed = run_limited_gate(group, gate, limit, output_lock, groups, related_base)
+    if not RECORDING.is_set():
+        from debt import judge
+
+        failed = judge(ROOT, group, gate, failed, OUTPUTS.get(name, ""))
     if failed:
         FAILED_GATES.append(key)
     else:
@@ -475,6 +482,26 @@ def run_projects(
         for project in projects
     ]
     return next((result for result in results if result.returncode), results[-1])
+
+
+def gate_scanner(group: Group, gate: Gate, scanner: str | None) -> str | None:
+    scanner = {
+        "secrets-files": "gitleaks",
+        "secrets-history": "gitleaks",
+        "security": "semgrep",
+        "vulnerabilities": "osv",
+        "container-vulnerabilities": "osv-image",
+        "react": "react-doctor",
+        "deployment": "trivy",
+    }.get(gate.get("role", ""), scanner)
+    return {
+        ("python", "imports"): "import-linter",
+        ("python", "dependencies"): "deptry",
+        ("python", "duplicates"): "jscpd",
+        ("swift", "duplicates"): "jscpd",
+        ("dart", "dead-code-duplicates"): "dart-decimate",
+        ("javascript", "dead-code-duplicates"): "fallow",
+    }.get((group.get("language", ""), gate.get("role", "")), scanner)
 
 
 def run_limited_gate(
@@ -513,23 +540,7 @@ def run_limited_gate(
         report = gate.get("report", {})
         kind = report.get("type", "")
         tests = gate.get("role") == "tests"
-        scanner = {
-            "secrets-files": "gitleaks",
-            "secrets-history": "gitleaks",
-            "security": "semgrep",
-            "vulnerabilities": "osv",
-            "container-vulnerabilities": "osv-image",
-            "react": "react-doctor",
-            "deployment": "trivy",
-        }.get(gate.get("role", ""), kind if kind in SCANNERS else None)
-        scanner = {
-            ("python", "imports"): "import-linter",
-            ("python", "dependencies"): "deptry",
-            ("python", "duplicates"): "jscpd",
-            ("swift", "duplicates"): "jscpd",
-            ("dart", "dead-code-duplicates"): "dart-decimate",
-            ("javascript", "dead-code-duplicates"): "fallow",
-        }.get((group.get("language", ""), gate.get("role", "")), scanner)
+        scanner = gate_scanner(group, gate, kind if kind in SCANNERS else None)
         if tests or scanner:
             report_path, coverage_path, directory, expected_sources = prepare_reports(
                 group, report, kind, tests, scanner, command
@@ -563,7 +574,7 @@ def run_limited_gate(
                 with output_lock:
                     print(f"OUTPUT {group['path']}/{gate['name']}", flush=True)
                     log.seek(0)
-                    shutil.copyfileobj(log, sys.stdout)
+                    sys.stdout.write(remember(group, gate, log.read()))
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
         if result.returncode == 0 and scanner and report_path is not None:
@@ -606,8 +617,8 @@ def run_limited_gate(
         subprocess.CalledProcessError,
     ) as error:
         print(
-            f"FAIL {gate['name']}: {error}; elapsed {time.monotonic() - started:.3f}s"
-            f" @ {group['path']}"
+            f"FAIL {gate['name']}: {remember(group, gate, f'\n{error}')}; "
+            f"elapsed {time.monotonic() - started:.3f}s @ {group['path']}"
         )
         return True
 
@@ -756,6 +767,9 @@ def check(
     with check_lock(ROOT):
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(groups, quick)
+        from debt import require_shrink
+
+        require_shrink(ROOT, base)
         timeout = timeout or gate_budget(ROOT)
         import plans
         from comments import validate_comments, validate_suppressions
@@ -808,6 +822,8 @@ def pre_push() -> int:
 
 
 def deliver(args: "Namespace") -> int:
+    if args.command == "adopt":
+        return adopt()
     if args.command == "gap-issue":
         from gap_issue import file_gap
 
@@ -819,6 +835,24 @@ def deliver(args: "Namespace") -> int:
     from ship_actions import run
 
     return run(ROOT, args.plan, args.pr, args.stage, args.worktree, args.merge_method)
+
+
+def adopt() -> int:
+    """Record the findings the existing code fails with as shrink-only debt."""
+    from debt import record
+    from gate_config import load_groups
+    from shipping import gate_budget
+
+    with check_lock(ROOT):
+        groups = load_groups(ROOT)
+        timeout = gate_budget(ROOT)
+        provision_tools(ROOT, groups, timeout)
+        RECORDING.set()
+        try:
+            run_gates(groups, timeout, None)
+        finally:
+            RECORDING.clear()
+        return record(ROOT, groups, set(FAILED_GATES), OUTPUTS)
 
 
 def main() -> int:
@@ -852,6 +886,7 @@ def main() -> int:
     )
     impacts.add_argument("--base", required=True)
     commands.add_parser("pre-push", help="Verify the actual commits being pushed")
+    commands.add_parser("adopt", help="Record old findings once as shrink-only debt")
     usage = commands.add_parser(
         "ci-usage", help="Report billed GitHub Actions minutes by workflow and job"
     )
@@ -935,7 +970,7 @@ def main() -> int:
         from update_runner import update_main
 
         return update_main(ROOT, args.command == "update-pr", args.apply, args.merge)
-    if args.command in {"challenge", "ship", "gap-issue"}:
+    if args.command in {"adopt", "challenge", "ship", "gap-issue"}:
         return deliver(args)
     from agent_hooks import handle_event
 
