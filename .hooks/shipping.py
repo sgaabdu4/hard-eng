@@ -957,7 +957,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     if target == "Deploy" and not policy["delivery"]:
         raise ShippingError("Deploy target requires configured delivery checks")
     pull = _pull(resolved_root, owner, name, number)
-    reject_attribution(resolved_root, "pr", pull.body, "PR body")
+    reject_attribution(resolved_root, "pr", pull.body, "PR body", ShippingError)
     if pull.base_ref != policy["base"]:
         raise ShippingError("PR base branch does not match shipping policy")
     if pull.base_repository != repository or pull.head_repository != repository:
