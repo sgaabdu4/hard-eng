@@ -1,4 +1,4 @@
-"""Keep distributed skills loadable: frontmatter hosts can read, and resolvable links."""
+"""Keep distributed skills loadable: readable frontmatter, whole bodies, resolvable links."""
 
 import os
 import re
@@ -117,6 +117,20 @@ def frontmatter_failures(root: Path) -> list[str]:
     return failures
 
 
+# Codex cuts a skill's body after 8,000 bytes (codex-rs/ext/skills/src/render.rs).
+SKILL_BYTES = 8000
+
+
+def size_failures(root: Path) -> list[str]:
+    """Symlinked skills come from submodules that own their own size."""
+    return [
+        f"{skill.name}: SKILL.md has {size} bytes; Codex reads only {SKILL_BYTES}"
+        for skill in sorted((root / ".agents/skills").iterdir())
+        if not skill.is_symlink()
+        and (size := (skill / "SKILL.md").stat().st_size) > SKILL_BYTES
+    ]
+
+
 def skill(root: Path, name: str, text: str) -> None:
     (root / name).mkdir(parents=True)
     (root / name / "SKILL.md").write_text(text)
@@ -195,4 +209,20 @@ def test_unreadable_frontmatter_fails_and_valid_equivalent_passes(
         "silent: description must be 1-1024 characters",
         "unclosed: frontmatter must open on line 1 and close",
         "unquoted: invalid YAML: mapping values are not allowed here",
+    ]
+
+
+def test_distributed_skills_fit_the_codex_skill_limit() -> None:
+    assert size_failures(SOURCE) == []
+
+
+def test_an_oversized_skill_fails_unless_a_submodule_owns_it(tmp_path: Path) -> None:
+    skills = tmp_path / ".agents/skills"
+    skill(skills, "full", "x" * SKILL_BYTES)
+    skill(skills, "over", "x" * (SKILL_BYTES + 1))
+    skill(tmp_path / "submodule", "linked", "x" * (SKILL_BYTES + 1))
+    (skills / "linked").symlink_to(tmp_path / "submodule/linked")
+
+    assert size_failures(tmp_path) == [
+        f"over: SKILL.md has {SKILL_BYTES + 1} bytes; Codex reads only {SKILL_BYTES}"
     ]
