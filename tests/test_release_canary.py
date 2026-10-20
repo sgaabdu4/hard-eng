@@ -2,12 +2,14 @@
 
 import fcntl
 import json
+import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 import pytest
+from gate_config import validate_documents
 
 import release_canary
 
@@ -204,6 +206,19 @@ def test_release_text_holds_added_lines_but_not_lines_main_already_published(
     text = release_canary.public_text("HEAD")
     assert "new text" in text
     assert "secret-app" not in text
+
+
+def test_new_targets_get_the_project_documents_the_check_requires(
+    tmp_path: Path,
+) -> None:
+    """A fresh install fails its check until PRODUCT.md and DESIGN.md are filled."""
+    release_canary.add_documents(tmp_path)
+    validate_documents(tmp_path)
+
+
+def test_a_target_folder_is_a_valid_cloudflare_project_name() -> None:
+    """create-cloudflare names the project after the folder and rejects underscores."""
+    assert re.fullmatch(r"[a-z0-9-]+", release_canary.folder("scaffold opennext"))
 
 
 def test_a_private_repository_named_after_a_public_owner_is_no_leak() -> None:
