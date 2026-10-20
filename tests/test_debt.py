@@ -1,13 +1,14 @@
 """Shrink-only adoption debt for findings that existing code had at install."""
 
 import json
+import sys
 import threading
 from pathlib import Path
 from types import ModuleType
 
 import debt
 import pytest
-from conftest import commit, gate, git
+from conftest import commit, git
 from gate_config import Gate, Group
 
 FINDINGS = "import pathlib, sys; text = pathlib.Path('findings.txt').read_text(); print(text, end=''); sys.exit(bool(text))"
@@ -21,7 +22,11 @@ def run(runner: ModuleType, group: Group, check: Gate, findings: str) -> bool:
 def test_old_findings_pass_new_ones_fail_and_fixed_ones_must_be_dropped(
     runner: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    lint: Gate = {**gate("lint", FINDINGS), "role": "lint"}
+    lint: Gate = {
+        "name": "lint",
+        "role": "lint",
+        "command": [sys.executable, "-c", FINDINGS],
+    }
     group: Group = {"path": ".", "checks": [lint]}
     runner.RECORDING.set()
     try:
@@ -36,7 +41,9 @@ def test_old_findings_pass_new_ones_fail_and_fixed_ones_must_be_dropped(
     capsys.readouterr()
 
     assert run(runner, group, lint, "a.py:9:1: F841 unused x\n") is False
-    assert "DEBT lint: only the 1 recorded lines remain" in capsys.readouterr().out
+    assert (
+        "DEBT lint: the failure above holds only the 1 lines" in capsys.readouterr().out
+    )
     assert (
         run(runner, group, lint, "a.py:9:1: F841 unused x\nb.py:2:1: F841 unused y\n")
         is True
