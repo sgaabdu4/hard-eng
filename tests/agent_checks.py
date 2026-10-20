@@ -886,6 +886,10 @@ def execute(
         if not agent.completed:
             reasons = agent.problems or ["no completed turn"]
             return Outcome("blocked", reasons, agent.settings)
+        used = agent.settings.get("model")
+        if isinstance(used, str) and options.model not in used:
+            reason = f"ran model {used}, not the requested {options.model}"
+            return Outcome("blocked", [reason], agent.settings)
         grade = None
         if options.judge:
             grade = partial(judge_grade, client, options, evidence)

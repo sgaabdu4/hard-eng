@@ -34,7 +34,7 @@ from agent_checks import (
     loads_skill,
     main,
 )
-from conftest import commit, init, running, spawner
+from conftest import SOURCE, commit, init, running, spawner
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
 BASELINE = Action(
@@ -574,3 +574,21 @@ def test_an_eval_agent_does_not_inherit_host_markers(
     [seen] = found
     assert ("CLAUDECODE" in seen, "CODEX_THREAD_ID" in seen) == (False, False)
     assert (seen["CODEX_HOME"], seen["PATH"]) == ("fresh", os.environ["PATH"])
+
+
+@pytest.mark.parametrize(
+    ("used", "status"), [("claude-opus-9", "pass"), ("claude-haiku-9", "blocked")]
+)
+def test_a_run_on_another_model_than_requested_is_not_graded(
+    tmp_path: Path, used: str, status: str
+) -> None:
+    def run(*_: object) -> Agent:
+        return Agent(True, "", {"model": used}, [], [])
+
+    case = next(case for case in CASES if case.name == "review-only")._replace(
+        judge=lambda _: []
+    )
+    client = Client("opus", lambda: Ready("1", None), run, "none")
+    options = Namespace(model="opus", installed=SOURCE, bare=False, judge=False)
+    outcome = agent_checks.execute(case, client, options, tmp_path / "evidence")
+    assert outcome.status == status
