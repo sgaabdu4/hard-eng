@@ -28,6 +28,12 @@ Each language package runs a performance suite with a real workload, a time budg
 
 Proof: check
 
+## HE-DEBT-SHRINK-ONLY
+
+Findings that existing code fails with when Hard Eng is installed may be recorded once, by `python3 .hooks/hard-eng.py adopt`, in `hard-eng.debt.json`. A gate with recorded lines fails on any output line beyond them, and when a recorded line is gone but still listed. Only the change that installs Hard Eng can add the file; later changes only remove lines. Tests, lockfiles and secrets never carry debt.
+
+Proof: check
+
 ## HE-COMMENT-LINES
 
 A changed source file holds no comment block longer than one line. Generated output and scaffold paths are exempt.
