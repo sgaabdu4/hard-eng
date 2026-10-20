@@ -170,6 +170,12 @@ def test_only_whole_private_names_count_as_leaks() -> None:
         assert not release_canary.leaked_names(text, private), text
 
 
+def test_a_private_repository_named_after_a_public_owner_is_no_leak() -> None:
+    private = ["school/sgaabdu4"]
+    assert not release_canary.leaked_names('"github_login":"sgaabdu4"', private)
+    assert release_canary.leaked_names("see school/sgaabdu4", private)
+
+
 def agent_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, session: dict[str, object]
 ) -> Path:
