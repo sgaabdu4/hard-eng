@@ -95,7 +95,9 @@ def workflow_triggers(source: Path, base: str) -> tuple[str, str]:
     """The template trigger block and its copy for the project's base branch."""
     template = (source / ".github/workflows/hard-eng.yml").read_text()
     block = template[template.index("on:\n") : template.index("\n\npermissions:") + 1]
-    return block, block.replace("      - main\n", f"      - {base}\n", 1)
+    # Only this source repository releases from develop.
+    project = block.replace("      - develop\n", "", 1)
+    return block, project.replace("      - main\n", f"      - {base}\n", 1)
 
 
 def migrate_workflow_triggers(root: Path, source: Path, content: str) -> str:
