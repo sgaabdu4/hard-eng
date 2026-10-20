@@ -602,6 +602,13 @@ def passed_notice(
     return {"systemMessage": notice} if notice else completion_notice(agent, output)
 
 
+def bounded(text: str, *, tail: bool = False) -> str:
+    if len(text) <= GATE_OUTPUT_LIMIT:
+        return text
+    note = "\n[gate output cut; rerun check for the full log]\n"
+    return note + text[-GATE_OUTPUT_LIMIT:] if tail else text[:GATE_OUTPUT_LIMIT] + note
+
+
 def failure_summary(log: str) -> str:
     """Failed gate names, then the first failing gate's output from its start."""
     failures = re.findall(
@@ -609,18 +616,18 @@ def failure_summary(log: str) -> str:
         log,
     )
     if not failures:
-        return log[-GATE_OUTPUT_LIMIT:]
+        return bounded(log, tail=True)
     heading = "Failed gates: " + ", ".join(dict.fromkeys(n for n, _ in failures)) + "\n"
     name, package = failures[0]
     owner = re.escape(f"{package}/" if package else "") or r"(?:\S*/)?"
     start = re.search(rf"OUTPUT {owner}{re.escape(name)}[^\n]*\n", log)
     if start is None:
-        return heading + log[-GATE_OUTPUT_LIMIT:]
+        return heading + bounded(log, tail=True)
     body = log[start.end() :]
     tail = f"[^\n]* @ {re.escape(package)}(?!\\S)" if package else ""
     finished = re.escape(name) + r"(?: \(exit|:)" + tail
     end = re.search(rf"(?m)^(?:CHECK|OUTPUT) \S*/\S+|(?:PASS|FAIL) {finished}", body)
-    return heading + body[: end.start() if end else None][:GATE_OUTPUT_LIMIT]
+    return heading + bounded(body[: end.start() if end else None])
 
 
 def show_decisions(root: Path, names: list[str], state: Path | None) -> str:
