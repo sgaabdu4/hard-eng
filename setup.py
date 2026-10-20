@@ -674,26 +674,6 @@ def prepare_skill_links(root: Path, unused: set[str]) -> dict[str, str]:
     return links
 
 
-PR_TEXT = ".github/workflows/pr-text.yml"
-
-
-def configure_github_ci(
-    root: Path, config: GateConfig, changes: dict[str, str]
-) -> None:
-    from ci_setup import add_workflow_checks, configure_ci
-
-    workflow = ".github/workflows/hard-eng.yml"
-    configure_ci(root, SOURCE, config, changes)
-    if workflow in changes:
-        add_workflow_checks(config)
-    if workflow not in changes and not (root / workflow).is_file():
-        return
-    # The cloud GitHub proxy adds a Claude footer to PR bodies; this workflow removes it.
-    content = (SOURCE / PR_TEXT).read_text()
-    if not (root / PR_TEXT).is_file() or (root / PR_TEXT).read_text() != content:
-        changes[PR_TEXT] = content
-
-
 def configure_ignores(root: Path, changes: dict[str, str]) -> None:
     ignores = (
         (root / ".gitignore").read_text() if (root / ".gitignore").exists() else ""
@@ -883,7 +863,9 @@ def plan_install(
         }.get(package.get("language", ""))
         if configure is not None:
             configure(root, root / package["path"], package, changes)
-    configure_github_ci(root, config, changes)
+    from ci_setup import configure_github_ci
+
+    configure_github_ci(root, SOURCE, config, changes)
     configure_workflows(root, config)
     configure_shellcheck(root, config, tuple(retired))
     configure_deployment(root, config)
