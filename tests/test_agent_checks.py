@@ -557,3 +557,20 @@ def test_a_timed_out_agent_leaves_no_process_behind(tmp_path: Path) -> None:
     pid_file = tmp_path / "child.pid"
     assert agent_checks.stream(spawner(pid_file), tmp_path, tmp_path, 2) is None
     assert not running(pid_file)
+
+
+def test_an_eval_agent_does_not_inherit_host_markers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv("CODEX_THREAD_ID", "host")
+    dump = [
+        sys.executable,
+        "-c",
+        "import json, os; print(json.dumps(dict(os.environ)))",
+    ]
+    found = agent_checks.stream(dump, tmp_path, tmp_path, 60, {"CODEX_HOME": "fresh"})
+    assert found is not None
+    [seen] = found
+    assert ("CLAUDECODE" in seen, "CODEX_THREAD_ID" in seen) == (False, False)
+    assert (seen["CODEX_HOME"], seen["PATH"]) == ("fresh", os.environ["PATH"])
