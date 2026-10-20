@@ -918,7 +918,10 @@ def install(root: Path, previous: Path | None = None) -> None:
         "Codex: if hooks are disabled for this launch, start with `codex --enable hooks`; trust the project to load .codex configuration, then review new or changed hooks with /hooks. Hook-trust bypass alone does not trust the project.\n"
         "MCP entries still need host loading and authentication. In Codex, inspect `codex mcp list`; use `codex mcp login <name>` for an unauthenticated OAuth server, then verify a real call in the task."
     )
-    print("Then run: python3 .hooks/hard-eng.py check")
+    print(
+        "Then run: python3 .hooks/hard-eng.py check. Existing code fails? Before the install "
+        "reaches the default branch, run python3 .hooks/hard-eng.py adopt (HE-DEBT-SHRINK-ONLY)."
+    )
     print("Start a new agent session so it loads the installed skills.")
 
 
