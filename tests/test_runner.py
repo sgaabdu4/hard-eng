@@ -291,9 +291,15 @@ def test_command_failure_survives_later_pass(
         tmp_path, [gate("fails", "raise SystemExit(2)"), gate("passes", "print('ok')")]
     )
     assert runner.check() == 1
+    failing = capsys.readouterr().out
+    assert failing.splitlines()[-1] == (
+        "Hard Eng: verification failed in ./fails; the next stage is blocked."
+    )
     configure(tmp_path, [gate("passes", "print('ok')")])
     assert runner.check() == 0
-    output = capsys.readouterr().out
+    passing = capsys.readouterr().out
+    assert "failed in" not in passing
+    output = failing + passing
     assert "FAIL fails (exit 2; elapsed " in output
     assert "PASS passes (exit 0; elapsed " in output
 
