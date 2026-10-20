@@ -277,14 +277,18 @@ CLAUDE_ATTRIBUTION = re.compile(
 )
 
 
-def reject_attribution(root: Path, kind: str, text: str, where: str) -> None:
-    """Enforce the committed Claude setting that turns this attribution off."""
+def attribution_off(root: Path, kind: str) -> bool:
     try:
         settings = json.loads((root / HOOK_FILES["claude"]).read_text())
     except (OSError, ValueError):
-        return
+        return False
     attribution = settings.get("attribution") if isinstance(settings, dict) else None
-    if not isinstance(attribution, dict) or attribution.get(kind) != "":
+    return isinstance(attribution, dict) and attribution.get(kind) == ""
+
+
+def reject_attribution(root: Path, kind: str, text: str, where: str) -> None:
+    """Enforce the committed Claude setting that turns this attribution off."""
+    if not attribution_off(root, kind):
         return
     if found := CLAUDE_ATTRIBUTION.search(text):
         raise ValueError(
