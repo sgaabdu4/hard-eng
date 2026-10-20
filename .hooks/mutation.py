@@ -19,7 +19,7 @@ from pathlib import Path
 
 from gate_config import Group, parse_config
 from process_group import run_in_group
-from project_setup import python_gate_command
+from python_setup import python_gate_command
 
 GLOB = re.compile(r"[?*()[\]]")
 HUNK = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
