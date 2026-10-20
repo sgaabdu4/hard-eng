@@ -25,6 +25,7 @@ Decisions: Extend `release_canary.py`, not a new tool. Scaffold = every `--new` 
 - [x] Existing canary guarantees still hold → N/A — the full `tests/test_release_canary.py` suite covers them; no single test owns this line.
 - [x] A private repository named after the public upstream owner does not flag that owner's name → `tests/test_release_canary.py::test_a_private_repository_named_after_a_public_owner_is_no_leak`. The first Mac run failed on this before any target ran.
 - [x] A cut GitHub reply while reading PR text is retried instead of stopping the run → `tests/test_release_canary.py::test_a_cut_github_reply_is_retried_before_reading_release_text`. About 1 in 130 reads failed on the Mac.
+- [x] The leak check reads only added diff lines, so deleting text `main` already published does not fail the release → `tests/test_release_canary.py::test_release_text_holds_added_lines_but_not_lines_main_already_published`.
 
 ## Baseline + execution
 
