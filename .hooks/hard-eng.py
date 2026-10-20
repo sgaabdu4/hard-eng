@@ -33,7 +33,7 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
-from python_setup import pytest_options
+from python_setup import locks_nothing, pytest_options
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -311,6 +311,10 @@ def prepare_command(
     lockfile = ROOT / group["path"] / "bun.lock"
     if "--lockfile=bun.lock" in command and not lockfile.exists():
         command = [value for value in command if value != "--lockfile=bun.lock"]
+    if "--lockfile=uv.lock" in command and locks_nothing(ROOT / group["path"]):
+        command = [value for value in command if value != "--lockfile=uv.lock"]
+        if not any(value.startswith("--lockfile=") for value in command):
+            return []
     if gate.get("role") == "security" and "p/python" in command:
         index = command.index("p/python") + 1
         command = [
@@ -513,8 +517,13 @@ def run_limited_gate(
         expected_sources: set[Path] = set()
         command = prepare_command(group, gate, timeout, groups)
         if not command:
+            reason = (
+                ": uv.lock locks no third-party package to scan"
+                if gate.get("role") == "vulnerabilities"
+                else " by selected child checks"
+            )
             print(
-                f"COVERED {gate['name']} by selected child checks; elapsed {time.monotonic() - started:.3f}s"
+                f"COVERED {gate['name']}{reason}; elapsed {time.monotonic() - started:.3f}s"
             )
             return False
         from reports import (
