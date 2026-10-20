@@ -49,9 +49,11 @@ BROWNFIELD = (
 KINDS = ("installed", "scaffold", "greenfield", "brownfield")
 AGENTS = ("claude", "codex")
 TASK = (
-    "Follow AGENTS.md and the Hard Eng workflow. In this project's main language, add a "
-    "function that returns the sum of two integers and a test that proves it. Run the "
-    "project's checks until they pass. Do not commit or push."
+    "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
+    "In this project's main language, add a function that returns the sum of two "
+    "integers and a test that proves it. Run the project's checks until they pass. Commit "
+    "on a new local branch; never push. Failures that predate your change are out of "
+    "scope: list them, do not fix them."
 )
 
 
