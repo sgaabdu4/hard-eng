@@ -6,7 +6,7 @@ from types import ModuleType
 
 import gate_config
 import pytest
-from conftest import configure, gate
+from conftest import commit, configure, gate, git, init, plan_document
 from plans import validate_plan, validate_plans
 
 # Fixture IDs are built so this file names no real registry ID.
@@ -163,3 +163,24 @@ def test_check_fails_when_an_acceptance_test_was_skipped(
     assert runner.check(base="0" * 40, plan_stage="Complete") == int(skipped)
     output = capsys.readouterr().out
     assert ("skipped: test_value" in output) is skipped
+
+
+def test_feature_check_sees_plans_the_release_will_check(tmp_path: Path) -> None:
+    """A plan edited on the integration branch fails the feature PR, not only the release."""
+    root = tmp_path / "project"
+    init(root)
+    legacy = plan_document().replace(
+        UNPROVED, "- [x] Observe the configured command exit."
+    )
+    (root / "features/old").mkdir(parents=True)
+    (root / "features/old/PLAN.md").write_text(legacy)
+    commit(root, "release")
+    git(root, "branch", "-M", "main")
+    git(root, "checkout", "-qb", "develop")
+    (root / "features/old/PLAN.md").write_text(legacy + "\nReopened on develop.\n")
+    commit(root, "edit plan on develop")
+    git(root, "checkout", "-qb", "feature")
+    (root / "app.py").write_text("value = 1\n")
+    commit(root, "feature code")
+    with pytest.raises(ValueError, match="features/old/PLAN.md: Acceptance"):
+        validate_plans(root, base="develop", stage="Complete")
