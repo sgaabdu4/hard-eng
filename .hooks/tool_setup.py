@@ -336,6 +336,33 @@ def use_installed_tools(
     return True
 
 
+GITHUB_DENIED = "403 Forbidden) for url (https://api.github.com/repos/"
+
+
+def run_mise(
+    command: list[str],
+    arguments: list[str],
+    storage: Path,
+    environment: dict[str, str],
+    timeout: float,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [*command, *arguments],
+        # The project's packageManager pin would otherwise pick the Bun mise drives.
+        cwd=storage,
+        text=True,
+        timeout=timeout,
+        capture_output=True,
+        check=False,
+        env={
+            **environment,
+            "MISE_FETCH_REMOTE_VERSIONS_CACHE": "0s"
+            if arguments[0] == "install"
+            else "1h",
+        },
+    )
+
+
 def provision_latest(
     batch: list[str], storage: Path, environment: dict[str, str], timeout: float
 ) -> None:
@@ -353,21 +380,11 @@ def provision_latest(
             "--no-config",
         ]
         for arguments in (["install", *batch], ["env", "--json", *batch]):
-            result = subprocess.run(
-                [*command, *arguments],
-                # The project's packageManager pin would otherwise pick the Bun mise drives.
-                cwd=storage,
-                text=True,
-                timeout=timeout,
-                capture_output=True,
-                check=False,
-                env={
-                    **environment,
-                    "MISE_FETCH_REMOTE_VERSIONS_CACHE": "0s"
-                    if arguments[0] == "install"
-                    else "1h",
-                },
-            )
+            result = run_mise(command, arguments, storage, environment, timeout)
+            if arguments[0] == "install" and GITHUB_DENIED in result.stderr:
+                # A cloud GitHub proxy refuses other repositories' release lists; mise's host mirrors them.
+                command[3] = "MISE_USE_VERSIONS_HOST=true"
+                result = run_mise(command, arguments, storage, environment, timeout)
             print(result.stderr, file=sys.stderr, end="")
             result.check_returncode()
             if "Failed to resolve tool version" in result.stderr:
