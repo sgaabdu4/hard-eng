@@ -9,6 +9,7 @@ Status: Complete
 ## Repository context
 
 Owners: `DECISION.md`; the registry at `.agents/skills/he/references/requirements.md`. README, PRODUCT.md and DESIGN.md link only `DECISION.md#current-status`, which stays. `release_canary.py` lists `DECISION.md` as a source-only file, and `tests/test_setup.py` proves setup does not install it.
+Same cause: N/A — documentation cleanup, not a fault fix.
 
 ## Decisions + authorization
 

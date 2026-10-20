@@ -9,6 +9,7 @@ A feature PR into develop now validates every plan changed since the release bas
 ## Repository context
 
 Owners: `.hooks/plans.py` `validate_plans` and `plan_tests`, which reuse `default_branch_point` (shipping base merge-base) and `changed_files`. Cause: #330 passed against develop, but the release PR diffs against main, where develop-edited plans count as changed and get the new rule.
+Same cause: N/A — the first plan rule that reached develop before feature PRs checked it; this change makes feature PRs check every plan since main.
 
 ## Decisions + authorization
 

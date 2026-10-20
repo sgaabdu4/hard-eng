@@ -9,6 +9,7 @@ An acceptance checkbox may name a registry requirement ID (HE- or REQ-) instead 
 ## Repository context
 
 Owners: `.hooks/plans.py` (`acceptance_tests`, `plan_stage`, `plan_tests`), which reuses the registry's `REQUIREMENT_ID`, `registry_entries` and `requirement_tests`; he-plan template and SKILL.md proof rule.
+Same cause: N/A — new rule, not a fault fix.
 
 ## Decisions + authorization
 
