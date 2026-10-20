@@ -663,3 +663,15 @@ def validate_decisions(root: Path, base: str | None = None) -> None:
         ]
     if found:
         raise ValueError("Decision records are out of date: " + "; ".join(found))
+
+
+def validate_attribution(root: Path, base: str | None = None) -> None:
+    from agent_hooks import reject_attribution
+
+    point = base or default_branch_point(root) or "HEAD"
+    log = _git_output(
+        root, "log", "--format=%x1e%h%n%an <%ae>%n%cn <%ce>%n%B", f"{point}..HEAD"
+    )
+    for entry in filter(None, log.split("\x1e")):
+        revision, _, text = entry.partition("\n")
+        reject_attribution(root, "commit", text, f"Commit {revision}")
