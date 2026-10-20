@@ -62,6 +62,7 @@ DartOptions = TypedDict(
 
 
 ROOT = Path(__file__).resolve().parents[1]
+FAILED_GATES: list[str] = []
 TEST_REPORTS = {"python-tests", "lcov-tests", "dart-tests", "xcode-tests"}
 DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
     "analyzer": {
@@ -482,7 +483,9 @@ def run_gate(
     started = time.monotonic()
     limit = gate_limit(ROOT, key, timeout)
     failed = run_limited_gate(group, gate, limit, output_lock, groups, related_base)
-    if not failed:
+    if failed:
+        FAILED_GATES.append(key)
+    else:
         record_gate_time(ROOT, key, time.monotonic() - started)
     return failed
 
@@ -734,6 +737,7 @@ def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool 
     failed = False
     pending: set[Future[bool]] = set()
     scans: dict[Future[bool], str] = {}
+    FAILED_GATES.clear()
     checks = [(group, gate) for group in groups for gate in group["checks"]]
     ordered = gate_order(checks)
     workers = os.cpu_count() or 2
@@ -804,7 +808,7 @@ def check(
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))
-        plans.report_stage(failed, plan_stage)
+        plans.report_stage(failed, plan_stage, FAILED_GATES)
         return int(failed)
 
 
@@ -859,15 +863,13 @@ def deliver(args: "Namespace") -> int:
 def main() -> int:
     import argparse
 
-    if Path(sys.argv[0]).name == "pre-push":
+    if "pre-push" in (Path(sys.argv[0]).name, *sys.argv[1:2]):
         return pre_push()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.set_defaults(apply=False, merge=True)
     commands = parser.add_subparsers(dest="command", required=True)
     checks = commands.add_parser("check", help="Run applicable native checks")
-    checks.add_argument(
-        "--base", help="Git comparison base; unknown impact runs all checks"
-    )
+    checks.add_argument("--base", help="Git base; unknown impact runs all checks")
     checks.add_argument("--plan-stage", choices=("Draft", "Ready", "Complete"))
     checks.add_argument(
         "--without-dependents",
@@ -960,8 +962,6 @@ def main() -> int:
         )
     if args.command == "impact":
         return impact(args.base)
-    if args.command == "pre-push":
-        return pre_push()
     if args.command == "ci-usage":
         from ci_setup import ci_usage
 
