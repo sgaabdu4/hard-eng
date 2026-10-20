@@ -585,12 +585,12 @@ def reused_pull_request(root: Path, base: str) -> str | None:
 
 def passed_branch_point(root: Path) -> str | None:
     """The shipping-base commit HEAD left, when its required checks passed in CI."""
-    from comments import branch_point
+    from plans import default_branch_point
 
     try:
         policy = load_policy(root, required=False)
-        point = branch_point(root)
-        if policy is None or point == "HEAD":
+        point = default_branch_point(root)
+        if policy is None or point is None:
             return None
         remote = git(root, "remote", "get-url", "origin").strip()
         _checks(root, origin_repository(remote), point, policy)
