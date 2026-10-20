@@ -6,6 +6,7 @@ import re
 import subprocess
 import tomllib
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from concurrent.futures import Future
 from pathlib import Path
 from typing import TextIO, cast
@@ -765,13 +766,34 @@ def validate_dart_decimate(path: Path) -> None:
         raise ValueError("Dart Decimate report is incomplete or malformed") from error
 
 
-def validate_jscpd(path: Path) -> None:
+def jscpd_scanned(path: Path) -> bool:
+    try:
+        formats = json.loads(path.read_text())["statistics"]["formats"]
+        return set(formats) in ({"python"}, {"swift"}) and all(
+            type(summary["sources"]) is int and summary["sources"] > 0
+            for summary in formats.values()
+        )
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def validate_jscpd(path: Path, below_minimum: Callable[[], bool] | None = None) -> None:
     try:
         report = json.loads(path.read_text())
         if report["duplicates"] != []:
             raise ValueError("jscpd reports duplicate code or malformed findings")
         stats = report["statistics"]
         formats, total = stats["formats"], stats["total"]
+        if (
+            formats == {}
+            and total["sources"] == 0
+            and below_minimum
+            and below_minimum()
+        ):
+            print(
+                "jscpd: every file is below jscpd's --min-tokens, so no clone can exist"
+            )
+            return
         if not isinstance(formats, dict) or set(formats) not in ({"python"}, {"swift"}):
             raise ValueError("jscpd report requires Python or Swift analysis")
         analysed = next(iter(formats.values()))

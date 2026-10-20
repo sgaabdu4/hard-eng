@@ -526,6 +526,29 @@ def run_projects(
     return next((result for result in results if result.returncode), results[-1])
 
 
+def jscpd_below_minimum(command: list[str], directory: Path, timeout: float) -> bool:
+    """An empty jscpd scope is real only if the smallest --min-tokens still scans nothing."""
+    from reports import jscpd_scanned
+
+    options = {"--min-tokens", "-k", "--output", "-o"}
+    rescan = [
+        argument
+        for index, argument in enumerate(command)
+        if argument.split("=", 1)[0] not in options
+        and (index == 0 or command[index - 1] not in options)
+    ]
+    with tempfile.TemporaryDirectory(prefix="hard-eng-jscpd-") as output:
+        subprocess.run(
+            [*rescan, "--min-tokens", "1", "--output", output],
+            cwd=directory,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout,
+            check=False,
+        )
+        return jscpd_scanned(Path(output) / "jscpd-report.json")
+
+
 def run_limited_gate(
     group: Group,
     gate: Gate,
@@ -614,6 +637,13 @@ def run_limited_gate(
                 from reports import validate_osv
 
                 validate_osv(report_path, empty_bun=directory)
+            elif scanner == "jscpd":
+                from reports import validate_jscpd
+
+                validate_jscpd(
+                    report_path,
+                    lambda: jscpd_below_minimum(command, directory, timeout),
+                )
             else:
                 SCANNERS[scanner](report_path)
         from reports import completed_tests, line_coverage, parallel_hint
