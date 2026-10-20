@@ -478,9 +478,32 @@ def configure_python(
             + '\n[tool.pyrefly]\npreset = "strict"\ncheck-unannotated-defs = true\n'
         )
     name = str(project.relative_to(root))
-    updated = import_configuration(directory, package, changes.get(name, content))
+    current = test_import_path(directory, package, changes.get(name, content))
+    updated = import_configuration(directory, package, current)
     if updated != content:
         changes[name] = updated
+
+
+def test_import_path(directory: Path, package: Group, content: str) -> str:
+    """uv installs only a packaged project, so pytest needs the folder of root modules."""
+    project = tomllib.loads(content)
+    packaged = project.get("tool", {}).get("uv", {}).get("package")
+    if (
+        (packaged if isinstance(packaged, bool) else "build-system" in project)
+        or "pytest" in project.get("tool", {})
+        or any(
+            (directory / name).is_file()
+            for name in ("pytest.toml", ".pytest.toml", "pytest.ini", ".pytest.ini")
+        )
+        or any(
+            (directory / name).is_file()
+            and f"[{section}]" in (directory / name).read_text()
+            for name, section in (("tox.ini", "pytest"), ("setup.cfg", "tool:pytest"))
+        )
+    ):
+        return content
+    paths = sorted({"src" if name == "src" else "." for name in package["sources"]})
+    return content + f"\n[tool.pytest.ini_options]\npythonpath = {json.dumps(paths)}\n"
 
 
 def prepare_hook(root: Path) -> tuple[Path, str]:
