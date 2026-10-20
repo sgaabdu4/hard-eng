@@ -14,21 +14,31 @@ Owners: `validate_decisions` in `.hooks/plans.py` is the existing records check 
 
 Blockers: None
 Handoff: Approval
-Authority: Abid approved the design on 2026-10-20 ("Approve as recommended"): shipped registry, check shipped to installed projects, `DECISION.md` in a second PR. Push and PR need a separate approval.
+Authority: Abid approved the design on 2026-10-20 ("Approve as recommended"): shipped registry, check shipped to installed projects, `DECISION.md` in a second PR. He then authorized push and PR, and asked that this work be rebuilt on `develop` through the Hard Eng workflow.
 
 ## Acceptance + steps
 
-- [x] Repeated ID, entry without proof, unknown or retired reference, check rule without enforcer or test, guidance rule without skill link and copied definition sentence each fail; a proven registry and a repository without a registry pass → `tests/test_requirements.py`.
-- [x] Installed projects need no Hard Eng tests for `HE-` rules, while their own `REQ-` rules need tests → `tests/test_requirements.py`.
-- [x] `requirement_tests` returns path, line and reported test name for Python docstrings and JavaScript test names → `tests/test_requirements.py`.
+- [x] A proven registry passes → `tests/test_requirements.py::test_proven_registry_passes`.
+- [x] A repository without a registry is not checked → `tests/test_requirements.py::test_project_without_registry_is_not_checked`.
+- [x] A repeated ID fails → `tests/test_requirements.py::test_repeated_id_fails`.
+- [x] An entry without a definition and proof line fails → `tests/test_requirements.py::test_entry_without_proof_line_fails`.
+- [x] A reference to an unknown ID fails → `tests/test_requirements.py::test_reference_to_unknown_id_fails`.
+- [x] A reference to a retired ID fails → `tests/test_requirements.py::test_reference_to_retired_id_fails`.
+- [x] A check rule without a test fails → `tests/test_requirements.py::test_check_rule_without_test_fails`.
+- [x] A check rule without an enforcing source fails → `tests/test_requirements.py::test_check_rule_without_enforcer_fails`.
+- [x] A guidance rule without a skill link fails → `tests/test_requirements.py::test_guidance_rule_without_skill_link_fails`.
+- [x] A copied definition sentence fails → `tests/test_requirements.py::test_copied_rule_sentence_fails`.
+- [x] Installed projects need no Hard Eng tests for `HE-` rules → `tests/test_requirements.py::test_installed_project_does_not_need_hard_eng_tests`.
+- [x] A project's own `REQ-` rule needs its own test → `tests/test_requirements.py::test_project_rule_needs_its_own_test`.
+- [x] `requirement_tests` returns path, line and reported test name → `tests/test_requirements.py::test_requirement_tests_name_each_covering_test`.
 - [x] `check --quick` runs the registry check → `tests/test_comments.py::test_quick_check_runs_the_requirement_registry_guard`.
-- [x] Seeded rules name their ID in the enforcer message and one existing test; the source repository passes its own registry check.
-- [x] README, gates.md and AGENTS.md link seeded IDs instead of restating them; skill links resolve → `tests/test_skill_links.py`.
+- [x] Seeded rules name their ID in the enforcer message and one existing test → N/A — the repository's own `check` runs `validate_requirements` on itself in CI and fails if a seed loses either link.
+- [x] README, gates.md and AGENTS.md link seeded IDs; the links resolve → `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: Starting main suite with the locked environment: 1740 tests pass; the same 9 fail on main and on this branch because this machine lacks Dart, Xcode tools and process-limit support. Missing tools (gitleaks, osv-scanner, actionlint, zizmor, shellcheck, biome) and an unreachable Semgrep registry leave those gates to PR CI.
+Evidence: `origin/develop` full suite with the locked environment: 1733 passed, 8 failed. The 8 need Dart, Xcode or signal timing that this cloud machine lacks. gitleaks, osv-scanner, shellcheck, actionlint, zizmor and biome cannot install in cloud, and the Semgrep registry is unreachable; CI ran these.
 Execution: One builder; failing tests, the check, registry seeds, then doc links.
 
 ## Risks + recovery
@@ -42,5 +52,5 @@ N/A — gate and documentation change with no visual surface.
 ## Verification
 
 Result: Passed
-Evidence: Full suite 1740 passed, 9 failed, identical to the main baseline; line coverage 90%, `plans.py` 95%. Ruff format, lint, complexity and annotations, Pyrefly, Vulture and jscpd (0 clones) pass. The source repository passes its own registry, comment, switch-off and decision checks. Mutating the copy, retired, installed and sentence-length logic each fails `tests/test_requirements.py`. Remaining gates run in PR CI.
+Evidence: Branch full suite: 1748 passed, the same 8 failed as on `develop`; line coverage 89%, `plans.py` 95%. Ruff format, lint, complexity and annotations, Pyrefly, Vulture and jscpd (0 clones) pass. The repository passes its own registry, comment, switch-off, decision and attribution checks. Deliberately breaking the copy, retired, installed and sentence-length logic each fails `tests/test_requirements.py`. `hard-eng.py` stays at 999 lines: one `validate_records` call runs the decision, attribution and registry checks.
 E2E: N/A — the check runs inside the existing `check` command, proven by the quick-check test; no new user journey.
