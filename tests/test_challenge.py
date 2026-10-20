@@ -136,6 +136,18 @@ def test_codex_host_runs_claude_with_read_only_tools(
     assert (record["reviewer"], record["outcome"]) == ("claude", "findings")
 
 
+def test_claude_host_without_codex_installed_runs_it_through_bun(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    log = fake_cli(tmp_path / "bin", "bun", "Nothing found.\nVERDICT: clean")
+    monkeypatch.setattr(challenge.shutil, "which", lambda name: None)
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    argv = json.loads(log.read_text())["argv"]
+    assert argv[:5] == ["x", "@openai/codex@latest", "exec", "--sandbox", "read-only"]
+
+
 @pytest.mark.parametrize(
     ("code", "error", "reason"),
     [(None, "", "codex is not installed"), (1, "Not signed in", "Not signed in")],
