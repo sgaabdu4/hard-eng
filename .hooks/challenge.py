@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -35,7 +36,11 @@ def reviewer_for(host: str | None) -> str:
 
 def command(reviewer: str, prompt: str, root: Path) -> list[str]:
     if reviewer == "codex":
-        return ["codex", "exec", "--sandbox", "read-only", "--cd", str(root), prompt]
+        # Cloud sessions lack a global Codex install; Bun fetches the published CLI.
+        codex = (
+            ["codex"] if shutil.which("codex") else ["bun", "x", "@openai/codex@latest"]
+        )
+        return [*codex, "exec", "--sandbox", "read-only", "--cd", str(root), prompt]
     allowed = " ".join(
         ["Read", "Grep", "Glob"] + [f"Bash(git {g} *)" for g in READ_ONLY_GIT]
     )
