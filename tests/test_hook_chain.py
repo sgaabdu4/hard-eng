@@ -276,3 +276,11 @@ def test_a_new_worktree_matches_the_main_checkout(
     message = update.repair_current_hook(repository, "unused")
     assert message.endswith("; installed the worktree hook.")
     assert hook_chain.is_own(repository, installed)
+    git(repository, "switch", "-q", "-c", "untrusted")
+    (repository / ".hooks/ship_actions.py").write_text("open('ran', 'w')\n")
+    commit(repository, "branch code")
+    git(repository, "switch", "-q", "-")
+    review = repository.parent / "review"
+    git(repository, "worktree", "add", "-q", str(review), "untrusted")
+    assert not (review / "ran").exists()
+    assert (review / ".env").resolve() == (repository / ".env").resolve()
