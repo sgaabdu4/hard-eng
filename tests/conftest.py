@@ -101,7 +101,7 @@ Blockers: None
 Handoff: Approval
 Authorized test fixture; no external actions.
 ## Acceptance + steps
-- [x] Observe the configured command exit.
+- [x] Observe the configured command exit → N/A — fixture plan has no product test.
 ## Baseline + execution
 Result: Passed
 Evidence: Controlled fixture baseline; not production acceptance.

@@ -687,14 +687,16 @@ def test_native_cli_plan_stage_and_missing_plan(
     [
         ("", "E2E"),
         ("![Proposal](https://example.test/account-proposed.png)\n", "Surface"),
+        ("- [x] Observe the configured command exit.\n", "Acceptance"),
     ],
-    ids=["e2e", "ux"],
+    ids=["e2e", "ux", "acceptance"],
 )
 def test_unchanged_complete_plan_predates_newer_rules(
     runner: ModuleType, tmp_path: Path, visual_plan: str, older: str, rule: str
 ) -> None:
     """A plan completed before the E2E or UX field rules fails only once edited."""
     newer = {
+        "Acceptance": r"(?m)^- \[x\] Observe.*\n",
         "E2E": r"(?m)^E2E:.*\n",
         "Surface": r"(?m)^Surface:.*\n(?:(?:Before|Proposed|Capture|Review):.*\n)+",
     }[rule]
