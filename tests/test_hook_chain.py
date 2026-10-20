@@ -220,6 +220,20 @@ LOCAL_FILES = (
 )
 
 
+def husky_shims(repository: Path) -> Path:
+    shims = repository / ".husky/_"
+    shims.mkdir(parents=True)
+    for name in ("pre-push", "post-checkout"):
+        (shims / name).write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
+        (shims / name).chmod(0o755)
+    (shims / "h").write_text(
+        'n=$(basename "$0")\ns=$(dirname "$(dirname "$0")")/$n\nsh -e "$s" "$@"\n'
+    )
+    (shims / ".gitignore").write_text("*\n")
+    git(repository, "config", "core.hooksPath", ".husky/_")
+    return repository / ".husky/post-checkout"
+
+
 @pytest.mark.parametrize("husky", [False, True], ids=["git-hooks", "husky"])
 def test_a_new_worktree_matches_the_main_checkout(
     installer: ModuleType,
@@ -230,17 +244,7 @@ def test_a_new_worktree_matches_the_main_checkout(
     go_project(repository)
     project_hook = repository / ".git/hooks/post-checkout"
     if husky:
-        shims = repository / ".husky/_"
-        shims.mkdir(parents=True)
-        for name in ("pre-push", "post-checkout"):
-            (shims / name).write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
-            (shims / name).chmod(0o755)
-        (shims / "h").write_text(
-            'n=$(basename "$0")\ns=$(dirname "$(dirname "$0")")/$n\nsh -e "$s" "$@"\n'
-        )
-        (shims / ".gitignore").write_text("*\n")
-        git(repository, "config", "core.hooksPath", ".husky/_")
-        project_hook = repository / ".husky/post-checkout"
+        project_hook = husky_shims(repository)
     project_hook.parent.mkdir(parents=True, exist_ok=True)
     project_hook.write_text('#!/bin/sh\necho "$1" > project.args\n')
     project_hook.chmod(0o755)
