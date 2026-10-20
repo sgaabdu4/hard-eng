@@ -2,6 +2,9 @@
 
 import os
 import re
+import shutil
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -155,9 +158,60 @@ def size_failures(root: Path) -> list[str]:
     ]
 
 
+COMMAND = re.compile(r"hard-eng\.py ([a-z][a-z-]*)([^`\n|]*)")
+
+
+def command_failures(root: Path, documents: list[Path]) -> list[str]:
+    """A command or flag that docs name but the CLI lacks sends agents into a usage error."""
+    script = [sys.executable, str(root / ".hooks/hard-eng.py")]
+    usage: dict[str, str] = {}
+    failures: list[str] = []
+    for document in documents:
+        for name, rest in COMMAND.findall(document.read_text()):
+            if name not in usage:
+                shown = subprocess.run(
+                    [*script, name, "--help"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                usage[name] = shown.stdout if shown.returncode == 0 else ""
+            missing = [
+                flag
+                for flag in re.findall(r"--[a-z][a-z-]*", rest)
+                if not re.search(re.escape(flag) + "(?![a-z-])", usage[name])
+            ]
+            if not usage[name] or missing:
+                failures.append(
+                    f"{document.relative_to(root)}: hard-eng.py {name} {' '.join(missing)}".rstrip()
+                )
+    return failures
+
+
 def skill(root: Path, name: str, text: str) -> None:
     (root / name).mkdir(parents=True)
     (root / name / "SKILL.md").write_text(text)
+
+
+def test_documented_commands_and_flags_exist() -> None:
+    documents = [
+        SOURCE / "AGENTS.md",
+        SOURCE / "README.md",
+        *(SOURCE / ".agents/skills").glob("**/*.md"),
+    ]
+    assert command_failures(SOURCE, documents) == []
+
+
+def test_an_unknown_command_or_flag_in_docs_fails(tmp_path: Path) -> None:
+    shutil.copytree(SOURCE / ".hooks", tmp_path / ".hooks")
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        "Run `hard-eng.py check --base x`, `hard-eng.py chek` and `hard-eng.py ship --merge`.\n"
+    )
+    assert command_failures(tmp_path, [doc]) == [
+        "doc.md: hard-eng.py chek",
+        "doc.md: hard-eng.py ship --merge",
+    ]
 
 
 def test_distributed_skill_links_resolve() -> None:
