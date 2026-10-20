@@ -1041,3 +1041,48 @@ def test_jscpd_passes_files_below_its_minimum_only_when_a_rescan_finds_them(
     assert (
         json.loads((tmp_path / "coverage/jscpd/jscpd-report.json").read_text()) == small
     )
+
+
+@pytest.mark.parametrize(
+    ("source", "failed"),
+    [('{ virtual = "." }', False), ('{ registry = "https://pypi.org/simple" }', True)],
+)
+def test_osv_needs_no_scan_when_uv_locks_no_third_party_package(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    source: str,
+    failed: bool,
+) -> None:
+    tool = tmp_path / "bin/osv-scanner"
+    tool.parent.mkdir()
+    tool.write_text("#!/bin/sh\necho 'No package sources found' >&2\nexit 128\n")
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool.parent}:{os.environ['PATH']}")
+    (tmp_path / "uv.lock").write_text(
+        f'version = 1\n\n[[package]]\nname = "app"\nversion = "1"\nsource = {source}\n'
+    )
+    vulnerabilities: Gate = {
+        "name": "vulnerabilities",
+        "role": "vulnerabilities",
+        "command": [
+            "osv-scanner",
+            "scan",
+            "source",
+            "--lockfile=uv.lock",
+            "--format=json",
+            "--output-file=coverage/osv.json",
+        ],
+        "report": {"type": "osv", "path": "coverage/osv.json"},
+    }
+    group: Group = {
+        "path": ".",
+        "language": "python",
+        "sources": ["app.py"],
+        "checks": [vulnerabilities],
+    }
+    assert runner.run_gate(group, vulnerabilities, 30, threading.Lock()) is failed
+    assert (
+        "uv.lock locks no third-party package" in capsys.readouterr().out
+    ) is not failed
