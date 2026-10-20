@@ -318,12 +318,12 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
         return status
     if not no_blockers(field(sections["Decisions + authorization"], "Blockers")):
         raise ValueError("ready/complete plan has unresolved Blockers")
-    errors = readiness_errors(
-        sections, status, legacy=status == "Complete" and not changed
-    )
+    legacy = status == "Complete" and not changed
+    errors = readiness_errors(sections, status, legacy=legacy)
     if errors:
         raise ValueError("; ".join(errors))
-    if not (status == "Complete" and not changed):
+    if not legacy:
+        field(sections["Repository context"], "Same cause")
         acceptance_tests(sections)
     if status == "Complete":
         markers = re.findall(
