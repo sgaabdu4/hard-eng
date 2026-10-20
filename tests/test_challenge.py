@@ -141,7 +141,7 @@ def test_claude_host_without_codex_installed_runs_it_through_bun(
 ) -> None:
     big(branch)
     log = fake_cli(tmp_path / "bin", "bun", "Nothing found.\nVERDICT: clean")
-    monkeypatch.setattr(challenge.shutil, "which", lambda name: None)
+    monkeypatch.setattr(challenge.shutil, "which", Mock(return_value=None))
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 0
     argv = json.loads(log.read_text())["argv"]
