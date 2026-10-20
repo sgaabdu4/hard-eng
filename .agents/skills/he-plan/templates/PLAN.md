@@ -9,6 +9,7 @@ Status: Draft
 ## Repository context
 
 Owners: [TODO: Relevant paths + decisive evidence links]
+Same cause: [TODO: Fix → earlier fixes of this cause (plan/issue + helped, hurt, no effect or confounded) + every other place it can occur, searched + fixed; else N/A — reason]
 
 ## Decisions + authorization
 
