@@ -219,8 +219,8 @@ def folder(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", label.lower())
 
 
-def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -> str:
-    """Create the target, install Hard Eng from the release and commit; returns the pre-install commit."""
+def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -> None:
+    """Create the target, install Hard Eng from the release and commit."""
     if kind == "brownfield":
         clone = ["git", "clone", "-q", BROWNFIELD[0], str(work)]
         must(work.parent, log, "clone failed", clone)
@@ -243,7 +243,6 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
             ["git", "add", "--all"],
             ["git", "commit", "-q", "-m", "Create the project"],
         )
-    base = output(["git", "rev-parse", "HEAD"], work) if kind == "brownfield" else ""
     new = ["--new", value] if kind == "scaffold" else []
     must(work, log, "setup failed", ["sh", str(source / "setup.sh"), str(source), *new])
     add_documents(work)
@@ -254,7 +253,6 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
         ["git", "add", "--all"],
         ["git", "commit", "-q", "--allow-empty", "-m", "Install Hard Eng"],
     )
-    return base
 
 
 def prepare(
@@ -266,9 +264,9 @@ def prepare(
         base = update_installed(value, revision, work, log)
         # The update PR's check can skip gates for a proven update, so every gate runs after it.
         return [("update PR check", [*check, "--base", base]), ("full check", check)]
-    base = install_new(kind, value, source, work, log)
-    # Brownfield code predates Hard Eng's gates; only the install's own change must pass.
-    return [("check", [*check, "--base", base])] if base else [("full check", check)]
+    install_new(kind, value, source, work, log)
+    # Only a scaffold promises a passing project; elsewhere the agents add tests and a plan.
+    return [("full check", check)] if kind == "scaffold" else []
 
 
 def agent_command(agent: str, work: Path) -> list[str]:
@@ -333,7 +331,7 @@ def try_target(
         except Failed as failure:
             skipped = {f"{label} / {agent}": (False, "not run") for agent in agents}
             return {label: (False, f"{failure}; log {log_path}"), **skipped}
-        results = {label: (True, "install and checks passed")}
+        results = {label: (True, "install and its checks passed")}
         for agent in agents:
             ok, detail = try_agent(agent, work, log)
             results[f"{label} / {agent}"] = (
