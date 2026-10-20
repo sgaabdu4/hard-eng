@@ -30,6 +30,8 @@ Decisions: Extend `release_canary.py`, not a new tool. Scaffold = every `--new` 
 - [x] New targets get filled PRODUCT.md and DESIGN.md, so a fresh install can pass its first check → `tests/test_release_canary.py::test_new_targets_get_the_project_documents_the_check_requires`.
 - [x] Target folders are valid create-cloudflare project names → `tests/test_release_canary.py::test_a_target_folder_is_a_valid_cloudflare_project_name`.
 - [x] Project lock files such as pubspec.lock reach the agent copy; only Git's own lock files are skipped → `tests/test_release_canary.py::test_project_lock_files_reach_the_agent_copy`.
+- [x] The agent task lets agents commit on a local branch, never push, and leave failures that predate their change → N/A — task text only; the Claude trial on the Mac failed Vite (Stop hook blocked on an unfinished plan) and brownfield (agent stopped to ask about old failures) under "do not commit", and the next Mac canary run is the proof.
+- [x] An interrupted pre-push still counts its killed gate as stopped where the container never reaps zombies → `tests/test_ship_actions.py::test_interrupted_pre_push_removes_its_snapshot`; it failed in the cloud container before.
 
 ## Baseline + execution
 
