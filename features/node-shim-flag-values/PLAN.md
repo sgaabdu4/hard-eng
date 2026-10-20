@@ -10,6 +10,7 @@ Issue 317: the Bun `node` shim from `bun_node` read the word after `-r`, `--requ
 
 Owner: `.hooks/tool_setup.py` `bun_node`, which writes the shim's argument loop.
 Test: `tests/test_tool_setup.py::test_node_with_a_script_on_stdin_runs_it_on_bun` already proves piped input with other flags.
+Same cause: the shim's reading of node arguments; earlier fixes PR 310 (piped script) and PR 311 (flag-only calls) helped; a flag with a value was the last case, fixed here.
 
 ## Decisions + authorization
 

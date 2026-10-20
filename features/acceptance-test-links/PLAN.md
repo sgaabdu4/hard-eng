@@ -9,6 +9,7 @@ Plan validation requires each checkbox in `## Acceptance + steps` of a changed R
 ## Repository context
 
 Owners: `.hooks/plans.py` (`validate_plan`, `plan_stage`, `validate_plans`), `.hooks/reports.py` (test report parsing beside `completed_tests`), `.hooks/hard-eng.py` `check`, the he-plan template and SKILL.md proof rule. Unchanged Complete plans keep their original rules, as for the E2E and UX fields.
+Same cause: N/A — new rule, not a fault fix.
 
 ## Decisions + authorization
 

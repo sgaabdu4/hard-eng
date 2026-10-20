@@ -10,6 +10,7 @@ Status: Complete
 
 Owners: `.hooks/ship_actions.py` `link_env_files` + `snapshot` already prepared the pre-push snapshot worktree (env links + submodules); this change moves that into `prepare_checkout`, reused by the snapshot and by a new git `post-checkout` hook. `.hooks/hook_chain.py` owns hook launchers, `locate` and chaining of a project's own hook (`*.project`); `agent_hooks.project_pre_push` maps Husky shims and now does so for any hook name. `setup.py` `install` writes and commits hooks; `update.repair_current_hook` / `repair_installation` restore a missing hook at session start, so existing installs get the new hook without a new release step.
 Evidence: in a Husky project, `git rev-parse --git-path hooks/pre-push` in a fresh worktree names `.husky/_/pre-push`, which does not exist there, so pushes from that worktree ran no Hard Eng checks. A fresh worktree also had no `.env` files.
+Same cause: N/A — new setup behavior, not a fault fix.
 
 ## Decisions + authorization
 
