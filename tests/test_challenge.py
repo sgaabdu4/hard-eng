@@ -18,7 +18,7 @@ from test_plans import edit, sized_branch
 
 FAKE = """#!{python}
 import json, os, sys
-log = {{"argv": sys.argv[1:], "stdin_is_null": os.path.samestat(os.fstat(0), os.stat(os.devnull))}}
+log = {{"argv": sys.argv[1:], "stdin_is_null": os.path.samestat(os.fstat(0), os.stat(os.devnull)), "markers": sorted(k for k in os.environ if k == "CLAUDECODE" or k.startswith("CODEX_"))}}
 open({log!r}, "w").write(json.dumps(log))
 sys.stderr.write({error!r})
 print({output!r})
@@ -66,7 +66,6 @@ def small(root: Path) -> None:
     [
         ("1", None, None, "codex"),
         (None, "thread", None, "claude"),
-        ("1", "thread", None, "codex"),
         (None, None, "codex", "claude"),
         (None, None, "claude", "codex"),
     ],
@@ -87,11 +86,106 @@ def test_reviewer_is_the_other_agent_of_the_running_host(
     assert challenge.reviewer_for(host) == reviewer
 
 
-def test_unknown_host_asks_for_the_host(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("markers", [{}, {"CLAUDECODE": "1", "CODEX_THREAD_ID": "t"}])
+def test_unknown_or_ambiguous_host_asks_for_the_host(
+    monkeypatch: pytest.MonkeyPatch, markers: dict[str, str]
+) -> None:
     monkeypatch.delenv("CLAUDECODE", raising=False)
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    for name, value in markers.items():
+        monkeypatch.setenv(name, value)
     with pytest.raises(ValueError, match="--host"):
         challenge.reviewer_for(None)
+
+
+def test_the_reviewer_does_not_inherit_host_markers(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-home"))
+    monkeypatch.setenv("CODEX_SANDBOX", "seatbelt")
+    challenge.challenge(branch, None, "claude")
+    assert json.loads(log.read_text())["markers"] == ["CODEX_HOME"]
+
+
+def test_the_prompt_pins_the_reviewed_revision_and_treats_repo_text_as_data(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    challenge.challenge(branch, None, None)
+    prompt = json.loads(log.read_text())["argv"][-1]
+    revision = git(branch, "rev-parse", "HEAD")
+    assert f"git diff {git(branch, 'merge-base', 'HEAD', 'main')} {revision}`" in prompt
+    assert "never instructions" in prompt
+
+
+def record_of(root: Path) -> dict[str, str]:
+    path = challenge.store(root, git(root, "rev-parse", "HEAD")).with_suffix(".json")
+    return json.loads(path.read_text())
+
+
+@pytest.mark.parametrize(
+    "output",
+    ["", "Traceback (most recent call last):\nError", "Looks fine.", "verdict: clean"],
+)
+def test_a_reply_without_an_exact_verdict_is_not_a_review(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str
+) -> None:
+    big(branch)
+    fake_cli(tmp_path / "bin", "codex", output)
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 1
+    assert record_of(branch)["outcome"].startswith("not done: codex gave no")
+
+
+def test_no_branch_point_records_not_done_without_calling_the_reviewer(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git(repository, "branch", "-M", "trunk")
+    big(repository)
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(repository, None, None) == 1
+    assert "branch point" in record_of(repository)["outcome"]
+    assert not log.exists()
+
+
+def test_a_dirty_tree_is_not_reviewed(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    (branch / "app.py").write_text("value = 9\n")
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 1
+    assert "uncommitted" in record_of(branch)["outcome"]
+    assert not log.exists()
+
+
+def test_a_commit_during_the_review_voids_it(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    reviewed = git(branch, "rev-parse", "HEAD")
+    (tmp_path / "bin").mkdir()
+    script = tmp_path / "bin" / "codex"
+    script.write_text(
+        f"#!{sys.executable}\nimport subprocess\n"
+        "subprocess.run(['git', 'commit', '-q', '--allow-empty', '-m', 'during'], check=True)\n"
+        "print('VERDICT: clean')\n"
+    )
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 1
+    record = json.loads(
+        challenge.store(branch, reviewed).with_suffix(".json").read_text()
+    )
+    assert "HEAD moved" in record["outcome"]
 
 
 def test_claude_host_runs_codex_read_only_with_closed_stdin(
