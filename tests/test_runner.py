@@ -871,11 +871,12 @@ def test_pre_push_tests_committed_code(
 
 
 @pytest.mark.parametrize(
-    ("role", "existing", "seen"),
+    ("role", "existing", "seen", "cloud"),
     [
-        ("ci-security", None, "from-gh"),
-        ("ci-security", "set", "set"),
-        ("tests", None, ""),
+        ("ci-security", None, "from-gh", False),
+        ("ci-security", "set", "set", False),
+        ("ci-security", "set", "", True),
+        ("tests", None, "", False),
     ],
 )
 def test_only_the_ci_security_gate_borrows_the_gh_token(
@@ -884,7 +885,9 @@ def test_only_the_ci_security_gate_borrows_the_gh_token(
     role: str,
     existing: str | None,
     seen: str,
+    cloud: bool,
 ) -> None:
+    """The cloud agent proxy rejects its own token on GitHub git reads that zizmor makes."""
     from gitleaks_scan import run_gate_command
 
     (tmp_path / "gh").write_text("#!/bin/sh\necho from-gh\n")
@@ -892,6 +895,9 @@ def test_only_the_ci_security_gate_borrows_the_gh_token(
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("CCR_AGENT_PROXY_ENABLED", raising=False)
+    if cloud:
+        monkeypatch.setenv("CCR_AGENT_PROXY_ENABLED", "true")
     if existing:
         monkeypatch.setenv("GH_TOKEN", existing)
     show = [sys.executable, "-c", "import os; print(os.environ.get('GH_TOKEN', ''))"]
