@@ -782,3 +782,61 @@ def test_new_branch_zero_base_compares_with_default_branch(
         "shared.py",
         "task.py",
     }
+
+
+def test_source_repository_installs_hard_eng_on_itself(installer: ModuleType) -> None:
+    """Cloud sessions clone only the repository, so its own files must load Hard Eng."""
+    changes: dict[str, str] = {}
+    installer.configure_hooks(SOURCE, changes)
+    assert changes == {}
+    links = installer.prepare_skill_links(SOURCE, set())
+    assert {name.rsplit("/", 1)[1] for name in links} >= {"he", "he-plan", "he-ship"}
+    for name, target in links.items():
+        assert (SOURCE / name).is_symlink(), name
+        assert (SOURCE / name).readlink() == Path(target)
+
+
+def test_check_rejects_claude_attribution_when_settings_turn_it_off(
+    repository: Path,
+) -> None:
+    base = git(repository, "rev-parse", "HEAD")
+    trailer = "Change\n\nCo-Authored-By: Claude Opus <noreply@anthropic.com>"
+    git(repository, "commit", "--allow-empty", "-qm", trailer)
+    agent_hooks.validate_attribution(repository, base)
+    (repository / ".claude").mkdir()
+    (repository / ".claude/settings.json").write_text(
+        json.dumps({"attribution": {"commit": "", "pr": ""}})
+    )
+    clean = commit(repository, "Turn attribution off")
+    with pytest.raises(ValueError, match="Co-Authored-By: Claude"):
+        agent_hooks.validate_attribution(repository, base)
+    agent_hooks.validate_attribution(repository, clean)
+    git(
+        repository,
+        "-c",
+        "user.name=Claude",
+        "-c",
+        "user.email=noreply@anthropic.com",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        "Plain message",
+    )
+    with pytest.raises(ValueError, match="noreply@anthropic.com"):
+        agent_hooks.validate_attribution(repository, clean)
+
+
+def test_ready_ship_rejects_a_pr_body_with_claude_attribution(
+    repository: Path,
+) -> None:
+    body = (
+        "Change.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n"
+    )
+    agent_hooks.reject_attribution(repository, "pr", body, "PR body")
+    (repository / ".claude").mkdir()
+    (repository / ".claude/settings.json").write_text(
+        json.dumps({"attribution": {"commit": "", "pr": ""}})
+    )
+    agent_hooks.reject_attribution(repository, "pr", "Change.\n", "PR body")
+    with pytest.raises(ValueError, match="PR body.*Generated with"):
+        agent_hooks.reject_attribution(repository, "pr", body, "PR body")
