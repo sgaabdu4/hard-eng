@@ -208,7 +208,7 @@ def test_claude_host_runs_codex_read_only_with_closed_stdin(
     assert "VERDICT: clean" in Path(record["output"]).read_text()
 
 
-def test_codex_host_runs_claude_with_read_only_tools(
+def test_codex_host_runs_claude_with_read_only_tools_and_no_git_write_flags(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     big(branch)
@@ -221,7 +221,7 @@ def test_codex_host_runs_claude_with_read_only_tools(
     assert ran["stdin_is_null"]
     assert "--safe-mode" in argv
     assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob,Bash"
-    assert "Edit" not in " ".join(argv[argv.index("--allowedTools") + 1 :])
+    assert argv[argv.index("--allowedTools") + 1] == "Read Grep Glob"
     record = json.loads(
         challenge.store(branch, git(branch, "rev-parse", "HEAD"))
         .with_suffix(".json")
