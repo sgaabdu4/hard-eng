@@ -688,6 +688,11 @@ def configure_ci(
             migrated = migrated.replace(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
             )
+        migrated = migrated.replace(
+            "      MISE_MINIMUM_RELEASE_AGE: 0s\n",
+            "      MISE_MINIMUM_RELEASE_AGE: 2d\n",
+            1,
+        )
         if migrated != original:
             changes[name] = migrated
         integrated(workflows)
