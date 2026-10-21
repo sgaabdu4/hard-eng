@@ -882,3 +882,14 @@ def test_pr_text_workflow_removes_the_claude_footer_the_proxy_appends(
     body = "## Summary\n\nChange.\n\n---\n\nNotes end with a rule.\n"
     assert agent_hooks.without_attribution_footer(body + footer) == body
     assert agent_hooks.without_attribution_footer(body) == body
+
+
+def test_installed_hooks_spell_out_no_claude_email_address() -> None:
+    """A project's privacy scan rejected the literal Claude address in installed hooks."""
+    address = "noreply" + "@anthropic.com"
+    found = [
+        path.name
+        for path in sorted((SOURCE / ".hooks").glob("*.py"))
+        if address in path.read_text()
+    ]
+    assert found == []

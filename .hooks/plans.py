@@ -677,11 +677,12 @@ def validate_attribution(root: Path, base: str | None = None) -> None:
     for entry in filter(None, log.split("\x1e")):
         header, _, text = entry.partition("\n")
         revision, *emails = header.split("\x1f")
-        if "noreply@anthropic.com" in emails:
+        if any(CLAUDE_EMAIL.fullmatch(email) for email in emails):
             raise ValueError(f"Commit {revision} has a Claude author or committer")
         reject_attribution(root, "commit", text, f"Commit {revision}")
 
 
+CLAUDE_EMAIL = re.compile(r"noreply@anthropic\.com", re.IGNORECASE)
 REQUIREMENT_FILES = (
     ".agents/skills/he/references/requirements.md",
     "docs/requirements.md",
