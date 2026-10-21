@@ -893,3 +893,8 @@ def test_installed_hooks_spell_out_no_claude_email_address() -> None:
         if address in path.read_text()
     ]
     assert found == []
+
+
+def test_shared_agent_rules_stay_within_the_released_size() -> None:
+    """Installed projects cap their AGENTS.md; the release before develop held 3921 bytes."""
+    assert len((SOURCE / "AGENTS.md").read_bytes()) <= 3921
