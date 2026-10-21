@@ -2,9 +2,11 @@
 
 import fcntl
 import json
+import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -94,12 +96,11 @@ def test_projects_with_dotted_names_keep_their_own_log_and_clone(
         return False
 
     monkeypatch.setattr(release_canary, "step", step)
-    messages = [
-        release_canary.try_target(
-            ("installed", name), "a" * 40, tmp_path, tmp_path, ()
-        )[f"installed {name}"][1]
-        for name in ("owner/app.api", "owner/app.web", "owner/app.log")
-    ]
+    messages = []
+    for name in ("owner/app.api", "owner/app.web", "owner/app.log"):
+        trial = release_canary.Trial(("installed", name), tmp_path, ())
+        assert trial.prepare("a" * 40, tmp_path) == []
+        messages.append(trial.results[f"installed {name}"][1])
     logs = [message.rsplit("log ", 1)[1] for message in messages]
     assert len(set(logs)) == 3
     assert not set(logs) & set(cloned)
@@ -308,3 +309,160 @@ def test_project_lock_files_reach_the_agent_copy(
     monkeypatch.setattr(release_canary, "agent_command", agent_command)
     with (tmp_path / "agent.log").open("w") as log:
         assert release_canary.try_agent("codex", work, log) == (True, "codex passed")
+
+
+def test_a_step_log_shows_when_each_command_started_and_how_long_it_took(
+    tmp_path: Path,
+) -> None:
+    """Without times nobody can tell which part of a nine-hour run is slow."""
+    with (tmp_path / "step.log").open("w") as log:
+        assert release_canary.step(["true"], tmp_path, log, 60)
+    text = (tmp_path / "step.log").read_text()
+    assert re.search(r"^\[\d\d:\d\d:\d\d\] \$ true$", text, re.MULTILINE)
+    assert "Exit 0 after 0 seconds." in text
+
+
+def test_agent_units_of_a_prepared_target_run_before_the_next_target_is_prepared() -> (
+    None
+):
+    """Agents of one target are separate units, and they keep at most a few targets on disk."""
+    ran: list[str] = []
+
+    def prepare(name: str) -> list[release_canary.Unit]:
+        ran.append(name)
+        return [
+            lambda: ran.append(f"{name} claude") or [],
+            lambda: ran.append(f"{name} codex") or [],
+        ]
+
+    release_canary.run_units([lambda: prepare("a"), lambda: prepare("b")], 1)
+    assert ran == ["a", "a claude", "a codex", "b", "b claude", "b codex"]
+
+
+def test_agents_of_one_target_run_at_the_same_time() -> None:
+    """Claude and Codex work on their own copies, so neither waits for the other."""
+    both = threading.Barrier(2, timeout=10)
+
+    def agent() -> list[release_canary.Unit]:
+        both.wait()
+        return []
+
+    release_canary.run_units([lambda: [agent, agent]], 2)
+
+
+def test_a_unit_that_crashes_stops_the_run() -> None:
+    """A canary fault must stop the run, not turn into a verdict on a release."""
+    ran: list[str] = []
+
+    def broken() -> list[release_canary.Unit]:
+        raise RuntimeError("broken")
+
+    with pytest.raises(RuntimeError, match="broken"):
+        release_canary.run_units([broken, lambda: ran.append("other") or []], 1)
+    assert ran == []
+
+
+def test_new_projects_start_before_installed_ones() -> None:
+    """They always run both agents and take longest, so they must not form the tail."""
+    found = [
+        ("installed", "o/a"),
+        ("installed", "o/b"),
+        ("scaffold", "vite"),
+        ("brownfield", "x"),
+    ]
+    assert release_canary.longest_first(found) == [
+        ("scaffold", "vite"),
+        ("brownfield", "x"),
+        ("installed", "o/a"),
+        ("installed", "o/b"),
+    ]
+
+
+def test_a_target_is_kept_until_its_last_agent_ends_and_only_when_one_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each agent writes its own log; the shared target goes once every run passed."""
+    verdicts = {"claude": (True, "claude passed")}
+
+    def try_agent(agent: str, work: Path, log: object) -> tuple[bool, str]:
+        assert work.is_dir()
+        return verdicts[agent]
+
+    def prepare(*_: object) -> list[tuple[str, list[str]]]:
+        return []
+
+    monkeypatch.setattr(release_canary, "try_agent", try_agent)
+    monkeypatch.setattr(release_canary, "prepare", prepare)
+    for failing, kept in ((True, True), (False, False)):
+        verdicts["codex"] = (not failing, "codex result")
+        run = tmp_path / str(kept)
+        run.mkdir()
+        trial = release_canary.Trial(("scaffold", "vite"), run, ("claude", "codex"))
+        trial.work.mkdir()
+        units = trial.prepare("a" * 40, tmp_path)
+        assert [unit() for unit in units] == [[], []]
+        assert trial.work.exists() == kept
+        assert trial.log(".claude").exists()
+        assert trial.log(".codex").exists()
+        assert [stage for stage, _, _ in trial.times] == ["prepare", "claude", "codex"]
+
+
+def test_a_failed_clone_falls_back_to_a_full_copy_without_git_locks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A lock that Git's maintenance drops mid-clone must not fail the agent run."""
+    work = tmp_path / "target"
+    (work / ".git").mkdir(parents=True)
+    (work / ".git/index.lock").touch()
+    (work / "pubspec.lock").touch()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "cp").write_text('#!/bin/sh\nmkdir -p "$5/partial"\nexit 1\n')
+    (bin_dir / "cp").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setattr(sys, "platform", "darwin")
+    copy = tmp_path / "copy"
+    release_canary.copy_target(work, copy)
+    assert sorted(path.name for path in copy.rglob("*")) == [".git", "pubspec.lock"]
+
+
+def test_a_clone_drops_git_locks_and_keeps_project_lock_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work = tmp_path / "target"
+    (work / ".git/modules/skill").mkdir(parents=True)
+    (work / ".git/modules/skill/index.lock").touch()
+    (work / "pubspec.lock").touch()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    # GNU cp has no clone flag; drop it so the clone path runs here too.
+    (bin_dir / "cp").write_text('#!/bin/sh\nshift\nexec /bin/cp "$@"\n')
+    (bin_dir / "cp").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setattr(sys, "platform", "darwin")
+    copy = tmp_path / "copy"
+    release_canary.copy_target(work, copy)
+    assert (copy / "pubspec.lock").is_file()
+    assert not list(copy.rglob("index.lock"))
+    assert (work / ".git/modules/skill/index.lock").is_file()
+
+
+def test_the_time_summary_names_each_stage_with_its_runs_total_and_longest() -> None:
+    times = [
+        ("prepare", "installed o/a", 120.0),
+        ("claude", "scaffold vite", 3600.0),
+        ("claude", "installed o/a", 900.0),
+    ]
+    assert release_canary.time_summary(times, 5430.0) == [
+        "Time: 1h30m from start to end.",
+        "prepare: 1 runs, 2m in all, longest 2m (installed o/a)",
+        "claude: 2 runs, 1h15m in all, longest 1h00m (scaffold vite)",
+    ]
+
+
+def test_only_new_projects_get_agent_sessions() -> None:
+    """Installed projects prove the release with their checks; new ones prove the agents."""
+    agents = ("claude", "codex")
+    assert release_canary.agents_for(("installed", "o/a"), agents) == ()
+    for kind in ("scaffold", "greenfield", "brownfield"):
+        assert release_canary.agents_for((kind, "x"), agents) == agents
