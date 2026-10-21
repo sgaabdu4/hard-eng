@@ -7,6 +7,7 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock
 
+import agent_hooks
 import pytest
 import update
 from conftest import add_origin, commit, git, init
@@ -226,8 +227,11 @@ def assert_old_generation_retired(root: Path, project: dict[str, str]) -> None:
     for name in (".claude/settings.json", ".codex/hooks.json"):
         assert ".hard-eng/" not in (root / name).read_text(), name
     for name in (".claude/settings.json", ".codex/hooks.json"):
-        (group,) = json.loads((root / name).read_text())["hooks"]["PreToolUse"]
+        group, *managed = json.loads((root / name).read_text())["hooks"]["PreToolUse"]
         assert group == {"hooks": [{"type": "command", "command": "project-guard"}]}
+        assert managed == (
+            [agent_hooks.POLL_HOOK] if name.startswith(".claude") else []
+        )
 
 
 @pytest.mark.parametrize("tracked", [True, False])
@@ -447,7 +451,7 @@ def test_install_preserves_custom_retired_hooks_until_supported_migration(
     policy.unlink()
     installer.install(tmp_path)
     assert ".hard-eng" not in settings.read_text()
-    (group,) = json.loads(settings.read_text())["hooks"]["PreToolUse"]
+    group, _ = json.loads(settings.read_text())["hooks"]["PreToolUse"]
     assert group["hooks"] == [
         {"type": "command", "command": "project-guard"},
         *migrated,

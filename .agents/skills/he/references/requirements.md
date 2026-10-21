@@ -64,6 +64,12 @@ Agent replies and reports use plain, simplified technical English: one idea per 
 
 Proof: guidance
 
+## HE-NO-FOREGROUND-POLL
+
+An agent starts a long job in the background and waits for the host's exit notice; it never waits in a foreground sleep loop or a long sleep. In Claude Code, a hook denies a main-session shell command that sleeps at least 1 second inside a `while` or `until` loop, or at least 30 seconds at once. A subagent may wait in the foreground, because nothing watches its background job after its turn ends. Codex returns a long command early and waits on that command's session, not on a sleep loop.
+
+Proof: check
+
 ## HE-YAGNI
 
 Add a file, dependency, abstraction, configuration or stored state only for a current agreed requirement that existing code or a direct command cannot meet.
