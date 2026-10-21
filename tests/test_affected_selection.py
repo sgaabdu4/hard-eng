@@ -84,6 +84,26 @@ def test_pre_push_scope_checks_changed_packages_without_dependents(
     ]
 
 
+def test_root_dart_analysis_fetches_nested_dart_packages_under_pre_push(
+    repository: Path,
+) -> None:
+    pub: Gate = {"name": "lockfile", "command": ["true"], "role": "lockfiles"}
+    tests: Gate = {"name": "tests", "command": ["true"], "role": "tests"}
+    groups: list[Group] = [
+        {"path": ".", "language": "dart", "checks": [pub, tests], "depends_on": []},
+        {"path": "pkg", "language": "dart", "checks": [pub, tests], "depends_on": []},
+        {"path": "web", "language": "javascript", "checks": [pub], "depends_on": []},
+        {"path": ".", "checks": []},
+    ]
+    (repository / "lib").mkdir()
+    (repository / "lib/main.dart").write_text("void main() {}\n")
+    assert affected_groups(repository, groups, "HEAD", dependents=False) == [
+        groups[0],
+        {**groups[1], "checks": [pub]},
+        groups[-1],
+    ]
+
+
 def test_cross_package_fallow_coverage_owner_must_be_selected_with_its_consumer(
     repository: Path,
 ) -> None:
