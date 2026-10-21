@@ -689,9 +689,7 @@ def configure_ci(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
             )
         migrated = migrated.replace(
-            "      MISE_MINIMUM_RELEASE_AGE: 0s\n",
-            "      MISE_MINIMUM_RELEASE_AGE: 2d\n",
-            1,
+            "MISE_MINIMUM_RELEASE_AGE: 0s\n", "MISE_MINIMUM_RELEASE_AGE: 2d\n"
         )
         if migrated != original:
             changes[name] = migrated
