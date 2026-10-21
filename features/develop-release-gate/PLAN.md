@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-All PRs merge into `develop`. Before `develop` merges into `main`, `release_canary.py` installs the release in four kinds of project and runs one Claude and one Codex session in each. Non-goals: no CI job, no second tool, no branch protection change in this PR.
+All PRs merge into `develop`. Before `develop` merges into `main`, `release_canary.py` installs the release in four kinds of project and runs one Claude and one Codex session in each new project (changed by [canary speed](../canary-speed/PLAN.md): installed projects run their checks only). Non-goals: no CI job, no second tool, no branch protection change in this PR.
 
 ## Repository context
 

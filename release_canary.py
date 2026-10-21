@@ -9,8 +9,11 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from typing import IO
@@ -47,6 +50,8 @@ BROWNFIELD = (
     "672971d66a2ef9f85151e53283113f33d642dabd",
 )
 KINDS = ("installed", "scaffold", "greenfield", "brownfield")
+# Installed projects prove the release with their full checks; new projects prove the agents.
+AGENT_KINDS = ("scaffold", "greenfield", "brownfield")
 AGENTS = ("claude", "codex")
 TASK = (
     "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
@@ -70,6 +75,9 @@ DOCUMENTS = {
         "## Components\n\nNone.\n\n## Do's and Don'ts\n\nKeep it minimal.\n"
     ),
 }
+
+# One preparation or agent session; it returns the units that follow it.
+type Unit = Callable[[], list[Unit]]
 
 
 class Failed(Exception):
@@ -164,18 +172,21 @@ def installed_projects(found: list[tuple[str, bool, bool]]) -> list[str]:
 
 
 def step(command: list[str], cwd: Path, log: IO[str], limit: int) -> bool:
-    log.write(f"\n$ {' '.join(command)}\n")
+    log.write(f"\n[{time.strftime('%H:%M:%S')}] $ {' '.join(command)}\n")
     log.flush()
+    start = time.monotonic()
     process = subprocess.Popen(
         command, cwd=cwd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True
     )
     try:
-        return process.wait(timeout=limit) == 0
+        code = process.wait(timeout=limit)
     except subprocess.TimeoutExpired:
         os.killpg(process.pid, signal.SIGKILL)
         process.wait()
         log.write(f"Stopped after {limit} seconds.\n")
         return False
+    log.write(f"Exit {code} after {time.monotonic() - start:.0f} seconds.\n")
+    return code == 0
 
 
 def must(cwd: Path, log: IO[str], failure: str, *commands: list[str]) -> None:
@@ -296,9 +307,27 @@ def git_locks(folder: str, names: list[str]) -> set[str]:
     return {name for name in names if inside_git and name.endswith(".lock")}
 
 
+def copy_target(work: Path, copy: Path) -> None:
+    """An APFS clone is instant and shares disk until a file changes; else a full copy."""
+    if sys.platform == "darwin":
+        cloned = subprocess.run(
+            ["cp", "-c", "-p", "-R", str(work), str(copy)],
+            capture_output=True,
+            check=False,
+            timeout=3600,
+        )
+        if cloned.returncode == 0:
+            for lock in copy.glob(".git/**/*.lock"):
+                lock.unlink()
+            return
+        # A lock that Git's maintenance drops mid-clone fails cp; the full copy skips locks.
+        shutil.rmtree(copy, ignore_errors=True)
+    shutil.copytree(work, copy, symlinks=True, ignore=git_locks)
+
+
 def try_agent(agent: str, work: Path, log: IO[str]) -> tuple[bool, str]:
     copy = work.with_name(f"{work.name}.{agent}")
-    shutil.copytree(work, copy, symlinks=True, ignore=git_locks)
+    copy_target(work, copy)
     try:
         head = output(["git", "rev-parse", "HEAD"], copy)
         if not step(agent_command(agent, copy), copy, log, 3600):
@@ -315,34 +344,109 @@ def try_agent(agent: str, work: Path, log: IO[str]) -> tuple[bool, str]:
         shutil.rmtree(copy)
 
 
-def try_target(
-    target: tuple[str, str],
-    revision: str,
-    source: Path,
-    run: Path,
-    agents: tuple[str, ...],
-) -> dict[str, tuple[bool, str]]:
-    """Prepare one target and run its checks, then one agent session per agent CLI."""
-    label = " ".join(target)
-    work = run / folder(label)
-    log_path = work.with_name(f"{work.name}.log")
-    with log_path.open("w") as log:
-        try:
-            for name, command in prepare(target, revision, source, work, log):
-                must(work, log, f"{name} failed", command)
-        except Failed as failure:
-            skipped = {f"{label} / {agent}": (False, "not run") for agent in agents}
-            return {label: (False, f"{failure}; log {log_path}"), **skipped}
-        results = {label: (True, "install and its checks passed")}
-        for agent in agents:
-            ok, detail = try_agent(agent, work, log)
-            results[f"{label} / {agent}"] = (
+@dataclass
+class Trial:
+    """One target: its preparation, then one agent session per agent CLI, each its own unit."""
+
+    target: tuple[str, str]
+    run: Path
+    agents: tuple[str, ...]
+    results: dict[str, tuple[bool, str]] = field(default_factory=dict)
+    times: list[tuple[str, str, float]] = field(default_factory=list)
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    @property
+    def label(self) -> str:
+        return " ".join(self.target)
+
+    @property
+    def work(self) -> Path:
+        return self.run / folder(self.label)
+
+    def log(self, unit: str = "") -> Path:
+        return self.work.with_name(f"{self.work.name}{unit}.log")
+
+    def prepare(self, revision: str, source: Path) -> list[Unit]:
+        """Returns the agent units, which may run at the same time on their own copies."""
+        start = time.monotonic()
+        log_path = self.log()
+        with log_path.open("w") as log:
+            try:
+                for name, command in prepare(
+                    self.target, revision, source, self.work, log
+                ):
+                    must(self.work, log, f"{name} failed", command)
+            except Failed as failure:
+                self.results[self.label] = (False, f"{failure}; log {log_path}")
+                for agent in self.agents:
+                    self.results[f"{self.label} / {agent}"] = (False, "not run")
+                return []
+            finally:
+                self.times.append(("prepare", self.label, time.monotonic() - start))
+        self.results[self.label] = (True, "install and its checks passed")
+        if not self.agents:
+            shutil.rmtree(self.work)
+        return [partial(self.try_agent, agent) for agent in self.agents]
+
+    def try_agent(self, agent: str) -> list[Unit]:
+        start = time.monotonic()
+        log_path = self.log(f".{agent}")
+        with log_path.open("w") as log:
+            ok, detail = try_agent(agent, self.work, log)
+        with self.lock:
+            self.times.append((agent, self.label, time.monotonic() - start))
+            self.results[f"{self.label} / {agent}"] = (
                 ok,
                 detail if ok else f"{detail}; log {log_path}",
             )
-    if all(ok for ok, _ in results.values()):
-        shutil.rmtree(work)
-    return results
+            finished = len(self.results) == len(self.agents) + 1
+        if finished and all(ok for ok, _ in self.results.values()):
+            shutil.rmtree(self.work)
+        return []
+
+
+def run_units(units: list[Unit], jobs: int) -> None:
+    """Runs units on `jobs` threads. Units a unit returns run before waiting ones,
+    so a prepared target goes on to its agents before the next target is set up."""
+    waiting = list(units)
+    running: set[Future[list[Unit]]] = set()
+    with ThreadPoolExecutor(jobs) as pool:
+        while waiting or running:
+            while waiting and len(running) < jobs:
+                running.add(pool.submit(waiting.pop(0)))
+            done, running = wait(running, return_when=FIRST_COMPLETED)
+            for future in done:
+                waiting[:0] = future.result()
+
+
+def agents_for(target: tuple[str, str], agents: tuple[str, ...]) -> tuple[str, ...]:
+    return agents if target[0] in AGENT_KINDS else ()
+
+
+def longest_first(found: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """New projects run the agents, often to the limit, so they start first."""
+    return sorted(found, key=lambda target: target[0] == "installed")
+
+
+def minutes(seconds: float) -> str:
+    hours, rest = divmod(round(seconds / 60), 60)
+    return f"{hours}h{rest:02d}m" if hours else f"{rest}m"
+
+
+def time_summary(times: list[tuple[str, str, float]], wall: float) -> list[str]:
+    """Time per stage, so the next speed change starts from numbers; stays local."""
+    lines = [f"Time: {minutes(wall)} from start to end."]
+    for stage in ("prepare", *AGENTS):
+        spent = sorted(
+            (seconds, label) for name, label, seconds in times if name == stage
+        )
+        if spent:
+            total = sum(seconds for seconds, _ in spent)
+            lines.append(
+                f"{stage}: {len(spent)} runs, {minutes(total)} in all, "
+                f"longest {minutes(spent[-1][0])} ({spent[-1][1]})"
+            )
+    return lines
 
 
 def post_status(revision: str, state: str, description: str) -> None:
@@ -440,16 +544,18 @@ def canary(args: argparse.Namespace) -> int:
     run.mkdir(parents=True)
     source = release_source(revision, run)
     agents = tuple(args.agent or AGENTS)
-    attempt = partial(
-        try_target, revision=revision, source=source, run=run, agents=agents
-    )
-    results: dict[str, tuple[bool, str]] = {}
-    with ThreadPoolExecutor(args.jobs) as pool:
-        for outcome in pool.map(attempt, targets(args, projects)):
-            results.update(outcome)
+    start = time.monotonic()
+    found = longest_first(targets(args, projects))
+    trials = [Trial(target, run, agents_for(target, agents)) for target in found]
+    run_units([partial(trial.prepare, revision, source) for trial in trials], args.jobs)
     shutil.rmtree(source)
+    results: dict[str, tuple[bool, str]] = {}
+    for trial in trials:
+        results.update(sorted(trial.results.items()))
     for name, (ok, detail) in results.items():
         print(f"{'PASS' if ok else 'FAIL'} {name}: {detail}")
+    times = [entry for trial in trials for entry in trial.times]
+    print("\n".join(time_summary(times, time.monotonic() - start)))
     passed = all(ok for ok, _ in results.values())
     return finish(
         revision, args, "success" if passed else "failure", status_text(results)
