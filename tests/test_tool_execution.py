@@ -312,7 +312,7 @@ def test_native_tools_install_before_reading_environment(
         assert environment["MISE_FETCH_REMOTE_VERSIONS_CACHE"] == "1h"
         assert command[-2:] == [
             "aqua:gitleaks/gitleaks@latest",
-            'npm:dart-decimate[bun_args="--minimum-release-age=0"]@latest',
+            'npm:dart-decimate[bun_args="--minimum-release-age=172800"]@latest',
         ]
         return subprocess.CompletedProcess(command, 0, '{"PATH":""}', "")
 
