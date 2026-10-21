@@ -439,7 +439,11 @@ def validate_osv_package(
     ):
         raise ValueError("OSV report is missing package identity")
     if item.get("vulnerabilities", []) != [] or item.get("groups", []) != []:
-        raise ValueError("OSV reports vulnerable packages")
+        found = item.get("vulnerabilities")
+        entries = found if isinstance(found, list) else []
+        ids = [str(entry.get("id")) for entry in entries if isinstance(entry, dict)]
+        name = f"{package.get('name') or commit}@{package.get('version')}"
+        raise ValueError(f"OSV reports vulnerable packages: {name}: " + ", ".join(ids))
     if image:
         origin = package["image_origin_details"]
         if not isinstance(origin, dict):
@@ -867,6 +871,25 @@ def validate_scanner_report(
         validate_jscpd(path, lambda: jscpd_below_minimum(command, directory, timeout))
     else:
         SCANNERS[scanner](path)
+
+
+def scanner_result(
+    passed: bool,
+    scanner: str,
+    gate: Gate,
+    path: Path,
+    command: list[str],
+    directory: Path,
+    timeout: float,
+) -> None:
+    """OSV writes findings only to its report, so a failed scan shows them from there."""
+    if passed:
+        validate_scanner_report(scanner, gate, path, command, directory, timeout)
+    elif scanner == "osv" and path.is_file():
+        try:
+            validate_scanner_report(scanner, gate, path, command, directory, timeout)
+        except ValueError as error:
+            print(error)
 
 
 def validate_gitleaks(path: Path) -> None:

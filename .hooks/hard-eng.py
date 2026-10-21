@@ -533,8 +533,8 @@ def run_limited_gate(
             SCANNERS,
             emit_dart_test_failure,
             related_command,
+            scanner_result,
             validate_scanner_log,
-            validate_scanner_report,
         )
 
         report = gate.get("report", {})
@@ -577,10 +577,9 @@ def run_limited_gate(
                     sys.stdout.write(remember(group, gate, log.read()))
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
-        if result.returncode == 0 and scanner and report_path is not None:
-            validate_scanner_report(
-                scanner, gate, report_path, command, directory, timeout
-            )
+        if scanner and report_path is not None:
+            report_args = (gate, report_path, command, directory, timeout)
+            scanner_result(result.returncode == 0, scanner, *report_args)
         from reports import completed_tests, line_coverage, parallel_hint
 
         if (

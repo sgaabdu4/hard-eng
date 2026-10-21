@@ -124,6 +124,21 @@ def test_jscpd_passes_files_below_its_minimum_only_when_a_rescan_finds_them(
     )
 
 
+OSV_GATE: Gate = {
+    "name": "vulnerabilities",
+    "role": "vulnerabilities",
+    "command": [
+        "osv-scanner",
+        "scan",
+        "source",
+        "--lockfile=uv.lock",
+        "--format=json",
+        "--output-file=coverage/osv.json",
+    ],
+    "report": {"type": "osv", "path": "coverage/osv.json"},
+}
+
+
 @pytest.mark.parametrize(
     ("source", "failed"),
     [('{ virtual = "." }', False), ('{ registry = "https://pypi.org/simple" }', True)],
@@ -144,19 +159,7 @@ def test_osv_needs_no_scan_when_uv_locks_no_third_party_package(
     (tmp_path / "uv.lock").write_text(
         f'version = 1\n\n[[package]]\nname = "app"\nversion = "1"\nsource = {source}\n'
     )
-    vulnerabilities: Gate = {
-        "name": "vulnerabilities",
-        "role": "vulnerabilities",
-        "command": [
-            "osv-scanner",
-            "scan",
-            "source",
-            "--lockfile=uv.lock",
-            "--format=json",
-            "--output-file=coverage/osv.json",
-        ],
-        "report": {"type": "osv", "path": "coverage/osv.json"},
-    }
+    vulnerabilities = OSV_GATE
     group: Group = {
         "path": ".",
         "language": "python",
@@ -243,3 +246,42 @@ def test_small_change_without_a_remote_compares_with_the_local_default_branch(
     assert "Size: small (1 file, 4 changed lines); no plan needed." in (
         capsys.readouterr().out
     )
+
+
+def test_failed_vulnerability_scan_names_the_vulnerable_packages(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = {
+        "results": [
+            {
+                "source": {"path": "uv.lock", "type": "lockfile"},
+                "packages": [
+                    {
+                        "package": {"name": "lib", "version": "1", "ecosystem": "PyPI"},
+                        "vulnerabilities": [{"id": "GHSA-0001"}, {"id": "GHSA-0002"}],
+                    }
+                ],
+            }
+        ]
+    }
+    tool = tmp_path / "bin/osv-scanner"
+    tool.parent.mkdir()
+    tool.write_text(
+        "#!/bin/sh\nmkdir -p coverage\n"
+        f"printf '%s' '{json.dumps(report)}' > coverage/osv.json\n"
+        "echo 'Scanning dir .'\nexit 1\n"
+    )
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool.parent}:{os.environ['PATH']}")
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n\n[[package]]\nname = "lib"\nversion = "1"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+    )
+    gate = OSV_GATE
+    group: Group = {"path": ".", "language": "python", "sources": [], "checks": [gate]}
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    assert runner.run_gate(group, gate, 30, threading.Lock()) is True
+    assert "lib@1: GHSA-0001, GHSA-0002" in capsys.readouterr().out
