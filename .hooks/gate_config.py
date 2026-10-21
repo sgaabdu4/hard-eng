@@ -636,22 +636,22 @@ def affected_groups(
 def selected_services(
     root: Path, packages: list[Group], selected: set[str]
 ) -> list[Group]:
-    """Retain ancestor-owned dependency checks without unrelated test suites."""
+    """Keep ancestor dependency checks and the lockfiles a Dart analyzer reads."""
     affected = []
+    dart = {
+        (root / g["path"]).resolve() for g in packages if g.get("language") == "dart"
+    }
+    chosen = {(root / path).resolve() for path in selected}
     for group in packages:
+        here = (root / group["path"]).resolve()
+        holds = any(path.is_relative_to(here) for path in chosen)
+        nested = here in dart and any(here.is_relative_to(p) for p in chosen & dart)
+        roles = {"lockfiles", "vulnerabilities"} if holds else {"lockfiles"}
+        services = [gate for gate in group["checks"] if gate.get("role") in roles]
         if group["path"] in selected:
             affected.append(group)
-        elif any(
-            (root / path).resolve().is_relative_to((root / group["path"]).resolve())
-            for path in selected
-        ):
-            services = [
-                gate
-                for gate in group["checks"]
-                if gate.get("role") in {"lockfiles", "vulnerabilities"}
-            ]
-            if services:
-                affected.append({**group, "checks": services})
+        elif (holds or nested) and services:
+            affected.append({**group, "checks": services})
     return affected
 
 
