@@ -219,11 +219,11 @@ def pin_python_scanners(names: list[str], timeout: float) -> None:
 
 
 def provision_batch(batch: list[str], timeout: float) -> None:
-    # Bun reads a user bunfig release-age limit and ignores MISE_MINIMUM_RELEASE_AGE.
+    # Bun ignores MISE_MINIMUM_RELEASE_AGE; two days avoids newly broken releases.
     batch = [
         re.sub(
             r"^(npm:[^\[]+?)(@latest)$",
-            r'\1[bun_args="--minimum-release-age=0"]\2',
+            r'\1[bun_args="--minimum-release-age=172800"]\2',
             tool,
         )
         for tool in batch
@@ -375,7 +375,7 @@ def provision_latest(
             "MISE_NPM_PACKAGE_MANAGER=bun",
             "MISE_PREFER_OFFLINE=false",
             "MISE_USE_VERSIONS_HOST=false",
-            "MISE_MINIMUM_RELEASE_AGE=0s",
+            "MISE_MINIMUM_RELEASE_AGE=2d",
             "mise",
             "--no-config",
         ]
