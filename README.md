@@ -259,6 +259,7 @@ Skills guide the agent. Hooks and checks enforce. Plan checks validate the plan'
 | When | What runs |
 | --- | --- |
 | Session start | Reports the last update result. Starts the next update in the background. |
+| Claude runs a shell command | Denies a main-session wait that sleeps in the foreground ([HE-NO-FOREGROUND-POLL](.agents/skills/he/references/requirements.md#he-no-foreground-poll)). The agent runs the job in the background and gets a notice when it exits. |
 | Agent stops | Checks the plan handoff. After code changes, runs quick checks on this session's changes: format, lint, types and the current-files secret scan. Tests run at pre-push and in CI. A failure shows the failed checks and the first one's output. |
 | `git push` | Checks the pushed commits in a separate worktree, for the changed packages. With Vitest or Jest, runs only the related tests. Then reports changed lines whose tests miss small deliberate bugs (mutation report; it never blocks the push). |
 | `git worktree add` | Links the main checkout's ignored `.env*` files, `.claude/settings.local.json` and `CLAUDE.local.md` into the new worktree. It never reads or copies their contents. Copies an ignored hooks folder, such as Husky's, so pushes from the worktree are checked. Initializes submodules. |

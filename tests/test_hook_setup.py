@@ -7,6 +7,7 @@ import tomllib
 from pathlib import Path
 from types import ModuleType
 
+import agent_hooks
 import pytest
 import update
 from conftest import CODEBASE_MEMORY, SOURCE
@@ -34,6 +35,8 @@ def test_hook_registrations_invoke_shared_runner(
         ("codex", ".codex/hooks.json", "SessionStart Stop"),
     ):
         hooks = json.loads((root / path).read_text())["hooks"]
+        if agent == "claude":
+            assert hooks.pop("PreToolUse") == [agent_hooks.POLL_HOOK]
         assert set(hooks) == set(events.split())
         calls = {
             "codex": ("session", "stop"),
