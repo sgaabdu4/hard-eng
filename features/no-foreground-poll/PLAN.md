@@ -43,5 +43,7 @@ Result: Passed
 Evidence: Branch full suite 1873 passed; the 6 failures are the known environment ones (no Dart or Swift in this container). Ruff format and lint and Pyrefly (0 diagnostics) pass. Hook call measured at about 43 ms. Independent review not done: Codex is not installed in cloud sessions.
 E2E: N/A — the tests run the real hook script on real hook payloads.
 
+CI repair on this branch: Biome 2.6.0 (released 2026-10-21) formats Markdown and YAML and warns on `innerText`. Every shipped skill file is formatted except `SKILL.md`, whose nested YAML front matter Biome 2.6.2 flattens; both skill submodules point at their formatting commits. Suite after the repair: 1873 passed, the same 6 environment failures; `biome ci --error-on-warnings` on `.agents/skills` is clean.
+
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with the `hard-eng` CI check green.
