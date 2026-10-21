@@ -951,8 +951,8 @@ def four_files(root: Path) -> None:
 BIG_CHANGES = [
     (partial(edit, name="a.py", count=11), "it changes 22 lines"),
     (four_files, "it changes 4 files"),
-    (new_file, "it adds, deletes or renames a file"),
-    (deleted_file, "it adds, deletes or renames a file"),
+    (new_file, "it adds, deletes or renames the file new.py"),
+    (deleted_file, "it adds, deletes or renames the file d.py"),
     (binary_file, "it changes the binary file image.bin"),
     (
         partial(edit, name="uv.lock", count=1),
