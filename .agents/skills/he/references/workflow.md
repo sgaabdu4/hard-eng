@@ -11,9 +11,8 @@
 
 ## Participation
 
-| Mode | Planning behavior |
-| --- | --- |
-| Human-loop | Resolve grouped material questions, show the grounded UX and completed plan, then request one combined approval covering plan + UX + execution recommendation. Reuse approval of that proposal; the initial feature request alone is not proposal approval. |
+| Mode       | Planning behavior                                                                                                                                                                                                                                                           |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Human-loop | Resolve grouped material questions, show the grounded UX and completed plan, then request one combined approval covering plan + UX + execution recommendation. Reuse approval of that proposal; the initial feature request alone is not proposal approval.                 |
 | Autonomous | Study and prepare without routine approval stops; provide concise progress. Still ask unresolved material questions and show/inspect applicable UX references. Choose reversible details within the user's constraints; initial authorization covers proceeding once ready. |
-
 - Neither mode permits inventing user answers, skipping UX/baseline proof or crossing an unauthorized boundary. A mode name alone does not authorize publication, production changes or other external actions beyond the task's agreed delivery scope.
