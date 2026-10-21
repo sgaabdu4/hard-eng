@@ -11,12 +11,18 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import IO
+from typing import IO, Protocol
+
+
+class Unit(Protocol):
+    """One preparation or agent session; it returns the units that follow it."""
+
+    def __call__(self) -> list["Unit"]: ...
+
 
 SOURCE = Path(__file__).resolve().parent
 UPSTREAM = "sgaabdu4/hard-eng"
@@ -75,9 +81,6 @@ DOCUMENTS = {
         "## Components\n\nNone.\n\n## Do's and Don'ts\n\nKeep it minimal.\n"
     ),
 }
-
-# One preparation or agent session; it returns the units that follow it.
-type Unit = Callable[[], list[Unit]]
 
 
 class Failed(Exception):
