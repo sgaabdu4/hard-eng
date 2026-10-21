@@ -39,8 +39,8 @@ N/A — agent hook with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: Branch full suite 1873 passed; the 6 failures are the known environment ones (no Dart or Swift in this container). Ruff format and lint and Pyrefly (0 diagnostics) pass. Hook call measured at about 43 ms. Independent review not done: Codex is not installed in cloud sessions.
 E2E: N/A — the tests run the real hook script on real hook payloads.
 
 Delivery target: Merge
