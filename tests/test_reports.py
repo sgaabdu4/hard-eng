@@ -269,6 +269,27 @@ def test_fallow_audit_requires_active_crap_enforcement(
         reports.validate_fallow(path)
 
 
+def test_fallow_audit_of_no_changed_files_passes_only_when_empty(
+    tmp_path: Path,
+) -> None:
+    summary: JsonObject = {"dead_code_issues": 0, "dead_code_has_errors": False}
+    summary |= {"complexity_findings": 0, "duplication_clone_groups": 0}
+    audit: JsonObject = {"kind": "audit", "command": "audit", "verdict": "pass"}
+    audit |= {"changed_files_count": 0, "summary": summary}
+    path = tmp_path / "audit.json"
+    path.write_text(json.dumps(audit))
+    reports.validate_fallow(path)
+    for key, value in (
+        ("changed_files_count", 1),
+        ("changed_files_count", False),
+        ("verdict", "fail"),
+        ("summary", {**summary, "dead_code_issues": 1}),
+    ):
+        path.write_text(json.dumps({**audit, key: value}))
+        with pytest.raises(ValueError):
+            reports.validate_fallow(path)
+
+
 def test_osv_accepts_native_empty_only_with_dependency_free_bun(
     empty_bun: Path,
 ) -> None:
