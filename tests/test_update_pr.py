@@ -739,5 +739,5 @@ def test_update_branch_needs_no_plan_for_files_the_update_wrote(
     commit(target, "binary file beside the update")
     assert change_size.size_verdict(target) == (
         False,
-        "it adds, deletes or renames a file",
+        "it adds, deletes or renames the file logo.png",
     )
