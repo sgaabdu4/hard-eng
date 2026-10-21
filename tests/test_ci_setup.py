@@ -945,40 +945,23 @@ def test_workflow_holds_one_pr_permission(tmp_path: Path, existing: str) -> None
     assert changes == ({} if existing else {".github/workflows/hard-eng.yml": template})
 
 
-def test_existing_workflow_gets_the_two_day_release_wait(tmp_path: Path) -> None:
+@pytest.mark.parametrize("step", ["", "          MISE_MINIMUM_RELEASE_AGE: {}\n"])
+def test_existing_workflow_gets_the_two_day_release_wait(
+    tmp_path: Path, step: str
+) -> None:
     (path := tmp_path / ".github/workflows/hard-eng.yml").parent.mkdir(parents=True)
     template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
-    path.write_text(
-        template.replace(
-            "      MISE_MINIMUM_RELEASE_AGE: 2d\n",
-            "      MISE_MINIMUM_RELEASE_AGE: 0s\n",
+    job, checks = "      MISE_MINIMUM_RELEASE_AGE: 2d\n", "        env:\n"
+
+    def aged(value: str) -> str:
+        return template.replace(checks, checks + step.format(value)).replace(
+            job, job.replace("2d", value)
         )
-    )
+
+    path.write_text(aged("0s"))
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes == {".github/workflows/hard-eng.yml": template}
-
-
-def test_older_step_level_release_age_also_gets_the_wait(tmp_path: Path) -> None:
-    (path := tmp_path / ".github/workflows/hard-eng.yml").parent.mkdir(parents=True)
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
-    step = "          MISE_MINIMUM_RELEASE_AGE: %s\n"
-    checks = "        env:\n          GH_TOKEN"
-    older = template.replace(
-        checks, "        env:\n" + step % "0s" + "          GH_TOKEN"
-    )
-    path.write_text(
-        older.replace(
-            "      MISE_MINIMUM_RELEASE_AGE: 2d\n",
-            "      MISE_MINIMUM_RELEASE_AGE: 0s\n",
-        )
-    )
-    changes: dict[str, str] = {}
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    expected = template.replace(
-        checks, "        env:\n" + step % "2d" + "          GH_TOKEN"
-    )
-    assert changes == {".github/workflows/hard-eng.yml": expected}
+    assert changes == {".github/workflows/hard-eng.yml": aged("2d")}
 
 
 def test_generated_tool_cache_is_removed_from_existing_workflows(
