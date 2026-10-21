@@ -220,6 +220,11 @@ def owned_hook_entry(
 
 
 HOOK_TIMEOUTS = {"session": 60, "stop": 3600}
+POLL_COMMAND = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/polling.py" 2>/dev/null || true'
+POLL_HOOK: JsonObject = {
+    "matcher": "Bash",
+    "hooks": [{"type": "command", "command": POLL_COMMAND, "timeout": 5}],
+}
 CODEX_HOOK_STATUS = {
     "session": "Hard Eng: updating project setup",
     "stop": "Hard Eng: verifying changes",

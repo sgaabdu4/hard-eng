@@ -141,6 +141,8 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
                     agent, event, command, timeout, status_message=status_message
                 )
             ]
+        if agent == "claude":
+            hooks["PreToolUse"] = [agent_hooks.POLL_HOOK]
         target = root / name
         text = target.read_text() if target.exists() else "{}"
         current: JsonObject = json.loads(text)
