@@ -129,11 +129,16 @@ def size_verdict(root: Path) -> tuple[bool, str]:
         for name in names
         if not documentation(name) or _is_protected(PurePosixPath(name))
     }
-    if any(
-        kind[:1] in {"A", "D", "T"} and name in names
-        for kind, name in zip(status[0::2], status[1::2], strict=False)
-    ) or any(name in names for name in untracked):
-        return False, "it adds, deletes or renames a file"
+    added = sorted(
+        {
+            name
+            for kind, name in zip(status[0::2], status[1::2], strict=False)
+            if kind[:1] in {"A", "D", "T"} and name in names
+        }
+        | names.intersection(untracked)
+    )
+    if added:
+        return False, f"it adds, deletes or renames the file {added[0]}"
     counted = _counted_lines(counts, names)
     if isinstance(counted, str):
         return False, counted
