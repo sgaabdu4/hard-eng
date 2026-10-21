@@ -23,6 +23,7 @@ Authority: The user asked on 2026-10-21 to add at least a two-day wait after a n
 - [x] A mise install waits two days → `tests/test_runner.py::test_wrapped_actionlint_and_decimate_use_latest_packages` (checks `MISE_MINIMUM_RELEASE_AGE=2d` on every mise command).
 - [x] CI bootstrap installs uv and SDK tools with the same wait → `.github/workflows/hard-eng.yml` job env sets `MISE_MINIMUM_RELEASE_AGE: 2d` (read in the diff; actionlint and zizmor pass). The PR's CI install log is the remote proof under Delivery.
 - [x] An existing project's generated workflow moves from `0s` to `2d` on its next Hard Eng update → `tests/test_ci_setup.py::test_existing_workflow_gets_the_two_day_release_wait` (failed before the migration, passes after).
+- [x] A workflow generated before the setting moved to job level also changes its step-level `0s`, which would otherwise override the job value → `tests/test_ci_setup.py::test_older_step_level_release_age_also_gets_the_wait` (failed before, passes after).
 - [x] Existing behavior still holds: install commands still use the Bun package manager → same test in `tests/test_runner.py`.
 
 ## Baseline + execution
@@ -47,7 +48,7 @@ N/A — no visible UI change; command-line installer only.
 ## Verification
 
 Result: Passed
-Evidence: Focused tests `tests/test_tool_execution.py`, `tests/test_runner.py`, `tests/test_tool_setup.py`: 200 passed. Full Ready-stage `check --plan-stage Ready --base origin/main`: all 19 gates passed, tests 189s. The install log shows `npm:@biomejs/biome@2.5.15` installed under `--minimum-release-age=172800`. Independent review (codex) at f1387383 found two items: the CI bootstrap still used `0s` (fixed), and an already-installed young copy still runs through mise's `@latest` link (reproduced; not fixed, see Risks). A second review at b6924263 found that existing consumer workflows kept `0s` (fixed with a migration). Complete-stage `check --plan-stage Complete --base origin/main` after the fix: all 19 gates passed; Biome 2.5.15 in use.
+Evidence: Focused tests `tests/test_tool_execution.py`, `tests/test_runner.py`, `tests/test_tool_setup.py`: 200 passed. Full Ready-stage `check --plan-stage Ready --base origin/main`: all 19 gates passed, tests 189s. The install log shows `npm:@biomejs/biome@2.5.15` installed under `--minimum-release-age=172800`. Independent review (codex) at f1387383 found two items: the CI bootstrap still used `0s` (fixed), and an already-installed young copy still runs through mise's `@latest` link (reproduced; not fixed, see Risks). A second review at b6924263 found that existing consumer workflows kept `0s` (fixed with a migration). A third review at 08332e3a found that workflows from before the setting moved to job level keep a step-level `0s` (fixed: every generated `0s` line now moves to `2d`). Complete-stage `check --plan-stage Complete --base origin/main` after the fix: all 19 gates passed; Biome 2.5.15 in use.
 Delivery target: Merge
 Delivery: Pending — PR merged to main; main CI install step shows a release at least two days old.
 E2E: N/A — installer behavior has no user journey; the install command assertions prove the wait.
