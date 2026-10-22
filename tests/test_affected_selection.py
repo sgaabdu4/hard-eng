@@ -472,3 +472,35 @@ def test_plan_stage_check_skips_packages_unchanged_since_a_passed_branch_point(
     monkeypatch.setattr(shipping, "passed_branch_point", passed)
     assert runner.check(plan_stage=plan_stage) == int(failed)
     assert ("FAIL fails" in capsys.readouterr().out) is failed
+
+
+@pytest.mark.parametrize("event", ["push", "pull_request"])
+def test_force_push_base_outside_history_compares_with_parent(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    event: str,
+) -> None:
+    proof = [sys.executable, "-c", "open('ran', 'w').close()"]
+    gates = {"name": "proof", "command": proof}
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [gates]})
+    )
+    (tmp_path / ".gitignore").write_text("ran\n")
+    with (tmp_path / ".git/config").open("a") as config:
+        config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
+    commit(tmp_path, "parent")
+    (tmp_path / "notes.txt").write_text("rewritten\n")
+    commit(tmp_path, "rewritten head")
+    rewritten_away = "b" * 40
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", event)
+    if event == "pull_request":
+        with pytest.raises(ValueError, match="Cannot verify plan scope"):
+            runner.check(base=rewritten_away)
+        return
+    assert runner.impact(rewritten_away) == 0
+    assert runner.check(base=rewritten_away) == 0
+    assert (tmp_path / "ran").is_file()
+    assert "not in this history" in capsys.readouterr().err
