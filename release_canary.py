@@ -26,6 +26,10 @@ class Unit(Protocol):
 
 SOURCE = Path(__file__).resolve().parent
 UPSTREAM = "sgaabdu4/hard-eng"
+DICTIONARY = Path("/usr/share/dict/words")
+WORDS = frozenset(
+    DICTIONARY.read_text().lower().split() if DICTIONARY.is_file() else ()
+)
 CACHE = Path.home() / "Library/Caches/hard-eng-canary"
 LOCK = CACHE.with_name("hard-eng-canary.lock")
 SOURCE_ONLY = ("tests/", "features/", "docs/", "assets/")
@@ -101,7 +105,9 @@ def status_text(results: dict[str, tuple[bool, str]]) -> str:
 
 def leaked_names(text: str, projects: list[str]) -> list[str]:
     """Private project names in public release text; owners are public already."""
-    names = {part for name in projects for part in (name, name.split("/")[-1])}
+    # A short name that is a common word cannot reveal a project; its full name still can.
+    short = {name.split("/")[-1] for name in projects} - WORDS
+    names = {*projects, *short}
     names.discard(UPSTREAM.split("/")[0])
     return sorted(
         name
