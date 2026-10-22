@@ -228,6 +228,16 @@ def test_a_private_repository_named_after_a_public_owner_is_no_leak() -> None:
     assert release_canary.leaked_names("see school/sgaabdu4", private)
 
 
+def test_a_private_repository_named_with_a_common_word_leaks_only_by_full_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(release_canary, "WORDS", frozenset({"starter"}))
+    private = ["owner/starter", "owner/zorblax"]
+    assert not release_canary.leaked_names("The starter tests pass.", private)
+    assert release_canary.leaked_names("see owner/starter", private)
+    assert release_canary.leaked_names("the zorblax app", private)
+
+
 def agent_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, session: dict[str, object]
 ) -> Path:
