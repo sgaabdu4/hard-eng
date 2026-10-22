@@ -92,23 +92,56 @@ def test_flutter_pins_each_any_constraint_to_the_resolved_version() -> None:
     assert ": any" not in pinned
 
 
+def created(
+    root: Path, monkeypatch: pytest.MonkeyPatch, stack: str, files: dict[str, str]
+) -> list[list[str]]:
+    """Create the stack with a fake scaffold that writes these files; the commands run."""
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    ran: list[list[str]] = []
+
+    def run(target: Path, command: list[str]) -> None:
+        ran.append(command)
+        if command == new_project.SCAFFOLDS[stack]:
+            for name, text in files.items():
+                (target / name).parent.mkdir(parents=True, exist_ok=True)
+                (target / name).write_text(text)
+
+    monkeypatch.setattr(new_project, "run", run)
+    new_project.create(root, stack)
+    return ran
+
+
 def test_opennext_keeps_the_scaffold_next_release_after_the_upgrade(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Newer Next.js releases build but fail at runtime on OpenNext's Worker."""
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    ran: list[list[str]] = []
-
-    def run(root: Path, command: list[str]) -> None:
-        ran.append(command)
-        if command == new_project.SCAFFOLDS["opennext"]:
-            manifest = {"dependencies": {"next": "16.3.8"}}
-            (root / "package.json").write_text(json.dumps(manifest))
-            (root / "eslint.config.mjs").write_text("export default [];\n")
-
-    monkeypatch.setattr(new_project, "run", run)
-    new_project.create(tmp_path, "opennext")
+    manifest = json.dumps({"dependencies": {"next": "16.3.8"}})
+    files = {"package.json": manifest, "eslint.config.mjs": "export default [];\n"}
+    ran = created(tmp_path, monkeypatch, "opennext", files)
     upgrade = ran.index(["bun", "update", "--latest", "--exact"])
     assert ran[upgrade + 1] == ["bun", "add", "--exact", "next@16.3.8"]
     assert ran[upgrade + 2] == ["bun", "run", "cf-typegen"]
     assert not (tmp_path / "eslint.config.mjs").exists()
+
+
+def test_nextjs_moves_the_scaffold_to_the_installed_biome(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Biome 2.6 rejected the scaffold's older config, Markdown and untitled images."""
+    image = '<svg viewBox="0 0 1 1"><path/></svg>'
+    files = {"package.json": "{}", "biome.json": "{}", "public/next.svg": image}
+    ran = created(tmp_path, monkeypatch, "nextjs", files)
+    upgrade = ran.index(["bun", "update", "--latest", "--exact"])
+    assert ran[upgrade + 1 : upgrade + 3] == [
+        ["bun", "x", "biome", "migrate", "--write"],
+        ["bun", "x", "biome", "format", "--write", "."],
+    ]
+    assert (tmp_path / "public/next.svg").read_text() == (
+        '<svg viewBox="0 0 1 1"><title>next</title><path/></svg>'
+    )
+
+
+def test_opennext_replaces_the_vulnerable_glob_its_minifier_pins() -> None:
+    """@node-minify/core pins glob 10.3.3 (GHSA-5j98-mcp5-4vw2); it only calls globSync."""
+    starter = new_project.SOURCE / ".agents/starters/opennext/package.json"
+    assert json.loads(starter.read_text())["overrides"]["glob"] == ">=10.5.0"
