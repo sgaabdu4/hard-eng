@@ -953,7 +953,10 @@ def check_scaffold_update(root: Path, base: str) -> bool:
         raise ValueError(
             "Scaffold update does not identify a successful upstream hard-eng check"
         )
-    if not release_installed(root, base, names, revision, previous):
+    try:
+        if not release_installed(root, base, names, revision, previous):
+            return False
+    except subprocess.CalledProcessError:
         return False
     print(
         "Scaffold-only update: source CI verified and the gate configuration accepted.",

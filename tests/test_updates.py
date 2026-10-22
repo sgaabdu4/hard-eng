@@ -823,18 +823,27 @@ def test_committed_scaffold_exemption_preserves_application_boundary(
             git(target, "worktree", "remove", "--force", str(linked))
 
 
-def test_unverified_scaffold_update_fails(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("rewritten", [False, True])
+def test_unproven_scaffold_update_is_not_trusted(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, rewritten: bool
 ) -> None:
     source, target, _ = release
     base = git(target, "rev-parse", "HEAD")
     select_release(source, monkeypatch)
     update.update(target)
 
-    def unverified(_revision: str) -> bool:
-        return False
+    def verified(_revision: str) -> bool:
+        return rewritten
 
-    monkeypatch.setattr(update, "verified_revision", unverified)
+    def gone(_temporary: Path, revision: str, previous: str) -> None:
+        command = ["git", "merge-base", "--is-ancestor", previous, revision]
+        raise subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(update, "verified_revision", verified)
+    monkeypatch.setattr(update, "fetch_sources", gone)
+    if rewritten:
+        assert update.check_scaffold_update(target, base) is False
+        return
     with pytest.raises(ValueError, match="successful upstream"):
         update.check_scaffold_update(target, base)
 
