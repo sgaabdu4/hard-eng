@@ -41,6 +41,7 @@ Decisions: Extend `release_canary.py`, not a new tool. Scaffold = every `--new` 
 - [x] The Next.js and OpenNext starter tests define the font stubs at module level, so Biome's noComponentHookFactories rule passes → N/A — Biome 2.6.2 lint of the starter test and `bun test` passed on a fresh Next.js scaffold in the cloud; the OpenNext template cannot be cloned here, and the next Mac canary run is the proof.
 - [x] The OpenNext starter replaces the glob 10.3.3 that its minifier pins (GHSA-5j98-mcp5-4vw2) → `tests/test_new_project.py::test_opennext_replaces_the_vulnerable_glob_its_minifier_pins`; the minifier only calls `globSync`, which glob 13.0.6 keeps.
 - [x] `develop` merged with `main` keeps `tests/test_runner.py` under the 1000-line limit, so PR 327's check passes and installed projects accept the release → N/A — the file-length gate on the merge ref proves it; no unit test can.
+- [x] A private repository whose short name is a common English word leaks only by its full name, so ordinary prose passes the leak check → `tests/test_release_canary.py::test_a_private_repository_named_with_a_common_word_leaks_only_by_full_name`.
 
 ## Baseline + execution
 
