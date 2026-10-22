@@ -36,6 +36,10 @@ Decisions: Extend `release_canary.py`, not a new tool. Scaffold = every `--new` 
 - [x] The shared AGENTS.md stays within the size the main release already held, because one project's test caps it and develop pushed it 153 tokens over; restated rules now name their HE- ID → `tests/test_agent_hooks.py::test_shared_agent_rules_stay_within_the_released_size`, red on the develop file.
 - [x] Codex runs the release's project hooks in the canary; without the hook-trust bypass it lists them but runs none → N/A — only a real `codex exec` run can prove it; a throwaway repo showed SessionStart and Stop ran only with the flag.
 - [x] Pushes to `develop` run the `hard-eng` check here, so installed projects accept a develop release; projects get only their base branch → `tests/test_ci_setup.py::test_workflow_runs_once_per_change`.
+- [x] An update PR check does not demand that an unrelated open plan is Complete when the branch holds only files the verified update wrote; project work beside it still needs its plan → `tests/test_update_pr.py::test_update_branch_check_skips_an_unrelated_draft_plan`, red before the fix. One installed project failed on develop only for this reason.
+- [x] A new Next.js project moves its Biome config to the installed Biome, formats its files and titles its images, so its first check passes on Biome 2.6 → `tests/test_new_project.py::test_nextjs_moves_the_scaffold_to_the_installed_biome`.
+- [x] The Next.js and OpenNext starter tests define the font stubs at module level, so Biome's noComponentHookFactories rule passes → N/A — Biome 2.6.2 lint of the starter test and `bun test` passed on a fresh Next.js scaffold in the cloud; the OpenNext template cannot be cloned here, and the next Mac canary run is the proof.
+- [x] The OpenNext starter replaces the glob 10.3.3 that its minifier pins (GHSA-5j98-mcp5-4vw2) → `tests/test_new_project.py::test_opennext_replaces_the_vulnerable_glob_its_minifier_pins`; the minifier only calls `globSync`, which glob 13.0.6 keeps.
 
 ## Baseline + execution
 

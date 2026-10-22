@@ -1,10 +1,11 @@
 import { expect, mock, test } from "bun:test";
 import nextConfig from "../next.config";
 
-mock.module("next/font/google", () => ({
+const fonts = {
   Geist: () => ({ variable: "font-sans-variable" }),
   Geist_Mono: () => ({ variable: "font-mono-variable" }),
-}));
+};
+mock.module("next/font/google", () => fonts);
 
 const { default: RootLayout } = await import("./layout");
 const { default: Home } = await import("./page");
