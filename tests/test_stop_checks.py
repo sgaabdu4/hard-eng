@@ -293,3 +293,29 @@ def test_unmatched_or_inactive_decisions_do_not_block(
 ) -> None:
     decision_record(repository, status, applies)
     assert "decision" not in decision_turn(repository, path)
+
+
+def test_a_failure_seen_before_in_this_checkout_is_named_as_a_repeat(
+    repository: Path,
+) -> None:
+    failing = repository.parent / "failing.txt"
+    failing.write_text("tests/test_a.py::test_one")
+    install_check(
+        repository,
+        f"import time\nname = open({str(failing)!r}).read()\n"
+        "print(f'FAIL tests (exit 1; elapsed {time.time()}s) @ .')\n"
+        "print(f'FAILED {name} - assert {time.time_ns()} == 0')\n"
+        "raise SystemExit(1)\n",
+    )
+    (repository / "work.py").write_text("value = 1\n")
+    reasons = []
+    for session in ("first", "second", "third"):
+        payload: JsonObject = {"session_id": session}
+        assert agent_hooks.record_session(repository, payload)
+        (repository / "work.py").write_text(f"value = '{session}'\n")
+        reasons.append(str(agent_hooks.completion(repository, payload)["reason"]))
+        if session == "second":
+            failing.write_text("tests/test_a.py::test_two")
+    assert "Repeat failure" not in reasons[0]
+    assert "Repeat failure: seen 2 times" in reasons[1]
+    assert "Repeat failure" not in reasons[2]
