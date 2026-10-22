@@ -948,16 +948,8 @@ def test_check_output_survives_a_non_blocking_pipe(
     (tmp_path / ".gitignore").write_text("__pycache__/\n")
     configure(tmp_path, [gate("noisy", "print('x' * 2_000_000)")])
     git(tmp_path, "add", ".")
-    git(
-        tmp_path,
-        "-c",
-        "user.name=Fixture",
-        "-c",
-        "user.email=fixture@example.test",
-        "commit",
-        "-qm",
-        "fixture",
-    )
+    identity = ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test"]
+    git(tmp_path, *identity, "commit", "-qm", "fixture")
     read, write = os.pipe()
     os.set_blocking(write, False)
     command = [sys.executable, str(tmp_path / ".hooks/hard-eng.py"), "check"]
