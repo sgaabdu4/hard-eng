@@ -14,6 +14,7 @@ from collections.abc import Callable
 from operator import itemgetter
 from pathlib import Path
 
+import agent_hooks
 import hook_chain
 from mcp_setup import retired_settings
 from update_runner import (
@@ -855,6 +856,7 @@ INSTALLED_FILES = {
     ".husky/pre-push",
     ".github/workflows/hard-eng.yml",
     ".github/workflows/pr-text.yml",
+    *agent_hooks.HOOK_FILES.values(),
 }
 
 
@@ -914,7 +916,8 @@ def release_installed(
     root: Path, base: str, names: set[str], revision: str, previous: str
 ) -> bool:
     """Whether these paths hold exactly what the verified release installs."""
-    from ci_setup import workflow_installed
+    from agent_hooks import preserved_instructions
+    from ci_setup import setup_installed
 
     with tempfile.TemporaryDirectory(prefix="hard-eng-scaffold-check-") as temporary:
         source, old = fetch_sources(Path(temporary), revision, previous)
@@ -937,7 +940,7 @@ def release_installed(
                 for name in scaffold_files(old) - scaffold_files(source)
             )
             or not preserved_instructions(root, base, names)
-            or not workflow_installed(root, base, names, (source, old))
+            or not setup_installed(root, base, names, (source, old))
         ):
             return False
         validate_gates(root, source, {})
@@ -979,22 +982,3 @@ def installed_update_paths(root: Path, base: str) -> set[str]:
     except (OSError, ValueError, TypeError, subprocess.SubprocessError):
         return set()
     return installed if proven else set()
-
-
-def preserved_instructions(root: Path, base: str, names: set[str]) -> bool:
-    from agent_hooks import instruction_suffix
-
-    for name in names & {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}:
-        blob = f"{base}:{name}"
-        original = subprocess.run(
-            ["git", "show", blob],
-            cwd=root,
-            text=True,
-            capture_output=True,
-            check=False,
-        ).stdout
-        if not (root / name).is_file() or instruction_suffix(
-            original
-        ) != instruction_suffix((root / name).read_text()):
-            return False
-    return True

@@ -616,12 +616,14 @@ def integrated(workflows: list[Path]) -> bool:
     return found and complete
 
 
-def workflow_installed(
+def setup_installed(
     root: Path, base: str, names: set[str], sources: tuple[Path, Path]
 ) -> bool:
-    """Whether a changed workflow is what the release's setup writes from the base one."""
-    name = ".github/workflows/hard-eng.yml"
-    return name not in names or name in setup_written(root, base, {name}, sources)
+    """Whether changed setup-owned files are what the release's setup writes from the base."""
+    from agent_hooks import HOOK_FILES
+
+    owned = names & {".github/workflows/hard-eng.yml", *HOOK_FILES.values()}
+    return not owned or setup_written(root, base, owned, sources) == owned
 
 
 def setup_written(

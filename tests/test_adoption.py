@@ -108,34 +108,44 @@ def test_managed_instruction_update_preserves_native_scaffold_proof(
         instructions.write_text(
             instructions.read_text().replace("Keep project", "Edited project")
         )
-        assert not update.preserved_instructions(target, base, {"AGENTS.md"})
+        assert not agent_hooks.preserved_instructions(target, base, {"AGENTS.md"})
 
 
 @pytest.mark.parametrize(
-    ("edited", "external"), [(False, False), (True, False), (False, True)]
+    ("how", "name"),
+    [
+        (how, name)
+        for name in (".github/workflows/hard-eng.yml", ".claude/settings.json")
+        for how in ("clean", "edited", "external")
+    ],
 )
-def test_update_that_migrates_the_ci_workflow_is_scaffold_only_unless_edited(
+def test_update_that_migrates_setup_files_is_scaffold_only_unless_edited(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
-    edited: bool,
-    external: bool,
+    how: str,
+    name: str,
 ) -> None:
     source, target, _ = release
-    workflow = target / ".github/workflows/hard-eng.yml"
-    token = "          GH_TOKEN: ${{ github.token }}\n"
-    workflow.write_text(workflow.read_text().replace(token, "", 1))
-    commit(target, "workflow from an older release")
+    installed = (path := target / name).read_text()
+    if path.suffix == ".json":
+        settings = json.loads(installed)
+        del settings["hooks"]["PreToolUse"]
+        path.write_text(json.dumps(settings, indent=2) + "\n")
+    else:
+        token = "          GH_TOKEN: ${{ github.token }}\n"
+        path.write_text(installed.replace(token, "", 1))
+    commit(target, "setup files from an older release")
     base = git(target, "rev-parse", "HEAD")
     select_release(source, monkeypatch)
     update.update(target)
-    assert token in workflow.read_text()
-    if edited:
-        workflow.write_text(workflow.read_text() + "# project edit\n")
-        commit(target, "edit CI beside the update")
-    if external:
+    assert path.read_text() == installed
+    if how == "edited":
+        path.write_text(installed + "\n")
+        commit(target, "edit a setup file beside the update")
+    if how == "external":
         git(target, "config", "core.hooksPath", str(target.parent / "runner-hooks"))
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
-    assert update.check_scaffold_update(target, base) is not edited
+    assert update.check_scaffold_update(target, base) is (how != "edited")
     assert git(target, "worktree", "list").count("\n") == 0
 
 
