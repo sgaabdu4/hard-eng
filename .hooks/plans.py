@@ -540,6 +540,15 @@ def validate_plans(
         raise ValueError("Cannot verify plan scope; fetch or supply a valid Git --base")
     if stage is None:
         stage = "Draft" if planning_only(root, changed) else "Complete"
+    if base is not None and not explicit_stage and changed:
+        from change_size import update_written
+
+        # Unrelated open plans must not block a verified Hard Eng update branch.
+        if not changed - update_written(root, base):
+            print(
+                "Plan: only files the verified Hard Eng update wrote; no plan needed."
+            )
+            return stage
     changed |= released_plans(root, base)
     paths = [
         path for path in repository_files(root) if is_plan_path(path.relative_to(root))

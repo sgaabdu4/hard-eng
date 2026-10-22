@@ -95,6 +95,26 @@ def copy_starter(root: Path, stack: str) -> None:
         target.write_text(text)
 
 
+def titled_svgs(root: Path) -> None:
+    """Give each scaffold image the title Biome's accessibility rule requires."""
+    for path in sorted((root / "public").glob("*.svg")):
+        text = path.read_text()
+        if "<title>" not in text:
+            start = text.index(">", text.index("<svg")) + 1
+            path.write_text(f"{text[:start]}<title>{path.stem}</title>{text[start:]}")
+
+
+def finish_web(root: Path, kept: list[str]) -> None:
+    run(root, ["bun", "update", "--latest", "--exact"])
+    if kept:
+        run(root, ["bun", "add", "--exact", *kept])
+    if (root / "biome.json").is_file():
+        titled_svgs(root)
+        # The scaffold's config targets the Biome it shipped; the update installs a newer one.
+        run(root, ["bun", "x", "biome", "migrate", "--write"])
+        run(root, ["bun", "x", "biome", "format", "--write", "."])
+
+
 def finish_flutter(root: Path) -> None:
     skill = SOURCE / ".agents/skills/building-flutter-apps/references"
     shutil.copyfile(skill / "analysis_options.yaml", root / "analysis_options.yaml")
@@ -123,9 +143,7 @@ def create(root: Path, stack: str) -> None:
     if stack == "flutter":
         finish_flutter(root)
     else:
-        run(root, ["bun", "update", "--latest", "--exact"])
-        if kept:
-            run(root, ["bun", "add", "--exact", *kept])
+        finish_web(root, kept)
     for command in GENERATED.get(stack, []):
         run(root, command)
     run(root, ["git", "add", "--all"])

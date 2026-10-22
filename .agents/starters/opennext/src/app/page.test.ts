@@ -6,10 +6,11 @@ mock.module("@opennextjs/cloudflare", () => ({
 	...cloudflare,
 	initOpenNextCloudflareForDev,
 }));
-mock.module("next/font/google", () => ({
+const fonts = {
 	Geist: () => ({ variable: "font-sans-variable" }),
 	Geist_Mono: () => ({ variable: "font-mono-variable" }),
-}));
+};
+mock.module("next/font/google", () => fonts);
 
 const { default: RootLayout, metadata } = await import("./layout");
 const { default: Home } = await import("./page");

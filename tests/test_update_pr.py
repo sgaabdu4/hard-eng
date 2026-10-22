@@ -741,3 +741,24 @@ def test_update_branch_needs_no_plan_for_files_the_update_wrote(
         False,
         "it adds, deletes or renames the file logo.png",
     )
+
+
+def test_update_branch_check_skips_an_unrelated_draft_plan(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A project's open Draft plan blocked its Hard Eng update PR check."""
+    import plans
+
+    source, target, _ = release
+    (target / "PLAN.md").write_text("# Later work\n\nStatus: Draft\n")
+    commit(target, "draft plan for later work")
+    git(target, "update-ref", "refs/heads/main", "HEAD")
+    git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH)
+    select_release(source, monkeypatch)
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert plans.validate_plans(target, "main") == "Complete"
+    (target / "app.py").write_text("print('project work')\n")
+    commit(target, "project work beside the update")
+    with pytest.raises(ValueError, match="PLAN.md: plan needs"):
+        plans.validate_plans(target, "main")
