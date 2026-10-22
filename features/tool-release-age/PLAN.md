@@ -25,6 +25,7 @@ Authority: The user asked on 2026-10-21 to add at least a two-day wait after a n
 - [x] An existing project's generated workflow moves from `0s` to `2d` on its next Hard Eng update → `tests/test_ci_setup.py::test_existing_workflow_gets_the_two_day_release_wait` (failed before the migration, passes after).
 - [x] A workflow generated before the setting moved to job level also changes its step-level `0s`, which would otherwise override the job value → `tests/test_ci_setup.py::test_existing_workflow_gets_the_two_day_release_wait` with a step-level line (failed before, passes after).
 - [x] Existing behavior still holds: install commands still use the Bun package manager → `tests/test_runner.py::test_wrapped_actionlint_and_decimate_use_latest_packages`.
+- [x] The shipped Biome config loads on the Biome the two-day wait selects (2.5.15 until 23 October) and on 2.6.2: the SKILL.md override turns off the formatter, not the 2.6-only `markdown` key → N/A — config only; `biome ci` and the focused-tests lint on `.agents/skills` pass on both 2.5.15 and 2.6.2, and develop CI failed with "unknown key `markdown`" before.
 
 ## Baseline + execution
 
