@@ -895,6 +895,38 @@ def require_ci_base(base: str | None) -> None:
         )
 
 
+def push_base(root: Path, base: str | None) -> str | None:
+    """A force push names a base outside the new history; compare with HEAD's parent."""
+    if (
+        os.environ.get("GITHUB_ACTIONS") != "true"
+        or os.environ.get("GITHUB_EVENT_NAME") != "push"
+        or not base
+        or subprocess.run(
+            ["git", "cat-file", "-e", base + "^{commit}"],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    ):
+        return base
+    parent = subprocess.run(
+        ["git", "rev-parse", "--verify", "-q", "HEAD^"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if parent.returncode:
+        return base
+    print(
+        f"Push base {base[:12]} is not in this history (force push); "
+        "checking changes since HEAD's parent.",
+        file=sys.stderr,
+    )
+    return parent.stdout.strip()
+
+
 PR_TEXT = ".github/workflows/pr-text.yml"
 
 
