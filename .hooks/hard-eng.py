@@ -753,12 +753,13 @@ def check(
     related_tests: bool = False,
     quick: bool = False,
 ) -> int:
-    from ci_setup import require_ci_base
+    from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
     from reports import quick_groups
     from shipping import gate_budget
 
     require_ci_base(base)
+    base = push_base(ROOT, base)
     parse_config((ROOT / "hard-eng.gates.json").read_text())
     if proven_elsewhere(base):
         return 0
@@ -790,10 +791,11 @@ def impact(base: str) -> int:
     """Tell CI whether the check will run only the secret scan, before tools."""
     from contextlib import redirect_stdout, suppress
 
-    from ci_setup import impact_runner, impact_tools, require_ci_base
+    from ci_setup import impact_runner, impact_tools, push_base, require_ci_base
     from gate_config import affected_groups, parse_config
 
     require_ci_base(base)
+    base = push_base(ROOT, base) or base
     proven = False
     with redirect_stdout(sys.stderr), suppress(OSError, subprocess.SubprocessError):
         proven = proven_elsewhere(base)
