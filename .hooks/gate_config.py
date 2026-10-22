@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
@@ -244,23 +245,21 @@ def generated_sources(root: Path, names: list[str]) -> set[str]:
     )
     if repository.returncode:
         return set()  # Standalone source directories have no Git attributes.
-    attributes = subprocess.check_output(
-        [
-            "git",
-            "check-attr",
-            "-z",
-            "--stdin",
-            "linguist-generated",
-            "linguist-vendored",
-        ],
-        cwd=root,
-        text=True,
-        input="\0".join(names) + "\0",
-    ).split("\0")
+    # A live stdin pipe deadlocked against git's per-path output on macOS (issue 375).
+    with tempfile.TemporaryFile() as paths:
+        paths.write(("\0".join(names) + "\0").encode())
+        paths.seek(0)
+        attributes = subprocess.check_output(
+            ["git", "check-attr", "-z", "--all", "--stdin"],
+            cwd=root,
+            text=True,
+            stdin=paths,
+        ).split("\0")
     return {
         name
-        for name, _, value in zip(attributes[::3], attributes[1::3], attributes[2::3])
-        if value in {"set", "true"}
+        for name, key, value in zip(attributes[::3], attributes[1::3], attributes[2::3])
+        if key in {"linguist-generated", "linguist-vendored"}
+        and value in {"set", "true"}
     }
 
 
