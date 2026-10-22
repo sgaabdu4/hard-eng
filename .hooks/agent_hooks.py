@@ -33,6 +33,23 @@ def instruction_suffix(content: str) -> str:
     return content.split(end + "\n", 1)[-1]
 
 
+def preserved_instructions(root: Path, base: str, names: set[str]) -> bool:
+    for name in names & {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}:
+        blob = f"{base}:{name}"
+        original = subprocess.run(
+            ["git", "show", blob],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        ).stdout
+        if not (root / name).is_file() or instruction_suffix(
+            original
+        ) != instruction_suffix((root / name).read_text()):
+            return False
+    return True
+
+
 def configure_instructions(
     root: Path, source: Path, previous: Path | None, changes: dict[str, str]
 ) -> list[str]:
