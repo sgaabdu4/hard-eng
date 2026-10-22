@@ -21,10 +21,10 @@ Authority: The user asked on 2026-10-21 to add at least a two-day wait after a n
 
 - [x] An npm tool install waits at least 172800 seconds before taking a new release → `tests/test_tool_execution.py::test_native_tools_install_before_reading_environment` (checks the Bun release-age flag in the install command).
 - [x] A mise install waits two days → `tests/test_runner.py::test_wrapped_actionlint_and_decimate_use_latest_packages` (checks `MISE_MINIMUM_RELEASE_AGE=2d` on every mise command).
-- [x] CI bootstrap installs uv and SDK tools with the same wait → `.github/workflows/hard-eng.yml` job env sets `MISE_MINIMUM_RELEASE_AGE: 2d` (read in the diff; actionlint and zizmor pass). The PR's CI install log is the remote proof under Delivery.
+- [x] CI bootstrap installs uv and SDK tools with the same wait → N/A — workflow setting only: the `.github/workflows/hard-eng.yml` job env sets `MISE_MINIMUM_RELEASE_AGE: 2d` (read in the diff; actionlint and zizmor pass). The PR's CI install log is the remote proof under Delivery.
 - [x] An existing project's generated workflow moves from `0s` to `2d` on its next Hard Eng update → `tests/test_ci_setup.py::test_existing_workflow_gets_the_two_day_release_wait` (failed before the migration, passes after).
 - [x] A workflow generated before the setting moved to job level also changes its step-level `0s`, which would otherwise override the job value → `tests/test_ci_setup.py::test_existing_workflow_gets_the_two_day_release_wait` with a step-level line (failed before, passes after).
-- [x] Existing behavior still holds: install commands still use the Bun package manager → same test in `tests/test_runner.py`.
+- [x] Existing behavior still holds: install commands still use the Bun package manager → `tests/test_runner.py::test_wrapped_actionlint_and_decimate_use_latest_packages`.
 
 ## Baseline + execution
 
