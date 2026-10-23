@@ -1,0 +1,85 @@
+name: Canary
+
+# Sets up and fully checks each public new project (scaffolds, greenfield, brownfield) from
+# this revision. The release canary on the maintainer's Mac needs these jobs green on the
+# develop head before it starts its agent sessions; installed projects stay on the Mac.
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  targets:
+    name: canary targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: List the new projects when an installed file changed
+        id: targets
+        env:
+          # A develop push is compared with main, as the release canary compares it.
+          BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then names=setup.py; else names=$(git diff --name-only "$BASE...HEAD"); fi
+          printf '%s\n' "$names" | python3 -I -c 'import json, sys; sys.path.insert(0, "."); import release_canary as c; names = sys.stdin.read().split(); print("targets=" + json.dumps([c.folder(" ".join(t)) for t in c.NEW_TARGETS] if c.needs_canary(names) else []))' >> "$GITHUB_OUTPUT"
+
+  new-project:
+    name: new project (${{ matrix.target }}, ${{ matrix.os }})
+    needs: targets
+    if: needs.targets.outputs.targets != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+        target: ${{ fromJSON(needs.targets.outputs.targets) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      checks: read # The new project's update check verifies the upstream release.
+    env:
+      MISE_FETCH_REMOTE_VERSIONS_CACHE: 0s
+      MISE_PREFER_OFFLINE: 'false'
+      MISE_USE_VERSIONS_HOST: 'false'
+      MISE_MINIMUM_RELEASE_AGE: 2d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: latest
+      - name: Set up and check the new project
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          git config --global user.name "Hard Eng canary"
+          git config --global user.email "canary@users.noreply.github.com"
+          git config --global init.defaultBranch main
+          package="@jdxcode/mise-$(uname -s | tr '[:upper:]' '[:lower:]')-$(echo "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')@latest"
+          tools=(uv@latest python@3.12)
+          if [ "$TARGET" = scaffold-flutter ]; then tools+=(flutter@latest); fi
+          bun x --package="$package" mise --no-config install "${tools[@]}" &&
+          MISE_FETCH_REMOTE_VERSIONS_CACHE=1h bun x --package="$package" mise --no-config exec "${tools[@]}" -- uv run --locked python release_canary.py HEAD --ci --target "$TARGET"

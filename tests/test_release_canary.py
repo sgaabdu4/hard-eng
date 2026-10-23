@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 from gate_config import validate_documents
 
 import release_canary
@@ -41,28 +42,40 @@ def test_published_status_names_no_project() -> None:
     assert "owner" not in text
 
 
-def test_a_run_that_finds_no_project_fails(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """An empty search must not certify a release."""
+def full_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, projects: list[str]
+) -> list[tuple[str, str]]:
+    """A posting run of a release that changes an installed file; returns each status."""
     monkeypatch.setattr(release_canary, "LOCK", tmp_path / "canary.lock")
-    posted: list[str] = []
+    monkeypatch.setattr(release_canary, "CACHE", tmp_path / "cache")
+    posted: list[tuple[str, str]] = []
     replies = {"rev-parse": "a" * 40, "diff": ".hooks/update.py"}
 
     def output(command: list[str], cwd: Path = release_canary.SOURCE) -> str:
         return replies.get(command[1], "")
 
+    def installed_projects(_: object) -> list[str]:
+        return projects
+
     def post_status(revision: str, state: str, description: str) -> None:
-        posted.append(state)
+        posted.append((state, description))
 
     monkeypatch.setattr(release_canary, "output", output)
     monkeypatch.setattr(release_canary, "repositories", list)
     monkeypatch.setattr(release_canary, "public_text", str)
-    monkeypatch.setattr(release_canary, "installed_projects", list)
+    monkeypatch.setattr(release_canary, "installed_projects", installed_projects)
     monkeypatch.setattr(release_canary, "post_status", post_status)
     monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--post-status"])
     assert release_canary.main() == 1
-    assert posted == ["pending", "failure"]
+    return posted
+
+
+def test_a_run_that_finds_no_project_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty search must not certify a release."""
+    posted = full_run(tmp_path, monkeypatch, [])
+    assert [state for state, _ in posted] == ["pending", "failure"]
 
 
 def test_a_step_past_its_limit_stops_every_process_it_started(tmp_path: Path) -> None:
@@ -476,3 +489,98 @@ def test_only_new_projects_get_agent_sessions() -> None:
     assert release_canary.agents_for(("installed", "o/a"), agents) == ()
     for kind in ("scaffold", "greenfield", "brownfield"):
         assert release_canary.agents_for((kind, "x"), agents) == agents
+
+
+def test_the_public_canary_workflow_needs_no_canary_run() -> None:
+    """The workflow only checks new projects; a project never installs it."""
+    assert not release_canary.needs_canary([".github/workflows/canary.yml"])
+
+
+def test_ci_names_every_new_project_without_a_newest_passing_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = [
+        "new project (scaffold-flutter, ubuntu-latest)\tsuccess",
+        "new project (scaffold-flutter, macos-latest)\tsuccess",
+        "new project (scaffold-vite, macos-latest)\tfailure",
+        "new project (scaffold-vite, ubuntu-latest)\tsuccess",
+        "new project (greenfield-python, ubuntu-latest)\t",
+        "new project (scaffold-nextjs, ubuntu-latest)\tsuccess",
+        "new project (scaffold-opennext, ubuntu-latest)\tsuccess",
+        "new project (brownfield-itsdangerous, ubuntu-latest)\tsuccess",
+        "hard-eng\tsuccess",
+    ]
+
+    def output(command: list[str]) -> str:
+        return "\n".join(rows)
+
+    monkeypatch.setattr(release_canary, "output", output)
+    assert release_canary.ci_failures("a" * 40) == [
+        "scaffold-vite",
+        "greenfield-python",
+    ]
+    rows[:] = ["hard-eng\tsuccess"]
+    assert release_canary.ci_failures("a" * 40) == [
+        release_canary.folder(" ".join(target)) for target in release_canary.NEW_TARGETS
+    ]
+
+
+def test_the_workflow_job_names_are_the_ones_the_mac_canary_reads() -> None:
+    workflow = yaml.safe_load(
+        (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
+    )
+    name = workflow["jobs"]["new-project"]["name"]
+    for os_name in workflow["jobs"]["new-project"]["strategy"]["matrix"]["os"]:
+        job = name.replace("${{ matrix.target }}", "scaffold-vite")
+        found = release_canary.CI_JOB.fullmatch(
+            job.replace("${{ matrix.os }}", os_name)
+        )
+        assert found and found[1] == "scaffold-vite"
+
+
+def test_a_new_project_gets_its_full_check_only_in_ci(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On the Mac the agents' Stop check runs it; CI proved it first."""
+
+    def install_new(*_: object) -> None:
+        pass
+
+    monkeypatch.setattr(release_canary, "install_new", install_new)
+    with (tmp_path / "log").open("w") as log:
+        for target in release_canary.NEW_TARGETS:
+            args = (target, "a" * 40, tmp_path, tmp_path / "work", log)
+            assert release_canary.prepare(*args) == []
+            checks = release_canary.prepare(*args, check_new=True)
+            assert [name for name, _ in checks] == ["full check"]
+
+
+def test_ci_and_reruns_pick_only_the_named_new_projects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sys, "argv", ["release_canary.py", "HEAD", "--ci", "--target", "scaffold-vite"]
+    )
+    assert release_canary.targets(release_canary.arguments(), ["o/a"]) == [
+        ("scaffold", "vite")
+    ]
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--ci"])
+    found = release_canary.targets(release_canary.arguments(), ["o/a"])
+    assert found == list(release_canary.NEW_TARGETS)
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD"])
+    found = release_canary.targets(release_canary.arguments(), ["o/a"])
+    assert found == [("installed", "o/a"), *release_canary.NEW_TARGETS]
+
+
+def test_new_projects_that_failed_ci_stop_the_run_before_any_agent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A scaffold that fails in minutes on CI must not start hours of agent runs."""
+
+    def ci_failures(_: str) -> list[str]:
+        return ["scaffold-vite"]
+
+    monkeypatch.setattr(release_canary, "ci_failures", ci_failures)
+    posted = full_run(tmp_path, monkeypatch, ["o/a"])
+    assert posted[-1] == ("failure", "New projects have not passed CI")
+    assert not (tmp_path / "cache").exists()

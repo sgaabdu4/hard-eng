@@ -1,4 +1,6 @@
-"""Try a Hard Eng release on new and installed projects under Claude and Codex; results stay on this machine."""
+"""Try a Hard Eng release on new and installed projects under Claude and Codex; results stay on this machine.
+
+With --ci it only sets up and checks the public new projects, for hard-eng's own CI."""
 
 import argparse
 import fcntl
@@ -39,6 +41,7 @@ SOURCE_ONLY_FILES = {
     "DECISION.md",
     "AGENTS.override.md",
     "release_canary.py",
+    ".github/workflows/canary.yml",
 }
 # Runs the project's own installed updater, told that this release is the newest verified one.
 UPDATE = """
@@ -62,6 +65,13 @@ BROWNFIELD = (
 KINDS = ("installed", "scaffold", "greenfield", "brownfield")
 # Installed projects prove the release with their full checks; new projects prove the agents.
 AGENT_KINDS = ("scaffold", "greenfield", "brownfield")
+NEW_TARGETS = (
+    *(("scaffold", stack) for stack in STACKS),
+    ("greenfield", "python"),
+    ("brownfield", "itsdangerous"),
+)
+# The public CI job (.github/workflows/canary.yml) that checks each new project.
+CI_JOB = re.compile(r"new project \(([a-z0-9-]+), [\w.-]+\)")
 AGENTS = ("claude", "codex")
 TASK = (
     "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
@@ -271,7 +281,12 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
 
 
 def prepare(
-    target: tuple[str, str], revision: str, source: Path, work: Path, log: IO[str]
+    target: tuple[str, str],
+    revision: str,
+    source: Path,
+    work: Path,
+    log: IO[str],
+    check_new: bool = False,
 ) -> list[tuple[str, list[str]]]:
     kind, value = target
     check = [sys.executable, ".hooks/hard-eng.py", "check"]
@@ -280,8 +295,8 @@ def prepare(
         # The update PR's check can skip gates for a proven update, so every gate runs after it.
         return [("update PR check", [*check, "--base", base]), ("full check", check)]
     install_new(kind, value, source, work, log)
-    # Only a scaffold promises a passing project; elsewhere the agents add tests and a plan.
-    return [("full check", check)] if kind == "scaffold" else []
+    # Public CI proves a new project's first full check; on the Mac the agents' Stop check runs it.
+    return [("full check", check)] if check_new else []
 
 
 def agent_command(agent: str, work: Path) -> list[str]:
@@ -350,6 +365,7 @@ class Trial:
     target: tuple[str, str]
     run: Path
     agents: tuple[str, ...]
+    check_new: bool = False
     results: dict[str, tuple[bool, str]] = field(default_factory=dict)
     times: list[tuple[str, str, float]] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -372,7 +388,7 @@ class Trial:
         with log_path.open("w") as log:
             try:
                 for name, command in prepare(
-                    self.target, revision, source, self.work, log
+                    self.target, revision, source, self.work, log, self.check_new
                 ):
                     must(self.work, log, f"{name} failed", command)
             except Failed as failure:
@@ -448,6 +464,24 @@ def time_summary(times: list[tuple[str, str, float]], wall: float) -> list[str]:
     return lines
 
 
+def ci_failures(revision: str) -> list[str]:
+    """New projects without a passing public CI job for this revision; the newest try counts."""
+    rows = output(
+        [
+            *("gh", "api", "--paginate", "-q"),
+            r'.check_runs[] | "\(.name)\t\(.conclusion)"',
+            f"repos/{UPSTREAM}/commits/{revision}/check-runs?per_page=100",
+        ]
+    ).splitlines()
+    passed: dict[str, bool] = {}
+    for name, _, conclusion in (row.partition("\t") for row in rows):
+        if found := CI_JOB.fullmatch(name):
+            label = found[1]
+            passed[label] = passed.get(label, True) and conclusion == "success"
+    labels = [folder(" ".join(target)) for target in NEW_TARGETS]
+    return [label for label in labels if not passed.get(label)]
+
+
 def post_status(revision: str, state: str, description: str) -> None:
     output(
         [
@@ -470,11 +504,27 @@ def arguments() -> argparse.Namespace:
     parser.add_argument(
         "--agent", action="append", choices=AGENTS, help="rerun only these agents"
     )
+    parser.add_argument(
+        "--target",
+        action="append",
+        choices=[folder(" ".join(target)) for target in NEW_TARGETS],
+        help="rerun only these new projects",
+    )
     parser.add_argument("--jobs", type=int, default=3)
     parser.add_argument("--post-status", action="store_true")
+    parser.add_argument(
+        "--ci",
+        action="store_true",
+        help="set up and fully check the new projects only; no agents or private projects",
+    )
     args = parser.parse_args()
-    if (args.project or args.kind or args.agent) and args.post_status:
-        parser.error("--post-status needs a full run, not --project, --kind or --agent")
+    partial_run = args.project or args.kind or args.agent or args.target
+    if partial_run and args.post_status:
+        parser.error(
+            "--post-status needs a full run, not --project, --kind, --agent or --target"
+        )
+    if args.ci and (args.project or args.agent or args.post_status):
+        parser.error("--ci checks public new projects only")
     return args
 
 
@@ -491,13 +541,15 @@ def main() -> int:
 
 
 def targets(args: argparse.Namespace, projects: list[str]) -> list[tuple[str, str]]:
-    found = {
-        "installed": [("installed", name) for name in args.project or projects],
-        "scaffold": [("scaffold", stack) for stack in STACKS],
-        "greenfield": [("greenfield", "python")],
-        "brownfield": [("brownfield", "itsdangerous")],
-    }
-    return [target for kind in args.kind or KINDS for target in found[kind]]
+    found = [("installed", name) for name in args.project or projects]
+    found += NEW_TARGETS
+    kinds = args.kind or (AGENT_KINDS if args.ci or args.target else KINDS)
+    return [
+        target
+        for target in found
+        if target[0] in kinds
+        and (not args.target or folder(" ".join(target)) in args.target)
+    ]
 
 
 def release_source(revision: str, run: Path) -> Path:
@@ -518,8 +570,47 @@ def finish(
     return 0 if state == "success" else 1
 
 
+def try_targets(
+    trials: list[Trial], revision: str, run: Path, jobs: int
+) -> dict[str, tuple[bool, str]]:
+    """Runs every trial and prints each result and the time per stage."""
+    source = release_source(revision, run)
+    start = time.monotonic()
+    run_units([partial(trial.prepare, revision, source) for trial in trials], jobs)
+    shutil.rmtree(source)
+    results: dict[str, tuple[bool, str]] = {}
+    for trial in trials:
+        results.update(sorted(trial.results.items()))
+    for name, (ok, detail) in results.items():
+        print(f"{'PASS' if ok else 'FAIL'} {name}: {detail}")
+    times = [entry for trial in trials for entry in trial.times]
+    print("\n".join(time_summary(times, time.monotonic() - start)))
+    return results
+
+
+def fresh_run() -> Path:
+    if CACHE.is_dir():
+        shutil.rmtree(CACHE)
+    run = CACHE / time.strftime("run-%Y%m%d-%H%M%S")
+    run.mkdir(parents=True)
+    return run
+
+
+def ci_canary(args: argparse.Namespace, revision: str) -> int:
+    """Public new projects only, so the CI log may show every step."""
+    run = fresh_run()
+    trials = [Trial(target, run, (), check_new=True) for target in targets(args, [])]
+    results = try_targets(trials, revision, run, args.jobs)
+    for trial in trials:
+        if not all(ok for ok, _ in trial.results.values()):
+            print(f"::group::{trial.label} log\n{trial.log().read_text()}::endgroup::")
+    return 0 if all(ok for ok, _ in results.values()) else 1
+
+
 def canary(args: argparse.Namespace) -> int:
     revision = output(["git", "rev-parse", "--verify", args.revision + "^{commit}"])
+    if args.ci:
+        return ci_canary(args, revision)
     names = output(["git", "diff", "--name-only", f"origin/main...{revision}"]).split()
     found = repositories()
     private = [name for name, hidden, _ in found if hidden]
@@ -533,28 +624,22 @@ def canary(args: argparse.Namespace) -> int:
             revision, "pending", "Trying the release on new and installed projects"
         )
     projects = installed_projects(found) if not args.project else []
-    if not args.project and not projects and "installed" in (args.kind or KINDS):
+    chosen = longest_first(targets(args, projects))
+    wants_installed = "installed" in (args.kind or ([] if args.target else KINDS))
+    if not args.project and not projects and wants_installed:
         return finish(revision, args, "failure", "No installed project found")
+    if any(target[0] in AGENT_KINDS for target in chosen) and (
+        missing := ci_failures(revision)
+    ):
+        # A new project that fails in minutes on CI must not start hours of agent runs.
+        print(f"New projects without passing CI: {', '.join(missing)}")
+        return finish(revision, args, "failure", "New projects have not passed CI")
     token = output(["gh", "auth", "token"])
     os.environ.update(GH_TOKEN=token, GITHUB_TOKEN=token)
-    if CACHE.is_dir():
-        shutil.rmtree(CACHE)
-    run = CACHE / time.strftime("run-%Y%m%d-%H%M%S")
-    run.mkdir(parents=True)
-    source = release_source(revision, run)
+    run = fresh_run()
     agents = tuple(args.agent or AGENTS)
-    start = time.monotonic()
-    found = longest_first(targets(args, projects))
-    trials = [Trial(target, run, agents_for(target, agents)) for target in found]
-    run_units([partial(trial.prepare, revision, source) for trial in trials], args.jobs)
-    shutil.rmtree(source)
-    results: dict[str, tuple[bool, str]] = {}
-    for trial in trials:
-        results.update(sorted(trial.results.items()))
-    for name, (ok, detail) in results.items():
-        print(f"{'PASS' if ok else 'FAIL'} {name}: {detail}")
-    times = [entry for trial in trials for entry in trial.times]
-    print("\n".join(time_summary(times, time.monotonic() - start)))
+    trials = [Trial(target, run, agents_for(target, agents)) for target in chosen]
+    results = try_targets(trials, revision, run, args.jobs)
     passed = all(ok for ok, _ in results.values())
     return finish(
         revision, args, "success" if passed else "failure", status_text(results)
