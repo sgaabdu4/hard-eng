@@ -152,6 +152,7 @@ def test_python_locks_the_scaffold_and_adds_tested_starter_code(
 ) -> None:
     """A new Python project starts with tests and a performance suite, so its first check passes."""
     ran = created(tmp_path, monkeypatch, "python", {"main.py": "print('hi')\n"})
+    assert "--no-package" in ran[0]
     assert ran[1] == ["uv", "lock", "--quiet"]
     assert (tmp_path / "tests/test_main.py").is_file()
     assert (tmp_path / "tests/performance/test_greeting_performance.py").is_file()
