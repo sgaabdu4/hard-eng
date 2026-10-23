@@ -26,6 +26,22 @@ NATIVE_SCANNERS = {
     "dart-decimate": "dart-decimate",
     "react-doctor": "React Doctor",
 }
+PACKAGES = {
+    "uv": "uv",
+    "gitleaks": "aqua:gitleaks/gitleaks",
+    "osv-scanner": "aqua:google/osv-scanner",
+    "actionlint": "aqua:rhysd/actionlint",
+    "shellcheck": "aqua:koalaman/shellcheck",
+    "trivy": "aqua:aquasecurity/trivy",
+    "biome": "npm:@biomejs/biome",
+    "tsc": "npm:typescript",
+    "fallow": "npm:fallow",
+    "dart-decimate": "npm:dart-decimate",
+    "react-doctor": "npm:react-doctor",
+    "jscpd": "npm:jscpd",
+    "lhci": "npm:@lhci/cli",
+    "k6": "aqua:grafana/k6",
+}
 MANAGED_PYTHON_SCANNERS = {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "poetry"}
 SCANNER_VERSIONS: dict[str, str] = {}
 # The platform package installs without the npm-only preinstall of @jdxcode/mise.
@@ -146,22 +162,6 @@ def managed_scanner_command(command: list[str], directory: Path) -> list[str]:
 
 
 def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
-    packages = {
-        "uv": "uv",
-        "gitleaks": "aqua:gitleaks/gitleaks",
-        "osv-scanner": "aqua:google/osv-scanner",
-        "actionlint": "aqua:rhysd/actionlint",
-        "shellcheck": "aqua:koalaman/shellcheck",
-        "trivy": "aqua:aquasecurity/trivy",
-        "biome": "npm:@biomejs/biome",
-        "tsc": "npm:typescript",
-        "fallow": "npm:fallow",
-        "dart-decimate": "npm:dart-decimate",
-        "react-doctor": "npm:react-doctor",
-        "jscpd": "npm:jscpd",
-        "lhci": "npm:@lhci/cli",
-        "k6": "aqua:grafana/k6",
-    }
     commands = [
         uvx_scanner(
             package_script_invocation(
@@ -179,10 +179,10 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
         argument
         for command in commands
         for argument in command[1:]
-        if argument in packages
+        if argument in PACKAGES
     )
     selected = sorted(
-        packages[name] + "@latest" for name in executables & packages.keys()
+        PACKAGES[name] + "@latest" for name in executables & PACKAGES.keys()
     )
     if selected:
         provision_batch(selected, timeout)
@@ -218,16 +218,23 @@ def pin_python_scanners(names: list[str], timeout: float) -> None:
             SCANNER_VERSIONS[name] = version
 
 
+def bun_age(tool: str, seconds: int) -> str:
+    """Bun ignores MISE_MINIMUM_RELEASE_AGE, so an npm tool also passes its own."""
+    return re.sub(
+        r"^(npm:[^\[]+?)(@latest)$",
+        rf'\1[bun_args="--minimum-release-age={seconds}"]\2',
+        tool,
+    )
+
+
+def tool_name(tool: str) -> str:
+    """The tool without its install options or version, as mise names it."""
+    return re.sub(r"\[[^\]]*\]|@latest$", "", tool)
+
+
 def provision_batch(batch: list[str], timeout: float) -> None:
-    # Bun ignores MISE_MINIMUM_RELEASE_AGE; two days avoids newly broken releases.
-    batch = [
-        re.sub(
-            r"^(npm:[^\[]+?)(@latest)$",
-            r'\1[bun_args="--minimum-release-age=172800"]\2',
-            tool,
-        )
-        for tool in batch
-    ]
+    # Two days avoids newly broken releases.
+    batch = [bun_age(tool, 172800) for tool in batch]
     shared = Path(os.environ.get("RUNNER_TEMP") or temporary_root()) / "hard-eng-tools"
     # Checkouts on other Hard Eng revisions rewrite these files while this one runs.
     storage = shared if "RUNNER_TEMP" in os.environ else checkout_storage(shared)
@@ -333,7 +340,52 @@ def use_installed_tools(
     if result.returncode != 0 or "Failed to resolve tool version" in result.stderr:
         return False
     export_tool_paths(result.stdout, Path(environment["MISE_DATA_DIR"]))
-    return True
+    return not broken_tools(batch, Path(environment["MISE_DATA_DIR"]), timeout)
+
+
+def broken_tools(
+    batch: list[str], data_directory: Path, timeout: float
+) -> dict[str, str]:
+    """Each installed npm tool that fails `--version`, such as a release published
+    without its platform binary, mapped to the reason."""
+    names = {spec: name for name, spec in PACKAGES.items() if spec.startswith("npm:")}
+    probes = {}
+    for tool in batch:
+        name = names.get(tool_name(tool))
+        executable = shutil.which(name) if name else None
+        if executable and Path(executable).resolve().is_relative_to(
+            data_directory.resolve()
+        ):
+            probes[tool] = (
+                name,
+                executable,
+                subprocess.Popen(
+                    [executable, "--version"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                ),
+            )
+    broken = {}
+    for tool, (name, executable, probe) in probes.items():
+        try:
+            _, error = probe.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            probe.kill()
+            error = probe.communicate()[1] + "\nno answer to --version"
+        if probe.returncode == 0:
+            continue
+        missing = re.search(r"Cannot find module '([^']+)'", error)
+        reason = (
+            "missing " + missing[1]
+            if missing
+            else (error.strip().splitlines() or [f"exit code {probe.returncode}"])[-1]
+        )
+        # The executable sits in <installs>/<tool>/<version link>/bin.
+        version = Path(executable).parents[1].resolve().name
+        broken[tool] = f"tool install broken: {name} {version} {reason}"
+    return broken
 
 
 GITHUB_DENIED = "403 Forbidden) for url (https://api.github.com/repos/"
@@ -391,7 +443,32 @@ def provision_latest(
                 raise ValueError(
                     "Latest tool versions could not be resolved; retry provisioning"
                 )
-    export_tool_paths(result.stdout, Path(environment["MISE_DATA_DIR"]))
+        data_directory = Path(environment["MISE_DATA_DIR"])
+        export_tool_paths(result.stdout, data_directory)
+        broken = broken_tools(batch, data_directory, timeout)
+        if not broken:
+            return
+        # An age-allowed release can lack its platform binary while a newer one fixes it.
+        print(
+            "Reinstall at the newest release: " + "; ".join(broken.values()),
+            file=sys.stderr,
+            flush=True,
+        )
+        names = [tool_name(tool) for tool in broken]
+        retry = [bun_age(name + "@latest", 0) for name in names]
+        command[4] = "MISE_MINIMUM_RELEASE_AGE=0"
+        for arguments in (
+            ["uninstall", "--all", *names],
+            ["install", *retry],
+            ["env", "--json", *retry],
+        ):
+            result = run_mise(command, arguments, storage, environment, timeout)
+            print(result.stderr, file=sys.stderr, end="")
+            result.check_returncode()
+        export_tool_paths(result.stdout, data_directory)
+        broken = broken_tools(retry, data_directory, timeout)
+        if broken:
+            raise ValueError("; ".join(broken.values()))
 
 
 def bun_node(storage: Path, environment: dict[str, str]) -> None:
