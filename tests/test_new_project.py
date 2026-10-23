@@ -145,3 +145,14 @@ def test_opennext_replaces_the_vulnerable_glob_its_minifier_pins() -> None:
     """@node-minify/core pins glob 10.3.3 (GHSA-5j98-mcp5-4vw2); it only calls globSync."""
     starter = new_project.SOURCE / ".agents/starters/opennext/package.json"
     assert json.loads(starter.read_text())["overrides"]["glob"] == ">=10.5.0"
+
+
+def test_python_locks_the_scaffold_and_adds_tested_starter_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new Python project starts with tests and a performance suite, so its first check passes."""
+    ran = created(tmp_path, monkeypatch, "python", {"main.py": "print('hi')\n"})
+    assert ran[1] == ["uv", "lock", "--quiet"]
+    assert (tmp_path / "tests/test_main.py").is_file()
+    assert (tmp_path / "tests/performance/test_greeting_performance.py").is_file()
+    assert "def greeting" in (tmp_path / "main.py").read_text()
