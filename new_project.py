@@ -18,7 +18,7 @@ SCAFFOLDS = {
     ],
     "opennext": [
         *("bun", "x", "create-cloudflare@2.73.3", "."),
-        "--template=github:opennextjs/opennextjs-cloudflare/create-cloudflare/next#2c37a8a4e0679e442dc5232c8b2a58bdbf8189c2",
+        "--template=github:opennextjs/opennextjs-cloudflare/create-cloudflare/next#adb4f68c7c957be53412fba0c1d8266e81b27d28",
         *("--no-deploy", "--no-git", "--no-agents", "--no-auto-update"),
     ],
     "vite": ["bun", "x", "create-vite@9.2.1", ".", "--template", "react-ts"],
