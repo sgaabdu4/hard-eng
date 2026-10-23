@@ -556,6 +556,18 @@ def test_sessions_still_count_an_unplanned_file_under_a_planned_path(
     assert update_runner.committed_matches(installed, commit_id, planned)
 
 
+def test_committed_matches_reads_an_update_larger_than_a_pipe(installed: Path) -> None:
+    planned: dict[str, str | None] = {
+        f"skills/s{index}/SKILL.md": f"{index}" * 2000 for index in range(400)
+    }
+    for name, content in planned.items():
+        (installed / name).parent.mkdir(parents=True)
+        (installed / name).write_text(content or "")
+    commit(installed, "a large update")
+    commit_id = git(installed, "rev-parse", "HEAD")
+    assert update_runner.committed_matches(installed, commit_id, planned)
+
+
 def test_sessions_still_count_an_update_commit_holding_other_content(
     installed: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
