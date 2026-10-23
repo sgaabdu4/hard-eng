@@ -650,3 +650,119 @@ def test_a_check_skips_a_stale_folder_another_check_just_removed(
     monkeypatch.setattr(Path, "exists", other_check_prunes_first)
     tool_setup.prune_checkouts(tmp_path / "checkouts")
     assert not stale.exists()
+
+
+FAKE_MISE = """#!{python}
+import json, os, shutil, sys
+from pathlib import Path
+state = Path({state!r})
+arguments = sys.argv[2:]
+age = os.environ.get("MISE_MINIMUM_RELEASE_AGE", "offline")
+with (state / "calls").open("a") as log:
+    log.write(arguments[0] + " " + age + "\\n")
+tool = Path(os.environ["MISE_DATA_DIR"], "installs/npm-biomejs-biome")
+version = "2.0.1" if age == "2d" else "2.0.2"
+if arguments[0] == "uninstall":
+    shutil.rmtree(tool)
+elif arguments[0] == "install":
+    biome = tool / version / "bin/biome"
+    biome.parent.mkdir(parents=True, exist_ok=True)
+    error = "Error: Cannot find module '@biomejs/cli-test/biome'"
+    biome.write_text(
+        f"#!/bin/sh\\necho \\"{{error}}\\" >&2\\nexit 1\\n"
+        if (state / f"broken-{{version}}").exists()
+        else f"#!/bin/sh\\necho {{version}}\\n"
+    )
+    biome.chmod(0o755)
+    (tool / "latest").unlink(missing_ok=True)
+    (tool / "latest").symlink_to(version)
+elif arguments[0] == "env":
+    print(json.dumps({{"PATH": str(tool / "latest/bin")}}))
+"""
+
+
+def provision_biome(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, quick: bool = False
+) -> None:
+    """Provision Biome with a fake mise whose age-limited release is 2.0.1."""
+    from collections.abc import Generator
+    from contextlib import contextmanager
+
+    import tool_setup
+    from gate_config import Group
+
+    launcher = tmp_path / "launcher"
+    mise = launcher / tool_setup.MISE_BINARY
+    if not mise.exists():
+        mise.parent.mkdir(parents=True)
+        mise.write_text(FAKE_MISE.format(python=sys.executable, state=str(tmp_path)))
+        mise.chmod(0o755)
+
+    @contextmanager
+    def installed(*_arguments: object) -> Generator[Path]:
+        yield mise
+
+    def newest(_launchers: Path) -> Path:
+        return launcher
+
+    monkeypatch.setattr(tool_setup, "mise_launcher", installed)
+    monkeypatch.setattr(tool_setup, "newest_launcher", newest)
+    monkeypatch.setattr(
+        sys, "argv", ["hard-eng.py", "check", *(["--quick"] if quick else [])]
+    )
+    for name in ("MISE_DATA_DIR", "MISE_CACHE_DIR", "MISE_STATE_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
+    monkeypatch.setenv("PATH", os.environ["PATH"])
+    biome: Group = {
+        "path": ".",
+        "checks": [{"name": "lint", "command": ["biome", "check"]}],
+    }
+    tool_setup.provision_tools(tmp_path, [biome], 30)
+
+
+def test_a_release_without_its_platform_binary_is_replaced_by_the_newest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "broken-2.0.1").touch()
+    provision_biome(tmp_path, monkeypatch)
+    assert (
+        subprocess.run(["biome"], check=False, capture_output=True, text=True).stdout
+        == "2.0.2\n"
+    )
+    assert (tmp_path / "calls").read_text().splitlines() == [
+        "install 2d",
+        "env 2d",
+        "uninstall 0",
+        "install 0",
+        "env 0",
+    ]
+
+
+def test_a_tool_still_broken_after_reinstall_names_what_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "broken-2.0.1").touch()
+    (tmp_path / "broken-2.0.2").touch()
+    with pytest.raises(ValueError) as error:
+        provision_biome(tmp_path, monkeypatch)
+    assert str(error.value) == (
+        "tool install broken: biome 2.0.2 missing @biomejs/cli-test/biome"
+    )
+
+
+def test_quick_check_repairs_a_broken_installed_tool(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "broken-2.0.1").touch()
+    (tmp_path / "broken-2.0.2").touch()
+    with pytest.raises(ValueError):
+        provision_biome(tmp_path, monkeypatch)
+    (tmp_path / "broken-2.0.2").unlink()
+    (tmp_path / "calls").unlink()
+    provision_biome(tmp_path, monkeypatch, quick=True)
+    assert (
+        subprocess.run(["biome"], check=False, capture_output=True, text=True).stdout
+        == "2.0.2\n"
+    )
+    assert (tmp_path / "calls").read_text().splitlines()[0] == "env offline"
