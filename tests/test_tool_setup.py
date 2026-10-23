@@ -657,7 +657,7 @@ import json, os, shutil, sys
 from pathlib import Path
 state = Path({state!r})
 arguments = sys.argv[2:]
-age = os.environ.get("MISE_MINIMUM_RELEASE_AGE", "offline")
+age = "offline" if "MISE_OFFLINE" in os.environ else os.environ["MISE_MINIMUM_RELEASE_AGE"]
 with (state / "calls").open("a") as log:
     log.write(arguments[0] + " " + age + "\\n")
 tool = Path(os.environ["MISE_DATA_DIR"], "installs/npm-biomejs-biome")
@@ -710,8 +710,8 @@ def provision_biome(
     monkeypatch.setattr(
         sys, "argv", ["hard-eng.py", "check", *(["--quick"] if quick else [])]
     )
-    for name in ("MISE_DATA_DIR", "MISE_CACHE_DIR", "MISE_STATE_DIR"):
-        monkeypatch.delenv(name, raising=False)
+    for name in [name for name in os.environ if name.startswith("MISE_")]:
+        monkeypatch.delenv(name)
     monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
     monkeypatch.setenv("PATH", os.environ["PATH"])
     biome: Group = {
