@@ -22,7 +22,8 @@ SCAFFOLDS = {
         *("--no-deploy", "--no-git", "--no-agents", "--no-auto-update"),
     ],
     "vite": ["bun", "x", "create-vite@9.2.1", ".", "--template", "react-ts"],
-    "python": ["uv", "init", "--quiet", "--app"],
+    # uv 0.12 builds apps as packages; the starter needs a root main.py on the test path.
+    "python": ["uv", "init", "--quiet", "--app", "--no-package"],
 }
 REMOVED = {"opennext": ["eslint.config.mjs"], "vite": [".oxlintrc.json"]}
 SCAFFOLD_VERSIONS = {"opennext": ["next"]}
