@@ -936,7 +936,9 @@ if __name__ == "__main__":
         action="store_true",
         help="Print the installation plan without writing files",
     )
-    parser.add_argument("--new", choices=["flutter", "nextjs", "opennext", "vite"])
+    parser.add_argument(
+        "--new", choices=["flutter", "nextjs", "opennext", "vite", "python"]
+    )
     try:
         args = parser.parse_args()
         if args.plan:

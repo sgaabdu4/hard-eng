@@ -14,7 +14,7 @@ DEBT_FILE = "hard-eng.debt.json"
 NEVER = {"tests", "lockfiles", "secrets-files", "secrets-history"}
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 RUNNER_LINES = re.compile(
-    r"^(warning: The `UV_|mise |(Downloading|Downloaded|Installed|Uninstalled"
+    r"^(warning: (The `UV_|`VIRTUAL_ENV=)|mise |(Downloading|Downloaded|Installed|Uninstalled"
     r"|Resolved|Prepared|Audited|Building|Built) )"
 )
 

@@ -255,17 +255,7 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
     else:
         work.mkdir()
         must(work, log, "setup failed", ["git", "init", "-q"])
-    if kind == "greenfield":
-        must(
-            work,
-            log,
-            "setup failed",
-            ["uv", "init", "-q", "--app"],
-            ["uv", "lock", "-q"],
-            ["git", "add", "--all"],
-            ["git", "commit", "-q", "-m", "Create the project"],
-        )
-    new = ["--new", value] if kind == "scaffold" else []
+    new = [] if kind == "brownfield" else ["--new", value]
     must(work, log, "setup failed", ["sh", str(source / "setup.sh"), str(source), *new])
     add_documents(work)
     if kind == "brownfield":

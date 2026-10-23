@@ -92,6 +92,14 @@ def test_report_findings_count_beside_the_output(tmp_path: Path) -> None:
     assert found == {"rule a.py eval(x)": 2, "Ran N rules in .": 1}
 
 
+def test_a_mismatched_virtual_env_warning_is_not_a_finding(tmp_path: Path) -> None:
+    """uv warns when an outer VIRTUAL_ENV is set; that warning must not count as debt."""
+    gate: Gate = {"name": "dependencies", "role": "dependencies", "command": ["uv"]}
+    group: Group = {"path": ".", "checks": [gate]}
+    output = "warning: `VIRTUAL_ENV=/other/.venv` does not match the project environment path `.venv`\n"
+    assert debt.fingerprints(tmp_path, group, gate, output) == {}
+
+
 def test_debt_appears_only_with_the_install_and_never_grows(repository: Path) -> None:
     """HE-DEBT-SHRINK-ONLY: the debt file is added by the install and only shrinks."""
     path = repository / debt.DEBT_FILE

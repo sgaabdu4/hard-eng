@@ -22,6 +22,7 @@ SCAFFOLDS = {
         *("--no-deploy", "--no-git", "--no-agents", "--no-auto-update"),
     ],
     "vite": ["bun", "x", "create-vite@9.2.1", ".", "--template", "react-ts"],
+    "python": ["uv", "init", "--quiet", "--app"],
 }
 REMOVED = {"opennext": ["eslint.config.mjs"], "vite": [".oxlintrc.json"]}
 SCAFFOLD_VERSIONS = {"opennext": ["next"]}
@@ -32,10 +33,9 @@ EMPTY_REPOSITORY = (
     "For a web app, never default to Next.js: suggest it only for public pages that need "
     "search ranking or fast first load, and React + Vite for apps behind a login, internal "
     "tools and apps with a separate backend. Then rerun the setup command with "
-    "`sh -s -- --new STACK` (flutter, nextjs, opennext or vite): it creates the project with "
+    "`sh -s -- --new STACK` (flutter, nextjs, opennext, vite or python): it creates the project with "
     "the official scaffold, adds starter tests and checks, pins each package to the newest "
-    "release minimumReleaseAge allows, commits, and installs Hard Eng. A Python project: "
-    "`uv init` and `uv lock`, then rerun setup."
+    "release minimumReleaseAge allows, commits, and installs Hard Eng."
 )
 
 
@@ -142,6 +142,8 @@ def create(root: Path, stack: str) -> None:
     copy_starter(root, stack)
     if stack == "flutter":
         finish_flutter(root)
+    elif stack == "python":
+        run(root, ["uv", "lock", "--quiet"])
     else:
         finish_web(root, kept)
     for command in GENERATED.get(stack, []):
