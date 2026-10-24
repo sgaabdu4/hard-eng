@@ -555,6 +555,24 @@ def test_a_new_project_gets_its_full_check_only_in_ci(
             assert [name for name, _ in checks] == ["full check"]
 
 
+def test_ci_checks_new_projects_as_manual_full_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A push or PR event would make the new project's check ask for --base."""
+    seen: list[str | None] = []
+
+    def try_targets(*_: object) -> dict[str, tuple[bool, str]]:
+        seen.append(os.environ.get("GITHUB_EVENT_NAME"))
+        return {}
+
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setattr(release_canary, "fresh_run", lambda: tmp_path)
+    monkeypatch.setattr(release_canary, "try_targets", try_targets)
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--ci"])
+    assert release_canary.ci_canary(release_canary.arguments(), "a" * 40) == 0
+    assert seen == [None]
+
+
 def test_ci_and_reruns_pick_only_the_named_new_projects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
