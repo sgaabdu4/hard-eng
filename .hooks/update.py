@@ -17,6 +17,7 @@ from pathlib import Path
 import agent_hooks
 import hook_chain
 from mcp_setup import retired_settings
+from release_history import StaleRelease, ordered
 from update_runner import (
     commit_update,
     current_head,
@@ -170,12 +171,7 @@ def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, 
         check=True,
         timeout=60,
     )
-    subprocess.run(
-        ["git", "merge-base", "--is-ancestor", previous, revision],
-        cwd=source,
-        check=True,
-        timeout=30,
-    )
+    ordered(source, revision, previous)
     subprocess.run(
         ["git", "worktree", "add", "--quiet", "--detach", str(old), previous],
         cwd=source,
@@ -959,7 +955,7 @@ def check_scaffold_update(root: Path, base: str) -> bool:
     try:
         if not release_installed(root, base, names, revision, previous):
             return False
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, StaleRelease):
         return False
     print(
         "Scaffold-only update: source CI verified and the gate configuration accepted.",
