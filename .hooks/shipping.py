@@ -7,7 +7,6 @@ import math
 import os
 import re
 import subprocess
-import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +27,7 @@ ShippingPolicy = TypedDict(
         "ui_paths": list[str],
         "ci_seconds": float,
         "pre_push_seconds": float,
+        "pre_push_mutation_seconds": float,
         "delivery": list[Delivery],
     },
 )
@@ -65,6 +65,7 @@ _CONFIG_KEYS = {
     "pre_push_seconds",
     "delivery",
 }
+_OPTIONAL_KEYS = {"pre_push_mutation_seconds"}  # policies older than the key still load
 _DELIVERY_KEYS = {"name", "command"}
 _BRANCH_PARTS = re.compile(r"^[A-Za-z0-9._/-]+$")
 _SHA = re.compile(r"^[0-9a-fA-F]{40}$")
@@ -228,14 +229,14 @@ def _branch(value: str, description: str) -> str:
     return value
 
 
-def _number(value: JsonValue, description: str) -> float:
+def _number(value: JsonValue, description: str, zero: bool = False) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ShippingError(f"{description} must be a positive number")
     try:
         number = float(value)
     except OverflowError as error:
         raise ShippingError(f"{description} must be a positive number") from error
-    if not math.isfinite(number) or number <= 0:
+    if not math.isfinite(number) or number < 0 or (number == 0 and not zero):
         raise ShippingError(f"{description} must be a positive number")
     return number
 
@@ -284,7 +285,7 @@ def _delivery_entries(value: JsonValue) -> list[Delivery]:
 
 
 def _policy(raw: dict[str, JsonValue]) -> ShippingPolicy:
-    if set(raw) != _CONFIG_KEYS:
+    if not _CONFIG_KEYS <= set(raw) <= _CONFIG_KEYS | _OPTIONAL_KEYS:
         raise ShippingError("shipping policy has unknown or missing keys")
     base = raw["base"]
     if not isinstance(base, str):
@@ -298,12 +299,12 @@ def _policy(raw: dict[str, JsonValue]) -> ShippingPolicy:
         "pre_push_seconds": _number(
             raw["pre_push_seconds"], "shipping pre_push_seconds"
         ),
+        # Zero skips pre-push mutation; the default caps it at two minutes.
+        "pre_push_mutation_seconds": _number(
+            raw.get("pre_push_mutation_seconds", 120), "pre_push_mutation_seconds", True
+        ),
         "delivery": _delivery_entries(raw["delivery"]),
     }
-
-
-GATE_FLOOR_SECONDS = 600
-GATE_TIMES_LOCK = threading.Lock()
 
 
 def gate_budget(root: Path) -> float:
@@ -312,39 +313,6 @@ def gate_budget(root: Path) -> float:
     if policy is None:
         return 600
     return policy["ci_seconds" if os.environ.get("CI") else "pre_push_seconds"]
-
-
-def gate_times(root: Path) -> Path:
-    common = subprocess.check_output(
-        ["git", "rev-parse", "--git-common-dir"], cwd=root, text=True
-    ).strip()
-    return root / common / "hard-eng-gate-times.json"
-
-
-def gate_limit(root: Path, key: str, budget: float) -> float:
-    """A hung gate stops at three times its last passing time, not the whole budget."""
-    try:
-        times = json.loads(gate_times(root).read_text())
-    except (OSError, ValueError, subprocess.CalledProcessError):
-        return budget
-    last = times.get(key) if isinstance(times, dict) else None
-    if not isinstance(last, int | float):
-        return budget
-    return min(budget, max(GATE_FLOOR_SECONDS, 3 * last))
-
-
-def record_gate_time(root: Path, key: str, seconds: float) -> None:
-    path = gate_times(root)
-    with GATE_TIMES_LOCK:
-        try:
-            loaded = json.loads(path.read_text())
-        except (OSError, ValueError):
-            loaded = None
-        times: dict[str, JsonValue] = loaded if isinstance(loaded, dict) else {}
-        times[key] = round(seconds, 3)
-        temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-        temporary.write_text(json.dumps(times))
-        temporary.replace(path)
 
 
 def load_policy(root: Path, required: bool = True) -> ShippingPolicy | None:

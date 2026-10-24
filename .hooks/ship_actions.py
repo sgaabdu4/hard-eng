@@ -267,10 +267,12 @@ def pre_push(root: Path) -> int:
                     flush=True,
                 )
                 return 1
-            if base is not None:
+            if base is not None and (limit := policy["pre_push_mutation_seconds"]):
                 began = time.monotonic()
                 arguments = ["mutation", "--base", base, "--in-place"]
-                run_hard_eng(checkout, arguments, environment)
+                run_hard_eng(
+                    checkout, [*arguments, "--seconds", str(limit)], environment
+                )
                 mutating += time.monotonic() - began
         elapsed = time.monotonic() - started - mutating
         if elapsed > policy["pre_push_seconds"]:

@@ -684,10 +684,52 @@ def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
     assert runner.pre_push() == 0
     assert hard_eng.call_args_list[0].args[1] == ["check", "--base", "2" * 40, *scope]
     mutating = hard_eng.call_args_list[1].args[1]
-    assert mutating == ["mutation", "--base", "2" * 40, "--in-place"]
+    assert mutating == [
+        "mutation",
+        "--base",
+        "2" * 40,
+        "--in-place",
+        "--seconds",
+        "120.0",
+    ]
     output = capsys.readouterr().out
     assert "checks passed in 2s, over the 1s pre_push_seconds budget" in output
     assert ("Switch to HTTPS" in output) is warned
+
+
+def test_pre_push_skips_mutation_when_its_budget_is_zero(
+    runner: ModuleType,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkout = runner.ROOT / "snapshot"
+    (checkout / ".hooks").mkdir(parents=True)
+    (checkout / ".hooks/hard-eng.py").write_text("")
+
+    def snapshot(*_args: object) -> nullcontext[Path]:
+        return nullcontext(checkout)
+
+    monkeypatch.setattr(ship_actions, "snapshot", snapshot)
+    shipping_policy["pre_push_mutation_seconds"] = 0.0
+    (runner.ROOT / "hard-eng.gates.json").write_text(
+        json.dumps({"shipping": shipping_policy})
+    )
+    monkeypatch.setattr(
+        "sys.stdin",
+        StringIO(f"refs/heads/task {'1' * 40} refs/heads/task {'2' * 40}\n"),
+    )
+    monkeypatch.setattr(
+        ship_actions, "git", Mock(return_value="https://github.com/o/r.git")
+    )
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        Mock(return_value=subprocess.CompletedProcess([], 0, "")),
+    )
+    hard_eng = Mock(return_value=0)
+    monkeypatch.setattr(ship_actions, "run_hard_eng", hard_eng)
+    assert runner.pre_push() == 0
+    assert [call.args[1][0] for call in hard_eng.call_args_list] == ["check"]
 
 
 @pytest.mark.parametrize("signal_number", [signal.SIGTERM, signal.SIGHUP])

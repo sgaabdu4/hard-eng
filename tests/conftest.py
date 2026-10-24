@@ -192,6 +192,7 @@ def default_policy() -> "ShippingPolicy":
         "ui_paths": [],
         "ci_seconds": 180.0,
         "pre_push_seconds": 180.0,
+        "pre_push_mutation_seconds": 120.0,
         "delivery": [],
     }
 
