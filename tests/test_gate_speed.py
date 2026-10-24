@@ -16,9 +16,9 @@ from reports import gate_order, scan_blockers
 def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import shipping
+    import gate_times
 
-    monkeypatch.setattr(shipping, "GATE_FLOOR_SECONDS", 1)
+    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
     configure(tmp_path, [gate("suite", "pass")])
     assert runner.check(timeout=120) == 0
     times = json.loads((tmp_path / ".git/hard-eng-gate-times.json").read_text())
