@@ -833,7 +833,7 @@ def paused_turn(payload: JsonObject) -> JsonObject | None:
 
 
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
-    from plans import build_in_progress, planning_feedback, planning_only
+    from plans import planning_feedback, planning_only
 
     if (paused := paused_turn(payload)) is not None:
         return paused
@@ -867,37 +867,53 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 root,
                 {"systemMessage": notice + ". Planning-only; no code checks run."},
             )
-        claim = str(
-            payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
+        return checked_changes(
+            root, payload, state, agent, (base, current, changed, notice)
         )
-        # HE Build keeps a plan Ready until its final gate; only its handoff needs Complete.
-        building = not SHIP_CLAIM.search(claim) and build_in_progress(
-            root, set(changed.splitlines())
-        )
-        verified: JsonObject = {
-            "base": base,
-            "files": dict(current),
-            "building": building,
-        }
-        if last_pass(state) == verified:
-            return with_freshness(
-                root,
-                {
-                    "systemMessage": "Hard Eng: unchanged since last passing check; not rerun."
-                },
-            )
-        returncode, output = run_check(root, base, building)
-        decisions = show_decisions(root, changed.splitlines(), state)
-        if returncode == 0:
-            remember_pass(state, verified)
-            if decisions:
-                return {"decision": "block", "reason": decisions.strip()}
-            return with_freshness(root, passed_notice(building, notice, agent, output))
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return {
             "decision": "block",
             "reason": f"Verification could not run: {error}. Report it; repair only within the authorized task. No new authority.",
         }
+
+
+def checked_changes(
+    root: Path,
+    payload: JsonObject,
+    state: Path | None,
+    agent: str | None,
+    scope: tuple[str, dict[str, str], str, str],
+) -> JsonObject:
+    """Run the check on the session's changes; a split keeps Semgrep's taint analysis bounded."""
+    from plans import build_in_progress
+
+    base, current, changed, notice = scope
+    claim = str(
+        payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
+    )
+    # HE Build keeps a plan Ready until its final gate; only its handoff needs Complete.
+    building = not SHIP_CLAIM.search(claim) and build_in_progress(
+        root, set(changed.splitlines())
+    )
+    verified: JsonObject = {
+        "base": base,
+        "files": dict(current),
+        "building": building,
+    }
+    if last_pass(state) == verified:
+        return with_freshness(
+            root,
+            {
+                "systemMessage": "Hard Eng: unchanged since last passing check; not rerun."
+            },
+        )
+    returncode, output = run_check(root, base, building)
+    decisions = show_decisions(root, changed.splitlines(), state)
+    if returncode == 0:
+        remember_pass(state, verified)
+        if decisions:
+            return {"decision": "block", "reason": decisions.strip()}
+        return with_freshness(root, passed_notice(building, notice, agent, output))
     return {
         "decision": "block",
         "reason": output.rstrip("\n")
