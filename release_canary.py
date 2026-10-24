@@ -598,6 +598,8 @@ def fresh_run() -> Path:
 
 def ci_canary(args: argparse.Namespace, revision: str) -> int:
     """Public new projects only, so the CI log may show every step."""
+    # Each new project's check is a manual full check, not hard-eng's own push or PR check.
+    os.environ.pop("GITHUB_EVENT_NAME", None)
     run = fresh_run()
     trials = [Trial(target, run, (), check_new=True) for target in targets(args, [])]
     results = try_targets(trials, revision, run, args.jobs)
