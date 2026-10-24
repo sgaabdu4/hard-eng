@@ -206,23 +206,30 @@ RUNNER_HEADER = (
 
 
 def migrate_launcher(source: Path, content: str) -> str:
-    """Bash 3.2 on macOS runners cannot lowercase with ${var,,}; compute the package once."""
+    """Bash 3.2 on macOS runners cannot lowercase with ${var,,}; compute the package once per job."""
     if LEGACY_PACKAGE not in content and MISE_PACKAGE not in content:
         return content
-    if 'echo "MISE_PACKAGE=' not in content:
-        template = (source / ".github/workflows/hard-eng.yml").read_text()
-        echo = next(line for line in template.splitlines() if "MISE_PACKAGE=" in line)
-        anchor = re.search(r'(?m)^( *)echo "BUN_INSTALL_CACHE_DIR=[^\n]*\n', content)
-        if anchor is None:
-            print(
-                "CI launcher not updated: add the MISE_PACKAGE line from the Hard Eng "
-                "template to the impact step so mise installs on macOS runners.",
-                file=sys.stderr,
-            )
-            return content
-        line = anchor[1] + echo.strip() + "\n"
-        content = content[: anchor.end()] + line + content[anchor.end() :]
-    return content.replace(LEGACY_PACKAGE, MISE_PACKAGE)
+    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    echo = next(line for line in template.splitlines() if "MISE_PACKAGE=" in line)
+    # Each job runs on its own runner, so every job that launches mise sets the package.
+    jobs = re.split(r"(?m)^(?=  [A-Za-z0-9_-]+:\n)", content)
+    for index, job in enumerate(jobs):
+        if (
+            LEGACY_PACKAGE in job or MISE_PACKAGE in job
+        ) and 'echo "MISE_PACKAGE=' not in job:
+            anchor = re.search(r'(?m)^( *)echo "BUN_INSTALL_CACHE_DIR=[^\n]*\n', job)
+            if anchor is None:
+                name = job.split(":", 1)[0].strip()
+                print(
+                    f"CI launcher not updated in job {name}: add the MISE_PACKAGE line "
+                    "from the Hard Eng template to its first step so mise installs on "
+                    "every runner.",
+                    file=sys.stderr,
+                )
+                continue
+            line = anchor[1] + echo.strip() + "\n"
+            jobs[index] = job[: anchor.end()] + line + job[anchor.end() :]
+    return "".join(jobs).replace(LEGACY_PACKAGE, MISE_PACKAGE)
 
 
 def migrate_swift_runner(config: GateConfig, content: str) -> str:
