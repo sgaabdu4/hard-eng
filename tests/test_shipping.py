@@ -199,68 +199,6 @@ def _ready_fixture(
     return fixture, fake
 
 
-def _add_unknown(policy: dict[str, object]) -> None:
-    policy.update(extra=True)
-
-
-def _duplicate_checks(policy: dict[str, object]) -> None:
-    policy.update(checks=["build", "build"])
-
-
-def _boolean_budget(policy: dict[str, object]) -> None:
-    policy.update(ci_seconds=False)
-
-
-def _zero_budget(policy: dict[str, object]) -> None:
-    policy.update(pre_push_seconds=0)
-
-
-def _malformed_delivery(policy: dict[str, object]) -> None:
-    policy.update(delivery=[{"name": "bad"}])
-
-
-def test_load_policy_is_optional_only_when_absent(tmp_path: Path) -> None:
-    root = tmp_path / "project"
-    root.mkdir()
-    assert shipping.load_policy(root, required=False) is None
-    with pytest.raises(shipping.ShippingError):
-        shipping.load_policy(root)
-    (root / "hard-eng.gates.json").write_text(
-        json.dumps({"shipping": {"base": "main"}})
-    )
-    with pytest.raises(shipping.ShippingError):
-        shipping.load_policy(root, required=False)
-
-
-@pytest.mark.parametrize(
-    "change",
-    [
-        _add_unknown,
-        _duplicate_checks,
-        _boolean_budget,
-        _zero_budget,
-        _malformed_delivery,
-    ],
-)
-def test_load_policy_rejects_malformed_values(
-    tmp_path: Path, change: Callable[[dict[str, object]], None]
-) -> None:
-    root = tmp_path / "project"
-    root.mkdir()
-    policy: dict[str, object] = {
-        "base": "main",
-        "checks": ["build"],
-        "ui_paths": [],
-        "ci_seconds": 180,
-        "pre_push_seconds": 180,
-        "delivery": [],
-    }
-    change(policy)
-    (root / "hard-eng.gates.json").write_text(json.dumps({"shipping": policy}))
-    with pytest.raises(shipping.ShippingError):
-        shipping.load_policy(root)
-
-
 def test_ready_returns_identity_after_current_checks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -437,7 +437,7 @@ def run_gate(
     related_base: str | None = None,
 ) -> bool:
     """Run a gate under its own limit and record how long a pass took."""
-    from shipping import gate_limit, record_gate_time
+    from gate_times import gate_limit, record_gate_time
 
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
     started = time.monotonic()
