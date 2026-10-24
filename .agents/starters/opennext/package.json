@@ -19,6 +19,9 @@
   },
   "overrides": {
     "glob": ">=10.5.0",
-    "sharp": ">=0.35.5"
+    "sharp": ">=0.35.5",
+    "miniflare": {
+      "undici": "^7.30.1"
+    }
   }
 }

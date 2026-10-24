@@ -147,6 +147,13 @@ def test_opennext_replaces_the_vulnerable_glob_its_minifier_pins() -> None:
     assert json.loads(starter.read_text())["overrides"]["glob"] == ">=10.5.0"
 
 
+def test_opennext_replaces_the_vulnerable_undici_miniflare_pins() -> None:
+    """Miniflare pins undici 7.29.1 (GHSA-4qv8-2p9j-2685); dotenvx keeps its own undici 6."""
+    starter = new_project.SOURCE / ".agents/starters/opennext/package.json"
+    overrides = json.loads(starter.read_text())["overrides"]
+    assert overrides["miniflare"] == {"undici": "^7.30.1"}
+
+
 def test_python_locks_the_scaffold_and_adds_tested_starter_code(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
