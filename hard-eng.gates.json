@@ -3,7 +3,7 @@
   "scan_git_history": false,
   "shipping": {
     "base": "develop",
-    "checks": ["hard-eng"],
+    "checks": ["hard-eng", "canary"],
     "ui_paths": [],
     "ci_seconds": 300,
     "pre_push_seconds": 600,
