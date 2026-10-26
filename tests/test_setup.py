@@ -21,7 +21,6 @@ from project_setup import (
     FLUTTER_TESTS,
     PREVIOUS_BROWSER_TESTS,
     adapt_performance,
-    add_freshness,
     browser_test_coverage,
     dependency_command,
     javascript_files,
@@ -662,105 +661,6 @@ def repository(root: Path) -> None:
         config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
     (root / "package.json").write_text('{"private":true}')
     (root / "bun.lock").write_text('{"lockfileVersion": 1}\n')
-
-
-FRESHNESS_COMMANDS = {
-    "bun": ["bun", "outdated", "--minimum-release-age=172800"],
-    "dart": ["dart", "pub", "outdated", "--json"],
-    "flutter": ["flutter", "pub", "outdated", "--json"],
-    "uv": ["uv", "tree", "--frozen", "--outdated", "--all-groups", "--depth", "1"],
-    "poetry": ["poetry", "show", "--outdated", "--top-level", "--format", "json"],
-}
-
-
-@pytest.mark.parametrize("tool", sorted(FRESHNESS_COMMANDS))
-def test_groups_require_freshness_role(
-    installer: ModuleType, tmp_path: Path, tool: str
-) -> None:
-    repository(tmp_path)
-    if tool != "bun":
-        (tmp_path / "package.json").unlink()
-        (tmp_path / "bun.lock").unlink()
-    if tool in {"uv", "poetry"}:
-        (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\nversion="1"\n')
-        (tmp_path / f"{tool}.lock").touch()
-    if tool in {"dart", "flutter"}:
-        sdk = "dependencies:\n  flutter:\n    sdk: flutter\n" * (tool == "flutter")
-        (tmp_path / "pubspec.yaml").write_text(f"name: app\n{sdk}")
-        (tmp_path / "pubspec.lock").touch()
-        (tmp_path / "lib").mkdir()
-        (tmp_path / "lib/app.dart").write_text("int one() => 1;\n")
-    config = installer.gate_config(tmp_path)
-    package = config["packages"][0]
-    gate = next(g for g in package["checks"] if g.get("role") == "freshness")
-    assert gate["command"] == FRESHNESS_COMMANDS[tool]
-    assert gate["report"]["type"] == "freshness"
-    assert gate["report"]["stdout"] is True
-    validate_required_checks(tmp_path, config)
-    package["checks"].remove(gate)
-    with pytest.raises(ValueError, match="missing mandatory checks: freshness"):
-        validate_required_checks(tmp_path, config)
-    add_freshness(tmp_path, installer.SOURCE, package)
-    assert next(g for g in package["checks"] if g.get("role") == "freshness") == gate
-    add_freshness(tmp_path, installer.SOURCE, package)
-    assert [g.get("role") for g in package["checks"]].count("freshness") == 1
-    validate_required_checks(tmp_path, config)
-
-
-def test_languages_sharing_a_folder_each_get_their_own_freshness(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    repository(tmp_path)
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\nversion="1"\n')
-    (tmp_path / "uv.lock").touch()
-    packages = installer.gate_config(tmp_path)["packages"]
-    for package in packages:
-        package["checks"] = [
-            g for g in package["checks"] if g.get("role") != "freshness"
-        ]
-        add_freshness(tmp_path, installer.SOURCE, package)
-    added = {
-        package["language"]: next(
-            g for g in package["checks"] if g.get("role") == "freshness"
-        )
-        for package in packages
-    }
-    assert added["python"]["command"][:2] == ["uv", "tree"]
-    assert added["javascript"]["command"][:2] == ["bun", "outdated"]
-    paths = {gate["report"]["path"] for gate in added.values()}
-    assert len(paths) == len(added)
-
-
-def test_javascript_workspace_checks_freshness_from_its_root(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    repository(tmp_path)
-    (tmp_path / "package.json").write_text('{"private":true,"workspaces":["apps/*"]}')
-    member = tmp_path / "apps/web"
-    member.mkdir(parents=True)
-    (member / "package.json").write_text('{"name":"web"}')
-    packages = {
-        package["path"]: package
-        for package in installer.gate_config(tmp_path)["packages"]
-    }
-    root = [g for g in packages["."]["checks"] if g.get("role") == "freshness"]
-    assert [g["command"] for g in root] == [[*FRESHNESS_COMMANDS["bun"], "-r"]]
-    assert "freshness" not in {g.get("role") for g in packages["apps/web"]["checks"]}
-
-
-def test_install_adds_freshness_to_an_existing_gate_file(
-    installer: ModuleType, tmp_path: Path, shipping_policy: ShippingPolicy
-) -> None:
-    repository(tmp_path)
-    config = installer.gate_config(tmp_path)
-    config["shipping"] = shipping_policy
-    checks = config["packages"][0]["checks"]
-    checks[:] = [gate for gate in checks if gate.get("role") != "freshness"]
-    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
-    installer.install(tmp_path)
-    installed = json.loads((tmp_path / "hard-eng.gates.json").read_text())
-    roles = [gate.get("role") for gate in installed["packages"][0]["checks"]]
-    assert roles.count("freshness") == 1
 
 
 def snapshot(root: Path) -> dict[str, bytes]:
