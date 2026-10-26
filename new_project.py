@@ -26,7 +26,6 @@ SCAFFOLDS = {
     "python": ["uv", "init", "--quiet", "--app", "--no-package"],
 }
 REMOVED = {"opennext": ["eslint.config.mjs"], "vite": [".oxlintrc.json"]}
-SCAFFOLD_VERSIONS = {"opennext": ["next"]}
 GENERATED = {"opennext": [["bun", "run", "cf-typegen"]]}
 EMPTY_REPOSITORY = (
     "No supported project manifest found. New project: ask the user which type to create "
@@ -55,18 +54,6 @@ def merged_package(text: str, starter: dict[str, dict[str, str | None]]) -> str:
             else:
                 current[key] = value
     return json.dumps(manifest, indent=2) + "\n"
-
-
-def scaffold_versions(root: Path, names: list[str]) -> list[str]:
-    """The scaffold's own pins for packages that newer releases break."""
-    if not names:
-        return []
-    manifest = json.loads((root / "package.json").read_text())
-    versions = {
-        **manifest.get("dependencies", {}),
-        **manifest.get("devDependencies", {}),
-    }
-    return [f"{name}@{versions[name]}" for name in names]
 
 
 def pinned_pubspec(text: str, lock: dict[str, dict[str, dict[str, str]]]) -> str:
@@ -105,10 +92,8 @@ def titled_svgs(root: Path) -> None:
             path.write_text(f"{text[:start]}<title>{path.stem}</title>{text[start:]}")
 
 
-def finish_web(root: Path, kept: list[str]) -> None:
-    run(root, ["bun", "update", "--latest", "--exact"])
-    if kept:
-        run(root, ["bun", "add", "--exact", *kept])
+def finish_web(root: Path) -> None:
+    run(root, ["bun", "update", "--latest", "--exact", "--minimum-release-age=172800"])
     if (root / "biome.json").is_file():
         titled_svgs(root)
         # The scaffold's config targets the Biome it shipped; the update installs a newer one.
@@ -139,14 +124,13 @@ def create(root: Path, stack: str) -> None:
     run(root, SCAFFOLDS[stack])
     for name in REMOVED.get(stack, []):
         (root / name).unlink()
-    kept = scaffold_versions(root, SCAFFOLD_VERSIONS.get(stack, []))
     copy_starter(root, stack)
     if stack == "flutter":
         finish_flutter(root)
     elif stack == "python":
         run(root, ["uv", "lock", "--quiet"])
     else:
-        finish_web(root, kept)
+        finish_web(root)
     for command in GENERATED.get(stack, []):
         run(root, command)
     run(root, ["git", "add", "--all"])
