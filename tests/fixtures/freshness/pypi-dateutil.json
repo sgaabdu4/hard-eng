@@ -1,0 +1,37 @@
+{
+  "info": {
+    "name": "python-dateutil"
+  },
+  "releases": {
+    "2.8.2": [
+      {
+        "upload_time_iso_8601": "2021-07-14T08:19:18.161589Z",
+        "yanked": false
+      },
+      {
+        "upload_time_iso_8601": "2021-07-14T08:19:19.783256Z",
+        "yanked": false
+      }
+    ],
+    "2.9.0": [
+      {
+        "upload_time_iso_8601": "2024-03-01T03:52:51.479771Z",
+        "yanked": false
+      },
+      {
+        "upload_time_iso_8601": "2024-03-01T03:52:54.963234Z",
+        "yanked": false
+      }
+    ],
+    "2.9.0.post0": [
+      {
+        "upload_time_iso_8601": "2024-03-01T18:36:18.570437Z",
+        "yanked": false
+      },
+      {
+        "upload_time_iso_8601": "2024-03-01T18:36:20.211056Z",
+        "yanked": false
+      }
+    ]
+  }
+}

@@ -24,15 +24,16 @@ def fetch_json(url: str) -> object:
         return json.load(response)
 
 
-def version_key(version: str, *, strict: bool) -> tuple[int, ...] | None:
-    """Dotted numbers without trailing zeros; strict rejects prereleases and suffixes."""
+def version_key(version: str, *, strict: bool) -> tuple[tuple[int, ...], int] | None:
+    """Release numbers, then post number; strict allows no suffix except `.postN`."""
     release = version.partition("+")[0]
-    if strict and not re.fullmatch(r"\d+(\.\d+)*", release):
+    match = re.fullmatch(r"(\d+(?:\.\d+)*)(?:\.post(\d+))?", release)
+    if strict and match is None:
         return None
-    numbers = [int(part) for part in re.findall(r"\d+", release)]
+    numbers = [int(part) for part in re.findall(r"\d+", match[1] if match else release)]
     while numbers and numbers[-1] == 0:
         numbers.pop()
-    return tuple(numbers)
+    return tuple(numbers), int(match[2]) if match and match[2] else -1
 
 
 def released_before(stamp: object, cutoff: datetime) -> bool:

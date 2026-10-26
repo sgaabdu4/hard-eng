@@ -12,7 +12,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from freshness import validate_freshness, validate_holds
+from freshness import stale_dependencies, validate_freshness, validate_holds
 from gate_config import Gate, Group, JsonObject, validate_gate
 from gitleaks_scan import run_gate_command
 
@@ -124,6 +124,18 @@ def test_uv_uses_pypi_upload_dates(tmp_path: Path) -> None:
     check(tmp_path, "uv", report, Registry(records), "2024-03-04T00:00:00+00:00")
     with pytest.raises(ValueError, match="uv output is unreadable"):
         check(tmp_path, "uv", "error: failed to fetch", Registry(records))
+
+
+def test_uv_counts_a_post_release_as_newer() -> None:
+    report = "app v0.1.0\n└── python-dateutil v2.9.0 (latest: v2.9.0.post0)\n"
+    records = {PYPI + "python-dateutil/json": fixture("pypi-dateutil.json")}
+    stale = stale_dependencies(
+        "uv", report, Registry(records), moment("2024-03-04T00:00:00+00:00")
+    )
+    assert stale == [("python-dateutil", "2.9.0", "2.9.0.post0")]
+    assert not stale_dependencies(
+        "uv", report, Registry(records), moment("2024-03-02T00:00:00+00:00")
+    )
 
 
 def test_poetry_reads_outdated_with_wait(tmp_path: Path) -> None:
