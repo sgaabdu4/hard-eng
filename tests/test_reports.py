@@ -63,7 +63,7 @@ def test_delegated_fallow_reuses_only_its_completed_coverage_owner(
         coverage["parallel"] = True
     elif prerequisite == "different":
         coverage["command"] = ["node", "--test"]
-    inherited = {"lockfiles", "vulnerabilities", "security"}
+    inherited = {"lockfiles", "vulnerabilities", "freshness", "security"}
     if prerequisite != "before":
         with pytest.raises(ValueError, match="Wire check:fallow"):
             validate_package_services(tmp_path, group, {}, {}, inherited)
@@ -162,7 +162,7 @@ def test_delegated_fallow_reuses_only_selected_declared_coverage_owners(
         ((tmp_path / "packages/api").resolve(), "javascript"): consumer,
         ((tmp_path / "packages/website").resolve(), "javascript"): owner,
     }
-    inherited = {"lockfiles", "vulnerabilities", "security"}
+    inherited = {"lockfiles", "vulnerabilities", "freshness", "security"}
     package_groups = [consumer, owner] if invalid == "late-owner" else [owner, consumer]
     if invalid is not None:
         with pytest.raises(ValueError, match="Wire check:fallow"):

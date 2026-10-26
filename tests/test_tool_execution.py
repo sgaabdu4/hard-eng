@@ -217,7 +217,7 @@ def test_existing_fallow_audit_must_be_the_enforced_gate(
             }
         ],
     }
-    inherited = {"lockfiles", "vulnerabilities", "security"}
+    inherited = {"lockfiles", "vulnerabilities", "freshness", "security"}
     with pytest.raises(ValueError, match="Wire check:fallow"):
         validate_package_services(tmp_path, group, {}, {}, inherited)
     adapt_javascript(tmp_path, group, "bun")

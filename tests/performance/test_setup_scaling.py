@@ -73,7 +73,12 @@ def test_baseline_validation_does_not_rescan_siblings(
                     "sources": [],
                     "checks": [
                         {"name": role, "role": role, "command": ["true"]}
-                        for role in ("lockfiles", "vulnerabilities", "security")
+                        for role in (
+                            "lockfiles",
+                            "vulnerabilities",
+                            "freshness",
+                            "security",
+                        )
                     ],
                 }
             )
