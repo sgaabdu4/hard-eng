@@ -36,7 +36,7 @@ Authority: User asked on 2026-10-26 to plan #403 with a two-day window. Build wa
 - [x] Registry failure or unreadable output fails with the tool's message → `tests/test_freshness.py::test_unreachable_registry_fails`.
 - [x] A hold passes until its end date, then fails; a hold over 14 days or without a reason is rejected → `tests/test_freshness.py::test_hold_expires_and_needs_reason`.
 - [x] A failure names the baseline-repair route and the native upgrade command → `tests/test_freshness.py::test_failure_names_upgrade_route`.
-- [x] The Bun, Dart and Python templates carry the `freshness` role (basic mode reads no supported lockfile); a group without it is rejected → `tests/test_setup.py::test_groups_require_freshness_role`.
+- [x] The Bun, Dart and Python templates carry the `freshness` role (basic mode reads no supported lockfile); a group without it is rejected → `tests/test_freshness.py::test_groups_require_freshness_role`.
 - [x] An update PR that adds the gate to a project with old dependencies still passes → `tests/test_updates.py::test_update_pr_skips_freshness`.
 - [x] A new web project starts on releases the check accepts, OpenNext's Next.js included → `tests/test_new_project.py::test_opennext_upgrades_next_like_every_other_package`.
 - [x] Existing gates unchanged → N/A — no single test; the full `check --plan-stage Complete --base origin/main` passed.
