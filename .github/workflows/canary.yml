@@ -83,3 +83,20 @@ jobs:
           if [ "$TARGET" = scaffold-flutter ]; then tools+=(flutter@latest); fi
           bun x --package="$package" mise --no-config install "${tools[@]}" &&
           MISE_FETCH_REMOTE_VERSIONS_CACHE=1h bun x --package="$package" mise --no-config exec "${tools[@]}" -- uv run --locked python release_canary.py HEAD --ci --target "$TARGET"
+
+  canary:
+    name: canary
+    needs: [targets, new-project]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every listed new project to pass
+        env:
+          LISTED: ${{ needs.targets.outputs.targets }}
+          TARGETS: ${{ needs.targets.result }}
+          PROJECTS: ${{ needs.new-project.result }}
+        run: |
+          [ "$TARGETS" = success ] || { echo "Listing the new projects failed: $TARGETS"; exit 1; }
+          if [ "$LISTED" = '[]' ]; then echo "No installed file changed; no new project to check."; exit 0; fi
+          [ "$PROJECTS" = success ] || { echo "A new project failed its checks: $PROJECTS"; exit 1; }
