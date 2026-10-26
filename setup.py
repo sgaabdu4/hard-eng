@@ -104,7 +104,7 @@ def gate_config(root: Path) -> GateConfig:
             package["checks"] = [
                 gate
                 for gate in package["checks"]
-                if gate.get("role") in {"lockfiles", "vulnerabilities"}
+                if gate.get("role") in {"lockfiles", "vulnerabilities", "freshness"}
             ]
     return config
 
@@ -507,8 +507,8 @@ def configure_workflows(root: Path, config: GateConfig) -> None:
 def configure_shellcheck(
     root: Path, config: GateConfig, retired: tuple[str, ...] = ()
 ) -> None:
-    from gate_config import repository_files, unlisted_shell_scripts
-    from project_setup import is_shell_script
+    from gate_config import repository_files
+    from project_setup import is_shell_script, unlisted_shell_scripts
 
     existing = [
         gate
@@ -813,6 +813,7 @@ def plan_install(
     add_swift_groups(root, config)
     from project_setup import (
         adapt_boundaries,
+        add_freshness,
         browser_test_coverage,
         strict_scanner_flags,
     )
@@ -822,6 +823,7 @@ def plan_install(
 
     for package in config.get("packages", []):
         strict_scanner_flags(package)
+        add_freshness(root, SOURCE, package)
         adapt_boundaries(package, typescript)
         browser_test_coverage(root / package["path"], package)
         configure_semgrep_ignore(root, package, changes)

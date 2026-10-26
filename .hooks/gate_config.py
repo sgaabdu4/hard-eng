@@ -649,7 +649,9 @@ def selected_services(
         here = (root / group["path"]).resolve()
         holds = any(path.is_relative_to(here) for path in chosen)
         nested = here in dart and any(here.is_relative_to(p) for p in chosen & dart)
-        roles = {"lockfiles", "vulnerabilities"} if holds else {"lockfiles"}
+        roles = (
+            {"lockfiles", "vulnerabilities", "freshness"} if holds else {"lockfiles"}
+        )
         services = [gate for gate in group["checks"] if gate.get("role") in roles]
         if group["path"] in selected:
             affected.append(group)
@@ -786,46 +788,12 @@ def has_workflows(root: Path, files: list[Path]) -> bool:
     )
 
 
-def unlisted_shell_scripts(
-    root: Path, files: list[Path], shared: list[Gate]
-) -> list[str]:
-    """Scripts absent from explicit shellcheck lists; custom shell gates own inputs."""
-    from project_setup import is_shell_script
-
-    gates = [
-        gate
-        for gate in shared
-        if gate.get("role") == "shell" or Path(gate["command"][0]).name == "shellcheck"
-    ]
-    if not gates or any(
-        Path(gate["command"][0]).name != "shellcheck" or "--" not in gate["command"]
-        for gate in gates
-    ):
-        return []
-    listed = {
-        argument
-        for gate in gates
-        for argument in gate["command"][gate["command"].index("--") + 1 :]
-    }
-    return sorted(
-        str(path.relative_to(root))
-        for path in files
-        if is_shell_script(path) and str(path.relative_to(root)) not in listed
-    )
-
-
-def require_listed_shell_scripts(
-    root: Path, files: list[Path], shared: list[Gate]
-) -> None:
-    if unlisted := unlisted_shell_scripts(root, files, shared):
-        raise ValueError(
-            f"shared: shellcheck omits {', '.join(unlisted)}; rerun setup or list "
-            "them after `--`"
-        )
-
-
 def validate_required_checks(root: Path, config: GateConfig) -> None:
-    from project_setup import is_deployment_file, is_shell_script
+    from project_setup import (
+        is_deployment_file,
+        is_shell_script,
+        require_listed_shell_scripts,
+    )
 
     files = repository_files(root)
     manifests = package_manifests(root, files)
@@ -915,7 +883,10 @@ def validate_package_services(
             inherited.update(gate.get("role", "") for gate in parent["checks"])
     if language == "swift":
         inherited |= parent_roles(directory, by_directory)
-    require_roles(group["path"], {"lockfiles", "vulnerabilities"}, roles | inherited)
+    required = {"lockfiles", "vulnerabilities"}
+    if language in LANGUAGES.values():
+        required.add("freshness")
+    require_roles(group["path"], required, roles | inherited)
     if language == "python":
         dependency_command(directory, language)  # Raises when no lockfile exists.
     if not group.get("language"):
