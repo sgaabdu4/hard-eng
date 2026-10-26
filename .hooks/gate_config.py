@@ -636,6 +636,25 @@ def affected_groups(
     return selected_services(root, packages, selected) + [groups[-1]]
 
 
+def without_freshness_for_update(
+    root: Path, base: str | None, groups: list[Group]
+) -> list[Group]:
+    """The Hard Eng update that adds the freshness check must not fail on it."""
+    from update import installed_update_paths
+
+    if (
+        base is None
+        or not any(g.get("role") == "freshness" for x in groups for g in x["checks"])
+        or not installed_update_paths(root, base)
+    ):
+        return groups
+    print("Hard Eng update matches its verified release; skipping freshness.")
+    return [
+        {**x, "checks": [g for g in x["checks"] if g.get("role") != "freshness"]}
+        for x in groups
+    ]
+
+
 def selected_services(
     root: Path, packages: list[Group], selected: set[str]
 ) -> list[Group]:
@@ -971,4 +990,7 @@ def load_groups(
     for gate in config["shared"]:
         if gate.get("role") == "secrets-history":
             gate["command"] = new_commits_command(gate["command"], root, base)
-    return affected_groups(root, groups, base, prove_update=True, dependents=dependents)
+    selected = affected_groups(
+        root, groups, base, prove_update=True, dependents=dependents
+    )
+    return without_freshness_for_update(root, base, selected)
