@@ -45,7 +45,7 @@ def newest(candidates: list[str]) -> str | None:
     return max(((k, v) for k, v in keyed if k is not None), default=(None, None))[1]
 
 
-def pub_eligible(name: str, fetch: Fetch, cutoff: datetime) -> str | None:
+def pub_eligible(name: str, fetch: Fetch, cutoff: datetime, ceiling: str) -> str | None:
     package = fetch(f"https://pub.dev/api/packages/{urllib.parse.quote(name)}")
     if not isinstance(package, dict) or not isinstance(package.get("versions"), list):
         raise TypeError(f"pub.dev returned an unreadable record for {name}")
@@ -53,7 +53,9 @@ def pub_eligible(name: str, fetch: Fetch, cutoff: datetime) -> str | None:
         [
             item["version"]
             for item in package["versions"]
-            if not item.get("retracted") and released_before(item["published"], cutoff)
+            if not item.get("retracted")
+            and released_before(item["published"], cutoff)
+            and not newer(item["version"], ceiling)
         ]
     )
 
@@ -113,16 +115,17 @@ def bun_rows(text: str) -> list[Stale]:
     return rows
 
 
-def dart_rows(text: str) -> list[tuple[str, str]]:
+def dart_rows(text: str) -> dict[str, tuple[str, str]]:
+    """Name → current and the newest version pub can resolve beside the others."""
     report = json.loads(text[text.index("{") :])
-    return [
-        (item["package"], item["current"]["version"])
+    return {
+        item["package"]: (item["current"]["version"], item["resolvable"]["version"])
         for item in report["packages"]
         if item["kind"] in {"direct", "dev"}
         and item.get("current")
-        and item.get("latest")
-        and item["latest"]["version"] != item["current"]["version"]
-    ]
+        and item.get("resolvable")
+        and item["resolvable"]["version"] != item["current"]["version"]
+    }
 
 
 UV_ROW = re.compile(
@@ -169,7 +172,11 @@ def stale_dependencies(
     if tool == "poetry":
         return poetry_rows(text)
     if tool in {"dart", "flutter"}:
-        return behind(dart_rows(text), lambda name: pub_eligible(name, fetch, cutoff))
+        rows = dart_rows(text)
+        return behind(
+            [(name, current) for name, (current, _) in rows.items()],
+            lambda name: pub_eligible(name, fetch, cutoff, rows[name][1]),
+        )
     return behind(uv_rows(text), lambda name: pypi_eligible(name, fetch, cutoff))
 
 
