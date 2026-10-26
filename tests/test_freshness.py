@@ -113,6 +113,22 @@ def test_dart_uses_pub_dates_for_direct_dependencies(tmp_path: Path) -> None:
         check(tmp_path, "dart", report, Registry(records), "2025-11-11T18:27:56+00:00")
 
 
+def test_dart_stops_at_the_version_pub_can_resolve(tmp_path: Path) -> None:
+    parsed = json.loads(fixture("dart-outdated.json"))
+    http = next(p for p in parsed["packages"] if p["package"] == "http")
+    http["resolvable"] = {"version": "1.4.0"}
+    blocked = {"package": "build_runner", "kind": "dev"}
+    blocked |= {"current": {"version": "2.16.2"}, "resolvable": {"version": "2.16.2"}}
+    parsed["packages"].append(blocked | {"latest": {"version": "2.17.1"}})
+    registry = dart_registry()
+    with pytest.raises(ValueError, match=r"http 0\.13\.6 → 1\.4\.0") as failure:
+        check(
+            tmp_path, "dart", json.dumps(parsed), registry, "2025-11-11T18:27:56+00:00"
+        )
+    assert "build_runner" not in str(failure.value)
+    assert PUB + "build_runner" not in registry.requests
+
+
 def test_uv_uses_pypi_upload_dates(tmp_path: Path) -> None:
     report = fixture("uv-tree.txt")
     records = {
