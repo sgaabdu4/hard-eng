@@ -12,6 +12,7 @@ from pathlib import Path
 from fallow_report import fallow_report_path, validate_scanner_command
 from gate_config import (
     LANGUAGES,
+    LOCKFILES,
     Gate,
     GateConfig,
     Group,
@@ -607,14 +608,22 @@ def adapt_freshness(gate: Gate, manager: str) -> None:
 def add_freshness(root: Path, source: Path, package: Group) -> None:
     """Give an older configuration the freshness check the templates now carry."""
     directory = root / package["path"]
-    language = package.get("language") or next(
-        (name for file, name in LANGUAGES.items() if (directory / file).is_file()), ""
-    )
     checks = package["checks"]
     anchor = next(
         (i for i, g in enumerate(checks) if g.get("role") == "vulnerabilities"), None
     )
-    if language not in LANGUAGES.values() or anchor is None:
+    if anchor is None:
+        return
+    scanned = " ".join(checks[anchor]["command"])
+    language = (
+        package.get("language")
+        or next(
+            (n for n, files in LOCKFILES.items() if any(f in scanned for f in files)),
+            "",
+        )
+        or next((n for f, n in LANGUAGES.items() if (directory / f).is_file()), "")
+    )
+    if language not in LANGUAGES.values():
         return
     if any(gate.get("role") == "freshness" for gate in checks):
         return
