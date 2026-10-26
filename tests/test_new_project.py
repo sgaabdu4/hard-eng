@@ -8,6 +8,8 @@ import pytest
 
 import new_project
 
+UPGRADE = ["bun", "update", "--latest", "--exact", "--minimum-release-age=172800"]
+
 
 def test_new_project_refuses_a_repository_that_holds_files(tmp_path: Path) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
@@ -62,7 +64,7 @@ def test_vite_starter_replaces_oxlint_and_pins_after_the_scaffold(
     assert manifest["devDependencies"]["@types/bun"] == "latest"
     assert not (tmp_path / ".oxlintrc.json").exists()
     assert (tmp_path / "tests/app.test.tsx").is_file()
-    assert ran[1] == ["bun", "update", "--latest", "--exact"]
+    assert ran[1] == UPGRADE
     status = subprocess.run(
         ["git", "status", "--porcelain"],
         cwd=tmp_path,
@@ -111,16 +113,15 @@ def created(
     return ran
 
 
-def test_opennext_keeps_the_scaffold_next_release_after_the_upgrade(
+def test_opennext_upgrades_next_like_every_other_package(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Newer Next.js releases build but fail at runtime on OpenNext's Worker."""
-    manifest = json.dumps({"dependencies": {"next": "16.3.8"}})
+    """A held-back Next.js release would fail the freshness check on day one."""
+    manifest = json.dumps({"dependencies": {"next": "16.4.1"}})
     files = {"package.json": manifest, "eslint.config.mjs": "export default [];\n"}
     ran = created(tmp_path, monkeypatch, "opennext", files)
-    upgrade = ran.index(["bun", "update", "--latest", "--exact"])
-    assert ran[upgrade + 1] == ["bun", "add", "--exact", "next@16.3.8"]
-    assert ran[upgrade + 2] == ["bun", "run", "cf-typegen"]
+    upgrade = ran.index(UPGRADE)
+    assert ran[upgrade + 1] == ["bun", "run", "cf-typegen"]
     assert not (tmp_path / "eslint.config.mjs").exists()
 
 
@@ -131,7 +132,7 @@ def test_nextjs_moves_the_scaffold_to_the_installed_biome(
     image = '<svg viewBox="0 0 1 1"><path/></svg>'
     files = {"package.json": "{}", "biome.json": "{}", "public/next.svg": image}
     ran = created(tmp_path, monkeypatch, "nextjs", files)
-    upgrade = ran.index(["bun", "update", "--latest", "--exact"])
+    upgrade = ran.index(UPGRADE)
     assert ran[upgrade + 1 : upgrade + 3] == [
         ["bun", "x", "biome", "migrate", "--write"],
         ["bun", "x", "biome", "format", "--write", "."],
