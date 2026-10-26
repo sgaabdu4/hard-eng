@@ -1,0 +1,56 @@
+{
+ "info": {
+  "name": "pytest",
+  "version": "9.1.1"
+ },
+ "releases": {
+  "8.0.0": [
+   {
+    "filename": "pytest-8.0.0-py3-none-any.whl",
+    "upload_time_iso_8601": "2024-01-27T21:47:54.913691Z",
+    "yanked": false
+   },
+   {
+    "filename": "pytest-8.0.0.tar.gz",
+    "upload_time_iso_8601": "2024-01-27T21:47:58.099345Z",
+    "yanked": false
+   }
+  ],
+  "8.1.0": [
+   {
+    "filename": "pytest-8.1.0-py3-none-any.whl",
+    "upload_time_iso_8601": "2024-03-03T21:23:38.040582Z",
+    "yanked": true
+   },
+   {
+    "filename": "pytest-8.1.0.tar.gz",
+    "upload_time_iso_8601": "2024-03-03T21:23:43.502406Z",
+    "yanked": true
+   }
+  ],
+  "8.3.4": [
+   {
+    "filename": "pytest-8.3.4-py3-none-any.whl",
+    "upload_time_iso_8601": "2024-12-01T12:54:19.735286Z",
+    "yanked": false
+   },
+   {
+    "filename": "pytest-8.3.4.tar.gz",
+    "upload_time_iso_8601": "2024-12-01T12:54:25.980064Z",
+    "yanked": false
+   }
+  ],
+  "9.1.1": [
+   {
+    "filename": "pytest-9.1.1-py3-none-any.whl",
+    "upload_time_iso_8601": "2026-06-19T10:58:31.347074Z",
+    "yanked": false
+   },
+   {
+    "filename": "pytest-9.1.1.tar.gz",
+    "upload_time_iso_8601": "2026-06-19T10:58:32.857420Z",
+    "yanked": false
+   }
+  ]
+ }
+}

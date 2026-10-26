@@ -1,0 +1,60 @@
+{
+ "packages": [
+  {
+   "package": "http",
+   "kind": "direct",
+   "isDiscontinued": false,
+   "replacedBy": null,
+   "isCurrentRetracted": false,
+   "isCurrentAffectedByAdvisory": false,
+   "current": {
+    "version": "0.13.6"
+   },
+   "upgradable": {
+    "version": "0.13.6"
+   },
+   "resolvable": {
+    "version": "1.6.0"
+   },
+   "latest": {
+    "version": "1.6.0"
+   }
+  },
+  {
+   "package": "lints",
+   "kind": "dev",
+   "isDiscontinued": false,
+   "replacedBy": null,
+   "isCurrentRetracted": false,
+   "isCurrentAffectedByAdvisory": false,
+   "current": {
+    "version": "2.1.1"
+   },
+   "upgradable": {
+    "version": "2.1.1"
+   },
+   "resolvable": {
+    "version": "6.1.0"
+   },
+   "latest": {
+    "version": "6.1.0"
+   }
+  },
+  {
+   "package": "web",
+   "kind": "transitive",
+   "isDiscontinued": false,
+   "replacedBy": null,
+   "isCurrentRetracted": false,
+   "isCurrentAffectedByAdvisory": false,
+   "current": null,
+   "upgradable": null,
+   "resolvable": {
+    "version": "1.1.2"
+   },
+   "latest": {
+    "version": "1.1.2"
+   }
+  }
+ ]
+}

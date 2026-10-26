@@ -1,0 +1,7 @@
+bun outdated v1.4.3 (c6da4a4d3)
+|----------------------------------------|
+| Package  | Current | Update | Latest   |
+|----------|---------|--------|----------|
+| fallow   | 3.35.0  | 3.35.0 | 3.35.0 * |
+|----------------------------------------|
+Note: The * indicates that version isn't true latest due to minimum release age

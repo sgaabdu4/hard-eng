@@ -1,0 +1,1 @@
+[{"name": "httpx", "installed_status": "installed", "version": "0.27.0", "latest_version": "0.28.1", "description": "The next generation HTTP client."}, {"name": "pytest", "installed_status": "installed", "version": "8.0.0", "latest_version": "9.1.1", "description": "pytest: simple powerful testing with Python"}]

@@ -100,6 +100,7 @@ Gate = TypedDict(
         "role": NotRequired[str],
         "parallel": NotRequired[bool],
         "report": NotRequired[Report],
+        "holds": NotRequired[list[JsonObject]],
     },
 )
 Group = TypedDict(
@@ -405,6 +406,9 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
         raise ValueError(
             f"{gate['name']}: put the executable in command; separate tool fields are unsupported"
         )
+    from freshness import validate_gate_holds
+
+    validate_gate_holds(gate)
     from gitleaks_scan import validate_current_files_gate
 
     validate_current_files_gate(gate.get("role"), command)
