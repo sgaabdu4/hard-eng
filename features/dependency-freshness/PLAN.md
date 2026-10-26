@@ -1,6 +1,6 @@
 # Fail when a direct dependency misses a two-day-old release
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -36,9 +36,10 @@ Authority: User asked on 2026-10-26 to plan #403 with a two-day window. Build wa
 - [x] Registry failure or unreadable output fails with the tool's message → `tests/test_freshness.py::test_unreachable_registry_fails`.
 - [x] A hold passes until its end date, then fails; a hold over 14 days or without a reason is rejected → `tests/test_freshness.py::test_hold_expires_and_needs_reason`.
 - [x] A failure names the baseline-repair route and the native upgrade command → `tests/test_freshness.py::test_failure_names_upgrade_route`.
-- [x] Every language template and basic mode carries the `freshness` role; a group without it is rejected → `tests/test_setup.py::test_groups_require_freshness_role`.
+- [x] The Bun, Dart and Python templates carry the `freshness` role (basic mode reads no supported lockfile); a group without it is rejected → `tests/test_setup.py::test_groups_require_freshness_role`.
 - [x] An update PR that adds the gate to a project with old dependencies still passes → `tests/test_updates.py::test_update_pr_skips_freshness`.
-- [ ] Existing gates unchanged → N/A — no single test; the full `check --plan-stage Complete --base origin/main` must pass.
+- [x] A new web project starts on releases the check accepts, OpenNext's Next.js included → `tests/test_new_project.py::test_opennext_upgrades_next_like_every_other_package`.
+- [x] Existing gates unchanged → N/A — no single test; the full `check --plan-stage Complete --base origin/main` passed.
 
 ## Baseline + execution
 
@@ -51,6 +52,8 @@ Execution: One builder (Sonnet), one slice per ecosystem in the order Bun, Dart,
 - Gate needs network in pre-push and CI. Offline push fails; recovery is to rerun online.
 - The gate is time-based: an unchanged branch turns red once a release passes two days. Accepted by design.
 - Registry APIs change shape. Parsers fail closed with the raw message.
+- Dart dates come only from pub.dev, so a private pub server fails closed. Recovery: a hold, then extend the lookup when a project needs it.
+- A branch that holds a verified Hard Eng update skips the check, even with other work in it. Task branches rebase after the update merges, so the skip ends there.
 
 ## ux_reference
 
@@ -58,8 +61,8 @@ N/A — command-line gate only; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Focused runs pass: tests/test_freshness.py 14 passed; tests/test_setup.py + test_updates.py + test_verified_release.py + test_deployment_and_shell_gates.py + test_freshness.py 145 passed; test_package_discovery, test_basic_mode, test_adoption, test_affected_selection, test_ci_setup, test_swift, test_runner, test_quick_check, test_debt all pass. Local ruff, pyrefly, vulture, jscpd, deptry and semgrep on the changed files clean. Real smoke: uv and Dart outdated output checked against live PyPI and pub.dev. Full `check` not run by the builder.
+Result: Passed
+Evidence: Focused runs pass: tests/test_freshness.py 14 passed; tests/test_setup.py + test_updates.py + test_verified_release.py + test_deployment_and_shell_gates.py + test_freshness.py 145 passed; test_package_discovery, test_basic_mode, test_adoption, test_affected_selection, test_ci_setup, test_swift, test_runner, test_quick_check, test_debt all pass. Local ruff, pyrefly, vulture, jscpd, deptry and semgrep on the changed files clean. Real smoke: uv and Dart outdated output checked against live PyPI and pub.dev. Review fixes: pub rows with no newer version are not looked up (test fails without the fix); uv hint raises lower bounds, since uv has no @latest. First full gate failed: 18 older tests built packages without the new role (fixed). New-project scaffolds checked in a scratch folder: Flutter had no old direct dependency; Next.js and Vite did, and `bun update --latest` already fixes them; OpenNext's pinned Next.js 16.4.1 did not, and 16.4.3 builds and serves HTTP 200 on its Worker, so the pin is gone. Full gate `check --plan-stage Complete --base origin/main`: 20 gates passed, tests 1954 passed, freshness passed on Hard Eng's own uv dependencies.
 E2E: N/A — gate behavior has no user journey; recorded registry responses prove each branch.
 Delivery target: Merge
 Delivery: Pending — main CI passes with the new gate.
