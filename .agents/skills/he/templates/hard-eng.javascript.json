@@ -143,7 +143,7 @@
       "role": "freshness",
       "parallel": true,
       "command": ["bun", "outdated", "--minimum-release-age=172800"],
-      "report": { "type": "freshness", "path": "coverage/freshness.txt", "stdout": true }
+      "report": { "type": "freshness", "path": "coverage/freshness-javascript.txt", "stdout": true }
     },
     {
       "name": "security",

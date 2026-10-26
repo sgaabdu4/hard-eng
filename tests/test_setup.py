@@ -668,7 +668,7 @@ FRESHNESS_COMMANDS = {
     "bun": ["bun", "outdated", "--minimum-release-age=172800"],
     "dart": ["dart", "pub", "outdated", "--json"],
     "flutter": ["flutter", "pub", "outdated", "--json"],
-    "uv": ["uv", "tree", "--frozen", "--outdated", "--depth", "1"],
+    "uv": ["uv", "tree", "--frozen", "--outdated", "--all-groups", "--depth", "1"],
     "poetry": ["poetry", "show", "--outdated", "--top-level", "--format", "json"],
 }
 
@@ -705,6 +705,30 @@ def test_groups_require_freshness_role(
     add_freshness(tmp_path, installer.SOURCE, package)
     assert [g.get("role") for g in package["checks"]].count("freshness") == 1
     validate_required_checks(tmp_path, config)
+
+
+def test_languages_sharing_a_folder_each_get_their_own_freshness(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\nversion="1"\n')
+    (tmp_path / "uv.lock").touch()
+    packages = installer.gate_config(tmp_path)["packages"]
+    for package in packages:
+        package["checks"] = [
+            g for g in package["checks"] if g.get("role") != "freshness"
+        ]
+        add_freshness(tmp_path, installer.SOURCE, package)
+    added = {
+        package["language"]: next(
+            g for g in package["checks"] if g.get("role") == "freshness"
+        )
+        for package in packages
+    }
+    assert added["python"]["command"][:2] == ["uv", "tree"]
+    assert added["javascript"]["command"][:2] == ["bun", "outdated"]
+    paths = {gate["report"]["path"] for gate in added.values()}
+    assert len(paths) == len(added)
 
 
 def test_javascript_workspace_checks_freshness_from_its_root(

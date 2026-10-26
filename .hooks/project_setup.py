@@ -600,20 +600,19 @@ def recurse_into_workspaces(checks: list[Gate]) -> None:
 def adapt_freshness(gate: Gate, manager: str) -> None:
     if manager in FRESHNESS_COMMANDS:
         gate["command"] = list(FRESHNESS_COMMANDS[manager])
-        gate["report"] = {**gate["report"], "path": "coverage/freshness.json"}
+        path = Path(gate["report"]["path"]).with_suffix(".json")
+        gate["report"] = {**gate["report"], "path": str(path)}
 
 
 def add_freshness(root: Path, source: Path, package: Group) -> None:
     """Give an older configuration the freshness check the templates now carry."""
     directory = root / package["path"]
-    language = next(
-        (name for file, name in LANGUAGES.items() if (directory / file).is_file()), ""
-    )
+    language = package.get("language", "")
     checks = package["checks"]
     anchor = next(
         (i for i, g in enumerate(checks) if g.get("role") == "vulnerabilities"), None
     )
-    if not language or anchor is None:
+    if language not in LANGUAGES.values() or anchor is None:
         return
     if any(gate.get("role") == "freshness" for gate in checks):
         return
