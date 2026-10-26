@@ -117,7 +117,10 @@ def dart_rows(text: str) -> list[tuple[str, str]]:
     return [
         (item["package"], item["current"]["version"])
         for item in report["packages"]
-        if item["kind"] in {"direct", "dev"} and item.get("current")
+        if item["kind"] in {"direct", "dev"}
+        and item.get("current")
+        and item.get("latest")
+        and item["latest"]["version"] != item["current"]["version"]
     ]
 
 
@@ -151,7 +154,7 @@ UPGRADES = {
     "bun": "bun update --latest {names}",
     "dart": "dart pub upgrade --major-versions {names}",
     "flutter": "flutter pub upgrade --major-versions {names}",
-    "uv": "uv add {latest}",
+    "uv": "uv add [--group <group>] {minimums}",
     "poetry": "poetry add {latest}",
 }
 
@@ -223,10 +226,11 @@ def validate_freshness(
     if stale:
         names = " ".join(name for name, _, _ in stale)
         latest = " ".join(f"{name}@latest" for name, _, _ in stale)
+        minimums = " ".join(f"'{name}>={target}'" for name, _, target in stale)
         raise ValueError(
             "Outdated direct dependencies: "
             + "; ".join(f"{n} {c} → {t}" for n, c, t in stale)
-            + f". Run `{UPGRADES[tool].format(names=names, latest=latest)}` in a "
+            + f". Run `{UPGRADES[tool].format(names=names, latest=latest, minimums=minimums)}` in a "
             "separate PR first (baseline repair)."
         )
     print("Every direct dependency is on its newest release at least 2 days old")

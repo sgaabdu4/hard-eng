@@ -89,7 +89,11 @@ def dart_registry() -> Registry:
 
 
 def test_dart_uses_pub_dates_for_direct_dependencies(tmp_path: Path) -> None:
-    report = fixture("dart-outdated.json")
+    git_dependency = {"package": "local", "kind": "direct"}
+    git_dependency |= {"current": {"version": "1.0.0"}, "latest": {"version": "1.0.0"}}
+    parsed = json.loads(fixture("dart-outdated.json"))
+    parsed["packages"].append(git_dependency)
+    report = json.dumps(parsed)
     registry = dart_registry()
     with pytest.raises(ValueError, match=r"http 0\.13\.6 → 1\.5\.0") as failure:
         check(tmp_path, "dart", report, registry, "2025-11-11T18:27:56+00:00")
@@ -205,7 +209,11 @@ def test_hold_expires_and_needs_reason(tmp_path: Path) -> None:
             "dart-outdated.json",
             "flutter pub upgrade --major-versions http lints",
         ),
-        ("uv", "uv-tree.txt", "uv add httpx@latest pytest@latest"),
+        (
+            "uv",
+            "uv-tree.txt",
+            "uv add [--group <group>] 'httpx>=0.28.0' 'pytest>=8.3.4'",
+        ),
         ("poetry", "poetry-show.json", "poetry add httpx@latest pytest@latest"),
     ],
 )

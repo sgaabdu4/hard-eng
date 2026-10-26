@@ -29,15 +29,15 @@ Authority: User asked on 2026-10-26 to plan #403 with a two-day window. Build wa
 
 ## Acceptance + steps
 
-- [ ] Bun: a direct dependency behind a release over two days old fails; only a newer release under two days passes → `tests/test_freshness.py::test_bun_fails_on_release_older_than_two_days`.
-- [ ] Dart: direct and dev dependencies judged on pub.dev dates; transitive and retracted versions ignored → `tests/test_freshness.py::test_dart_uses_pub_dates_for_direct_dependencies`.
-- [ ] uv: a direct dependency judged on PyPI upload dates → `tests/test_freshness.py::test_uv_uses_pypi_upload_dates`.
-- [ ] Poetry: output read with the two-day wait set → `tests/test_freshness.py::test_poetry_reads_outdated_with_wait`.
-- [ ] Registry failure or unreadable output fails with the tool's message → `tests/test_freshness.py::test_unreachable_registry_fails`.
-- [ ] A hold passes until its end date, then fails; a hold over 14 days or without a reason is rejected → `tests/test_freshness.py::test_hold_expires_and_needs_reason`.
-- [ ] A failure names the baseline-repair route and the native upgrade command → `tests/test_freshness.py::test_failure_names_upgrade_route`.
-- [ ] Every language template and basic mode carries the `freshness` role; a group without it is rejected → `tests/test_setup.py::test_groups_require_freshness_role`.
-- [ ] An update PR that adds the gate to a project with old dependencies still passes → `tests/test_updates.py::test_update_pr_skips_freshness`.
+- [x] Bun: a direct dependency behind a release over two days old fails; only a newer release under two days passes → `tests/test_freshness.py::test_bun_fails_on_release_older_than_two_days`.
+- [x] Dart: direct and dev dependencies judged on pub.dev dates; transitive and retracted versions ignored → `tests/test_freshness.py::test_dart_uses_pub_dates_for_direct_dependencies`.
+- [x] uv: a direct dependency judged on PyPI upload dates → `tests/test_freshness.py::test_uv_uses_pypi_upload_dates`.
+- [x] Poetry: output read with the two-day wait set → `tests/test_freshness.py::test_poetry_reads_outdated_with_wait`.
+- [x] Registry failure or unreadable output fails with the tool's message → `tests/test_freshness.py::test_unreachable_registry_fails`.
+- [x] A hold passes until its end date, then fails; a hold over 14 days or without a reason is rejected → `tests/test_freshness.py::test_hold_expires_and_needs_reason`.
+- [x] A failure names the baseline-repair route and the native upgrade command → `tests/test_freshness.py::test_failure_names_upgrade_route`.
+- [x] Every language template and basic mode carries the `freshness` role; a group without it is rejected → `tests/test_setup.py::test_groups_require_freshness_role`.
+- [x] An update PR that adds the gate to a project with old dependencies still passes → `tests/test_updates.py::test_update_pr_skips_freshness`.
 - [ ] Existing gates unchanged → N/A — no single test; the full `check --plan-stage Complete --base origin/main` must pass.
 
 ## Baseline + execution
@@ -59,7 +59,7 @@ N/A — command-line gate only; no visible UI.
 ## Verification
 
 Result: Pending
-Evidence: Pending build.
+Evidence: Focused runs pass: tests/test_freshness.py 14 passed; tests/test_setup.py + test_updates.py + test_verified_release.py + test_deployment_and_shell_gates.py + test_freshness.py 145 passed; test_package_discovery, test_basic_mode, test_adoption, test_affected_selection, test_ci_setup, test_swift, test_runner, test_quick_check, test_debt all pass. Local ruff, pyrefly, vulture, jscpd, deptry and semgrep on the changed files clean. Real smoke: uv and Dart outdated output checked against live PyPI and pub.dev. Full `check` not run by the builder.
 E2E: N/A — gate behavior has no user journey; recorded registry responses prove each branch.
 Delivery target: Merge
 Delivery: Pending — main CI passes with the new gate.
