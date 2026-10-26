@@ -188,7 +188,7 @@ def test_a_commit_during_the_review_voids_it(
     assert "HEAD moved" in record["outcome"]
 
 
-def test_claude_host_runs_codex_read_only_with_closed_stdin(
+def test_claude_host_runs_codex_read_only_without_user_plugins_and_closed_stdin(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     big(branch)
@@ -197,7 +197,15 @@ def test_claude_host_runs_codex_read_only_with_closed_stdin(
     assert challenge.challenge(branch, None, None) == 0
     ran = json.loads(log.read_text())
     assert ran["stdin_is_null"]
-    assert ran["argv"][:5] == ["exec", "--sandbox", "read-only", "--cd", str(branch)]
+    assert ran["argv"][:7] == [
+        "exec",
+        "--sandbox",
+        "read-only",
+        "-c",
+        "features.plugins=false",
+        "--cd",
+        str(branch),
+    ]
     revision = git(branch, "rev-parse", "HEAD")
     record = json.loads(
         challenge.store(branch, revision).with_suffix(".json").read_text()
