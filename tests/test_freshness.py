@@ -383,6 +383,21 @@ def test_javascript_workspace_checks_freshness_from_its_root(
     assert "freshness" not in {g.get("role") for g in packages["apps/web"]["checks"]}
 
 
+def test_workspace_root_without_a_language_still_gets_freshness(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").write_text('{"private":true,"workspaces":["apps/*"]}')
+    (tmp_path / "apps/web").mkdir(parents=True)
+    (tmp_path / "apps/web/package.json").write_text('{"name":"web"}')
+    root = installer.gate_config(tmp_path)["packages"][0]
+    root.pop("language", None)
+    root["checks"] = [g for g in root["checks"] if g.get("role") != "freshness"]
+    add_freshness(tmp_path, installer.SOURCE, root)
+    added = [g["command"] for g in root["checks"] if g.get("role") == "freshness"]
+    assert added == [[*FRESHNESS_COMMANDS["bun"], "-r"]]
+
+
 def test_install_adds_freshness_to_an_existing_gate_file(
     installer: ModuleType, tmp_path: Path, shipping_policy: ShippingPolicy
 ) -> None:

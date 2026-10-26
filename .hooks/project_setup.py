@@ -607,7 +607,9 @@ def adapt_freshness(gate: Gate, manager: str) -> None:
 def add_freshness(root: Path, source: Path, package: Group) -> None:
     """Give an older configuration the freshness check the templates now carry."""
     directory = root / package["path"]
-    language = package.get("language", "")
+    language = package.get("language") or next(
+        (name for file, name in LANGUAGES.items() if (directory / file).is_file()), ""
+    )
     checks = package["checks"]
     anchor = next(
         (i for i, g in enumerate(checks) if g.get("role") == "vulnerabilities"), None
