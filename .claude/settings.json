@@ -6,6 +6,9 @@
     "pr": "",
     "sessionUrl": false
   },
+  "autoCompactWindow": 500000,
+  "bashOutputMaxChars": 10000,
+  "subagentPromptCacheTtl": "1h",
   "hooks": {
     "SessionStart": [
       {
