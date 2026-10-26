@@ -1,15 +1,19 @@
 """The freshness gate fails on direct dependencies that trail a release two days old."""
 
 import json
+import os
 import re
+import shutil
 import sys
+import threading
 import urllib.error
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from freshness import validate_freshness, validate_holds
-from gate_config import Gate, JsonObject, validate_gate
+from gate_config import Gate, Group, JsonObject, validate_gate
 from gitleaks_scan import run_gate_command
 
 FIXTURES = Path(__file__).parent / "fixtures/freshness"
@@ -226,3 +230,47 @@ def test_failure_names_upgrade_route(
         )
     assert f"`{command}`" in str(failure.value)
     assert re.search(r"separate PR first", str(failure.value))
+
+
+@pytest.mark.parametrize(
+    ("script", "failed", "message"),
+    [
+        (
+            "echo 'error: ConnectionRefused downloading package manifest' >&2; exit 1",
+            True,
+            "ConnectionRefused",
+        ),
+        ("cat bun-outdated.txt", True, "is-odd 2.0.0 → 3.0.1"),
+        ("cat bun-up-to-date.txt", False, "Every direct dependency"),
+    ],
+    ids=["registry-down", "stale", "current"],
+)
+def test_gate_run_shows_the_tool_message_and_the_stale_package(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    script: str,
+    failed: bool,
+    message: str,
+) -> None:
+    tool = tmp_path / "bin/bun"
+    tool.parent.mkdir()
+    tool.write_text(f"#!/bin/sh\n{script}\n")
+    tool.chmod(0o755)
+    for name in ("bun-outdated.txt", "bun-up-to-date.txt"):
+        shutil.copy(FIXTURES / name, tmp_path / name)
+    monkeypatch.setenv("PATH", f"{tool.parent}:{os.environ['PATH']}")
+    gate: Gate = {
+        "name": "freshness",
+        "role": "freshness",
+        "command": ["bun", "outdated", "--minimum-release-age=172800"],
+        "report": {
+            "type": "freshness",
+            "path": "coverage/freshness.txt",
+            "stdout": True,
+        },
+    }
+    group: Group = {"path": ".", "checks": [gate]}
+    assert runner.run_gate(group, gate, 30, threading.Lock()) is failed
+    assert message in capsys.readouterr().out
