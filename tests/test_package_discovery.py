@@ -75,10 +75,11 @@ def test_test_support_package_keeps_only_dependency_checks(
     )
     assert "language" not in support and "sources" not in support
     assert [gate["role"] for gate in support["checks"]] == [
+        "freshness",
         "vulnerabilities",
         "lockfiles",
     ]
-    assert support["checks"][1]["command"] == [
+    assert support["checks"][2]["command"] == [
         "dart",
         "pub",
         "get",
