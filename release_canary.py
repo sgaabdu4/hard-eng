@@ -262,6 +262,8 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
             "clone failed",
             ["git", "checkout", "-q", "--detach", BROWNFIELD[1]],
         )
+        # A real adoption first upgrades the snapshot's old dependencies in their own PR.
+        must(work, log, "upgrade failed", ["uv", "lock", "--upgrade"])
     else:
         work.mkdir()
         must(work, log, "setup failed", ["git", "init", "-q"])
