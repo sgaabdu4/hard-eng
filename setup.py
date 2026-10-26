@@ -159,6 +159,9 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
             current.setdefault(
                 "attribution", {"commit": "", "pr": "", "sessionUrl": False}
             )
+            current.setdefault("autoCompactWindow", 500000)
+            current.setdefault("bashOutputMaxChars", 10000)
+            current.setdefault("subagentPromptCacheTtl", "1h")
         merged = merge(current, additions)
         if merged != json.loads(text):
             changes[name] = json_file(root, merged)
