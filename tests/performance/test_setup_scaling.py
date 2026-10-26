@@ -93,7 +93,6 @@ def test_baseline_validation_does_not_rescan_siblings(
             },
         )
         visits.append(packages.visits)
-    # With sibling directories at a fixed depth, four times the packages must
-    # not exceed four times the visits. An all-packages parent search fails this.
+    # An all-packages parent search makes visits grow faster than packages.
     assert visits[0] > 0
     assert visits[1] <= visits[0] * 4
