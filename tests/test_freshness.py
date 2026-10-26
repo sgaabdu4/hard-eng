@@ -398,6 +398,32 @@ def test_workspace_root_without_a_language_still_gets_freshness(
     assert added == [[*FRESHNESS_COMMANDS["bun"], "-r"]]
 
 
+def test_workspace_root_beside_a_python_package_keeps_bun(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").write_text('{"private":true,"workspaces":["apps/*"]}')
+    (tmp_path / "apps/web").mkdir(parents=True)
+    (tmp_path / "apps/web/package.json").write_text('{"name":"web"}')
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\nversion="1"\n')
+    (tmp_path / "uv.lock").touch()
+    packages = [
+        p for p in installer.gate_config(tmp_path)["packages"] if p["path"] == "."
+    ]
+    for package in packages:
+        package["checks"] = [
+            g for g in package["checks"] if g.get("role") != "freshness"
+        ]
+        add_freshness(tmp_path, installer.SOURCE, package)
+    added = sorted(
+        g["command"][0]
+        for package in packages
+        for g in package["checks"]
+        if g.get("role") == "freshness"
+    )
+    assert added == ["bun", "uv"]
+
+
 def test_install_adds_freshness_to_an_existing_gate_file(
     installer: ModuleType, tmp_path: Path, shipping_policy: ShippingPolicy
 ) -> None:
