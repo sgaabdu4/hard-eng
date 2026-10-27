@@ -36,6 +36,14 @@ CODEBASE_MEMORY = {
 import update
 
 
+@pytest.fixture(autouse=True)
+def keep_machine_brokers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Session start tests must not stop the developer's own Codex brokers."""
+    import process_group
+
+    monkeypatch.setattr(process_group, "stop_idle_codex_brokers", lambda: (0, 0))
+
+
 def isolate_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Update cleanup sweeps the temporary directory; keep it off this machine's."""
     directory = tmp_path / "tmp"
