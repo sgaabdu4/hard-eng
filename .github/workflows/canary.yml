@@ -35,7 +35,11 @@ jobs:
           # A develop push is compared with main, as the release canary compares it.
           BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
           EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          # A release PR holds develop's tree, which develop's push already checked.
+          if [ "$BASE_REF" = main ] && [ "$HEAD_REF" = develop ]; then echo 'targets=[]' >> "$GITHUB_OUTPUT"; exit 0; fi
           if [ "$EVENT" = workflow_dispatch ]; then names=setup.py; else names=$(git diff --name-only "$BASE...HEAD"); fi
           printf '%s\n' "$names" | python3 -I -c 'import json, sys; sys.path.insert(0, "."); import release_canary as c; names = sys.stdin.read().split(); print("targets=" + json.dumps([c.folder(" ".join(t)) for t in c.NEW_TARGETS] if c.needs_canary(names) else []))' >> "$GITHUB_OUTPUT"
 

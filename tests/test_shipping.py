@@ -857,11 +857,23 @@ def _uncommitted_change(push: MergedPush) -> None:
 def test_push_runs_checks_when_pull_request_proof_is_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     break_proof: Callable[[MergedPush], None],
 ) -> None:
     push = _merged_push(tmp_path, monkeypatch)
     break_proof(push)
     assert shipping.reused_pull_request(push.root, push.base) is None
+    reason = capsys.readouterr().out
+    assert reason.startswith(
+        "Running the checks again; the merged PR's checks do not cover this push: "
+    )
+    assert (
+        reason.strip()
+        .removeprefix(
+            "Running the checks again; the merged PR's checks do not cover this push:"
+        )
+        .strip()
+    )
 
 
 @pytest.mark.parametrize(
@@ -873,7 +885,11 @@ def test_push_runs_checks_when_pull_request_proof_is_missing(
     ],
 )
 def test_only_ci_pushes_to_the_base_branch_reuse_pull_request_checks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, value: str | None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    name: str,
+    value: str | None,
 ) -> None:
     push = _merged_push(tmp_path, monkeypatch)
     if value is None:
@@ -881,6 +897,7 @@ def test_only_ci_pushes_to_the_base_branch_reuse_pull_request_checks(
     else:
         monkeypatch.setenv(name, value)
     assert shipping.reused_pull_request(push.root, push.base) is None
+    assert capsys.readouterr().out == ""
 
 
 def test_merge_of_a_head_without_the_previous_base_runs_checks(
