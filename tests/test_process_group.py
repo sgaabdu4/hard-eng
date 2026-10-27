@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -15,19 +16,30 @@ def start(command: list[str], pid_file: Path, cwd: Path) -> subprocess.Popen[byt
     return process
 
 
+BROKER_SCRIPT = """
+import subprocess, sys, time
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+open(sys.argv[sys.argv.index("--pid-file") + 1] + ".child", "w").write(str(child.pid))
+time.sleep(60)
+"""
+
+
 def broker(tmp_path: Path, folder: Path) -> tuple[subprocess.Popen[bytes], Path]:
-    child = tmp_path / "broker-child.pid"
-    command = spawner(child) + [
-        "app-server-broker.mjs",
-        "serve",
-        "--endpoint",
+    script = tmp_path / "scripts/app-server-broker.mjs"
+    script.parent.mkdir(exist_ok=True)
+    script.write_text(BROKER_SCRIPT)
+    pid_file = tmp_path / "broker.pid"
+    command = [sys.executable, str(script), "serve", "--endpoint"]
+    command += [
         "unix:/tmp/broker.sock",
         "--cwd",
         str(folder),
         "--pid-file",
-        str(tmp_path / "broker.pid"),
+        str(pid_file),
     ]
-    return start(command, child, tmp_path), child
+    return start(command, Path(f"{pid_file}.child"), tmp_path), Path(
+        f"{pid_file}.child"
+    )
 
 
 def own_table(*roots: subprocess.Popen[bytes]) -> list[Process]:
@@ -99,3 +111,15 @@ def test_stops_broker_whose_folder_is_gone_while_a_job_runs(tmp_path: Path) -> N
         assert ended(process, child)
     finally:
         stop_job(job, job_pid)
+
+
+def test_job_that_quotes_a_broker_command_is_not_a_broker(tmp_path: Path) -> None:
+    job_pid = tmp_path / "job-child.pid"
+    quoted = "node /x/app-server-broker.mjs serve --endpoint e --cwd /gone --pid-file p"
+    job = spawner(job_pid) + ["codex-companion.mjs", "task", quoted]
+    companion = start(job, job_pid, tmp_path)
+    try:
+        assert stop_idle_codex_brokers(own_table(companion)) == (0, 0)
+        assert companion.poll() is None
+    finally:
+        stop_job(companion, job_pid)
