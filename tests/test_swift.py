@@ -831,7 +831,15 @@ DEVICES = {
     "none": "    iPad (CCCCCCCC-1111-2222-3333-444444444444) (Shutdown)\n",
 }
 FAKE_TOOLS = {
-    "xcrun": 'if [ "$1" = simctl ]; then printf "%s" "$FAKE_DEVICES"; else echo "{}"; fi\n',
+    "xcrun": 'case "$1 $2" in\n'
+    '"simctl list") printf "%s" "$FAKE_DEVICES" ;;\n'
+    '"xccov view") case "$5" in\n'
+    '  *.xccovreport) echo \'{"report": "exported"}\' ;;\n'
+    '  *) [ -z "$FAKE_XCCOV_FAILS" ] || { echo "Failed to load coverage archive" >&2; exit 1; }; echo "{}" ;;\n'
+    '  esac ;;\n'
+    '"xcresulttool export") mkdir -p "$7" && touch "$7/0_Test_My Mac_CoverageReport" ;;\n'
+    '*) echo "{}" ;;\n'
+    'esac\n',
     "xcodebuild": 'echo "xcodebuild $*" >> "$FAKE_CALLS"\n',
     "flutter": 'echo "flutter $*" >> "$FAKE_CALLS"\n'
     '[ -z "$FAKE_RESOLVE" ] || [ "$1" != build ] || echo moved >> "$FAKE_RESOLVE"\n',
@@ -839,7 +847,12 @@ FAKE_TOOLS = {
 
 
 def run_tests_script(
-    installer: ModuleType, tmp_path: Path, platform: str, devices: str, moved: str
+    installer: ModuleType,
+    tmp_path: Path,
+    platform: str,
+    devices: str,
+    moved: str,
+    xccov_fails: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     root = tmp_path / "app"
     flutter_app(root, (platform,))
@@ -858,6 +871,7 @@ def run_tests_script(
         "FAKE_DEVICES": devices,
         "FAKE_CALLS": str(calls),
         "FAKE_RESOLVE": str(root / platform / moved) if moved else "",
+        "FAKE_XCCOV_FAILS": "1" if xccov_fails else "",
     }
     result = subprocess.run(
         script,
@@ -914,6 +928,15 @@ def test_macos_tests_script_keeps_the_project_files_unchanged(
     else:
         assert result.returncode == 0, result.stderr
         assert "-destination platform=macOS " in calls[-1]
+
+
+def test_tests_script_reads_exported_coverage_when_xccov_cannot_load_the_bundle(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    result, _ = run_tests_script(installer, tmp_path, "macos", "", "", True)
+    assert result.returncode == 0, result.stderr
+    report = tmp_path / "app/macos/coverage/swift-coverage.json"
+    assert json.loads(report.read_text()) == {"report": "exported"}
 
 
 def test_xccov_coverage_keeps_the_larger_denominator_per_file(tmp_path: Path) -> None:
