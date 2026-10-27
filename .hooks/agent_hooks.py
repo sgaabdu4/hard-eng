@@ -242,6 +242,12 @@ POLL_HOOK: JsonObject = {
     "matcher": "Bash",
     "hooks": [{"type": "command", "command": POLL_COMMAND, "timeout": 5}],
 }
+PREVIEW_COMMAND = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/previews.py" 2>/dev/null || true'
+PREVIEW_HOOK: JsonObject = {
+    "matcher": "Artifact",
+    "hooks": [{"type": "command", "command": PREVIEW_COMMAND, "timeout": 5}],
+}
+CLAUDE_TOOL_HOOKS = [POLL_HOOK, PREVIEW_HOOK]
 CODEX_HOOK_STATUS = {
     "session": "Hard Eng: updating project setup",
     "stop": "Hard Eng: verifying changes",
