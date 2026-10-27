@@ -11,7 +11,7 @@ from typing import IO, NamedTuple
 
 BROKER = re.compile(r"app-server-broker\.mjs serve .* --cwd (.+?) --pid-file ")
 COMPANION = "codex-companion.mjs"
-WORKER_FOLDER = re.compile(r" task-worker --cwd (.+?) --job-id ")
+FOLDER_OPTION = re.compile(r" (?:--cwd|-C)[= ](.+?)(?= -{1,2}\w|$)")
 
 
 class Process(NamedTuple):
@@ -92,8 +92,11 @@ def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, in
     for row in rows:
         if COMPANION not in row.command:
             continue
-        worker = WORKER_FOLDER.search(row.command)
-        folder = Path(worker.group(1)) if worker else process_folder(row.pid)
+        option = FOLDER_OPTION.search(row.command)
+        folder = Path(option.group(1)) if option else None
+        if folder is None or not folder.is_absolute():
+            here = process_folder(row.pid)
+            folder = here / folder if here and folder else here
         if folder is not None:
             busy.add(folder.resolve())
     brokers = stopped = 0
