@@ -33,15 +33,20 @@ CODEBASE_MEMORY = {
     ],
 }
 
+import process_group
 import update
 
+stop_listed_brokers = process_group.stop_idle_codex_brokers
 
-@pytest.fixture(autouse=True)
-def keep_machine_brokers(monkeypatch: pytest.MonkeyPatch) -> None:
+
+def keep_machine_brokers(
+    table: list[process_group.Process] | None = None,
+) -> tuple[int, int]:
     """Session start tests must not stop the developer's own Codex brokers."""
-    import process_group
+    return (0, 0) if table is None else stop_listed_brokers(table)
 
-    monkeypatch.setattr(process_group, "stop_idle_codex_brokers", lambda: (0, 0))
+
+process_group.stop_idle_codex_brokers = keep_machine_brokers
 
 
 def isolate_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
