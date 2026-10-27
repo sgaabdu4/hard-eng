@@ -12,9 +12,9 @@ from conftest import SOURCE
 HOOK = SOURCE / ".hooks/polling.py"
 
 
-def run(payload: object) -> str:
+def run(payload: object, hook: Path = HOOK) -> str:
     return subprocess.run(
-        [sys.executable, str(HOOK)],
+        [sys.executable, str(hook)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,

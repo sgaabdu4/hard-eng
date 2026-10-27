@@ -47,7 +47,7 @@ N/A — hook, setup and skill text only; no visible UI.
 ## Verification
 
 Result: Passed
-Evidence: `uv run pytest -q tests/test_previews.py tests/test_polling.py tests/test_hook_setup.py tests/test_adoption.py tests/test_skill_links.py`: 114 passed; after the shared hook list change, `tests/test_previews.py tests/test_hook_setup.py tests/test_adoption.py`: 92 passed. `check --quick` found one finding, `tests/test_adoption.py` at 1002 lines; fixed by naming the hook list once in `agent_hooks.CLAUDE_TOOL_HOOKS`. Limit: the note in a live desktop session is unchecked until a new session starts after merge.
+Evidence: `uv run pytest -q tests/test_previews.py tests/test_polling.py tests/test_hook_setup.py tests/test_adoption.py tests/test_skill_links.py`: 114 passed; after the shared hook list change, `tests/test_previews.py tests/test_hook_setup.py tests/test_adoption.py`: 92 passed. `check --quick` found one finding, `tests/test_adoption.py` at 1002 lines; fixed by naming the hook list once in `agent_hooks.CLAUDE_TOOL_HOOKS`. The first push's full check found two more: jscpd matched the new hook's input code and test helper to the poll hook's (now shared through `polling.respond` and `test_polling.run`), and Biome reformatted the `ux.md` table; after that, jscpd found 0 clones, `biome ci` passed, the hook tests passed (46) and `check --quick` passed. Limit: the note in a live desktop session is unchecked until a new session starts after merge.
 E2E: N/A — no user interface; tests run the real hook script and the installed command.
 Delivery target: Merge
 Delivery: Pending — `Hard Eng` CI passes on the PR and it merges into develop; then the develop to main release PR merges.
