@@ -1,6 +1,6 @@
 # Open issue sweep: idle Codex brokers, Stop without a session record, own launchers, Xcode 27.1 coverage
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
@@ -9,7 +9,7 @@ One PR closes every open issue: session start stops idle Codex plugin brokers (#
 ## Repository context
 
 Owners: `.hooks/process_group.py`, `.hooks/agent_hooks.py` (`session_context`, `completion`), `.hooks/project_setup.py::unlisted_shell_scripts`, `.agents/skills/he/templates/hard-eng.swift.json`.
-Same cause: #417 — Hard Eng's own Codex review runs through `run_in_group`, which already stops every child; the plugin starts `app-server-broker.mjs serve --endpoint E --cwd F --pid-file P` detached and stops it only on `SessionEnd`; its clients are `codex-companion.mjs` processes. #415 — the unchanged-turn skip needed the SessionStart record, and `test_missing_session_baseline_cannot_skip_verification` keeps the first check; no other Stop path depends on the record. #414 — `is_own` already names every launcher setup writes. #413 — the two vendored `skill-sources` copies are submodules owned upstream. #416 — Stop already runs `check --quick` (format, lint, types, annotations only, `reports.QUICK_ROLES`); tests, coverage and scans run in pre-push and CI; the long waits came from #415 and a test queue held back by machine load.
+Same cause: #417 — Hard Eng's own Codex review runs through `run_in_group`, which already stops every child; the plugin starts `app-server-broker.mjs serve --endpoint E --cwd F --pid-file P` detached and stops it only on `SessionEnd`; its clients are `codex-companion.mjs` processes. #415 — the unchanged-turn skip needed the SessionStart record, and `test_missing_session_baseline_cannot_skip_verification` keeps the first check; no other Stop path depends on the record. #414 — `is_own` already names every launcher setup writes. #413 — the two vendored `skill-sources` copies are submodules owned upstream. Stop failures in this build: the plan stayed Draft after build started (missing baseline, then Draft status); both fixed here, no code cause. #416 — Stop already runs `check --quick` (format, lint, types, annotations only, `reports.QUICK_ROLES`); tests, coverage and scans run in pre-push and CI; the long waits came from #415 and a test queue held back by machine load.
 
 ## Decisions + authorization
 
