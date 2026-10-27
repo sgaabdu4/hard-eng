@@ -1,10 +1,13 @@
 """Deployment, shell and workflow checks are added only for files the project has."""
 
+import json
 from pathlib import Path
 from types import ModuleType
 
+import hook_chain
 import pytest
-from gate_config import GateConfig
+from gate_config import GateConfig, load_groups
+from test_runner import native_gate_fixture
 from test_setup import repository
 
 
@@ -99,3 +102,20 @@ def test_existing_checks_are_not_replaced(
     ):
         configure(tmp_path, config)
     assert config["shared"] == gates
+
+
+def test_own_hook_launcher_needs_no_shellcheck_entry(
+    runner: ModuleType, installer: ModuleType, tmp_path: Path
+) -> None:
+    native_gate_fixture(tmp_path, installer, "python")
+    (tmp_path / "helper.sh").write_text("echo helper\n")
+    gates = tmp_path / "hard-eng.gates.json"
+    config = json.loads(gates.read_text())
+    installer.configure_shellcheck(tmp_path, config)
+    gates.write_text(json.dumps(config))
+    (tmp_path / ".githooks").mkdir()
+    (tmp_path / ".githooks/post-checkout").write_text(hook_chain.WORKTREE_LAUNCHER)
+    load_groups(tmp_path)
+    (tmp_path / ".githooks/pre-commit").write_text("#!/bin/sh\necho project\n")
+    with pytest.raises(ValueError, match="shellcheck omits .githooks/pre-commit"):
+        load_groups(tmp_path)

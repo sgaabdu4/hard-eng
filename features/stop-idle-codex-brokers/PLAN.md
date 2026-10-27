@@ -4,7 +4,7 @@ Status: Draft
 
 ## Outcome + scope
 
-One PR closes every open issue: session start stops idle Codex plugin brokers (#417); a session without a SessionStart record checks once, then skips unchanged turns (#415); Hard Eng's own hook launchers need no shellcheck entry (#414); Swift coverage reads the exported report when `xccov view` cannot load the bundle (#413); #416 needs no change. Non-goals: changing the Codex plugin, a new Stop time budget, Windows process cleanup.
+One PR closes every open issue: session start stops idle Codex plugin brokers (#417); a session without a SessionStart record checks until one check passes, then skips unchanged turns (#415); Hard Eng's own hook launchers need no shellcheck entry (#414); Swift coverage reads the exported report when `xccov view` cannot load the bundle (#413); #416 needs no change. Non-goals: changing the Codex plugin, a new Stop time budget, Windows process cleanup.
 
 ## Repository context
 
@@ -20,11 +20,12 @@ Authority: Abid on 2026-10-27: stop idle brokers in Hard Eng, address every open
 ## Acceptance + steps
 
 - [ ] A broker whose folder no longer exists is stopped with its child process → `tests/test_process_group.py::test_stops_broker_whose_folder_is_gone`: both processes end.
-- [ ] A broker with no job for its folder is stopped with its child process → `tests/test_process_group.py::test_stops_broker_without_a_job`: both processes end.
-- [ ] A broker with a running job stays, for a task worker, a job with `--cwd` or `-C`, and a job in the folder → `tests/test_process_group.py::test_keeps_broker_with_a_running_job`: the broker stays alive.
+- [ ] A broker is stopped with its child process when no Codex job runs → `tests/test_process_group.py::test_stops_broker_without_a_job`: both processes end.
+- [ ] While any Codex job runs, every broker whose folder exists stays; a job's target folder is not read from its command line, which is ambiguous → `tests/test_process_group.py::test_keeps_broker_while_a_job_runs`: the broker stays alive.
+- [ ] A broker whose folder is gone is stopped even while a job runs → `tests/test_process_group.py::test_stops_broker_whose_folder_is_gone_while_a_job_runs`: both processes end.
 - [ ] Session start reports the stopped brokers → `tests/test_agent_hooks.py::test_session_reports_stopped_codex_brokers`: the context names the count.
 - [ ] A session without a record checks until one check passes, then skips an unchanged turn → `tests/test_agent_hooks.py::test_session_without_a_record_checks_until_a_pass`: a failed check blocks and is retried; after a pass, "no code checks run".
-- [ ] Hard Eng's own launcher in a tracked hooks folder needs no shellcheck entry; a project hook still does → `tests/test_runner.py::test_own_hook_launcher_needs_no_shellcheck_entry`.
+- [ ] Hard Eng's own launcher in a tracked hooks folder needs no shellcheck entry; a project hook still does → `tests/test_deployment_and_shell_gates.py::test_own_hook_launcher_needs_no_shellcheck_entry`.
 - [ ] Swift coverage falls back to the exported report → `tests/test_swift.py::test_tests_script_reads_exported_coverage_when_xccov_cannot_load_the_bundle`: the report holds the exported coverage. The fallback commands were run against a real Xcode 27.1 result bundle: `xccov view` of the exported report gave the same per-file counts as `xccov view` of the bundle.
 - [ ] #416 → N/A — no code change; the PR states the evidence and closes it.
 
