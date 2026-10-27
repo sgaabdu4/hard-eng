@@ -536,17 +536,25 @@ def reused_pull_request(root: Path, base: str) -> str | None:
             or os.environ.get("GITHUB_ACTIONS") != "true"
             or os.environ.get("GITHUB_EVENT_NAME") != "push"
             or os.environ.get("GITHUB_REF") != f"refs/heads/{policy['base']}"
-            or git(root, "status", "--porcelain")
         ):
             return None
+    except ShippingError:
+        return None
+    try:
+        if git(root, "status", "--porcelain"):
+            raise ShippingError("the checkout has uncommitted changes")
         repository = _repo(os.environ.get("GITHUB_REPOSITORY"), "workflow")
         head, tree = _pull_request_head(
             root, repository, _sha(base, "push base"), policy["base"]
         )
         if tree != git(root, "rev-parse", "HEAD^{tree}").strip():
-            return None
+            raise ShippingError("the merged PR tested a different tree")
         _checks(root, repository, head, policy)
-    except ShippingError:
+    except ShippingError as error:
+        print(
+            f"Running the checks again; the merged PR's checks do not cover this push: {error}",
+            flush=True,
+        )
         return None
     return head
 

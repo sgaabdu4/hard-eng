@@ -22,6 +22,7 @@ Settings: allow merge commits; `develop` requires linear history, so its PRs sta
 
 - [x] A PR to `main` from any branch but this repository's `develop` fails `release source` → N/A — GitHub runs this check only on a real PR; throwaway PR #422 from this branch showed it red, then was closed.
 - [x] `main` takes no direct push → N/A — a GitHub setting, not code; the protection read-back shows a required PR with admins enforced.
+- [x] A release PR runs no new-project jobs, because develop's push already checked the same tree → N/A — GitHub runs this only on a real release PR; the next release PR's `canary targets` lists none.
 - [x] The new workflow passes the workflow checks → N/A — no product test; actionlint and zizmor pass.
 
 ## Baseline + execution
