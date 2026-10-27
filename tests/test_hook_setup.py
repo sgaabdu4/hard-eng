@@ -36,7 +36,10 @@ def test_hook_registrations_invoke_shared_runner(
     ):
         hooks = json.loads((root / path).read_text())["hooks"]
         if agent == "claude":
-            assert hooks.pop("PreToolUse") == [agent_hooks.POLL_HOOK]
+            assert hooks.pop("PreToolUse") == [
+                agent_hooks.POLL_HOOK,
+                agent_hooks.PREVIEW_HOOK,
+            ]
         assert set(hooks) == set(events.split())
         calls = {
             "codex": ("session", "stop"),

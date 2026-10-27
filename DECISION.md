@@ -41,7 +41,7 @@ Each item is agreed but not yet fully implemented or proven. Tick work happens i
 - [ ] Source security: Semgrep scans JavaScript, TypeScript, Python, Dart and Flutter with applicable rules and fails on findings or scan errors.
 - [ ] Scanner exceptions: only narrow exceptions for proven false positives or intended patterns, with reason and evidence; the rule stays active elsewhere.
 - [ ] Focused test selection: reject command-line or configuration filters that shrink the expected Python, JavaScript or Dart test suite; scanner scopes cover the tests.
-- [ ] AI hook lifecycle: session start checks updates and gives MCP readiness guidance; completion runs code checks; no Hard Eng PreToolUse gate. See [the learning decision](docs/adr/0001-learning-prevention-and-decisions.md).
+- [ ] AI hook lifecycle: session start checks updates and gives MCP readiness guidance; completion runs code checks; Claude PreToolUse hooks only deny foreground polling and note real-app previews on Artifact calls. See [the learning decision](docs/adr/0001-learning-prevention-and-decisions.md).
 - [ ] AI completion: failed gates need another repair attempt; a broken verification hook needs repair before completion is claimed; repeated Stop loops are prevented.
 - [ ] Full checks: pre-push and CI run every required check under the check-scope rules; task completion runs quick static gates on the session's own change (user decision, 2026-10-15).
 - [ ] JavaScript and TypeScript gates: Biome, type checks, tests, applicable build and Fallow; React adds React Doctor.

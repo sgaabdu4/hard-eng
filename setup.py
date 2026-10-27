@@ -142,7 +142,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
                 )
             ]
         if agent == "claude":
-            hooks["PreToolUse"] = [agent_hooks.POLL_HOOK]
+            hooks["PreToolUse"] = list(agent_hooks.CLAUDE_TOOL_HOOKS)
         target = root / name
         text = target.read_text() if target.exists() else "{}"
         current: JsonObject = json.loads(text)

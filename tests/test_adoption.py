@@ -240,7 +240,7 @@ def assert_old_generation_retired(root: Path, project: dict[str, str]) -> None:
         group, *managed = json.loads((root / name).read_text())["hooks"]["PreToolUse"]
         assert group == {"hooks": [{"type": "command", "command": "project-guard"}]}
         assert managed == (
-            [agent_hooks.POLL_HOOK] if name.startswith(".claude") else []
+            agent_hooks.CLAUDE_TOOL_HOOKS if name.startswith(".claude") else []
         )
 
 
@@ -461,7 +461,7 @@ def test_install_preserves_custom_retired_hooks_until_supported_migration(
     policy.unlink()
     installer.install(tmp_path)
     assert ".hard-eng" not in settings.read_text()
-    group, _ = json.loads(settings.read_text())["hooks"]["PreToolUse"]
+    group, *_ = json.loads(settings.read_text())["hooks"]["PreToolUse"]
     assert group["hooks"] == [
         {"type": "command", "command": "project-guard"},
         *migrated,
