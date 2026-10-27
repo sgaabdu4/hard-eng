@@ -77,7 +77,8 @@ def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, in
             continue
         if jobs and Path(broker.group(1)).is_dir():
             continue
-        tree, pending = [], [row.pid]
+        tree: list[int] = []
+        pending = [row.pid]
         while pending:
             pid = pending.pop()
             tree.append(pid)
