@@ -348,6 +348,18 @@ def test_missing_session_baseline_cannot_skip_verification(repository: Path) -> 
     assert result["decision"] == "block"
 
 
+def test_session_without_a_record_checks_once(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    check = Mock(return_value=(0, "Hard Eng: checks passed"))
+    monkeypatch.setattr(agent_hooks, "run_check", check)
+    payload: JsonObject = {"session_id": "moved-in"}
+    assert agent_hooks.completion(repository, payload).get("decision") != "block"
+    assert "no code checks run" in str(agent_hooks.completion(repository, payload))
+    check.assert_called_once()
+
+
 def test_saved_git_option_cannot_hide_staged_changes(repository: Path) -> None:
     (repository / ".git/info/exclude").write_text(".hard-eng/\n")
     (repository / "change.txt").write_text("staged change")

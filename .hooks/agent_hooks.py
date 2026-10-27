@@ -850,6 +850,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
     if (paused := paused_turn(payload)) is not None:
         return paused
     state = session_state(root, payload)
+    recorded = state is not None and state.exists()
     base, before = saved_session(state)
     try:
         base = subprocess.check_output(
@@ -858,6 +859,10 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
             text=True,
         ).strip()
         base = session_scope(root, base)
+        if state is not None and not recorded:
+            # A session that began outside this project checks once, then compares later turns.
+            state.parent.mkdir(parents=True, exist_ok=True)
+            state.write_text(json.dumps({"base": base, "dirty": {}}))
         current = dirty_files(root, base)
         changed = "".join(
             f"{name}\n"
@@ -872,7 +877,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 "reason": notice
                 + ". Only authorized planning/verification; ask real blockers. No authority to implement, expand scope or edit read-only work → report + stop.",
             }
-        if not changed.strip() and state is not None and state.exists():
+        if not changed.strip() and recorded:
             return unchanged_notice(root, notice)
         if notice and planning_only(root, set(changed.splitlines())):
             return with_freshness(
