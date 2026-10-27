@@ -836,10 +836,10 @@ FAKE_TOOLS = {
     '"xccov view") case "$5" in\n'
     '  *.xccovreport) echo \'{"report": "exported"}\' ;;\n'
     '  *) [ -z "$FAKE_XCCOV_FAILS" ] || { echo "Failed to load coverage archive" >&2; exit 1; }; echo "{}" ;;\n'
-    '  esac ;;\n'
+    "  esac ;;\n"
     '"xcresulttool export") mkdir -p "$7" && touch "$7/0_Test_My Mac_CoverageReport" ;;\n'
     '*) echo "{}" ;;\n'
-    'esac\n',
+    "esac\n",
     "xcodebuild": 'echo "xcodebuild $*" >> "$FAKE_CALLS"\n',
     "flutter": 'echo "flutter $*" >> "$FAKE_CALLS"\n'
     '[ -z "$FAKE_RESOLVE" ] || [ "$1" != build ] || echo moved >> "$FAKE_RESOLVE"\n',
