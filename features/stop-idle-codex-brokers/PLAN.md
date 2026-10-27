@@ -30,8 +30,8 @@ Authority: Abid on 2026-10-27: stop idle brokers in Hard Eng, address every open
 
 ## Baseline + execution
 
-Result: Pending
-Evidence: Pending — `python3 .hooks/hard-eng.py check --plan-stage Draft --base origin/develop`.
+Result: Passed
+Evidence: Branch point develop 6c8fc95f: `hard-eng`, `canary` and all 12 new-project jobs passed in CI.
 Execution: One builder, this session; Codex adversarial review loop before the PR.
 
 ## Risks + recovery
