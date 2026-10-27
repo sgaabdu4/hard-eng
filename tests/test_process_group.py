@@ -2,7 +2,6 @@ import subprocess
 import time
 from pathlib import Path
 
-import pytest
 from conftest import running, spawner
 from process_group import Process, process_table, stop_idle_codex_brokers
 
