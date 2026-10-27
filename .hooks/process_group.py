@@ -8,7 +8,9 @@ from contextlib import suppress
 from pathlib import Path
 from typing import IO, NamedTuple
 
-BROKER = re.compile(r"app-server-broker\.mjs serve .* --cwd (.+?) --pid-file ")
+BROKER = re.compile(
+    r"^\S+ \S*/app-server-broker\.mjs serve --endpoint \S+ --cwd (.+) --pid-file \S+$"
+)
 COMPANION = "codex-companion.mjs"
 
 
@@ -72,7 +74,7 @@ def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, in
     jobs = any(COMPANION in row.command for row in rows)
     brokers = stopped = 0
     for row in rows:
-        broker = BROKER.search(row.command)
+        broker = BROKER.match(row.command)
         if broker is None:
             continue
         if jobs and Path(broker.group(1)).is_dir():
