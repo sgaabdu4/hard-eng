@@ -1,13 +1,10 @@
 import subprocess
-import sys
 import time
 from pathlib import Path
 
 import pytest
 from conftest import running, spawner
 from process_group import Process, process_table, stop_idle_codex_brokers
-
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX processes")
 
 
 def start(command: list[str], pid_file: Path, cwd: Path) -> subprocess.Popen[bytes]:
