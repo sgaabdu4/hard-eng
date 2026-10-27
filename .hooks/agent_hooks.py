@@ -859,10 +859,6 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
             text=True,
         ).strip()
         base = session_scope(root, base)
-        if state is not None and not recorded:
-            # A session that began outside this project checks once, then compares later turns.
-            state.parent.mkdir(parents=True, exist_ok=True)
-            state.write_text(json.dumps({"base": base, "dirty": {}}))
         current = dirty_files(root, base)
         changed = "".join(
             f"{name}\n"
@@ -927,6 +923,10 @@ def checked_changes(
     returncode, output = run_check(root, base, building)
     decisions = show_decisions(root, changed.splitlines(), state)
     if returncode == 0:
+        if state is not None and not state.exists():
+            # A session that began outside this project passes once, then compares later turns.
+            state.parent.mkdir(parents=True, exist_ok=True)
+            state.write_text(json.dumps({"base": base, "dirty": {}}))
         remember_pass(state, verified)
         if decisions:
             return {"decision": "block", "reason": decisions.strip()}
