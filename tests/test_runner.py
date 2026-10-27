@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from types import ModuleType
 
+import hook_chain
 import pytest
 import tool_setup
 from conftest import SOURCE, configure, default_policy, gate, init, use_installed_mise
@@ -155,6 +156,23 @@ def test_new_repository_inputs_require_applicable_gates(
             load_groups(tmp_path)
         installer.configure_shellcheck(tmp_path, config)
         gates.write_text(json.dumps(config))
+        load_groups(tmp_path)
+
+
+def test_own_hook_launcher_needs_no_shellcheck_entry(
+    runner: ModuleType, installer: ModuleType, tmp_path: Path
+) -> None:
+    native_gate_fixture(tmp_path, installer, "python")
+    (tmp_path / "helper.sh").write_text("echo helper\n")
+    gates = tmp_path / "hard-eng.gates.json"
+    config = json.loads(gates.read_text())
+    installer.configure_shellcheck(tmp_path, config)
+    gates.write_text(json.dumps(config))
+    (tmp_path / ".githooks").mkdir()
+    (tmp_path / ".githooks/post-checkout").write_text(hook_chain.WORKTREE_LAUNCHER)
+    load_groups(tmp_path)
+    (tmp_path / ".githooks/pre-commit").write_text("#!/bin/sh\necho project\n")
+    with pytest.raises(ValueError, match="shellcheck omits .githooks/pre-commit"):
         load_groups(tmp_path)
 
 
