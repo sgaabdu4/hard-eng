@@ -13,6 +13,7 @@ from unittest.mock import Mock
 
 import agent_hooks
 import plans
+import process_group
 import pytest
 import update
 import update_runner
@@ -492,6 +493,17 @@ def test_only_claude_is_told_to_read_override(
     ]
     told = "AGENTS.override.md → read it now + follow it." in context
     assert told == (override and agent == "claude")
+
+
+def test_session_reports_stopped_codex_brokers(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(update_runner, "start_update", Mock(return_value="status"))
+    monkeypatch.setattr(
+        process_group, "stop_idle_codex_brokers", Mock(return_value=(2, 40))
+    )
+    context = agent_hooks.session_context(repository, {"session_id": "brokers"})
+    assert "Stopped 2 idle Codex brokers (40 processes)." in context
 
 
 def test_session_states_whether_gates_can_run(repository: Path) -> None:
