@@ -68,15 +68,23 @@ def test_stops_broker_without_a_job(tmp_path: Path) -> None:
     assert ended(process, child)
 
 
-@pytest.mark.parametrize("worker", [True, False])
-def test_keeps_broker_with_a_running_job(tmp_path: Path, worker: bool) -> None:
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["task-worker", "--cwd", "{folder}", "--job-id", "1"],
+        ["review", "--cwd", "{folder}", "--base", "main"],
+        ["review", "-C", "worktree"],
+        ["review"],
+    ],
+)
+def test_keeps_broker_with_a_running_job(tmp_path: Path, arguments: list[str]) -> None:
     folder = tmp_path / "worktree"
     folder.mkdir()
     process, child = broker(tmp_path, folder)
     job_pid = tmp_path / "job-child.pid"
     job = spawner(job_pid) + ["codex-companion.mjs"]
-    job += ["task-worker", "--cwd", str(folder), "--job-id", "1"] if worker else ["review"]
-    companion = start(job, job_pid, tmp_path if worker else folder)
+    job += [argument.format(folder=folder) for argument in arguments]
+    companion = start(job, job_pid, folder if arguments == ["review"] else tmp_path)
     try:
         assert stop_idle_codex_brokers(own_table(process, companion)) == (0, 0)
         assert process.poll() is None
