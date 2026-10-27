@@ -4,14 +4,12 @@ import os
 import re
 import signal
 import subprocess
-import sys
 from contextlib import suppress
 from pathlib import Path
 from typing import IO, NamedTuple
 
 BROKER = re.compile(r"app-server-broker\.mjs serve .* --cwd (.+?) --pid-file ")
 COMPANION = "codex-companion.mjs"
-FOLDER_OPTION = re.compile(r" (?:--cwd|-C)[= ](.+?)(?= -{1,2}\w|$)")
 
 
 class Process(NamedTuple):
@@ -65,47 +63,19 @@ def process_table() -> list[Process]:
     return rows
 
 
-def process_folder(pid: int) -> Path | None:
-    if sys.platform == "linux":
-        with suppress(OSError):
-            return Path(os.readlink(f"/proc/{pid}/cwd"))
-        return None
-    listing = subprocess.run(
-        ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
-        check=False,
-        capture_output=True,
-        text=True,
-    ).stdout
-    return next(
-        (Path(line[1:]) for line in listing.splitlines() if line.startswith("n")),
-        None,
-    )
-
-
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:
-    """The plugin stops a broker only on SessionEnd, which a killed session never sends."""
+    """SessionEnd alone misses killed sessions; a job's folder is not readable, so any job keeps live folders."""
     rows = process_table() if table is None else table
     children: dict[int, list[int]] = {}
     for row in rows:
         children.setdefault(row.parent, []).append(row.pid)
-    busy: set[Path] = set()
-    for row in rows:
-        if COMPANION not in row.command:
-            continue
-        option = FOLDER_OPTION.search(row.command)
-        folder = Path(option.group(1)) if option else None
-        if folder is None or not folder.is_absolute():
-            here = process_folder(row.pid)
-            folder = here / folder if here and folder else here
-        if folder is not None:
-            busy.add(folder.resolve())
+    jobs = any(COMPANION in row.command for row in rows)
     brokers = stopped = 0
     for row in rows:
         broker = BROKER.search(row.command)
         if broker is None:
             continue
-        folder = Path(broker.group(1))
-        if folder.is_dir() and folder.resolve() in busy:
+        if jobs and Path(broker.group(1)).is_dir():
             continue
         tree, pending = [], [row.pid]
         while pending:
