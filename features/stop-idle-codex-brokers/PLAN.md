@@ -1,6 +1,6 @@
 # Open issue sweep: idle Codex brokers, Stop without a session record, own launchers, Xcode 27.1 coverage
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -19,15 +19,15 @@ Authority: Abid on 2026-10-27: stop idle brokers in Hard Eng, address every open
 
 ## Acceptance + steps
 
-- [ ] A broker whose folder no longer exists is stopped with its child process → `tests/test_process_group.py::test_stops_broker_whose_folder_is_gone`: both processes end.
-- [ ] A broker is stopped with its child process when no Codex job runs → `tests/test_process_group.py::test_stops_broker_without_a_job`: both processes end.
-- [ ] While any Codex job runs, every broker whose folder exists stays; a job's target folder is not read from its command line, which is ambiguous → `tests/test_process_group.py::test_keeps_broker_while_a_job_runs`: the broker stays alive.
-- [ ] A broker whose folder is gone is stopped even while a job runs → `tests/test_process_group.py::test_stops_broker_whose_folder_is_gone_while_a_job_runs`: both processes end.
-- [ ] Session start reports the stopped brokers → `tests/test_agent_hooks.py::test_session_reports_stopped_codex_brokers`: the context names the count.
-- [ ] A session without a record checks until one check passes, then skips an unchanged turn → `tests/test_agent_hooks.py::test_session_without_a_record_checks_until_a_pass`: a failed check blocks and is retried; after a pass, "no code checks run".
-- [ ] Hard Eng's own launcher in a tracked hooks folder needs no shellcheck entry; a project hook still does → `tests/test_deployment_and_shell_gates.py::test_own_hook_launcher_needs_no_shellcheck_entry`.
-- [ ] Swift coverage falls back to the exported report → `tests/test_swift.py::test_tests_script_reads_exported_coverage_when_xccov_cannot_load_the_bundle`: the report holds the exported coverage. The fallback commands were run against a real Xcode 27.1 result bundle: `xccov view` of the exported report gave the same per-file counts as `xccov view` of the bundle.
-- [ ] #416 → N/A — no code change; the PR states the evidence and closes it.
+- [x] A broker whose folder no longer exists is stopped with its child process → `tests/test_process_group.py::test_stops_broker_whose_folder_is_gone`: both processes end.
+- [x] A broker is stopped with its child process when no Codex job runs → `tests/test_process_group.py::test_stops_broker_without_a_job`: both processes end.
+- [x] While any Codex job runs, every broker whose folder exists stays; a job's target folder is not read from its command line, which is ambiguous → `tests/test_process_group.py::test_keeps_broker_while_a_job_runs`: the broker stays alive.
+- [x] A broker whose folder is gone is stopped even while a job runs → `tests/test_process_group.py::test_stops_broker_whose_folder_is_gone_while_a_job_runs`: both processes end.
+- [x] Session start reports the stopped brokers → `tests/test_agent_hooks.py::test_session_reports_stopped_codex_brokers`: the context names the count.
+- [x] A session without a record checks until one check passes, then skips an unchanged turn → `tests/test_agent_hooks.py::test_session_without_a_record_checks_until_a_pass`: a failed check blocks and is retried; after a pass, "no code checks run".
+- [x] Hard Eng's own launcher in a tracked hooks folder needs no shellcheck entry; a project hook still does → `tests/test_deployment_and_shell_gates.py::test_own_hook_launcher_needs_no_shellcheck_entry`.
+- [x] Swift coverage falls back to the exported report → `tests/test_swift.py::test_tests_script_reads_exported_coverage_when_xccov_cannot_load_the_bundle`: the report holds the exported coverage. The fallback commands were run against a real Xcode 27.1 result bundle: `xccov view` of the exported report gave the same per-file counts as `xccov view` of the bundle.
+- [x] #416 → N/A — no code change; the PR states the evidence and closes it.
 
 ## Baseline + execution
 
@@ -45,8 +45,8 @@ N/A — hook and template code only; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
+Result: Passed
+Evidence: Each new test failed on develop 6c8fc95f and passes on this branch. Focused runs passed: `tests/test_process_group.py` (5), `tests/test_runner.py`, `tests/test_deployment_and_shell_gates.py`, `tests/test_swift.py`, and the changed `tests/test_agent_hooks.py` tests (139 + 10). `check --plan-stage Ready --base origin/develop --quick` passed (format, lint, types, annotations, secrets). The broker pattern matched both live brokers and no shell that only names one. Limit: the full local check was stopped; this PR's `hard-eng` CI runs the full suite.
 E2E: N/A — the tests start real processes and real hook scripts with fake tools; no user interface.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` passes on the PR and the PR merges into develop.
