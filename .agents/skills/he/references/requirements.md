@@ -70,6 +70,12 @@ An agent starts a long job in the background and waits for the host's exit notic
 
 Proof: check
 
+## HE-REAL-APP-PREVIEW
+
+A proposed change to a screen that exists is shown as before and after captures of the real app, rendered in an isolated checkout, never as a hand-made mock. In Claude Code, a hook adds this note to every Artifact publish or quickstart call; the call always proceeds, because an artifact can be the right way to show other things. Codex has no Artifact tool.
+
+Proof: check
+
 ## HE-YAGNI
 
 Add a file, dependency, abstraction, configuration or stored state only for a current agreed requirement that existing code or a direct command cannot meet.
