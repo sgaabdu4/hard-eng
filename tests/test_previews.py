@@ -3,24 +3,14 @@
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 import agent_hooks
 import pytest
 from conftest import SOURCE
+from test_polling import run
 
 HOOK = SOURCE / ".hooks/previews.py"
-
-
-def run(payload: object) -> str:
-    return subprocess.run(
-        [sys.executable, str(HOOK)],
-        input=json.dumps(payload),
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
 
 
 def artifact(**tool_input: object) -> dict[str, object]:
@@ -40,7 +30,7 @@ def artifact(**tool_input: object) -> dict[str, object]:
 )
 def test_notes_artifact_page_calls(payload: object) -> None:
     """HE-REAL-APP-PREVIEW: a page call proceeds with a note to capture the real app."""
-    output = json.loads(run(payload))["hookSpecificOutput"]
+    output = json.loads(run(payload, HOOK))["hookSpecificOutput"]
     assert "permissionDecision" not in output
     note = output["additionalContext"]
     assert note.startswith("HE-REAL-APP-PREVIEW")
@@ -68,7 +58,7 @@ def test_notes_artifact_page_calls(payload: object) -> None:
 )
 def test_ignores_artifact_reads_and_other_tools(payload: object) -> None:
     """Reads, other tools and malformed input get no note."""
-    assert run(payload) == ""
+    assert run(payload, HOOK) == ""
 
 
 def test_installed_command_adds_the_note(tmp_path: Path) -> None:

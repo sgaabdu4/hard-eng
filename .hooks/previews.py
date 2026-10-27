@@ -1,8 +1,5 @@
 """Claude Code PreToolUse hook: note real-app previews on Artifact pages (HE-REAL-APP-PREVIEW)."""
 
-import json
-import sys
-
 PAGE_ACTIONS = {"publish", "quickstart"}
 NOTE = (
     "HE-REAL-APP-PREVIEW: if this page shows a proposed change to this project's app screens, "
@@ -28,15 +25,7 @@ def decision(payload: object) -> dict[str, object] | None:
     }
 
 
-def main() -> int:
-    try:
-        output = decision(json.load(sys.stdin))
-    except ValueError:
-        return 0
-    if output is not None:
-        print(json.dumps(output))
-    return 0
-
-
 if __name__ == "__main__":
-    raise SystemExit(main())
+    from polling import respond
+
+    raise SystemExit(respond(decision))
