@@ -556,6 +556,18 @@ def session_context(root: Path, payload: JsonObject) -> str:
     if note := restore_note(root):
         messages.append(note)
     messages.append(gate_status(root))
+    if os.name == "posix":
+        from process_group import stop_idle_codex_brokers
+
+        try:
+            brokers, processes = stop_idle_codex_brokers()
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            messages.append(f"Idle Codex broker cleanup failed: {error}")
+            brokers = processes = 0
+        if brokers:
+            messages.append(
+                f"Stopped {brokers} idle Codex brokers ({processes} processes)."
+            )
     messages.append(
         "Open the task's skill first: he-plan, he-build, he-ship or code-review. "
         "Tests fail before your edits → fix only that and stop; the feature waits until that fix merges."
