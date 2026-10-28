@@ -842,7 +842,7 @@ def deliver(args: "Namespace") -> int:
 
 def adopt() -> int:
     """Record the findings the existing code fails with as shrink-only debt."""
-    from debt import record
+    from debt import record, settled_run
     from gate_config import load_groups
     from shipping import gate_budget
 
@@ -852,7 +852,7 @@ def adopt() -> int:
         provision_tools(ROOT, groups, timeout)
         RECORDING.set()
         try:
-            run_gates(groups, timeout, None)
+            settled_run(ROOT, lambda: run_gates(groups, timeout, None))
         finally:
             RECORDING.clear()
         return record(ROOT, groups, set(FAILED_GATES), OUTPUTS)

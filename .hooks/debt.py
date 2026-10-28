@@ -147,6 +147,15 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     return False
 
 
+def settled_run(root: Path, run: Callable[[], object]) -> None:
+    """Run the gates; when they fixed files, record what the fixed code still fails with."""
+    before = subprocess.check_output(["git", "diff"], cwd=root)
+    run()
+    if subprocess.check_output(["git", "diff"], cwd=root) != before:
+        OUTPUTS.clear()
+        run()
+
+
 def record(
     root: Path, groups: list[Group], failed: set[str], outputs: dict[str, str]
 ) -> int:

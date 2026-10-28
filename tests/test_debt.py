@@ -122,3 +122,24 @@ def test_debt_appears_only_with_the_install_and_never_grows(repository: Path) ->
         debt.require_shrink(repository, recorded)
     path.write_text(json.dumps({"version": 1, "gates": {}}))
     debt.require_shrink(repository, recorded)
+
+
+def test_adoption_records_what_the_fixed_code_still_fails_with(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixing = (
+        "import pathlib, sys; p = pathlib.Path('a.py'); t = p.read_text(); "
+        "p.write_text(t.replace('old', 'new')); print('a.py:1:1: F1 still wrong'); "
+        "print('Fixed 1 error.' if 'old' in t else ''); sys.exit(1)"
+    )
+    lint = {"name": "lint", "role": "lint", "command": [sys.executable, "-c", fixing]}
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [lint]})
+    )
+    (tmp_path / "a.py").write_text("old\n")
+    commit(tmp_path, "baseline")
+    monkeypatch.setattr(runner, "provision_tools", lambda *_: None)
+    debt.OUTPUTS.clear()
+    assert runner.adopt() == 0
+    recorded = json.loads((tmp_path / debt.DEBT_FILE).read_text())["gates"]
+    assert recorded == {"./lint": {"a.py:N:N: FN still wrong": 1}}
