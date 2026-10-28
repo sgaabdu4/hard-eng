@@ -132,6 +132,21 @@ def test_the_install_change_keeps_older_blocks_in_files_its_tools_fixed(
         validate_comments(root, "HEAD")
 
 
+def test_the_install_change_compares_each_older_block_whole(tmp_path: Path) -> None:
+    init(tmp_path / "repo")
+    root = tmp_path / "repo"
+    spaced = "x = 1\n# first\n#\n# old reason\n"
+    (root / "app.py").write_text(spaced)
+    commit(root, "baseline")
+    (root / ".hooks").mkdir()
+    (root / ".hooks/hard-eng.py").write_text("")
+    (root / "app.py").write_text(spaced + "y = 2\n")
+    validate_comments(root, "HEAD")
+    (root / "app.py").write_text(spaced.replace("old reason", "new reason"))
+    with pytest.raises(ValueError, match=r"app\.py:2 holds a 2-line"):
+        validate_comments(root, "HEAD")
+
+
 def test_pre_push_rejects_a_pushed_comment_block(
     tmp_path: Path, completed_plan: str, shipping_policy: ShippingPolicy
 ) -> None:
