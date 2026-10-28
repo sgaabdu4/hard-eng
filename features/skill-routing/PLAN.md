@@ -23,8 +23,8 @@ Decision: routing lives in he-plan, he-build, Code Review and the two descriptio
 - [x] A "look online" prompt ranks Research first, and an API key and personal-data prompt ranks Security Review first → `tests/test_skill_routing.py::test_every_request_picks_its_own_skill`.
 - [x] No two descriptions grow too alike → `tests/test_skill_routing.py::test_no_two_descriptions_are_too_alike`.
 - [x] he-plan stays under the Codex skill size limit → `tests/test_skill_links.py::test_distributed_skills_fit_the_codex_skill_limit`.
-- [x] A model asked to look online for a vendor choice loads Research → `tests/agent_checks.py::routes-to-research`.
-- [x] A model asked to check a commit that stores API keys loads Security Review → `tests/agent_checks.py::routes-to-security`.
+- [x] A model asked to look online for a vendor choice loads Research → N/A — not a pytest test; the on-demand model eval `routes-to-research` in `tests/agent_checks.py` proves it, results under Verification.
+- [x] A model asked to check a commit that stores API keys loads Security Review → N/A — not a pytest test; the on-demand model eval `routes-to-security` in `tests/agent_checks.py` proves it, results under Verification.
 - [x] A command that reads several SKILL.md files counts each skill → `tests/test_agent_checks.py::test_skill_routing_is_judged_from_the_skills_each_client_loaded`.
 - [x] Each client's skill loads are read from its own records → `tests/test_agent_checks.py::test_skill_routing_is_judged_from_the_skills_each_client_loaded`.
 
