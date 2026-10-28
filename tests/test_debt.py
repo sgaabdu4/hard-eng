@@ -9,6 +9,7 @@ from types import ModuleType
 import debt
 import pytest
 from conftest import commit, git
+from test_basic_mode import no_provisioning
 from gate_config import Gate, Group
 
 FINDINGS = "import pathlib, sys; text = pathlib.Path('findings.txt').read_text(); print(text, end=''); sys.exit(bool(text))"
@@ -138,7 +139,7 @@ def test_adoption_records_what_the_fixed_code_still_fails_with(
     )
     (tmp_path / "a.py").write_text("old\n")
     commit(tmp_path, "baseline")
-    monkeypatch.setattr(runner, "provision_tools", lambda *_: None)
+    monkeypatch.setattr(runner, "provision_tools", no_provisioning)
     debt.OUTPUTS.clear()
     assert runner.adopt() == 0
     recorded = json.loads((tmp_path / debt.DEBT_FILE).read_text())["gates"]
