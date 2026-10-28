@@ -26,6 +26,8 @@ Decision: routing lives in he-plan, he-build, Code Review and the two descriptio
 - [x] A model asked to look online for a vendor choice loads Research → N/A — not a pytest test; the on-demand model eval `routes-to-research` in `tests/agent_checks.py` proves it, results under Verification.
 - [x] A model asked to check a commit that stores API keys loads Security Review → N/A — not a pytest test; the on-demand model eval `routes-to-security` in `tests/agent_checks.py` proves it, results under Verification.
 - [x] A command that reads several SKILL.md files counts each skill → `tests/test_agent_checks.py::test_skill_routing_is_judged_from_the_skills_each_client_loaded`.
+- [x] CI repair: the brownfield sample drops the ended Python 3.10 before its lock upgrade, so fixed filelock releases resolve → `tests/test_release_canary.py::test_the_brownfield_upgrade_drops_the_ended_python`.
+- [x] CI repair: the measured CI budget rises from 300 to 420 seconds; full runs took 253 to 306 seconds → `tests/test_ci_setup.py::test_generated_ci_timeout` and the PR's `hard-eng` job.
 - [x] Each client's skill loads are read from its own records → `tests/test_agent_checks.py::test_skill_routing_is_judged_from_the_skills_each_client_loaded`.
 
 ## Baseline + execution
