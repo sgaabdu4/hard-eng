@@ -10,6 +10,7 @@ import subprocess
 import tokenize
 from pathlib import Path, PurePosixPath
 
+from debt import git_file
 from gate_config import changed_files, generated_sources, initial_base
 from plans import _is_test as is_test_path
 from plans import default_branch_point
@@ -227,21 +228,14 @@ def comment_blocks(path: Path, text: str | None = None) -> list[tuple[int, int, 
     return blocks
 
 
-def base_text(root: Path, base: str, name: str) -> str | None:
-    shown = subprocess.run(
-        ["git", "show", f"{base}:{name}"], cwd=root, capture_output=True, check=False
-    )
-    return None if shown.returncode else shown.stdout.decode(errors="replace")
-
-
 def installed_blocks(root: Path, base: str, name: str) -> set[tuple[str, ...]]:
     """Blocks a file held before the change that installs Hard Eng: old code its tools may touch."""
     if (
         not (root / ".hooks/hard-eng.py").is_file()
-        or base_text(root, base, ".hooks/hard-eng.py") is not None
+        or git_file(root, base, ".hooks/hard-eng.py") is not None
     ):
         return set()
-    text = base_text(root, base, name)
+    text = git_file(root, base, name)
     if text is None:
         return set()
     lines = text.splitlines()
