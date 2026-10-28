@@ -491,9 +491,8 @@ def loaded_skills(actions: list[Action]) -> set[str]:
         action.detail for action in actions if action.ok and action.kind == "skill"
     }
     for action in actions:
-        read = SKILL_FILE.search(action.detail) if action.kind == "command" else None
-        if action.ok and read:
-            found.add(read[1])
+        if action.ok and action.kind == "command":
+            found.update(SKILL_FILE.findall(action.detail))
     return found
 
 
