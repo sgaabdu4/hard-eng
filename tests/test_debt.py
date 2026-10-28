@@ -9,8 +9,8 @@ from types import ModuleType
 import debt
 import pytest
 from conftest import commit, git
-from test_basic_mode import no_provisioning
 from gate_config import Gate, Group
+from test_basic_mode import no_provisioning
 
 FINDINGS = "import pathlib, sys; text = pathlib.Path('findings.txt').read_text(); print(text, end=''); sys.exit(bool(text))"
 
