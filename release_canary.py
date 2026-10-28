@@ -275,16 +275,7 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
         )
         # A real adoption first upgrades the snapshot's old dependencies in their own PR.
         drop_ended_python(work)
-        must(
-            work,
-            log,
-            "upgrade failed",
-            ["uv", "lock", "--upgrade"],
-            ["uv", "run", "ruff", "check", "--fix-only", "."],
-            ["git", "add", "--all"],
-            ["git", "commit", "-q", "-m", "Upgrade dependencies and drop Python 3.10"],
-            ["git", "update-ref", "refs/remotes/origin/main", "HEAD"],
-        )
+        must(work, log, "upgrade failed", ["uv", "lock", "--upgrade"])
     else:
         work.mkdir()
         must(work, log, "setup failed", ["git", "init", "-q"])
