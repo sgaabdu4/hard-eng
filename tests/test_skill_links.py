@@ -7,9 +7,12 @@ import subprocess
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+from types import ModuleType
 
+import pytest
 import yaml
 from conftest import SOURCE
+from test_setup import repository
 
 FENCE = re.compile(r"^\s*(?:`{3,}|~{3,})\s*([\w-]*)")
 LINK = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
@@ -216,6 +219,17 @@ def test_an_unknown_command_or_flag_in_docs_fails(tmp_path: Path) -> None:
 
 def test_distributed_skill_links_resolve() -> None:
     assert link_failures(SOURCE) == []
+
+
+def test_installed_skill_links_resolve_without_stack_skills(
+    installer: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("APPWRITE_ENDPOINT", raising=False)
+    repository(tmp_path)
+    installer.install(tmp_path)
+    assert not (tmp_path / ".agents/skills/appwrite-backend").exists()
+    assert not (tmp_path / ".agents/skills/building-flutter-apps").exists()
+    assert link_failures(tmp_path) == []
 
 
 def test_broken_links_fail_and_valid_equivalents_pass(tmp_path: Path) -> None:

@@ -614,6 +614,8 @@ def integrated_services(root: Path) -> list[str]:
             continue
         if path.name == "pubspec.yaml":
             found.add("Dart")
+        if path.name in {"appwrite.json", "appwrite.config.json"}:
+            found.add("Appwrite")
         if path.suffix in {
             ".py",
             ".js",
