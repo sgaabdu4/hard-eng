@@ -266,7 +266,7 @@ def validate_comments(root: Path, base: str | None) -> None:
         and not (root / name).is_symlink()
     )
     skipped = generated_sources(root, sources)
-    found = []
+    found: list[str] = []
     for name in sources:
         if name in skipped:
             continue
