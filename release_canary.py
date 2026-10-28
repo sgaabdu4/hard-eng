@@ -251,6 +251,17 @@ def folder(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", label.lower())
 
 
+def drop_ended_python(work: Path) -> None:
+    # Python 3.10 ended in October 2026, and fixed releases of the snapshot's dependencies need 3.11.
+    pyproject = work / "pyproject.toml"
+    text = pyproject.read_text()
+    if 'requires-python = ">=3.10"' not in text:
+        raise RuntimeError(
+            "the brownfield snapshot no longer sets requires-python >=3.10"
+        )
+    pyproject.write_text(text.replace('">=3.10"', '">=3.11"', 1))
+
+
 def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -> None:
     """Create the target, install Hard Eng from the release and commit."""
     if kind == "brownfield":
@@ -263,6 +274,7 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
             ["git", "checkout", "-q", "--detach", BROWNFIELD[1]],
         )
         # A real adoption first upgrades the snapshot's old dependencies in their own PR.
+        drop_ended_python(work)
         must(work, log, "upgrade failed", ["uv", "lock", "--upgrade"])
     else:
         work.mkdir()
