@@ -556,7 +556,7 @@ CASES = [
     ),
     Case(
         "routes-to-research",
-        "Look online: is statistics.fmean still the current way to average floats in Python? Answer only; change no files.",
+        "Look online and recommend a hosted database for this app before we plan it. Answer only; change no files.",
         prepare_nothing,
         loads_skill("research"),
     ),
