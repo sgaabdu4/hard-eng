@@ -202,9 +202,9 @@ def hash_comment_lines(lines: list[str]) -> dict[int, str]:
     return found
 
 
-def comment_blocks(path: Path) -> list[tuple[int, int]]:
+def comment_blocks(path: Path, text: str | None = None) -> list[tuple[int, int]]:
     """(first narration line, narration lines) of each block with more than one."""
-    text = path.read_text(errors="replace")
+    text = path.read_text(errors="replace") if text is None else text
     lines = text.splitlines()
     comments = python_comment_lines(text) if path.suffix in {".py", ".pyi"} else None
     if comments is None:
@@ -226,8 +226,33 @@ def comment_blocks(path: Path) -> list[tuple[int, int]]:
     return blocks
 
 
+def base_text(root: Path, base: str, name: str) -> str | None:
+    shown = subprocess.run(
+        ["git", "show", f"{base}:{name}"], cwd=root, capture_output=True, check=False
+    )
+    return None if shown.returncode else shown.stdout.decode(errors="replace")
+
+
+def installed_blocks(root: Path, base: str, name: str) -> set[tuple[str, ...]]:
+    """Blocks a file held before the change that installs Hard Eng: old code its tools may touch."""
+    if (
+        not (root / ".hooks/hard-eng.py").is_file()
+        or base_text(root, base, ".hooks/hard-eng.py") is not None
+    ):
+        return set()
+    text = base_text(root, base, name)
+    if text is None:
+        return set()
+    lines = text.splitlines()
+    return {
+        tuple(lines[start - 1 : start - 1 + length])
+        for start, length in comment_blocks(root / name, text)
+    }
+
+
 def validate_comments(root: Path, base: str | None) -> None:
-    names = changed_files(root, base or default_branch_point(root) or "HEAD")
+    base = base or default_branch_point(root) or "HEAD"
+    names = changed_files(root, base)
     if names is None:
         raise ValueError(
             "Cannot verify comment scope; fetch or supply a valid Git --base"
@@ -241,12 +266,17 @@ def validate_comments(root: Path, base: str | None) -> None:
         and not (root / name).is_symlink()
     )
     skipped = generated_sources(root, sources)
-    found = [
-        f"{name}:{start} holds a {length}-line comment block"
-        for name in sources
-        if name not in skipped
-        for start, length in comment_blocks(root / name)
-    ]
+    found = []
+    for name in sources:
+        if name in skipped:
+            continue
+        older = installed_blocks(root, base, name)
+        lines = (root / name).read_text(errors="replace").splitlines()
+        found += [
+            f"{name}:{start} holds a {length}-line comment block"
+            for start, length in comment_blocks(root / name)
+            if tuple(lines[start - 1 : start - 1 + length]) not in older
+        ]
     if found:
         raise ValueError(
             "HE-COMMENT-LINES: Code comments are none by default: delete each block below, and add one "
