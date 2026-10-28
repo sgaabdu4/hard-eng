@@ -26,8 +26,8 @@ Decision: Appwrite counts as planned when the repository has an Appwrite project
 - [x] After the file lands on the base branch, the next update branch holds the skill and its link; the same holds for `pubspec.yaml` and the Flutter skill → `tests/test_update_pr.py::test_next_update_adds_the_stack_skill_the_base_branch_now_needs`.
 - [x] A setup rerun with no newer release keeps its repair on the update branch and `update-pr` opens one repair PR, then none after it merges → `tests/test_update_pr.py::test_setup_rerun_without_a_newer_release_publishes_its_repair`.
 - [x] That repair also writes the workflow checks `hard-eng.gates.json` needs → `tests/test_update_pr.py::test_setup_rerun_repair_adds_the_workflow_checks_with_the_workflow`.
-- [x] The repair branch counts as files the verified update wrote, so pre-push needs no plan for it → same repair test, `change_size.size_verdict`.
-- [x] A repair with a follow-up fix still publishes after the base moves; a merged repair is never published again, even after the base later removes a file it added → same repair test.
+- [x] The repair branch counts as files the verified update wrote, so pre-push needs no plan for it → `tests/test_update_pr.py::test_setup_rerun_without_a_newer_release_publishes_its_repair` (`change_size.size_verdict`).
+- [x] A repair with a follow-up fix still publishes after the base moves; a merged repair is never published again, even after the base later removes a file it added → `tests/test_update_pr.py::test_setup_rerun_without_a_newer_release_publishes_its_repair`.
 - [x] A merged update plus fix publishes nothing when no newer release exists, after rebase or squash merge → `tests/test_update_pr.py::test_update_pr_publishes_nothing_after_a_merged_fix_without_a_newer_release`.
 - [x] Source skill links still resolve → `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
 - [x] The shipped Appwrite skill is the merged 2.6.2 update (appwrite-backend PR #27, master CI passed), so new installs ask for TablesDB scopes → `tests/test_skill_links.py::test_distributed_skill_links_resolve` and the full check on the moved submodule.
