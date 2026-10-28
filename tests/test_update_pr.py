@@ -626,6 +626,29 @@ def test_manual_setup_rerun_prepares_the_branch_instead_of_committing(
     assert git(target, "rev-list", "--count", f"origin/main..{BRANCH}") == "1"
 
 
+@pytest.mark.parametrize(
+    "marker,skill",
+    [
+        ("appwrite.config.json", "appwrite-backend"),
+        ("pubspec.yaml", "building-flutter-apps"),
+    ],
+)
+def test_next_update_adds_the_stack_skill_the_base_branch_now_needs(
+    feature: tuple[Path, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    marker: str,
+    skill: str,
+) -> None:
+    source, target, _ = feature
+    (target / marker).write_text("{}\n" if marker.endswith(".json") else "name: app\n")
+    commit(target, "plan the stack")
+    git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
+    newer_release(source, monkeypatch, "stack update")
+    assert update_runner.apply_update(target) == 0
+    assert git(target, "ls-tree", "--name-only", BRANCH, f".claude/skills/{skill}")
+    assert git(target, "show", f"{BRANCH}:.agents/skills/{skill}/SKILL.md")
+
+
 def test_setup_rerun_restores_a_missing_pre_push_hook_before_the_first_push(
     release: tuple[Path, Path, str],
 ) -> None:

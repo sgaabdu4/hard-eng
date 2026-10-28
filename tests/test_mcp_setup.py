@@ -68,6 +68,25 @@ def test_appwrite_unresolved_setup_installs_framework_and_reports_pending(
     assert not (tmp_path / ".agents/skills/building-flutter-apps").exists()
 
 
+def test_planned_appwrite_setup_installs_the_skill(
+    installer: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repository(tmp_path)
+    monkeypatch.delenv("APPWRITE_ENDPOINT", raising=False)
+    (tmp_path / "appwrite.config.json").write_text(
+        '{"projectId": "fixture", "endpoint": "https://backend.example.test/v1"}\n'
+    )
+    installer.install(tmp_path)
+    assert "MCP setup pending: Appwrite needs the deployed endpoint" in (
+        capsys.readouterr().err
+    )
+    guide = tmp_path / ".claude/skills/appwrite-backend/references/mcp-servers.md"
+    assert guide.is_file()
+
+
 def test_mcp_setup_leaves_unmanaged_vscode_jsonc_untouched(
     installer: ModuleType, tmp_path: Path
 ) -> None:
