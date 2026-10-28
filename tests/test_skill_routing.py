@@ -67,6 +67,11 @@ ROUTES = [
         "Research why this failure happens and check the external documentation",
         "research",
     ),
+    ("Look online and check whether the hosted functions can run R", "research"),
+    (
+        "Store each team's AI API key on the server; the app holds personal data",
+        "security-review",
+    ),
     (
         "Do a security review of the new upload endpoint for injection and authorization risks",
         "security-review",
