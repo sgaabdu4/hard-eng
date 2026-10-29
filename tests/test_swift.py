@@ -570,19 +570,62 @@ def generated_workflow(root: Path, config: GateConfig) -> str:
     return changes[".github/workflows/hard-eng.yml"]
 
 
+LINUX_RUNNER = "${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}"
+SWIFT_RUNNER = (
+    "${{ needs.impact.outputs.runner == 'macos-latest' && 'macos-latest' || "
+    "(vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest') }}"
+)
+
+
+def hosted(workflow: str) -> str:
+    """The workflow as releases before the CI_RUNS_ON variable generated it."""
+    return (
+        workflow.replace(
+            f"    runs-on: {LINUX_RUNNER}\n", "    runs-on: ubuntu-latest\n"
+        )
+        .replace(
+            f"runs-on: {SWIFT_RUNNER}",
+            "runs-on: ${{ needs.impact.outputs.runner || 'macos-latest' }}",
+        )
+        .replace("|| echo runner=ubuntu-latest", "|| echo runner=macos-latest")
+    )
+
+
+@pytest.mark.parametrize("name", ["hard-eng.yml", "pr-text.yml"])
+def test_shipped_workflows_take_their_runner_from_the_variable(name: str) -> None:
+    workflow = yaml.safe_load((SOURCE / ".github/workflows" / name).read_text())
+    assert {job["runs-on"] for job in workflow["jobs"].values()} == {LINUX_RUNNER}
+
+
 def test_swift_workflow_selects_runner(installer: ModuleType, tmp_path: Path) -> None:
     root = tmp_path / "app"
     flutter_app(root)
     workflow = yaml.safe_load(generated_workflow(root, app_config(installer, root)))
     jobs = workflow["jobs"]
     assert list(jobs) == ["impact", "hard-eng"]
-    assert jobs["impact"]["runs-on"] == "ubuntu-latest"
+    assert jobs["impact"]["runs-on"] == LINUX_RUNNER
     assert jobs["impact"]["outputs"] == {"runner": "${{ steps.impact.outputs.runner }}"}
     check = jobs["hard-eng"]
     assert check["name"] == "hard-eng" and check["needs"] == "impact"
     assert check["if"] == "${{ !cancelled() }}"
-    assert check["runs-on"] == "${{ needs.impact.outputs.runner || 'macos-latest' }}"
+    assert check["runs-on"] == SWIFT_RUNNER
     assert check["timeout-minutes"] == 20 and jobs["impact"]["timeout-minutes"] == 5
+
+
+def test_a_failed_impact_script_does_not_pick_macos(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "app"
+    flutter_app(root)
+    jobs = yaml.safe_load(generated_workflow(root, app_config(installer, root)))["jobs"]
+    run = next(s["run"] for s in jobs["impact"]["steps"] if s.get("id") == "impact")
+    output = tmp_path / "output"
+    environment = {**os.environ, "BASE_SHA": "none", "GITHUB_OUTPUT": str(output)}
+    result = subprocess.run(
+        ["bash", "-c", run], cwd=tmp_path, env=environment, capture_output=True
+    )
+    assert result.returncode == 0
+    assert output.read_text() == "runner=ubuntu-latest\n"
 
 
 def test_workflow_without_swift_keeps_its_jobs(
@@ -597,22 +640,23 @@ def test_workflow_without_swift_keeps_its_jobs(
     assert ",," not in (SOURCE / ".github/workflows/hard-eng.yml").read_text()
 
 
+@pytest.mark.parametrize("older", [False, True])
 def test_existing_workflow_gains_the_runner_job_once(
-    installer: ModuleType, tmp_path: Path
+    installer: ModuleType, tmp_path: Path, older: bool
 ) -> None:
     root = tmp_path / "app"
     flutter_app(root)
     plain = generated_workflow(root, installer.gate_config(root))
     path = root / ".github/workflows/hard-eng.yml"
     path.parent.mkdir(parents=True)
-    path.write_text(plain)
+    path.write_text(hosted(plain) if older else plain)
     config = app_config(installer, root)
     changes: dict[str, str] = {}
     configure_ci(root, SOURCE, config, changes)
-    assert list(yaml.safe_load(changes[".github/workflows/hard-eng.yml"])["jobs"]) == [
-        "impact",
-        "hard-eng",
-    ]
+    jobs = yaml.safe_load(changes[".github/workflows/hard-eng.yml"])["jobs"]
+    assert list(jobs) == ["impact", "hard-eng"]
+    assert jobs["impact"]["runs-on"] == LINUX_RUNNER
+    assert jobs["hard-eng"]["runs-on"] == SWIFT_RUNNER
     path.write_text(changes[".github/workflows/hard-eng.yml"])
     changes.clear()
     configure_ci(root, SOURCE, config, changes)
@@ -627,12 +671,50 @@ def test_customised_workflow_is_left_with_a_note(
     plain = generated_workflow(root, installer.gate_config(root))
     path = root / ".github/workflows/hard-eng.yml"
     path.parent.mkdir(parents=True)
-    custom = plain.replace("runs-on: ubuntu-latest", "runs-on: [self-hosted, linux]")
+    custom = plain.replace(LINUX_RUNNER, "[self-hosted, linux]")
     path.write_text(custom)
     changes: dict[str, str] = {}
     configure_ci(root, SOURCE, app_config(installer, root), changes)
     assert changes == {}
     assert "runner" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("swift", [False, True])
+def test_older_workflow_moves_to_the_runner_variable(
+    installer: ModuleType, tmp_path: Path, swift: bool
+) -> None:
+    root = tmp_path / "app"
+    flutter_app(root)
+    config = app_config(installer, root) if swift else installer.gate_config(root)
+    current = generated_workflow(root, config)
+    assert ("macos-latest" in current) is swift
+    path = root / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(hosted(current))
+    changes: dict[str, str] = {}
+    configure_ci(root, SOURCE, config, changes)
+    assert changes == {".github/workflows/hard-eng.yml": current}
+    path.write_text(current)
+    changes.clear()
+    configure_ci(root, SOURCE, config, changes)
+    assert changes == {}
+
+
+def test_a_custom_runner_stays_when_the_variable_arrives(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "app"
+    flutter_app(root)
+    config = installer.gate_config(root)
+    custom = generated_workflow(root, config).replace(
+        LINUX_RUNNER, "[self-hosted, linux]"
+    )
+    path = root / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(custom)
+    changes: dict[str, str] = {}
+    configure_ci(root, SOURCE, config, changes)
+    assert changes == {}
 
 
 LEGACY_LAUNCHER = '--package="@jdxcode/mise-linux-${RUNNER_ARCH,,}@latest"'

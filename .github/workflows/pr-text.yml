@@ -14,7 +14,7 @@ jobs:
   remove-claude-footer:
     name: remove-claude-footer
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}
     timeout-minutes: 2
     permissions:
       contents: read # Read the footer rule from .hooks.
