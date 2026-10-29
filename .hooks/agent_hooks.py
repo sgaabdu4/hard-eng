@@ -673,12 +673,15 @@ def failure_summary(log: str) -> str:
 
 
 def repeat_note(root: Path, output: str) -> str:
-    """Counts each failure by its failing lines with numbers masked; a second sighting is a repeat."""
-    lines = {
+    """Counts each failure by its failing lines, else all lines, with numbers masked; a second sighting is a repeat."""
+    masked = [
         re.sub(r"\d+(?:\.\d+)?", "#", line.strip())
         for line in output.splitlines()
-        if re.search(r"(?i)fail|error", line)
-    }
+        if line.strip()
+    ]
+    lines = {line for line in masked if re.search(r"(?i)fail|error", line)} or set(
+        masked
+    )
     key = hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()[:16]
     path = root / ".hard-eng/failures.json"
     try:
