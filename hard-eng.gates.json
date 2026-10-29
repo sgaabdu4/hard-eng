@@ -5,7 +5,7 @@
     "base": "develop",
     "checks": ["hard-eng", "canary"],
     "ui_paths": [],
-    "ci_seconds": 300,
+    "ci_seconds": 420,
     "pre_push_seconds": 600,
     "delivery": []
   },

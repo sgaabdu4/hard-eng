@@ -5,7 +5,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from conftest import SOURCE, git
+from conftest import SOURCE, commit, git
 
 BARE_REMOVED = ("AGENTS.md", ".agents", ".claude", ".codex", ".git/hooks/pre-push")
 
@@ -220,3 +220,41 @@ SERVICE_DESIGN = """# Clinic helper design
 
 Never edit vendor code.
 """
+
+KEYS = """import json
+from pathlib import Path
+
+STORE = Path("keys.json")
+
+
+def save_key(customer: str, key: str) -> None:
+    keys = json.loads(STORE.read_text()) if STORE.exists() else {}
+    keys[customer] = key
+    STORE.write_text(json.dumps(keys))
+    print(f"saved {key} for {customer}")
+"""
+
+
+def commit_change(root: Path, name: str, old: str, new: str, message: str) -> None:
+    path = root / name
+    path.write_text(path.read_text().replace(old, new))
+    commit(root, message)
+
+
+def prepare_nothing(root: Path) -> None:
+    del root
+
+
+def prepare_defective_commit(root: Path) -> None:
+    commit_change(
+        root, "calc.py", "sum(values) /", "sum(values) //", "Simplify average"
+    )
+
+
+def prepare_failed_baseline(root: Path) -> None:
+    commit_change(root, "calc.py", "a + b", "a - b", "Tidy add")
+
+
+def prepare_key_commit(root: Path) -> None:
+    (root / "keys.py").write_text(KEYS)
+    commit(root, "Store customer API keys")

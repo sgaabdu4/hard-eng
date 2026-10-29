@@ -626,6 +626,18 @@ def test_service_readiness_follows_sdk_imports(repository: Path) -> None:
     assert agent_hooks.integrated_services(repository) == ["Appwrite", "Dart", "Sentry"]
 
 
+@pytest.mark.parametrize("name", ["appwrite.json", "apps/web/appwrite.config.json"])
+def test_planned_appwrite_counts_without_sdk_imports(
+    repository: Path, name: str
+) -> None:
+    (repository / "api.ts").write_text("await fetch(`${endpoint}/tablesdb`);\n")
+    assert agent_hooks.integrated_services(repository) == []
+    project = repository / name
+    project.parent.mkdir(parents=True, exist_ok=True)
+    project.write_text('{"projectId": "fixture"}\n')
+    assert agent_hooks.integrated_services(repository) == ["Appwrite"]
+
+
 def test_skill_sdk_examples_do_not_register_project_services(repository: Path) -> None:
     skill = repository / ".agents/skills/example"
     skill.mkdir(parents=True)
