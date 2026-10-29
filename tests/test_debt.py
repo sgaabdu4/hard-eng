@@ -125,8 +125,9 @@ def test_debt_appears_only_with_the_install_and_never_grows(repository: Path) ->
     debt.require_shrink(repository, recorded)
 
 
+@pytest.mark.parametrize("tracked", [True, False])
 def test_adoption_records_what_the_fixed_code_still_fails_with(
-    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tracked: bool
 ) -> None:
     fixing = (
         "import pathlib, sys; p = pathlib.Path('a.py'); t = p.read_text(); "
@@ -137,8 +138,10 @@ def test_adoption_records_what_the_fixed_code_still_fails_with(
     (tmp_path / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": [lint]})
     )
-    (tmp_path / "a.py").write_text("old\n")
     commit(tmp_path, "baseline")
+    (tmp_path / "a.py").write_text("old\n")
+    if tracked:
+        commit(tmp_path, "add the source")
     monkeypatch.setattr(runner, "provision_tools", no_provisioning)
     debt.OUTPUTS.clear()
     assert runner.adopt() == 0

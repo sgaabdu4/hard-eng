@@ -147,11 +147,22 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     return False
 
 
+def worktree(root: Path) -> bytes:
+    """Tracked changes plus untracked, unignored file contents."""
+    untracked = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=root
+    ).split(b"\0")
+    files = [root / name.decode() for name in untracked if name]
+    return subprocess.check_output(["git", "diff"], cwd=root) + b"".join(
+        bytes(path) + path.read_bytes() for path in files if path.is_file()
+    )
+
+
 def settled_run(root: Path, run: Callable[[], object]) -> None:
     """Run the gates; when they fixed files, record what the fixed code still fails with."""
-    before = subprocess.check_output(["git", "diff"], cwd=root)
+    before = worktree(root)
     run()
-    if subprocess.check_output(["git", "diff"], cwd=root) != before:
+    if worktree(root) != before:
         OUTPUTS.clear()
         run()
 
