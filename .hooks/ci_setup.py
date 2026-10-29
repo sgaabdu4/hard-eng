@@ -183,10 +183,14 @@ def migrate_bun(source: Path, content: str) -> str:
 
 LEGACY_PACKAGE = '--package="@jdxcode/mise-linux-${RUNNER_ARCH,,}@latest"'
 MISE_PACKAGE = '--package="$MISE_PACKAGE"'
-RUNNER_JOB = """  impact:
-    name: impact
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+LINUX_RUNNER = "vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest'"
+LINUX_HEADER = "    runs-on: ${{ " + LINUX_RUNNER + " }}\n"
+IMPACT_NAME = "  impact:\n    name: impact\n"
+CHECK_NAME = "  hard-eng:\n    name: hard-eng\n"
+RUNNER_JOB = (
+    IMPACT_NAME
+    + LINUX_HEADER
+    + """    timeout-minutes: 5
     outputs:
       runner: ${{ steps.impact.outputs.runner }}
     steps:
@@ -195,11 +199,19 @@ RUNNER_JOB = """  impact:
         env:
           BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}
           GH_TOKEN: ${{ github.token }}
-        run: python3 .hooks/hard-eng.py impact --base "$BASE_SHA" >> "$GITHUB_OUTPUT" || echo runner=macos-latest >> "$GITHUB_OUTPUT"
+        run: python3 .hooks/hard-eng.py impact --base "$BASE_SHA" >> "$GITHUB_OUTPUT" || echo runner=ubuntu-latest >> "$GITHUB_OUTPUT"
 
 """
-CHECK_JOB = "  hard-eng:\n    name: hard-eng\n    runs-on: ubuntu-latest\n"
+)
+CHECK_JOB = CHECK_NAME + LINUX_HEADER
 RUNNER_HEADER = (
+    "    needs: impact\n    if: ${{ !cancelled() }}\n"
+    "    runs-on: ${{ needs.impact.outputs.runner == 'macos-latest' && 'macos-latest' || ("
+    + LINUX_RUNNER
+    + ") }}\n"
+)
+HOSTED_HEADER = "    runs-on: ubuntu-latest\n"
+OLD_RUNNER_HEADER = (
     "    needs: impact\n    if: ${{ !cancelled() }}\n"
     "    runs-on: ${{ needs.impact.outputs.runner || 'macos-latest' }}\n"
 )
@@ -247,10 +259,23 @@ def migrate_swift_runner(config: GateConfig, content: str) -> str:
             file=sys.stderr,
         )
         return content
-    job = RUNNER_JOB % checkout[0] + CHECK_JOB.replace(
-        "    runs-on: ubuntu-latest\n", RUNNER_HEADER
-    )
+    job = RUNNER_JOB % checkout[0] + CHECK_NAME + RUNNER_HEADER
     return content.replace(CHECK_JOB, job, 1)
+
+
+def migrate_runner_variable(content: str) -> str:
+    """Move the generated jobs' hosted runner onto the CI_RUNS_ON variable; a failed impact step stays on Linux."""
+    for old, new in (
+        (IMPACT_NAME + HOSTED_HEADER, IMPACT_NAME + LINUX_HEADER),
+        (CHECK_NAME + HOSTED_HEADER, CHECK_JOB),
+        (CHECK_NAME + OLD_RUNNER_HEADER, CHECK_NAME + RUNNER_HEADER),
+        (
+            '|| echo runner=macos-latest >> "$GITHUB_OUTPUT"',
+            '|| echo runner=ubuntu-latest >> "$GITHUB_OUTPUT"',
+        ),
+    ):
+        content = content.replace(old, new, 1)
+    return content
 
 
 OLD_PERMISSIONS = (
@@ -692,7 +717,9 @@ def configure_ci(
         )
         migrated = migrate_affected_tools(root, source, config, migrated)
         migrated = migrate_docs_token(migrate_impact_token(migrated))
-        migrated = migrate_swift_runner(config, migrate_launcher(source, migrated))
+        migrated = migrate_swift_runner(
+            config, migrate_runner_variable(migrate_launcher(source, migrated))
+        )
         if "\n  pull-requests:" not in migrated:
             migrated = migrated.replace(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1

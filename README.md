@@ -244,7 +244,7 @@ Shared checks:
 | Deployment configuration | A deployment configuration check, such as Trivy. |
 | A lockfile | OSV vulnerability scan. |
 
-Checks run only for the packages a change affects, their known dependents and the shared checks. Pre-push leaves dependents to CI. A change to the gate configuration, or an unknown package link, normally runs everything. A push to the base branch reuses the merged PR's passed checks when the tree is the same. `python3 .hooks/hard-eng.py ci-usage` reports billed CI minutes. Setup keeps your existing workflows. It adds a workflow only when none exists and shipping is configured.
+Checks run only for the packages a change affects, their known dependents and the shared checks. Pre-push leaves dependents to CI. A change to the gate configuration, or an unknown package link, normally runs everything. A push to the base branch reuses the merged PR's passed checks when the tree is the same. `python3 .hooks/hard-eng.py ci-usage` reports billed CI minutes. Setup keeps your existing workflows. It adds a workflow only when none exists and shipping is configured. Generated workflows run on `ubuntu-latest` unless the repository variable `CI_RUNS_ON` holds a JSON `runs-on` value, such as `"ubuntu-24.04"` or `["self-hosted", "linux"]`. A private repository can use it to run on its own self-hosted runner. If the Swift runner lookup fails, the job stays on that Linux runner instead of `macos-latest`.
 
 More detail: [gates](.agents/skills/he/references/gates.md), [testing](.agents/skills/he/references/testing.md), [shipping](.agents/skills/he-ship/references/checks.md), [this repository's gate file](hard-eng.gates.json).
 
