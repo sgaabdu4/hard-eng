@@ -170,7 +170,10 @@ def test_generated_ci_timeout(
     checks = next(step for step in steps if step.get("name") == "Run required checks")
     environment = yaml.safe_load(workflow)["jobs"]["hard-eng"]["env"]
     impact = next(step for step in steps if step.get("id") == "impact")
-    assert "MISE_DATA_DIR=$RUNNER_TEMP/hard-eng-tools/mise/data" in impact["run"]
+    assert (
+        "MISE_DATA_DIR=${MISE_DATA_DIR:-$RUNNER_TEMP/hard-eng-tools/mise/data}"
+        in impact["run"]
+    )
     assert environment["EXTRA_SDK_TOOLS"] == ""
     scan = next(step for step in steps if "secret scan" in step.get("name", ""))
     assert "if" not in yaml.safe_load(workflow)["jobs"]["hard-eng"]

@@ -278,6 +278,23 @@ def migrate_runner_variable(content: str) -> str:
     return content
 
 
+TOOL_DIRECTORIES = (
+    "MISE_DATA_DIR",
+    "MISE_CACHE_DIR",
+    "MISE_STATE_DIR",
+    "BUN_INSTALL_CACHE_DIR",
+)
+
+
+def migrate_tool_environment(content: str) -> str:
+    """A runner that already exports a tool or cache directory keeps it; the temp path fills only a missing one."""
+    return re.sub(
+        rf'(?m)^( *echo ")({"|".join(TOOL_DIRECTORIES)})=(\$RUNNER_TEMP/hard-eng-tools/[^"\n]*)"$',
+        r'\1\2=${\2:-\3}"',
+        content,
+    )
+
+
 OLD_PERMISSIONS = (
     "  checks: read # Verify the upstream release for scaffold-only updates.\n"
 )
@@ -720,6 +737,7 @@ def configure_ci(
         migrated = migrate_swift_runner(
             config, migrate_runner_variable(migrate_launcher(source, migrated))
         )
+        migrated = migrate_tool_environment(migrated)
         if "\n  pull-requests:" not in migrated:
             migrated = migrated.replace(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
