@@ -20,12 +20,12 @@ Authority: The maintainer asked on 2026-10-29 for this change as a pull request 
 
 ## Acceptance + steps
 
-- [x] New installs and the shipped `pr-text.yml` take their runner from the variable → `tests/test_swift.py::test_shipped_workflows_take_their_runner_from_the_variable`.
+- [x] New installs and the shipped `pr-text.yml` take their runner from the variable → `tests/test_runner_variable.py::test_shipped_workflows_take_their_runner_from_the_variable`.
 - [x] The generated Swift workflow runs the impact job on the variable runner and picks macOS only when impact says so → `tests/test_swift.py::test_swift_workflow_selects_runner`.
-- [x] A failed impact script writes a Linux runner, not `macos-latest` → `tests/test_swift.py::test_a_failed_impact_script_does_not_pick_macos`.
-- [x] An install generated before the variable, with or without the Swift jobs, moves to it once and then stays unchanged → `tests/test_swift.py::test_older_workflow_moves_to_the_runner_variable`.
-- [x] An older plain workflow that gains a Swift group still gets the impact job → `tests/test_swift.py::test_existing_workflow_gains_the_runner_job_once`.
-- [x] A custom `runs-on` is left alone, with a note when a Swift group needs the impact job → `tests/test_swift.py::test_a_custom_runner_stays_when_the_variable_arrives` and `tests/test_swift.py::test_customised_workflow_is_left_with_a_note`.
+- [x] A failed impact script writes a Linux runner, not `macos-latest` → `tests/test_runner_variable.py::test_a_failed_impact_script_does_not_pick_macos`.
+- [x] An install generated before the variable, with or without the Swift jobs, moves to it once and then stays unchanged → `tests/test_runner_variable.py::test_older_workflow_moves_to_the_runner_variable`.
+- [x] A plain workflow that gains a Swift group still gets the impact job, whether it was generated before or after the variable → `tests/test_runner_variable.py::test_older_workflow_moves_to_the_runner_variable` and `tests/test_swift.py::test_existing_workflow_gains_the_runner_job_once`.
+- [x] A custom `runs-on` is left alone, with a note when a Swift group needs the impact job → `tests/test_runner_variable.py::test_a_custom_runner_stays_when_the_variable_arrives` and `tests/test_swift.py::test_customised_workflow_is_left_with_a_note`.
 - [x] The impact output contract is unchanged → `tests/test_swift.py::test_impact_runner_is_macos_only_for_swift`.
 
 ## Baseline + execution
