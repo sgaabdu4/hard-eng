@@ -570,18 +570,25 @@ def generated_workflow(root: Path, config: GateConfig) -> str:
     return changes[".github/workflows/hard-eng.yml"]
 
 
+LINUX_RUNNER = "${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}"
+SWIFT_RUNNER = (
+    "${{ needs.impact.outputs.runner == 'macos-latest' && 'macos-latest' || "
+    "(vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest') }}"
+)
+
+
 def test_swift_workflow_selects_runner(installer: ModuleType, tmp_path: Path) -> None:
     root = tmp_path / "app"
     flutter_app(root)
     workflow = yaml.safe_load(generated_workflow(root, app_config(installer, root)))
     jobs = workflow["jobs"]
     assert list(jobs) == ["impact", "hard-eng"]
-    assert jobs["impact"]["runs-on"] == "ubuntu-latest"
+    assert jobs["impact"]["runs-on"] == LINUX_RUNNER
     assert jobs["impact"]["outputs"] == {"runner": "${{ steps.impact.outputs.runner }}"}
     check = jobs["hard-eng"]
     assert check["name"] == "hard-eng" and check["needs"] == "impact"
     assert check["if"] == "${{ !cancelled() }}"
-    assert check["runs-on"] == "${{ needs.impact.outputs.runner || 'macos-latest' }}"
+    assert check["runs-on"] == SWIFT_RUNNER
     assert check["timeout-minutes"] == 20 and jobs["impact"]["timeout-minutes"] == 5
 
 
@@ -609,10 +616,9 @@ def test_existing_workflow_gains_the_runner_job_once(
     config = app_config(installer, root)
     changes: dict[str, str] = {}
     configure_ci(root, SOURCE, config, changes)
-    assert list(yaml.safe_load(changes[".github/workflows/hard-eng.yml"])["jobs"]) == [
-        "impact",
-        "hard-eng",
-    ]
+    jobs = yaml.safe_load(changes[".github/workflows/hard-eng.yml"])["jobs"]
+    assert list(jobs) == ["impact", "hard-eng"]
+    assert jobs["hard-eng"]["runs-on"] == SWIFT_RUNNER
     path.write_text(changes[".github/workflows/hard-eng.yml"])
     changes.clear()
     configure_ci(root, SOURCE, config, changes)
@@ -627,7 +633,7 @@ def test_customised_workflow_is_left_with_a_note(
     plain = generated_workflow(root, installer.gate_config(root))
     path = root / ".github/workflows/hard-eng.yml"
     path.parent.mkdir(parents=True)
-    custom = plain.replace("runs-on: ubuntu-latest", "runs-on: [self-hosted, linux]")
+    custom = plain.replace(LINUX_RUNNER, "[self-hosted, linux]")
     path.write_text(custom)
     changes: dict[str, str] = {}
     configure_ci(root, SOURCE, app_config(installer, root), changes)

@@ -25,7 +25,7 @@ concurrency:
 jobs:
   hard-eng:
     name: hard-eng
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}
     timeout-minutes: 7
     env:
       EXTRA_SDK_TOOLS: dart@latest
@@ -46,10 +46,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "MISE_DATA_DIR=$RUNNER_TEMP/hard-eng-tools/mise/data"
-            echo "MISE_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/mise/cache"
-            echo "MISE_STATE_DIR=$RUNNER_TEMP/hard-eng-tools/mise/state"
-            echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/bun/cache"
+            echo "MISE_DATA_DIR=${MISE_DATA_DIR:-$RUNNER_TEMP/hard-eng-tools/mise/data}"
+            echo "MISE_CACHE_DIR=${MISE_CACHE_DIR:-$RUNNER_TEMP/hard-eng-tools/mise/cache}"
+            echo "MISE_STATE_DIR=${MISE_STATE_DIR:-$RUNNER_TEMP/hard-eng-tools/mise/state}"
+            echo "BUN_INSTALL_CACHE_DIR=${BUN_INSTALL_CACHE_DIR:-$RUNNER_TEMP/hard-eng-tools/bun/cache}"
             echo "MISE_PACKAGE=@jdxcode/mise-$(uname -s | tr '[:upper:]' '[:lower:]')-$(echo "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')@latest"
           } >> "$GITHUB_ENV"
           python3 .hooks/hard-eng.py impact --base "$BASE_SHA" >> "$GITHUB_OUTPUT" || echo docs_only=false >> "$GITHUB_OUTPUT"
