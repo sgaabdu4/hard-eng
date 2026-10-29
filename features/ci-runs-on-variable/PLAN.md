@@ -44,8 +44,8 @@ N/A — workflow and setup change with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending the full check.
+Result: Passed
+Evidence: `check --plan-stage Draft --base origin/develop` on the branch: all 17 gates passed, 2005 tests passed, line coverage 91.22%. Zizmor (auditor persona) and actionlint report nothing on the new `runs-on` values, in the template and in a generated Swift workflow. The final `check --plan-stage Complete` run is recorded in the PR.
 E2E: N/A — the tests run the generated impact step in a real shell and the real setup migration on written workflow files; the runner a hosted or self-hosted job picks is decided by GitHub from the variable and is not provable here.
 
 Delivery target: PR
