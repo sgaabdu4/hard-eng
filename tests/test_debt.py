@@ -138,6 +138,8 @@ def test_adoption_records_what_the_fixed_code_still_fails_with(
     (tmp_path / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": [lint]})
     )
+    git(tmp_path, "config", "user.name", "Fixture")
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
     commit(tmp_path, "baseline")
     (tmp_path / "a.py").write_text("old\n")
     if tracked:
