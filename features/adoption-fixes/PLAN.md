@@ -44,7 +44,7 @@ N/A — check and hook behavior only; no visible UI.
 ## Verification
 
 Result: Passed
-Evidence: Each new test fails on the old code and passes now. The local brownfield canary failed with only the Python 3.10 drop (comment check, then lint and annotation debt) and passes with these fixes. Comment, debt, stop hook and canary tests pass. Codex adversarial review (gpt-6-astra): round 1 found the old-block match stopped short of blocks with a blank comment line, fixed; round 2 no material findings.
-E2E: The brownfield canary jobs install Hard Eng into the public sample and run its first full check.
+Evidence: Each new test fails on the old code and passes now. The local brownfield canary failed with only the Python 3.10 drop (comment check, then lint and annotation debt) and passes with these fixes. Comment, debt, stop hook and canary tests pass. Codex adversarial review (gpt-6-astra): round 1 found the old-block match stopped short of blocks with a blank comment line, fixed; round 2 no material findings; on the full branch, round 1 found that a fix to an untracked file did not trigger the second adoption run, fixed with an untracked case in the adoption test.
+E2E: Passed — the local brownfield canary installs Hard Eng into the public sample and passes its first full check; the PR's two brownfield canary jobs repeat it on Linux and macOS.
 Delivery target: Merge
 Delivery: Pending — merges into develop, then releases to main.
