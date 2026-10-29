@@ -602,3 +602,12 @@ def test_new_projects_that_failed_ci_stop_the_run_before_any_agent(
     posted = full_run(tmp_path, monkeypatch, ["o/a"])
     assert posted[-1] == ("failure", "New projects have not passed CI")
     assert not (tmp_path / "cache").exists()
+
+
+def test_the_brownfield_upgrade_drops_the_ended_python(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "sample"\nrequires-python = ">=3.10"\n')
+    release_canary.drop_ended_python(tmp_path)
+    assert 'requires-python = ">=3.11"' in pyproject.read_text()
+    with pytest.raises(RuntimeError, match="requires-python"):
+        release_canary.drop_ended_python(tmp_path)

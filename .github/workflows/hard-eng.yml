@@ -26,7 +26,7 @@ jobs:
   hard-eng:
     name: hard-eng
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     env:
       EXTRA_SDK_TOOLS: dart@latest
       MISE_FETCH_REMOTE_VERSIONS_CACHE: 0s

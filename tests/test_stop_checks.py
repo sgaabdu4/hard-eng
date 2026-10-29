@@ -319,3 +319,13 @@ def test_a_failure_seen_before_in_this_checkout_is_named_as_a_repeat(
     assert "Repeat failure" not in reasons[0]
     assert "Repeat failure: seen 2 times" in reasons[1]
     assert "Repeat failure" not in reasons[2]
+
+
+def test_failures_without_a_fail_or_error_line_keep_their_own_count(
+    tmp_path: Path,
+) -> None:
+    missing = "Hard Eng: a/PLAN.md: acceptance names tests that do not exist: t::x"
+    stage = "Hard Eng: b/PLAN.md: plan is Ready; this check requires Complete"
+    assert agent_hooks.repeat_note(tmp_path, missing) == ""
+    assert agent_hooks.repeat_note(tmp_path, stage) == ""
+    assert "Repeat failure: seen 2 times" in agent_hooks.repeat_note(tmp_path, stage)

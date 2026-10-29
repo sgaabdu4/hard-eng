@@ -55,6 +55,10 @@ from agent_fixtures import (
     TESTS,
     install_hard_eng,
     installed_source,
+    prepare_defective_commit,
+    prepare_failed_baseline,
+    prepare_key_commit,
+    prepare_nothing,
 )
 from challenge import without_host_markers
 from conftest import SOURCE, commit, git, init
@@ -126,26 +130,6 @@ def ready_feature_plans(fixture: Run, feature: str) -> list[str]:
             for status in ("Ready", "Complete")
         )
     ]
-
-
-def commit_change(root: Path, name: str, old: str, new: str, message: str) -> None:
-    path = root / name
-    path.write_text(path.read_text().replace(old, new))
-    commit(root, message)
-
-
-def prepare_nothing(root: Path) -> None:
-    del root
-
-
-def prepare_defective_commit(root: Path) -> None:
-    commit_change(
-        root, "calc.py", "sum(values) /", "sum(values) //", "Simplify average"
-    )
-
-
-def prepare_failed_baseline(root: Path) -> None:
-    commit_change(root, "calc.py", "a + b", "a - b", "Tidy add")
 
 
 def prepare_ready_plan(root: Path) -> None:
@@ -507,9 +491,8 @@ def loaded_skills(actions: list[Action]) -> set[str]:
         action.detail for action in actions if action.ok and action.kind == "skill"
     }
     for action in actions:
-        read = SKILL_FILE.search(action.detail) if action.kind == "command" else None
-        if action.ok and read:
-            found.add(read[1])
+        if action.ok and action.kind == "command":
+            found.update(SKILL_FILE.findall(action.detail))
     return found
 
 
@@ -570,6 +553,18 @@ CASES = [
         "Ship this: open the pull request and merge it once it is green.",
         prepare_nothing,
         loads_skill("he-ship"),
+    ),
+    Case(
+        "routes-to-research",
+        "Look online and recommend a hosted database for this app before we plan it. Answer only; change no files.",
+        prepare_nothing,
+        loads_skill("research"),
+    ),
+    Case(
+        "routes-to-security",
+        "Check my latest commit before I merge it. It stores each customer's API key.",
+        prepare_key_commit,
+        loads_skill("security-review"),
     ),
 ]
 

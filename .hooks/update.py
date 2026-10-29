@@ -697,7 +697,8 @@ def repair_installation(root: Path, previous: str) -> str:
         and (
             not (root / name).exists()
             or retired_parent(root, name)
-            or name in {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}
+            or name
+            in {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md", "hard-eng.gates.json"}
             or any(old in (root / name).read_text(errors="replace") for old in retired)
             or OLD_GENERATION_SCRIPT.search((root / name).read_text(errors="replace"))
         )
@@ -894,13 +895,17 @@ def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
                 text=True,
             ).split("\0")
         ) - {""}
+        subjects = subprocess.check_output(
+            ["git", "log", "--format=%s", f"{base}..HEAD"], cwd=root, text=True
+        ).splitlines()
     except (subprocess.CalledProcessError, ValueError, AttributeError):
         return None
+    repair = revision == previous and set(subjects) == {"Install Hard Eng"}
     if (
-        SOURCE_FILE not in names
+        (SOURCE_FILE not in names or revision == previous)
+        and not repair
         or not isinstance(previous, str)
         or not isinstance(revision, str)
-        or revision == previous
         or not re.fullmatch(r"[0-9a-f]{40}", previous)
         or not re.fullmatch(r"[0-9a-f]{40}", revision)
     ):

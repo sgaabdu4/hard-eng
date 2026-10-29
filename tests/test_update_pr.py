@@ -7,11 +7,12 @@ from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import Mock
 
+import change_size
 import pytest
 import update
 import update_pr
 import update_runner
-from conftest import add_origin, commit, git
+from conftest import add_origin, commit, default_policy, git
 from test_husky_setup import husky_project
 from test_updates import select_release
 
@@ -299,6 +300,22 @@ def squash_merge(landing: Path) -> None:
     commit(landing, "Update Hard Eng (#1)")
 
 
+def land(target: Path, merge: Callable[[Path], None]) -> None:
+    landing = target.parent / "landing"
+    git(target, "worktree", "add", "-q", "--detach", str(landing), "origin/main")
+    merge(landing)
+    git(landing, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", "HEAD:main")
+    git(target, "worktree", "remove", "--force", str(landing))
+
+
+def retire_fix(target: Path) -> None:
+    git(target, "fetch", "-q", "origin", "main")
+    git(target, "switch", "-q", "--detach", "origin/main")
+    git(target, "rm", "-q", "fix.txt")
+    commit(target, "retire the fix file")
+    git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
+
+
 @pytest.mark.parametrize("merge", [rebase_merge, squash_merge])
 def test_update_after_a_merged_fix_prepares_and_publishes_the_next_release(
     feature: tuple[Path, Path, Path],
@@ -312,17 +329,33 @@ def test_update_after_a_merged_fix_prepares_and_publishes_the_next_release(
     fix_update_branch(target)
     git(target, "worktree", "remove", "--force", str(target.parent / "fixing"))
     git(target, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", BRANCH)
-    landing = target.parent / "landing"
-    git(target, "worktree", "add", "-q", "--detach", str(landing), "origin/main")
-    merge(landing)
-    git(landing, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", "HEAD:main")
-    git(target, "worktree", "remove", "--force", str(landing))
+    land(target, merge)
     second = newer_release(source, monkeypatch, "second update")
     assert update_runner.apply_update(target) == 0
     assert "unfinished work" not in (target / update_runner.RESULT_FILE).read_text()
     assert second in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
     assert publish(target, monkeypatch) == 0
     assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
+
+
+@pytest.mark.parametrize("merge", [rebase_merge, squash_merge])
+def test_update_pr_publishes_nothing_after_a_merged_fix_without_a_newer_release(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    merge: Callable[[Path], None],
+) -> None:
+    source, target, _ = feature
+    newer_release(source, monkeypatch, "first update")
+    assert update_runner.apply_update(target) == 0
+    fix_update_branch(target)
+    git(target, "worktree", "remove", "--force", str(target.parent / "fixing"))
+    land(target, merge)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    assert publish(target, monkeypatch) == 0
+    retire_fix(target)
+    assert publish(target, monkeypatch) == 0
+    assert gh.calls == []
 
 
 def test_update_pr_pushes_opens_one_pr_and_turns_on_auto_merge(
@@ -624,6 +657,98 @@ def test_manual_setup_rerun_prepares_the_branch_instead_of_committing(
     assert (target / "project.txt").read_text() == "working edit\n"
     assert revision in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
     assert git(target, "rev-list", "--count", f"origin/main..{BRANCH}") == "1"
+
+
+@pytest.mark.parametrize(
+    "marker,skill",
+    [
+        ("appwrite.config.json", "appwrite-backend"),
+        ("pubspec.yaml", "building-flutter-apps"),
+    ],
+)
+def test_next_update_adds_the_stack_skill_the_base_branch_now_needs(
+    feature: tuple[Path, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    marker: str,
+    skill: str,
+) -> None:
+    source, target, _ = feature
+    (target / marker).write_text("{}\n" if marker.endswith(".json") else "name: app\n")
+    commit(target, "plan the stack")
+    git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
+    newer_release(source, monkeypatch, "stack update")
+    assert update_runner.apply_update(target) == 0
+    assert git(target, "ls-tree", "--name-only", BRANCH, f".claude/skills/{skill}")
+    assert git(target, "show", f"{BRANCH}:.agents/skills/{skill}/SKILL.md")
+
+
+def test_setup_rerun_without_a_newer_release_publishes_its_repair(
+    feature: tuple[Path, Path, Path],
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, target, remote = feature
+    (target / "appwrite.config.json").write_text("{}\n")
+    commit(target, "plan the backend")
+    git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    assert "hard-eng.py update-pr" in update_runner.locked_update(target, repair=True)
+    assert git(target, "show", f"{BRANCH}:.agents/skills/appwrite-backend/SKILL.md")
+    checkout = target.parent / "repair"
+    git(target, "worktree", "add", "-q", str(checkout), BRANCH)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert change_size.size_verdict(checkout) == (
+        True,
+        "only files the verified Hard Eng update wrote",
+    )
+    git(target, "worktree", "remove", "--force", str(checkout))
+    assert publish(target, monkeypatch) == 0
+    assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
+    create = next(call for call in gh.calls if call[:2] == ("pr", "create"))
+    assert create[create.index("--title") + 1] == "Repair the Hard Eng installation"
+    fix_update_branch(target)
+    git(target, "worktree", "remove", "--force", str(target.parent / "fixing"))
+    (target / "project.txt").write_text("base moved\n")
+    commit(target, "base moved")
+    git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
+    assert publish(target, monkeypatch) == 0
+    assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
+    land(target, squash_merge)
+    update_runner.locked_update(target, repair=True)
+    assert publish(target, monkeypatch) == 0
+    gh.pulls = []
+    published = git(remote, "rev-parse", BRANCH)
+    retire_fix(target)
+    assert publish(target, monkeypatch) == 0
+    assert git(remote, "rev-parse", BRANCH) == published
+    assert gh.verbs().count("pr create") == 1
+
+
+def test_setup_rerun_repair_adds_the_workflow_checks_with_the_workflow(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, target, _ = feature
+    git(target, "rm", "-rq", ".github")
+    gates = target / "hard-eng.gates.json"
+    config = json.loads(gates.read_text())
+    config["shared"] = [
+        check
+        for check in config["shared"]
+        if check.get("role") not in {"workflows", "ci-security"}
+    ]
+    gates.write_text(json.dumps(config, indent=2) + "\n")
+    commit(target, "install before the shipping policy")
+    config["shipping"] = default_policy()
+    gates.write_text(json.dumps(config, indent=2) + "\n")
+    commit(target, "add the shipping policy")
+    git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    update_runner.locked_update(target, repair=True)
+    assert git(target, "show", f"{BRANCH}:.github/workflows/hard-eng.yml")
+    repaired = json.loads(git(target, "show", f"{BRANCH}:hard-eng.gates.json"))
+    assert {"workflows", "ci-security"} <= {
+        check.get("role") for check in repaired["shared"]
+    }
 
 
 def test_setup_rerun_restores_a_missing_pre_push_hook_before_the_first_push(

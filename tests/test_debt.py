@@ -10,6 +10,7 @@ import debt
 import pytest
 from conftest import commit, git
 from gate_config import Gate, Group
+from test_basic_mode import no_provisioning
 
 FINDINGS = "import pathlib, sys; text = pathlib.Path('findings.txt').read_text(); print(text, end=''); sys.exit(bool(text))"
 
@@ -122,3 +123,29 @@ def test_debt_appears_only_with_the_install_and_never_grows(repository: Path) ->
         debt.require_shrink(repository, recorded)
     path.write_text(json.dumps({"version": 1, "gates": {}}))
     debt.require_shrink(repository, recorded)
+
+
+@pytest.mark.parametrize("tracked", [True, False])
+def test_adoption_records_what_the_fixed_code_still_fails_with(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tracked: bool
+) -> None:
+    fixing = (
+        "import pathlib, sys; p = pathlib.Path('a.py'); t = p.read_text(); "
+        "p.write_text(t.replace('old', 'new')); print('a.py:1:1: F1 still wrong'); "
+        "print('Fixed 1 error.' if 'old' in t else ''); sys.exit(1)"
+    )
+    lint = {"name": "lint", "role": "lint", "command": [sys.executable, "-c", fixing]}
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [lint]})
+    )
+    git(tmp_path, "config", "user.name", "Fixture")
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    commit(tmp_path, "baseline")
+    (tmp_path / "a.py").write_text("old\n")
+    if tracked:
+        commit(tmp_path, "add the source")
+    monkeypatch.setattr(runner, "provision_tools", no_provisioning)
+    debt.OUTPUTS.clear()
+    assert runner.adopt() == 0
+    recorded = json.loads((tmp_path / debt.DEBT_FILE).read_text())["gates"]
+    assert recorded == {"./lint": {"a.py:N:N: FN still wrong": 1}}

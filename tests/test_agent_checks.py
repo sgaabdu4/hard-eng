@@ -472,6 +472,11 @@ def test_skill_routing_is_judged_from_the_skills_each_client_loaded(
     assert judge(Run(root, base, "", [], [codex[1]])) == [
         "never loaded the he-ship skill"
     ]
+    several = "cat .agents/skills/he/SKILL.md .agents/skills/security-review/SKILL.md"
+    assert loaded_skills([Action("command", several, True)]) == {
+        "he",
+        "security-review",
+    }
 
 
 def test_a_codex_review_keeps_the_answer_before_its_closing_line(
