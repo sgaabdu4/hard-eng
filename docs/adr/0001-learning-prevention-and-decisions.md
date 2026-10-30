@@ -9,7 +9,7 @@ The user requested repeated-failure prevention and decision capture throughout a
 
 ## Decision
 
-- Use session and supported failure checkpoints; the agent judges evidence in its current context. Ordinary prompt/tool callbacks were removed under the user's September 14 efficiency correction because their repeated message added no evidence.
+- Use session and supported failure checkpoints; the agent judges evidence in its current context. The failure checkpoint's trigger is superseded by [0002](0002-repeat-gated-failure-warning.md). Ordinary prompt/tool callbacks were removed under the user's September 14 efficiency correction because their repeated message added no evidence.
 - Prefer deterministic prevention; skill creation is a last resort under Writing Great Skills.
 - Skills live in `.agents/skills/`; terse durable decisions live in `docs/adr/`.
 - Reuse current task authorization and proof owners; no learning database or global memory writes.

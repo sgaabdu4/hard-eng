@@ -233,6 +233,11 @@ def save_key(customer: str, key: str) -> None:
     STORE.write_text(json.dumps(keys))
     print(f"saved {key} for {customer}")
 """
+SYNC = """import sys
+
+print("ERROR: the build cache at 127.0.0.1:9 refused the connection", file=sys.stderr)
+raise SystemExit(1)
+"""
 
 
 def commit_change(root: Path, name: str, old: str, new: str, message: str) -> None:
@@ -258,3 +263,8 @@ def prepare_failed_baseline(root: Path) -> None:
 def prepare_key_commit(root: Path) -> None:
     (root / "keys.py").write_text(KEYS)
     commit(root, "Store customer API keys")
+
+
+def prepare_repeat_failure(root: Path) -> None:
+    (root / "sync.py").write_text(SYNC)
+    commit(root, "Sync with the build cache")

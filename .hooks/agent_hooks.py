@@ -11,6 +11,7 @@ import tempfile
 from contextlib import suppress
 from pathlib import Path
 
+from failures import failure_context, repeat_note
 from gate_config import JsonObject, JsonValue, nonproduction_source, repository_files
 
 GATE_OUTPUT_LIMIT = 8000
@@ -672,42 +673,6 @@ def failure_summary(log: str) -> str:
     return heading + bounded(body[: end.start() if end else None])
 
 
-def repeat_note(root: Path, output: str) -> str:
-    """Counts each failure by its failing lines, else all lines, with numbers masked; a second sighting is a repeat."""
-    masked = [
-        re.sub(r"\d+(?:\.\d+)?", "#", line.strip())
-        for line in output.splitlines()
-        if line.strip()
-    ]
-    if not masked:
-        return ""
-    lines = {line for line in masked if re.search(r"(?i)fail|error", line)} or set(
-        masked
-    )
-    key = hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()[:16]
-    path = root / ".hard-eng/failures.json"
-    try:
-        loaded: JsonValue = json.loads(path.read_text())
-    except (OSError, ValueError):
-        loaded = None
-    seen: dict[str, int] = (
-        {name: value for name, value in loaded.items() if isinstance(value, int)}
-        if isinstance(loaded, dict)
-        else {}
-    )
-    count = seen.pop(key, 0) + 1
-    seen[key] = count
-    path.parent.mkdir(exist_ok=True)
-    path.write_text(json.dumps(dict(list(seen.items())[-100:])))
-    if count < 2:
-        return ""
-    return (
-        f"\n\nRepeat failure: seen {count} times in this checkout. Before another similar try, "
-        "follow .agents/skills/he-learn/SKILL.md: find the shared cause and every place it occurs, "
-        "then record them on the plan's Same cause line."
-    )
-
-
 def show_decisions(root: Path, names: list[str], state: Path | None) -> str:
     """Accepted ADRs matching these files and not yet shown this session; records them as shown."""
     from plans import matched_decisions
@@ -964,24 +929,18 @@ def handle_event(root: Path, event: str, agent: str) -> int:
             raise ValueError("Unsupported native hook event")
         if event == "stop":
             output = completion(root, payload, agent)
+        elif event == "failure":
+            message = failure_context(session_state(root, payload), payload)
+            output = context_output(native, message) if message else {}
         else:
-            message = (
-                session_context(root, payload)
-                if event == "session"
-                else learning_context(event)
-            )
+            message = session_context(root, payload)
             # Codex loads AGENTS.override.md natively; Claude loads only AGENTS.md.
-            if (
-                event == "session"
-                and agent == "claude"
-                and (root / "AGENTS.override.md").is_file()
-            ):
+            if agent == "claude" and (root / "AGENTS.override.md").is_file():
                 message += "\nProject rules also in AGENTS.override.md → read it now + follow it."
             output = context_output(native, message)
-            if event == "session":
-                output["systemMessage"] = "Hard Eng startup: " + " ".join(
-                    message.splitlines()[:2]
-                )
+            output["systemMessage"] = "Hard Eng startup: " + " ".join(
+                message.splitlines()[:2]
+            )
     except (OSError, ValueError, TypeError) as error:
         message = (
             f"Hard Eng hook failed: {error}. Continue; don't claim verification passed."
