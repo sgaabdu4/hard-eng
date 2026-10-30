@@ -10,28 +10,18 @@ import yaml
 from ci_setup import configure_ci
 from conftest import SOURCE
 from gate_config import GateConfig
-from test_swift import (
-    LINUX_RUNNER,
-    SWIFT_RUNNER,
-    app_config,
-    flutter_app,
-    generated_workflow,
-)
+from test_apple_jobs import previous_generation
+from test_swift import LINUX_RUNNER, app_config, flutter_app, generated_workflow
 
 WORKFLOW = ".github/workflows/hard-eng.yml"
 
 
-def hosted(workflow: str) -> str:
+def hosted(plain: str, *, swift: bool) -> str:
     """The workflow as releases before the CI_RUNS_ON variable generated it."""
-    return (
-        workflow.replace(
-            f"    runs-on: {LINUX_RUNNER}\n", "    runs-on: ubuntu-latest\n"
-        )
-        .replace(
-            f"runs-on: {SWIFT_RUNNER}",
-            "runs-on: ${{ needs.impact.outputs.runner || 'macos-latest' }}",
-        )
-        .replace("|| echo runner=ubuntu-latest", "|| echo runner=macos-latest")
+    if swift:
+        return previous_generation(plain, variable=False)
+    return plain.replace(
+        f"    runs-on: {LINUX_RUNNER}\n", "    runs-on: ubuntu-latest\n"
     )
 
 
@@ -41,7 +31,7 @@ def test_shipped_workflows_take_their_runner_from_the_variable(name: str) -> Non
     assert {job["runs-on"] for job in workflow["jobs"].values()} == {LINUX_RUNNER}
 
 
-def test_a_failed_impact_script_does_not_pick_macos(
+def test_a_failed_impact_script_still_runs_the_swift_job(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     root = tmp_path / "app"
@@ -58,7 +48,7 @@ def test_a_failed_impact_script_does_not_pick_macos(
         capture_output=True,
     )
     assert result.returncode == 0
-    assert output.read_text() == "runner=ubuntu-latest\n"
+    assert output.read_text() == "runner=ubuntu-latest\napple=true\n"
 
 
 @pytest.mark.parametrize(
@@ -74,9 +64,9 @@ def test_older_workflow_moves_to_the_runner_variable(
         return app_config(installer, root) if swift else installer.gate_config(root)
 
     current = generated_workflow(root, configured(swift_after))
-    before = generated_workflow(root, configured(swift_before))
-    older = hosted(before)
-    assert older != before
+    plain = generated_workflow(root, installer.gate_config(root))
+    older = hosted(plain, swift=swift_before)
+    assert older != plain
     path = root / WORKFLOW
     path.parent.mkdir(parents=True)
     path.write_text(older)

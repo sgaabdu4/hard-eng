@@ -12,7 +12,8 @@ import pytest
 import reports
 import yaml
 from basic_mode import announce
-from ci_setup import configure_ci, impact_runner
+from ci_jobs import LanguageFilter, impact_runner
+from ci_setup import configure_ci
 from comments import validate_comments, validate_suppressions
 from conftest import SOURCE, commit, init, load_module
 from gate_config import GateConfig, Group, validate_group, validate_required_checks
@@ -528,17 +529,7 @@ def test_impact_runner_is_macos_only_for_swift() -> None:
     assert impact_runner(selected_groups("dart", "swift")) == "macos-latest"
 
 
-@pytest.mark.parametrize(
-    ("changed", "runner_name"),
-    [("ios/Runner/Box.swift", "macos-latest"), ("lib/main.dart", "ubuntu-latest")],
-)
-def test_impact_prints_the_runner(
-    installer: ModuleType,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    changed: str,
-    runner_name: str,
-) -> None:
+def impact_module(installer: ModuleType, tmp_path: Path, changed: str) -> ModuleType:
     root = tmp_path / "app"
     flutter_app(root)
     config = app_config(installer, root)
@@ -551,8 +542,39 @@ def test_impact_prints_the_runner(
     write(root, {changed: CODE + "\n"})
     module = load_module("swift_impact", SOURCE / ".hooks/hard-eng.py")
     module.__dict__["ROOT"] = root
+    return module
+
+
+@pytest.mark.parametrize(
+    ("changed", "runner_name", "apple"),
+    [
+        ("ios/Runner/Box.swift", "macos-latest", "true"),
+        ("lib/main.dart", "ubuntu-latest", "false"),
+    ],
+)
+def test_impact_prints_the_runner_and_whether_swift_is_affected(
+    installer: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    changed: str,
+    runner_name: str,
+    apple: str,
+) -> None:
+    module = impact_module(installer, tmp_path, changed)
     assert module.impact("HEAD") == 0
-    assert f"runner={runner_name}\n" in capsys.readouterr().out
+    lines = capsys.readouterr().out.splitlines()
+    assert f"runner={runner_name}" in lines and f"apple={apple}" in lines
+
+
+def test_impact_filter_changes_only_the_tools(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    module = impact_module(installer, tmp_path, "ios/Runner/Box.swift")
+    assert module.impact("HEAD", LanguageFilter(only=("swift",))) == 0
+    captured = capsys.readouterr()
+    assert "apple=true" in captured.out.splitlines()
+    assert "Language filter: checking ., ios" in captured.err
+    assert "Language filter" not in captured.out
 
 
 def generated_workflow(root: Path, config: GateConfig) -> str:
@@ -571,25 +593,6 @@ def generated_workflow(root: Path, config: GateConfig) -> str:
 
 
 LINUX_RUNNER = "${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}"
-SWIFT_RUNNER = (
-    "${{ needs.impact.outputs.runner == 'macos-latest' && 'macos-latest' || "
-    "(vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest') }}"
-)
-
-
-def test_swift_workflow_selects_runner(installer: ModuleType, tmp_path: Path) -> None:
-    root = tmp_path / "app"
-    flutter_app(root)
-    workflow = yaml.safe_load(generated_workflow(root, app_config(installer, root)))
-    jobs = workflow["jobs"]
-    assert list(jobs) == ["impact", "hard-eng"]
-    assert jobs["impact"]["runs-on"] == LINUX_RUNNER
-    assert jobs["impact"]["outputs"] == {"runner": "${{ steps.impact.outputs.runner }}"}
-    check = jobs["hard-eng"]
-    assert check["name"] == "hard-eng" and check["needs"] == "impact"
-    assert check["if"] == "${{ !cancelled() }}"
-    assert check["runs-on"] == SWIFT_RUNNER
-    assert check["timeout-minutes"] == 20 and jobs["impact"]["timeout-minutes"] == 5
 
 
 def test_workflow_without_swift_keeps_its_jobs(
@@ -617,8 +620,7 @@ def test_existing_workflow_gains_the_runner_job_once(
     changes: dict[str, str] = {}
     configure_ci(root, SOURCE, config, changes)
     jobs = yaml.safe_load(changes[".github/workflows/hard-eng.yml"])["jobs"]
-    assert list(jobs) == ["impact", "hard-eng"]
-    assert jobs["hard-eng"]["runs-on"] == SWIFT_RUNNER
+    assert list(jobs) == ["impact", "linux", "apple", "hard-eng"]
     path.write_text(changes[".github/workflows/hard-eng.yml"])
     changes.clear()
     configure_ci(root, SOURCE, config, changes)

@@ -20,6 +20,13 @@ from typing import IO, TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
 import swift_setup
+from ci_jobs import (
+    NO_LANGUAGES,
+    LanguageFilter,
+    add_language_filters,
+    language_filter,
+    language_groups,
+)
 from debt import OUTPUTS, remember
 from gate_config import (
     Gate,
@@ -754,6 +761,7 @@ def check(
     dependents: bool = True,
     related_tests: bool = False,
     quick: bool = False,
+    languages: LanguageFilter = NO_LANGUAGES,
 ) -> int:
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
@@ -768,7 +776,7 @@ def check(
 
     with check_lock(ROOT):
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
-        groups = quick_groups(groups, quick)
+        groups = quick_groups(language_groups(groups, languages), quick)
         from debt import require_shrink
 
         require_shrink(ROOT, base)
@@ -789,33 +797,11 @@ def check(
         return int(failed)
 
 
-def impact(base: str) -> int:
-    """Tell CI whether the check will run only the secret scan, before tools."""
-    from contextlib import redirect_stdout, suppress
+def impact(base: str, languages: LanguageFilter = NO_LANGUAGES) -> int:
+    """Tell CI the runner, the tools and whether Swift is affected, before tools."""
+    from ci_jobs import impact_outputs
 
-    from ci_setup import impact_runner, impact_tools, push_base, require_ci_base
-    from gate_config import affected_groups, parse_config
-
-    require_ci_base(base)
-    base = push_base(ROOT, base) or base
-    proven = False
-    with redirect_stdout(sys.stderr), suppress(OSError, subprocess.SubprocessError):
-        proven = proven_elsewhere(base)
-    if proven:
-        print("docs_only=true\nrunner=" + impact_runner([]))
-        return 0
-    config = parse_config((ROOT / "hard-eng.gates.json").read_text())
-    groups: list[Group] = [
-        *config["packages"],
-        {"path": ".", "checks": config["shared"]},
-    ]
-    with redirect_stdout(sys.stderr):
-        selected = affected_groups(ROOT, groups, base)
-    docs_only = bool(config["packages"]) and len(selected) == 1
-    print(f"docs_only={str(docs_only).lower()}")
-    print("tools=" + " ".join(impact_tools(ROOT, selected)))
-    print("runner=" + impact_runner(selected))
-    return 0
+    return impact_outputs(ROOT, base, proven_elsewhere, languages)
 
 
 def pre_push() -> int:
@@ -866,7 +852,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.set_defaults(apply=False, merge=True)
     commands = parser.add_subparsers(dest="command", required=True)
-    checks = commands.add_parser("check", help="Run applicable native checks")
+    checks = add_language_filters(
+        commands.add_parser("check", help="Run applicable native checks")
+    )
     checks.add_argument("--base", help="Git base; unknown impact runs all checks")
     checks.add_argument("--plan-stage", choices=("Draft", "Ready", "Complete"))
     checks.add_argument(
@@ -884,8 +872,11 @@ def main() -> int:
         action="store_true",
         help="Run only format, lint, types and the file secret scan; the Stop hook uses it",
     )
-    impacts = commands.add_parser(
-        "impact", help="Print docs_only=true when only the secret scan applies"
+    impacts = add_language_filters(
+        commands.add_parser(
+            "impact",
+            help="Print docs_only, tools, runner and apple for the change, for CI jobs",
+        )
     )
     impacts.add_argument("--base", required=True)
     commands.add_parser("pre-push", help="Verify the actual commits being pushed")
@@ -958,9 +949,10 @@ def main() -> int:
             dependents=not args.without_dependents,
             related_tests=args.related_tests,
             quick=args.quick,
+            languages=language_filter(args),
         )
     if args.command == "impact":
-        return impact(args.base)
+        return impact(args.base, language_filter(args))
     if args.command == "ci-usage":
         from ci_setup import ci_usage
 
