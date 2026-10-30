@@ -101,6 +101,7 @@ def test_failure_hook_warns_on_the_third_identical_error(
         {"error": "PreToolUse:Bash hook error: blocked"},
         {"error": "Exit code 1"},
         {"error": "ERROR: lock held", "is_interrupt": True},
+        {"error": "[Request interrupted by user for tool use]"},
     ],
 )
 def test_failure_hook_ignores_errors_that_are_not_agent_mistakes(
@@ -121,9 +122,11 @@ def test_failure_hook_ignores_errors_that_are_not_agent_mistakes(
         "FAILED tests/test_timeout.py::test_retry - TimeoutError",
         "ERROR: database connection timed out",
         "Command timed out after 2m 0s",
+        "ERROR: connection denied by server",
+        "InterruptedError: [Errno 4] Interrupted system call",
     ],
 )
-def test_failure_hook_counts_repeated_timeouts(
+def test_failure_hook_counts_errors_that_only_name_a_timeout_denial_or_interrupt(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

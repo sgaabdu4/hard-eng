@@ -23,7 +23,7 @@ Decided: no hook may get slower (user, 2026-10-30); the failure hook is its own 
 - [x] A first and second identical tool error add no context; the third adds the warning without echoing the error text → `tests/test_failures.py::test_failure_hook_warns_on_the_third_identical_error`.
 - [x] Refusals, interrupts and bare exit codes never count → `tests/test_failures.py::test_failure_hook_ignores_errors_that_are_not_agent_mistakes`.
 - [x] A session with no recorded state, or bad input, writes and echoes nothing → `tests/test_failures.py::test_failure_hook_without_session_state_writes_and_echoes_nothing`.
-- [x] A repeated timeout, or an error that names one, counts → `tests/test_failures.py::test_failure_hook_counts_repeated_timeouts`.
+- [x] A repeated timeout, or an error that only names a timeout, denial or interrupt, counts → `tests/test_failures.py::test_failure_hook_counts_errors_that_only_name_a_timeout_denial_or_interrupt`.
 - [x] Setup registers the failure script and removes the old `hard-eng.py failure` entry; the installed command warns on the third error → `tests/test_hook_setup.py::test_failure_hook_runs_its_own_script_and_replaces_the_old_entry`.
 - [x] The failure hook loads no other Hard Eng module, so no hook gets slower → `tests/test_failures.py::test_failure_hook_loads_no_other_hard_eng_module`.
 - [x] A failed Stop check with no output is never named a repeat → `tests/test_stop_checks.py::test_failures_with_no_output_are_not_counted_as_repeats`.
