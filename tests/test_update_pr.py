@@ -78,7 +78,17 @@ def feature(
 
 
 def publish(target: Path, monkeypatch: pytest.MonkeyPatch, merge: bool = True) -> int:
+    build = update_pr.locked_update
+
+    def build_with_hooks(root: Path, repair: bool = False) -> str:
+        with monkeypatch.context() as inner:
+            inner.setenv("GIT_CONFIG_COUNT", "1")
+            inner.delenv("GIT_CONFIG_KEY_1")
+            inner.delenv("GIT_CONFIG_VALUE_1")
+            return build(root, repair)
+
     with monkeypatch.context() as scope:
+        scope.setattr(update_pr, "locked_update", build_with_hooks)
         scope.setenv("GIT_CONFIG_COUNT", "2")
         scope.setenv("GIT_CONFIG_KEY_1", "core.hooksPath")
         scope.setenv("GIT_CONFIG_VALUE_1", "/dev/null")
@@ -335,6 +345,32 @@ def test_update_after_a_merged_fix_prepares_and_publishes_the_next_release(
     assert "unfinished work" not in (target / update_runner.RESULT_FILE).read_text()
     assert second in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
     assert publish(target, monkeypatch) == 0
+    assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
+
+
+def rebase_merge_update(landing: Path) -> None:
+    (landing / "moved.txt").write_text("base moved\n")
+    commit(landing, "base moved")
+    git(landing, "cherry-pick", BRANCH)
+
+
+@pytest.mark.parametrize("merge", [rebase_merge_update, squash_merge])
+def test_update_pr_alone_replaces_a_merged_update_branch_with_the_next_release(
+    opened: Path,
+    feature: tuple[Path, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    merge: Callable[[Path], None],
+) -> None:
+    source, target, remote = feature
+    land(opened, merge)
+    git(target, "fetch", "-q", "origin", "main")
+    git(target, "switch", "-q", "--detach", "origin/main")
+    (target / "later.txt").write_text("later\n")
+    commit(target, "a later change on main")
+    git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
+    second = newer_release(source, monkeypatch, "second update")
+    assert publish(target, monkeypatch) == 0
+    assert second in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
     assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
 
 
