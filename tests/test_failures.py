@@ -18,12 +18,13 @@ def failure_outputs(
     capsys: pytest.CaptureFixture[str],
     payloads: list[JsonObject],
 ) -> list[JsonObject]:
-    outputs = []
+    outputs: list[JsonObject] = []
+    nothing: JsonObject = {}
     for payload in payloads:
         monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
         assert failures.main(repository) == 0
         printed = capsys.readouterr().out
-        outputs.append(json.loads(printed) if printed else {})
+        outputs.append(json.loads(printed) if printed else nothing)
     return outputs
 
 
@@ -134,14 +135,12 @@ def test_failure_hook_counts_code_errors_that_name_a_timeout(
 
 def test_failure_hook_loads_no_other_hard_eng_module() -> None:
     hooks = Path(failures.__file__).parent
+    listing = (
+        "import runpy, sys; runpy.run_path(sys.argv[1]); "
+        "print('\\n'.join(getattr(m, '__file__', None) or '' for m in list(sys.modules.values())))"
+    )
     loaded = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import runpy, sys; runpy.run_path(sys.argv[1]); "
-            "print('\\n'.join(getattr(m, '__file__', None) or '' for m in list(sys.modules.values())))",
-            str(hooks / "failures.py"),
-        ],
+        [sys.executable, "-c", listing, str(hooks / "failures.py")],
         input="{}",
         capture_output=True,
         text=True,

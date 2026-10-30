@@ -7,6 +7,7 @@ import re
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
 SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,200}")
 NOT_A_MISTAKE = re.compile(
     r"(?i)doesn't want to (?:proceed|take this action)|tool use was rejected|"
@@ -97,7 +98,7 @@ def failure_context(root: Path, payload: dict[str, object]) -> str:
     )
 
 
-def main(root: Path = Path(__file__).resolve().parents[1]) -> int:
+def main(root: Path = ROOT) -> int:
     try:
         payload = json.load(sys.stdin)
     except ValueError:
