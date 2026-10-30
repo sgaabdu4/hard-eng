@@ -42,16 +42,10 @@ from pathlib import Path
 from typing import NamedTuple
 
 from agent_fixtures import (
-    APP,
-    APP_TESTS,
     CALC,
     DESIGN,
     GATES,
     PRODUCT,
-    READY_PLAN,
-    RECORDS_TOOL,
-    SERVICE_DESIGN,
-    SERVICE_PRODUCT,
     TESTS,
     install_hard_eng,
     installed_source,
@@ -59,6 +53,8 @@ from agent_fixtures import (
     prepare_failed_baseline,
     prepare_key_commit,
     prepare_nothing,
+    prepare_outside_service,
+    prepare_ready_plan,
     prepare_repeat_failure,
 )
 from challenge import without_host_markers
@@ -131,15 +127,6 @@ def ready_feature_plans(fixture: Run, feature: str) -> list[str]:
             for status in ("Ready", "Complete")
         )
     ]
-
-
-def prepare_ready_plan(root: Path) -> None:
-    (root / "features/empty-average").mkdir(parents=True)
-    (root / "features/empty-average/PLAN.md").write_text(READY_PLAN)
-    commit(root, "Approve the empty-average plan")
-    check = [sys.executable, ".hooks/hard-eng.py", "check", "--plan-stage", "Ready"]
-    if subprocess.run(check, cwd=root, capture_output=True, check=False).returncode:
-        raise RuntimeError("the continue-approved fixture plan does not pass Ready")
 
 
 def codex_actions(found: list[dict[str, object]]) -> list[Action]:
@@ -399,23 +386,6 @@ def judge_failed_baseline(fixture: Run) -> list[str]:
     if not any(BASELINE_FAILED.search(action.output) for action in fixture.actions):
         failures.append("no recorded command output shows the failing baseline")
     return failures
-
-
-def prepare_outside_service(root: Path) -> None:
-    for name in ("calc.py", "test_calc.py"):
-        (root / name).unlink()
-    for name, text in {
-        "app.py": APP,
-        "test_app.py": APP_TESTS,
-        "vendor/records_tool.py": RECORDS_TOOL,
-        "PRODUCT.md": SERVICE_PRODUCT,
-        "DESIGN.md": SERVICE_DESIGN,
-    }.items():
-        (root / name).parent.mkdir(exist_ok=True)
-        (root / name).write_text(text)
-    with (root / ".gitignore").open("a") as ignores:
-        ignores.write("vendor/calls.log\n")
-    commit(root, "Clinic helper with the vendor records tool")
 
 
 def app_output(fixture: Run, *arguments: str) -> tuple[int, str]:

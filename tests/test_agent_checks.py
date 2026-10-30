@@ -13,7 +13,6 @@ import pytest
 from agent_checks import (
     CASES,
     CONTROLS,
-    READY_PLAN,
     Action,
     Agent,
     Client,
@@ -35,6 +34,7 @@ from agent_checks import (
     loads_skill,
     main,
 )
+from agent_fixtures import READY_PLAN
 from conftest import SOURCE, commit, init, running, spawner
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
