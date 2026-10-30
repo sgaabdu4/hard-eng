@@ -10,7 +10,7 @@ from gate_config import JsonObject, JsonValue
 
 NOT_A_MISTAKE = re.compile(
     r"(?i)doesn't want to (?:proceed|take this action)|tool use was rejected|"
-    r"permission for this action was denied|denied by|hook error|interrupted|timed out|timeout"
+    r"permission for this action was denied|denied by|hook error|interrupted|timed out"
 )
 ERROR_NOISE = (
     (r"(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<id>"),

@@ -78,3 +78,20 @@ def test_failure_hook_ignores_errors_that_are_not_agent_mistakes(
     assert agent_hooks.record_session(repository, session)
     payload: JsonObject = {**session, "tool_name": "Bash", **failure}
     assert failure_outputs(repository, monkeypatch, capsys, [payload] * 4) == [{}] * 4
+
+
+def test_failure_hook_counts_code_errors_that_name_a_timeout(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session: JsonObject = {"session_id": "named"}
+    assert agent_hooks.record_session(repository, session)
+    payload: JsonObject = {
+        **session,
+        "tool_name": "Bash",
+        "error": "FAILED tests/test_timeout.py::test_retry - TimeoutError",
+    }
+    outputs = failure_outputs(repository, monkeypatch, capsys, [payload] * 3)
+    assert outputs[:2] == [{}, {}]
+    assert "Same tool error 3 times" in json.dumps(outputs[2])
