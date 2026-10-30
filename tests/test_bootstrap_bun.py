@@ -42,7 +42,7 @@ def test_a_pinned_bun_needs_no_lookup() -> None:
 
 
 def test_the_newest_release_two_days_old_is_chosen(actions: None) -> None:
-    releases = [
+    releases: list[JsonObject] = [
         release("bun-v1.5.0", 0.5),
         release("bun-v1.4.9-canary.1", 3),
         release("bun-v1.4.8", 3, prerelease=True),
@@ -74,6 +74,14 @@ def test_only_releases_under_two_days_old_leave_latest(actions: None) -> None:
     assert bootstrap_bun([], lambda: [release("bun-v1.4.4", 0.1)]) is None
 
 
+def proven(_base: str) -> bool:
+    return True
+
+
+def unproven(_base: str) -> bool:
+    return False
+
+
 def test_impact_prints_the_version(
     installer: ModuleType,
     tmp_path: Path,
@@ -83,10 +91,10 @@ def test_impact_prints_the_version(
 ) -> None:
     monkeypatch.setattr(ci_jobs, "bun_releases", lambda: [release("bun-v1.4.4", 5)])
     module = impact_module(installer, tmp_path, "ios/Runner/Box.swift")
-    module.__dict__["proven_elsewhere"] = lambda _base: False
+    monkeypatch.setattr(module, "proven_elsewhere", unproven)
     assert module.impact("HEAD") == 0
     assert "bun=1.4.4" in capsys.readouterr().out.splitlines()
-    module.__dict__["proven_elsewhere"] = lambda _base: True
+    monkeypatch.setattr(module, "proven_elsewhere", proven)
     assert module.impact("HEAD") == 0
     assert capsys.readouterr().out.splitlines()[-1] == "bun=1.4.4"
 
