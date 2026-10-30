@@ -679,6 +679,8 @@ def repeat_note(root: Path, output: str) -> str:
         for line in output.splitlines()
         if line.strip()
     ]
+    if not masked:
+        return ""
     lines = {line for line in masked if re.search(r"(?i)fail|error", line)} or set(
         masked
     )

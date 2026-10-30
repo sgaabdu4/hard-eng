@@ -329,3 +329,9 @@ def test_failures_without_a_fail_or_error_line_keep_their_own_count(
     assert agent_hooks.repeat_note(tmp_path, missing) == ""
     assert agent_hooks.repeat_note(tmp_path, stage) == ""
     assert "Repeat failure: seen 2 times" in agent_hooks.repeat_note(tmp_path, stage)
+
+
+def test_failures_with_no_output_are_not_counted_as_repeats(tmp_path: Path) -> None:
+    for output in ("", "\n  \n", ""):
+        assert agent_hooks.repeat_note(tmp_path, output) == ""
+    assert not (tmp_path / ".hard-eng/failures.json").exists()
