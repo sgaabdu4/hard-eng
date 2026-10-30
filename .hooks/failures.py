@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,200}")
 NOT_A_MISTAKE = re.compile(
     r"(?i)doesn't want to (?:proceed|take this action)|tool use was rejected|"
-    r"permission for this action was denied|denied by|hook error|interrupted"
+    r"permission for this action was denied|hook error|interrupted by user|tool call interrupted"
 )
 ERROR_NOISE = (
     (r"(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<id>"),
