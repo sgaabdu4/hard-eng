@@ -49,6 +49,9 @@ def test_each_acceptance_line_names_its_test_or_why_none_applies(
         ("tests/test_app.py::test_exit[0|1]", True),
         ("test/exit.test.ts::reports the exit", True),
         ("tests/test_app.py::TestApp::test_method", True),
+        ("Tests/AppTests/ExitTests.swift::reportsTheExit", True),
+        ("Tests/AppTests/ExitTests.swift::testExitCode", True),
+        ("Tests/AppTests/ExitTests.swift::reportsTheExitCode", False),
         ("tests/test_app.py::test_gone", False),
         ("tests/test_other.py::test_exit", False),
         ("app.py::test_exit", False),
@@ -67,6 +70,11 @@ def test_complete_plan_cannot_name_a_missing_test(
     (root / "app.py").write_text("def test_exit() -> None: ...\n")
     (root / "test").mkdir()
     (root / "test/exit.test.ts").write_text("it('reports the exit', () => {});\n")
+    (root / "Tests/AppTests").mkdir(parents=True)
+    (root / "Tests/AppTests/ExitTests.swift").write_text(
+        "@Test func reportsTheExit() {}\nfinal class ExitCases: XCTestCase {\n"
+        "    func testExitCode() throws {}\n}\n"
+    )
     plan = root / "PLAN.md"
     plan.write_text(
         plan.read_text().replace(UNPROVED, f"- [x] Exit observed → `{reference}`.")
