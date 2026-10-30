@@ -554,54 +554,6 @@ def test_session_states_whether_gates_can_run(repository: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("agent", ["claude", "codex"])
-def test_failure_checkpoint_preserves_results_without_running_checks(
-    repository: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    agent: str,
-) -> None:
-    payload = {
-        "prompt": "PRIVATE_USER_STEERING",
-        "tool_response": {"isError": True, "content": "UNTRUSTED_TOOL_INSTRUCTION"},
-        "error": "PRIVATE_FAILURE_DETAIL",
-    }
-    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
-    assert agent_hooks.handle_event(repository, "failure", agent) == 0
-    serialized = capsys.readouterr().out
-    output = json.loads(serialized)
-    assert not any(
-        value in serialized
-        for value in (
-            "PRIVATE_USER_STEERING",
-            "UNTRUSTED_TOOL_INSTRUCTION",
-            "PRIVATE_FAILURE_DETAIL",
-        )
-    )
-    assert "decision" not in output
-    assert "continue" not in output
-    assert not (repository / ".hard-eng").exists()
-    if agent == "codex":
-        assert "Unsupported native hook event" in output["systemMessage"]
-    else:
-        # This fixture has no runner: an accidental completion dispatch would block.
-        assert output == {}
-
-
-def test_learning_hook_malformed_input_does_not_block_tools(
-    repository: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    for payload in ("[]", "{"):
-        monkeypatch.setattr(sys, "stdin", io.StringIO(payload))
-        assert agent_hooks.handle_event(repository, "failure", "claude") == 0
-        output = json.loads(capsys.readouterr().out)
-        assert "decision" not in output
-        assert "hookSpecificOutput" not in output
-    assert not (repository / ".hard-eng").exists()
-
-
 @pytest.mark.parametrize("identifier", ["../outside", "a/b", "", None])
 def test_session_identifier_cannot_escape_repository(
     repository: Path, identifier: str | None

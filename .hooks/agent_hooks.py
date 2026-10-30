@@ -11,7 +11,6 @@ import tempfile
 from contextlib import suppress
 from pathlib import Path
 
-from failures import failure_context, repeat_note
 from gate_config import JsonObject, JsonValue, nonproduction_source, repository_files
 
 GATE_OUTPUT_LIMIT = 8000
@@ -212,14 +211,7 @@ def project_pre_push(root: Path, hook: Path) -> Path:
 def hook_events(agent: str) -> dict[str, str]:
     if agent not in HOOK_FILES:
         raise ValueError("Unsupported native agent; use Claude or Codex")
-    events = {
-        "session": "SessionStart",
-        "failure": "PostToolUseFailure",
-        "stop": "Stop",
-    }
-    if agent == "codex":
-        del events["failure"]
-    return events
+    return {"session": "SessionStart", "stop": "Stop"}
 
 
 def owned_hook_entry(
@@ -249,6 +241,11 @@ PREVIEW_HOOK: JsonObject = {
     "hooks": [{"type": "command", "command": PREVIEW_COMMAND, "timeout": 5}],
 }
 CLAUDE_TOOL_HOOKS = [POLL_HOOK, PREVIEW_HOOK]
+# Its own script: the hard-eng.py entry point loads every gate module first.
+FAILURE_COMMAND = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/failures.py" 2>/dev/null || true'
+FAILURE_HOOK: JsonObject = {
+    "hooks": [{"type": "command", "command": FAILURE_COMMAND, "timeout": 5}]
+}
 CODEX_HOOK_STATUS = {
     "session": "Hard Eng: updating project setup",
     "stop": "Hard Eng: verifying changes",
@@ -270,7 +267,11 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
     hooks = current.get("hooks", {})
     if not isinstance(hooks, dict):
         raise TypeError("Conflicting hooks: expected an object")
-    for event, native in (("prompt", "UserPromptSubmit"), ("tool", "PostToolUse")):
+    for event, native in (
+        ("prompt", "UserPromptSubmit"),
+        ("tool", "PostToolUse"),
+        ("failure", "PostToolUseFailure"),
+    ):
         call = f"{command} {event} {agent}"
         owned: JsonObject = {
             "hooks": [{"type": "command", "command": call, "timeout": 10}]
@@ -909,6 +910,8 @@ def checked_changes(
         if decisions:
             return {"decision": "block", "reason": decisions.strip()}
         return with_freshness(root, passed_notice(building, notice, agent, output))
+    from failures import repeat_note
+
     return {
         "decision": "block",
         "reason": output.rstrip("\n")
@@ -929,9 +932,6 @@ def handle_event(root: Path, event: str, agent: str) -> int:
             raise ValueError("Unsupported native hook event")
         if event == "stop":
             output = completion(root, payload, agent)
-        elif event == "failure":
-            message = failure_context(session_state(root, payload), payload)
-            output = context_output(native, message) if message else {}
         else:
             message = session_context(root, payload)
             # Codex loads AGENTS.override.md natively; Claude loads only AGENTS.md.

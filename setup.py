@@ -143,6 +143,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
             ]
         if agent == "claude":
             hooks["PreToolUse"] = list(agent_hooks.CLAUDE_TOOL_HOOKS)
+            hooks["PostToolUseFailure"] = [agent_hooks.FAILURE_HOOK]
         target = root / name
         text = target.read_text() if target.exists() else "{}"
         current: JsonObject = json.loads(text)
