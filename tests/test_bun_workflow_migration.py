@@ -27,7 +27,7 @@ def test_pnpm_setup_step_with_a_condition_migrates_as_one_step(step: str) -> Non
     template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
     old = template.replace(
         "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0\n"
-        "        with:\n          bun-version: latest\n",
+        "        with:\n          bun-version: ${{ steps.impact.outputs.bun || 'latest' }}\n",
         step,
     )
     assert old != template
@@ -40,7 +40,7 @@ def test_pnpm_bootstrap_migrates_to_the_template_bun_steps() -> None:
     old = (
         template.replace(
             "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0\n"
-            "        with:\n          bun-version: latest\n",
+            "        with:\n          bun-version: ${{ steps.impact.outputs.bun || 'latest' }}\n",
             "      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0\n"
             "        with:\n          version: latest\n          runtime: node@latest\n"
             "          install: false\n",
