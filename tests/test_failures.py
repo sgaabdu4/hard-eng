@@ -2,10 +2,12 @@
 
 import io
 import json
+import subprocess
 import sys
 from pathlib import Path
 
 import agent_hooks
+import failures
 import pytest
 from gate_config import JsonObject
 
@@ -19,9 +21,42 @@ def failure_outputs(
     outputs = []
     for payload in payloads:
         monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
-        assert agent_hooks.handle_event(repository, "failure", "claude") == 0
-        outputs.append(json.loads(capsys.readouterr().out))
+        assert failures.main(repository) == 0
+        printed = capsys.readouterr().out
+        outputs.append(json.loads(printed) if printed else {})
     return outputs
+
+
+def test_failure_hook_without_session_state_writes_and_echoes_nothing(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    payload = {
+        "prompt": "PRIVATE_USER_STEERING",
+        "tool_response": {"isError": True, "content": "UNTRUSTED_TOOL_INSTRUCTION"},
+        "error": "PRIVATE_FAILURE_DETAIL",
+    }
+    for text in (json.dumps(payload), "[]", "{"):
+        monkeypatch.setattr(sys, "stdin", io.StringIO(text))
+        assert failures.main(repository) == 0
+        assert capsys.readouterr().out == ""
+    assert not (repository / ".hard-eng").exists()
+
+
+@pytest.mark.parametrize("identifier", ["../outside", "a/b", ""])
+def test_failure_hook_ignores_session_ids_that_leave_the_session_folder(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    identifier: str,
+) -> None:
+    (repository / ".hard-eng").mkdir()
+    outside = repository / ".hard-eng/outside.json"
+    outside.write_text("{}")
+    payload: JsonObject = {"session_id": identifier, "error": "ERROR: lock held"}
+    assert failure_outputs(repository, monkeypatch, capsys, [payload] * 3) == [{}] * 3
+    assert outside.read_text() == "{}"
 
 
 def test_failure_hook_warns_on_the_third_identical_error(
@@ -95,3 +130,21 @@ def test_failure_hook_counts_code_errors_that_name_a_timeout(
     outputs = failure_outputs(repository, monkeypatch, capsys, [payload] * 3)
     assert outputs[:2] == [{}, {}]
     assert "Same tool error 3 times" in json.dumps(outputs[2])
+
+
+def test_failure_hook_loads_no_other_hard_eng_module() -> None:
+    hooks = Path(failures.__file__).parent
+    loaded = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import runpy, sys; runpy.run_path(sys.argv[1]); "
+            "print('\\n'.join(getattr(m, '__file__', None) or '' for m in list(sys.modules.values())))",
+            str(hooks / "failures.py"),
+        ],
+        input="{}",
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    assert [name for name in loaded if name.startswith(str(hooks))] == []
