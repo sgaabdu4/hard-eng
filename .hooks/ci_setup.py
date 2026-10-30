@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ci_jobs import migrate_runner_variable, migrate_swift_runner
+from ci_jobs import migrate_bun_version, migrate_runner_variable, migrate_swift_runner
 from gate_config import GateConfig, Group, JsonValue
 from project_setup import dependency_command
 
@@ -667,7 +667,7 @@ def configure_ci(
         migrated = migrate_swift_runner(
             config, migrate_runner_variable(migrate_launcher(source, migrated))
         )
-        migrated = migrate_tool_environment(migrated)
+        migrated = migrate_tool_environment(migrate_bun_version(migrated))
         if "\n  pull-requests:" not in migrated:
             migrated = migrated.replace(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
