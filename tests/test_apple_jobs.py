@@ -18,7 +18,7 @@ from ci_jobs import (
 )
 from ci_setup import configure_ci
 from conftest import SOURCE, configure, gate
-from gate_config import Gate, Group
+from gate_config import Gate, GateConfig, Group
 from test_swift import LINUX_RUNNER, app_config, flutter_app, generated_workflow
 
 WORKFLOW = ".github/workflows/hard-eng.yml"
@@ -163,23 +163,24 @@ def test_new_install_without_swift_keeps_one_job(
     assert language_flags(jobs["hard-eng"]) == ["", "", ""]
 
 
+def migrate(root: Path, text: str, config: GateConfig) -> dict[str, str]:
+    path = root / WORKFLOW
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    changes: dict[str, str] = {}
+    configure_ci(root, SOURCE, config, changes)
+    return changes
+
+
 @pytest.mark.parametrize("variable", [True, False])
 def test_previous_generation_splits_once(
     installer: ModuleType, tmp_path: Path, variable: bool
 ) -> None:
     root, plain, current = generated(installer, tmp_path)
     older = previous_generation(plain, variable=variable)
-    path = root / WORKFLOW
-    path.parent.mkdir(parents=True)
-    path.write_text(older)
     config = app_config(installer, root)
-    changes: dict[str, str] = {}
-    configure_ci(root, SOURCE, config, changes)
-    assert changes == {WORKFLOW: current}
-    path.write_text(current)
-    changes.clear()
-    configure_ci(root, SOURCE, config, changes)
-    assert changes == {}
+    assert migrate(root, older, config) == {WORKFLOW: current}
+    assert migrate(root, current, config) == {}
 
 
 def test_custom_lines_and_later_jobs_stay(
@@ -189,11 +190,9 @@ def test_custom_lines_and_later_jobs_stay(
     older = previous_generation(plain, variable=True)
     custom = "      - run: echo project step\n"
     later = "\n  deploy:\n    needs: hard-eng\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ship\n"
-    path = root / WORKFLOW
-    path.parent.mkdir(parents=True)
-    path.write_text(older.rstrip("\n") + "\n" + custom + later)
-    changes: dict[str, str] = {}
-    configure_ci(root, SOURCE, app_config(installer, root), changes)
+    changes = migrate(
+        root, older.rstrip("\n") + "\n" + custom + later, app_config(installer, root)
+    )
     migrated = changes[WORKFLOW]
     jobs = yaml.safe_load(migrated)["jobs"]
     assert list(jobs) == ["impact", "linux", "apple", "hard-eng", "deploy"]
@@ -227,12 +226,7 @@ def test_customised_previous_generation_is_left_with_a_note(
     older = previous_generation(plain, variable=True)
     custom = older.replace(old, new)
     assert custom != older
-    path = root / WORKFLOW
-    path.parent.mkdir(parents=True)
-    path.write_text(custom)
-    changes: dict[str, str] = {}
-    configure_ci(root, SOURCE, app_config(installer, root), changes)
-    assert changes == {}
+    assert migrate(root, custom, app_config(installer, root)) == {}
     assert "CI runner not added" in capsys.readouterr().err
 
 
