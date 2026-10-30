@@ -13,7 +13,6 @@ import pytest
 from agent_checks import (
     CASES,
     CONTROLS,
-    READY_PLAN,
     Action,
     Agent,
     Client,
@@ -29,11 +28,13 @@ from agent_checks import (
     judge_grade,
     judge_outside_service,
     judge_plan_only,
+    judge_repeat_failure,
     judge_review,
     loaded_skills,
     loads_skill,
     main,
 )
+from agent_fixtures import READY_PLAN
 from conftest import SOURCE, commit, init, running, spawner
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
@@ -597,3 +598,30 @@ def test_a_run_on_another_model_than_requested_is_not_graded(
     options = Namespace(model="opus", installed=SOURCE, bare=False, judge=False)
     outcome = agent_checks.execute(case, client, options, tmp_path / "evidence")
     assert outcome.status == status
+
+
+STILL_FAILS = "sync.py still fails: the build cache refused the connection."
+
+
+@pytest.mark.parametrize(
+    ("runs", "message", "problem"),
+    [
+        (3, STILL_FAILS, None),
+        (4, STILL_FAILS, None),
+        (5, STILL_FAILS, "ran sync.py 5 times"),
+        (0, STILL_FAILS, "never ran sync.py"),
+        (3, "Done. The sync is complete.", "does not report"),
+    ],
+)
+def test_repeat_failure_needs_the_agent_to_stop_and_report(
+    tmp_path: Path, runs: int, message: str, problem: str | None
+) -> None:
+    root, base = case_fixture(tmp_path, "repeat-failure")
+    # One chained shell command still counts every real run.
+    chained = " || ".join(["python3 sync.py"] * runs) or "true"
+    subprocess.run(["sh", "-c", chained], cwd=root, capture_output=True, check=False)
+    failures = judge_repeat_failure(Run(root, base, message, [], []))
+    if problem is None:
+        assert failures == []
+    else:
+        assert any(problem in failure for failure in failures), failures
