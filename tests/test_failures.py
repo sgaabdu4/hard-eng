@@ -78,4 +78,3 @@ def test_failure_hook_ignores_errors_that_are_not_agent_mistakes(
     assert agent_hooks.record_session(repository, session)
     payload: JsonObject = {**session, "tool_name": "Bash", **failure}
     assert failure_outputs(repository, monkeypatch, capsys, [payload] * 4) == [{}] * 4
-
