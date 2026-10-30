@@ -10,7 +10,7 @@ The Claude failure hook asked for HE Learn after every failed tool call. A repla
 ## Decision
 
 - The failure hook adds context only from the third sighting of one tool error in a session. The key is the tool, the subagent and the error text with numbers, hex runs and UUIDs masked.
-- Interrupts, user or permission refusals, hook errors, timeouts and bare exit codes never count.
+- Interrupts, user or permission refusals, hook errors and bare exit codes never count. Timeouts count: the same timeout three times is a loop too.
 - It warns and never blocks a tool call. Counts live in the session's state file.
 - It runs as its own script, `.hooks/failures.py`, and loads no other Hard Eng module, so it is faster than the old `hard-eng.py failure` call. No hook may get slower.
 

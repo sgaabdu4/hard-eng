@@ -99,7 +99,6 @@ def test_failure_hook_warns_on_the_third_identical_error(
         {"error": "The user doesn't want to proceed with this tool use."},
         {"error": "Permission for this action was denied by the classifier."},
         {"error": "PreToolUse:Bash hook error: blocked"},
-        {"error": "Command timed out after 2m 0s"},
         {"error": "Exit code 1"},
         {"error": "ERROR: lock held", "is_interrupt": True},
     ],
@@ -116,18 +115,23 @@ def test_failure_hook_ignores_errors_that_are_not_agent_mistakes(
     assert failure_outputs(repository, monkeypatch, capsys, [payload] * 4) == [{}] * 4
 
 
-def test_failure_hook_counts_code_errors_that_name_a_timeout(
+@pytest.mark.parametrize(
+    "error",
+    [
+        "FAILED tests/test_timeout.py::test_retry - TimeoutError",
+        "ERROR: database connection timed out",
+        "Command timed out after 2m 0s",
+    ],
+)
+def test_failure_hook_counts_repeated_timeouts(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    error: str,
 ) -> None:
     session: JsonObject = {"session_id": "named"}
     assert agent_hooks.record_session(repository, session)
-    payload: JsonObject = {
-        **session,
-        "tool_name": "Bash",
-        "error": "FAILED tests/test_timeout.py::test_retry - TimeoutError",
-    }
+    payload: JsonObject = {**session, "tool_name": "Bash", "error": error}
     outputs = failure_outputs(repository, monkeypatch, capsys, [payload] * 3)
     assert outputs[:2] == [{}, {}]
     assert "Same tool error 3 times" in json.dumps(outputs[2])

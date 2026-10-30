@@ -16,14 +16,14 @@ Same cause: one cause, a failure note that cannot tell a first failure from a lo
 Blockers: None
 Handoff: Approval
 Authority: Abid approved building the third-repeat warning on 2026-10-30 ("Yes, build it") after the replay, and asked for a gpt-6-astra Codex adversarial review loop before any PR, fixing genuine substantial findings only.
-Decided: no hook may get slower (user, 2026-10-30); the failure hook is its own script. Key = tool name, subagent id and the error text with numbers, hex runs and UUIDs masked; counts live in the session's existing `.hard-eng/sessions/<id>.json`, written only when that file exists. Left out: interrupts, user or permission refusals, hook errors, timeouts and errors with no text beyond an exit code. Warn from the third sighting on; earlier failures add nothing.
+Decided: no hook may get slower (user, 2026-10-30); the failure hook is its own script. Key = tool name, subagent id and the error text with numbers, hex runs and UUIDs masked; counts live in the session's existing `.hard-eng/sessions/<id>.json`, written only when that file exists. Left out: interrupts, user or permission refusals, hook errors and errors with no text beyond an exit code; timeouts count. Warn from the third sighting on; earlier failures add nothing.
 
 ## Acceptance + steps
 
 - [x] A first and second identical tool error add no context; the third adds the warning without echoing the error text → `tests/test_failures.py::test_failure_hook_warns_on_the_third_identical_error`.
-- [x] Refusals, interrupts, timeouts and bare exit codes never count → `tests/test_failures.py::test_failure_hook_ignores_errors_that_are_not_agent_mistakes`.
+- [x] Refusals, interrupts and bare exit codes never count → `tests/test_failures.py::test_failure_hook_ignores_errors_that_are_not_agent_mistakes`.
 - [x] A session with no recorded state, or bad input, writes and echoes nothing → `tests/test_failures.py::test_failure_hook_without_session_state_writes_and_echoes_nothing`.
-- [x] An error that only names a timeout still counts → `tests/test_failures.py::test_failure_hook_counts_code_errors_that_name_a_timeout`.
+- [x] A repeated timeout, or an error that names one, counts → `tests/test_failures.py::test_failure_hook_counts_repeated_timeouts`.
 - [x] Setup registers the failure script and removes the old `hard-eng.py failure` entry; the installed command warns on the third error → `tests/test_hook_setup.py::test_failure_hook_runs_its_own_script_and_replaces_the_old_entry`.
 - [x] The failure hook loads no other Hard Eng module, so no hook gets slower → `tests/test_failures.py::test_failure_hook_loads_no_other_hard_eng_module`.
 - [x] A failed Stop check with no output is never named a repeat → `tests/test_stop_checks.py::test_failures_with_no_output_are_not_counted_as_repeats`.
