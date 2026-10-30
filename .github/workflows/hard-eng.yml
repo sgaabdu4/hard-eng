@@ -55,7 +55,7 @@ jobs:
           python3 .hooks/hard-eng.py impact --base "$BASE_SHA" >> "$GITHUB_OUTPUT" || echo docs_only=false >> "$GITHUB_OUTPUT"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: ${{ steps.impact.outputs.bun || 'latest' }}
       - name: Run the secret scan for docs-only changes
         if: steps.impact.outputs.docs_only == 'true'
         env:

@@ -21,6 +21,7 @@ from project_setup import (
     dependency_free,
     package_script_invocation,
 )
+from react_report import incomplete_reason
 
 
 def dart_test_failure(
@@ -674,7 +675,7 @@ def validate_react_project(project: JsonObject) -> None:
         or project.get("skippedCheckReasons", {}) != {}
         or project["diagnostics"] != []
     ):
-        raise ValueError("React Doctor reports incomplete checks or diagnostics")
+        raise ValueError(incomplete_reason(project))
     files = project["analyzedFiles"]
     if (
         not isinstance(files, list)

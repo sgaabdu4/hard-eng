@@ -31,7 +31,7 @@ def test_hook_registrations_invoke_shared_runner(
         "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"
     )
     for agent, path, events in (
-        ("claude", ".claude/settings.json", "SessionStart PostToolUseFailure Stop"),
+        ("claude", ".claude/settings.json", "SessionStart Stop"),
         ("codex", ".codex/hooks.json", "SessionStart Stop"),
     ):
         hooks = json.loads((root / path).read_text())["hooks"]
@@ -40,12 +40,9 @@ def test_hook_registrations_invoke_shared_runner(
                 agent_hooks.POLL_HOOK,
                 agent_hooks.PREVIEW_HOOK,
             ]
+            assert hooks.pop("PostToolUseFailure") == [agent_hooks.FAILURE_HOOK]
         assert set(hooks) == set(events.split())
-        calls = {
-            "codex": ("session", "stop"),
-            "claude": ("session", "failure", "stop"),
-        }[agent]
-        for event, native in zip(calls, events.split(), strict=True):
+        for event, native in zip(("session", "stop"), events.split(), strict=True):
             (registration,) = hooks[native]
             (handler,) = registration["hooks"]
             command = handler["command"]
@@ -154,6 +151,46 @@ def test_project_codex_enabled_or_unset_hooks_are_allowed(
         config.write_text("[features]\n" + features)
 
     installer.install(root)
+
+
+def test_failure_hook_runs_its_own_script_and_replaces_the_old_entry(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "project with spaces"
+    root.mkdir()
+    repository(root)
+    old = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py" failure claude'
+    (root / ".claude").mkdir()
+    (root / ".claude/settings.json").write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PostToolUseFailure": [
+                        {"hooks": [{"type": "command", "command": old, "timeout": 10}]}
+                    ]
+                }
+            }
+        )
+    )
+    installer.install(root)
+    hooks = json.loads((root / ".claude/settings.json").read_text())["hooks"]
+    assert hooks["PostToolUseFailure"] == [agent_hooks.FAILURE_HOOK]
+    (root / ".hard-eng/sessions").mkdir(parents=True)
+    (root / ".hard-eng/sessions/s.json").write_text('{"base": "HEAD", "dirty": {}}')
+    payload = json.dumps({"session_id": "s", "tool_name": "Bash", "error": "ERROR: x"})
+    printed = [
+        subprocess.run(
+            ["sh", "-c", agent_hooks.FAILURE_COMMAND],
+            cwd=root / ".hooks",
+            input=payload,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        for _ in range(3)
+    ]
+    assert printed[:2] == ["", ""]
+    assert "Same tool error 3 times" in printed[2]
 
 
 def test_malformed_project_codex_config_fails_before_writes(

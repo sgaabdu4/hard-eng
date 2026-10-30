@@ -26,8 +26,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/.hooks/hard-eng.py\" failure claude",
-            "timeout": 10
+            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/failures.py\" 2>/dev/null || true",
+            "timeout": 5
           }
         ]
       }

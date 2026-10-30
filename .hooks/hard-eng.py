@@ -935,7 +935,7 @@ def main() -> int:
     )
     shipping.add_argument("--worktree", help="Task worktree in the same repository")
     shipping.add_argument("--merge-method", choices=("rebase",), default="rebase")
-    for event in ("session", "failure", "stop"):
+    for event in ("session", "stop"):
         hook = commands.add_parser(event, help=f"Handle a native {event} hook")
         hook.add_argument("agent", choices=("claude", "codex"))
     args = parser.parse_args()

@@ -1,15 +1,19 @@
 """CI jobs for a project with Swift: Linux checks, macOS Swift checks and one required check."""
 
+import json
+import os
 import re
 import subprocess
 import sys
+import urllib.request
 from argparse import ArgumentParser, Namespace
 from collections.abc import Callable
 from contextlib import redirect_stdout, suppress
+from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
-from gate_config import LANGUAGES, GateConfig, Group
+from gate_config import LANGUAGES, GateConfig, Group, JsonObject
 
 FILTER_LANGUAGES = sorted({*LANGUAGES.values(), "swift"})
 
@@ -77,6 +81,58 @@ def impact_runner(groups: list[Group]) -> str:
     return "macos-latest" if has_swift(groups) else "ubuntu-latest"
 
 
+BUN_RELEASES = "https://api.github.com/repos/oven-sh/bun/releases?per_page=5"
+EXACT_VERSION = re.compile(r"\d+\.\d+\.\d+")
+BUN_TAG = re.compile(r"bun-v(\d+\.\d+\.\d+)")
+
+
+def bun_releases() -> list[JsonObject]:
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "hard-eng"}
+    if token := os.environ.get("GH_TOKEN"):
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(BUN_RELEASES, headers=headers)
+    with urllib.request.urlopen(request, timeout=10) as response:
+        releases = json.load(response)
+    return [item for item in releases if isinstance(item, dict)]
+
+
+def released_bun(release: JsonObject, cutoff: datetime) -> str | None:
+    tag, stamp = release.get("tag_name"), release.get("published_at")
+    found = BUN_TAG.fullmatch(tag) if isinstance(tag, str) else None
+    if (
+        found is None
+        or release.get("draft") is not False
+        or release.get("prerelease") is not False
+        or not isinstance(stamp, str)
+        or datetime.fromisoformat(stamp) > cutoff
+    ):
+        return None
+    return found[1]
+
+
+def bootstrap_bun(
+    tools: list[str], releases: Callable[[], list[JsonObject]] | None = None
+) -> str | None:
+    """An exact Bun version lets a runner's installed or cached Bun serve setup-bun."""
+    pinned = next((tool[4:] for tool in tools if tool.startswith("bun@")), "")
+    if EXACT_VERSION.fullmatch(pinned):
+        return pinned
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return None
+    cutoff = datetime.now(UTC) - timedelta(days=2)
+    try:
+        versions = [
+            released_bun(release, cutoff) for release in (releases or bun_releases)()
+        ]
+    except (OSError, ValueError):
+        return None
+    return max(
+        (version for version in versions if version),
+        key=lambda version: tuple(map(int, version.split("."))),
+        default=None,
+    )
+
+
 def impact_outputs(
     root: Path, base: str, proven: Callable[[str], bool], languages: LanguageFilter
 ) -> int:
@@ -91,6 +147,8 @@ def impact_outputs(
         done = proven(base)
     if done:
         print("docs_only=true\nrunner=" + impact_runner([]) + "\napple=false")
+        if bun := bootstrap_bun([]):
+            print(f"bun={bun}")
         return 0
     config = parse_config((root / "hard-eng.gates.json").read_text())
     groups: list[Group] = [
@@ -102,9 +160,12 @@ def impact_outputs(
         needed = language_groups(selected, languages)
     docs_only = bool(config["packages"]) and len(selected) == 1
     print(f"docs_only={str(docs_only).lower()}")
-    print("tools=" + " ".join(impact_tools(root, needed)))
+    tools = impact_tools(root, needed)
+    print("tools=" + " ".join(tools))
     print("runner=" + impact_runner(selected))
     print(f"apple={str(has_swift(selected)).lower()}")
+    if bun := bootstrap_bun(tools):
+        print(f"bun={bun}")
     return 0
 
 
@@ -221,6 +282,23 @@ def migrate_swift_runner(config: GateConfig, content: str) -> str:
     apple = APPLE_JOB + with_language(body, "--only-language swift")
     jobs = head + linux + apple + GATE_JOB
     return jobs + "\n" + content[end:] if end < len(content) else jobs
+
+
+BUN_LATEST = re.compile(
+    r"(?m)^(      - uses: oven-sh/setup-bun@[^\n]*\n        with:\n          bun-version: )latest$"
+)
+BUN_VERSION = "${{ steps.impact.outputs.bun || 'latest' }}"
+
+
+def migrate_bun_version(content: str) -> str:
+    """Ask setup-bun for the exact version the impact step resolved, in every job that has that step."""
+    jobs = re.split(r"(?m)^(?=  [A-Za-z0-9_-]+:\n)", content)
+    return "".join(
+        BUN_LATEST.sub(lambda match: match[1] + BUN_VERSION, job)
+        if "        id: impact\n" in job
+        else job
+        for job in jobs
+    )
 
 
 def migrate_runner_variable(content: str) -> str:
