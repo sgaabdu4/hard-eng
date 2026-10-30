@@ -234,7 +234,10 @@ def save_key(customer: str, key: str) -> None:
     print(f"saved {key} for {customer}")
 """
 SYNC = """import sys
+from pathlib import Path
 
+with Path(__file__).with_name(".sync-attempts").open("a") as attempts:
+    attempts.write("run\\n")
 print("ERROR: the build cache at 127.0.0.1:9 refused the connection", file=sys.stderr)
 raise SystemExit(1)
 """
@@ -293,4 +296,6 @@ def prepare_outside_service(root: Path) -> None:
 
 def prepare_repeat_failure(root: Path) -> None:
     (root / "sync.py").write_text(SYNC)
+    with (root / ".gitignore").open("a") as ignores:
+        ignores.write(".sync-attempts\n")
     commit(root, "Sync with the build cache")

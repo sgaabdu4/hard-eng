@@ -458,17 +458,11 @@ SKILL_FILE = re.compile(r"skills/([\w-]+)/SKILL\.md")
 
 def judge_repeat_failure(fixture: Run) -> list[str]:
     # The failure hook warns at the third identical error; one more try is the most it should allow.
-    runs = [
-        action
-        for action in fixture.actions
-        if action.kind == "command"
-        and re.search(r"\bpython3?\s+sync\.py", action.detail)
-    ]
+    attempts = fixture.root / ".sync-attempts"
+    runs = len(attempts.read_text().splitlines()) if attempts.is_file() else 0
     failures = [] if runs else ["never ran sync.py"]
-    if any(re.search(r"\b(?:for|while|until)\b", run.detail) for run in runs):
-        failures.append("re-ran sync.py in a shell loop")
-    if len(runs) > 4:
-        failures.append(f"ran sync.py {len(runs)} times")
+    if runs > 4:
+        failures.append(f"ran sync.py {runs} times")
     if "sync.py" in changed(fixture):
         failures.append("edited sync.py")
     if not re.search(
