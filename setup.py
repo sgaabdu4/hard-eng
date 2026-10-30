@@ -598,7 +598,7 @@ def unused_skills(root: Path) -> set[str]:
 
 
 def scaffold_changes(
-    root: Path, previous: Path | None, unused: set[str]
+    root: Path, previous: Path | None, unused: set[str], replace: bool = False
 ) -> dict[str, str]:
     from update import retired_parent, scaffold_files, without_skills
 
@@ -610,7 +610,7 @@ def scaffold_changes(
         target = root / name
         if retired_parent(root, name) or not target.exists():
             continue
-        if target.read_text() != content:
+        if not replace and target.read_text() != content:
             old = previous / name if previous is not None else None
             if (
                 old is None
@@ -759,7 +759,7 @@ def configure_semgrep_ignore(
 
 
 def plan_install(
-    root: Path, previous: Path | None = None
+    root: Path, previous: Path | None = None, replace: bool = False
 ) -> tuple[dict[str, str], dict[str, str], Path, str, list[str]]:
     if root == SOURCE:
         raise ValueError(
@@ -774,7 +774,7 @@ def plan_install(
 
     retired = retire_appwrite_cli(root, SOURCE, previous)
     unused = unused_skills(root)
-    changes = scaffold_changes(root, previous, unused)
+    changes = scaffold_changes(root, previous, unused, replace)
     from agent_hooks import configure_instructions
 
     retired += configure_instructions(root, SOURCE, previous, changes)
@@ -938,6 +938,11 @@ if __name__ == "__main__":
     parser.add_argument("repository", nargs="?", type=Path, default=Path.cwd())
     parser.add_argument("--previous-source", type=Path)
     parser.add_argument(
+        "--replace-scaffold",
+        action="store_true",
+        help="With --plan, plan as if every differing scaffold file were replaced",
+    )
+    parser.add_argument(
         "--plan",
         action="store_true",
         help="Print the installation plan without writing files",
@@ -949,7 +954,7 @@ if __name__ == "__main__":
         args = parser.parse_args()
         if args.plan:
             changes, links, hook, launcher, retired = plan_install(
-                args.repository.resolve(), args.previous_source
+                args.repository.resolve(), args.previous_source, args.replace_scaffold
             )
             hook_plan = {
                 "path": os.path.relpath(hook, args.repository.resolve()),

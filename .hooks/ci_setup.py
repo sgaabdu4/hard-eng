@@ -623,7 +623,7 @@ def setup_written(
             timeout=120,
         )
         try:
-            planned = update_plan(tree, *sources, own_hooks_env(tree))[0]
+            planned = update_plan(tree, *sources, own_hooks_env(tree), replace=True)[0]
         finally:
             subprocess.run(
                 [*git, "remove", "--force", str(tree)],
