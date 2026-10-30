@@ -608,7 +608,7 @@ STILL_FAILS = "sync.py still fails: the build cache refused the connection."
     ("runs", "message", "problem"),
     [
         ([SYNC_RUN] * 3, STILL_FAILS, None),
-        ([SYNC_RUN] * 4, STILL_FAILS, None),
+        ([SYNC_RUN] * 4 + [SYNC_RUN._replace(detail="cat sync.py")], STILL_FAILS, None),
         ([SYNC_RUN] * 5, STILL_FAILS, "ran sync.py 5 times"),
         ([], STILL_FAILS, "never ran sync.py"),
         (

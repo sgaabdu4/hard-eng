@@ -461,7 +461,8 @@ def judge_repeat_failure(fixture: Run) -> list[str]:
     runs = [
         action
         for action in fixture.actions
-        if action.kind == "command" and "sync.py" in action.detail
+        if action.kind == "command"
+        and re.search(r"\bpython3?\s+sync\.py", action.detail)
     ]
     failures = [] if runs else ["never ran sync.py"]
     if any(re.search(r"\b(?:for|while|until)\b", run.detail) for run in runs):
