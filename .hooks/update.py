@@ -292,7 +292,11 @@ def pre_push_missing(root: Path) -> bool:
 
 
 def update_plan(
-    root: Path, source: Path, previous: Path, env: dict[str, str] | None = None
+    root: Path,
+    source: Path,
+    previous: Path,
+    env: dict[str, str] | None = None,
+    replace: bool = False,
 ) -> tuple[dict[str, str | None], dict[str, str | None], tuple[str, str], list[str]]:
     planned = subprocess.run(
         [
@@ -311,6 +315,7 @@ def update_plan(
             "--plan",
             "--previous-source",
             str(previous),
+            *(["--replace-scaffold"] if replace else []),
         ],
         cwd=root,
         env=env,
@@ -339,7 +344,7 @@ def update_plan(
     ):
         target = root / name
         if target.exists():
-            if (
+            if not replace and (
                 target.is_symlink()
                 or target.read_bytes() != (previous / name).read_bytes()
             ):
