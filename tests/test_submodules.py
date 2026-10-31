@@ -88,6 +88,24 @@ def test_prepare_checkout_reuses_main_submodules_without_network(
     _assert_pinned(_prepare(root, tmp_path), module_remote)
 
 
+def test_prepare_checkout_reuses_main_submodules_when_git_variables_are_inherited(
+    nested_project: tuple[Path, Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _, module_remote = nested_project
+    moved = tmp_path / "moved"
+    moved.mkdir()
+    for remote in tmp_path.glob("*.git"):
+        remote.rename(moved / remote.name)
+    monkeypatch.setenv("GIT_DIR", str(root / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(root))
+    checkout = _prepare(root, tmp_path)
+    monkeypatch.delenv("GIT_DIR")
+    monkeypatch.delenv("GIT_WORK_TREE")
+    _assert_pinned(checkout, module_remote)
+
+
 def test_prepare_checkout_checks_out_the_pin_when_main_sits_on_another_commit(
     nested_project: tuple[Path, Path, Path], tmp_path: Path
 ) -> None:
