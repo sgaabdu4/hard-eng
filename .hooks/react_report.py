@@ -3,6 +3,10 @@
 from gate_config import JsonObject
 
 DETAIL_LIMIT = 2000
+MEMORY_FIX = (
+    ". Fix: allow memory overcommit on the runner or give the job more memory,"
+    " then rerun the job; the scan starts clean each time."
+)
 
 
 def incomplete_reason(project: JsonObject) -> str:
@@ -21,6 +25,9 @@ def incomplete_reason(project: JsonObject) -> str:
         details.append(f"{len(diagnostics)} diagnostics")
     if not details:
         details.append("the project scan did not complete")
-    return "React Doctor reports incomplete checks or diagnostics: " + "; ".join(
+    message = "React Doctor reports incomplete checks or diagnostics: " + "; ".join(
         details
     )
+    if "out of memory" in message.lower():
+        message += MEMORY_FIX
+    return message
