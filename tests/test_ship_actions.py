@@ -2,6 +2,7 @@
 
 import json
 import os
+import plistlib
 import shutil
 import signal
 import subprocess
@@ -771,6 +772,37 @@ def test_interrupted_pre_push_removes_its_snapshot(
         ["ps", "-o", "stat=", "-p", child], check=False, capture_output=True, text=True
     )
     assert state.stdout.strip() in {"", "Z"}
+
+
+def test_removed_snapshot_drops_only_its_xcode_build_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, derived = tmp_path / "repo", tmp_path / "DerivedData"
+    init(root)
+    (root / "README.md").write_text("fixture\n")
+    revision = commit(root, "base").strip()
+    monkeypatch.setattr(ship_actions, "DERIVED_DATA", derived)
+
+    def cache(name: str, workspace: object) -> Path:
+        (derived / name).mkdir(parents=True)
+        (derived / name / "info.plist").write_bytes(
+            plistlib.dumps({"WorkspacePath": workspace})
+        )
+        return derived / name
+
+    environment = ship_actions.snapshot_environment(root)
+    with ship_actions.snapshot(root, revision, environment) as checkout:
+        inside = cache("Runner-inside", str(checkout / "ios/Runner.xcworkspace"))
+        resolved = cache(
+            "Runner-resolved", str(checkout.resolve() / "macos/Runner.xcworkspace")
+        )
+        outside = cache("Runner-outside", str(root / "ios/Runner.xcworkspace"))
+        (derived / "Runner-broken").mkdir()
+        (derived / "Runner-broken/info.plist").write_text("<plist")
+    assert not inside.exists()
+    assert not resolved.exists()
+    assert outside.exists()
+    assert (derived / "Runner-broken").exists()
 
 
 @pytest.mark.parametrize("gate_passes", [True, False])
