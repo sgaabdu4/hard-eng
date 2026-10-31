@@ -643,6 +643,19 @@ def setup_written(
     }
 
 
+def migrate_project_workflows(
+    root: Path, workflows: list[Path], changes: dict[str, str]
+) -> None:
+    """Project-owned workflows carry copies of the generated tool-directory lines."""
+    for path in workflows:
+        relative = path.relative_to(root).as_posix()
+        if relative != ".github/workflows/hard-eng.yml":
+            original = path.read_text()
+            moved = migrate_tool_environment(original)
+            if moved != original:
+                changes[relative] = moved
+
+
 def configure_ci(
     root: Path, source: Path, config: GateConfig, changes: dict[str, str]
 ) -> None:
@@ -652,6 +665,7 @@ def configure_ci(
         for path in (root / ".github/workflows").glob("*")
         if path.is_file() and path.suffix in {".yml", ".yaml"}
     ]
+    migrate_project_workflows(root, workflows, changes)
     if (root / name).exists():
         original = (root / name).read_text()
         migrated = migrate_bun(
