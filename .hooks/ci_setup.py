@@ -218,11 +218,20 @@ TOOL_DIRECTORIES = (
 
 def migrate_tool_environment(content: str) -> str:
     """A runner that already exports a tool or cache directory keeps it; the temp path fills only a missing one."""
-    return re.sub(
+    content = re.sub(
         rf'(?m)^( *echo ")({"|".join(TOOL_DIRECTORIES)})=(\$RUNNER_TEMP/hard-eng-tools/[^"\n]*)"$',
         r'\1\2=${\2:-\3}"',
         content,
     )
+    for name in TOOL_DIRECTORIES:
+        if f'echo "{name}=${{{name}:-' in content:
+            # A step env mapping beats the value exported to GITHUB_ENV, so it would undo the runner's.
+            content = re.sub(
+                rf"(?m)^ +{name}: \$\{{\{{ runner\.temp \}}\}}/hard-eng-tools/[^\n]*\n",
+                "",
+                content,
+            )
+    return content
 
 
 OLD_PERMISSIONS = (
