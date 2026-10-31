@@ -141,6 +141,20 @@ def unfinished_update(root: Path, tip: str) -> bool:
     return not landed(root, tip, f"refs/heads/{UPDATE_BRANCH}")
 
 
+def merged_update(root: Path, tip: str) -> bool:
+    """The update branch holds nothing the base lacks, so it is left over from a merged update."""
+    branch = f"refs/heads/{UPDATE_BRANCH}"
+    ahead = git_lines(
+        root,
+        "rev-list",
+        "--count",
+        "--right-only",
+        "--cherry-pick",
+        f"{tip}...{branch}",
+    )
+    return ahead == ["0"] or landed(root, tip, branch)
+
+
 def fix_steps(root: Path) -> str:
     existing = branch_worktree(root)
     if existing is not None:
@@ -272,10 +286,14 @@ def publish(root: Path, merge: bool = True) -> int:
     tip = fetch_base(root, base)
     current = revision_at(root, tip)
     revision = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
-    if revision is None or (
-        revision != current
-        and not unfinished_update(root, tip)
-        and not branch_current(root, tip)
+    if (
+        revision is None
+        or (revision == current and merged_update(root, tip))
+        or (
+            revision != current
+            and not unfinished_update(root, tip)
+            and not branch_current(root, tip)
+        )
     ):
         print(locked_update(root))
         revision = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
