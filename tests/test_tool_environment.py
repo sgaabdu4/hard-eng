@@ -8,6 +8,7 @@ from types import ModuleType
 import yaml
 from ci_setup import configure_ci
 from conftest import SOURCE
+from test_setup import repository
 from test_swift import flutter_app, generated_workflow
 
 WORKFLOW = ".github/workflows/hard-eng.yml"
@@ -108,3 +109,39 @@ def test_a_custom_tool_directory_stays_when_the_update_arrives(
     changes: dict[str, str] = {}
     configure_ci(root, SOURCE, config, changes)
     assert changes == {}
+
+
+def project_workflow(lines: str) -> str:
+    return f"jobs:\n  check:\n    steps:\n      - run: |\n{lines}"
+
+
+def test_project_owned_workflow_moves_to_runner_directories(tmp_path: Path) -> None:
+    older = "".join(
+        f'          echo "{name}=$RUNNER_TEMP/{tail}"\n'
+        for name, tail in DIRECTORIES.items()
+    )
+    current = "".join(
+        f'          echo "{name}=${{{name}:-$RUNNER_TEMP/{tail}}}"\n'
+        for name, tail in DIRECTORIES.items()
+    )
+    path = tmp_path / ".github/workflows/ci.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(project_workflow(older))
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes == {".github/workflows/ci.yml": project_workflow(current)}
+
+
+def test_setup_plan_includes_the_project_owned_workflow_move(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    path = tmp_path / ".github/workflows/ci.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        project_workflow(
+            f'          echo "MISE_DATA_DIR=$RUNNER_TEMP/{DIRECTORIES["MISE_DATA_DIR"]}"\n'
+        )
+    )
+    planned = installer.plan_install(tmp_path.resolve())[0]
+    assert "${MISE_DATA_DIR:-$RUNNER_TEMP/" in planned[".github/workflows/ci.yml"]
