@@ -6,10 +6,13 @@ from pathlib import Path
 from typing import TextIO
 
 
-def query(directory: Path, *arguments: str) -> str | None:
+def query(
+    environment: dict[str, str] | None, directory: Path, *arguments: str
+) -> str | None:
     found = subprocess.run(
         ["git", *arguments],
         cwd=directory,
+        env=environment,
         capture_output=True,
         text=True,
         check=False,
@@ -18,8 +21,9 @@ def query(directory: Path, *arguments: str) -> str | None:
     return found.stdout if found.returncode == 0 else None
 
 
-def submodule_names(tree: Path) -> dict[str, str]:
+def submodule_names(tree: Path, environment: dict[str, str] | None) -> dict[str, str]:
     declared = query(
+        environment,
         tree,
         "config",
         "-f",
@@ -36,13 +40,15 @@ def submodule_names(tree: Path) -> dict[str, str]:
     }
 
 
-def donor_rewrites(tree: Path, donor: Path) -> tuple[list[str], list[str]]:
+def donor_rewrites(
+    tree: Path, donor: Path, environment: dict[str, str] | None
+) -> tuple[list[str], list[str]]:
     """Paths of missing submodules that the donor holds at their pinned commit, and the URL rewrites to its copies."""
-    query(tree, "submodule", "init")
-    names = submodule_names(tree)
+    query(environment, tree, "submodule", "init")
+    names = submodule_names(tree, environment)
     copies: dict[str, Path] = {}
     paths: list[str] = []
-    for line in (query(tree, "submodule", "status") or "").splitlines():
+    for line in (query(environment, tree, "submodule", "status") or "").splitlines():
         pinned = re.fullmatch(r"-([0-9a-f]{40}|[0-9a-f]{64}) (.+)", line)
         if (
             pinned is None
@@ -50,15 +56,20 @@ def donor_rewrites(tree: Path, donor: Path) -> tuple[list[str], list[str]]:
             or not (donor / pinned[2] / ".git").exists()
         ):
             continue
-        url = (query(tree, "config", f"submodule.{names[pinned[2]]}.url") or "").strip()
+        url = (
+            query(environment, tree, "config", f"submodule.{names[pinned[2]]}.url")
+            or ""
+        ).strip()
         held = (
-            query(donor / pinned[2], "rev-parse", "--absolute-git-dir") or ""
+            query(environment, donor / pinned[2], "rev-parse", "--absolute-git-dir")
+            or ""
         ).strip()
         copy = copies.get(url) or (Path(held) if held else None)
         if (
             url
             and copy
-            and query(copy, "cat-file", "-e", f"{pinned[1]}^{{commit}}") is not None
+            and query(environment, copy, "cat-file", "-e", f"{pinned[1]}^{{commit}}")
+            is not None
         ):
             copies[url] = copy
             paths.append(pinned[2])
@@ -77,7 +88,7 @@ def reuse_submodules(
     """Clone each submodule the donor holds from the donor's copy, level by level; the rest is left unchanged."""
     if not (tree / ".gitmodules").is_file():
         return
-    paths, rewrites = donor_rewrites(tree, donor)
+    paths, rewrites = donor_rewrites(tree, donor, environment)
     if paths:
         subprocess.run(
             [
@@ -98,7 +109,7 @@ def reuse_submodules(
             timeout=timeout,
             check=False,
         )
-    for path in submodule_names(tree):
+    for path in submodule_names(tree, environment):
         if (tree / path / ".git").exists() and (donor / path / ".git").exists():
             reuse_submodules(tree / path, donor / path, environment, stdout, timeout)
 
