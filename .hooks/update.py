@@ -18,6 +18,7 @@ import agent_hooks
 import hook_chain
 from mcp_setup import retired_settings
 from release_history import StaleRelease, ordered
+from submodules import update_submodules
 from update_runner import (
     commit_update,
     current_head,
@@ -178,15 +179,8 @@ def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, 
         check=True,
         timeout=60,
     )
-    for tree in (source, old):
-        if (tree / ".gitmodules").is_file():
-            subprocess.run(
-                ["git", "submodule", "update", "--init", "--recursive", "--depth=1"],
-                cwd=tree,
-                stdout=sys.stderr,
-                check=True,
-                timeout=120,
-            )
+    update_submodules(source, stdout=sys.stderr, timeout=120)
+    update_submodules(old, source, stdout=sys.stderr, timeout=120)
     return source, old
 
 
