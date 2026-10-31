@@ -1,6 +1,7 @@
 """Guard the mutations following verified PR delivery."""
 
 import os
+import plistlib
 import re
 import shutil
 import signal
@@ -11,6 +12,7 @@ import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager, suppress
 from pathlib import Path
+from xml.parsers.expat import ExpatError
 
 from challenge import shipping_note
 from gate_config import Group
@@ -25,6 +27,8 @@ from shipping import (
 )
 from tool_setup import TOOL_OWNER, temporary_root
 from update import require_current
+
+DERIVED_DATA = Path.home() / "Library/Developer/Xcode/DerivedData"
 
 
 def remote_base(root: Path, branch: str | None) -> str | None:
@@ -156,6 +160,19 @@ def snapshot(root: Path, revision: str, environment: dict[str, str]) -> Generato
                 env=environment,
                 check=True,
             )
+            drop_derived_data(checkout)
+
+
+def drop_derived_data(checkout: Path) -> None:
+    """Xcode keys its build cache by project path, so a removed snapshot's cache is never reused."""
+    roots = {checkout, checkout.resolve()}
+    for info in DERIVED_DATA.glob("*/info.plist"):
+        with suppress(OSError, ValueError, ExpatError):
+            workspace = plistlib.loads(info.read_bytes()).get("WorkspacePath")
+            if isinstance(workspace, str) and any(
+                Path(workspace).is_relative_to(root) for root in roots
+            ):
+                shutil.rmtree(info.parent, ignore_errors=True)
 
 
 def mutate(
