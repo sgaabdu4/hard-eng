@@ -248,6 +248,7 @@ def scaffold_files(source: Path) -> set[str]:
                 ".agents/biome.json",
                 ".claude/rules/*.md",
                 ".claude/output-styles/*.md",
+                ".claude/output-styles/biome.json",
             )
             for path in source.glob(pattern)
         }
