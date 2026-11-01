@@ -68,6 +68,7 @@ def test_hook_registrations_invoke_shared_runner(
                 "autoCompactWindow": 500000,
                 "bashOutputMaxChars": 10000,
                 "subagentPromptCacheTtl": "1h",
+                "env": {"CLAUDE_CODE_FORK_SUBAGENT": "0"},
             },
         ),
         (
@@ -78,6 +79,7 @@ def test_hook_registrations_invoke_shared_runner(
                 "autoCompactWindow": 300000,
                 "bashOutputMaxChars": 30000,
                 "subagentPromptCacheTtl": "5m",
+                "env": {"CLAUDE_CODE_FORK_SUBAGENT": "1", "OTHER": "x"},
             },
             {
                 "advisorModel": "opus",
@@ -86,7 +88,12 @@ def test_hook_registrations_invoke_shared_runner(
                 "autoCompactWindow": 300000,
                 "bashOutputMaxChars": 30000,
                 "subagentPromptCacheTtl": "5m",
+                "env": {"CLAUDE_CODE_FORK_SUBAGENT": "1", "OTHER": "x"},
             },
+        ),
+        (
+            {"env": {"OTHER": "x"}},
+            {"env": {"OTHER": "x", "CLAUDE_CODE_FORK_SUBAGENT": "0"}},
         ),
     ],
 )
