@@ -909,7 +909,9 @@ def _ready_state(
     if threads is None or any(node.get("isResolved") is not True for node in threads):
         raise ShippingError("a review conversation is unresolved or uncounted")
     if not _UNDO_LINE.search(pull.body):
-        raise ShippingError("PR body needs a line that starts `Undo:` and lists the undo steps")
+        raise ShippingError(
+            "PR body needs a line that starts `Undo:` and lists the undo steps"
+        )
     _current_with_base(root, identity, pull.base_ref, pull.head_sha)
     bypass = pull.mergeable is True and pull.mergeable_state == "blocked"
     if bypass:
