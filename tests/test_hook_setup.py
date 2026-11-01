@@ -113,6 +113,9 @@ def test_claude_settings_default_fable_advisor_plain_style_and_no_attribution(
     style = (root / ".claude/output-styles/plain-ste.md").read_text()
     assert "\nname: Plain STE\n" in style
     assert "\nkeep-coding-instructions: true\n" in style
+    config = json.loads((root / ".claude/output-styles/biome.json").read_text())
+    markdown_off = {"includes": ["**/*.md"], "formatter": {"enabled": False}}
+    assert markdown_off in config["overrides"]
 
 
 @pytest.mark.parametrize(
