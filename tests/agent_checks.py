@@ -183,6 +183,10 @@ def claude_actions(found: list[dict[str, object]]) -> list[Action]:
             actions.append(Action("edit", str(path), ok))
         elif part.get("name") == "Skill":
             actions.append(Action("skill", str(arguments.get("skill")), ok))
+        elif part.get("name") == "Read" and (
+            skill := SKILL_FILE.search(str(arguments.get("file_path")))
+        ):
+            actions.append(Action("skill", skill.group(1), ok))
     return actions
 
 
