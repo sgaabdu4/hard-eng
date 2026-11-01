@@ -22,8 +22,8 @@ Known limit: outside the sandbox (hooks), a mount point is an empty regular file
 
 ## Acceptance + steps
 
-- [ ] A two-line fix with a sandbox placeholder stays small → `tests/test_plans.py::test_sandbox_placeholder_does_not_add_a_file[small]`.
-- [ ] A real new file beside a sandbox placeholder stays big → `tests/test_plans.py::test_sandbox_placeholder_does_not_add_a_file[new]`.
+- [x] A two-line fix with a sandbox placeholder stays small → `tests/test_change_size.py::test_sandbox_placeholder_does_not_add_a_file[small]`.
+- [x] A real new file beside a sandbox placeholder stays big → `tests/test_change_size.py::test_sandbox_placeholder_does_not_add_a_file[new]`.
 - [ ] `tests/agent_checks.py --client claude --case escaped-bug` passes with the sandbox on and bubblewrap installed.
 
 ## Baseline + execution
