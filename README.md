@@ -194,7 +194,7 @@ flowchart LR
 - Before a big change ships, the other agent reviews it: `python3 .hooks/hard-eng.py challenge`. Codex reviews Claude Code work. Claude Code reviews Codex work.
 - For visible changes, the agent compares the before and after states. It posts an image pair only when the look changed.
 - The agent checks outgoing text for secrets, personal data and private project details.
-- The PR body has a non-empty `Undo:` line with the steps to undo the change. `ship` refuses a PR without it.
+- The PR body has a line that starts with `Undo:` and gives the steps to undo the change on that line. `ship` refuses a PR without it.
 - `ship` refuses a PR that is behind its base branch. Two PRs that pass alone can break main together, so the agent rebases and the checks run again.
 - Cleanup happens only after a confirmed merge. Unrelated worktrees stay.
 
