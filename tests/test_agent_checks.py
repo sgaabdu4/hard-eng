@@ -669,3 +669,15 @@ def test_escaped_bug_needs_a_test_that_fails_on_the_merged_code(
         assert failures == []
     else:
         assert any(problem in failure for failure in failures), failures
+
+
+def test_a_claude_read_of_a_skill_file_counts_as_loading_it() -> None:
+    use = {
+        "type": "tool_use",
+        "id": "r1",
+        "name": "Read",
+        "input": {"file_path": "/tmp/project/.agents/skills/he-learn/SKILL.md"},
+    }
+    result = {"type": "tool_result", "tool_use_id": "r1", "content": "text"}
+    events = [{"message": {"content": [use, result]}}]
+    assert loaded_skills(claude_actions(events)) == {"he-learn"}
