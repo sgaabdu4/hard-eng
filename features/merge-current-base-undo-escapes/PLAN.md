@@ -51,7 +51,7 @@ N/A — shipping checks and skill text; no visual surface.
 ## Verification
 
 Result: Passed
-Evidence:
+Evidence: final code checked on this branch; results below.
 - Ship tests: `tests/test_review_bypass.py` (36 passed) failed first on the old code (9 cases), then passed. With the other ship tests: 212 passed.
 - Full gate `python3 .hooks/hard-eng.py check` on the final code: every gate passed except `tests`, which had 6 failures (2120 passed). These are the same 6 as on the starting commit: they need `dart` and `swiftc`, which this container does not have. CI runs them.
 - Reader check (Writing Great Skills) on all changed text: two rounds, all findings fixed. Fresh Opus review: 3 findings (judge did not prove HE Learn loaded, wrong test file in the plan, `Undo:` steps had to be on the same line), all fixed in their own commits.
