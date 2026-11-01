@@ -1,6 +1,6 @@
 # Sandbox placeholders do not make a change big
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -24,7 +24,6 @@ Known limit: outside the sandbox (hooks), a mount point is an empty regular file
 
 - [x] A two-line fix with a sandbox placeholder stays small → `tests/test_change_size.py::test_sandbox_placeholder_does_not_add_a_file[small]`.
 - [x] A real new file beside a sandbox placeholder stays big → `tests/test_change_size.py::test_sandbox_placeholder_does_not_add_a_file[new]`.
-- [ ] `tests/agent_checks.py --client claude --case escaped-bug` passes with the sandbox on and bubblewrap installed.
 
 ## Baseline + execution
 
@@ -34,7 +33,7 @@ Execution: One builder, this session. Failing test first, then the filter in `_b
 
 ## Risks + recovery
 
-The test needs bubblewrap; it skips where bubblewrap is not installed, which includes the GitHub runner. Revert the filter to restore the old count.
+The test fakes the Git listing recorded in the real sandbox, so it runs without bubblewrap on Linux and macOS. Revert the filter to restore the old count.
 
 ## ux_reference
 
@@ -42,9 +41,9 @@ N/A — hook output with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
-E2E: Required — `tests/agent_checks.py --client claude --case escaped-bug` with the sandbox on and bubblewrap installed; expected proof: the case passes and the agent fixes the bug in the main folder.
+Result: Passed
+Evidence: `tests/test_change_size.py` fails on 7624c88 (both cases name `.bashrc`) and passes on the fix. A local `bwrap --ro-bind /dev/null .bashrc` run of `size_verdict` showed the same: 2 failed before, 2 passed after. `tests/test_plans.py`, `test_update_pr.py`, `test_challenge.py`, `test_greenfield.py`, `test_source_trees.py`: 179 passed. `check --plan-stage Complete`: every gate passes except tests, 2106 passed and 6 failed; all 6 fail only because this container has no `dart` or `swiftc`, which CI installs.
+E2E: Passed — `tests/agent_checks.py --client claude --case escaped-bug`, sandbox on, bubblewrap installed, 1 of 1 run. The case is only on the unmerged branch `feature/great-curie-3csfg2`, so it ran on 9e84682 plus this fix: the agent's `git status` listed the placeholders, `check` printed `Size: small (2 files, 5 changed lines)`, and the fix stayed in the main folder.
 
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with the `hard-eng` CI check green.
