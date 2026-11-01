@@ -20,13 +20,13 @@ Authority: Abid asked on 2026-11-01 to set the value to "0" here and in every re
 ## Acceptance + steps
 
 - [x] A repo with no Claude settings gets `env.CLAUDE_CODE_FORK_SUBAGENT` "0" → `tests/test_hook_setup.py::test_claude_settings_default_fable_advisor_plain_style_and_no_attribution[project0-expected0]` passes.
-- [x] A repo that already sets the key keeps its value and other `env` keys → `[project1-expected1]` passes.
-- [x] A repo with other `env` keys keeps them and gets the new key → `[project2-expected2]` passes.
+- [x] A repo that already sets the key keeps its value and other `env` keys → `tests/test_hook_setup.py::test_claude_settings_default_fable_advisor_plain_style_and_no_attribution[project1-expected1]` passes.
+- [x] A repo with other `env` keys keeps them and gets the new key → `tests/test_hook_setup.py::test_claude_settings_default_fable_advisor_plain_style_and_no_attribution[project2-expected2]` passes.
 
 ## Baseline + execution
 
-Result: Failed
-Evidence: develop b4f5c6d local `check` on this branch failed `freshness` (types-pyyaml 6.0.12.20261030 is out), fixed first on its own branch. `tests` failed 6 Dart and Swift tests because this container has no `dart` or `swiftc`; CI installs both.
+Result: Passed
+Evidence: develop b4f5c6d: Hard Eng CI run 41262777417 passed; focused `tests/test_hook_setup.py` + `tests/test_setup.py` passed. A later local `check` failed `freshness` for a new types-pyyaml release, repaired first in PR #458. 6 Dart and Swift tests fail locally only because this container has no `dart` or `swiftc`; CI installs both.
 Execution: One builder, this session.
 
 ## Risks + recovery
