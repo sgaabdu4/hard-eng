@@ -27,8 +27,8 @@ Authority: Approved by the user on 2026-11-01 ("yes it is correct, you do it"): 
 
 ## Acceptance + steps
 
-- [ ] A PR whose head is behind the base is refused at `ready` and `merge` with a message that says to rebase and rerun checks; a current PR passes; unknown compare data refuses → `tests/test_shipping.py::test_ready_refuses_a_pr_behind_its_base`.
-- [ ] A PR body without a non-empty `Undo:` line is refused at `ready`; a body with one passes → `tests/test_shipping.py::test_ready_requires_an_undo_line`.
+- [ ] A PR whose head is behind the base is refused at `ready` and `merge` with a message that says to rebase and rerun checks; a current PR passes; unknown compare data refuses → `tests/test_review_bypass.py::test_ready_refuses_a_pr_behind_its_base`.
+- [ ] A PR body without a non-empty `Undo:` line is refused at `ready`; a body with one passes → `tests/test_review_bypass.py::test_ready_requires_an_undo_line`.
 - [ ] `he-ship` PR line asks for `Undo:` steps that fit a rebase merge (revert each commit, plus non-Git steps such as migrations or flags); README Ship section says the same → N/A — skill text; proven by the two ship tests above and the skill-link tests.
 - [ ] A first bug found on the base branch after a merge starts HE Learn; the agent names the gate that should have caught it and adds a test that fails on the merged code before the fix → `tests/test_agent_checks.py::test_escaped_bug_needs_a_test_that_fails_on_the_merged_code` for the judge, then one real run: `tests/agent_checks.py --client claude --case escaped-bug`. Non-trigger cases stay valid: `review-only` and `failed-baseline` agent cases in the same run.
 
