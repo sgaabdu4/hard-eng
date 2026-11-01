@@ -9,6 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from ci_cache import TOOL_DIRECTORIES, report_cache_problems
 from ci_jobs import migrate_bun_version, migrate_runner_variable, migrate_swift_runner
 from gate_config import GateConfig, Group, JsonValue
 from project_setup import dependency_command
@@ -206,14 +207,6 @@ def migrate_launcher(source: Path, content: str) -> str:
             line = anchor[1] + echo.strip() + "\n"
             jobs[index] = job[: anchor.end()] + line + job[anchor.end() :]
     return "".join(jobs).replace(LEGACY_PACKAGE, MISE_PACKAGE)
-
-
-TOOL_DIRECTORIES = (
-    "MISE_DATA_DIR",
-    "MISE_CACHE_DIR",
-    "MISE_STATE_DIR",
-    "BUN_INSTALL_CACHE_DIR",
-)
 
 
 def migrate_tool_environment(content: str) -> str:
@@ -666,6 +659,13 @@ def migrate_project_workflows(
 
 
 def configure_ci(
+    root: Path, source: Path, config: GateConfig, changes: dict[str, str]
+) -> None:
+    adapt_ci(root, source, config, changes)
+    report_cache_problems(root, changes)
+
+
+def adapt_ci(
     root: Path, source: Path, config: GateConfig, changes: dict[str, str]
 ) -> None:
     name = ".github/workflows/hard-eng.yml"
