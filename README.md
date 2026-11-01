@@ -194,13 +194,13 @@ flowchart LR
 - Before a big change ships, the other agent reviews it: `python3 .hooks/hard-eng.py challenge`. Codex reviews Claude Code work. Claude Code reviews Codex work.
 - For visible changes, the agent compares the before and after states. It posts an image pair only when the look changed.
 - The agent checks outgoing text for secrets, personal data and private project details.
-- The PR body has an `Undo:` line with the steps to undo the change. `ship` refuses a PR without it.
+- The PR body has a non-empty `Undo:` line with the steps to undo the change. `ship` refuses a PR without it.
 - `ship` refuses a PR that is behind its base branch. Two PRs that pass alone can break main together, so the agent rebases and the checks run again.
 - Cleanup happens only after a confirmed merge. Unrelated worktrees stay.
 
 ## 5. Learn
 
-[HE Learn](.agents/skills/he-learn/SKILL.md) runs when a failure repeats, a bug reaches main after a merge, or a decision must last. For a bug on main, the agent names the check that should have caught it and adds a failing case there before the fix.
+[HE Learn](.agents/skills/he-learn/SKILL.md) runs when a failure repeats, a bug is found on main, or a decision must last. For a bug on main, the agent names the check that should have caught it. Before the fix, it adds a case at that check that fails on the merged code.
 
 ```mermaid
 flowchart LR
