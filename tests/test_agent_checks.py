@@ -679,5 +679,5 @@ def test_a_claude_read_of_a_skill_file_counts_as_loading_it() -> None:
         "input": {"file_path": "/tmp/project/.agents/skills/he-learn/SKILL.md"},
     }
     result = {"type": "tool_result", "tool_use_id": "r1", "content": "text"}
-    events = [{"message": {"content": [use, result]}}]
+    events: list[dict[str, object]] = [{"message": {"content": [use, result]}}]
     assert loaded_skills(claude_actions(events)) == {"he-learn"}
