@@ -9,6 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from ci_cache import TOOL_DIRECTORIES, report_cache_problems
 from ci_jobs import migrate_bun_version, migrate_runner_variable, migrate_swift_runner
 from gate_config import GateConfig, Group, JsonValue
 from project_setup import dependency_command
@@ -208,21 +209,22 @@ def migrate_launcher(source: Path, content: str) -> str:
     return "".join(jobs).replace(LEGACY_PACKAGE, MISE_PACKAGE)
 
 
-TOOL_DIRECTORIES = (
-    "MISE_DATA_DIR",
-    "MISE_CACHE_DIR",
-    "MISE_STATE_DIR",
-    "BUN_INSTALL_CACHE_DIR",
-)
-
-
 def migrate_tool_environment(content: str) -> str:
     """A runner that already exports a tool or cache directory keeps it; the temp path fills only a missing one."""
-    return re.sub(
+    content = re.sub(
         rf'(?m)^( *echo ")({"|".join(TOOL_DIRECTORIES)})=(\$RUNNER_TEMP/hard-eng-tools/[^"\n]*)"$',
         r'\1\2=${\2:-\3}"',
         content,
     )
+    for name in TOOL_DIRECTORIES:
+        if f'echo "{name}=${{{name}:-' in content:
+            # A step env mapping beats the value exported to GITHUB_ENV, so it would undo the runner's.
+            content = re.sub(
+                rf"(?m)^ +{name}: \$\{{\{{ runner\.temp \}}\}}/hard-eng-tools/[^\n]*\n",
+                "",
+                content,
+            )
+    return content
 
 
 OLD_PERMISSIONS = (
@@ -643,7 +645,27 @@ def setup_written(
     }
 
 
+def migrate_project_workflows(
+    root: Path, workflows: list[Path], changes: dict[str, str]
+) -> None:
+    """Project-owned workflows carry copies of the generated tool-directory lines."""
+    for path in workflows:
+        relative = path.relative_to(root).as_posix()
+        if relative != ".github/workflows/hard-eng.yml":
+            original = path.read_text()
+            moved = migrate_tool_environment(original)
+            if moved != original:
+                changes[relative] = moved
+
+
 def configure_ci(
+    root: Path, source: Path, config: GateConfig, changes: dict[str, str]
+) -> None:
+    adapt_ci(root, source, config, changes)
+    report_cache_problems(root, changes)
+
+
+def adapt_ci(
     root: Path, source: Path, config: GateConfig, changes: dict[str, str]
 ) -> None:
     name = ".github/workflows/hard-eng.yml"
@@ -652,6 +674,7 @@ def configure_ci(
         for path in (root / ".github/workflows").glob("*")
         if path.is_file() and path.suffix in {".yml", ".yaml"}
     ]
+    migrate_project_workflows(root, workflows, changes)
     if (root / name).exists():
         original = (root / name).read_text()
         migrated = migrate_bun(
