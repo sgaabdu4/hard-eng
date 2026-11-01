@@ -9,6 +9,9 @@
   "autoCompactWindow": 500000,
   "bashOutputMaxChars": 10000,
   "subagentPromptCacheTtl": "1h",
+  "env": {
+    "CLAUDE_CODE_FORK_SUBAGENT": "0"
+  },
   "hooks": {
     "SessionStart": [
       {
