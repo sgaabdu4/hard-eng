@@ -67,6 +67,9 @@ def _fixture(
     return Fixture(root, root / "PLAN.md", head)
 
 
+_UNDO = "Undo: revert the PR's commits on main."
+
+
 def _pull(fixture: Fixture, **changes: object) -> dict[str, object]:
     pull: dict[str, object] = {
         "state": "open",
@@ -81,7 +84,7 @@ def _pull(fixture: Fixture, **changes: object) -> dict[str, object]:
             "sha": "a" * 40,
             "repo": {"full_name": "acme/widget"},
         },
-        "body": "",
+        "body": _UNDO,
         "mergeable": True,
         "mergeable_state": "clean",
         "merged": False,
@@ -139,6 +142,7 @@ class FakeGitHub:
         self.file_payload: object = [files or []]
         self.review: object = _review("0" * 40, viewerDidAuthor=False)
         self.collaborators: object = [[_OWNER]]
+        self.comparison: object = {"behind_by": 0}
         self.calls: list[tuple[str, ...]] = []
         self.attachment_response = (
             "HTTP/2 206 Partial Content\ncontent-type: image/png\n"
@@ -165,6 +169,8 @@ class FakeGitHub:
             return json.dumps(self.check_payload)
         if "/collaborators?" in endpoint:
             return json.dumps(self.collaborators)
+        if "/compare/" in endpoint:
+            return json.dumps(self.comparison)
         raise AssertionError(endpoint)
 
 
@@ -184,7 +190,7 @@ _MIXED_UI_BODY = "Before: ![old](https://github.com/user-attachments/assets/old-
 
 def _ui_fake(fixture: Fixture, *, body: str = _UI_BODY) -> FakeGitHub:
     return FakeGitHub(
-        _pull(fixture, body=body),
+        _pull(fixture, body=f"{body}\n{_UNDO}"),
         [_check(fixture.head)],
         [{"filename": "src/App.tsx"}],
     )
@@ -469,7 +475,7 @@ def test_unchanged_ui_needs_comparison_note_without_uploads(
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
     fake = _ui_fake(
         fixture,
-        body="UI appearance: unchanged — inspected the same dashboard, state and viewport before/after; no visible difference.",
+        body=f"UI appearance: unchanged — inspected the same dashboard, state and viewport before/after; no visible difference.\n{_UNDO}",
     )
     _patch_gh(monkeypatch, fake)
     shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
