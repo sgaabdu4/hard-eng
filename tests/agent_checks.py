@@ -476,7 +476,7 @@ def judge_escaped_bug(fixture: Run) -> list[str]:
         calc.write_text(fixed)
     if not MISSED_GATE.search(fixture.message):
         failures.append("the final reply does not name the gate that missed the bug")
-    return failures
+    return failures + loads_skill("he-learn")(fixture)
 
 
 def loaded_skills(actions: list[Action]) -> set[str]:

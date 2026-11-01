@@ -640,16 +640,22 @@ class SplitTest(unittest.TestCase):
 
 
 @pytest.mark.parametrize(
-    ("fix", "test", "message", "problem"),
+    ("fix", "test", "message", "learn", "problem"),
     [
-        (True, True, _MISSED, None),
-        (True, False, _MISSED, "no test fails on the merged code"),
-        (True, True, "Fixed and tested.", "does not name the gate"),
-        (False, True, _MISSED, "is still wrong"),
+        (True, True, _MISSED, True, None),
+        (True, False, _MISSED, True, "no test fails on the merged code"),
+        (True, True, "Fixed and tested.", True, "does not name the gate"),
+        (False, True, _MISSED, True, "is still wrong"),
+        (True, True, _MISSED, False, "never loaded the he-learn skill"),
     ],
 )
 def test_escaped_bug_needs_a_test_that_fails_on_the_merged_code(
-    tmp_path: Path, fix: bool, test: bool, message: str, problem: str | None
+    tmp_path: Path,
+    fix: bool,
+    test: bool,
+    message: str,
+    learn: bool,
+    problem: str | None,
 ) -> None:
     root, base = case_fixture(tmp_path, "escaped-bug")
     if fix:
@@ -657,7 +663,8 @@ def test_escaped_bug_needs_a_test_that_fails_on_the_merged_code(
         calc.write_text(calc.read_text().replace("sum(values) //", "sum(values) /"))
     if test:
         (root / "test_split.py").write_text(_SPLIT_TEST)
-    failures = judge_escaped_bug(Run(root, base, message, [], []))
+    actions = [Action("skill", "he-learn", True)] if learn else []
+    failures = judge_escaped_bug(Run(root, base, message, [], actions))
     if problem is None:
         assert failures == []
     else:
