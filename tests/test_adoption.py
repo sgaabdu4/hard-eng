@@ -392,17 +392,12 @@ def test_setup_json_stays_in_the_project_biome_layout(
     (tmp_path / "index.js").write_text("export {};\n")
     (tmp_path / "biome.jsonc").write_text(config)
     changes = installer.plan_install(tmp_path.resolve())[0]
-    shipped = (".agents/biome.json", ".claude/output-styles/biome.json")
-    for name in shipped:
-        assert changes[name] == (installer.SOURCE / name).read_text()
-    style = json.loads(changes[".claude/output-styles/biome.json"])
-    assert {"includes": ["**/*.md"], "formatter": {"enabled": False}} in style["overrides"]
+    for path in (".agents/biome.json", ".claude/output-styles/biome.json"):
+        assert changes[path] == (installer.SOURCE / path).read_text()
     written = {
         name: text
         for name, text in changes.items()
-        if name.endswith(".json")
-        and not name.startswith(".agents/")
-        and name not in shipped
+        if name.endswith(".json") and not name.startswith(".agents/") and name != path
     }
     assert {".hooks/hard-eng-source.json", "tsconfig.json"} <= set(written)
     for text in written.values():

@@ -20,7 +20,8 @@ Authority: The owner asked on 2026-10-31 for Hard Eng to enforce the CI speed wo
 
 ## Acceptance + steps
 
-- [x] Setup ships the nested config, and it turns the formatter off for the folder's Markdown → `tests/test_adoption.py::test_setup_json_stays_in_the_project_biome_layout` passes (both cases); it failed with `KeyError: '.claude/output-styles/biome.json'` before the `update.py` change.
+- [x] Setup ships the nested config unchanged → `tests/test_adoption.py::test_setup_json_stays_in_the_project_biome_layout` passes (both cases); it failed with `KeyError: '.claude/output-styles/biome.json'` without the `update.py` line.
+- [x] The installed config turns the formatter off for the folder's Markdown → `tests/test_hook_setup.py::test_claude_settings_default_fable_advisor_plain_style_and_no_attribution` passes (3 cases); all 3 fail without the `update.py` line.
 
 ## Baseline + execution
 
