@@ -183,5 +183,5 @@ def test_ready_requires_an_undo_line(
     if passes:
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
         return
-    with pytest.raises(shipping.ShippingError, match="`Undo:` line"):
+    with pytest.raises(shipping.ShippingError, match="starts `Undo:`"):
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
