@@ -4,6 +4,7 @@ import os
 import re
 import signal
 import subprocess
+import threading
 from contextlib import suppress
 from pathlib import Path
 from typing import IO, NamedTuple
@@ -12,6 +13,9 @@ BROKER = re.compile(
     r"^\S+ \S*/app-server-broker\.mjs serve --endpoint \S+ --cwd (.+) --pid-file \S+$"
 )
 COMPANION = "codex-companion.mjs"
+RUNNING: set[int] = set()
+STOPPED = threading.Event()
+STARTING = threading.Lock()
 
 
 class Process(NamedTuple):
@@ -31,16 +35,20 @@ def run_in_group(
     stderr: int | IO[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Like subprocess.run, but a timeout or interrupt kills the whole group first."""
-    process = subprocess.Popen(
-        command,
-        cwd=cwd,
-        env=env,
-        stdin=stdin,
-        stdout=stdout,
-        stderr=stderr,
-        text=True,
-        start_new_session=True,
-    )
+    with STARTING:
+        if STOPPED.is_set():
+            raise KeyboardInterrupt
+        process = subprocess.Popen(
+            command,
+            cwd=cwd,
+            env=env,
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+            text=True,
+            start_new_session=True,
+        )
+        RUNNING.add(process.pid)
     try:
         out, err = process.communicate(timeout=timeout)
     except BaseException:
@@ -48,7 +56,19 @@ def run_in_group(
             os.killpg(process.pid, signal.SIGKILL)
         process.communicate()
         raise
+    finally:
+        RUNNING.discard(process.pid)
     return subprocess.CompletedProcess(command, process.returncode, out, err)
+
+
+def stop_groups() -> None:
+    """An interrupt reaches only the main thread, not commands run by worker threads;
+    they start no new command until `STOPPED` is cleared."""
+    with STARTING:
+        STOPPED.set()
+        for group in RUNNING.copy():
+            with suppress(ProcessLookupError, PermissionError):
+                os.killpg(group, signal.SIGKILL)
 
 
 def process_table() -> list[Process]:

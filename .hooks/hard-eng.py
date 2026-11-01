@@ -13,7 +13,6 @@ import time
 import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Generator
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, TypedDict, cast
@@ -704,52 +703,21 @@ def plan_base(base: str | None, plan_stage: str | None) -> str | None:
     return point
 
 
-def settled(futures: set[Future[bool]]) -> bool:
-    """Wait for every gate; True when any failed."""
-    return True in [future.result() for future in futures]
-
-
 def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool | None:
-    """Parallel gates share the CPUs; serial ones wait; None when dependency setup failed."""
-    from reports import early_scan, gate_order, scan_blockers
+    """Gate chains of separate packages overlap; None when dependency setup failed."""
+    from gate_config import parse_config
+    from gate_schedule import run_checks
 
     output_lock = threading.Lock()
-    failed = False
-    pending: set[Future[bool]] = set()
-    scans: dict[Future[bool], str] = {}
     FAILED_GATES.clear()
-    checks = [(group, gate) for group in groups for gate in group["checks"]]
-    ordered = gate_order(checks)
-    workers = os.cpu_count() or 2
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        for group, gate in ordered:
-            if gate.get("parallel", False) and gate.get("role") != "lockfiles":
-                if len(pending) == workers:
-                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
-                    failed |= settled(done)
-                if early_scan(gate) and not scans:
-                    failed |= settled(pending)
-                    pending.clear()
-                future = pool.submit(
-                    run_gate, group, gate, timeout, output_lock, groups, related
-                )
-                if early_scan(gate):
-                    scans[future] = group["path"]
-                else:
-                    pending.add(future)
-            else:
-                for future in scan_blockers(group, gate, scans):
-                    del scans[future]
-                    pending.add(future)
-                failed |= settled(pending)
-                pending.clear()
-                result = run_gate(group, gate, timeout, output_lock, groups, related)
-                failed |= result
-                if result and gate.get("role") == "lockfiles":
-                    print("Dependency setup failed; remaining checks were not run.")
-                    return None
-        failed |= settled(pending | set(scans))
-    return failed
+    config = parse_config((ROOT / "hard-eng.gates.json").read_text())
+    return run_checks(
+        [(group, gate) for group in groups for gate in group["checks"]],
+        lambda group, gate: run_gate(
+            group, gate, timeout, output_lock, groups, related
+        ),
+        config["packages"],
+    )
 
 
 def check(

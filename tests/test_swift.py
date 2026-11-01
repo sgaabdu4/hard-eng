@@ -17,6 +17,7 @@ from ci_setup import configure_ci
 from comments import validate_comments, validate_suppressions
 from conftest import SOURCE, commit, init, load_module
 from gate_config import GateConfig, Group, validate_group, validate_required_checks
+from gate_schedule import gate_order
 from swift_setup import add_swift_groups, swift_projects
 
 PUBSPEC = (
@@ -964,8 +965,6 @@ def test_flutter_dependency_setup_runs_before_the_pods_gate(
     config = app_config(installer, root)
     checks = [(group, gate) for group in config["packages"] for gate in group["checks"]]
     setup = [
-        gate["name"]
-        for _, gate in reports.gate_order(checks)
-        if gate["role"] == "lockfiles"
+        gate["name"] for _, gate in gate_order(checks) if gate["role"] == "lockfiles"
     ]
     assert setup == ["lockfile", "pods-locked"]

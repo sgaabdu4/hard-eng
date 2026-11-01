@@ -3,6 +3,8 @@ import sys
 import time
 from pathlib import Path
 
+import process_group
+import pytest
 from conftest import running, spawner
 from process_group import Process, process_table, stop_idle_codex_brokers
 
@@ -123,3 +125,21 @@ def test_job_that_quotes_a_broker_command_is_not_a_broker(tmp_path: Path) -> Non
         assert companion.poll() is None
     finally:
         stop_job(companion, job_pid)
+
+
+def test_stop_groups_kills_every_group_while_others_finish(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    killed: list[int] = []
+
+    def kill(group: int, _signal: int) -> None:
+        killed.append(group)
+        process_group.RUNNING.discard(102 if group == 101 else 101)
+
+    monkeypatch.setattr(process_group, "RUNNING", {101, 102})
+    monkeypatch.setattr(process_group.os, "killpg", kill)
+    try:
+        process_group.stop_groups()
+    finally:
+        process_group.STOPPED.clear()
+    assert sorted(killed) == [101, 102]

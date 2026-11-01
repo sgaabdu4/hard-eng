@@ -57,3 +57,20 @@ def test_long_reason_is_cut(tmp_path: Path) -> None:
 
 def test_complete_react_scan_passes(tmp_path: Path) -> None:
     reports.validate_react_doctor(written(tmp_path))
+
+
+def test_out_of_memory_reason_says_how_to_fix_it(tmp_path: Path) -> None:
+    changes = {"skippedChecks": ["lint"], "skippedCheckReasons": {"lint": OOM}}
+    with pytest.raises(ValueError) as caught:
+        reports.validate_react_doctor(written(tmp_path, **changes))
+    assert (
+        "Fix: allow memory overcommit on the runner or give the job more memory"
+        in str(caught.value)
+    )
+
+
+def test_other_reasons_get_no_memory_hint(tmp_path: Path) -> None:
+    changes = {"skippedChecks": ["lint"], "skippedCheckReasons": {"lint": "timed out"}}
+    with pytest.raises(ValueError) as caught:
+        reports.validate_react_doctor(written(tmp_path, **changes))
+    assert "overcommit" not in str(caught.value)

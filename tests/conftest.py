@@ -34,6 +34,7 @@ CODEBASE_MEMORY = {
 }
 
 import process_group
+import source_trees
 import update
 
 stop_listed_brokers = process_group.stop_idle_codex_brokers
@@ -305,7 +306,7 @@ def release(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     release_template: tuple[Path, str],
-) -> tuple[Path, Path, str]:
+) -> Generator[tuple[Path, Path, str]]:
     isolate_temporary(tmp_path, monkeypatch)
     template, old = release_template
     source, target = tmp_path / "source", tmp_path / "target"
@@ -316,7 +317,9 @@ def release(
     monkeypatch.setenv(
         "GIT_CONFIG_VALUE_0", f"https://github.com/{update.UPSTREAM}.git"
     )
-    return source, target, old
+    source_trees.forget_all()
+    yield source, target, old
+    source_trees.forget_all()
 
 
 def gate(name: str, code: str, **options: object) -> dict[str, object]:

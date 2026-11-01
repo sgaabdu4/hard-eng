@@ -163,6 +163,9 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
             current.setdefault("autoCompactWindow", 500000)
             current.setdefault("bashOutputMaxChars", 10000)
             current.setdefault("subagentPromptCacheTtl", "1h")
+            env = current.get("env")
+            if not (isinstance(env, dict) and "CLAUDE_CODE_FORK_SUBAGENT" in env):
+                additions["env"] = {"CLAUDE_CODE_FORK_SUBAGENT": "0"}
         merged = merge(current, additions)
         if merged != json.loads(text):
             changes[name] = json_file(root, merged)

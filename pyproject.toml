@@ -6,7 +6,11 @@ requires-python = ">=3.12"
 dependencies = ["pyyaml>=6.0.3"]
 
 [dependency-groups]
-dev = ["pytest>=9.2.0", "pytest-cov>=7", "types-pyyaml>=6.0.12"]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-cov>=7",
+    "types-pyyaml>=6.0.12.20261030",
+]
 
 [tool.uv]
 package = false
@@ -29,4 +33,4 @@ search-path = [".hooks", "tests"]
 extend_exclude = ['^\.agents/skill-sources/']
 # These modules are installed together in .hooks and imported by the runner;
 # "main" is the Python starter's own module, imported by its tests.
-known_first_party = ["main", "gate_config", "dependency_graph", "mcp_setup", "ci_setup", "ci_jobs", "react_report", "reports", "fallow_report", "coverage_sources", "dart_coverage", "dart_test_report", "gitleaks_scan", "basic_mode", "project_setup", "agent_hooks", "update", "update_runner", "tool_setup", "plans", "gate_times", "release_history", "shipping", "ship_actions", "ship_evidence", "comments", "mutation", "untrusted_input", "challenge", "update_pr", "hook_chain", "gap_issue", "swift_setup", "process_group", "python_setup", "change_size", "debt", "freshness", "polling", "failures"]
+known_first_party = ["main", "gate_config", "dependency_graph", "mcp_setup", "ci_setup", "ci_cache", "ci_jobs", "react_report", "reports", "fallow_report", "coverage_sources", "dart_coverage", "dart_test_report", "gitleaks_scan", "basic_mode", "project_setup", "agent_hooks", "update", "source_trees", "update_runner", "tool_setup", "plans", "gate_times", "release_history", "shipping", "ship_actions", "submodules", "ship_evidence", "comments", "mutation", "untrusted_input", "challenge", "update_pr", "hook_chain", "gap_issue", "swift_setup", "process_group", "python_setup", "change_size", "debt", "freshness", "polling", "failures", "gate_schedule"]

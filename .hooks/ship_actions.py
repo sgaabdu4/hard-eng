@@ -25,6 +25,7 @@ from shipping import (
     load_policy,
     verify,
 )
+from submodules import update_submodules
 from tool_setup import TOOL_OWNER, temporary_root
 from update import require_current
 
@@ -115,13 +116,7 @@ def link_local_files(root: Path, checkout: Path) -> None:
 
 def prepare_checkout(root: Path, checkout: Path, environment: dict[str, str]) -> None:
     link_local_files(root, checkout)
-    if (checkout / ".gitmodules").is_file():
-        subprocess.run(
-            ["git", "submodule", "update", "--init", "--recursive", "--depth=1"],
-            cwd=checkout,
-            env=environment,
-            check=True,
-        )
+    update_submodules(checkout, root, environment)
 
 
 def post_checkout(checkout: Path) -> int:

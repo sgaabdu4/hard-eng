@@ -16,8 +16,10 @@ from pathlib import Path
 
 import agent_hooks
 import hook_chain
+import source_trees
 from mcp_setup import retired_settings
 from release_history import StaleRelease, ordered
+from submodules import update_submodules
 from update_runner import (
     commit_update,
     current_head,
@@ -178,16 +180,14 @@ def fetch_sources(temporary: Path, revision: str, previous: str) -> tuple[Path, 
         check=True,
         timeout=60,
     )
-    for tree in (source, old):
-        if (tree / ".gitmodules").is_file():
-            subprocess.run(
-                ["git", "submodule", "update", "--init", "--recursive", "--depth=1"],
-                cwd=tree,
-                stdout=sys.stderr,
-                check=True,
-                timeout=120,
-            )
+    update_submodules(source, stdout=sys.stderr, timeout=120)
+    update_submodules(old, source, stdout=sys.stderr, timeout=120)
     return source, old
+
+
+def shared_sources(revision: str, previous: str) -> tuple[Path, Path]:
+    """The source and previous trees, fetched once per run and cleaned up when it exits."""
+    return source_trees.shared(REPOSITORY, revision, previous, fetch_sources)
 
 
 def revision_follows(revision: str, reference: str) -> bool:
@@ -925,31 +925,30 @@ def release_installed(
     from agent_hooks import preserved_instructions
     from ci_setup import setup_installed
 
-    with tempfile.TemporaryDirectory(prefix="hard-eng-scaffold-check-") as temporary:
-        source, old = fetch_sources(Path(temporary), revision, previous)
-        allowed = scaffold_files(source) | scaffold_files(old) | INSTALLED_FILES
-        allowed |= {
-            ".claude/skills/" + path.name
-            for tree in (source, old)
-            for path in (tree / ".agents/skills").iterdir()
-            if path.is_dir()
-        }
-        env = hook_chain.own_hooks_env(root)
-        changes, links, _, _ = update_plan(root, source, source, env)
-        if (
-            not names <= allowed
-            or (env is not None and ".husky/pre-push" in names)
-            or changes
-            or links
-            or any(
-                (root / name).exists()
-                for name in scaffold_files(old) - scaffold_files(source)
-            )
-            or not preserved_instructions(root, base, names)
-            or not setup_installed(root, base, names, (source, old))
-        ):
-            return False
-        validate_gates(root, source, {})
+    source, old = shared_sources(revision, previous)
+    allowed = scaffold_files(source) | scaffold_files(old) | INSTALLED_FILES
+    allowed |= {
+        ".claude/skills/" + path.name
+        for tree in (source, old)
+        for path in (tree / ".agents/skills").iterdir()
+        if path.is_dir()
+    }
+    env = hook_chain.own_hooks_env(root)
+    changes, links, _, _ = update_plan(root, source, source, env)
+    if (
+        not names <= allowed
+        or (env is not None and ".husky/pre-push" in names)
+        or changes
+        or links
+        or any(
+            (root / name).exists()
+            for name in scaffold_files(old) - scaffold_files(source)
+        )
+        or not preserved_instructions(root, base, names)
+        or not setup_installed(root, base, names, (source, old))
+    ):
+        return False
+    validate_gates(root, source, {})
     return True
 
 
