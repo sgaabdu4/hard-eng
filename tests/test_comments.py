@@ -459,6 +459,14 @@ CASE = (
         (NESTED.format(helper="test_client"), "test_duplicate_of_a", True),
         (CASE, "runTest", True),
         (
+            NESTED.format(helper="check").replace(
+                "test_duplicate_of_a():",
+                "test_duplicate_of_a(\n    value: int,\n) -> None:",
+            ),
+            "test_duplicate_of_a",
+            True,
+        ),
+        (
             NESTED.format(helper="check")
             + "\n\nif LINUX:\n\n    def test_on_linux():\n        assert b()\n",
             "test_duplicate_of_a",
