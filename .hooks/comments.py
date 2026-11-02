@@ -485,6 +485,9 @@ def split_tests(block: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
     function: int | None = None
     for number, text in block:
         level = len(text) - len(text.lstrip())
+        code = text.strip() and not text.lstrip().startswith("#")
+        if code and function is not None and level <= function:
+            function = None
         helper = function is not None and level > function and PYTHON_BLOCK.match(text)
         if TEST_START.match(text) and not helper:
             if tests[-1]:
