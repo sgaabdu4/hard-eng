@@ -331,6 +331,14 @@ def prepare_command(
             "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
             *command[index:],
         ]
+    index = command.index("scan") if "scan" in command else 0
+    if (
+        index
+        and Path(command[index - 1]).name.split("@")[0] == "semgrep"
+        and "--timeout" not in command
+    ):
+        # Semgrep's 5 s per-rule limit times out under parallel load, and --strict then fails the gate.
+        command = [*command[: index + 1], "--timeout", "60", *command[index + 1 :]]
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 

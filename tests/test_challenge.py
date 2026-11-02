@@ -344,6 +344,101 @@ def test_a_review_of_an_older_head_does_not_cover_a_new_commit(
         challenge.shipping_note(branch, head)
 
 
+def test_a_narrow_review_without_an_earlier_review_does_not_cover_the_branch(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    (branch / "extra.py").write_text("value = 4\n")
+    head = commit(branch, "later")
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, "HEAD~1", None) == 1
+    assert not log.exists()
+    assert "no completed independent review" in record_of(branch)["outcome"]
+    with pytest.raises(ValueError, match="hard-eng.py challenge"):
+        challenge.shipping_note(branch, head)
+
+
+def test_a_narrow_rerun_after_a_full_review_covers_the_branch(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    reviewed = git(branch, "rev-parse", "HEAD")
+    assert challenge.challenge(branch, None, None) == 0
+    (branch / "extra.py").write_text("value = 4\n")
+    head = commit(branch, "fix")
+    assert challenge.challenge(branch, reviewed, None) == 0
+    assert challenge.shipping_note(branch, head) == "Independent review by codex: clean"
+
+
+def test_a_failed_rerun_replaces_a_completed_review_that_does_not_cover_the_branch(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    head = git(branch, "rev-parse", "HEAD")
+    path = challenge.store(branch, head).with_suffix(".json")
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"reviewer": "codex", "outcome": "clean"}))
+    fake_cli(tmp_path / "bin", "codex", "", 1, "Not signed in")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 1
+    note = challenge.shipping_note(branch, head)
+    assert note is not None
+    assert note.startswith("independent review not done: codex exited 1")
+
+
+def test_a_rejected_narrow_rerun_keeps_the_full_review_of_the_same_revision(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    (branch / "extra.py").write_text("value = 4\n")
+    head = commit(branch, "later")
+    fake_cli(tmp_path / "bin", "codex", "src/a.py:3 breaks\nVERDICT: findings")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    assert challenge.challenge(branch, "HEAD~1", None) == 0
+    assert "src/a.py:3" in Path(record_of(branch)["output"]).read_text()
+    assert (
+        challenge.shipping_note(branch, head) == "Independent review by codex: findings"
+    )
+
+
+def test_a_rerun_from_a_review_of_an_older_branch_point_keeps_the_current_review(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    old = git(branch, "rev-parse", "HEAD")
+    fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    git(branch, "checkout", "-q", "main")
+    (branch / "base.py").write_text("value = 5\n")
+    commit(branch, "main moves")
+    git(branch, "checkout", "-q", "feature")
+    git(branch, "merge", "-q", "--no-edit", "main")
+    head = git(branch, "rev-parse", "HEAD")
+    fake_cli(tmp_path / "bin", "codex", "src/a.py:3 breaks\nVERDICT: findings")
+    assert challenge.challenge(branch, None, None) == 0
+    fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    assert challenge.challenge(branch, old, None) == 0
+    assert (
+        challenge.shipping_note(branch, head) == "Independent review by codex: findings"
+    )
+
+
+def test_the_reviewer_diffs_from_the_base_commit_checked_for_coverage(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, "main", None) == 0
+    prompt = json.loads(log.read_text())["argv"][-1]
+    assert f"`git diff {git(branch, 'rev-parse', 'main')} " in prompt
+
+
 def test_a_small_change_needs_no_review(branch: Path) -> None:
     small(branch)
     assert challenge.shipping_note(branch, git(branch, "rev-parse", "HEAD")) is None

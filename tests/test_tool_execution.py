@@ -394,6 +394,25 @@ def test_package_script_scanner_executes_provisioned_native_executable(
     ) == ["managed", *arguments]
 
 
+@pytest.mark.parametrize(
+    ("scan", "expected"),
+    [
+        (
+            ["semgrep", "scan", "--config", "p/default", "."],
+            ["--timeout", "60", "--config", "p/default", "."],
+        ),
+        (["semgrep", "scan", "--timeout", "9", "."], ["--timeout", "9", "."]),
+        (["make", "scan"], []),
+    ],
+)
+def test_security_scan_gives_each_rule_time_to_finish_under_load(
+    runner: ModuleType, scan: list[str], expected: list[str]
+) -> None:
+    gate: Gate = {"name": "security", "role": "security", "command": scan}
+    command = runner.prepare_command({"path": ".", "checks": []}, gate, 5)
+    assert command[command.index("scan") + 1 :] == expected
+
+
 def test_python_security_gate_replaces_only_the_registry_sha1_rule(
     runner: ModuleType,
 ) -> None:
@@ -412,7 +431,7 @@ def test_python_security_gate_replaces_only_the_registry_sha1_rule(
     }
     rules = runner.ROOT / ".agents/skills/he/semgrep/python.yaml"
 
-    assert runner.prepare_command(group, python, 5)[3:] == [
+    assert runner.prepare_command(group, python, 5)[5:] == [
         "--config",
         "p/python",
         "--config",
