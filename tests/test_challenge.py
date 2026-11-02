@@ -373,6 +373,22 @@ def test_a_narrow_rerun_after_a_full_review_covers_the_branch(
     assert challenge.shipping_note(branch, head) == "Independent review by codex: clean"
 
 
+def test_a_failed_rerun_replaces_a_completed_review_that_does_not_cover_the_branch(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    head = git(branch, "rev-parse", "HEAD")
+    path = challenge.store(branch, head).with_suffix(".json")
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"reviewer": "codex", "outcome": "clean"}))
+    fake_cli(tmp_path / "bin", "codex", "", 1, "Not signed in")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 1
+    note = challenge.shipping_note(branch, head)
+    assert note is not None
+    assert note.startswith("independent review not done: codex exited 1")
+
+
 def test_the_reviewer_diffs_from_the_base_commit_checked_for_coverage(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

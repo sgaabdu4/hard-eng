@@ -163,8 +163,9 @@ def challenge(root: Path, base: str | None, host: str | None) -> int:
     path = store(root, revision)
     path.parent.mkdir(parents=True, exist_ok=True)
     if outcome.startswith("not done") and path.with_suffix(".json").is_file():
-        earlier = json.loads(path.with_suffix(".json").read_text())["outcome"]
-        if not earlier.startswith("not done"):
+        record = json.loads(path.with_suffix(".json").read_text())
+        earlier = record["outcome"]
+        if not earlier.startswith("not done") and record.get("covers") == covers:
             print(f"Independent review by {reviewer} at {revision}: {outcome}")
             print(f"Kept the earlier completed review for this revision: {earlier}")
             return 0
