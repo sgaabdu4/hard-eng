@@ -43,8 +43,10 @@ def held_interrupts(caught: list[int]) -> Generator[None]:
     try:
         yield
     finally:
+        mask = signal.pthread_sigmask(signal.SIG_BLOCK, held)
         for number, handler in held.items():
             signal.signal(number, handler)
+        signal.pthread_sigmask(signal.SIG_SETMASK, mask)
 
 
 def deliver(caught: list[int]) -> None:
@@ -64,6 +66,7 @@ def run_in_group(
 ) -> subprocess.CompletedProcess[str]:
     """Like subprocess.run, but a timeout or interrupt kills the whole group first."""
     caught: list[int] = []
+    process: subprocess.Popen[str] | None = None
     try:
         with STARTING, held_interrupts(caught):
             if STOPPED.is_set():
@@ -79,19 +82,18 @@ def run_in_group(
                 start_new_session=True,
             )
             RUNNING.add(process.pid)
-    except BaseException:
-        deliver(caught)
-        raise
-    try:
         deliver(caught)
         out, err = process.communicate(timeout=timeout)
     except BaseException:
-        with suppress(ProcessLookupError):
-            os.killpg(process.pid, signal.SIGKILL)
-        process.communicate()
+        if process is not None:
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
+        deliver(caught)
         raise
     finally:
-        RUNNING.discard(process.pid)
+        if process is not None:
+            RUNNING.discard(process.pid)
     return subprocess.CompletedProcess(command, process.returncode, out, err)
 
 
