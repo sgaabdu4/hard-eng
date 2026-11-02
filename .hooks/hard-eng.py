@@ -631,8 +631,10 @@ def run_limited_gate(
         subprocess.TimeoutExpired,
         subprocess.CalledProcessError,
     ) as error:
+        unrun = isinstance(error, (ImportError, OSError, subprocess.TimeoutExpired))
+        text = str(error) if unrun else remember(group, gate, str(error))
         print(
-            f"FAIL {gate['name']}: {remember(group, gate, str(error))}; "
+            f"FAIL {gate['name']}: {text}; "
             f"elapsed {time.monotonic() - started:.3f}s @ {group['path']}"
         )
         return True
