@@ -57,9 +57,14 @@ def _branch_change(root: Path, point: str) -> tuple[list[str], list[str], list[s
     counts = _git_output(
         root, "diff", "--numstat", "--no-renames", "-z", point, "--"
     ).split("\0")
-    untracked = _git_output(
-        root, "ls-files", "--others", "--exclude-standard", "-z"
-    ).split("\0")
+    # The Linux sandbox binds /dev/null over missing protected paths; Git lists them but cannot add them.
+    untracked = [
+        name
+        for name in _git_output(
+            root, "ls-files", "--others", "--exclude-standard", "-z"
+        ).split("\0")
+        if (root / name).is_file() or (root / name).is_symlink()
+    ]
     return status, counts, untracked
 
 
