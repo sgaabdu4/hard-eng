@@ -24,6 +24,8 @@ Decided: revert, do not fix forward. A sound fix needs its own review cycle.
 - [x] `run_in_group` and its tests match `develop` before the reverted commits → N/A — a revert, proved by an empty `git diff 8e666dce HEAD -- .hooks/process_group.py tests/test_process_group.py`.
 - [x] The tests that hung on main pass again → `tests/test_ship_actions.py::test_interrupted_pre_push_removes_its_snapshot`, `tests/test_update_runner.py::test_interrupted_update_stops_every_process_and_records_failure`.
 
+- [x] Found by this PR's gate, fixed in its own commit: a `Removed test:` line names a Python test that has nested helpers, so the switch-off check no longer splits the test at its helper `def` lines → `tests/test_comments.py::test_planned_removal_covers_helpers_nested_in_the_named_test`.
+
 Removed test: tests/test_process_group.py :: test_an_interrupt_while_a_command_starts_stops_that_command :: it proved the reverted handler swap; that behavior is gone and the start gap is open again (see Risks).
 Removed test: tests/test_process_group.py :: test_an_interrupt_while_handlers_are_restored_stops_the_command :: it proved the reverted signal mask, which is the cause of the red main run; that behavior is gone.
 

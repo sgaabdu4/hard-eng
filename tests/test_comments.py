@@ -439,6 +439,32 @@ def test_planned_removal_names_only_a_deleted_declaration(
             validate_suppressions(root, "HEAD")
 
 
+NESTED = (
+    "def test_keeps_a():\n    assert a()\n\n\n"
+    "def test_duplicate_of_a():\n    def check(value):\n        return value\n\n"
+    "    assert check(a())\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("name", "passes"), [("test_duplicate_of_a", True), ("check", False)]
+)
+def test_planned_removal_covers_helpers_nested_in_the_named_test(
+    tmp_path: Path, name: str, passes: bool
+) -> None:
+    root = switch_root(tmp_path, "tests/test_a.py", NESTED)
+    (root / "tests/test_a.py").write_text("def test_keeps_a():\n    assert a()\n")
+    (root / "features/x").mkdir(parents=True)
+    (root / "features/x/PLAN.md").write_text(
+        f"Removed test: tests/test_a.py :: {name} :: test_keeps_a proves it\n"
+    )
+    if passes:
+        validate_suppressions(root, "HEAD")
+    else:
+        with pytest.raises(ValueError, match=r"tests lose 1 assertion lines net"):
+            validate_suppressions(root, "HEAD")
+
+
 def retiring_root(tmp_path: Path) -> Path:
     root = switch_root(tmp_path, "app.py", "def keep():\n    return 1\n")
     (root / "migrate_users.py").write_text("def run():\n    return 2\n")

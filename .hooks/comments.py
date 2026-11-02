@@ -420,6 +420,7 @@ LITERAL = re.compile(r"\"(\\.|[^\"\\\n])*\"|'(\\.|[^'\\\n])*'|`(\\.|[^`\\\n])*`"
 TEST_START = re.compile(
     r"^\s*((async\s+)?def\s|class\s|(it|test|testWidgets|describe|group)(\.\w+)?\()"
 )
+NESTED_HELPER = re.compile(r"^\s*(?:(?:async\s+)?def|class)\s+(?!test|Test)\w")
 IMPORT = re.compile(r"^\s*(import|from|export|use)\b|\brequire\(")
 SYNTAX = {"import", "from", "as", "export", "use", "require", "const", "let", "var"}
 DEFINITION = re.compile(
@@ -480,9 +481,14 @@ def retired_names(
 
 def split_tests(block: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
     tests: list[list[tuple[int, str]]] = [[]]
+    depth: int | None = None
     for number, text in block:
-        if TEST_START.match(text) and tests[-1]:
-            tests.append([])
+        level = len(text) - len(text.lstrip())
+        helper = depth is not None and level > depth and NESTED_HELPER.match(text)
+        if TEST_START.match(text) and not helper:
+            if tests[-1]:
+                tests.append([])
+            depth = level
         tests[-1].append((number, text))
     return tests
 
