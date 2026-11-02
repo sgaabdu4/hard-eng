@@ -20,7 +20,7 @@ Same cause: Gap 1 is one cause: the ready check trusts GitHub's `clean`, which i
 
 Blockers: None
 Handoff: Approval
-Authority: Approved by the user on 2026-11-01 ("yes it is correct, you do it"): gaps 1, 3 and 4 from the Claude Code review article, the three recommendations below, build, commit and push to the task branch. Round limits and human-approval paths were rejected. Opening the PR needs the user's request. Accepted recommendations:
+Authority: Approved by the user on 2026-11-01 ("yes it is correct, you do it"): gaps 1, 3 and 4 from the Claude Code review article, the three recommendations below, build, commit and push to the task branch; merge into `develop` approved on 2026-11-02. Round limits and human-approval paths were rejected. Opening the PR needs the user's request. Accepted recommendations:
 1. Behind check uses GitHub's compare API (`behind_by` must be 0) for the PR head against the base, so it needs no local fetch. Unknown or invalid data refuses the PR.
 2. `Undo:` is enforced by the ship ready check (Hard Eng enforces with checks, not only skill text). The check needs a non-empty `Undo:` line; it cannot judge whether the steps are right.
 3. HE Learn change is skill text plus one agent check case, because a changed trigger needs real agent proof (`he-learn/SKILL.md`, "Behavioral proof").
@@ -59,5 +59,5 @@ Evidence: final code checked on this branch; results below.
 - Limits: the agent moved to a worktree because `check` counts the sandbox's empty placeholder files (`.bashrc`, `.mcp.json`) as new files. That is a separate bug, queued as its own task. Independent review not done: Codex is not installed in this container.
 E2E: N/A — the ship tests drive the real `verify` with a fake GitHub API, as in `features/review-threads-block-ship`; a live merge is not repeatable in tests. The agent journey is proven by the `escaped-bug` agent check above.
 
-Delivery target: PR
-Delivery: Pending — PR into `develop` with the `hard-eng` CI check green; open only on the user's request.
+Delivery target: Merge
+Delivery: Pending — the user asked to merge on 2026-11-02. PR into `develop`, `hard-eng` CI check green, `ship --stage merge` (rebase), then the merged `develop` revision checked.
