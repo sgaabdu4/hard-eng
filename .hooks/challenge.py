@@ -129,35 +129,37 @@ def review(
     return VERDICTS[lines[-1].strip()], result.stdout
 
 
-def covered_point(root: Path, base: str | None) -> str | None:
-    """The branch point that reviews up to `base` cover, or None when no completed review reaches it."""
+def covered_point(root: Path, base: str | None) -> tuple[str | None, str | None]:
+    """The commit `base` names and the branch point that reviews up to it cover; None covers when no completed review reaches it."""
     point = default_branch_point(root)
     if base is None:
-        return point
+        return None, point
     try:
         start = git_text(root, "rev-parse", "--verify", f"{base}^{{commit}}")
     except subprocess.CalledProcessError:
-        return None
+        return None, None
     if point is None or start == point:
-        return start
+        return start, start
     path = store(root, start).with_suffix(".json")
     if not path.is_file():
-        return None
+        return start, None
     earlier = json.loads(path.read_text())
-    return None if earlier["outcome"].startswith("not done") else earlier.get("covers")
+    return start, (
+        None if earlier["outcome"].startswith("not done") else earlier.get("covers")
+    )
 
 
 def challenge(root: Path, base: str | None, host: str | None) -> int:
     reviewer = reviewer_for(host)
     revision = git_text(root, "rev-parse", "HEAD")
-    covers = covered_point(root, base)
+    start, covers = covered_point(root, base)
     if base is not None and covers is None:
         outcome, output = (
             f"not done: --base {base} has no completed independent review; review from the branch point without --base",
             "",
         )
     else:
-        outcome, output = review(root, reviewer, base, revision)
+        outcome, output = review(root, reviewer, start, revision)
     path = store(root, revision)
     path.parent.mkdir(parents=True, exist_ok=True)
     if outcome.startswith("not done") and path.with_suffix(".json").is_file():
