@@ -144,9 +144,8 @@ def covered_point(root: Path, base: str | None) -> tuple[str | None, str | None]
     if not path.is_file():
         return start, None
     earlier = json.loads(path.read_text())
-    return start, (
-        None if earlier["outcome"].startswith("not done") else earlier.get("covers")
-    )
+    complete = not earlier["outcome"].startswith("not done")
+    return start, (point if complete and earlier.get("covers") == point else None)
 
 
 def challenge(root: Path, base: str | None, host: str | None) -> int:

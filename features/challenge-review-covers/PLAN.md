@@ -25,6 +25,7 @@ Decided: store `covers` (the branch point) in each record. A run without `--base
 - [x] A narrow rerun after a full review still satisfies ship → `tests/test_challenge.py::test_a_narrow_rerun_after_a_full_review_covers_the_branch`.
 - [x] A failed rerun replaces a completed record that does not cover the branch, so ship gets the `not done` note instead of a lasting refusal → `tests/test_challenge.py::test_a_failed_rerun_replaces_a_completed_review_that_does_not_cover_the_branch`.
 - [x] A rejected narrow rerun keeps the full review of the same revision and its findings → `tests/test_challenge.py::test_a_rejected_narrow_rerun_keeps_the_full_review_of_the_same_revision`.
+- [x] A rerun from a review of an older branch point is rejected and keeps the current full review → `tests/test_challenge.py::test_a_rerun_from_a_review_of_an_older_branch_point_keeps_the_current_review`.
 - [x] The reviewer diffs from the same commit that the coverage check resolved, so a moving ref cannot shift the range → `tests/test_challenge.py::test_the_reviewer_diffs_from_the_base_commit_checked_for_coverage`.
 
 ## Baseline + execution
