@@ -344,6 +344,35 @@ def test_a_review_of_an_older_head_does_not_cover_a_new_commit(
         challenge.shipping_note(branch, head)
 
 
+def test_a_narrow_review_without_an_earlier_review_does_not_cover_the_branch(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    (branch / "extra.py").write_text("value = 4\n")
+    head = commit(branch, "later")
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, "HEAD~1", None) == 1
+    assert not log.exists()
+    assert "no completed independent review" in record_of(branch)["outcome"]
+    with pytest.raises(ValueError, match="hard-eng.py challenge"):
+        challenge.shipping_note(branch, head)
+
+
+def test_a_narrow_rerun_after_a_full_review_covers_the_branch(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    reviewed = git(branch, "rev-parse", "HEAD")
+    assert challenge.challenge(branch, None, None) == 0
+    (branch / "extra.py").write_text("value = 4\n")
+    head = commit(branch, "fix")
+    assert challenge.challenge(branch, reviewed, None) == 0
+    assert challenge.shipping_note(branch, head) == "Independent review by codex: clean"
+
+
 def test_a_small_change_needs_no_review(branch: Path) -> None:
     small(branch)
     assert challenge.shipping_note(branch, git(branch, "rev-parse", "HEAD")) is None
