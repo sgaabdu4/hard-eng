@@ -68,8 +68,7 @@ def open_pull(root: Path) -> dict[str, JsonValue] | None:
             "--state",
             "open",
             "--json",
-            "url,title,statusCheckRollup,headRefOid,isCrossRepository,"
-            "mergeStateStatus,reviewDecision",
+            "url,title,statusCheckRollup,headRefOid,isCrossRepository,mergeStateStatus",
         )
     )
     if not isinstance(rows, list):

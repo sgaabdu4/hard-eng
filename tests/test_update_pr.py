@@ -504,7 +504,6 @@ def test_update_pr_merges_past_a_review_only_its_author_could_give(
             {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"}
         ],
         mergeStateStatus=merge_state,
-        reviewDecision="REVIEW_REQUIRED",
     )
     blocked = Mock(return_value=problem)
     monkeypatch.setattr(update_pr, "author_only_review_block", blocked)

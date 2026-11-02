@@ -45,7 +45,7 @@ N/A — command behavior with no visual surface.
 
 Result: Passed
 Evidence: before the move, `tests/test_shipping.py` and `tests/test_update_pr.py`: 141 passed. After the move, the six shipping, review-bypass, ship-action and update-pr test files: 233 passed. The full `check` runs before the push.
-E2E: N/A — the real project's PR was merged by hand before this fix; the tests replay its rules and CODEOWNERS.
+E2E: Passed — read-only run against the real GitHub API on the project's blocked update PR (merged by hand before this fix): the extended query parsed, the rule reported `requireCodeOwnerReview: true`, `_sole_code_owner` returned true and `_other_merge_requirement` found nothing else. No merge was attempted.
 
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with the `hard-eng` CI check green.
