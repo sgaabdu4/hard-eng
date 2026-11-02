@@ -373,6 +373,17 @@ def test_a_narrow_rerun_after_a_full_review_covers_the_branch(
     assert challenge.shipping_note(branch, head) == "Independent review by codex: clean"
 
 
+def test_the_reviewer_diffs_from_the_base_commit_checked_for_coverage(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, "main", None) == 0
+    prompt = json.loads(log.read_text())["argv"][-1]
+    assert f"`git diff {git(branch, 'rev-parse', 'main')} " in prompt
+
+
 def test_a_small_change_needs_no_review(branch: Path) -> None:
     small(branch)
     assert challenge.shipping_note(branch, git(branch, "rev-parse", "HEAD")) is None
