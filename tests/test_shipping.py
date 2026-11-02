@@ -142,6 +142,7 @@ class FakeGitHub:
         self.file_payload: object = [files or []]
         self.review: object = _review("0" * 40, viewerDidAuthor=False)
         self.collaborators: object = [[_OWNER]]
+        self.codeowners: dict[str, str] = {}
         self.comparison: object = {"behind_by": 0}
         self.calls: list[tuple[str, ...]] = []
         self.attachment_response = (
@@ -160,17 +161,23 @@ class FakeGitHub:
                 raise shipping.ShippingError("gh query failed")
             return self.attachment_response
         endpoint = args[-1]
-        if "/pulls/" in endpoint and "/files?" not in endpoint:
+        path = endpoint.partition("/contents/")[2].partition("?")[0]
+        if path:
+            if path not in self.codeowners:
+                raise shipping.ShippingError("gh query failed")
+            return self.codeowners[path]
+        payloads = {
+            "/files?": self.file_payload,
+            "/check-runs?": self.check_payload,
+            "/collaborators?": self.collaborators,
+            "/compare/": self.comparison,
+        }
+        for marker, payload in payloads.items():
+            if marker in endpoint:
+                return json.dumps(payload)
+        if "/pulls/" in endpoint:
             index = min(len(self.calls) - 1, len(self.pulls) - 1)
             return json.dumps(self.pulls[index])
-        if "/files?" in endpoint:
-            return json.dumps(self.file_payload)
-        if "/check-runs?" in endpoint:
-            return json.dumps(self.check_payload)
-        if "/collaborators?" in endpoint:
-            return json.dumps(self.collaborators)
-        if "/compare/" in endpoint:
-            return json.dumps(self.comparison)
         raise AssertionError(endpoint)
 
 
@@ -334,6 +341,21 @@ def test_ready_rejects_pr_identity_and_mergeability(
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
+def _ready_outcome(
+    fixture: Fixture,
+    fake: FakeGitHub,
+    monkeypatch: pytest.MonkeyPatch,
+    message: str | None,
+) -> shipping.Shipment | None:
+    """The ready shipment, or None after `verify` refused it with the message."""
+    _patch_gh(monkeypatch, fake)
+    if message is None:
+        return shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    with pytest.raises(shipping.ShippingError, match=message):
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    return None
+
+
 @pytest.mark.parametrize(
     ("state", "review", "others", "message"),
     [
@@ -363,14 +385,10 @@ def test_ready_bypasses_only_a_review_nobody_but_the_author_can_give(
     fake = FakeGitHub(pull, [_check(fixture.head)])
     fake.review = _review(fixture.head, **review)
     fake.collaborators = [[_OWNER, *others]]
-    _patch_gh(monkeypatch, fake)
-    if message is not None:
-        with pytest.raises(shipping.ShippingError, match=message):
-            shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
-        return
-    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
-    assert shipment.review_bypass is (state == "blocked")
-    assert any(call[1] == "graphql" for call in fake.calls)
+    shipment = _ready_outcome(fixture, fake, monkeypatch, message)
+    if shipment is not None:
+        assert shipment.review_bypass is (state == "blocked")
+        assert any(call[1] == "graphql" for call in fake.calls)
 
 
 @pytest.mark.parametrize(

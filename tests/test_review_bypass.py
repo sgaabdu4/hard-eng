@@ -3,9 +3,11 @@
 from pathlib import Path
 
 import pytest
+import review_bypass
 import shipping
 from gate_config import JsonValue
 from test_shipping import (
+    _OWNER,
     _PR_URL,
     _UNDO,
     FakeGitHub,
@@ -14,6 +16,7 @@ from test_shipping import (
     _patch_gh,
     _pull,
     _ready_fixture,
+    _ready_outcome,
     _review,
 )
 
@@ -105,7 +108,7 @@ def test_bypass_needs_every_other_merge_requirement_satisfied(
         "reviewThreads": EMPTY,
         "baseRef": {"branchProtectionRule": None, "rules": EMPTY},
     }
-    problem = shipping._other_merge_requirement(
+    problem = review_bypass._other_merge_requirement(
         review | pull, {"state": "SUCCESS", "contexts": contexts}
     )
     if message is None:
@@ -185,3 +188,77 @@ def test_ready_requires_an_undo_line(
         return
     with pytest.raises(shipping.ShippingError, match="starts `Undo:`"):
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+
+
+_PEER = {"login": "peer", "permissions": {"push": True}}
+
+
+def _code_owner_review(head: str, required: bool = True) -> object:
+    rule = {"type": "PULL_REQUEST", "parameters": {"requireCodeOwnerReview": required}}
+    return _review(
+        head, baseRefName="main", baseRef={"rules": {"totalCount": 1, "nodes": [rule]}}
+    )
+
+
+@pytest.mark.parametrize(
+    ("codeowners", "required", "message"),
+    [
+        ({".github/CODEOWNERS": "* @owner\n"}, True, None),
+        ({"CODEOWNERS": "# all files\n*  @Owner\n/docs/ @owner # docs\n"}, True, None),
+        ({".github/CODEOWNERS": "* @owner\n"}, False, "another"),
+        ({".github/CODEOWNERS": "* @owner @peer\n"}, True, "another"),
+        ({".github/CODEOWNERS": "* @owner\n/docs/\n"}, True, "another"),
+        ({".github/CODEOWNERS": "/src/ @owner\n"}, True, "another"),
+        ({".github/CODEOWNERS": "* @acme/maintainers\n"}, True, "another"),
+        ({}, True, "another"),
+    ],
+)
+def test_ready_bypasses_a_code_owner_review_only_the_author_can_give(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    codeowners: dict[str, str],
+    required: bool,
+    message: str | None,
+) -> None:
+    fixture = _fixture(tmp_path)
+    pull = _pull(fixture, mergeable_state="blocked", mergeable=True)
+    fake = FakeGitHub(pull, [_check(fixture.head)])
+    fake.review = _code_owner_review(fixture.head, required)
+    fake.collaborators = [[_OWNER, _PEER]]
+    fake.codeowners = codeowners
+    shipment = _ready_outcome(fixture, fake, monkeypatch, message)
+    assert (shipment is None) is (message is not None)
+    assert shipment is None or shipment.review_bypass is True
+
+
+@pytest.mark.parametrize(
+    ("state", "threads", "others", "message"),
+    [
+        ("blocked", [], [], None),
+        ("blocked", [{"isResolved": False}], [], "conversation"),
+        ("blocked", [], [_PEER], "another"),
+        ("clean", [], [], "not blocked"),
+    ],
+)
+def test_author_only_review_block_reads_the_open_pull_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+    threads: list[object],
+    others: list[object],
+    message: str | None,
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture, mergeable_state=state), [])
+    fake.review = _review(
+        fixture.head, reviewThreads={"totalCount": len(threads), "nodes": threads}
+    )
+    fake.collaborators = [[_OWNER, *others]]
+    _patch_gh(monkeypatch, fake)
+    problem = review_bypass.author_only_review_block(
+        fixture.root, _PR_URL, fixture.head
+    )
+    if message is None:
+        assert problem is None
+    else:
+        assert problem is not None and message in problem

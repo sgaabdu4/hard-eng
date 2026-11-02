@@ -686,6 +686,31 @@ def test_update_mixed_with_feature_work_checks_only_affected_packages(
     assert verified.called is (case not in {"gate-config", "impact"})
 
 
+def _committed_update(
+    source: Path, target: Path, monkeypatch: pytest.MonkeyPatch, case: str
+) -> str:
+    if case != "no-update":
+        select_release(source, monkeypatch)
+        update.update(target)
+    config = target / "hard-eng.gates.json"
+    config.write_text(config.read_text() + "\n")
+    return commit(target, "gate file change")
+
+
+def _checks_left(target: Path, base: str) -> list[str]:
+    from gate_config import Group, without_freshness_for_update
+
+    stale: Group = {
+        "path": ".",
+        "checks": [
+            {"name": "freshness", "role": "freshness", "command": ["old-dependency"]},
+            {"name": "tests", "role": "tests", "command": ["tests"]},
+        ],
+    }
+    groups = without_freshness_for_update(target, base, [stale])
+    return [gate["name"] for gate in groups[0]["checks"]]
+
+
 @pytest.mark.parametrize(
     ("case", "kept"),
     [("verified-update", False), ("unverified-update", True), ("no-update", True)],
@@ -696,30 +721,38 @@ def test_update_pr_skips_freshness(
     case: str,
     kept: bool,
 ) -> None:
-    from gate_config import Group, without_freshness_for_update
-
     source, target, _ = release
     base = git(target, "rev-parse", "HEAD")
-    if case != "no-update":
-        select_release(source, monkeypatch)
-        update.update(target)
-    config = target / "hard-eng.gates.json"
-    config.write_text(config.read_text() + "\n")
-    commit(target, "gate file change")
+    _committed_update(source, target, monkeypatch, case)
     verified = Mock(return_value=case == "verified-update")
     monkeypatch.setattr(update, "verified_revision", verified)
-    stale: Group = {
-        "path": ".",
-        "checks": [
-            {"name": "freshness", "role": "freshness", "command": ["old-dependency"]},
-            {"name": "tests", "role": "tests", "command": ["tests"]},
-        ],
-    }
-    groups = without_freshness_for_update(target, base, [stale])
-    assert [gate["name"] for gate in groups[0]["checks"]] == (
+    assert _checks_left(target, base) == (["freshness", "tests"] if kept else ["tests"])
+    assert verified.called is (case != "no-update")
+
+
+@pytest.mark.parametrize(
+    ("case", "kept"),
+    [("verified-update", False), ("unverified-update", True), ("no-update", True)],
+)
+def test_follow_up_push_on_update_branch_skips_freshness_like_ci(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    kept: bool,
+) -> None:
+    source, target, _ = release
+    git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(target, "switch", "-qc", "hard-eng/update")
+    pushed = _committed_update(source, target, monkeypatch, case)
+    project = target / "project.txt"
+    project.write_text(project.read_text() + "follow-up fix\n")
+    commit(target, "follow-up fix pushed onto the open update PR")
+    monkeypatch.setattr(
+        update, "verified_revision", Mock(return_value=case == "verified-update")
+    )
+    assert _checks_left(target, pushed) == (
         ["freshness", "tests"] if kept else ["tests"]
     )
-    assert verified.called is (case != "no-update")
 
 
 @pytest.mark.parametrize("extra", [None, "project.txt", "hard-eng.gates.json", "local"])
