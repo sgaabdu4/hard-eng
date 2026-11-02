@@ -398,20 +398,17 @@ def test_package_script_scanner_executes_provisioned_native_executable(
     ("scan", "expected"),
     [
         (
-            ["--config", "p/default", "."],
+            ["semgrep", "scan", "--config", "p/default", "."],
             ["--timeout", "60", "--config", "p/default", "."],
         ),
-        (["--timeout", "9", "."], ["--timeout", "9", "."]),
+        (["semgrep", "scan", "--timeout", "9", "."], ["--timeout", "9", "."]),
+        (["make", "scan"], []),
     ],
 )
 def test_security_scan_gives_each_rule_time_to_finish_under_load(
     runner: ModuleType, scan: list[str], expected: list[str]
 ) -> None:
-    gate: Gate = {
-        "name": "security",
-        "role": "security",
-        "command": ["semgrep", "scan", *scan],
-    }
+    gate: Gate = {"name": "security", "role": "security", "command": scan}
     command = runner.prepare_command({"path": ".", "checks": []}, gate, 5)
     assert command[command.index("scan") + 1 :] == expected
 
