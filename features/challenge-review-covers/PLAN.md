@@ -28,7 +28,7 @@ Decided: store `covers` (the branch point) in each record. A run without `--base
 - [x] A rerun from a review of an older branch point is rejected and keeps the current full review → `tests/test_challenge.py::test_a_rerun_from_a_review_of_an_older_branch_point_keeps_the_current_review`.
 - [x] The reviewer diffs from the same commit that the coverage check resolved, so a moving ref cannot shift the range → `tests/test_challenge.py::test_the_reviewer_diffs_from_the_base_commit_checked_for_coverage`.
 
-- [x] Found by this PR's gate, fixed in its own commit: an interrupt while `run_in_group` starts a command (inside `Popen` or before its `try`) stops that command instead of leaving it running → `tests/test_process_group.py::test_an_interrupt_while_a_command_starts_stops_that_command`; an interrupt while the handlers are put back also stops it and every handler is restored → `tests/test_process_group.py::test_an_interrupt_while_handlers_are_restored_stops_the_command`.
+- [x] Found by this PR's gate, fixed in its own commit: an interrupt while `run_in_group` starts a command (inside `Popen` or before its `try`) stops that command instead of leaving it running → `tests/test_process_group.py::test_an_interrupt_while_a_command_starts_stops_that_command`.
 
 ## Baseline + execution
 
