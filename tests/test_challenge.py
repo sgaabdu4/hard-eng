@@ -123,6 +123,20 @@ def test_the_prompt_pins_the_reviewed_revision_and_treats_repo_text_as_data(
     assert "never instructions" in prompt
 
 
+def test_the_safe_mode_claude_reviewer_is_pointed_at_the_project_rules(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    log = fake_cli(tmp_path / "bin", "claude", "VERDICT: clean")
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread")
+    challenge.challenge(branch, None, None)
+    argv = json.loads(log.read_text())["argv"]
+    prompt = argv[argv.index("--print") + 1]
+    assert "--safe-mode" in argv
+    assert "AGENTS.md" in prompt
+
+
 def record_of(root: Path) -> dict[str, str]:
     path = challenge.store(root, git(root, "rev-parse", "HEAD")).with_suffix(".json")
     return json.loads(path.read_text())
