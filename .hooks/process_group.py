@@ -5,8 +5,7 @@ import re
 import signal
 import subprocess
 import threading
-from collections.abc import Generator
-from contextlib import contextmanager, suppress
+from contextlib import suppress
 from pathlib import Path
 from typing import IO, NamedTuple
 
@@ -17,39 +16,12 @@ COMPANION = "codex-companion.mjs"
 RUNNING: set[int] = set()
 STOPPED = threading.Event()
 STARTING = threading.Lock()
-INTERRUPTS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 
 class Process(NamedTuple):
     pid: int
     parent: int
     command: str
-
-
-@contextmanager
-def held_interrupts(caught: list[int]) -> Generator[None]:
-    """Record the host's interrupts while a command starts, so none lands before its group is tracked."""
-    held = (
-        {
-            number: handler
-            for number in INTERRUPTS
-            if callable(handler := signal.getsignal(number))
-        }
-        if threading.current_thread() is threading.main_thread()
-        else {}
-    )
-    for number in held:
-        signal.signal(number, lambda signum, _frame: caught.append(signum))
-    try:
-        yield
-    finally:
-        for number, handler in held.items():
-            signal.signal(number, handler)
-
-
-def deliver(caught: list[int]) -> None:
-    while caught:
-        signal.raise_signal(caught.pop(0))
 
 
 def run_in_group(
@@ -63,27 +35,21 @@ def run_in_group(
     stderr: int | IO[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Like subprocess.run, but a timeout or interrupt kills the whole group first."""
-    caught: list[int] = []
+    with STARTING:
+        if STOPPED.is_set():
+            raise KeyboardInterrupt
+        process = subprocess.Popen(
+            command,
+            cwd=cwd,
+            env=env,
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+            text=True,
+            start_new_session=True,
+        )
+        RUNNING.add(process.pid)
     try:
-        with STARTING, held_interrupts(caught):
-            if STOPPED.is_set():
-                raise KeyboardInterrupt
-            process = subprocess.Popen(
-                command,
-                cwd=cwd,
-                env=env,
-                stdin=stdin,
-                stdout=stdout,
-                stderr=stderr,
-                text=True,
-                start_new_session=True,
-            )
-            RUNNING.add(process.pid)
-    except BaseException:
-        deliver(caught)
-        raise
-    try:
-        deliver(caught)
         out, err = process.communicate(timeout=timeout)
     except BaseException:
         with suppress(ProcessLookupError):
