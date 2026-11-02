@@ -125,6 +125,38 @@ def test_debt_appears_only_with_the_install_and_never_grows(repository: Path) ->
     debt.require_shrink(repository, recorded)
 
 
+def test_adoption_restarts_with_pyyaml_like_the_check(
+    runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+    import os
+    from importlib.machinery import ModuleSpec
+
+    class Restarted(Exception):
+        pass
+
+    def restart(_file: str, arguments: list[str]) -> None:
+        raise Restarted(arguments)
+
+    find_spec = importlib.util.find_spec
+
+    def without_yaml(name: str, package: str | None = None) -> ModuleSpec | None:
+        return None if name == "yaml" else find_spec(name, package)
+
+    def adopting(_root: Path) -> None:
+        pytest.fail("adopted without PyYAML")
+
+    monkeypatch.setattr(importlib.util, "find_spec", without_yaml)
+    monkeypatch.setattr(os, "execvp", restart)
+    monkeypatch.setattr(runner, "check_lock", adopting)
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "adopt"])
+    with pytest.raises(Restarted) as restarted:
+        runner.main()
+    arguments = restarted.value.args[0]
+    assert arguments[:5] == ["uv", "run", "--no-project", "--with", "pyyaml"]
+    assert arguments[-2:] == ["hard-eng.py", "adopt"]
+
+
 @pytest.mark.parametrize("tracked", [True, False])
 def test_adoption_records_what_the_fixed_code_still_fails_with(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tracked: bool
