@@ -482,6 +482,45 @@ def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
 
 
 @pytest.mark.parametrize(
+    ("merge_state", "problem", "flag"),
+    [
+        ("BLOCKED", None, "--admin"),
+        ("BLOCKED", "another collaborator can give the review", "--auto"),
+        ("CLEAN", None, "--auto"),
+    ],
+)
+def test_update_pr_merges_past_a_review_only_its_author_could_give(
+    opened: Path,
+    gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    merge_state: str,
+    problem: str | None,
+    flag: str,
+) -> None:
+    target = opened
+    gh.pulls[0].update(
+        statusCheckRollup=[
+            {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"}
+        ],
+        mergeStateStatus=merge_state,
+    )
+    blocked = Mock(return_value=problem)
+    monkeypatch.setattr(update_pr, "author_only_review_block", blocked)
+    head = git(target, "rev-parse", BRANCH)
+    capsys.readouterr()
+    assert publish(target, monkeypatch) == 0
+    assert ("pr", "merge", PULL, flag, "--rebase", "--match-head-commit", head) in (
+        gh.calls
+    )
+    assert blocked.called is (merge_state == "BLOCKED")
+    if blocked.called:
+        assert blocked.call_args.args[1:] == (PULL, head)
+    if problem:
+        assert problem in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
     ("allowed", "flag"),
     [
         ({"squashMergeAllowed": True, "mergeCommitAllowed": True}, "--squash"),
