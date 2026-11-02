@@ -129,10 +129,35 @@ def review(
     return VERDICTS[lines[-1].strip()], result.stdout
 
 
+def covered_point(root: Path, base: str | None) -> str | None:
+    """The branch point that reviews up to `base` cover, or None when no completed review reaches it."""
+    point = default_branch_point(root)
+    if base is None:
+        return point
+    try:
+        start = git_text(root, "rev-parse", "--verify", f"{base}^{{commit}}")
+    except subprocess.CalledProcessError:
+        return None
+    if point is None or start == point:
+        return start
+    path = store(root, start).with_suffix(".json")
+    if not path.is_file():
+        return None
+    earlier = json.loads(path.read_text())
+    return None if earlier["outcome"].startswith("not done") else earlier.get("covers")
+
+
 def challenge(root: Path, base: str | None, host: str | None) -> int:
     reviewer = reviewer_for(host)
     revision = git_text(root, "rev-parse", "HEAD")
-    outcome, output = review(root, reviewer, base, revision)
+    covers = covered_point(root, base)
+    if base is not None and covers is None:
+        outcome, output = (
+            f"not done: --base {base} has no completed independent review; review from the branch point without --base",
+            "",
+        )
+    else:
+        outcome, output = review(root, reviewer, base, revision)
     path = store(root, revision)
     path.parent.mkdir(parents=True, exist_ok=True)
     if outcome.startswith("not done") and path.with_suffix(".json").is_file():
@@ -148,6 +173,7 @@ def challenge(root: Path, base: str | None, host: str | None) -> int:
                 "reviewer": reviewer,
                 "revision": revision,
                 "outcome": outcome,
+                "covers": covers,
                 "output": str(path.with_suffix(".txt")),
             }
         )
@@ -173,6 +199,12 @@ def shipping_note(root: Path, revision: str) -> str | None:
             "review. Run `python3 .hooks/hard-eng.py challenge` first."
         )
     record = json.loads(path.read_text())
+    point = default_branch_point(root)
+    if point is not None and record.get("covers") != point:
+        raise ValueError(
+            f"This change is big ({reason}) and the review of revision {revision} does not "
+            f"cover the whole branch from {point}. Run `python3 .hooks/hard-eng.py challenge` first."
+        )
     if record["outcome"].startswith("not done"):
         return f"independent review {record['outcome']}"
     return f"Independent review by {record['reviewer']}: {record['outcome']}"
