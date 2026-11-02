@@ -77,6 +77,22 @@ def test_tests_lockfiles_and_secrets_never_become_debt(
     assert "must pass before adoption" in capsys.readouterr().out
 
 
+def test_a_gate_that_cannot_run_is_never_passed_as_debt(
+    runner: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lint: Gate = {"name": "lint", "role": "lint", "command": [str(tmp_path / "gone")]}
+    group: Group = {"path": ".", "checks": [lint]}
+    runner.RECORDING.set()
+    try:
+        assert runner.run_gate(group, lint, 30, threading.Lock()) is True
+    finally:
+        runner.RECORDING.clear()
+    adopted = debt.record(tmp_path, [group], set(runner.FAILED_GATES), debt.OUTPUTS)
+    assert runner.run_gate(group, lint, 30, threading.Lock()) is True
+    assert adopted == 1
+    assert "must pass before adoption" in capsys.readouterr().out
+
+
 def test_report_findings_count_beside_the_output(tmp_path: Path) -> None:
     report = tmp_path / "coverage/semgrep.json"
     report.parent.mkdir()
@@ -91,6 +107,24 @@ def test_report_findings_count_beside_the_output(tmp_path: Path) -> None:
     group: Group = {"path": ".", "checks": [security]}
     found = debt.fingerprints(tmp_path, group, security, f"Ran 3 rules in {tmp_path}\n")
     assert found == {"rule a.py eval(x)": 2, "Ran N rules in .": 1}
+
+
+def test_an_unreadable_report_is_never_recorded_as_debt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    report = tmp_path / "coverage/semgrep.json"
+    report.parent.mkdir()
+    report.write_text("{")
+    security: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep"],
+        "report": {"type": "semgrep", "path": "coverage/semgrep.json"},
+    }
+    group: Group = {"path": ".", "checks": [security]}
+    output = {"./security": "Ran 3 rules\n"}
+    assert debt.record(tmp_path, [group], {"./security"}, output) == 1
+    assert "must pass before adoption" in capsys.readouterr().out
 
 
 def test_a_mismatched_virtual_env_warning_is_not_a_finding(tmp_path: Path) -> None:
