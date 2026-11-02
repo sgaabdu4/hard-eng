@@ -5,7 +5,17 @@ from pathlib import Path
 import pytest
 import shipping
 from gate_config import JsonValue
-from test_shipping import _PR_URL, FakeGitHub, _check, _fixture, _pull, _review
+from test_shipping import (
+    _PR_URL,
+    _UNDO,
+    FakeGitHub,
+    _check,
+    _fixture,
+    _patch_gh,
+    _pull,
+    _ready_fixture,
+    _review,
+)
 
 EMPTY: JsonValue = {"totalCount": 0, "nodes": []}
 
@@ -120,4 +130,58 @@ def test_ready_refuses_an_open_or_uncounted_review_thread_on_every_path(
     fake.review = _review(fixture.head, reviewThreads=threads)
     monkeypatch.setattr(shipping, "gh", fake)
     with pytest.raises(shipping.ShippingError, match="review conversation"):
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+
+
+@pytest.mark.parametrize(
+    ("comparison", "message"),
+    [
+        ({"behind_by": 0}, None),
+        ({"behind_by": 2}, "2 commit\\(s\\) behind main; rebase"),
+        ({"behind_by": None}, "comparison with its base is invalid"),
+        ({"behind_by": True}, "comparison with its base is invalid"),
+        ({}, "comparison with its base is invalid"),
+    ],
+)
+def test_ready_refuses_a_pr_behind_its_base(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    comparison: object,
+    message: str | None,
+) -> None:
+    fixture, fake = _ready_fixture(tmp_path, monkeypatch)
+    fake.comparison = comparison
+    if message is not None:
+        with pytest.raises(shipping.ShippingError, match=message):
+            shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+        return
+    shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert any(
+        call[-1] == f"repos/acme/widget/compare/main...{fixture.head}"
+        for call in fake.calls
+    )
+
+
+@pytest.mark.parametrize(
+    ("body", "passes"),
+    [
+        (_UNDO, True),
+        (f"Summary\r\n\r\n{_UNDO}\r\n", True),
+        ("", False),
+        ("Undo:", False),
+        ("Undo:   \nNext line", False),
+        ("We can undo this later.", False),
+    ],
+)
+def test_ready_requires_an_undo_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, passes: bool
+) -> None:
+    fixture = _fixture(tmp_path)
+    _patch_gh(
+        monkeypatch, FakeGitHub(_pull(fixture, body=body), [_check(fixture.head)])
+    )
+    if passes:
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+        return
+    with pytest.raises(shipping.ShippingError, match="starts `Undo:`"):
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")

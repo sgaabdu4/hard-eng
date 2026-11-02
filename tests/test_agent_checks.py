@@ -12,7 +12,6 @@ import agent_checks
 import pytest
 from agent_checks import (
     CASES,
-    CONTROLS,
     Action,
     Agent,
     Client,
@@ -24,6 +23,7 @@ from agent_checks import (
     codex_run,
     fixture,
     judge_continue,
+    judge_escaped_bug,
     judge_failed_baseline,
     judge_grade,
     judge_outside_service,
@@ -34,7 +34,7 @@ from agent_checks import (
     loads_skill,
     main,
 )
-from agent_fixtures import READY_PLAN
+from agent_fixtures import CONTROLS, READY_PLAN
 from conftest import SOURCE, commit, init, running, spawner
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
@@ -625,3 +625,59 @@ def test_repeat_failure_needs_the_agent_to_stop_and_report(
         assert failures == []
     else:
         assert any(problem in failure for failure in failures), failures
+
+
+_MISSED = "test_average used [2, 4], so the unit tests missed the floor division."
+_SPLIT_TEST = """import unittest
+
+from calc import average
+
+
+class SplitTest(unittest.TestCase):
+    def test_average_keeps_the_fraction(self) -> None:
+        self.assertEqual(average([1, 2]), 1.5)
+"""
+
+
+@pytest.mark.parametrize(
+    ("fix", "test", "message", "learn", "problem"),
+    [
+        (True, True, _MISSED, True, None),
+        (True, False, _MISSED, True, "no test fails on the merged code"),
+        (True, True, "Fixed and tested.", True, "does not name the gate"),
+        (False, True, _MISSED, True, "is still wrong"),
+        (True, True, _MISSED, False, "never loaded the he-learn skill"),
+    ],
+)
+def test_escaped_bug_needs_a_test_that_fails_on_the_merged_code(
+    tmp_path: Path,
+    fix: bool,
+    test: bool,
+    message: str,
+    learn: bool,
+    problem: str | None,
+) -> None:
+    root, base = case_fixture(tmp_path, "escaped-bug")
+    if fix:
+        calc = root / "calc.py"
+        calc.write_text(calc.read_text().replace("sum(values) //", "sum(values) /"))
+    if test:
+        (root / "test_split.py").write_text(_SPLIT_TEST)
+    actions = [Action("skill", "he-learn", True)] if learn else []
+    failures = judge_escaped_bug(Run(root, base, message, [], actions))
+    if problem is None:
+        assert failures == []
+    else:
+        assert any(problem in failure for failure in failures), failures
+
+
+def test_a_claude_read_of_a_skill_file_counts_as_loading_it() -> None:
+    use = {
+        "type": "tool_use",
+        "id": "r1",
+        "name": "Read",
+        "input": {"file_path": "/tmp/project/.agents/skills/he-learn/SKILL.md"},
+    }
+    result = {"type": "tool_result", "tool_use_id": "r1", "content": "text"}
+    events: list[dict[str, object]] = [{"message": {"content": [use, result]}}]
+    assert loaded_skills(claude_actions(events)) == {"he-learn"}
