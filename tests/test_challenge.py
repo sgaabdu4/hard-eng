@@ -389,6 +389,22 @@ def test_a_failed_rerun_replaces_a_completed_review_that_does_not_cover_the_bran
     assert note.startswith("independent review not done: codex exited 1")
 
 
+def test_a_rejected_narrow_rerun_keeps_the_full_review_of_the_same_revision(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    (branch / "extra.py").write_text("value = 4\n")
+    head = commit(branch, "later")
+    fake_cli(tmp_path / "bin", "codex", "src/a.py:3 breaks\nVERDICT: findings")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    assert challenge.challenge(branch, "HEAD~1", None) == 0
+    assert "src/a.py:3" in Path(record_of(branch)["output"]).read_text()
+    assert (
+        challenge.shipping_note(branch, head) == "Independent review by codex: findings"
+    )
+
+
 def test_the_reviewer_diffs_from_the_base_commit_checked_for_coverage(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
