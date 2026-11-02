@@ -439,6 +439,57 @@ def test_planned_removal_names_only_a_deleted_declaration(
             validate_suppressions(root, "HEAD")
 
 
+NESTED = (
+    "def test_keeps_a():\n    assert a()\n\n\n"
+    "def test_duplicate_of_a():\n    def {helper}(value):\n        return value\n\n"
+    "    assert {helper}(a())\n"
+)
+CASE = (
+    "def test_keeps_a():\n    assert a()\n\n\n"
+    "class DuplicateOfA(TestCase):\n    def runTest(self):\n"
+    "        self.assertTrue(a())\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("before", "name", "passes"),
+    [
+        (NESTED.format(helper="check"), "test_duplicate_of_a", True),
+        (NESTED.format(helper="check"), "check", False),
+        (NESTED.format(helper="test_client"), "test_duplicate_of_a", True),
+        (CASE, "runTest", True),
+        (
+            NESTED.format(helper="check").replace(
+                "test_duplicate_of_a():",
+                "test_duplicate_of_a(\n    value: int,\n) -> None:",
+            ),
+            "test_duplicate_of_a",
+            True,
+        ),
+        (
+            NESTED.format(helper="check")
+            + "\n\nif LINUX:\n\n    def test_on_linux():\n        assert b()\n",
+            "test_duplicate_of_a",
+            False,
+        ),
+    ],
+)
+def test_planned_removal_covers_helpers_nested_in_the_named_test(
+    tmp_path: Path, before: str, name: str, passes: bool
+) -> None:
+    root = switch_root(tmp_path, "tests/test_a.py", before)
+    (root / "tests/test_a.py").write_text("def test_keeps_a():\n    assert a()\n")
+    (root / "features/x").mkdir(parents=True)
+    (root / "features/x/PLAN.md").write_text(
+        f"Removed test: tests/test_a.py :: {name} :: test_keeps_a proves it\n"
+    )
+    if passes:
+        validate_suppressions(root, "HEAD")
+    else:
+        with pytest.raises(ValueError, match=r"tests lose 1 assertion lines net"):
+            validate_suppressions(root, "HEAD")
+
+
 def retiring_root(tmp_path: Path) -> Path:
     root = switch_root(tmp_path, "app.py", "def keep():\n    return 1\n")
     (root / "migrate_users.py").write_text("def run():\n    return 2\n")

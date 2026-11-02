@@ -65,6 +65,7 @@ REPORT_FINDINGS: dict[str, Callable[[Path], list[str]]] = {
 }
 OUTPUT_REPORTS = {None, "import-linter", "performance-junit"}
 OUTPUTS: dict[str, str] = {}
+UNREADABLE = "unreadable report"
 
 
 def remember(group: Group, gate: Gate, text: str) -> str:
@@ -98,7 +99,7 @@ def fingerprints(root: Path, group: Group, gate: Gate, output: str) -> Counter[s
         try:
             found.update(extract(path))
         except (ValueError, KeyError, TypeError, AttributeError):
-            found["unreadable report"] += 1
+            found[UNREADABLE] += 1
     return found
 
 
@@ -179,10 +180,10 @@ def record(
             key = f"{group['path']}/{gate['name']}"
             if key not in failed:
                 continue
-            if not recordable(gate):
+            current = fingerprints(root, group, gate, outputs.get(key, ""))
+            if not recordable(gate) or not current or UNREADABLE in current:
                 refused.append(key)
                 continue
-            current = fingerprints(root, group, gate, outputs.get(key, ""))
             if old is not None:
                 current &= old.get(key, Counter())
             if current:

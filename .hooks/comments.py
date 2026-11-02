@@ -420,6 +420,8 @@ LITERAL = re.compile(r"\"(\\.|[^\"\\\n])*\"|'(\\.|[^'\\\n])*'|`(\\.|[^`\\\n])*`"
 TEST_START = re.compile(
     r"^\s*((async\s+)?def\s|class\s|(it|test|testWidgets|describe|group)(\.\w+)?\()"
 )
+PYTHON_FUNCTION = re.compile(r"^\s*(?:async\s+)?def\s")
+PYTHON_BLOCK = re.compile(r"^\s*(?:(?:async\s+)?def|class)\s")
 IMPORT = re.compile(r"^\s*(import|from|export|use)\b|\brequire\(")
 SYNTAX = {"import", "from", "as", "export", "use", "require", "const", "let", "var"}
 DEFINITION = re.compile(
@@ -480,9 +482,17 @@ def retired_names(
 
 def split_tests(block: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
     tests: list[list[tuple[int, str]]] = [[]]
+    function: int | None = None
     for number, text in block:
-        if TEST_START.match(text) and tests[-1]:
-            tests.append([])
+        level = len(text) - len(text.lstrip())
+        code = text.strip() and not text.lstrip().startswith(("#", ")", "]", "}"))
+        if code and function is not None and level <= function:
+            function = None
+        helper = function is not None and level > function and PYTHON_BLOCK.match(text)
+        if TEST_START.match(text) and not helper:
+            if tests[-1]:
+                tests.append([])
+            function = level if PYTHON_FUNCTION.match(text) else None
         tests[-1].append((number, text))
     return tests
 

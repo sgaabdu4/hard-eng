@@ -631,8 +631,10 @@ def run_limited_gate(
         subprocess.TimeoutExpired,
         subprocess.CalledProcessError,
     ) as error:
+        unrun = isinstance(error, (ImportError, OSError, subprocess.TimeoutExpired))
+        text = str(error) if unrun else remember(group, gate, str(error))
         print(
-            f"FAIL {gate['name']}: {remember(group, gate, str(error))}; "
+            f"FAIL {gate['name']}: {text}; "
             f"elapsed {time.monotonic() - started:.3f}s @ {group['path']}"
         )
         return True
@@ -807,7 +809,9 @@ def adopt() -> int:
     from debt import record, settled_run
     from gate_config import load_groups
     from shipping import gate_budget
+    from tool_setup import ensure_python_runtime
 
+    ensure_python_runtime()
     with check_lock(ROOT):
         groups = load_groups(ROOT)
         timeout = gate_budget(ROOT)
