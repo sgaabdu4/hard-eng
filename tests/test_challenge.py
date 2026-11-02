@@ -405,6 +405,29 @@ def test_a_rejected_narrow_rerun_keeps_the_full_review_of_the_same_revision(
     )
 
 
+def test_a_rerun_from_a_review_of_an_older_branch_point_keeps_the_current_review(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    old = git(branch, "rev-parse", "HEAD")
+    fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    git(branch, "checkout", "-q", "main")
+    (branch / "base.py").write_text("value = 5\n")
+    commit(branch, "main moves")
+    git(branch, "checkout", "-q", "feature")
+    git(branch, "merge", "-q", "--no-edit", "main")
+    head = git(branch, "rev-parse", "HEAD")
+    fake_cli(tmp_path / "bin", "codex", "src/a.py:3 breaks\nVERDICT: findings")
+    assert challenge.challenge(branch, None, None) == 0
+    fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    assert challenge.challenge(branch, old, None) == 0
+    assert (
+        challenge.shipping_note(branch, head) == "Independent review by codex: findings"
+    )
+
+
 def test_the_reviewer_diffs_from_the_base_commit_checked_for_coverage(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
