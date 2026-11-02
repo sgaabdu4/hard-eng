@@ -1,7 +1,13 @@
+import os
+import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
+from types import FrameType
+from typing import override
 
 import process_group
 import pytest
@@ -143,3 +149,82 @@ def test_stop_groups_kills_every_group_while_others_finish(
     finally:
         process_group.STOPPED.clear()
     assert sorted(killed) == [101, 102]
+
+
+class Interrupted(Exception):
+    pass
+
+
+def test_an_interrupt_while_a_command_starts_stops_that_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started: list[int] = []
+
+    class Interrupting(set[int]):
+        @override
+        def add(self, pid: int) -> None:
+            super().add(pid)
+            started.append(pid)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+    def interrupt(_number: int, _frame: object) -> None:
+        raise Interrupted
+
+    monkeypatch.setattr(process_group, "RUNNING", Interrupting())
+    previous = signal.signal(signal.SIGTERM, interrupt)
+    try:
+        with pytest.raises(Interrupted):
+            process_group.run_in_group(
+                [sys.executable, "-c", "import time; time.sleep(60)"], timeout=None
+            )
+        with pytest.raises(ProcessLookupError):
+            os.kill(started[0], 0)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        for pid in started:
+            with suppress(ProcessLookupError):
+                os.killpg(pid, signal.SIGKILL)
+
+
+def test_an_interrupt_while_handlers_are_restored_stops_the_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started: list[int] = []
+    real = signal.signal
+
+    class Recording(set[int]):
+        @override
+        def add(self, pid: int) -> None:
+            super().add(pid)
+            started.append(pid)
+
+    def interrupt(_number: int, _frame: FrameType | None) -> None:
+        raise Interrupted
+
+    def restoring(
+        number: int, handler: Callable[[int, FrameType | None], object] | int | None
+    ) -> object:
+        previous = real(number, handler)
+        if number == signal.SIGINT and handler is interrupt:
+            os.kill(os.getpid(), signal.SIGINT)
+        return previous
+
+    monkeypatch.setattr(process_group, "RUNNING", Recording())
+    held = {
+        number: real(number, interrupt) for number in (signal.SIGINT, signal.SIGTERM)
+    }
+    monkeypatch.setattr(signal, "signal", restoring)
+    try:
+        with pytest.raises(Interrupted):
+            process_group.run_in_group(
+                [sys.executable, "-c", "import time; time.sleep(60)"], timeout=None
+            )
+        with pytest.raises(ProcessLookupError):
+            os.kill(started[0], 0)
+        assert signal.getsignal(signal.SIGTERM) is interrupt
+    finally:
+        for number, handler in held.items():
+            real(number, handler)
+        for pid in started:
+            with suppress(ProcessLookupError):
+                os.killpg(pid, signal.SIGKILL)
