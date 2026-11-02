@@ -807,7 +807,9 @@ def adopt() -> int:
     from debt import record, settled_run
     from gate_config import load_groups
     from shipping import gate_budget
+    from tool_setup import ensure_python_runtime
 
+    ensure_python_runtime()
     with check_lock(ROOT):
         groups = load_groups(ROOT)
         timeout = gate_budget(ROOT)
