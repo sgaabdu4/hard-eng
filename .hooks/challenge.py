@@ -165,7 +165,10 @@ def challenge(root: Path, base: str | None, host: str | None) -> int:
     if outcome.startswith("not done") and path.with_suffix(".json").is_file():
         record = json.loads(path.with_suffix(".json").read_text())
         earlier = record["outcome"]
-        if not earlier.startswith("not done") and record.get("covers") == covers:
+        point = default_branch_point(root)
+        if not earlier.startswith("not done") and (
+            point is None or record.get("covers") == point
+        ):
             print(f"Independent review by {reviewer} at {revision}: {outcome}")
             print(f"Kept the earlier completed review for this revision: {earlier}")
             return 0
