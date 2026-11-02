@@ -441,18 +441,29 @@ def test_planned_removal_names_only_a_deleted_declaration(
 
 NESTED = (
     "def test_keeps_a():\n    assert a()\n\n\n"
-    "def test_duplicate_of_a():\n    def check(value):\n        return value\n\n"
-    "    assert check(a())\n"
+    "def test_duplicate_of_a():\n    def {helper}(value):\n        return value\n\n"
+    "    assert {helper}(a())\n"
+)
+CASE = (
+    "def test_keeps_a():\n    assert a()\n\n\n"
+    "class DuplicateOfA(TestCase):\n    def runTest(self):\n"
+    "        self.assertTrue(a())\n"
 )
 
 
 @pytest.mark.parametrize(
-    ("name", "passes"), [("test_duplicate_of_a", True), ("check", False)]
+    ("before", "name", "passes"),
+    [
+        (NESTED.format(helper="check"), "test_duplicate_of_a", True),
+        (NESTED.format(helper="check"), "check", False),
+        (NESTED.format(helper="test_client"), "test_duplicate_of_a", True),
+        (CASE, "runTest", True),
+    ],
 )
 def test_planned_removal_covers_helpers_nested_in_the_named_test(
-    tmp_path: Path, name: str, passes: bool
+    tmp_path: Path, before: str, name: str, passes: bool
 ) -> None:
-    root = switch_root(tmp_path, "tests/test_a.py", NESTED)
+    root = switch_root(tmp_path, "tests/test_a.py", before)
     (root / "tests/test_a.py").write_text("def test_keeps_a():\n    assert a()\n")
     (root / "features/x").mkdir(parents=True)
     (root / "features/x/PLAN.md").write_text(
