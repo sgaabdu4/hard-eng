@@ -458,6 +458,12 @@ CASE = (
         (NESTED.format(helper="check"), "check", False),
         (NESTED.format(helper="test_client"), "test_duplicate_of_a", True),
         (CASE, "runTest", True),
+        (
+            NESTED.format(helper="check")
+            + "\n\nif LINUX:\n\n    def test_on_linux():\n        assert b()\n",
+            "test_duplicate_of_a",
+            False,
+        ),
     ],
 )
 def test_planned_removal_covers_helpers_nested_in_the_named_test(
