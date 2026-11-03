@@ -3,7 +3,6 @@
 import json
 import os
 import stat
-import subprocess
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -206,13 +205,14 @@ def test_a_commit_during_the_review_voids_it(
     assert "HEAD moved" in record["outcome"]
 
 
-def test_claude_host_runs_codex_read_only_without_user_plugins_and_closed_stdin(
+def run_claude_host_contract(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> int:
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     big(branch)
     log = fake_cli(tmp_path / "bin", "codex", "Nothing found.\nVERDICT: clean")
     monkeypatch.setenv("CLAUDECODE", "1")
-    assert challenge.challenge(branch, None, None) == 0
+    result = challenge.challenge(branch, None, None)
     ran = json.loads(log.read_text())
     assert ran["stdin_is_null"]
     assert ran["argv"][:7] == [
@@ -232,25 +232,20 @@ def test_claude_host_runs_codex_read_only_without_user_plugins_and_closed_stdin(
     assert record["revision"] == revision
     assert record["outcome"] == "clean"
     assert "VERDICT: clean" in Path(record["output"]).read_text()
+    return result
 
 
-def test_review_tests_isolate_an_inherited_codex_host() -> None:
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            f"{Path(__file__)}::test_claude_host_runs_codex_read_only_without_user_plugins_and_closed_stdin",
-            "-q",
-            "--tb=short",
-        ],
-        env={**os.environ, "CODEX_THREAD_ID": "inherited-host"},
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
+def test_claude_host_runs_codex_read_only_without_user_plugins_and_closed_stdin(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert run_claude_host_contract(branch, tmp_path, monkeypatch) == 0
+
+
+def test_review_tests_isolate_an_inherited_codex_host(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "inherited-host")
+    assert run_claude_host_contract(branch, tmp_path, monkeypatch) == 0
 
 
 def test_codex_host_runs_claude_with_read_only_tools_and_no_git_write_flags(
