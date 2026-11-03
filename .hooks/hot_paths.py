@@ -36,12 +36,21 @@ def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, o
         report = json.loads(result.stdout)
     except json.JSONDecodeError as error:
         raise ValueError(f"HE-HOT-PATH scan failed: {result.stderr[-500:]}") from error
-    errors = report.get("errors", [])
-    if any("PartialParsing" not in str(error.get("type")) for error in errors):
-        raise ValueError(f"HE-HOT-PATH scan errors: {errors}")
-    for error in errors:
-        print(f"HE-HOT-PATH: partly scanned: {error.get('message', '')[:300]}")
+    require_parsed(report.get("errors", []))
     return report["results"]
+
+
+def require_parsed(errors: list[dict[str, object]]) -> None:
+    """Fail on scan errors except files Semgrep parsed only in part; print those gaps."""
+    spans = [
+        kind[1]
+        for kind in (error.get("type") for error in errors)
+        if isinstance(kind, list) and kind[0] == "PartialParsing"
+    ]
+    if len(spans) != len(errors):
+        raise ValueError(f"Semgrep reports scan errors: {str(errors)[:1000]}")
+    for span in (span for gaps in spans for span in gaps):
+        print(f"Semgrep partly scanned {span['path']}:{span['start']['line']}")
 
 
 def describe(result: dict[str, object]) -> str:
@@ -120,8 +129,10 @@ def semgrep_options(
             for name in unowned
         ]
         rules = ["--config", os.path.relpath(RULES, directory), *skipped]
-        command = [*command[: index + 1], *rules, *command[index + 1 :]]
+        # --strict fails valid code Semgrep parses only in part; the report check prints those gaps.
+        rest = [part for part in command[index + 1 :] if part != "--strict"]
+        command = [*command[: index + 1], *rules, *rest]
     if "--timeout" not in command:
-        # Semgrep's 5 s per-rule limit times out under parallel load, and --strict then fails the gate.
+        # Semgrep's 5 s per-rule limit times out under parallel load, and the report check then fails the gate.
         command = [*command[: index + 1], "--timeout", "60", *command[index + 1 :]]
     return command
