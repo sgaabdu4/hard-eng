@@ -13,6 +13,8 @@ Use controlled inputs, fake clocks or synchronization instead of sleep-based com
 
 Async does not make CPU work parallel; unbounded gathers can worsen resource use.
 
+When code must run in order, use a named `inOrder` or `inOrderSteps` helper. Pass a literal `reason` with at least 20 characters and more than one word: Dart uses `reason: '...'`; JavaScript uses `{ reason: '...' }`. State the real order constraint. Keep the helper's loop plain; never hide the order with recursion, streams or comments.
+
 ## Hot paths + data layout
 
 [HE-HOT-PATH](requirements.md#he-hot-path) fails each case below that a pattern can find, in old code too; `python3 .hooks/hard-eng.py hot-paths` lists them. Rewrite each finding as the table says; never hide one by moving the same work where the pattern cannot see it. For a requested scan ("deep scan hot paths", "find every place we ..."), run `python3 .hooks/hard-eng.py hot-paths`, then read the request handlers, jobs and loops that patterns cannot judge. Fix each confirmed case at its owner, one per commit.
