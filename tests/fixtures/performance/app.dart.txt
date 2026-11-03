@@ -116,3 +116,141 @@ Future<void> load(List<String> ids, Client client, Client users, Client blocks, 
   final after = await orders.get('c');
   print([step, after]);
 }
+
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T item) step, {required String reason}) async {
+  for (final item in items) {
+    await step(item);
+  }
+}
+
+Future<void> inOrderSteps(List<Future<void> Function()> steps, {required String reason}) async {
+  for (final step in steps) {
+    await step();
+  }
+}
+
+Future<void> inOrderWithoutReason<T>(Iterable<T> items, Future<void> Function(T item) step) async {
+  for (final item in items) {
+    // ruleid: await-in-loop-dart
+    await step(item);
+  }
+}
+
+class OtherOrder {
+  Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T item) step) async {
+    for (final item in items) {
+      // ruleid: await-in-loop-dart
+      await step(item);
+    }
+  }
+}
+
+class WrongOrderSignature {
+  Future<void> inOrder<T>(List<T> items, Future<void> Function(T item) step, {required String reason}) async {
+    for (final item in items) {
+      // ruleid: await-in-loop-dart
+      await step(item);
+    }
+  }
+
+  Future<void> inOrderSteps(List<Future<void> Function()> steps, {String reason = ''}) async {
+    for (final step in steps) {
+      // ruleid: await-in-loop-dart
+      await step();
+    }
+  }
+}
+
+Future<void> reviewedOrder(items, client, orders, String reason) async {
+  await inOrder(items, (item) async {
+    final first = await client.get(item);
+    final second = await orders.get(item);
+    print([first, second]);
+    for (final child in item.children) {
+      // ruleid: await-in-loop-dart
+      await client.get(child);
+    }
+  }, reason: 'Each update reads the previous write');
+  await inOrderSteps([
+    () async {
+      final first = await client.get('a');
+      final second = await orders.get('b');
+      print([first, second]);
+    },
+  ], reason: 'Each stage needs the preceding stage');
+  // ruleid: in-order-needs-reason-dart
+  await inOrder(items, client.put, reason: reason);
+  // ruleid: in-order-needs-reason-dart
+  await inOrder(items, client.put);
+  // ruleid: in-order-needs-reason-dart
+  await inOrderSteps([]);
+  // ruleid: in-order-needs-reason-dart
+  await inOrder(items, client.put, reason: '');
+  // ruleid: in-order-needs-reason-dart
+  await inOrderSteps([], reason: 'too short');
+  // ruleid: in-order-needs-reason-dart
+  await inOrder(items, client.put, reason: 'singlewordlongerthantwentycharacters');
+  // ruleid: in-order-needs-reason-dart
+  await inOrderSteps([], reason: '                       ');
+  await inOrderSteps([], reason: '1234567890 123456789');
+  await inOrderSteps([], reason: "Each stage needs the preceding stage");
+  await inOrderSteps([], reason: "Each writer's result feeds the next");
+  // ruleid: in-order-needs-reason-dart
+  await inOrderSteps([], reason: '123456789 123456789');
+  // ruleid: in-order-needs-reason-dart
+  await inOrderSteps([], reason: 'The order is $reason');
+  // ruleid: in-order-needs-reason-dart
+  await inOrderSteps([], reason: 12345678901234567890);
+  // ruleid: in-order-needs-reason-dart
+  await inOrderSteps([], reason: 'singlewordlongerthantwentycharacters   ');
+}
+
+Future<void> carriedResult(items, client, orders) async {
+  var cursor = 'start';
+  for (final item in items) {
+    cursor = await client.next(item, cursor);
+    // ruleid: await-in-loop-dart
+    await orders.notify(item);
+  }
+  for (final item in items) {
+    // ruleid: await-in-loop-dart
+    cursor = await client.next(item);
+    // ruleid: await-in-loop-dart
+    await orders.put(cursor);
+  }
+}
+
+Future<void> stoppingPoll(items, client, done, pause, wait) async {
+  for (final item in items) {
+    // ruleid: await-in-loop-dart
+    await client.poll(item);
+    // ruleid: await-in-loop-dart
+    await Future.any([done.future, pause(wait)]);
+  }
+  for (var i = 0; i < 10; i++) {
+    // ruleid: await-in-loop-dart
+    await client.poll(i);
+    // ruleid: await-in-loop-dart
+    await Future.any([done.future, pause(wait)]);
+  }
+  while (client.active) {
+    // ruleid: await-in-loop-dart
+    await client.poll();
+    // ruleid: await-in-loop-dart
+    await Future.any([done.future, pause(wait)]);
+  }
+  for (final item in items) {
+    // ruleid: await-in-loop-dart
+    await client.poll(item);
+    // ruleid: await-in-loop-dart
+    await Future.any([client.ready(), pause(wait)]);
+  }
+  while (client.active) {
+    // ruleid: await-in-loop-dart
+    await client.poll();
+    // ruleid: await-in-loop-dart
+    await Future.any([done.future, pause(wait)]);
+    // ruleid: await-in-loop-dart
+    await client.write();
+  }
+}
