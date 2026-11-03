@@ -50,8 +50,7 @@ rules:
           - pattern: RegExp("...", "=~/^[dimsuv]*$/")
           - patterns:
               - pattern: /.../
-              - pattern-not: /.../g
-              - pattern-not: /.../y
+              - pattern-not-regex: /(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\[\n])+/[a-z]*[gy]
   - id: regex-built-in-function-dart
     languages: [dart]
     severity: ERROR
@@ -77,8 +76,8 @@ rules:
     languages: [python]
     severity: WARNING
     message: >-
-      A list of bools stores one object reference per flag. Where the list is large or hot, use a bitset
-      (a bytearray of (n + 7) // 8 bytes with bit masks); an int rebuilds itself on every write.
+      A list of bools stores one object reference per flag. Use a bytearray(n), one byte per flag and as fast
+      as a list; pack eight flags per byte only when memory matters. An int bitset rebuilds itself on every write.
     paths: *paths
     pattern-either:
       - pattern: "[False] * $N"
@@ -156,14 +155,17 @@ rules:
     severity: ERROR
     message: Select only the columns this code reads instead of the whole row.
     paths: *paths
-    pattern-regex: (?is)['"](?:(?!exists\s*\()[^'"])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+    pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\()[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
   - id: whole-row-sql-file
     languages: [generic]
     severity: ERROR
     message: Select only the columns this code reads instead of the whole row.
     paths:
       include: ["*.sql"]
-    pattern-regex: (?is)(?<!exists \()(?<!exists\()\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+    patterns:
+      - pattern-regex: (?is)\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+      - pattern-not-regex: (?is)exists\s*\(\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+      - pattern-not-regex: --[^\n]*
   - id: whole-row-query-javascript
     languages: [javascript, typescript]
     severity: ERROR

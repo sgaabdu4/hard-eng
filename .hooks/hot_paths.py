@@ -35,7 +35,7 @@ def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, o
     except json.JSONDecodeError as error:
         raise ValueError(f"HE-HOT-PATH scan failed: {result.stderr[-500:]}") from error
     errors = report.get("errors", [])
-    if any(error.get("level") != "warn" for error in errors):
+    if any("PartialParsing" not in str(error.get("type")) for error in errors):
         raise ValueError(f"HE-HOT-PATH scan errors: {errors}")
     for error in errors:
         print(f"HE-HOT-PATH: partly scanned: {error.get('message', '')[:300]}")

@@ -1,6 +1,7 @@
 import 'package:async/async.dart';
 
 final word = RegExp(r'\w+');
+// Don't SELECT * FROM users here.
 
 bool words(String text, int size, String pattern) {
   // ruleid: regex-built-in-function-dart
