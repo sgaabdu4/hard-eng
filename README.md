@@ -233,7 +233,7 @@ Rules for every language:
 - [HE-PERFORMANCE-SUITE](.agents/skills/he/references/requirements.md#he-performance-suite): a performance suite, or a reviewed exception ([how to review](.agents/skills/he/references/gates.md)).
 - [HE-UNTRUSTED-JSON](.agents/skills/he/references/requirements.md#he-untrusted-json): parsed JSON is `unknown` until validated. Type casts fail, except `as const`.
 - [HE-FILE-LENGTH](.agents/skills/he/references/requirements.md#he-file-length): files longer than 1000 lines need a reviewed exception.
-- [HE-HOT-PATH](.agents/skills/he/references/requirements.md#he-hot-path): added code fails on known slow patterns; `python3 .hooks/hard-eng.py hot-paths` lists old ones.
+- [HE-HOT-PATH](.agents/skills/he/references/requirements.md#he-hot-path): the `security` gate fails known slow patterns across the whole repository; `python3 .hooks/hard-eng.py hot-paths` lists them.
 - Checks read each tool's report as well as its exit code. A missing, old, partial or failing report fails.
 - Fill in [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md) for your project.
 
