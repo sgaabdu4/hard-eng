@@ -304,12 +304,27 @@ rules:
           - pattern-inside: for (...; ...; ...) { ... }
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C)
-      - pattern: await $E
+      - pattern-either:
+          - patterns:
+              - pattern: await $E
+              - pattern-not: await Promise.all(...)
+          - patterns:
+              - pattern: await $E
+              - pattern: await Promise.all(...)
+              - pattern-not-inside: for (...; ...; $I += $S) { ... }
+      - pattern-not-inside: "for (...) { ... <... async (...) => <... await $E ...> ...>; ... }"
+      - pattern-not-inside: "for (...) { ... <... async (...) => { ... <... await $E ...>; ... } ...>; ... }"
+      - pattern-not-inside: "for (...) { ... <... async function (...) { ... <... await $E ...>; ... } ...>; ... }"
+      - pattern-not-inside: "while ($C) { ... <... async (...) => <... await $E ...> ...>; ... }"
+      - pattern-not-inside: "while ($C) { ... <... async (...) => { ... <... await $E ...>; ... } ...>; ... }"
+      - pattern-not-inside: "while ($C) { ... <... async function (...) { ... <... await $E ...>; ... } ...>; ... }"
       - pattern-not-regex: (?ms)^([ \t]*)for\s+await\s*\((?:[^;{]*?\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for (...) { ... break; }
       - pattern-not-inside: for (...) { ... return $R; }
       - pattern-not-inside: for (...) { ... return; }
+      - pattern-not-inside: if (<... await $E ...>) { ... throw $T; }
+      - pattern-not-inside: if (<... await $E ...>) throw $T;
       - pattern-not-inside: for (...) { ... await sleep(...); }
       - pattern-not-inside: for (...) { ... await delay(...); }
       - pattern-not-inside: for (...) { ... await setTimeout(...); }
@@ -337,12 +352,27 @@ rules:
           - pattern-inside: for (...; ...; ...) { ... }
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C);
-      - pattern: await $E
+      - pattern-either:
+          - patterns:
+              - pattern: await $E
+              - pattern-not: await Future.wait(...)
+          - patterns:
+              - pattern: await $E
+              - pattern: await Future.wait(...)
+              - pattern-not-inside: for (...; ...; $I += $S) { ... }
+      - pattern-not-inside: "for ($I in $C) { ... <... (...) async => <... await $E ...> ...>; ... }"
+      - pattern-not-inside: "for ($I in $C) { ... <... (...) async { ... <... await $E ...>; ... } ...>; ... }"
+      - pattern-not-inside: "for (...; ...; ...) { ... <... (...) async => <... await $E ...> ...>; ... }"
+      - pattern-not-inside: "for (...; ...; ...) { ... <... (...) async { ... <... await $E ...>; ... } ...>; ... }"
+      - pattern-not-inside: "while ($C) { ... <... (...) async => <... await $E ...> ...>; ... }"
+      - pattern-not-inside: "while ($C) { ... <... (...) async { ... <... await $E ...>; ... } ...>; ... }"
       - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\((?:[^;{]*?\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for ($I in $C) { ... break; }
       - pattern-not-inside: for ($I in $C) { ... return; }
       - pattern-not-inside: for ($I in $C) { ... return $R; }
+      - pattern-not-inside: if (<... await $E ...>) { ... throw $T; }
+      - pattern-not-inside: if (<... await $E ...>) throw $T;
       - pattern-not-inside: for ($I in $C) { ... await Future.delayed(...); }
       - pattern-not-inside: for (...; ...; ...) { ... break; }
       - pattern-not-inside: for (...; ...; ...) { ... return; }
@@ -458,8 +488,26 @@ rules:
           const $A = await $X;
           const $B = await <... $A ...>;
       - pattern-not: |
+          const $A = await $X;
+          const $B = await <... (...) => <... $A ...> ...>;
+      - pattern-not: |
+          const $A = await $X;
+          const $B = await <... (...) => { ... <... $A ...>; ... } ...>;
+      - pattern-not: |
+          const $A = await $X;
+          const $B = await <... function (...) { ... <... $A ...>; ... } ...>;
+      - pattern-not: |
           let $A = await $X;
           let $B = await <... $A ...>;
+      - pattern-not: |
+          let $A = await $X;
+          let $B = await <... (...) => <... $A ...> ...>;
+      - pattern-not: |
+          let $A = await $X;
+          let $B = await <... (...) => { ... <... $A ...>; ... } ...>;
+      - pattern-not: |
+          let $A = await $X;
+          let $B = await <... function (...) { ... <... $A ...>; ... } ...>;
   - id: sequential-awaits-python
     languages: [python]
     severity: ERROR
@@ -489,7 +537,7 @@ rules:
     severity: ERROR
     message: The second call does not use the first result. Start both together with Future.wait or a record's .wait.
     paths: *paths
-    pattern-regex: (?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(?>((?:[a-z]\w*?(?=[A-Z])|\w*_)?(?i:session|connection|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|tx|trx|rl|ws|page)(?![a-z])\w*)\b|\w+)[^;]*;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;])*;
+    pattern-regex: '(?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(?>((?:[a-z]\w*?(?=[A-Z])|\w*_)?(?i:session|connection|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|tx|trx|rl|ws|page)(?![a-z])\w*)\b|\w+)(?:[^;(){}\[\]]|(?<g>\((?:[^()]|(?&g))*+\)|\{(?:[^{}]|(?&g))*+\}|\[(?:[^\[\]]|(?&g))*+\]))*+;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;(){}\[\]]|(?<h>\((?:(?!\b\1\b)[^()]|(?&h))*+\)|\{(?:(?!\b\1\b)[^{}]|(?&h))*+\}|\[(?:(?!\b\1\b)[^\[\]]|(?&h))*+\]))*+;'
   - id: sequential-awaits-swift
     languages: [swift]
     severity: ERROR
