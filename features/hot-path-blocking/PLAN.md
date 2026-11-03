@@ -1,6 +1,6 @@
 # Hot-path rules fail old code
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -20,11 +20,11 @@ Decided: no suppression path exists (HE-NO-SWITCH-OFF), so each blocking rule sk
 
 ## Acceptance + steps
 
-- [ ] Each rule fires on its annotated fixture line and nowhere else, including the passing loop, URL, SQL, JSON and comment shapes → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
-- [ ] A Semgrep security gate fails on slow code that is already committed, and other gates do not get the rules → `tests/test_hot_paths.py::test_every_security_gate_fails_old_slow_code`.
-- [ ] `hot-paths` lists every finding and fails while any remain → `tests/test_hot_paths.py::test_a_repository_scan_lists_every_finding_and_fails`.
-- [ ] Python and other security gates get the rule file and the 60 s rule limit → `tests/test_tool_execution.py::test_security_scan_gives_each_rule_time_to_finish_under_load` and `tests/test_tool_execution.py::test_python_security_gate_replaces_only_the_registry_sha1_rule`.
-- [ ] Hard Eng's own code has no finding → `python3 .hooks/hard-eng.py hot-paths` prints `HE-HOT-PATH: 0 findings`.
+- [x] Each rule fires on its annotated fixture line and nowhere else, including the passing loop, URL, SQL, JSON and comment shapes → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
+- [x] A Semgrep security gate fails on slow code that is already committed, and other gates do not get the rules → `tests/test_hot_paths.py::test_every_security_gate_fails_old_slow_code`.
+- [x] `hot-paths` lists every finding and fails while any remain → `tests/test_hot_paths.py::test_a_repository_scan_lists_every_finding_and_fails`.
+- [x] Python and other security gates get the rule file and the 60 s rule limit → `tests/test_tool_execution.py::test_security_scan_gives_each_rule_time_to_finish_under_load` and `tests/test_tool_execution.py::test_python_security_gate_replaces_only_the_registry_sha1_rule`.
+- [x] Hard Eng's own code has no finding → `python3 .hooks/hard-eng.py hot-paths` prints `HE-HOT-PATH: 0 findings`.
 
 ## Baseline + execution
 
@@ -42,9 +42,9 @@ N/A — command-line checks and skill text; no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
-E2E: Required — the security gate command runs on a real repository in `tests/test_hot_paths.py`, and `hot-paths` runs on this repository.
+Result: Passed
+Evidence: `tests/test_hot_paths.py` (5 tests) passes: the fixture test counts findings per line across Python, TS, Dart, Swift, SQL and Prisma, including a file with a PEP 695 `type` statement; the gate test runs the real `security` command in an `ios` group, fails on committed slow code, skips a generated file and shows `ios`-relative `app.py:5 Compile this constant regex` in the gate error. `python3 .hooks/hard-eng.py hot-paths` on this repository: `HE-HOT-PATH: 0 findings` after 115 old findings in `.hooks/` were fixed. Full `check --plan-stage Ready` on 8818162: every gate passed, including `security` with the rules; `tests` failed only on the 6 tests that need the Dart and Swift SDKs this machine lacks (2166 passed); they fail on `develop` here too and pass in CI. Opus adversarial review, 4 rounds: 11, then 5, then 3, then 1 verified findings, all fixed with fixtures. Known misses, safe direction: loops nested inside a stream or worker loop, JS destructured loop items (Semgrep binds no names in JS destructuring), a `{` alone on the line after a stream-loop header, two independent awaits that destructure their results, Drizzle `json()`. Accepted: an ordered loop that does not stop early, update its condition or sleep must be rewritten.
+E2E: Passed — the real Semgrep security gate command ran on a Git repository in `tests/test_hot_paths.py`, and `hot-paths` and `check` ran on this repository.
 
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with the `hard-eng` CI check green, then the `develop` → `main` release PR.
