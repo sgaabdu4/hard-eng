@@ -78,7 +78,7 @@ Proof: check
 
 ## HE-HOT-PATH
 
-Added code must not build a constant regex inside a function, allocate an array of booleans, read whole rows (`SELECT *`, an ORM query without a column list) or add an in-process cache. `check` fails on these in added lines and prints the judgment cases there as notes: awaits in a loop, independent awaits in sequence, URL parsing in a loop, JSON columns and whole-entity loads. Code already on the base branch never fails; `python3 .hooks/hard-eng.py hot-paths` lists it.
+Code must not build a constant regex inside a function, allocate an array of booleans, read whole rows or entities (`SELECT *`, an ORM query without a column list), add an in-process cache, await inside a loop, await independent calls in sequence, parse the same URL on each loop pass or use a JSON column. Every Semgrep `security` gate runs these rules on the whole repository, so old code fails too; only the change that installs Hard Eng can record them as debt. A loop passes when it stops early, updates a value its condition reads, or sleeps on purpose. `python3 .hooks/hard-eng.py hot-paths` lists the findings.
 
 Proof: check
 
