@@ -59,6 +59,12 @@ PNPM_MISE_CHECK_STEP = re.compile(
     r"          -- (?P<check>uv run --no-project --with pyyaml python "
     r'\.hooks/hard-eng\.py check --base "\$BASE_SHA")\n'
 )
+JOB_TIMEOUTS = {
+    jobs: re.compile(
+        rf"(?ms)(^  (?:{jobs}):\n(?:(?!^  \S).)*?^    timeout-minutes: )\d+$"
+    )
+    for jobs in ("linux|apple", "hard-eng")
+}
 
 MAINTENANCE_EVENTS = {"schedule", "workflow_dispatch"}
 OLD_TRIGGERS = (
@@ -153,10 +159,8 @@ def workflow_budget(root: Path, content: str) -> str:
     if policy is None:
         return content
     jobs = "linux|apple" if "\n  apple:\n" in content else "hard-eng"
-    return re.sub(
-        rf"(?ms)(^  (?:{jobs}):\n(?:(?!^  \S).)*?^    timeout-minutes: )\d+$",
-        lambda match: match[1] + str(math.ceil(policy["ci_seconds"] / 60)),
-        content,
+    return JOB_TIMEOUTS[jobs].sub(
+        lambda match: match[1] + str(math.ceil(policy["ci_seconds"] / 60)), content
     )
 
 
