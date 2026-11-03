@@ -39,7 +39,7 @@ def square(value):
     return value * value
 
 
-async def load(client, ids, links, base, session, config):
+async def load(client, users, orders, ids, links, base, session, config, socket):
     for item in ids:
         # ruleid: await-in-loop-python
         await client.get(item)
@@ -53,15 +53,25 @@ async def load(client, ids, links, base, session, config):
     for item in ids:
         await client.put(item)
         await asyncio.sleep(1)
+    async for message in socket:
+        await socket.send(message)
+    while True:
+        await client.take()
     # ruleid: sequential-awaits-python
-    first = await client.get(1)
-    second = await client.get(2)
+    first = await users.get(1)
+    second = await orders.get(2)
+    print(second)
+    user = await session.get(1)
+    org = await session.get(2)
     total = first + second
     third = await client.get(total)
     fourth = await client.get(third)
     # ruleid: url-parse-in-loop-python
     hosts = [urlparse(base).netloc == link for link in links]
     paths = [urlparse(link).path for link in links]
+    named = {key: urlparse(value).path for key, value in links.items()}
+    for key, value in links.items():
+        hosts.append(urlparse(value).netloc + key)
     for link in links:
         trimmed = link.strip()
         hosts.append(urlparse(trimmed).netloc)
@@ -69,13 +79,17 @@ async def load(client, ids, links, base, session, config):
     user = User.objects.get(id=1)
     named = User.objects.filter(id=1).only("name")
     # ruleid: whole-entity-load-python
+    ordered = User.objects.filter(id=1).order_by("name")
+    known = User.objects.filter(id=1).exists()
+    # ruleid: whole-entity-load-python
     row = session.get(User, 1)
     value = config.get(KEY, 1)
     # ruleid: json-column-python
     settings = models.JSONField()
+    payload = serializers.JSONField()
     # ruleid: json-column-python
     key = "SELECT data->>'k' FROM users"
     body = client.response.json()
     kind = "application/json"
     # Stores a jsonb blob.
-    return fourth, hosts, paths, user, named, row, value, settings, key, body, kind, cachetools
+    return fourth, user, org, hosts, paths, named, ordered, known, row, value, settings, payload, key, body, kind, cachetools

@@ -311,31 +311,6 @@ def production_files(
     return files
 
 
-def semgrep_options(gate: Gate, command: list[str]) -> list[str]:
-    """Add Hard Eng's Semgrep rules to security scans and a 60 s limit per rule."""
-    if gate.get("role") == "security" and "p/python" in command:
-        index = command.index("p/python") + 1
-        command = [
-            *command[:index],
-            "--config",
-            str(ROOT / ".agents/skills/he/semgrep/python.yaml"),
-            "--exclude-rule",
-            "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
-            *command[index:],
-        ]
-    index = command.index("scan") if "scan" in command else 0
-    if not index or Path(command[index - 1]).name.split("@")[0] != "semgrep":
-        return command
-    if gate.get("role") == "security":
-        from hot_paths import RULES
-
-        command = [*command[: index + 1], "--config", str(RULES), *command[index + 1 :]]
-    if "--timeout" not in command:
-        # Semgrep's 5 s per-rule limit times out under parallel load, and --strict then fails the gate.
-        command = [*command[: index + 1], "--timeout", "60", *command[index + 1 :]]
-    return command
-
-
 def prepare_command(
     group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
 ) -> list[str]:
@@ -346,7 +321,9 @@ def prepare_command(
     )
     if not command:
         return []
-    command = semgrep_options(gate, command)
+    from hot_paths import semgrep_options
+
+    command = semgrep_options(ROOT, group, gate, command)
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 

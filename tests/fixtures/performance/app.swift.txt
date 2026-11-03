@@ -33,16 +33,21 @@ func load(ids: [String], client: Client) async throws {
     try await client.put(id)
     try await Task.sleep(nanoseconds: 1_000_000)
   }
+  for try await line in client.lines {
+    try await client.put(line)
+  }
   var cursor = try await client.page("")
   while !cursor.isEmpty {
     cursor = try await client.page(cursor)
   }
 }
 
-func pair(client: Client) async throws -> Int {
+func pair(client: Client, users: Client, orders: Client) async throws -> Int {
   // ruleid: sequential-awaits-swift
-  let first = try await client.get(1)
-  let second = try await client.get(2)
+  let first = try await users.get(1)
+  let second = try await orders.get(2)
   let third = try await client.get(second)
-  return first + third
+  let user = try await client.get(1)
+  let org = try await client.get(2)
+  return first + third + user + org
 }
