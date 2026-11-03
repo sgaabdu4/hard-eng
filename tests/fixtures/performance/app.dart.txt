@@ -53,5 +53,10 @@ Future<void> load(List<String> ids, Client client, Client users, Client blocks, 
   await for (final line in lines) {
     await client.put(line);
   }
+  await for (final line in client.stream(
+    'a',
+  )) {
+    await client.put(line);
+  }
   print([first, third, yes, no, top, bottom, left, right]);
 }

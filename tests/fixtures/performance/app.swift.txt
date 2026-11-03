@@ -36,6 +36,11 @@ func load(ids: [String], client: Client) async throws {
   for try await line in client.lines {
     try await client.put(line)
   }
+  for try await line in client.stream(
+    from: 1
+  ) {
+    try await client.put(line)
+  }
   var cursor = try await client.page("")
   while !cursor.isEmpty {
     cursor = try await client.page(cursor)

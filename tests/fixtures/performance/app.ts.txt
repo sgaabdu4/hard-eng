@@ -43,6 +43,11 @@ export async function load(blocks: Db, session: Db, db: Db, users: Db, orders: D
   })) {
     await db.put(chunk);
   }
+  for await (const chunk of db.stream(
+    base,
+  )) {
+    await db.put(chunk);
+  }
   for (const id of ids) {
     // ruleid: await-in-loop-javascript
     await db.remove(id);
