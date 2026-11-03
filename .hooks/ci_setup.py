@@ -14,6 +14,52 @@ from ci_jobs import migrate_bun_version, migrate_runner_variable, migrate_swift_
 from gate_config import GateConfig, Group
 from project_setup import dependency_command
 
+MISE_INSTALL_EXEC_LINE = re.compile(
+    r"(?m)^(?P<indent> +)(?P<launcher>bun x (?:\S+ )+?mise --no-config) "
+    r"install (?P<tools>[^&\n]+) &&\n"
+    r"(?P=indent)MISE_FETCH_REMOTE_VERSIONS_CACHE=1h (?P=launcher) exec (?P=tools) -- "
+)
+MISE_CHECK_STEP = re.compile(
+    r"(?m)^          (?P<launcher>bun x (?:\S+ )+?mise --no-config) "
+    r"install (?P<tools>[\w@.+ -]+) &&\n"
+    r"          MISE_FETCH_REMOTE_VERSIONS_CACHE=1h (?P=launcher) exec (?P=tools) -- "
+    r'uv run --no-project --with pyyaml python \.hooks/hard-eng\.py check --base "\$BASE_SHA"\n'
+)
+
+TOOL_NAME_BEFORE_AT = re.compile(r"\b([a-z]+)@")
+BUN_X_MISE_LAUNCHER = re.compile(r"bun x \S+ mise")
+BASE_ARGUMENT = re.compile(r"--base(?:\s|=)\S+")
+PNPM_SETUP_USES = re.compile(r"\buses: pnpm/setup@")
+TOOL_SPECIFICATION = re.compile(r"[a-z]+@[\w.+-]+")
+JOB_BOUNDARY = re.compile(r"(?m)^(?=  [A-Za-z0-9_-]+:\n)")
+BUN_CACHE_ENV_LINE = re.compile(r'(?m)^( *)echo "BUN_INSTALL_CACHE_DIR=[^\n]*\n')
+BUN_RUNNER_USAGE = re.compile(r"setup-bun|\bbunx\b|\bbun (?:x|install|run)\b")
+FLUTTER_COMMAND = re.compile(r"\bflutter\s+(?:pub|test|analyze|build)\b")
+DART_COMMAND = re.compile(r"\bdart\s+(?:pub|test|analyze|compile|run|format)\b")
+BUN_TOOL_SPECIFICATION = re.compile(
+    r"bun@(?:latest|\d+(?:\.\d+){0,2}(?:-[\w.-]+)?)(?:\+[\w.-]+)?"
+)
+HARD_ENG_CHECK_COMMAND = re.compile(r"\.hooks/hard-eng\.py\s+check(?=\s|$)[^\n;|&]*")
+PNPM_STEP_BLOCK = re.compile(r"(?m)^      - [^\n]*\n(?:        [^\n]*\n)*")
+PNPM_ENV_LINES = re.compile(
+    r'(?m)^( +)echo "PNPM_CONFIG_STORE_DIR=[^\n]*\n +echo "PNPM_CONFIG_CACHE_DIR=[^\n]*\n'
+)
+SDK_TOOLS_ENV_EXPRESSION = re.compile(
+    r"SDK_TOOLS: \$\{\{ steps\.impact\.outputs\.tools \|\| '[^']*' \}\}"
+)
+PNPM_MISE_LAUNCHER = re.compile(
+    r"pnpm dlx (?:--config\.ignore-scripts=false )?--allow-build=@jdxcode/mise "
+    r"--package=@jdxcode/mise@latest mise"
+)
+PNPM_MISE_CHECK_STEP = re.compile(
+    r"(?m)^        run: >-\n"
+    r"          pnpm dlx --allow-build=@jdxcode/mise\n"
+    r"          --package=@jdxcode/mise@latest mise --no-config exec\n"
+    r"          (?P<tools>[^\n]+)\n"
+    r"          -- (?P<check>uv run --no-project --with pyyaml python "
+    r'\.hooks/hard-eng\.py check --base "\$BASE_SHA")\n'
+)
+
 MAINTENANCE_EVENTS = {"schedule", "workflow_dispatch"}
 OLD_TRIGGERS = (
     "on:\n  push:\n    branches-ignore:\n      - 'feature/**'\n  pull_request:\n"
@@ -53,10 +99,7 @@ def bun_specification(root: Path, package: Group, groups: list[Group]) -> str:
         declared = "bun@latest"
     if (
         not isinstance(declared, str)
-        or re.fullmatch(
-            r"bun@(?:latest|\d+(?:\.\d+){0,2}(?:-[\w.-]+)?)(?:\+[\w.-]+)?", declared
-        )
-        is None
+        or BUN_TOOL_SPECIFICATION.fullmatch(declared) is None
     ):
         raise ValueError("CI requires a valid bun packageManager version")
     return declared.split("+", 1)[0]
@@ -70,12 +113,8 @@ def impact_tools(root: Path, groups: list[Group]) -> list[str]:
         language = group.get("language")
         commands = " ".join(" ".join(gate["command"]) for gate in group["checks"])
         executables = {Path(gate["command"][0]).name for gate in group["checks"]}
-        flutter = "flutter" in executables or re.search(
-            r"\bflutter\s+(?:pub|test|analyze|build)\b", commands
-        )
-        dart = "dart" in executables or re.search(
-            r"\bdart\s+(?:pub|test|analyze|compile|run|format)\b", commands
-        )
+        flutter = "flutter" in executables or FLUTTER_COMMAND.search(commands)
+        dart = "dart" in executables or DART_COMMAND.search(commands)
         if language == "dart" or flutter or dart:
             tools.append("flutter@latest" if flutter else "dart@latest")
         if language == "python" and (directory / "poetry.lock").exists():
@@ -150,22 +189,14 @@ def migrate_bun(source: Path, content: str) -> str:
     template = (source / ".github/workflows/hard-eng.yml").read_text()
     start = template.index("      - uses: oven-sh/setup-bun@")
     setup = template[start : template.index("      - name: ", start)]
-    launcher = re.search(r"bun x \S+ mise", template)
+    launcher = BUN_X_MISE_LAUNCHER.search(template)
     if launcher is None:
         raise ValueError("Hard Eng workflow template has no Bun mise launcher")
-    content = re.sub(
-        r"(?m)^      - [^\n]*\n(?:        [^\n]*\n)*",
-        lambda step: setup if re.search(r"\buses: pnpm/setup@", step[0]) else step[0],
-        content,
+    content = PNPM_STEP_BLOCK.sub(
+        lambda step: setup if PNPM_SETUP_USES.search(step[0]) else step[0], content
     )
-    content = re.sub(
-        r"pnpm dlx (?:--config\.ignore-scripts=false )?--allow-build=@jdxcode/mise "
-        r"--package=@jdxcode/mise@latest mise",
-        lambda _: launcher[0],
-        content,
-    )
-    content = re.sub(
-        r'(?m)^( +)echo "PNPM_CONFIG_STORE_DIR=[^\n]*\n +echo "PNPM_CONFIG_CACHE_DIR=[^\n]*\n',
+    content = PNPM_MISE_LAUNCHER.sub(lambda _: launcher[0], content)
+    content = PNPM_ENV_LINES.sub(
         r'\1echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/bun/cache"\n',
         content,
     )
@@ -189,12 +220,12 @@ def migrate_launcher(source: Path, content: str) -> str:
     template = (source / ".github/workflows/hard-eng.yml").read_text()
     echo = next(line for line in template.splitlines() if "MISE_PACKAGE=" in line)
     # Each job runs on its own runner, so every job that launches mise sets the package.
-    jobs = re.split(r"(?m)^(?=  [A-Za-z0-9_-]+:\n)", content)
+    jobs = JOB_BOUNDARY.split(content)
     for index, job in enumerate(jobs):
         if (
             LEGACY_PACKAGE in job or MISE_PACKAGE in job
         ) and 'echo "MISE_PACKAGE=' not in job:
-            anchor = re.search(r'(?m)^( *)echo "BUN_INSTALL_CACHE_DIR=[^\n]*\n', job)
+            anchor = BUN_CACHE_ENV_LINE.search(job)
             if anchor is None:
                 name = job.split(":", 1)[0].strip()
                 print(
@@ -237,13 +268,7 @@ LAUNCHER = "pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise"
 
 def migrate_workflow_tools(content: str) -> str:
     launcher = f"{LAUNCHER} --package=@jdxcode/mise@latest mise --no-config"
-    return re.sub(
-        r"(?m)^        run: >-\n"
-        r"          pnpm dlx --allow-build=@jdxcode/mise\n"
-        r"          --package=@jdxcode/mise@latest mise --no-config exec\n"
-        r"          (?P<tools>[^\n]+)\n"
-        r"          -- (?P<check>uv run --no-project --with pyyaml python "
-        r'\.hooks/hard-eng\.py check --base "\$BASE_SHA")\n',
+    return PNPM_MISE_CHECK_STEP.sub(
         lambda match: (
             "        run: |\n"
             f"          {launcher} install {match['tools']} &&\n"
@@ -304,7 +329,7 @@ def workflow_tools(root: Path, config: GateConfig) -> list[str]:
                 if language == "javascript"
                 else manager + "@latest"
             )
-            if re.fullmatch(r"[a-z]+@[\w.+-]+", specification) is None:
+            if TOOL_SPECIFICATION.fullmatch(specification) is None:
                 raise ValueError(
                     "CI SDK specifications must contain a tool and version"
                 )
@@ -349,19 +374,13 @@ def migrate_workflow_sdks(root: Path, config: GateConfig, content: str) -> str:
                         content,
                     )
         fallback = " ".join([*BOOTSTRAP_TOOLS, *required])
-        return re.sub(
-            r"SDK_TOOLS: \$\{\{ steps\.impact\.outputs\.tools \|\| '[^']*' \}\}",
+        return SDK_TOOLS_ENV_EXPRESSION.sub(
             "SDK_TOOLS: ${{ steps.impact.outputs.tools || '" + fallback + "' }}",
             content,
         )
-    pattern = re.compile(
-        r"(?m)^(?P<indent> +)(?P<launcher>bun x (?:\S+ )+?mise --no-config) "
-        r"install (?P<tools>[^&\n]+) &&\n"
-        r"(?P=indent)MISE_FETCH_REMOTE_VERSIONS_CACHE=1h (?P=launcher) exec (?P=tools) -- "
-    )
-    match = pattern.search(content)
+    match = MISE_INSTALL_EXEC_LINE.search(content)
     if match is None:
-        names = set(re.findall(r"\b([a-z]+)@", content))
+        names = set(TOOL_NAME_BEFORE_AT.findall(content))
         missing = [tool for tool in required if tool.split("@")[0] not in names]
         if missing:
             print(
@@ -400,13 +419,7 @@ def migrate_affected_tools(
         or "env" in jobs["hard-eng"]
     ):
         return content
-    pattern = re.compile(
-        r"(?m)^          (?P<launcher>bun x (?:\S+ )+?mise --no-config) "
-        r"install (?P<tools>[\w@.+ -]+) &&\n"
-        r"          MISE_FETCH_REMOTE_VERSIONS_CACHE=1h (?P=launcher) exec (?P=tools) -- "
-        r'uv run --no-project --with pyyaml python \.hooks/hard-eng\.py check --base "\$BASE_SHA"\n'
-    )
-    match = pattern.search(content)
+    match = MISE_CHECK_STEP.search(content)
     marker = "      - name: Run required checks\n"
     if match is None or "id: impact" not in content or content.count(marker) != 1:
         return content
@@ -546,19 +559,15 @@ def runs_hard_eng_check(workflow: object, *, require_base: bool = False) -> bool
         if isinstance(job, dict) and isinstance(job.get("steps"), list)
         for step in job["steps"]
         if isinstance(step, dict) and isinstance(step.get("run"), str)
-        for match in re.finditer(
-            r"\.hooks/hard-eng\.py\s+check(?=\s|$)[^\n;|&]*",
-            step["run"].replace("\\\n", " "),
-        )
+        for match in HARD_ENG_CHECK_COMMAND.finditer(step["run"].replace("\\\n", " "))
     ]
     return bool(commands) and (
-        not require_base
-        or all(re.search(r"--base(?:\s|=)\S+", command) for command in commands)
+        not require_base or all(BASE_ARGUMENT.search(command) for command in commands)
     )
 
 
 def report_missing_bun(path: Path) -> None:
-    if not re.search(r"setup-bun|\bbunx\b|\bbun (?:x|install|run)\b", path.read_text()):
+    if not BUN_RUNNER_USAGE.search(path.read_text()):
         print(
             f"CI adaptation pending: {path.name} runs Hard Eng without setting up Bun; "
             "add an oven-sh/setup-bun step before the check.",

@@ -17,6 +17,11 @@ from gate_config import (
     repository_files,
 )
 
+WHITESPACE_RUN = re.compile(r"\s+")
+BLOCK_OR_LINE_COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
+TEMPLATE_SECTION = re.compile(r"\{\{#(\w+)\}\}.*?\{\{/\1\}\}", re.DOTALL)
+INVERTED_TEMPLATE_SECTION = re.compile(r"\{\{\^(\w+)\}\}(.*?)\{\{/\1\}\}", re.DOTALL)
+
 PLATFORMS = ("ios", "macos")
 NOT_AUTHORED = {"Flutter", "Pods"}
 TEST_FLAGS = (
@@ -66,10 +71,10 @@ class SwiftProject(NamedTuple):
 
 def fingerprint(text: str) -> str:
     """The text without comments, whitespace and the plugin-only template sections."""
-    text = re.sub(r"\{\{\^(\w+)\}\}(.*?)\{\{/\1\}\}", r"\2", text, flags=re.DOTALL)
-    text = re.sub(r"\{\{#(\w+)\}\}.*?\{\{/\1\}\}", "", text, flags=re.DOTALL)
-    text = re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.DOTALL)
-    return hashlib.sha256(re.sub(r"\s+", "", text).encode()).hexdigest()[:16]
+    text = INVERTED_TEMPLATE_SECTION.sub(r"\2", text)
+    text = TEMPLATE_SECTION.sub("", text)
+    text = BLOCK_OR_LINE_COMMENT.sub("", text)
+    return hashlib.sha256(WHITESPACE_RUN.sub("", text).encode()).hexdigest()[:16]
 
 
 def installed_templates() -> frozenset[str]:
