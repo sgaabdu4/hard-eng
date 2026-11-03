@@ -448,6 +448,23 @@ def test_findings_and_empty_analysis_fail(
         reports.SCANNERS[kind](path)
 
 
+def test_semgrep_failure_names_each_finding_and_its_fix(tmp_path: Path) -> None:
+    """HE-HOT-PATH: a failing gate shows where each finding is and how to fix it."""
+    finding = (
+        '{"path":"src/a.py","start":{"line":7},'
+        '"extra":{"message":"Compile this constant regex once at module level."}}'
+    )
+    path = tmp_path / "report"
+    path.write_text(
+        REPORTS["semgrep"].replace('"results":[]', f'"results":[{finding}]')
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"src/a\.py:7 Compile this constant regex once at module level\.",
+    ):
+        reports.validate_semgrep(path)
+
+
 @pytest.mark.parametrize(
     "tool", ["dart-decimate", "dart-decimate 0.0.44", "dart-decimate 0.1.0-beta.1"]
 )
