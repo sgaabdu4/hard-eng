@@ -132,4 +132,34 @@ def test_a_partly_parsed_file_still_reports_its_findings(
     assert [
         result["start"]["line"] for result in found if isinstance(result["start"], dict)
     ] == [4]
-    assert "HE-HOT-PATH: partly scanned" in capsys.readouterr().out
+    assert "Semgrep partly scanned View.swift:7" in capsys.readouterr().out
+
+
+def test_a_partly_parsed_page_passes_the_gate_but_its_findings_fail_it(
+    runner: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-HOT-PATH: the stock Next.js page, which Semgrep parses only in part, passes; slow code in it fails."""
+    page = runner.ROOT / "page.tsx"
+    link = (
+        '<a href="https://vercel.com/templates?framework=next.js&utm_source=app">Go</a>'
+    )
+    slow = "export function seen(text: string) {\n  return /a+b/.test(text);\n}\n"
+    gate: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep", "scan", "--error", "--strict", "--metrics=off"]
+        + ["--time", "--json", "--output", "semgrep.json", "."],
+    }
+    command = runner.prepare_command({"path": ".", "checks": []}, gate, 5)
+    report = runner.ROOT / "semgrep.json"
+    for code, failed in ((slow, 1), ("", 0)):
+        page.write_text(
+            f"{code}export default function Page() {{\n  return {link};\n}}\n"
+        )
+        result = subprocess.run(command, cwd=runner.ROOT, check=False)
+        assert result.returncode == failed
+        if failed:
+            with pytest.raises(ValueError, match=r"page\.tsx:2 Build this constant"):
+                validate_semgrep(report)
+    validate_semgrep(report)
+    assert "Semgrep partly scanned page.tsx:" in capsys.readouterr().out

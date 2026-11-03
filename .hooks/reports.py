@@ -474,8 +474,9 @@ def validate_semgrep(path: Path) -> None:
                     for item in results[:30]
                 )
             )
-        if report["errors"] != []:
-            raise ValueError("Semgrep reports scan errors")
+        from hot_paths import require_parsed
+
+        require_parsed(report["errors"])
         if report["skipped_rules"] != [] or report["paths"].get("skipped", []) != []:
             raise ValueError("Semgrep reports skipped analysis")
         scanned, timing = report["paths"]["scanned"], report["time"]
