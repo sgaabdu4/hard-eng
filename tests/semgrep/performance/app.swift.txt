@@ -1,0 +1,21 @@
+import Foundation
+
+let word = try! NSRegularExpression(pattern: "\\w+")
+
+func words(text: String, size: Int, pattern: String) throws -> Bool {
+  // ruleid: regex-built-in-function-swift
+  let found = try NSRegularExpression(pattern: "a+b")
+  let dynamic = try NSRegularExpression(pattern: pattern)
+  // ruleid: bool-array-swift
+  let seen = [Bool](repeating: false, count: size)
+  // ruleid: in-process-cache-swift
+  let cache = NSCache<NSString, NSString>()
+  return found.pattern.isEmpty && dynamic.pattern.isEmpty && seen.isEmpty && cache.name.isEmpty
+}
+
+func load(ids: [String], client: Client) async throws {
+  for id in ids {
+    // ruleid: await-in-loop-swift
+    try await client.get(id)
+  }
+}
