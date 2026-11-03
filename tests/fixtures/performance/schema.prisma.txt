@@ -1,3 +1,4 @@
+// No Json columns here.
 model User {
   id       Int  @id
   // ruleid: json-column

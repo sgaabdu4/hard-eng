@@ -19,6 +19,9 @@ def words(text, pattern):
     # ruleid: regex-built-in-function-python
     found = re.findall(r"\w+", text)
     dynamic = re.compile(pattern)
+    # ruleid: regex-built-in-function-python
+    joined = re.compile("a" "b")
+    formatted = re.compile(f"{pattern}x")
     # ruleid: bool-array-python
     seen = [False] * len(text)
     # ruleid: whole-row-sql-python
@@ -26,7 +29,8 @@ def words(text, pattern):
     columns = "SELECT id, name FROM users"
     count = "SELECT COUNT(*) FROM users"
     exists = "SELECT 1 WHERE EXISTS (SELECT * FROM users)"
-    return found, dynamic, seen, query, columns, count, exists, TOKEN
+    copy = "INSERT INTO archive SELECT * FROM users"
+    return found, dynamic, joined, formatted, seen, query, columns, count, exists, copy, TOKEN
 
 
 # ruleid: in-process-cache-python
@@ -35,10 +39,20 @@ def square(value):
     return value * value
 
 
-async def load(client, ids, links):
+async def load(client, ids, links, base, session, config):
     for item in ids:
         # ruleid: await-in-loop-python
         await client.get(item)
+    cursor = await client.page(None)
+    while cursor:
+        cursor = await client.page(cursor)
+    for attempt in ids:
+        result = await client.try_once(attempt)
+        if result:
+            break
+    for item in ids:
+        await client.put(item)
+        await asyncio.sleep(1)
     # ruleid: sequential-awaits-python
     first = await client.get(1)
     second = await client.get(2)
@@ -46,11 +60,22 @@ async def load(client, ids, links):
     third = await client.get(total)
     fourth = await client.get(third)
     # ruleid: url-parse-in-loop-python
-    hosts = [urlparse(link).netloc for link in links]
+    hosts = [urlparse(base).netloc == link for link in links]
+    paths = [urlparse(link).path for link in links]
+    for link in links:
+        trimmed = link.strip()
+        hosts.append(urlparse(trimmed).netloc)
     # ruleid: whole-entity-load-python
     user = User.objects.get(id=1)
     named = User.objects.filter(id=1).only("name")
-    # ruleid: json-column-code
+    # ruleid: whole-entity-load-python
+    row = session.get(User, 1)
+    value = config.get(KEY, 1)
+    # ruleid: json-column-python
     settings = models.JSONField()
+    # ruleid: json-column-python
+    key = "SELECT data->>'k' FROM users"
     body = client.response.json()
-    return fourth, hosts, user, named, settings, body, cachetools, asyncio
+    kind = "application/json"
+    # Stores a jsonb blob.
+    return fourth, hosts, paths, user, named, row, value, settings, key, body, kind, cachetools

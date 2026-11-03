@@ -6,7 +6,6 @@ rules:
     paths: &paths
       exclude:
         [
-          ".hooks/",
           ".agents/",
           "test/",
           "tests/",
@@ -24,10 +23,13 @@ rules:
       - pattern-inside: |
           def $F(...):
             ...
-      - pattern: re.$M("...", ...)
+      - pattern: re.$M($S, ...)
       - metavariable-regex:
           metavariable: $M
           regex: ^(compile|match|fullmatch|search|sub|subn|split|findall|finditer)$
+      - metavariable-regex:
+          metavariable: $S
+          regex: ^[rbuRB]*["']
   - id: regex-built-in-function-javascript
     languages: [javascript, typescript]
     options:
@@ -74,7 +76,7 @@ rules:
       - pattern: 'NSRegularExpression(pattern: "...", ...)'
   - id: bool-array-python
     languages: [python]
-    severity: WARNING
+    severity: ERROR
     message: >-
       A list of bools stores one object reference per flag. Use a bytearray(n), one byte per flag and as fast
       as a list; pack eight flags per byte only when memory matters. An int bitset rebuilds itself on every write.
@@ -129,7 +131,7 @@ rules:
       - pattern: '"$SQL"'
       - metavariable-regex: &select-all
           metavariable: $SQL
-          regex: (?is)^(?:(?!exists\s*\().)*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+          regex: (?is)^(?:(?!exists\s*\(|insert\s+into\b).)*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
   - id: whole-row-sql
     languages: [javascript, typescript]
     options:
@@ -155,7 +157,9 @@ rules:
     severity: ERROR
     message: Select only the columns this code reads instead of the whole row.
     paths: *paths
-    pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\()[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+    patterns:
+      - pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\(|insert\s+into\b)[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+      - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-row-sql-file
     languages: [generic]
     severity: ERROR
@@ -163,9 +167,8 @@ rules:
     paths:
       include: ["*.sql"]
     patterns:
-      - pattern-regex: (?is)\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
-      - pattern-not-regex: (?is)exists\s*\(\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
-      - pattern-not-regex: --[^\n]*
+      - pattern-regex: (?im)^(?:(?!exists\s*\(|insert\s+into\b)(?:[^'\n-]|'[^'\n]*'|-(?!-)))*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+      - pattern-not-regex: (?is)(?:exists\s*\(|insert\s+into\b[^;]*?)\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
       - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-row-query-javascript
     languages: [javascript, typescript]
@@ -232,8 +235,10 @@ rules:
       - pattern: NSCache()
   - id: await-in-loop-python
     languages: [python]
-    severity: WARNING
-    message: Each loop pass waits for the last one. Start independent calls together (asyncio.gather or a TaskGroup); keep the loop only when a pass needs the previous result or the order matters.
+    severity: ERROR
+    message: >-
+      Each loop pass waits for the last one. Start independent calls together with asyncio.gather or a TaskGroup.
+      A loop passes when it stops early (break or return), reads a value it updates in its condition, or sleeps on purpose.
     paths: *paths
     patterns:
       - pattern-either:
@@ -245,10 +250,48 @@ rules:
                 ...
           - pattern-inside: "[...]"
       - pattern: await $E
+      - pattern-not-inside: |
+          for $X in $Y:
+            ...
+            break
+      - pattern-not-inside: |
+          for $X in $Y:
+            ...
+            return $R
+      - pattern-not-inside: |
+          for $X in $Y:
+            ...
+            return
+      - pattern-not-inside: |
+          for $X in $Y:
+            ...
+            await asyncio.sleep(...)
+      - pattern-not-inside: |
+          while $C:
+            ...
+            break
+      - pattern-not-inside: |
+          while $C:
+            ...
+            return $R
+      - pattern-not-inside: |
+          while $C:
+            ...
+            return
+      - pattern-not-inside: |
+          while $C:
+            ...
+            await asyncio.sleep(...)
+      - pattern-not-inside: |
+          while <... $V ...>:
+            ...
+            $V = $X
   - id: await-in-loop-javascript
     languages: [javascript, typescript]
-    severity: WARNING
-    message: Each loop pass waits for the last one. Start independent calls together (Promise.all); keep the loop only when a pass needs the previous result or the order matters.
+    severity: ERROR
+    message: >-
+      Each loop pass waits for the last one. Start independent calls together with Promise.all.
+      A loop passes when it stops early (break or return), reads a value it updates in its condition, or sleeps on purpose.
     paths: *paths
     patterns:
       - pattern-either:
@@ -258,31 +301,121 @@ rules:
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C)
       - pattern: await $E
+      - pattern-not-inside: for (...) { ... break; }
+      - pattern-not-inside: for (...) { ... return $R; }
+      - pattern-not-inside: for (...) { ... return; }
+      - pattern-not-inside: for (...) { ... await sleep(...); }
+      - pattern-not-inside: for (...) { ... await delay(...); }
+      - pattern-not-inside: for (...) { ... await setTimeout(...); }
+      - pattern-not-inside: while ($C) { ... break; }
+      - pattern-not-inside: while ($C) { ... return $R; }
+      - pattern-not-inside: while ($C) { ... return; }
+      - pattern-not-inside: while ($C) { ... await sleep(...); }
+      - pattern-not-inside: while ($C) { ... await delay(...); }
+      - pattern-not-inside: while ($C) { ... await setTimeout(...); }
+      - pattern-not-inside: do { ... break; } while ($C)
+      - pattern-not-inside: do { ... return $R; } while ($C)
+      - pattern-not-inside: do { ... return; } while ($C)
+      - pattern-not-inside: while (<... $V ...>) { ... $V = $X; ... }
+      - pattern-not-inside: do { ... $V = $X; ... } while (<... $V ...>)
   - id: await-in-loop-dart
     languages: [dart]
-    severity: WARNING
-    message: Each loop pass waits for the last one. Start independent calls together (Future.wait); keep the loop only when a pass needs the previous result or the order matters.
+    severity: ERROR
+    message: >-
+      Each loop pass waits for the last one. Start independent calls together with Future.wait.
+      A loop passes when it stops early (break or return), reads a value it updates in its condition, or sleeps on purpose.
     paths: *paths
     patterns:
       - pattern-either:
           - pattern-inside: for ($I in $C) { ... }
           - pattern-inside: for (...; ...; ...) { ... }
           - pattern-inside: while ($C) { ... }
+          - pattern-inside: do { ... } while ($C);
       - pattern: await $E
+      - pattern-not-inside: for ($I in $C) { ... break; }
+      - pattern-not-inside: for ($I in $C) { ... return; }
+      - pattern-not-inside: for ($I in $C) { ... return $R; }
+      - pattern-not-inside: for ($I in $C) { ... await Future.delayed(...); }
+      - pattern-not-inside: for (...; ...; ...) { ... break; }
+      - pattern-not-inside: for (...; ...; ...) { ... return; }
+      - pattern-not-inside: for (...; ...; ...) { ... return $R; }
+      - pattern-not-inside: for (...; ...; ...) { ... await Future.delayed(...); }
+      - pattern-not-inside: while ($C) { ... break; }
+      - pattern-not-inside: while ($C) { ... return; }
+      - pattern-not-inside: while ($C) { ... return $R; }
+      - pattern-not-inside: while ($C) { ... await Future.delayed(...); }
+      - pattern-not-inside: do { ... break; } while ($C);
+      - pattern-not-inside: do { ... return; } while ($C);
+      - pattern-not-inside: do { ... return $R; } while ($C);
+      - pattern-not-inside: while (<... $V ...>) { ... $V = $X; ... }
+      - pattern-not-inside: do { ... $V = $X; ... } while (<... $V ...>);
   - id: await-in-loop-swift
     languages: [swift]
-    severity: WARNING
-    message: Each loop pass waits for the last one. Start independent calls together (async let or a task group); keep the loop only when a pass needs the previous result or the order matters.
+    severity: ERROR
+    message: >-
+      Each loop pass waits for the last one. Start independent calls together with async let or a task group.
+      A loop passes when it stops early (break or return), reads a value it updates in its condition, or sleeps on purpose.
     paths: *paths
     patterns:
       - pattern-either:
           - pattern-inside: for $I in $C { ... }
           - pattern-inside: while $C { ... }
+          - pattern-inside: repeat { ... } while $C
       - pattern: await $E
+      - pattern-not-inside: |
+          for $I in $C {
+            ...
+            break
+          }
+      - pattern-not-inside: |
+          for $I in $C {
+            ...
+            return $R
+          }
+      - pattern-not-inside: |
+          for $I in $C {
+            ...
+            return
+          }
+      - pattern-not-inside: |
+          for $I in $C {
+            ...
+            try await Task.sleep(...)
+          }
+      - pattern-not-inside: |
+          while $C {
+            ...
+            break
+          }
+      - pattern-not-inside: |
+          while $C {
+            ...
+            return $R
+          }
+      - pattern-not-inside: |
+          while $C {
+            ...
+            return
+          }
+      - pattern-not-inside: |
+          while $C {
+            ...
+            try await Task.sleep(...)
+          }
+      - pattern-not-inside: |
+          while $C {
+            ...
+            $V = $X
+          }
+      - pattern-not-inside: |
+          repeat {
+            ...
+            $V = $X
+          } while $C
   - id: sequential-awaits-javascript
     languages: [javascript, typescript]
-    severity: WARNING
-    message: The second call does not use the first result. Start both together with Promise.all unless the order matters.
+    severity: ERROR
+    message: The second call does not use the first result. Start both together with Promise.all.
     paths: *paths
     patterns:
       - pattern-either:
@@ -300,8 +433,8 @@ rules:
           let $B = await <... $A ...>;
   - id: sequential-awaits-python
     languages: [python]
-    severity: WARNING
-    message: The second call does not use the first result. Start both together with asyncio.gather unless the order matters.
+    severity: ERROR
+    message: The second call does not use the first result. Start both together with asyncio.gather.
     paths: *paths
     patterns:
       - pattern: |
@@ -310,10 +443,16 @@ rules:
       - pattern-not: |
           $A = await $X
           $B = await <... $A ...>
+  - id: sequential-awaits-dart
+    languages: [dart]
+    severity: ERROR
+    message: The second call does not use the first result. Start both together with Future.wait or a record's .wait.
+    paths: *paths
+    pattern-regex: (?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\b[^;]*;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\b(?:(?!\b\1\b)[^;])*;
   - id: sequential-awaits-swift
     languages: [swift]
-    severity: WARNING
-    message: The second call does not use the first result. Start both together with async let unless the order matters.
+    severity: ERROR
+    message: The second call does not use the first result. Start both together with async let.
     paths: *paths
     patterns:
       - pattern-either:
@@ -331,46 +470,139 @@ rules:
           let $B = await <... $A ...>
   - id: url-parse-in-loop-javascript
     languages: [javascript, typescript]
-    severity: WARNING
-    message: This parses a URL on every pass. Parse once outside the loop, keep the URL object, or compare the strings directly.
+    severity: ERROR
+    message: This parses the same URL on every pass. Parse it once before the loop, or compare the strings directly.
     paths: *paths
     patterns:
       - pattern-either:
-          - pattern-inside: for (...) { ... }
-          - pattern-inside: while ($C) { ... }
-          - pattern-inside: $XS.$M((...) => $B)
-          - pattern-inside: $XS.$M(function (...) { ... })
-      - pattern: new URL(...)
+          - patterns:
+              - pattern-inside: for (const $I of $C) { ... }
+              - pattern: new URL(...)
+              - pattern-not: new URL(<... $I ...>, ...)
+          - patterns:
+              - pattern-inside: for (let $I of $C) { ... }
+              - pattern: new URL(...)
+              - pattern-not: new URL(<... $I ...>, ...)
+          - patterns:
+              - pattern-inside: for (const $I in $C) { ... }
+              - pattern: new URL(...)
+              - pattern-not: new URL(<... $I ...>, ...)
+          - patterns:
+              - pattern-inside: for (let $I in $C) { ... }
+              - pattern: new URL(...)
+              - pattern-not: new URL(<... $I ...>, ...)
+          - patterns:
+              - pattern-inside: for (let $I = $S; $T; $U) { ... }
+              - pattern: new URL(...)
+              - pattern-not: new URL(<... $I ...>, ...)
+          - patterns:
+              - pattern-inside: $XS.$M(($I, ...) => $B)
+              - pattern: new URL(...)
+              - pattern-not: new URL(<... $I ...>, ...)
+          - patterns:
+              - pattern-inside: $XS.$M(function ($I, ...) { ... })
+              - pattern: new URL(...)
+              - pattern-not: new URL(<... $I ...>, ...)
+          - patterns:
+              - pattern-inside: while ($C) { ... }
+              - pattern: new URL(...)
+      - pattern-not-inside: for (...) { ... $V = $X; ... <... new URL(<... $V ...>, ...) ...>; }
+      - pattern-not-inside: for (...) { ... const $V = $X; ... <... new URL(<... $V ...>, ...) ...>; }
+      - pattern-not-inside: for (...) { ... let $V = $X; ... <... new URL(<... $V ...>, ...) ...>; }
+      - pattern-not-inside: "$XS.$M(($I, ...) => { ... const $V = $X; ... <... new URL(<... $V ...>, ...) ...>; })"
   - id: url-parse-in-loop-python
     languages: [python]
-    severity: WARNING
-    message: This parses a URL on every pass. Parse once outside the loop or compare the strings directly.
+    severity: ERROR
+    message: This parses the same URL on every pass. Parse it once before the loop, or compare the strings directly.
     paths: *paths
     patterns:
       - pattern-either:
           - pattern-inside: |
-              for $X in $Y:
+              for $I in $Y:
                 ...
-          - pattern-inside: "[...]"
+          - pattern-inside: "[$E for $I in $Y]"
       - pattern-either:
           - pattern: urllib.parse.urlparse(...)
           - pattern: urllib.parse.urlsplit(...)
+      - pattern-not: urllib.parse.urlparse(<... $I ...>, ...)
+      - pattern-not: urllib.parse.urlsplit(<... $I ...>, ...)
+      - pattern-not-inside: |
+          for $I in $Y:
+            ...
+            $V = $X
+            ...
+            <... urllib.parse.urlparse(<... $V ...>, ...) ...>
+      - pattern-not-inside: |
+          for $I in $Y:
+            ...
+            $V = $X
+            ...
+            <... urllib.parse.urlsplit(<... $V ...>, ...) ...>
   - id: json-column
     languages: [generic]
-    severity: WARNING
-    message: A JSON column, or a read of one key from it. Move each key that hot paths read into a real column, and keep large JSON out of the row.
+    severity: ERROR
+    message: A JSON column, or a read of one key from it. Store each key as a real column, or a list as a child table.
     paths:
       include: ["*.sql", "*.prisma"]
-    pattern-regex: (?i)\bjsonb?\b|->>|#>>
-  - id: json-column-code
-    languages: [python, javascript, typescript, dart, swift]
-    severity: WARNING
-    message: A JSON column, or a read of one key from it. Move each key that hot paths read into a real column, and keep large JSON out of the row.
+    patterns:
+      - pattern-regex: (?i)\bjsonb?\b|->>|#>>
+      - pattern-not-regex: (?m)(?:--|//).*$
+      - pattern-not-regex: (?s)/\*.*?\*/
+  - id: json-column-python
+    languages: [python]
+    options:
+      constant_propagation: false
+    severity: ERROR
+    message: A JSON column, or a read of one key from it. Store each key as a real column, or a list as a child table.
     paths: *paths
-    pattern-regex: (?i:\bjsonb\b)|\bJSONField\(|->>|#>>
+    pattern-either:
+      - pattern: JSONField(...)
+      - pattern: $M.JSONField(...)
+      - pattern: sqlalchemy.JSON
+      - pattern: sqlalchemy.dialects.postgresql.JSONB
+      - patterns:
+          - pattern-either:
+              - pattern-inside: $F(...)
+              - pattern-inside: $X = $E
+              - pattern-inside: return $E
+          - pattern: '"$SQL"'
+          - metavariable-regex: &json-read
+              metavariable: $SQL
+              regex: (?is)^.*?(?:\bjsonb\b|->>|#>>)
+  - id: json-column-javascript
+    languages: [javascript, typescript]
+    options:
+      constant_propagation: false
+    severity: ERROR
+    message: A JSON column, or a read of one key from it. Store each key as a real column, or a list as a child table.
+    paths: *paths
+    pattern-either:
+      - pattern: jsonb(...)
+      - pattern: $M.jsonb(...)
+      - patterns:
+          - pattern: '"$SQL"'
+          - metavariable-regex: *json-read
+  - id: json-column-swift
+    languages: [swift]
+    options:
+      constant_propagation: false
+    severity: ERROR
+    message: A JSON column, or a read of one key from it. Store each key as a real column, or a list as a child table.
+    paths: *paths
+    patterns:
+      - pattern: '"$SQL"'
+      - metavariable-regex: *json-read
+  - id: json-column-dart
+    languages: [dart]
+    severity: ERROR
+    message: A JSON column, or a read of one key from it. Store each key as a real column, or a list as a child table.
+    paths: *paths
+    patterns:
+      - pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"][^'"\n]*?(?:\bjsonb\b|->>|#>>)
+      - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-entity-load-python
     languages: [python]
-    severity: WARNING
+    severity: ERROR
     message: This loads every column. Read only the fields this code needs (.only(), .values(), load_only() or a column select).
     paths: *paths
     patterns:
@@ -382,10 +614,17 @@ rules:
                   regex: ^(get|filter|all|exclude|first|last)$
               - pattern-not-inside: $M.objects.$F(...).$G(...)
           - patterns:
+              - pattern: sqlalchemy.select($M)
+              - metavariable-regex:
+                  metavariable: $M
+                  regex: ^[A-Z][a-z]\w*$
+          - patterns:
               - pattern-either:
-                  - pattern: sqlalchemy.select($M)
                   - pattern: $S.get($M, ...)
                   - pattern: $S.query($M)
               - metavariable-regex:
                   metavariable: $M
-                  regex: ^[A-Z]\w*$
+                  regex: ^[A-Z][a-z]\w*$
+              - metavariable-regex:
+                  metavariable: $S
+                  regex: (?i)^(?:[\w.]*session|(?:[\w.]*\.)?db)$
