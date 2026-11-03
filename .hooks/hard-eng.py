@@ -321,24 +321,9 @@ def prepare_command(
     )
     if not command:
         return []
-    if gate.get("role") == "security" and "p/python" in command:
-        index = command.index("p/python") + 1
-        command = [
-            *command[:index],
-            "--config",
-            str(ROOT / ".agents/skills/he/semgrep/python.yaml"),
-            "--exclude-rule",
-            "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
-            *command[index:],
-        ]
-    index = command.index("scan") if "scan" in command else 0
-    if (
-        index
-        and Path(command[index - 1]).name.split("@")[0] == "semgrep"
-        and "--timeout" not in command
-    ):
-        # Semgrep's 5 s per-rule limit times out under parallel load, and --strict then fails the gate.
-        command = [*command[: index + 1], "--timeout", "60", *command[index + 1 :]]
+    from hot_paths import semgrep_options
+
+    command = semgrep_options(ROOT, group, gate, command)
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 
@@ -768,10 +753,6 @@ def check(
         validate_suppressions(ROOT, base)
         plans.validate_records(ROOT, base)
         provision_tools(ROOT, groups, timeout)
-        if not quick and not languages.only:
-            from hot_paths import scan_changes
-
-            scan_changes(ROOT, base, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))

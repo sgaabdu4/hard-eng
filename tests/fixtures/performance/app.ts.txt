@@ -28,23 +28,73 @@ export function words(text: string, pattern: string, total: number, parts: numbe
   return [found, global, ratio, path, built, dynamic, seen, WORD, SPLIT, LRUCache];
 }
 
-export async function load(db: Db, ids: string[]) {
+export async function load(blocks: Db, session: Db, db: Db, users: Db, orders: Db, ids: string[], base: string, links: Link[]) {
   for (const id of ids) {
     // ruleid: await-in-loop-javascript
     await db.get(id);
   }
   for await (const row of db.stream()) {
-    // ruleid: await-in-loop-javascript
     await db.put(row);
   }
+  for await (const row of db.stream()) await db.put(row);
+  for await (const chunk of db.stream({
+    from: base,
+    to: base,
+  })) {
+    await db.put(chunk);
+  }
+  for await (const chunk of db.stream(
+    base,
+  )) {
+    await db.put(chunk);
+  }
+  for (const id of ids) {
+    // ruleid: await-in-loop-javascript
+    await db.remove(id);
+  }
+  while (true) {
+    await db.take();
+  }
+  let cursor = await db.page("");
+  while (cursor) {
+    cursor = await db.page(cursor);
+  }
+  for (const id of ids) {
+    if (await db.has(id)) {
+      break;
+    }
+  }
+  for (const id of ids) {
+    await db.put(id);
+    await sleep(100);
+  }
   // ruleid: sequential-awaits-javascript
-  const first = await db.get("a");
-  const second = await db.get("b");
+  const first = await users.get("a");
+  const second = await orders.get("b");
+  console.log(second);
+  // ruleid: sequential-awaits-javascript
+  const user = await db.get("a");
+  const org = await db.get("b");
+  console.log(org);
+  const left = await session.get("a");
+  const right = await session.get("b");
+  console.log(right);
+  // ruleid: sequential-awaits-javascript
+  const top = await blocks.get("a");
+  const bottom = await blocks.get("b");
   const total = first + second;
   const third = await db.get(total);
   const fourth = await db.get(third);
   // ruleid: url-parse-in-loop-javascript
-  return [fourth, ids.map((id) => new URL(id).host)];
+  const same = ids.map((id) => new URL(base).host === id);
+  for (const id of ids) {
+    const trimmed = id.trim();
+    same.push(new URL(trimmed).host === base);
+  }
+  for (const [key, value] of Object.entries(links)) {
+    same.push(new URL(value).host === key);
+  }
+  return [fourth, user, org, left, right, top, bottom, same, ids.map((id) => new URL(id).host), links.map(({ href }) => new URL(href))];
 }
 
 export function queries(db: Db, prisma: Prisma, supabase: Supabase, args: object) {
@@ -59,9 +109,13 @@ export function queries(db: Db, prisma: Prisma, supabase: Supabase, args: object
     prisma.user.findMany({ where: { active: true } }),
     prisma.user.findMany({ where: { active: true }, select: { id: true } }),
     prisma.user.findMany(args),
-    // ruleid: json-column-code
+    // ruleid: json-column-javascript
     jsonb("settings"),
     db.response.json(),
+    db.header("application/json"),
+    // ruleid: json-column-javascript
+    db.raw("SELECT data->>'k' FROM users"),
+    db.raw("INSERT INTO archive SELECT * FROM users"),
     db.raw("SELECT 1 WHERE EXISTS (SELECT * FROM users)"),
     // ruleid: whole-row-sql
     db.raw("SELECT * FROM users"),

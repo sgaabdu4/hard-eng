@@ -10,6 +10,10 @@ from pathlib import Path
 
 from gate_config import Gate, JsonObject
 
+VERSION_LINE = re.compile(r"\S+ v\S+")
+DIGIT_RUN = re.compile(r"\d+")
+RELEASE_VERSION = re.compile(r"(\d+(?:\.\d+)*)(?:\.post(\d+))?")
+
 WAIT = timedelta(days=2)
 MAX_HOLD_DAYS = 14
 HOLD_KEYS = {"package", "version", "reason", "until"}
@@ -27,10 +31,10 @@ def fetch_json(url: str) -> object:
 def version_key(version: str, *, strict: bool) -> tuple[tuple[int, ...], int] | None:
     """Release numbers, then post number; strict allows no suffix except `.postN`."""
     release = version.partition("+")[0]
-    match = re.fullmatch(r"(\d+(?:\.\d+)*)(?:\.post(\d+))?", release)
+    match = RELEASE_VERSION.fullmatch(release)
     if strict and match is None:
         return None
-    numbers = [int(part) for part in re.findall(r"\d+", match[1] if match else release)]
+    numbers = [int(part) for part in DIGIT_RUN.findall(match[1] if match else release)]
     while numbers and numbers[-1] == 0:
         numbers.pop()
     return tuple(numbers), int(match[2]) if match and match[2] else -1
@@ -134,7 +138,7 @@ UV_ROW = re.compile(
 
 
 def uv_rows(text: str) -> list[tuple[str, str]]:
-    if not re.match(r"\S+ v\S+", text):
+    if not VERSION_LINE.match(text):
         raise ValueError("uv tree printed no dependency tree")
     return [
         (match["name"], match["current"])

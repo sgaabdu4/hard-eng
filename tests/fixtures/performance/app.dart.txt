@@ -2,6 +2,8 @@ import 'package:async/async.dart';
 
 final word = RegExp(r'\w+');
 // Don't SELECT * FROM users here.
+/* Don't SELECT * FROM users
+   or read jsonb here either. */
 
 bool words(String text, int size, String pattern) {
   // ruleid: regex-built-in-function-dart
@@ -10,16 +12,51 @@ bool words(String text, int size, String pattern) {
   // ruleid: whole-row-sql-dart
   final query = 'SELECT * FROM users';
   final exists = 'SELECT 1 WHERE EXISTS (SELECT * FROM users)';
+  final copy = 'INSERT INTO archive SELECT * FROM users';
+  // ruleid: json-column-dart
+  final key = "SELECT data->>'k' FROM users";
   // ruleid: bool-array-dart
   final seen = List<bool>.filled(size, false);
   // ruleid: in-process-cache-dart
   final cache = AsyncCache<int>(const Duration(seconds: 1));
-  return query.isEmpty && exists.isEmpty && found.hasMatch(text) && dynamic.hasMatch(text) && seen.isEmpty && cache.hashCode > 0;
+  return query.isEmpty && copy.isEmpty && key.isEmpty && exists.isEmpty && found.hasMatch(text) && dynamic.hasMatch(text) && seen.isEmpty && cache.hashCode > 0;
 }
 
-Future<void> load(List<String> ids, Client client) async {
+Future<void> load(List<String> ids, Client client, Client users, Client blocks, Client orders, Stream<String> lines, Object context) async {
   for (final id in ids) {
     // ruleid: await-in-loop-dart
     await client.get(id);
   }
+  var cursor = await client.page('');
+  while (cursor.isNotEmpty) {
+    cursor = await client.page(cursor);
+  }
+  for (final id in ids) {
+    await client.put(id);
+    await Future.delayed(const Duration(seconds: 1));
+  }
+  // ruleid: sequential-awaits-dart
+  final first = await users.get('a');
+  final second = await orders.get('b');
+  final third = await client.get(second);
+  print(third);
+  final yes = await showDialog(context);
+  final no = await showDialog(context);
+  print(no);
+  // ruleid: sequential-awaits-dart
+  final top = await blocks.get('a');
+  final bottom = await blocks.get('b');
+  print(no);
+  // ruleid: sequential-awaits-dart
+  final left = await client.get('a');
+  final right = await client.get('b');
+  await for (final line in lines) {
+    await client.put(line);
+  }
+  await for (final line in client.stream(
+    'a',
+  )) {
+    await client.put(line);
+  }
+  print([first, third, yes, no, top, bottom, left, right]);
 }

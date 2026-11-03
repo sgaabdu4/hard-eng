@@ -475,9 +475,6 @@ def test_initial_push_uses_current_remote_base_and_exact_revision(
     hooks.mkdir()
     for source in (Path(__file__).resolve().parents[1] / ".hooks").glob("*.py"):
         (hooks / source.name).write_bytes(source.read_bytes())
-    rules = Path(".agents/skills/he/semgrep/performance.yaml")
-    (root / rules).parent.mkdir(parents=True)
-    (root / rules).write_text((SOURCE / rules).read_text())
     config: dict[str, object] = {
         "packages": [],
         "shipping": shipping_policy,
@@ -916,9 +913,6 @@ def test_new_branch_behind_its_base_is_judged_on_its_own_changes(
     shutil.copytree(
         SOURCE / ".hooks", root / ".hooks", ignore=shutil.ignore_patterns("__pycache__")
     )
-    rules = Path(".agents/skills/he/semgrep/performance.yaml")
-    (root / rules).parent.mkdir(parents=True)
-    (root / rules).write_text((SOURCE / rules).read_text())
     (root / ".gitignore").write_text("__pycache__/\n")
     noop = {"name": "noop", "command": [sys.executable, "-c", "pass"]}
     gates: dict[str, object] = {
