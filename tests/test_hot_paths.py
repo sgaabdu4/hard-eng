@@ -9,13 +9,8 @@ import yaml
 from hot_paths import RULES, findings, scan_all, scan_changes
 
 SOURCE = Path(__file__).resolve().parents[1]
-FIXTURES = SOURCE / "tests/semgrep/performance"
+FIXTURES = SOURCE / "tests/fixtures/performance"
 ANNOTATION = re.compile(r"ruleid: (\S+)")
-
-
-def install_rules(root: Path) -> None:
-    (root / RULES).parent.mkdir(parents=True)
-    (root / RULES).write_text((SOURCE / RULES).read_text())
 
 
 def git(root: Path, *args: str) -> None:
@@ -29,7 +24,6 @@ def git(root: Path, *args: str) -> None:
 
 def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
     """HE-HOT-PATH: every rule fires on its annotated line and nowhere else."""
-    install_rules(tmp_path)
     expected = set()
     for fixture in sorted(FIXTURES.iterdir()):
         name = fixture.name.removesuffix(".txt")
@@ -50,7 +44,7 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
         if isinstance(result["start"], dict)
     }
     assert actual == expected
-    rules = yaml.safe_load((SOURCE / RULES).read_text())["rules"]
+    rules = yaml.safe_load(RULES.read_text())["rules"]
     assert {rule for _, rule, _ in actual} == {rule["id"] for rule in rules}
 
 
@@ -58,7 +52,6 @@ def test_added_slow_code_fails_while_old_code_and_notes_pass(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """HE-HOT-PATH: added slow code fails, old slow code passes, judgment cases are notes."""
-    install_rules(tmp_path)
     git(tmp_path, "init", "-q", "-b", "main")
     old = "import re\n\n\ndef old(text):\n    return re.findall(r'a+', text)\n"
     (tmp_path / "app.py").write_text(old)
@@ -85,7 +78,6 @@ def test_a_repository_scan_lists_old_and_new_findings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """HE-HOT-PATH: a requested whole-repository scan lists every finding and passes."""
-    install_rules(tmp_path)
     (tmp_path / "app.py").write_text(
         "from functools import cache\n\n\n@cache\ndef square(x):\n    return x * x\n"
     )

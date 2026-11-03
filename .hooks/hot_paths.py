@@ -9,13 +9,15 @@ from gate_config import generated_sources
 from plans import default_branch_point
 from tool_setup import managed_command
 
-RULES = ".agents/skills/he/semgrep/performance.yaml"
+RULES = (
+    Path(__file__).resolve().parents[1] / ".agents/skills/he/semgrep/performance.yaml"
+)
 SUFFIXES = {".py", ".dart", ".swift", ".sql", ".prisma", *JAVASCRIPT}
 
 
 def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, object]]:
     command = managed_command(
-        ["semgrep", "scan", "--config", str(root / RULES), "--metrics=off"]
+        ["semgrep", "scan", "--config", str(RULES), "--metrics=off"]
     )
     result = subprocess.run(
         [*command, "--quiet", "--json", "--timeout", "60", *targets],
@@ -54,7 +56,8 @@ def scan_changes(root: Path, base: str | None, timeout: float) -> None:
     if not names:
         return
     lines = {name: {number for number, _ in added[name]} for name in names}
-    blocked, notes = [], []
+    blocked: list[str] = []
+    notes: list[str] = []
     for result in findings(root, names, timeout):
         start, end, extra = result["start"], result["end"], result["extra"]
         assert isinstance(start, dict) and isinstance(end, dict)
@@ -72,7 +75,7 @@ def scan_changes(root: Path, base: str | None, timeout: float) -> None:
         )
 
 
-def scan_all(root: Path, timeout: float) -> int:
+def scan_all(root: Path, timeout: float = 600) -> int:
     """List every finding in the repository, for a requested hot-path scan."""
     results = findings(root, ["."], timeout)
     for result in results:
