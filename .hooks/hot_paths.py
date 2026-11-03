@@ -78,6 +78,18 @@ def unowned_paths(names: list[str], generated: set[str]) -> list[str]:
     return sorted(paths)
 
 
+def git_prefix(directory: Path) -> str:
+    """The folder's path from the Git root, which Semgrep anchors excludes to."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-prefix"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
 def semgrep_options(
     root: Path, group: Group, gate: Gate, command: list[str]
 ) -> list[str]:
@@ -102,8 +114,10 @@ def semgrep_options(
             for path in repository_files(directory)
         ]
         unowned = unowned_paths(names, generated_sources(directory, names))
+        prefix = git_prefix(directory)
         skipped = [
-            "--exclude=/" + GLOB_SPECIAL.sub(r"\\\g<0>", name) for name in unowned
+            "--exclude=/" + GLOB_SPECIAL.sub(r"\\\g<0>", prefix + name)
+            for name in unowned
         ]
         rules = ["--config", os.path.relpath(RULES, directory), *skipped]
         command = [*command[: index + 1], *rules, *command[index + 1 :]]

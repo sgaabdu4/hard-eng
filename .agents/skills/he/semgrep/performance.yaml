@@ -305,7 +305,7 @@ rules:
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C)
       - pattern: await $E
-      - pattern-not-regex: (?ms)^([ \t]*)for\s+await\s*\((?:[^\n]*\{[ \t]*\n.*?^\1\}|[^\n]*$)
+      - pattern-not-regex: (?ms)^([ \t]*)for\s+await\s*\((?:[^\n]*\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for (...) { ... break; }
       - pattern-not-inside: for (...) { ... return $R; }
@@ -338,7 +338,7 @@ rules:
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C);
       - pattern: await $E
-      - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\((?:[^\n]*\{[ \t]*\n.*?^\1\}|[^\n]*$)
+      - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\((?:[^\n]*\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for ($I in $C) { ... break; }
       - pattern-not-inside: for ($I in $C) { ... return; }
@@ -370,7 +370,7 @@ rules:
           - pattern-inside: while $C { ... }
           - pattern-inside: repeat { ... } while $C
       - pattern: await $E
-      - pattern-not-regex: (?ms)^([ \t]*)for\s+(?:try\s+)?await\b(?:[^\n]*\{[ \t]*\n.*?^\1\}|[^\n]*$)
+      - pattern-not-regex: (?ms)^([ \t]*)for\s+(?:try\s+)?await\b(?:[^\n]*\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while true { ... }
       - pattern-not-inside: |
           for $I in $C {
@@ -453,7 +453,7 @@ rules:
                       let $B = await $S.$N(...);
               - metavariable-regex:
                   metavariable: $S
-                  regex: ^(?!.*(?i:session|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|\btx\b|\btrx\b|\brl\b|\bws\b|\bpage\b))
+                  regex: ^(?!.*(?:^|[._]|(?<=[a-z])(?=[A-Z]))(?i:session|connection|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|tx|trx|rl|ws|page)(?![a-z]))
       - pattern-not: |
           const $A = await $X;
           const $B = await <... $A ...>;
@@ -480,7 +480,7 @@ rules:
                   $B = await $S.$N(...)
               - metavariable-regex:
                   metavariable: $S
-                  regex: ^(?!.*(?i:session|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|\btx\b|\btrx\b|\brl\b|\bws\b|\bpage\b))
+                  regex: ^(?!.*(?:^|[._]|(?<=[a-z])(?=[A-Z]))(?i:session|connection|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|tx|trx|rl|ws|page)(?![a-z]))
       - pattern-not: |
           $A = await $X
           $B = await <... $A ...>
@@ -489,7 +489,7 @@ rules:
     severity: ERROR
     message: The second call does not use the first result. Start both together with Future.wait or a record's .wait.
     paths: *paths
-    pattern-regex: (?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(?>((?i:\w*(?:session|conn|transaction|cursor|socket|dialog|lock|mutex|queue|channel|reader|writer)\w*|tx|trx|ws|page))\b|\w+)[^;]*;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;])*;
+    pattern-regex: (?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(?>((?:[a-z]\w*?(?=[A-Z])|\w*_)?(?i:session|connection|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|tx|trx|rl|ws|page)(?![a-z])\w*)\b|\w+)[^;]*;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;])*;
   - id: sequential-awaits-swift
     languages: [swift]
     severity: ERROR
@@ -521,7 +521,7 @@ rules:
                       let $B = await $S.$N(...)
               - metavariable-regex:
                   metavariable: $S
-                  regex: ^(?!.*(?i:session|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|\btx\b|\btrx\b|\brl\b|\bws\b|\bpage\b))
+                  regex: ^(?!.*(?:^|[._]|(?<=[a-z])(?=[A-Z]))(?i:session|connection|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|tx|trx|rl|ws|page)(?![a-z]))
       - pattern-not: |
           let $A = try await $X
           let $B = try await <... $A ...>
