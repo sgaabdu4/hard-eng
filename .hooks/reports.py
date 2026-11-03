@@ -466,8 +466,16 @@ def validate_osv_image(path: Path) -> None:
 def validate_semgrep(path: Path) -> None:
     try:
         report = json.loads(path.read_text())
-        if report["results"] != [] or report["errors"] != []:
-            raise ValueError("Semgrep reports findings or scan errors")
+        if results := report["results"]:
+            raise ValueError(
+                f"Semgrep reports {len(results)} findings; fix each as its message says: "
+                + "; ".join(
+                    f"{item['path']}:{item['start']['line']} {item['extra']['message']}"
+                    for item in results[:30]
+                )
+            )
+        if report["errors"] != []:
+            raise ValueError("Semgrep reports scan errors")
         if report["skipped_rules"] != [] or report["paths"].get("skipped", []) != []:
             raise ValueError("Semgrep reports skipped analysis")
         scanned, timing = report["paths"]["scanned"], report["time"]
