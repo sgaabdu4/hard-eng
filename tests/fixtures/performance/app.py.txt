@@ -15,16 +15,18 @@ class Settings:
 
 
 def words(text, pattern):
+    """Runs SELECT * FROM users only in this sentence."""
     # ruleid: regex-built-in-function-python
     found = re.findall(r"\w+", text)
     dynamic = re.compile(pattern)
     # ruleid: bool-array-python
     seen = [False] * len(text)
-    # ruleid: whole-row-sql
+    # ruleid: whole-row-sql-python
     query = "SELECT * FROM users WHERE id = %s"
     columns = "SELECT id, name FROM users"
     count = "SELECT COUNT(*) FROM users"
-    return found, dynamic, seen, query, columns, count, TOKEN
+    exists = "SELECT 1 WHERE EXISTS (SELECT * FROM users)"
+    return found, dynamic, seen, query, columns, count, exists, TOKEN
 
 
 # ruleid: in-process-cache-python
@@ -50,4 +52,5 @@ async def load(client, ids, links):
     named = User.objects.filter(id=1).only("name")
     # ruleid: json-column-code
     settings = models.JSONField()
-    return fourth, hosts, user, named, settings, cachetools, asyncio
+    body = client.response.json()
+    return fourth, hosts, user, named, settings, body, cachetools, asyncio

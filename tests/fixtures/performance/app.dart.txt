@@ -6,11 +6,14 @@ bool words(String text, int size, String pattern) {
   // ruleid: regex-built-in-function-dart
   final found = RegExp(r'a+b');
   final dynamic = RegExp(pattern);
+  // ruleid: whole-row-sql-dart
+  final query = 'SELECT * FROM users';
+  final exists = 'SELECT 1 WHERE EXISTS (SELECT * FROM users)';
   // ruleid: bool-array-dart
   final seen = List<bool>.filled(size, false);
   // ruleid: in-process-cache-dart
   final cache = AsyncCache<int>(const Duration(seconds: 1));
-  return found.hasMatch(text) && dynamic.hasMatch(text) && seen.isEmpty && cache.hashCode > 0;
+  return query.isEmpty && exists.isEmpty && found.hasMatch(text) && dynamic.hasMatch(text) && seen.isEmpty && cache.hashCode > 0;
 }
 
 Future<void> load(List<String> ids, Client client) async {

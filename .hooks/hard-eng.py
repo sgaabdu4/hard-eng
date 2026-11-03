@@ -768,7 +768,7 @@ def check(
         validate_suppressions(ROOT, base)
         plans.validate_records(ROOT, base)
         provision_tools(ROOT, groups, timeout)
-        if not quick:
+        if not quick and not languages.only:
             from hot_paths import scan_changes
 
             scan_changes(ROOT, base, timeout)
