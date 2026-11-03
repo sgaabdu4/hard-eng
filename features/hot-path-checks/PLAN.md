@@ -1,6 +1,6 @@
 # Hot-path checks and CI time split
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -20,11 +20,13 @@ Decided (Fable advice, verified): only rules with a rewrite that is never worse 
 
 ## Acceptance + steps
 
-- [ ] Each rule fires on its annotated fixture line and nowhere else (division, `g` regexes, column lists, dynamic patterns, module-level regexes stay clean) → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
-- [ ] Added slow code fails, old slow code passes, judgment cases print as notes → `tests/test_hot_paths.py::test_added_slow_code_fails_while_old_code_and_notes_pass`.
-- [ ] `hot-paths` lists old findings and exits 0 → `tests/test_hot_paths.py::test_a_repository_scan_lists_old_and_new_findings`.
-- [ ] `ci-usage --runs 150` uses the newest runs and splits a job into 30 s queue, 22 s setup and 28 s run → `tests/test_ci_usage.py::test_ci_usage_splits_the_slowest_jobs_into_queue_setup_and_run`.
-- [ ] Skills tell agents how to act on each practice and on a CI audit, and every command and link they name exists → `tests/test_skill_links.py::test_documented_commands_and_flags_exist` and `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
+- [x] Each rule fires on its annotated fixture line and nowhere else (division, `g` regexes, column lists, dynamic patterns, module-level regexes stay clean) → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
+- [x] Added slow code fails, old slow code passes, judgment cases print as notes → `tests/test_hot_paths.py::test_added_slow_code_fails_while_old_code_and_notes_pass`.
+- [x] `hot-paths` lists old findings and exits 0 → `tests/test_hot_paths.py::test_a_repository_scan_lists_old_and_new_findings`.
+- [x] `ci-usage --runs 150` uses the newest runs and splits a job into 30 s queue, 22 s setup and 28 s run → `tests/test_ci_usage.py::test_ci_usage_splits_the_slowest_jobs_into_queue_setup_and_run`.
+- [x] `ci-usage --runs 150` reads two pages of 100 runs and keeps the newest 150 → `tests/test_ci_usage.py::test_ci_usage_reads_only_the_newest_runs_across_pages`.
+- [x] A Swift file Semgrep can only partly parse still reports its findings and does not fail → `tests/test_hot_paths.py::test_a_partly_parsed_file_still_reports_its_findings`.
+- [x] Skills tell agents how to act on each practice and on a CI audit, and every command and link they name exists → `tests/test_skill_links.py::test_documented_commands_and_flags_exist` and `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
 
 ## Baseline + execution
 
@@ -42,9 +44,9 @@ N/A — command-line checks and skill text; no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
-E2E: Required — `python3 .hooks/hard-eng.py check` on this repository runs the new step for real, and `hot-paths` runs on the real tree.
+Result: Passed
+Evidence: `tests/test_hot_paths.py` and `tests/test_ci_usage.py`: 9 passed, with the fixture test counting findings per line. `python3 .hooks/hard-eng.py hot-paths` on this repository: `HE-HOT-PATH: 0 findings` after the four root-script regexes moved to module level. Full `check --plan-stage Ready` on b9e07d3: every gate passed except `tests`, whose only failures need the Dart and Swift SDKs this machine lacks (the same tests failed on `develop` here) and one process-exit race fixed in ba878b1; CI has the SDKs and runs the full suite. Opus adversarial review, 3 rounds: round 1 found 9 issues (a broken Swift rule test, false blocks on division, strings, comments, static fields, `EXISTS`, docstrings, `.json()`, Swift previews, a run-paging bug), round 2 found 3 (multi-flag `g` regexes, multi-line `EXISTS`, Dart comments), round 3 found 1 (a `g` regex after another on one line); all fixed with fixtures. Known gaps, not blocking: SQL inside Dart block comments still blocks, `--`-like text inside SQL strings hides a finding, Dart sequential awaits get no note (Semgrep's Dart parser cannot express "uses the first result"), `check --only-language` skips the scan, Hard Eng's own `.hooks/` are not scanned.
+E2E: Passed — `python3 .hooks/hard-eng.py check` ran the new step on this repository's real diff, and `hot-paths` ran on the real tree.
 
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with the `hard-eng` CI check green, then the `develop` → `main` release PR.
