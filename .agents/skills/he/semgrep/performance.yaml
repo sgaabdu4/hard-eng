@@ -305,7 +305,7 @@ rules:
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C)
       - pattern: await $E
-      - pattern-not-regex: (?ms)^([ \t]*)for\s+await\s*\((?:[^\n]*\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
+      - pattern-not-regex: (?ms)^([ \t]*)for\s+await\s*\((?:[^;{]*?\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for (...) { ... break; }
       - pattern-not-inside: for (...) { ... return $R; }
@@ -338,7 +338,7 @@ rules:
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C);
       - pattern: await $E
-      - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\((?:[^\n]*\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
+      - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\((?:[^;{]*?\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for ($I in $C) { ... break; }
       - pattern-not-inside: for ($I in $C) { ... return; }
@@ -370,7 +370,7 @@ rules:
           - pattern-inside: while $C { ... }
           - pattern-inside: repeat { ... } while $C
       - pattern: await $E
-      - pattern-not-regex: (?ms)^([ \t]*)for\s+(?:try\s+)?await\b(?:[^\n]*\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
+      - pattern-not-regex: (?ms)^([ \t]*)for\s+(?:try\s+)?await\b(?:[^;{]*?\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while true { ... }
       - pattern-not-inside: |
           for $I in $C {
