@@ -42,12 +42,17 @@ func load(ids: [String], client: Client) async throws {
   }
 }
 
-func pair(client: Client, users: Client, orders: Client) async throws -> Int {
+func pair(client: Client, session: Client, users: Client, orders: Client) async throws -> Int {
   // ruleid: sequential-awaits-swift
   let first = try await users.get(1)
   let second = try await orders.get(2)
   let third = try await client.get(second)
-  let user = try await client.get(1)
-  let org = try await client.get(2)
-  return first + third + user + org
+  print(third)
+  let user = try await session.get(1)
+  let org = try await session.get(2)
+  print(org)
+  // ruleid: sequential-awaits-swift
+  let left = try await client.get(1)
+  let right = try await client.get(2)
+  return first + third + user + org + left + right
 }

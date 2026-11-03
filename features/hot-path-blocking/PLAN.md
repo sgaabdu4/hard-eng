@@ -16,7 +16,7 @@ Same cause: `features/hot-path-checks` made the judgment rules notes and kept ol
 Blockers: None.
 Handoff: Approval
 Authority: Autonomous. The maintainer asked to enforce every rule on old projects too, make the judgment rules fail, close the known gaps, review adversarially with an Opus subagent, merge into `develop` and release to `main`.
-Decided: no suppression path exists (HE-NO-SWITCH-OFF), so each blocking rule skips a loop that stops early (`break` or `return`), updates a value its condition reads, or sleeps on purpose; a URL parse of the loop item or of a value the loop builds; `INSERT INTO ... SELECT *`; SQL and JSON words in comments. `.agents/` and test files stay out of scope.
+Decided: no suppression path exists (HE-NO-SWITCH-OFF), so each blocking rule skips the shapes that need the slow form: loops that stop early, update a value their condition reads, sleep, read an async stream or run as workers; awaits on one session, connection, transaction, cursor, socket, page or dialog; URL parses of the loop item or of a value the loop builds; `INSERT INTO ... SELECT *`, `CREATE TABLE ... AS`, table functions; JSON and SQL text in comments or quotes; form JSON fields. Generated and vendored files leave the security scan, as whole folders when they hold nothing else. `.agents/` and test files stay out of scope. Rule paths are relative to the gate folder, so adopted debt matches on every machine.
 
 ## Acceptance + steps
 

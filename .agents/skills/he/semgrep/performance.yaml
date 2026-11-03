@@ -128,7 +128,7 @@ rules:
       - pattern: '"$SQL"'
       - metavariable-regex: &select-all
           metavariable: $SQL
-          regex: (?is)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b|with\s+(?:recursive\s+)?\w+\s+as\s*\().)*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
+          regex: (?is)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b).)*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
   - id: whole-row-sql
     languages: [javascript, typescript]
     options:
@@ -155,7 +155,7 @@ rules:
     message: Select only the columns this code reads instead of the whole row.
     paths: *paths
     patterns:
-      - pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b|with\s+(?:recursive\s+)?\w+\s+as\s*\()[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
+      - pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b)[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
       - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-row-sql-file
     languages: [generic]
@@ -165,8 +165,8 @@ rules:
       include: ["*.sql"]
       exclude: *excluded
     patterns:
-      - pattern-regex: (?im)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b|with\s+(?:recursive\s+)?\w+\s+as\s*\()(?:[^'\n-]|'[^'\n]*'|-(?!-)))*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
-      - pattern-not-regex: (?is)(?:exists\s*\(|insert\s+into\b[^;]*?|create\s+(?:temp(?:orary)?\s+)?table\b[^;]*?\bas\b[^;]*?|\bwith\s+(?:recursive\s+)?\w+\s+as\s*\([^;]*)\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
+      - pattern-regex: (?im)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b)(?:[^'\n-]|'[^'\n]*'|-(?!-)))*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
+      - pattern-not-regex: (?is)(?:exists\s*\(|insert\s+into\b[^;]*?|create\s+(?:temp(?:orary)?\s+)?table\b[^;]*?\bas\b[^;]*?)\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
       - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-row-query-javascript
     languages: [javascript, typescript]
@@ -305,7 +305,7 @@ rules:
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C)
       - pattern: await $E
-      - pattern-not-regex: (?ms)^([ \t]*)for\s+await\s*\(.*?^\1\}
+      - pattern-not-regex: (?ms)^([ \t]*)for\s+await\s*\((?:[^\n]*\{[ \t]*\n.*?^\1\}|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for (...) { ... break; }
       - pattern-not-inside: for (...) { ... return $R; }
@@ -338,7 +338,7 @@ rules:
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C);
       - pattern: await $E
-      - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\(.*?^\1\}
+      - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\((?:[^\n]*\{[ \t]*\n.*?^\1\}|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for ($I in $C) { ... break; }
       - pattern-not-inside: for ($I in $C) { ... return; }
@@ -370,7 +370,7 @@ rules:
           - pattern-inside: while $C { ... }
           - pattern-inside: repeat { ... } while $C
       - pattern: await $E
-      - pattern-not-regex: (?ms)^([ \t]*)for\s+(?:try\s+)?await\b.*?^\1\}
+      - pattern-not-regex: (?ms)^([ \t]*)for\s+(?:try\s+)?await\b(?:[^\n]*\{[ \t]*\n.*?^\1\}|[^\n]*$)
       - pattern-not-inside: while true { ... }
       - pattern-not-inside: |
           for $I in $C {
@@ -429,45 +429,67 @@ rules:
     paths: *paths
     patterns:
       - pattern-either:
-          - pattern: |
-              const $A = await $X;
-              const $B = await $Y;
-          - pattern: |
-              let $A = await $X;
-              let $B = await $Y;
+          - patterns:
+              - pattern-either:
+                  - pattern: |
+                      const $A = await $X;
+                      const $B = await $Y;
+                  - pattern: |
+                      let $A = await $X;
+                      let $B = await $Y;
+              - pattern-not: |
+                  const $A = await $S.$M(...);
+                  const $B = await $S.$N(...);
+              - pattern-not: |
+                  let $A = await $S.$M(...);
+                  let $B = await $S.$N(...);
+          - patterns:
+              - pattern-either:
+                  - pattern: |
+                      const $A = await $S.$M(...);
+                      const $B = await $S.$N(...);
+                  - pattern: |
+                      let $A = await $S.$M(...);
+                      let $B = await $S.$N(...);
+              - metavariable-regex:
+                  metavariable: $S
+                  regex: ^(?!.*(?i:session|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|\btx\b|\btrx\b|\brl\b|\bws\b|\bpage\b))
       - pattern-not: |
           const $A = await $X;
           const $B = await <... $A ...>;
       - pattern-not: |
           let $A = await $X;
           let $B = await <... $A ...>;
-      - pattern-not: |
-          const $A = await $S.$M(...);
-          const $B = await $S.$N(...);
-      - pattern-not: |
-          let $A = await $S.$M(...);
-          let $B = await $S.$N(...);
   - id: sequential-awaits-python
     languages: [python]
     severity: ERROR
     message: The second call does not use the first result. Start both together with asyncio.gather.
     paths: *paths
     patterns:
-      - pattern: |
-          $A = await $X
-          $B = await $Y
+      - pattern-either:
+          - patterns:
+              - pattern: |
+                  $A = await $X
+                  $B = await $Y
+              - pattern-not: |
+                  $A = await $S.$M(...)
+                  $B = await $S.$N(...)
+          - patterns:
+              - pattern: |
+                  $A = await $S.$M(...)
+                  $B = await $S.$N(...)
+              - metavariable-regex:
+                  metavariable: $S
+                  regex: ^(?!.*(?i:session|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|\btx\b|\btrx\b|\brl\b|\bws\b|\bpage\b))
       - pattern-not: |
           $A = await $X
           $B = await <... $A ...>
-      - pattern-not: |
-          $A = await $S.$M(...)
-          $B = await $S.$N(...)
   - id: sequential-awaits-dart
     languages: [dart]
     severity: ERROR
     message: The second call does not use the first result. Start both together with Future.wait or a record's .wait.
     paths: *paths
-    pattern-regex: (?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(\w+)\b[^;]*;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;])*;
+    pattern-regex: (?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(?>((?i:\w*(?:session|conn|transaction|cursor|socket|dialog|lock|mutex|queue|channel|reader|writer)\w*|tx|trx|ws|page))\b|\w+)[^;]*;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;])*;
   - id: sequential-awaits-swift
     languages: [swift]
     severity: ERROR
@@ -475,24 +497,37 @@ rules:
     paths: *paths
     patterns:
       - pattern-either:
-          - pattern: |
-              let $A = try await $X
-              let $B = try await $Y
-          - pattern: |
-              let $A = await $X
-              let $B = await $Y
+          - patterns:
+              - pattern-either:
+                  - pattern: |
+                      let $A = try await $X
+                      let $B = try await $Y
+                  - pattern: |
+                      let $A = await $X
+                      let $B = await $Y
+              - pattern-not: |
+                  let $A = try await $S.$M(...)
+                  let $B = try await $S.$N(...)
+              - pattern-not: |
+                  let $A = await $S.$M(...)
+                  let $B = await $S.$N(...)
+          - patterns:
+              - pattern-either:
+                  - pattern: |
+                      let $A = try await $S.$M(...)
+                      let $B = try await $S.$N(...)
+                  - pattern: |
+                      let $A = await $S.$M(...)
+                      let $B = await $S.$N(...)
+              - metavariable-regex:
+                  metavariable: $S
+                  regex: ^(?!.*(?i:session|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|\btx\b|\btrx\b|\brl\b|\bws\b|\bpage\b))
       - pattern-not: |
           let $A = try await $X
           let $B = try await <... $A ...>
       - pattern-not: |
           let $A = await $X
           let $B = await <... $A ...>
-      - pattern-not: |
-          let $A = try await $S.$M(...)
-          let $B = try await $S.$N(...)
-      - pattern-not: |
-          let $A = await $S.$M(...)
-          let $B = await $S.$N(...)
   - id: url-parse-in-loop-javascript
     languages: [javascript, typescript]
     severity: ERROR
@@ -504,34 +539,58 @@ rules:
               - pattern-inside: for (const $I of $C) { ... }
               - pattern: new URL(...)
               - pattern-not: new URL(<... $I ...>, ...)
+              - pattern-not-inside: for (const [...] of $LIST) { ... }
+              - pattern-not-inside: for (const {...} of $LIST) { ... }
+              - pattern-not-inside: ([...]) => $BODY
+              - pattern-not-inside: "({...}) => $BODY"
           - patterns:
               - pattern-inside: for (let $I of $C) { ... }
               - pattern: new URL(...)
               - pattern-not: new URL(<... $I ...>, ...)
+              - pattern-not-inside: for (const [...] of $LIST) { ... }
+              - pattern-not-inside: for (const {...} of $LIST) { ... }
+              - pattern-not-inside: ([...]) => $BODY
+              - pattern-not-inside: "({...}) => $BODY"
           - patterns:
               - pattern-inside: for (const $I in $C) { ... }
               - pattern: new URL(...)
               - pattern-not: new URL(<... $I ...>, ...)
+              - pattern-not-inside: for (const [...] of $LIST) { ... }
+              - pattern-not-inside: for (const {...} of $LIST) { ... }
+              - pattern-not-inside: ([...]) => $BODY
+              - pattern-not-inside: "({...}) => $BODY"
           - patterns:
               - pattern-inside: for (let $I in $C) { ... }
               - pattern: new URL(...)
               - pattern-not: new URL(<... $I ...>, ...)
+              - pattern-not-inside: for (const [...] of $LIST) { ... }
+              - pattern-not-inside: for (const {...} of $LIST) { ... }
+              - pattern-not-inside: ([...]) => $BODY
+              - pattern-not-inside: "({...}) => $BODY"
           - patterns:
               - pattern-inside: for (let $I = $S; $T; $U) { ... }
               - pattern: new URL(...)
               - pattern-not: new URL(<... $I ...>, ...)
+              - pattern-not-inside: for (const [...] of $LIST) { ... }
+              - pattern-not-inside: for (const {...} of $LIST) { ... }
+              - pattern-not-inside: ([...]) => $BODY
+              - pattern-not-inside: "({...}) => $BODY"
           - patterns:
               - pattern-inside: $XS.$M(($I, ...) => $B)
               - pattern: new URL(...)
               - pattern-not: new URL(<... $I ...>, ...)
+              - pattern-not-inside: for (const [...] of $LIST) { ... }
+              - pattern-not-inside: for (const {...} of $LIST) { ... }
+              - pattern-not-inside: ([...]) => $BODY
+              - pattern-not-inside: "({...}) => $BODY"
           - patterns:
               - pattern-inside: $XS.$M(function ($I, ...) { ... })
               - pattern: new URL(...)
               - pattern-not: new URL(<... $I ...>, ...)
-      - pattern-not-inside: for (const [...] of $LIST) { ... }
-      - pattern-not-inside: for (const {...} of $LIST) { ... }
-      - pattern-not-inside: ([...]) => $B
-      - pattern-not-inside: "({...}) => $B"
+              - pattern-not-inside: for (const [...] of $LIST) { ... }
+              - pattern-not-inside: for (const {...} of $LIST) { ... }
+              - pattern-not-inside: ([...]) => $BODY
+              - pattern-not-inside: "({...}) => $BODY"
       - pattern-not-inside: for (...) { ... $V = $X; ... <... new URL(<... $V ...>, ...) ...>; }
       - pattern-not-inside: for (...) { ... const $V = $X; ... <... new URL(<... $V ...>, ...) ...>; }
       - pattern-not-inside: for (...) { ... let $V = $X; ... <... new URL(<... $V ...>, ...) ...>; }
@@ -543,19 +602,49 @@ rules:
     paths: *paths
     patterns:
       - pattern-either:
-          - pattern-inside: |
-              for $I in $Y:
-                ...
-          - pattern-inside: "[$E for $I in $Y]"
-      - pattern-either:
-          - pattern: urllib.parse.urlparse(...)
-          - pattern: urllib.parse.urlsplit(...)
-      - pattern-not: urllib.parse.urlparse(<... $I ...>, ...)
-      - pattern-not: urllib.parse.urlsplit(<... $I ...>, ...)
-      - pattern-not-inside: |
-          for ($K, $V) in $Y:
-            ...
-      - pattern-not-inside: "[$E for ($K, $V) in $Y]"
+          - patterns:
+              - pattern-inside: |
+                  for $I in $Y:
+                    ...
+
+              - pattern-either:
+                  - pattern: urllib.parse.urlparse(...)
+                  - pattern: urllib.parse.urlsplit(...)
+              - pattern-not: urllib.parse.urlparse(<... $I ...>, ...)
+              - pattern-not: urllib.parse.urlsplit(<... $I ...>, ...)
+              - pattern-not-inside: |
+                  for ($A, $B) in $Z:
+                    ...
+
+          - patterns:
+              - pattern-inside: "[$E for $I in $Y]"
+              - pattern-either:
+                  - pattern: urllib.parse.urlparse(...)
+                  - pattern: urllib.parse.urlsplit(...)
+              - pattern-not: urllib.parse.urlparse(<... $I ...>, ...)
+              - pattern-not: urllib.parse.urlsplit(<... $I ...>, ...)
+              - pattern-not-inside: "[$F for ($A, $B) in $Z]"
+          - patterns:
+              - pattern-inside: |
+                  for ($K, $V) in $Y:
+                    ...
+
+              - pattern-either:
+                  - pattern: urllib.parse.urlparse(...)
+                  - pattern: urllib.parse.urlsplit(...)
+              - pattern-not: urllib.parse.urlparse(<... $K ...>, ...)
+              - pattern-not: urllib.parse.urlsplit(<... $K ...>, ...)
+              - pattern-not: urllib.parse.urlparse(<... $V ...>, ...)
+              - pattern-not: urllib.parse.urlsplit(<... $V ...>, ...)
+          - patterns:
+              - pattern-inside: "[$E for ($K, $V) in $Y]"
+              - pattern-either:
+                  - pattern: urllib.parse.urlparse(...)
+                  - pattern: urllib.parse.urlsplit(...)
+              - pattern-not: urllib.parse.urlparse(<... $K ...>, ...)
+              - pattern-not: urllib.parse.urlsplit(<... $K ...>, ...)
+              - pattern-not: urllib.parse.urlparse(<... $V ...>, ...)
+              - pattern-not: urllib.parse.urlsplit(<... $V ...>, ...)
       - pattern-not-inside: |
           for $I in $Y:
             ...

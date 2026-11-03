@@ -42,8 +42,12 @@ Future<void> load(List<String> ids, Client client, Client users, Client orders, 
   print(third);
   final yes = await showDialog(context);
   final no = await showDialog(context);
+  print(no);
+  // ruleid: sequential-awaits-dart
+  final left = await client.get('a');
+  final right = await client.get('b');
   await for (final line in lines) {
     await client.put(line);
   }
-  print([first, third, yes, no]);
+  print([first, third, yes, no, left, right]);
 }

@@ -39,7 +39,7 @@ def square(value):
     return value * value
 
 
-async def load(client, users, orders, ids, links, base, session, config, socket):
+async def load(api, client, users, orders, ids, links, base, session, config, socket):
     for item in ids:
         # ruleid: await-in-loop-python
         await client.get(item)
@@ -63,6 +63,10 @@ async def load(client, users, orders, ids, links, base, session, config, socket)
     print(second)
     user = await session.get(1)
     org = await session.get(2)
+    print(org)
+    # ruleid: sequential-awaits-python
+    left = await api.get(1)
+    right = await api.get(2)
     total = first + second
     third = await client.get(total)
     fourth = await client.get(third)
@@ -72,6 +76,9 @@ async def load(client, users, orders, ids, links, base, session, config, socket)
     named = {key: urlparse(value).path for key, value in links.items()}
     for key, value in links.items():
         hosts.append(urlparse(value).netloc + key)
+    for key, value in links.items():
+        # ruleid: url-parse-in-loop-python
+        hosts.append(urlparse(base).netloc + key + value)
     for link in links:
         trimmed = link.strip()
         hosts.append(urlparse(trimmed).netloc)
@@ -92,4 +99,4 @@ async def load(client, users, orders, ids, links, base, session, config, socket)
     body = client.response.json()
     kind = "application/json"
     # Stores a jsonb blob.
-    return fourth, user, org, hosts, paths, named, ordered, known, row, value, settings, payload, key, body, kind, cachetools
+    return fourth, user, org, left, right, hosts, paths, named, ordered, known, row, value, settings, payload, key, body, kind, cachetools

@@ -17,10 +17,12 @@ INSERT INTO archive
 SELECT * FROM users;
 -- A json column would go here.
 CREATE TABLE users_backup AS SELECT * FROM users;
+-- ruleid: whole-row-sql-file
 WITH recent AS (SELECT id, name FROM users) SELECT * FROM recent;
 WITH recent AS (
   SELECT id, name FROM users
 )
+-- ruleid: whole-row-sql-file
 SELECT * FROM recent;
 SELECT * FROM generate_series(1, 10);
 ALTER TABLE files ADD COLUMN content_type text NOT NULL DEFAULT 'application/json';
