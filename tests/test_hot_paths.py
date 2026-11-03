@@ -55,12 +55,14 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
 def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
     """HE-HOT-PATH: each security gate fails committed slow code, says how to fix it and skips generated files."""
     old = "import re\n\n\ndef old(text):\n    return re.findall(r'a+', text)\n"
-    (runner.ROOT / "app.py").write_text(old)
-    (runner.ROOT / "client.py").write_text(old)
-    (runner.ROOT / ".gitattributes").write_text("client.py linguist-generated\n")
+    package = runner.ROOT / "ios"
+    package.mkdir()
+    (package / "app.py").write_text(old)
+    (package / "client.py").write_text(old)
+    (runner.ROOT / ".gitattributes").write_text("ios/client.py linguist-generated\n")
     git(runner.ROOT, "add", ".")
     git(runner.ROOT, "commit", "-qm", "base")
-    group: Group = {"path": ".", "checks": []}
+    group: Group = {"path": "ios", "checks": []}
     gate: Gate = {
         "name": "security",
         "role": "security",
@@ -70,15 +72,15 @@ def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
     other = runner.prepare_command(group, {**gate, "role": "lint"}, 5)
 
     result = subprocess.run(
-        command, cwd=runner.ROOT, capture_output=True, text=True, check=False
+        command, cwd=package, capture_output=True, text=True, check=False
     )
 
-    assert "--exclude=/client.py" in command
+    assert "--exclude=/ios/client.py" in command
     assert not any("performance.yaml" in part for part in other)
     assert result.returncode == 1
     (found,) = json.loads(result.stdout)["results"]
     assert (found["path"], found["start"]["line"]) == ("app.py", 5)
-    report = runner.ROOT / "semgrep.json"
+    report = package / "semgrep.json"
     report.write_text(result.stdout)
     with pytest.raises(ValueError, match=r"app\.py:5 Compile this constant regex"):
         validate_semgrep(report)

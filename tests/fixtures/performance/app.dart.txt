@@ -22,7 +22,7 @@ bool words(String text, int size, String pattern) {
   return query.isEmpty && copy.isEmpty && key.isEmpty && exists.isEmpty && found.hasMatch(text) && dynamic.hasMatch(text) && seen.isEmpty && cache.hashCode > 0;
 }
 
-Future<void> load(List<String> ids, Client client, Client users, Client orders, Stream<String> lines, Object context) async {
+Future<void> load(List<String> ids, Client client, Client users, Client blocks, Client orders, Stream<String> lines, Object context) async {
   for (final id in ids) {
     // ruleid: await-in-loop-dart
     await client.get(id);
@@ -44,10 +44,14 @@ Future<void> load(List<String> ids, Client client, Client users, Client orders, 
   final no = await showDialog(context);
   print(no);
   // ruleid: sequential-awaits-dart
+  final top = await blocks.get('a');
+  final bottom = await blocks.get('b');
+  print(no);
+  // ruleid: sequential-awaits-dart
   final left = await client.get('a');
   final right = await client.get('b');
   await for (final line in lines) {
     await client.put(line);
   }
-  print([first, third, yes, no, left, right]);
+  print([first, third, yes, no, top, bottom, left, right]);
 }
