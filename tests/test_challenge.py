@@ -11,7 +11,7 @@ from unittest.mock import Mock
 import challenge
 import pytest
 import ship_actions
-from conftest import commit, git, running, spawner
+from conftest import commit, git, gone, spawner
 from plans import validate_plans
 from shipping import Shipment
 from test_plans import edit, sized_branch
@@ -500,4 +500,4 @@ def test_a_timed_out_reviewer_leaves_no_process_behind(
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 1
     assert "timed out" in record_of(branch)["outcome"]
-    assert not running(pid_file)
+    assert gone(pid_file)
