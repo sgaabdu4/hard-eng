@@ -1,6 +1,6 @@
 # Hot-path rules fail old code
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
