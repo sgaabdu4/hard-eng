@@ -3,6 +3,7 @@
 import json
 import os
 import stat
+import subprocess
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -43,6 +44,8 @@ def fake_cli(
 
 @pytest.fixture
 def branch(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     git(repository, "branch", "-M", "main")
     (repository / "app.py").write_text("value = 1\n")
     commit(repository, "base")
@@ -164,6 +167,7 @@ def test_no_branch_point_records_not_done_without_calling_the_reviewer(
     log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
     monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     assert challenge.challenge(repository, None, None) == 1
     assert "branch point" in record_of(repository)["outcome"]
     assert not log.exists()
@@ -228,6 +232,25 @@ def test_claude_host_runs_codex_read_only_without_user_plugins_and_closed_stdin(
     assert record["revision"] == revision
     assert record["outcome"] == "clean"
     assert "VERDICT: clean" in Path(record["output"]).read_text()
+
+
+def test_review_tests_isolate_an_inherited_codex_host() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            f"{Path(__file__)}::test_claude_host_runs_codex_read_only_without_user_plugins_and_closed_stdin",
+            "-q",
+            "--tb=short",
+        ],
+        env={**os.environ, "CODEX_THREAD_ID": "inherited-host"},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_codex_host_runs_claude_with_read_only_tools_and_no_git_write_flags(
