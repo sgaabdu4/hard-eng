@@ -14,6 +14,7 @@ import pytest
 import tool_setup
 from conftest import SOURCE, use_installed_mise
 from gate_config import Gate, Group, validate_gate, validate_package_services
+from hot_paths import PYTHON_RULES, RULES
 from python_setup import import_configuration
 
 RECURSIVE_IMPORT_LINTER = """[importlinter]
@@ -399,9 +400,12 @@ def test_package_script_scanner_executes_provisioned_native_executable(
     [
         (
             ["semgrep", "scan", "--config", "p/default", "."],
-            ["--timeout", "60", "--config", "p/default", "."],
+            ["--timeout", "60", "--config", "RULES", "--config", "p/default", "."],
         ),
-        (["semgrep", "scan", "--timeout", "9", "."], ["--timeout", "9", "."]),
+        (
+            ["semgrep", "scan", "--timeout", "9", "."],
+            ["--config", "RULES", "--timeout", "9", "."],
+        ),
         (["make", "scan"], []),
     ],
 )
@@ -410,6 +414,8 @@ def test_security_scan_gives_each_rule_time_to_finish_under_load(
 ) -> None:
     gate: Gate = {"name": "security", "role": "security", "command": scan}
     command = runner.prepare_command({"path": ".", "checks": []}, gate, 5)
+    rules = os.path.relpath(RULES, runner.ROOT)
+    expected = [rules if part == "RULES" else part for part in expected]
     assert command[command.index("scan") + 1 :] == expected
 
 
@@ -429,13 +435,14 @@ def test_python_security_gate_replaces_only_the_registry_sha1_rule(
         **python,
         "command": [part.format("p/javascript") for part in scan],
     }
-    rules = runner.ROOT / ".agents/skills/he/semgrep/python.yaml"
 
     assert runner.prepare_command(group, python, 5)[5:] == [
         "--config",
+        os.path.relpath(RULES, runner.ROOT),
+        "--config",
         "p/python",
         "--config",
-        str(rules),
+        os.path.relpath(PYTHON_RULES, runner.ROOT),
         "--exclude-rule",
         "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
         "--error",

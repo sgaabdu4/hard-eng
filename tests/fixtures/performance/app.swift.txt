@@ -9,11 +9,13 @@ func words(text: String, size: Int, pattern: String) throws -> Bool {
   // ruleid: whole-row-sql-swift
   let query = "SELECT * FROM users"
   let exists = "SELECT 1 WHERE EXISTS (SELECT * FROM users)"
+  // ruleid: json-column-swift
+  let key = "SELECT data->>'k' FROM users"
   // ruleid: bool-array-swift
   let seen = [Bool](repeating: false, count: size)
   // ruleid: in-process-cache-swift
   let cache = NSCache<NSString, NSString>()
-  return query.isEmpty && exists.isEmpty && found.pattern.isEmpty && dynamic.pattern.isEmpty && seen.isEmpty && cache.name.isEmpty
+  return query.isEmpty && key.isEmpty && exists.isEmpty && found.pattern.isEmpty && dynamic.pattern.isEmpty && seen.isEmpty && cache.name.isEmpty
 }
 
 func load(ids: [String], client: Client) async throws {
@@ -21,12 +23,41 @@ func load(ids: [String], client: Client) async throws {
     // ruleid: await-in-loop-swift
     try await client.get(id)
   }
+  for id in ids {
+    let found = try await client.has(id)
+    if found {
+      break
+    }
+  }
+  for id in ids {
+    try await client.put(id)
+    try await Task.sleep(nanoseconds: 1_000_000)
+  }
+  for try await line in client.lines {
+    try await client.put(line)
+  }
+  for try await line in client.stream(
+    from: 1
+  ) {
+    try await client.put(line)
+  }
+  var cursor = try await client.page("")
+  while !cursor.isEmpty {
+    cursor = try await client.page(cursor)
+  }
 }
 
-func pair(client: Client) async throws -> Int {
+func pair(client: Client, session: Client, users: Client, orders: Client) async throws -> Int {
   // ruleid: sequential-awaits-swift
-  let first = try await client.get(1)
-  let second = try await client.get(2)
+  let first = try await users.get(1)
+  let second = try await orders.get(2)
   let third = try await client.get(second)
-  return first + third
+  print(third)
+  let user = try await session.get(1)
+  let org = try await session.get(2)
+  print(org)
+  // ruleid: sequential-awaits-swift
+  let left = try await client.get(1)
+  let right = try await client.get(2)
+  return first + third + user + org + left + right
 }

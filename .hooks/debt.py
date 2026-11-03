@@ -9,6 +9,9 @@ from pathlib import Path
 
 from gate_config import Gate, Group, JsonObject
 
+WORD_CHARACTER = re.compile(r"\w")
+DIGIT_RUN = re.compile(r"\d+")
+
 DEBT_FILE = "hard-eng.debt.json"
 # Failing tests, broken installs and leaked secrets are never old findings to keep.
 NEVER = {"tests", "lockfiles", "secrets-files", "secrets-history"}
@@ -91,7 +94,7 @@ def fingerprints(root: Path, group: Group, gate: Gate, output: str) -> Counter[s
         lines += path.read_text().splitlines()
     found: Counter[str] = Counter()
     for line in lines:
-        line = re.sub(r"\d+", "N", ANSI.sub("", line).replace(str(root), ".")).strip()
+        line = DIGIT_RUN.sub("N", ANSI.sub("", line).replace(str(root), ".")).strip()
         if line and not RUNNER_LINES.match(line):
             found[line] += 1
     extract = REPORT_FINDINGS.get(str(report.get("type")))
@@ -132,7 +135,7 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     current = fingerprints(root, group, gate, output) if failed else Counter()
     if new := current - debt:
         print(f"FAIL {gate['name']}: findings beyond {DEBT_FILE}:")
-        shown = sorted(new.elements(), key=lambda line: not re.search(r"\w", line))
+        shown = sorted(new.elements(), key=lambda line: not WORD_CHARACTER.search(line))
         print("".join(f"  {line}\n" for line in shown[:20]), end="")
         return True
     if fixed := debt - current:

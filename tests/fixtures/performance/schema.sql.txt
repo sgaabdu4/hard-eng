@@ -8,4 +8,22 @@ SELECT id FROM a WHERE EXISTS (
   SELECT * FROM b WHERE b.a = a.id
 );
 -- Never SELECT * FROM users in app code
-/* SELECT * FROM users */
+/* SELECT * FROM users
+   and no jsonb */
+-- ruleid: whole-row-sql-file
+SELECT name FROM a WHERE note = '--'; SELECT * FROM users;
+INSERT INTO archive SELECT * FROM users;
+INSERT INTO archive
+SELECT * FROM users;
+-- A json column would go here.
+CREATE TABLE users_backup AS SELECT * FROM users;
+-- ruleid: whole-row-sql-file
+WITH recent AS (SELECT id, name FROM users) SELECT * FROM recent;
+WITH recent AS (
+  SELECT id, name FROM users
+)
+-- ruleid: whole-row-sql-file
+SELECT * FROM recent;
+SELECT * FROM generate_series(1, 10);
+ALTER TABLE files ADD COLUMN content_type text NOT NULL DEFAULT 'application/json';
+SELECT net.http_post(url := 'https://x.test', headers := '{"Content-Type": "application/json"}'::jsonb);

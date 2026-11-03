@@ -1,12 +1,16 @@
-"""Known slow patterns fail only on added lines; judgment cases print as notes."""
+"""Known slow patterns fail the security gate, old code included."""
 
+import json
 import re
 import subprocess
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import yaml
-from hot_paths import RULES, findings, scan_all, scan_changes
+from gate_config import Gate, Group
+from hot_paths import RULES, findings, scan_all, unowned_paths
+from reports import validate_semgrep
 
 SOURCE = Path(__file__).resolve().parents[1]
 FIXTURES = SOURCE / "tests/fixtures/performance"
@@ -48,43 +52,71 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
     assert {rule for _, rule, _ in actual} == {rule["id"] for rule in rules}
 
 
-def test_added_slow_code_fails_while_old_code_and_notes_pass(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """HE-HOT-PATH: added slow code fails, old slow code passes, judgment cases are notes."""
-    git(tmp_path, "init", "-q", "-b", "main")
+def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
+    """HE-HOT-PATH: each security gate fails committed slow code, says how to fix it and skips generated files."""
     old = "import re\n\n\ndef old(text):\n    return re.findall(r'a+', text)\n"
-    (tmp_path / "app.py").write_text(old)
-    git(tmp_path, "add", ".")
-    git(tmp_path, "commit", "-qm", "base")
-    (tmp_path / "app.py").write_text(
-        old + "\n\nasync def load(client, ids):\n"
-        "    for item in ids:\n        await client.get(item)\n"
+    package = runner.ROOT / "ios"
+    package.mkdir()
+    (package / "app.py").write_text(old)
+    (package / "client.py").write_text(old)
+    (runner.ROOT / ".gitattributes").write_text("ios/client.py linguist-generated\n")
+    git(runner.ROOT, "add", ".")
+    git(runner.ROOT, "commit", "-qm", "base")
+    group: Group = {"path": "ios", "checks": []}
+    gate: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep", "scan", "--error", "--metrics=off", "--json", "."],
+    }
+    command = runner.prepare_command(group, gate, 5)
+    other = runner.prepare_command(group, {**gate, "role": "lint"}, 5)
+
+    result = subprocess.run(
+        command, cwd=package, capture_output=True, text=True, check=False
     )
-    scan_changes(tmp_path, "HEAD", 600)
-    output = capsys.readouterr().out
-    assert "Performance note (HE-HOT-PATH): app.py:10 Each loop pass waits" in output
-    assert "app.py:5" not in output
 
-    (tmp_path / "app.py").write_text(
-        old + "\n\ndef new(text):\n    return re.findall(r'b+', text)\n"
-    )
-    with pytest.raises(ValueError, match=r"HE-HOT-PATH: .*app\.py:9 Compile") as error:
-        scan_changes(tmp_path, "HEAD", 600)
-    assert "app.py:5" not in str(error.value)
+    assert "--exclude=/ios/client.py" in command
+    assert not any("performance.yaml" in part for part in other)
+    assert result.returncode == 1
+    (found,) = json.loads(result.stdout)["results"]
+    assert (found["path"], found["start"]["line"]) == ("app.py", 5)
+    report = package / "semgrep.json"
+    report.write_text(result.stdout)
+    with pytest.raises(ValueError, match=r"app\.py:5 Compile this constant regex"):
+        validate_semgrep(report)
 
 
-def test_a_repository_scan_lists_old_and_new_findings(
+def test_generated_folders_become_one_exclude_each() -> None:
+    """HE-HOT-PATH: a vendored folder is one exclude, so large ones fit the command line."""
+    names = [f"ios/Pods/{index}.m" for index in range(3)] + ["ios/Runner/App.swift"]
+    names += [
+        "types.ts",
+        "src/types.ts",
+        "src/app/[id]/page.ts",
+        "src/app/[id]/form.ts",
+    ]
+    generated = {*names[:3], "types.ts", "src/app/[id]/page.ts"}
+
+    assert unowned_paths(names, generated) == [
+        "ios/Pods/",
+        "src/app/[id]/page.ts",
+        "types.ts",
+    ]
+
+
+def test_a_repository_scan_lists_every_finding_and_fails(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """HE-HOT-PATH: a requested whole-repository scan lists every finding and passes."""
+    """HE-HOT-PATH: `hot-paths` lists every finding and fails while any remain."""
     (tmp_path / "app.py").write_text(
         "from functools import cache\n\n\n@cache\ndef square(x):\n    return x * x\n"
     )
-    assert scan_all(tmp_path, 600) == 0
+    assert scan_all(tmp_path, 600) == 1
     output = capsys.readouterr().out
-    assert "fix: app.py:4 Remove this cache" in output
+    assert "app.py:4 Remove this cache" in output
     assert "HE-HOT-PATH: 1 findings" in output
+    (tmp_path / "app.py").write_text("def square(x):\n    return x * x\n")
+    assert scan_all(tmp_path, 600) == 0
 
 
 def test_a_partly_parsed_file_still_reports_its_findings(
@@ -100,4 +132,34 @@ def test_a_partly_parsed_file_still_reports_its_findings(
     assert [
         result["start"]["line"] for result in found if isinstance(result["start"], dict)
     ] == [4]
-    assert "HE-HOT-PATH: partly scanned" in capsys.readouterr().out
+    assert "Semgrep partly scanned View.swift:7" in capsys.readouterr().out
+
+
+def test_a_partly_parsed_page_passes_the_gate_but_its_findings_fail_it(
+    runner: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-HOT-PATH: the stock Next.js page, which Semgrep parses only in part, passes; slow code in it fails."""
+    page = runner.ROOT / "page.tsx"
+    link = (
+        '<a href="https://vercel.com/templates?framework=next.js&utm_source=app">Go</a>'
+    )
+    slow = "export function seen(text: string) {\n  return /a+b/.test(text);\n}\n"
+    gate: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep", "scan", "--error", "--strict", "--metrics=off"]
+        + ["--time", "--json", "--output", "semgrep.json", "."],
+    }
+    command = runner.prepare_command({"path": ".", "checks": []}, gate, 5)
+    report = runner.ROOT / "semgrep.json"
+    for code, failed in ((slow, 1), ("", 0)):
+        page.write_text(
+            f"{code}export default function Page() {{\n  return {link};\n}}\n"
+        )
+        result = subprocess.run(command, cwd=runner.ROOT, check=False)
+        assert result.returncode == failed
+        if failed:
+            with pytest.raises(ValueError, match=r"page\.tsx:2 Build this constant"):
+                validate_semgrep(report)
+    validate_semgrep(report)
+    assert "Semgrep partly scanned page.tsx:" in capsys.readouterr().out

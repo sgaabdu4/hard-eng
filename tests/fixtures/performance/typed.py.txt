@@ -1,0 +1,11 @@
+import re
+
+type Names = list[str]
+
+
+def words(text: str) -> Names:
+    # ruleid: regex-built-in-function-python
+    found = re.findall(r"\w+", text)
+    # ruleid: whole-row-sql-python
+    query = "SELECT * FROM users"
+    return [*found, query]
