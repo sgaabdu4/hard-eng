@@ -330,6 +330,7 @@ def configure_dart(
     configure_dart_generated(root, directory, changes)
 
 
+LOCALE_SEPARATOR = re.compile("[_-]")
 LOCALE = re.compile(r"[a-z]{2,3}([_-][A-Z][a-z]{3})?([_-](?:[A-Z]{2}|\d{3}))?")
 
 
@@ -344,7 +345,7 @@ def arb_language(arb: Path) -> str | None:
         stem = arb.stem
         candidates = [stem, *(stem[i + 1 :] for i, c in enumerate(stem) if c == "_")]
         locale = next((name for name in candidates if LOCALE.fullmatch(name)), None)
-    return re.split("[_-]", locale)[0] if locale else None
+    return LOCALE_SEPARATOR.split(locale)[0] if locale else None
 
 
 def localization_outputs(root: Path, directory: Path) -> list[str]:
