@@ -1,0 +1,391 @@
+rules:
+  - id: regex-built-in-function-python
+    languages: [python]
+    severity: ERROR
+    message: Compile this constant regex once at module level and reuse it.
+    paths: &paths
+      exclude:
+        [
+          ".hooks/",
+          ".agents/",
+          "test/",
+          "tests/",
+          "__tests__/",
+          "*Tests/",
+          "test_*.py",
+          "*_test.py",
+          "conftest.py",
+          "*.test.*",
+          "*.spec.*",
+          "*_test.dart",
+          "*Tests.swift",
+        ]
+    patterns:
+      - pattern-inside: |
+          def $F(...):
+            ...
+      - pattern: re.$M("...", ...)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(compile|match|fullmatch|search|sub|subn|split|findall|finditer)$
+  - id: regex-built-in-function-javascript
+    languages: [javascript, typescript]
+    options:
+      constant_propagation: false
+    severity: ERROR
+    message: Build this constant regex once at module level and reuse it.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern-inside: function $F(...) { ... }
+          - pattern-inside: (...) => { ... }
+          - pattern-inside: (...) => $X
+          - pattern-inside: "$C.$M = function (...) { ... }"
+          - pattern-inside: |
+              $M(...) { ... }
+      - pattern-either:
+          - pattern: new RegExp("...")
+          - pattern: new RegExp("...", "=~/^[dimsuv]*$/")
+          - pattern: RegExp("...")
+          - pattern: RegExp("...", "=~/^[dimsuv]*$/")
+          - patterns:
+              - pattern: /.../
+              - pattern-not-regex: (?<![\w$)\]/])/(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\[\n])+/[a-z]*[gy]
+  - id: regex-built-in-function-dart
+    languages: [dart]
+    severity: ERROR
+    message: Build this constant regex once as a top-level or static final and reuse it.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern-inside: $T $F(...) { ... }
+          - pattern-inside: $F(...) { ... }
+          - pattern-inside: (...) { ... }
+          - pattern-inside: (...) => $X
+      - pattern: RegExp("...", ...)
+  - id: regex-built-in-function-swift
+    languages: [swift]
+    severity: ERROR
+    message: Build this constant regex once as a global or static let and reuse it.
+    paths: *paths
+    patterns:
+      - pattern-inside: |
+          func $F(...) { ... }
+      - pattern: 'NSRegularExpression(pattern: "...", ...)'
+  - id: bool-array-python
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A list of bools stores one object reference per flag. Use a bytearray(n), one byte per flag and as fast
+      as a list; pack eight flags per byte only when memory matters. An int bitset rebuilds itself on every write.
+    paths: *paths
+    pattern-either:
+      - pattern: "[False] * $N"
+      - pattern: "[True] * $N"
+      - pattern: "$N * [False]"
+      - pattern: "$N * [True]"
+  - id: bool-array-javascript
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Use a bitset (a Uint32Array of words) instead of an array of booleans.
+    paths: *paths
+    pattern-either:
+      - pattern: new Array($N).fill(false)
+      - pattern: new Array($N).fill(true)
+      - pattern: Array($N).fill(false)
+      - pattern: Array($N).fill(true)
+      - pattern: "Array.from({length: $N}, () => false)"
+      - pattern: "Array.from({length: $N}, () => true)"
+  - id: bool-array-dart
+    languages: [dart]
+    severity: ERROR
+    message: Use a bitset (a Uint32List of words) instead of a list of bools.
+    paths: *paths
+    pattern-either:
+      - pattern: List<bool>.filled($N, $V)
+      - pattern: List.filled($N, false)
+      - pattern: List.filled($N, true)
+  - id: bool-array-swift
+    languages: [swift]
+    severity: ERROR
+    message: Use a bitset (an array of UInt64 words) instead of an array of Bool.
+    paths: *paths
+    pattern-either:
+      - pattern: "[Bool](repeating: $V, count: $N)"
+      - pattern: "Array(repeating: false, count: $N)"
+      - pattern: "Array(repeating: true, count: $N)"
+  - id: whole-row-sql-python
+    languages: [python]
+    options:
+      constant_propagation: false
+    severity: ERROR
+    message: Select only the columns this code reads instead of the whole row.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern-inside: $F(...)
+          - pattern-inside: $X = $E
+          - pattern-inside: return $E
+      - pattern: '"$SQL"'
+      - metavariable-regex: &select-all
+          metavariable: $SQL
+          regex: (?is)^(?:(?!exists\s*\().)*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+  - id: whole-row-sql
+    languages: [javascript, typescript]
+    options:
+      constant_propagation: false
+    severity: ERROR
+    message: Select only the columns this code reads instead of the whole row.
+    paths: *paths
+    patterns:
+      - pattern: '"$SQL"'
+      - metavariable-regex: *select-all
+  - id: whole-row-sql-swift
+    languages: [swift]
+    options:
+      constant_propagation: false
+    severity: ERROR
+    message: Select only the columns this code reads instead of the whole row.
+    paths: *paths
+    patterns:
+      - pattern: '"$SQL"'
+      - metavariable-regex: *select-all
+  - id: whole-row-sql-dart
+    languages: [dart]
+    severity: ERROR
+    message: Select only the columns this code reads instead of the whole row.
+    paths: *paths
+    pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\()[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+  - id: whole-row-sql-file
+    languages: [generic]
+    severity: ERROR
+    message: Select only the columns this code reads instead of the whole row.
+    paths:
+      include: ["*.sql"]
+    patterns:
+      - pattern-regex: (?is)\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+      - pattern-not-regex: (?is)exists\s*\(\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+      - pattern-not-regex: --[^\n]*
+      - pattern-not-regex: (?s)/\*.*?\*/
+  - id: whole-row-query-javascript
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Select only the columns this code reads instead of the whole row.
+    paths: *paths
+    pattern-either:
+      - pattern: $DB.from($T).select()
+      - pattern: $DB.from($T).select("*", ...)
+      - pattern: $DB.select().from($T)
+      - patterns:
+          - pattern-either:
+              - pattern: "$P.$M.$F({...})"
+              - pattern: $P.$M.$F()
+          - metavariable-regex:
+              metavariable: $F
+              regex: ^(findMany|findFirst|findFirstOrThrow|findUnique|findUniqueOrThrow)$
+          - pattern-not: "$P.$M.$F({..., select: $S, ...})"
+          - pattern-not: "$P.$M.$F({..., omit: $S, ...})"
+          - pattern-not: "$P.$M.$F({..., columns: $S, ...})"
+  - id: in-process-cache-python
+    languages: [python]
+    severity: ERROR
+    message: Remove this cache and make the underlying work fast instead.
+    paths: *paths
+    pattern-either:
+      - pattern: functools.cache
+      - pattern: functools.lru_cache
+      - pattern: functools.cached_property
+      - pattern: import cachetools
+      - pattern: from cachetools import $X
+  - id: in-process-cache-javascript
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Remove this cache and make the underlying work fast instead.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern: import $X from "$MOD"
+          - pattern: import { $X } from "$MOD"
+          - pattern: import * as $X from "$MOD"
+          - pattern: require("$MOD")
+      - metavariable-regex:
+          metavariable: $MOD
+          regex: ^(lru-cache|quick-lru|memoize-one|mem|p-memoize|node-cache|memoizee|lodash/memoize|lodash\.memoize|fast-memoize|micro-memoize)$
+  - id: in-process-cache-dart
+    languages: [dart]
+    severity: ERROR
+    message: Remove this cache and make the underlying work fast instead.
+    paths: *paths
+    pattern-either:
+      - pattern: AsyncCache(...)
+      - pattern: AsyncCache<$T>(...)
+      - pattern: AsyncCache.ephemeral(...)
+      - pattern: AsyncMemoizer(...)
+      - pattern: AsyncMemoizer<$T>(...)
+  - id: in-process-cache-swift
+    languages: [swift]
+    severity: ERROR
+    message: Remove this cache and make the underlying work fast instead.
+    paths: *paths
+    pattern-either:
+      - pattern: NSCache<$K, $V>()
+      - pattern: NSCache()
+  - id: await-in-loop-python
+    languages: [python]
+    severity: WARNING
+    message: Each loop pass waits for the last one. Start independent calls together (asyncio.gather or a TaskGroup); keep the loop only when a pass needs the previous result or the order matters.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern-inside: |
+              for $X in $Y:
+                ...
+          - pattern-inside: |
+              while $C:
+                ...
+          - pattern-inside: "[...]"
+      - pattern: await $E
+  - id: await-in-loop-javascript
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Each loop pass waits for the last one. Start independent calls together (Promise.all); keep the loop only when a pass needs the previous result or the order matters.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern-inside: for ($I of $C) { ... }
+          - pattern-inside: for ($I in $C) { ... }
+          - pattern-inside: for (...; ...; ...) { ... }
+          - pattern-inside: while ($C) { ... }
+          - pattern-inside: do { ... } while ($C)
+      - pattern: await $E
+  - id: await-in-loop-dart
+    languages: [dart]
+    severity: WARNING
+    message: Each loop pass waits for the last one. Start independent calls together (Future.wait); keep the loop only when a pass needs the previous result or the order matters.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern-inside: for ($I in $C) { ... }
+          - pattern-inside: for (...; ...; ...) { ... }
+          - pattern-inside: while ($C) { ... }
+      - pattern: await $E
+  - id: await-in-loop-swift
+    languages: [swift]
+    severity: WARNING
+    message: Each loop pass waits for the last one. Start independent calls together (async let or a task group); keep the loop only when a pass needs the previous result or the order matters.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern-inside: for $I in $C { ... }
+          - pattern-inside: while $C { ... }
+      - pattern: await $E
+  - id: sequential-awaits-javascript
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: The second call does not use the first result. Start both together with Promise.all unless the order matters.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern: |
+              const $A = await $X;
+              const $B = await $Y;
+          - pattern: |
+              let $A = await $X;
+              let $B = await $Y;
+      - pattern-not: |
+          const $A = await $X;
+          const $B = await <... $A ...>;
+      - pattern-not: |
+          let $A = await $X;
+          let $B = await <... $A ...>;
+  - id: sequential-awaits-python
+    languages: [python]
+    severity: WARNING
+    message: The second call does not use the first result. Start both together with asyncio.gather unless the order matters.
+    paths: *paths
+    patterns:
+      - pattern: |
+          $A = await $X
+          $B = await $Y
+      - pattern-not: |
+          $A = await $X
+          $B = await <... $A ...>
+  - id: sequential-awaits-swift
+    languages: [swift]
+    severity: WARNING
+    message: The second call does not use the first result. Start both together with async let unless the order matters.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern: |
+              let $A = try await $X
+              let $B = try await $Y
+          - pattern: |
+              let $A = await $X
+              let $B = await $Y
+      - pattern-not: |
+          let $A = try await $X
+          let $B = try await <... $A ...>
+      - pattern-not: |
+          let $A = await $X
+          let $B = await <... $A ...>
+  - id: url-parse-in-loop-javascript
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: This parses a URL on every pass. Parse once outside the loop, keep the URL object, or compare the strings directly.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern-inside: for (...) { ... }
+          - pattern-inside: while ($C) { ... }
+          - pattern-inside: $XS.$M((...) => $B)
+          - pattern-inside: $XS.$M(function (...) { ... })
+      - pattern: new URL(...)
+  - id: url-parse-in-loop-python
+    languages: [python]
+    severity: WARNING
+    message: This parses a URL on every pass. Parse once outside the loop or compare the strings directly.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - pattern-inside: |
+              for $X in $Y:
+                ...
+          - pattern-inside: "[...]"
+      - pattern-either:
+          - pattern: urllib.parse.urlparse(...)
+          - pattern: urllib.parse.urlsplit(...)
+  - id: json-column
+    languages: [generic]
+    severity: WARNING
+    message: A JSON column, or a read of one key from it. Move each key that hot paths read into a real column, and keep large JSON out of the row.
+    paths:
+      include: ["*.sql", "*.prisma"]
+    pattern-regex: (?i)\bjsonb?\b|->>|#>>
+  - id: json-column-code
+    languages: [python, javascript, typescript, dart, swift]
+    severity: WARNING
+    message: A JSON column, or a read of one key from it. Move each key that hot paths read into a real column, and keep large JSON out of the row.
+    paths: *paths
+    pattern-regex: (?i:\bjsonb\b)|\bJSONField\(|->>|#>>
+  - id: whole-entity-load-python
+    languages: [python]
+    severity: WARNING
+    message: This loads every column. Read only the fields this code needs (.only(), .values(), load_only() or a column select).
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern: $M.objects.$F(...)
+              - metavariable-regex:
+                  metavariable: $F
+                  regex: ^(get|filter|all|exclude|first|last)$
+              - pattern-not-inside: $M.objects.$F(...).$G(...)
+          - patterns:
+              - pattern-either:
+                  - pattern: sqlalchemy.select($M)
+                  - pattern: $S.get($M, ...)
+                  - pattern: $S.query($M)
+              - metavariable-regex:
+                  metavariable: $M
+                  regex: ^[A-Z]\w*$

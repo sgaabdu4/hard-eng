@@ -12,7 +12,7 @@ from unittest.mock import Mock
 
 import mutation
 import pytest
-from conftest import SOURCE, commit, init, running, spawner
+from conftest import SOURCE, commit, gone, init, spawner
 from gate_config import Group
 
 PRICE = """\
@@ -418,4 +418,4 @@ def test_a_capped_tool_raises_capped_and_leaves_no_process_behind(
         mutation.run(
             spawner(pid_file), tmp_path, time.monotonic() + 2, tmp_path / "log"
         )
-    assert not running(pid_file)
+    assert gone(pid_file)

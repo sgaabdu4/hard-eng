@@ -1,0 +1,11 @@
+-- ruleid: whole-row-sql-file
+CREATE VIEW active AS SELECT * FROM users WHERE active;
+CREATE VIEW names AS SELECT id, name FROM users;
+-- ruleid: json-column
+ALTER TABLE users ADD COLUMN settings jsonb;
+SELECT 1 WHERE EXISTS (SELECT * FROM users);
+SELECT id FROM a WHERE EXISTS (
+  SELECT * FROM b WHERE b.a = a.id
+);
+-- Never SELECT * FROM users in app code
+/* SELECT * FROM users */

@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -80,6 +81,16 @@ def running(pid_file: Path) -> bool:
         check=False,
     ).stdout.strip()
     return bool(state) and not state.startswith("Z")
+
+
+def gone(pid_file: Path) -> bool:
+    """A killed process can stay scheduled for a moment on a loaded machine."""
+    deadline = time.monotonic() + 5
+    while running(pid_file):
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(0.05)
+    return True
 
 
 def load_module(name: str, path: Path) -> ModuleType:

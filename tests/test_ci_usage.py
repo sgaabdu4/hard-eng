@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from ci_setup import ci_usage
+from ci_usage import ci_usage
 
 SOURCE = Path(__file__).resolve().parents[1]
 
@@ -28,33 +28,26 @@ def _usage(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     runs: list[tuple[str, list[dict[str, object]]]],
+    limit: int | None = None,
 ) -> str:
     import shipping
 
     def github(_root: Path, *args: str) -> str:
         endpoint = args[-1]
         if "/actions/runs?" in endpoint:
-            return json.dumps(
-                [
-                    {
-                        "total_count": len(runs),
-                        "workflow_runs": [
-                            {
-                                "id": index,
-                                "name": "CI",
-                                "event": event,
-                                "path": "ci.yml",
-                            }
-                            for index, (event, _) in enumerate(runs)
-                        ],
-                    }
-                ]
-            )
+            page = {
+                "total_count": len(runs),
+                "workflow_runs": [
+                    {"id": index, "name": "CI", "event": event, "path": "ci.yml"}
+                    for index, (event, _) in enumerate(runs)
+                ],
+            }
+            return json.dumps([page] if "--paginate" in args else page)
         jobs = runs[int(endpoint.split("/runs/")[1].split("/")[0])][1]
         return json.dumps([{"total_count": len(jobs), "jobs": jobs}])
 
     monkeypatch.setattr(shipping, "gh", github)
-    assert ci_usage(SOURCE, "acme/widget", 14) == 0
+    assert ci_usage(SOURCE, "acme/widget", 14, limit) == 0
     return capsys.readouterr().out
 
 
@@ -109,3 +102,57 @@ def test_ci_usage_reports_jobs_repeated_on_push_and_pull_request(
     )
     assert "CI / preview" not in output.split("Runs on push")[1]
     assert output.count("Runs on push and pull_request") == 1
+
+
+def test_ci_usage_splits_the_slowest_jobs_into_queue_setup_and_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def step(name: str, start: int, end: int) -> dict[str, object]:
+        return {
+            "name": name,
+            "started_at": f"2026-09-10T10:00:{start:02}Z",
+            "completed_at": f"2026-09-10T10:00:{end:02}Z",
+        }
+
+    checks = _job(
+        "hard-eng",
+        50,
+        created_at="2026-09-10T09:59:30Z",
+        steps=[
+            step("Set up job", 0, 2),
+            step("Run actions/checkout@v7", 2, 10),
+            step("Install check tools", 10, 20),
+            step("Run required checks", 20, 48),
+            step("Complete job", 48, 50),
+        ],
+    )
+    output = _usage(monkeypatch, capsys, [("pull_request", [checks])], limit=150)
+    assert "acme/widget, last 150 runs: 1 runs, 1 jobs." in output
+    assert "    30     22     28     80     1  CI / hard-eng" in output
+
+
+def test_ci_usage_reads_only_the_newest_runs_across_pages(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import shipping
+
+    pages: list[str] = []
+
+    def github(_root: Path, *args: str) -> str:
+        endpoint = args[-1]
+        if "/actions/runs?" in endpoint:
+            page = int(endpoint.rsplit("&page=", 1)[1])
+            pages.append(endpoint)
+            runs = [
+                {"id": (page - 1) * 100 + index, "name": "CI", "event": "push"}
+                for index in range(100)
+            ]
+            return json.dumps({"total_count": 300, "workflow_runs": runs})
+        run = int(endpoint.split("/runs/")[1].split("/")[0])
+        return json.dumps([{"total_count": 1, "jobs": [_job(f"job{run}", 60)]}])
+
+    monkeypatch.setattr(shipping, "gh", github)
+    assert ci_usage(SOURCE, "acme/widget", 14, 150) == 0
+    output = capsys.readouterr().out
+    assert len(pages) == 2
+    assert "last 150 runs: 150 runs, 150 jobs." in output

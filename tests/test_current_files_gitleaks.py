@@ -11,7 +11,7 @@ from types import ModuleType
 import gitleaks_scan
 import pytest
 from conftest import git as git_output
-from conftest import running, spawner
+from conftest import gone, spawner
 from gate_config import validate_gate
 from gitleaks_scan import run_current_files, snapshot_command
 
@@ -555,4 +555,4 @@ def test_a_timed_out_gate_leaves_no_process_behind(tmp_path: Path) -> None:
     pid_file = tmp_path / "child.pid"
     with (tmp_path / "log").open("w") as log, pytest.raises(subprocess.TimeoutExpired):
         run_gate_command("tests", spawner(pid_file), tmp_path, 2, log, log)
-    assert not running(pid_file)
+    assert gone(pid_file)

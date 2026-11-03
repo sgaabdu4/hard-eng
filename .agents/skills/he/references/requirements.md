@@ -76,6 +76,12 @@ A proposed change to a screen that exists is shown as before and after captures 
 
 Proof: check
 
+## HE-HOT-PATH
+
+Added code must not build a constant regex inside a function, allocate an array of booleans, read whole rows (`SELECT *`, an ORM query without a column list) or add an in-process cache. `check` fails on these in added lines and prints the judgment cases there as notes: awaits in a loop, independent awaits in sequence, URL parsing in a loop, JSON columns and whole-entity loads. Code already on the base branch never fails; `python3 .hooks/hard-eng.py hot-paths` lists it.
+
+Proof: check
+
 ## HE-YAGNI
 
 Add a file, dependency, abstraction, configuration or stored state only for a current agreed requirement that existing code or a direct command cannot meet.

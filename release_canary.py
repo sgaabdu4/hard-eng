@@ -71,6 +71,7 @@ NEW_TARGETS = (
     ("brownfield", "itsdangerous"),
 )
 # The public CI job (.github/workflows/canary.yml) that checks each new project.
+NOT_FOLDER_NAME = re.compile(r"[^a-z0-9]+")
 CI_JOB = re.compile(r"new project \(([a-z0-9-]+), [\w.-]+\)")
 AGENTS = ("claude", "codex")
 TASK = (
@@ -248,7 +249,7 @@ def add_documents(work: Path) -> None:
 
 
 def folder(label: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", label.lower())
+    return NOT_FOLDER_NAME.sub("-", label.lower())
 
 
 def drop_ended_python(work: Path) -> None:
