@@ -339,6 +339,8 @@ rules:
       - pattern-not-inside: do { ... return; } while ($C)
       - pattern-not-inside: while (<... $V ...>) { ... $V = $X; ... }
       - pattern-not-inside: do { ... $V = $X; ... } while (<... $V ...>)
+      - pattern-not-inside: "async function inOrder($ITEMS, $STEP, { reason }) { ... }"
+      - pattern-not-inside: "async function inOrderSteps($STEPS, { reason }) { ... }"
   - id: await-in-loop-dart
     languages: [dart]
     severity: ERROR
@@ -387,6 +389,9 @@ rules:
       - pattern-not-inside: do { ... return $R; } while ($C);
       - pattern-not-inside: while (<... $V ...>) { ... $V = $X; ... }
       - pattern-not-inside: do { ... $V = $X; ... } while (<... $V ...>);
+      - pattern-not-inside: $V = await $F(..., <... $V ...>, ...);
+      - pattern-not-inside: "Future<void> inOrder<T>(Iterable<T> $ITEMS, Future<void> Function(T $ITEM) $STEP, {required String reason}) async { ... }"
+      - pattern-not-inside: "Future<void> inOrderSteps(List<Future<void> Function()> $STEPS, {required String reason}) async { ... }"
   - id: await-in-loop-swift
     languages: [swift]
     severity: ERROR
@@ -458,6 +463,10 @@ rules:
     message: The second call does not use the first result. Start both together with Promise.all.
     paths: *paths
     patterns:
+      - pattern-not-inside: "inOrder(..., async (...) => { ... }, ...)"
+      - pattern-not-inside: "inOrder(..., async function (...) { ... }, ...)"
+      - pattern-not-inside: "inOrderSteps([..., async (...) => { ... }, ...], ...)"
+      - pattern-not-inside: "inOrderSteps([..., async function (...) { ... }, ...], ...)"
       - pattern-either:
           - patterns:
               - pattern-either:
@@ -537,7 +546,62 @@ rules:
     severity: ERROR
     message: The second call does not use the first result. Start both together with Future.wait or a record's .wait.
     paths: *paths
-    pattern-regex: '(?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(?>((?:[a-z]\w*?(?=[A-Z])|\w*_)?(?i:session|connection|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|tx|trx|rl|ws|page)(?![a-z])\w*)\b|\w+)(?:[^;(){}\[\]]|(?<g>\((?:[^()]|(?&g))*+\)|\{(?:[^{}]|(?&g))*+\}|\[(?:[^\[\]]|(?&g))*+\]))*+;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;(){}\[\]]|(?<h>\((?:(?!\b\1\b)[^()]|(?&h))*+\)|\{(?:(?!\b\1\b)[^{}]|(?&h))*+\}|\[(?:(?!\b\1\b)[^\[\]]|(?&h))*+\]))*+;'
+    patterns:
+      - pattern-not-inside: "inOrder(..., (...) async { ... }, ...)"
+      - pattern-not-inside: "inOrderSteps([..., (...) async { ... }, ...], ...)"
+      - pattern-regex: '(?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(?>((?:[a-z]\w*?(?=[A-Z])|\w*_)?(?i:session|connection|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|tx|trx|rl|ws|page)(?![a-z])\w*)\b|\w+)(?:[^;(){}\[\]]|(?<g>\((?:[^()]|(?&g))*+\)|\{(?:[^{}]|(?&g))*+\}|\[(?:[^\[\]]|(?&g))*+\]))*+;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;(){}\[\]]|(?<h>\((?:(?!\b\1\b)[^()]|(?&h))*+\)|\{(?:(?!\b\1\b)[^{}]|(?&h))*+\}|\[(?:(?!\b\1\b)[^\[\]]|(?&h))*+\]))*+;'
+  - id: in-order-needs-reason-dart
+    languages: [dart]
+    options:
+      constant_propagation: false
+    severity: ERROR
+    message: State why order is required in reason, using at least 20 characters and more than one word.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: inOrder(...)
+                  - pattern: inOrderSteps(...)
+              - pattern-not: "inOrder(..., reason: $REASON, ...)"
+              - pattern-not: "inOrderSteps(..., reason: $REASON, ...)"
+          - patterns:
+              - pattern-either:
+                  - pattern: "inOrder(..., reason: $REASON, ...)"
+                  - pattern: "inOrderSteps(..., reason: $REASON, ...)"
+              - metavariable-regex:
+                  metavariable: $REASON
+                  regex: >-
+                    (?s)^(?!(["'])(?=.{20,}\1$)(?=.*\S[ \t]+(?!\1)\S)(?:\\.|(?!\1|\$).)*\1$)
+  - id: in-order-needs-reason-javascript
+    languages: [javascript, typescript]
+    options:
+      constant_propagation: false
+    severity: ERROR
+    message: State why order is required in reason, using at least 20 characters and more than one word.
+    paths: *paths
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: inOrder(...)
+                  - pattern: inOrderSteps(...)
+              - pattern-not: "inOrder($ITEMS, $STEP, { ..., reason: $REASON, ... })"
+              - pattern-not: "inOrderSteps($STEPS, { ..., reason: $REASON, ... })"
+          - patterns:
+              - pattern-either:
+                  - pattern: "inOrder($ITEMS, $STEP, { ..., reason: $REASON, ... })"
+                  - pattern: "inOrderSteps($STEPS, { ..., reason: $REASON, ... })"
+              - metavariable-regex:
+                  metavariable: $REASON
+                  regex: >-
+                    (?s)^(?!(["'])(?=.{20,}\1$)(?=.*\S[ \t]+(?!\1)\S)(?:\\.|(?!\1).)*\1$)
+  - id: hidden-sequential-loop-javascript
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: This reduce runs async work in order. Use inOrder with a reason, or start independent work together.
+    paths: *paths
+    pattern: $ITEMS.reduce(($PREVIOUS, $ITEM) => $PREVIOUS.then(...), Promise.resolve())
   - id: sequential-awaits-swift
     languages: [swift]
     severity: ERROR
