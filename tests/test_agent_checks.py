@@ -35,7 +35,7 @@ from agent_checks import (
     main,
 )
 from agent_fixtures import CONTROLS, READY_PLAN
-from conftest import SOURCE, commit, init, running, spawner
+from conftest import SOURCE, commit, gone, init, spawner
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
 BASELINE = Action(
@@ -562,7 +562,7 @@ def test_results_record_a_bare_run(
 def test_a_timed_out_agent_leaves_no_process_behind(tmp_path: Path) -> None:
     pid_file = tmp_path / "child.pid"
     assert agent_checks.stream(spawner(pid_file), tmp_path, tmp_path, 2) is None
-    assert not running(pid_file)
+    assert gone(pid_file)
 
 
 def test_an_eval_agent_does_not_inherit_host_markers(

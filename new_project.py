@@ -26,6 +26,8 @@ SCAFFOLDS = {
     "python": ["uv", "init", "--quiet", "--app", "--no-package"],
 }
 REMOVED = {"opennext": ["eslint.config.mjs"], "vite": [".oxlintrc.json"]}
+ANY_CONSTRAINT = re.compile(r"^(  ([a-z0-9_]+)): any$", re.MULTILINE)
+SDK_CONSTRAINT = re.compile(r"^  sdk: (\S+)$", re.MULTILINE)
 GENERATED = {"opennext": [["bun", "run", "cf-typegen"]]}
 EMPTY_REPOSITORY = (
     "No supported project manifest found. New project: ask the user which type to create "
@@ -59,11 +61,8 @@ def merged_package(text: str, starter: dict[str, dict[str, str | None]]) -> str:
 def pinned_pubspec(text: str, lock: dict[str, dict[str, dict[str, str]]]) -> str:
     """Replace each `any` constraint with the version pub resolved."""
     packages = lock["packages"]
-    return re.sub(
-        r"^(  ([a-z0-9_]+)): any$",
-        lambda match: f"{match[1]}: {packages[match[2]]['version']}",
-        text,
-        flags=re.MULTILINE,
+    return ANY_CONSTRAINT.sub(
+        lambda match: f"{match[1]}: {packages[match[2]]['version']}", text
     )
 
 
@@ -77,7 +76,7 @@ def copy_starter(root: Path, stack: str) -> None:
         if path.name == "package.json":
             text = merged_package(target.read_text(), json.loads(text))
         elif path.name == "pubspec.yaml":
-            sdk = re.search(r"^  sdk: (\S+)$", target.read_text(), re.MULTILINE)
+            sdk = SDK_CONSTRAINT.search(target.read_text())
             text = text.replace("sdk: SDK", f"sdk: {sdk[1] if sdk else 'SDK'}")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)

@@ -1,0 +1,32 @@
+import Foundation
+
+let word = try! NSRegularExpression(pattern: "\\w+")
+
+func words(text: String, size: Int, pattern: String) throws -> Bool {
+  // ruleid: regex-built-in-function-swift
+  let found = try NSRegularExpression(pattern: "a+b")
+  let dynamic = try NSRegularExpression(pattern: pattern)
+  // ruleid: whole-row-sql-swift
+  let query = "SELECT * FROM users"
+  let exists = "SELECT 1 WHERE EXISTS (SELECT * FROM users)"
+  // ruleid: bool-array-swift
+  let seen = [Bool](repeating: false, count: size)
+  // ruleid: in-process-cache-swift
+  let cache = NSCache<NSString, NSString>()
+  return query.isEmpty && exists.isEmpty && found.pattern.isEmpty && dynamic.pattern.isEmpty && seen.isEmpty && cache.name.isEmpty
+}
+
+func load(ids: [String], client: Client) async throws {
+  for id in ids {
+    // ruleid: await-in-loop-swift
+    try await client.get(id)
+  }
+}
+
+func pair(client: Client) async throws -> Int {
+  // ruleid: sequential-awaits-swift
+  let first = try await client.get(1)
+  let second = try await client.get(2)
+  let third = try await client.get(second)
+  return first + third
+}
