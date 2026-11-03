@@ -2,8 +2,10 @@
 
 import json
 import os
+import re
 import subprocess
-from pathlib import Path
+from collections import Counter
+from pathlib import Path, PurePosixPath
 
 from gate_config import Gate, Group, generated_sources, repository_files
 from tool_setup import managed_command
@@ -12,6 +14,7 @@ RULES = (
     Path(__file__).resolve().parents[1] / ".agents/skills/he/semgrep/performance.yaml"
 )
 PYTHON_RULES = RULES.with_name("python.yaml")
+GLOB_SPECIAL = re.compile(r"[][*?]")
 
 
 def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, object]]:
@@ -56,6 +59,25 @@ def scan_all(root: Path, timeout: float = 600) -> int:
     return 1 if results else 0
 
 
+def unowned_paths(names: list[str], generated: set[str]) -> list[str]:
+    """Generated files, as their highest folder that holds nothing else."""
+    files: Counter[PurePosixPath] = Counter()
+    made: Counter[PurePosixPath] = Counter()
+    for name in names:
+        for folder in PurePosixPath(name).parents[:-1]:
+            files[folder] += 1
+            made[folder] += name in generated
+    paths = set()
+    for name in generated:
+        folders = [
+            folder
+            for folder in PurePosixPath(name).parents[:-1]
+            if made[folder] == files[folder]
+        ]
+        paths.add(f"{folders[-1]}/" if folders else name)
+    return sorted(paths)
+
+
 def semgrep_options(
     root: Path, group: Group, gate: Gate, command: list[str]
 ) -> list[str]:
@@ -76,10 +98,12 @@ def semgrep_options(
         return command
     if gate.get("role") == "security":
         names = [
-            str(path.relative_to(directory)) for path in repository_files(directory)
+            path.relative_to(directory).as_posix()
+            for path in repository_files(directory)
         ]
+        unowned = unowned_paths(names, generated_sources(directory, names))
         skipped = [
-            f"--exclude={name}" for name in sorted(generated_sources(directory, names))
+            "--exclude=/" + GLOB_SPECIAL.sub(r"\\\g<0>", name) for name in unowned
         ]
         rules = ["--config", os.path.relpath(RULES, directory), *skipped]
         command = [*command[: index + 1], *rules, *command[index + 1 :]]

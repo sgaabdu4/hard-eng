@@ -9,7 +9,7 @@ from types import ModuleType
 import pytest
 import yaml
 from gate_config import Gate, Group
-from hot_paths import RULES, findings, scan_all
+from hot_paths import RULES, findings, scan_all, unowned_paths
 from reports import validate_semgrep
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -73,7 +73,7 @@ def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
         command, cwd=runner.ROOT, capture_output=True, text=True, check=False
     )
 
-    assert "--exclude=client.py" in command
+    assert "--exclude=/client.py" in command
     assert not any("performance.yaml" in part for part in other)
     assert result.returncode == 1
     (found,) = json.loads(result.stdout)["results"]
@@ -82,6 +82,24 @@ def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
     report.write_text(result.stdout)
     with pytest.raises(ValueError, match=r"app\.py:5 Compile this constant regex"):
         validate_semgrep(report)
+
+
+def test_generated_folders_become_one_exclude_each() -> None:
+    """HE-HOT-PATH: a vendored folder is one exclude, so large ones fit the command line."""
+    names = [f"ios/Pods/{index}.m" for index in range(3)] + ["ios/Runner/App.swift"]
+    names += [
+        "types.ts",
+        "src/types.ts",
+        "src/app/[id]/page.ts",
+        "src/app/[id]/form.ts",
+    ]
+    generated = {*names[:3], "types.ts", "src/app/[id]/page.ts"}
+
+    assert unowned_paths(names, generated) == [
+        "ios/Pods/",
+        "src/app/[id]/page.ts",
+        "types.ts",
+    ]
 
 
 def test_a_repository_scan_lists_every_finding_and_fails(
