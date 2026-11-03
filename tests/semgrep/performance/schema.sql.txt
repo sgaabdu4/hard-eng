@@ -1,0 +1,5 @@
+-- ruleid: whole-row-sql-file
+CREATE VIEW active AS SELECT * FROM users WHERE active;
+CREATE VIEW names AS SELECT id, name FROM users;
+-- ruleid: json-column
+ALTER TABLE users ADD COLUMN settings jsonb;

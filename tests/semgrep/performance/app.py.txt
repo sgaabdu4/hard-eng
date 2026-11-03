@@ -1,0 +1,53 @@
+import asyncio
+import re
+from functools import lru_cache
+from urllib.parse import urlparse
+
+# ruleid: in-process-cache-python
+import cachetools
+from django.db import models
+
+TOKEN = re.compile(r"\w+")
+
+
+class Settings:
+    SPLIT = re.compile(",")
+
+
+def words(text, pattern):
+    # ruleid: regex-built-in-function-python
+    found = re.findall(r"\w+", text)
+    dynamic = re.compile(pattern)
+    # ruleid: bool-array-python
+    seen = [False] * len(text)
+    # ruleid: whole-row-sql
+    query = "SELECT * FROM users WHERE id = %s"
+    columns = "SELECT id, name FROM users"
+    count = "SELECT COUNT(*) FROM users"
+    return found, dynamic, seen, query, columns, count, TOKEN
+
+
+# ruleid: in-process-cache-python
+@lru_cache(maxsize=128)
+def square(value):
+    return value * value
+
+
+async def load(client, ids, links):
+    for item in ids:
+        # ruleid: await-in-loop-python
+        await client.get(item)
+    # ruleid: sequential-awaits-python
+    first = await client.get(1)
+    second = await client.get(2)
+    total = first + second
+    third = await client.get(total)
+    fourth = await client.get(third)
+    # ruleid: url-parse-in-loop-python
+    hosts = [urlparse(link).netloc for link in links]
+    # ruleid: whole-entity-load-python
+    user = User.objects.get(id=1)
+    named = User.objects.filter(id=1).only("name")
+    # ruleid: json-column-code
+    settings = models.JSONField()
+    return fourth, hosts, user, named, settings, cachetools, asyncio

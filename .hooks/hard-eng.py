@@ -768,6 +768,10 @@ def check(
         validate_suppressions(ROOT, base)
         plans.validate_records(ROOT, base)
         provision_tools(ROOT, groups, timeout)
+        if not quick:
+            from hot_paths import scan_changes
+
+            scan_changes(ROOT, base, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))
@@ -866,6 +870,13 @@ def main() -> int:
     )
     usage.add_argument("--repo", help="owner/name; defaults to origin")
     usage.add_argument("--days", type=int, default=14)
+    usage.add_argument(
+        "--runs", type=int, help="Use the newest N runs instead of --days"
+    )
+    hot = commands.add_parser(
+        "hot-paths", help="List known slow patterns across the whole repository"
+    )
+    hot.add_argument("--seconds", type=float, default=600)
     mutating = commands.add_parser(
         "mutation",
         help="Report changed lines whose tests miss small deliberate bugs",
@@ -934,9 +945,13 @@ def main() -> int:
     if args.command == "impact":
         return impact(args.base, language_filter(args))
     if args.command == "ci-usage":
-        from ci_setup import ci_usage
+        from ci_usage import ci_usage
 
-        return ci_usage(ROOT, args.repo, args.days)
+        return ci_usage(ROOT, args.repo, args.days, args.runs)
+    if args.command == "hot-paths":
+        from hot_paths import scan_all
+
+        return scan_all(ROOT, args.seconds)
     if args.command == "mutation":
         from ship_actions import mutate
 

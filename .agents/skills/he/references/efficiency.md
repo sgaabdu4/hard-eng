@@ -1,6 +1,6 @@
 # Bulk + async + performance
 
-Apply only to the changed flow. Derive limits from its actual service/behavior contract; unknown limits remain unverified.
+Apply only to the changed flow, unless the user asks for a wider scan. Derive limits from its actual service/behavior contract; unknown limits remain unverified.
 
 | Flow            | Implementation + meaningful assertion                                                                                                                                                                                                                                        |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -12,6 +12,20 @@ Apply only to the changed flow. Derive limits from its actual service/behavior c
 Use controlled inputs, fake clocks or synchronization instead of sleep-based comparisons. Native pattern lints and timing samples do not prove general Big-O.
 
 Async does not make CPU work parallel; unbounded gathers can worsen resource use.
+
+## Hot paths + data layout
+
+[HE-HOT-PATH](requirements.md#he-hot-path) fails the mechanical cases in added code and prints the judgment cases as notes. Fix each note on changed lines, or state in the PR why it must stay. For a requested scan ("deep scan hot paths", "find every place we ..."), run `python3 .hooks/hard-eng.py hot-paths`, then read the request handlers, jobs and loops that patterns cannot judge. Fix each confirmed case at its owner, one per commit.
+
+| Case             | Do                                                                                                                                                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sequential async | Start independent calls together (`Promise.all`, `asyncio.gather` or a `TaskGroup`, `Future.wait`, `async let`), bounded per Fan-out above. Keep a sequence only when a call needs the previous result, the order is part of the contract, or a rate limit requires it.                                                   |
+| Whole rows       | Select only the columns the caller reads: SQL column lists, Prisma `select`/`omit`, Drizzle `columns`, Django `.only()`/`.values()`, SQLAlchemy `load_only` or column selects, Appwrite `Query.select`. Load a whole entity only to write it back.                                                                                |
+| URL parsing      | Parse once at the boundary and pass the parsed object or the part needed. Compare strings when only a prefix or origin check is needed.                                                                                                                                                                                  |
+| Regex            | Build each constant regex once at module level (top-level or `static` in Dart and Swift). A JavaScript `g` or `y` regex keeps `lastIndex`, so build it where it is used.                                                                                                                                                 |
+| JSON columns     | Move each key that a hot path reads alone, filters, sorts or joins on into a typed column (indexed when queried). Keep JSON for large, rarely read, schema-free data. Migrate in deployable steps: add the column, backfill, switch reads, remove the key.                                                                 |
+| Caches           | Do not add a cache; find why the work is slow and fix that (query, index, data layout, algorithm). When asked to remove existing caches, redesign the slow path and measure before and after per Optimisation, because removal can raise load on a shared service. HTTP cache headers and CDN rules are delivery contracts. |
+| Data layout      | In hot loops over many records: arrays indexed by dense integer IDs instead of hash maps; indexes instead of object references; a structure of arrays when a loop reads few fields of many records (typed arrays, NumPy, `typed_data`, `ContiguousArray`); bitsets instead of boolean arrays; hot flags packed into spare index bits and fixed-capacity inline storage (Swift `InlineArray`) only when measured. Python, JavaScript and Dart cannot choose stack allocation. |
 
 ## Optimisation
 

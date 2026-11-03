@@ -1,0 +1,54 @@
+// ruleid: in-process-cache-javascript
+import { LRUCache } from "lru-cache";
+
+const WORD = /\w+/;
+const SPLIT = new RegExp(",");
+
+export function words(text: string, pattern: string, total: number, parts: number) {
+  // ruleid: regex-built-in-function-javascript
+  const found = /a+b/i.test(text);
+  const global = /x/g.test(text);
+  const ratio = total / parts / 2;
+  // ruleid: regex-built-in-function-javascript
+  const built = new RegExp("a+b");
+  const dynamic = new RegExp(pattern);
+  // ruleid: bool-array-javascript
+  const seen = new Array(text.length).fill(false);
+  return [found, global, ratio, built, dynamic, seen, WORD, SPLIT, LRUCache];
+}
+
+export async function load(db: Db, ids: string[]) {
+  for (const id of ids) {
+    // ruleid: await-in-loop-javascript
+    await db.get(id);
+  }
+  for await (const row of db.stream()) {
+    // ruleid: await-in-loop-javascript
+    await db.put(row);
+  }
+  // ruleid: sequential-awaits-javascript
+  const first = await db.get("a");
+  const second = await db.get("b");
+  const total = first + second;
+  const third = await db.get(total);
+  const fourth = await db.get(third);
+  // ruleid: url-parse-in-loop-javascript
+  return [fourth, ids.map((id) => new URL(id).host)];
+}
+
+export function queries(db: Db, prisma: Prisma, supabase: Supabase, args: object) {
+  return [
+    // ruleid: whole-row-query-javascript
+    supabase.from("users").select("*"),
+    supabase.from("users").select("id,name"),
+    // ruleid: whole-row-query-javascript
+    db.select().from(usersTable),
+    db.select({ id: usersTable.id }).from(usersTable),
+    // ruleid: whole-row-query-javascript
+    prisma.user.findMany({ where: { active: true } }),
+    prisma.user.findMany({ where: { active: true }, select: { id: true } }),
+    prisma.user.findMany(args),
+    // ruleid: json-column-code
+    jsonb("settings"),
+  ];
+}
