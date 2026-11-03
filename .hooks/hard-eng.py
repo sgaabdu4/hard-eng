@@ -332,11 +332,12 @@ def prepare_command(
             *command[index:],
         ]
     index = command.index("scan") if "scan" in command else 0
-    if (
-        index
-        and Path(command[index - 1]).name.split("@")[0] == "semgrep"
-        and "--timeout" not in command
-    ):
+    semgrep = bool(index) and Path(command[index - 1]).name.split("@")[0] == "semgrep"
+    if semgrep and gate.get("role") == "security":
+        from hot_paths import RULES
+
+        command = [*command[: index + 1], "--config", str(RULES), *command[index + 1 :]]
+    if semgrep and "--timeout" not in command:
         # Semgrep's 5 s per-rule limit times out under parallel load, and --strict then fails the gate.
         command = [*command[: index + 1], "--timeout", "60", *command[index + 1 :]]
     if command[0] == "biome" and "." in command:
@@ -768,10 +769,6 @@ def check(
         validate_suppressions(ROOT, base)
         plans.validate_records(ROOT, base)
         provision_tools(ROOT, groups, timeout)
-        if not quick and not languages.only:
-            from hot_paths import scan_changes
-
-            scan_changes(ROOT, base, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))

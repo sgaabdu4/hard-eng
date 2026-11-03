@@ -6,7 +6,6 @@ import os
 import re
 import shutil
 from collections.abc import Iterable
-from functools import cache
 from pathlib import Path
 from typing import NamedTuple
 
@@ -73,7 +72,6 @@ def fingerprint(text: str) -> str:
     return hashlib.sha256(re.sub(r"\s+", "", text).encode()).hexdigest()[:16]
 
 
-@cache
 def installed_templates() -> frozenset[str]:
     """Fingerprints of the app templates in the installed Flutter SDK, newer than the list."""
     flutter = shutil.which("flutter")

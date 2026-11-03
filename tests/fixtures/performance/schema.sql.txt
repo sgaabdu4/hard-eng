@@ -8,4 +8,11 @@ SELECT id FROM a WHERE EXISTS (
   SELECT * FROM b WHERE b.a = a.id
 );
 -- Never SELECT * FROM users in app code
-/* SELECT * FROM users */
+/* SELECT * FROM users
+   and no jsonb */
+-- ruleid: whole-row-sql-file
+SELECT name FROM a WHERE note = '--'; SELECT * FROM users;
+INSERT INTO archive SELECT * FROM users;
+INSERT INTO archive
+SELECT * FROM users;
+-- A json column would go here.

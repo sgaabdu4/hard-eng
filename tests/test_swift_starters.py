@@ -5,7 +5,6 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-import swift_setup
 from gate_config import Group, validate_required_checks
 from swift_setup import add_swift_groups, swift_projects, unchanged_starters
 from test_swift import CODE, app_config, flutter_app, write
@@ -150,12 +149,7 @@ def test_installed_sdk_templates_count_as_starters(
         return str(sdk / "bin/flutter")
 
     monkeypatch.setattr(shutil, "which", which)
-    cached = swift_setup.installed_templates
-    cached.cache_clear()
-    try:
-        assert unchanged_starters({file}) == {file}
-    finally:
-        cached.cache_clear()
+    assert unchanged_starters({file}) == {file}
 
 
 def test_template_only_folder_has_no_swift_group(

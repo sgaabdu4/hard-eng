@@ -157,9 +157,6 @@ def test_pre_push_rejects_a_pushed_comment_block(
     (root / ".hooks").mkdir()
     for source in (SOURCE / ".hooks").glob("*.py"):
         (root / ".hooks" / source.name).write_bytes(source.read_bytes())
-    rules = Path(".agents/skills/he/semgrep/performance.yaml")
-    (root / rules).parent.mkdir(parents=True)
-    (root / rules).write_text((SOURCE / rules).read_text())
     for name in ("PRODUCT.md", "DESIGN.md"):
         (root / name).write_text((SOURCE / name).read_text())
     check = {"name": "noop", "command": ["python3", "-c", "pass"]}
