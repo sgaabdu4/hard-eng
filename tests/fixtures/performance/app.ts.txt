@@ -4,17 +4,27 @@ import { LRUCache } from "lru-cache";
 const WORD = /\w+/;
 const SPLIT = new RegExp(",");
 
+export class Parser {
+  static WORD = /\w+/;
+
+  parse(text: string) {
+    // ruleid: regex-built-in-function-javascript
+    return /a+b/.test(text);
+  }
+}
+
 export function words(text: string, pattern: string, total: number, parts: number) {
   // ruleid: regex-built-in-function-javascript
   const found = /a+b/i.test(text);
   const global = /x/g.test(text);
   const ratio = total / parts / 2;
+  const path = "Error: /tmp/ is missing"; // see /docs/ for more
   // ruleid: regex-built-in-function-javascript
   const built = new RegExp("a+b");
   const dynamic = new RegExp(pattern);
   // ruleid: bool-array-javascript
   const seen = new Array(text.length).fill(false);
-  return [found, global, ratio, built, dynamic, seen, WORD, SPLIT, LRUCache];
+  return [found, global, ratio, path, built, dynamic, seen, WORD, SPLIT, LRUCache];
 }
 
 export async function load(db: Db, ids: string[]) {
@@ -50,5 +60,9 @@ export function queries(db: Db, prisma: Prisma, supabase: Supabase, args: object
     prisma.user.findMany(args),
     // ruleid: json-column-code
     jsonb("settings"),
+    db.response.json(),
+    db.raw("SELECT 1 WHERE EXISTS (SELECT * FROM users)"),
+    // ruleid: whole-row-sql
+    db.raw("SELECT * FROM users"),
   ];
 }

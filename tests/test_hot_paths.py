@@ -85,3 +85,19 @@ def test_a_repository_scan_lists_old_and_new_findings(
     output = capsys.readouterr().out
     assert "fix: app.py:4 Remove this cache" in output
     assert "HE-HOT-PATH: 1 findings" in output
+
+
+def test_a_partly_parsed_file_still_reports_its_findings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-HOT-PATH: a SwiftUI preview that Semgrep cannot parse does not fail the scan."""
+    (tmp_path / "View.swift").write_text(
+        "import SwiftUI\n\nfunc flags(size: Int) -> [Bool] {\n"
+        "  return [Bool](repeating: false, count: size)\n}\n\n"
+        '#Preview {\n  Text("Hello")\n}\n'
+    )
+    found = findings(tmp_path, ["View.swift"], 600)
+    assert [
+        result["start"]["line"] for result in found if isinstance(result["start"], dict)
+    ] == [4]
+    assert "HE-HOT-PATH: partly scanned" in capsys.readouterr().out

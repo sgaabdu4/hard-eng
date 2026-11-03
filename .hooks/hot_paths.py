@@ -19,20 +19,26 @@ def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, o
     command = managed_command(
         ["semgrep", "scan", "--config", str(RULES), "--metrics=off"]
     )
-    result = subprocess.run(
-        [*command, "--quiet", "--json", "--timeout", "60", *targets],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [*command, "--quiet", "--json", "--timeout", "60", *targets],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise ValueError(f"HE-HOT-PATH scan ran over {timeout:.0f}s") from error
     try:
         report = json.loads(result.stdout)
     except json.JSONDecodeError as error:
         raise ValueError(f"HE-HOT-PATH scan failed: {result.stderr[-500:]}") from error
-    if report.get("errors"):
-        raise ValueError(f"HE-HOT-PATH scan errors: {report['errors']}")
+    errors = report.get("errors", [])
+    if any(error.get("level") != "warn" for error in errors):
+        raise ValueError(f"HE-HOT-PATH scan errors: {errors}")
+    for error in errors:
+        print(f"HE-HOT-PATH: partly scanned: {error.get('message', '')[:300]}")
     return report["results"]
 
 

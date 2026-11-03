@@ -64,7 +64,7 @@ def recent_runs(
     """Runs from the last days, or the newest limit runs when a limit is set."""
     from datetime import UTC, datetime, timedelta
 
-    from shipping import _api_items, _json, _pages, gh
+    from shipping import ShippingError, _api_items, _json, gh
 
     if limit is None:
         since = (datetime.now(UTC) - timedelta(days=days)).date().isoformat()
@@ -79,11 +79,10 @@ def recent_runs(
     while len(runs) < limit:
         endpoint = f"repos/{repository}/actions/runs?per_page=100&page={page}"
         value = _json(gh(root, "api", endpoint), "workflow runs")
-        items = [
-            item
-            for item in _pages([value], "workflow_runs", "workflow runs")
-            if isinstance(item, dict)
-        ]
+        page_runs = value.get("workflow_runs") if isinstance(value, dict) else None
+        if not isinstance(page_runs, list):
+            raise ShippingError("workflow runs page has no run list")
+        items = [item for item in page_runs if isinstance(item, dict)]
         runs += items
         if len(items) < 100:
             break
