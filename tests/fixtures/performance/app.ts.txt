@@ -85,6 +85,61 @@ export async function load(blocks: Db, session: Db, db: Db, users: Db, orders: D
   const total = first + second;
   const third = await db.get(total);
   const fourth = await db.get(third);
+  for (let start = 0; start < ids.length; start += 2) {
+    await Promise.all(ids.slice(start, start + 2).map(db.get));
+    // ruleid: await-in-loop-javascript
+    await db.put(ids[start]);
+  }
+  for (let start = 0; start < ids.length; start += 2) {
+    // ruleid: await-in-loop-javascript
+    await db.get(ids[start]);
+  }
+  for (const id of ids) {
+    // ruleid: await-in-loop-javascript
+    await Promise.all([db.get(id), users.get(id)]);
+  }
+  for (const id of ids) {
+    if (await db.has(id)) throw new Error(id);
+  }
+  for (const id of ids) {
+    later(async () => {
+      await db.put(id);
+    });
+    // ruleid: await-in-loop-javascript
+    await db.get(id);
+  }
+  for (const id of ids) {
+    // ruleid: await-in-loop-javascript
+    await Promise.all([db.get(id), users.get(id)]);
+    later(async () => {
+      await db.put(id);
+    });
+  }
+  await db.run(async () => {
+    for (const id of ids) {
+      // ruleid: await-in-loop-javascript
+      await db.get(id);
+    }
+  });
+  const cached: Record<string, unknown> = {};
+  for (const id of ids) {
+    // ruleid: await-in-loop-javascript
+    cached[id] ??= await db.get(id);
+  }
+  console.log(cached);
+  const covers = await db.get("covers");
+  const perId = await Promise.all(ids.map(async (id) => {
+    const row = await db.get(id, covers);
+    return row;
+  }));
+  console.log(perId);
+  const head = await db.get("head");
+  const tail = await Promise.all(ids.map((id) => db.get(id, head)));
+  console.log(tail);
+  // ruleid: sequential-awaits-javascript
+  const alone = await users.get("x");
+  const others = await Promise.all(ids.map(async (id) => db.get(id)));
+  console.log(alone, others);
   // ruleid: url-parse-in-loop-javascript
   const same = ids.map((id) => new URL(base).host === id);
   for (const id of ids) {
