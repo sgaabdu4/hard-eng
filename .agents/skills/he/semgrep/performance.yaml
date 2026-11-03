@@ -50,7 +50,7 @@ rules:
           - pattern: RegExp("...", "=~/^[dimsuv]*$/")
           - patterns:
               - pattern: /.../
-              - pattern-not-regex: /(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\[\n])+/[a-z]*[gy]
+              - pattern-not-regex: (?<![\w$)\]/])/(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\[\n])+/[a-z]*[gy]
   - id: regex-built-in-function-dart
     languages: [dart]
     severity: ERROR
@@ -166,6 +166,7 @@ rules:
       - pattern-regex: (?is)\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
       - pattern-not-regex: (?is)exists\s*\(\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
       - pattern-not-regex: --[^\n]*
+      - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-row-query-javascript
     languages: [javascript, typescript]
     severity: ERROR
