@@ -795,6 +795,14 @@ def pre_push() -> int:
 def deliver(args: "Namespace") -> int:
     if args.command == "adopt":
         return adopt()
+    if args.command == "ci-usage":
+        from ci_usage import ci_usage
+
+        return ci_usage(ROOT, args.repo, args.days, args.runs)
+    if args.command == "hot-paths":
+        from hot_paths import scan_all
+
+        return scan_all(ROOT)
     if args.command == "gap-issue":
         from gap_issue import file_gap
 
@@ -873,10 +881,9 @@ def main() -> int:
     usage.add_argument(
         "--runs", type=int, help="Use the newest N runs instead of --days"
     )
-    hot = commands.add_parser(
+    commands.add_parser(
         "hot-paths", help="List known slow patterns across the whole repository"
     )
-    hot.add_argument("--seconds", type=float, default=600)
     mutating = commands.add_parser(
         "mutation",
         help="Report changed lines whose tests miss small deliberate bugs",
@@ -944,14 +951,6 @@ def main() -> int:
         )
     if args.command == "impact":
         return impact(args.base, language_filter(args))
-    if args.command == "ci-usage":
-        from ci_usage import ci_usage
-
-        return ci_usage(ROOT, args.repo, args.days, args.runs)
-    if args.command == "hot-paths":
-        from hot_paths import scan_all
-
-        return scan_all(ROOT, args.seconds)
     if args.command == "mutation":
         from ship_actions import mutate
 
@@ -960,7 +959,14 @@ def main() -> int:
         from update_runner import update_main
 
         return update_main(ROOT, args.command == "update-pr", args.apply, args.merge)
-    if args.command in {"adopt", "challenge", "ship", "gap-issue"}:
+    if args.command in {
+        "adopt",
+        "challenge",
+        "ship",
+        "gap-issue",
+        "ci-usage",
+        "hot-paths",
+    }:
         return deliver(args)
     from agent_hooks import handle_event
 

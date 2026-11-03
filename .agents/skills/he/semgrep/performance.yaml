@@ -4,7 +4,22 @@ rules:
     severity: ERROR
     message: Compile this constant regex once at module level and reuse it.
     paths: &paths
-      exclude: [".hooks/", ".agents/", "test/", "tests/", "__tests__/", "*Tests/", "test_*.py", "*_test.py", "conftest.py", "*.test.*", "*.spec.*", "*_test.dart", "*Tests.swift"]
+      exclude:
+        [
+          ".hooks/",
+          ".agents/",
+          "test/",
+          "tests/",
+          "__tests__/",
+          "*Tests/",
+          "test_*.py",
+          "*_test.py",
+          "conftest.py",
+          "*.test.*",
+          "*.spec.*",
+          "*_test.dart",
+          "*Tests.swift",
+        ]
     patterns:
       - pattern-inside: |
           def $F(...):
