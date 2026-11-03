@@ -176,3 +176,102 @@ export function queries(db: Db, prisma: Prisma, supabase: Supabase, args: object
     db.raw("SELECT * FROM users"),
   ];
 }
+
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    await step(item);
+  }
+}
+
+async function inOrderSteps(steps, { reason }) {
+  for (const step of steps) {
+    await step();
+  }
+}
+
+async function inOrderWithoutReason(items, step) {
+  for (const item of items) {
+    // ruleid: await-in-loop-javascript
+    await step(item);
+  }
+}
+
+class OtherOrder {
+  async inOrder(items, step, options) {
+    for (const item of items) {
+      // ruleid: await-in-loop-javascript
+      await step(item);
+    }
+  }
+}
+
+async function inOrder(items, step, { reason }, extra) {
+  for (const item of items) {
+    // ruleid: await-in-loop-javascript
+    await step(item);
+  }
+}
+
+async function inOrderSteps(steps, options) {
+  for (const step of steps) {
+    // ruleid: await-in-loop-javascript
+    await step();
+  }
+}
+
+async function reviewedOrder(items, client, orders, reason) {
+  await inOrder(items, async (item) => {
+    const first = await client.get(item);
+    const second = await orders.get(item);
+    console.log(first, second);
+    for (const child of item.children) {
+      // ruleid: await-in-loop-javascript
+      await client.get(child);
+    }
+  }, { reason: "Each update reads the previous write" });
+  await inOrderSteps([
+    async () => {
+      const first = await client.get("a");
+      const second = await orders.get("b");
+      console.log(first, second);
+    },
+  ], { reason: "Each stage needs the preceding stage" });
+  // ruleid: in-order-needs-reason-javascript
+  await inOrder(items, client.put, { reason });
+  // ruleid: in-order-needs-reason-javascript
+  await inOrder(items, client.put);
+  // ruleid: in-order-needs-reason-javascript
+  await inOrderSteps([]);
+  // ruleid: in-order-needs-reason-javascript
+  await inOrder(items, client.put, { reason: "" });
+  // ruleid: in-order-needs-reason-javascript
+  await inOrderSteps([], { reason: "too short" });
+  // ruleid: in-order-needs-reason-javascript
+  await inOrder(items, client.put, { reason: "singlewordlongerthantwentycharacters" });
+  // ruleid: in-order-needs-reason-javascript
+  await inOrderSteps([], { reason: "                       " });
+  await inOrderSteps([], { reason: "1234567890 123456789" });
+  await inOrderSteps([], { reason: 'Each stage needs the preceding stage' });
+  await inOrderSteps([], { reason: "Each writer's result feeds the next" });
+  // ruleid: in-order-needs-reason-javascript
+  await inOrderSteps([], { reason: "123456789 123456789" });
+  // ruleid: in-order-needs-reason-javascript
+  await inOrderSteps([], { reason: `The order is ${reason}` });
+  // ruleid: in-order-needs-reason-javascript
+  await inOrderSteps([], { reason: 12345678901234567890 });
+  // ruleid: in-order-needs-reason-javascript
+  await inOrderSteps([], { reason: "singlewordlongerthantwentycharacters   " });
+}
+
+function hiddenSequence(items, client) {
+  // ruleid: hidden-sequential-loop-javascript
+  return items.reduce((previous, item) => previous.then(() => client.put(item)), Promise.resolve());
+}
+
+function ordinaryReduce(items) {
+  return items.reduce((total, item) => total + item, 0);
+}
+
+function nonChainedPromises(items, client) {
+  return items.reduce((previous, item) => client.put(item), Promise.resolve());
+}
