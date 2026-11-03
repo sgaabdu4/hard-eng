@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from gate_config import validate_documents
+from plans import validate_documents
 
 import release_canary
 

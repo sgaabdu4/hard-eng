@@ -23,13 +23,10 @@ rules:
       - pattern-inside: |
           def $F(...):
             ...
-      - pattern: re.$M($S, ...)
+      - pattern: re.$M("...", ...)
       - metavariable-regex:
           metavariable: $M
           regex: ^(compile|match|fullmatch|search|sub|subn|split|findall|finditer)$
-      - metavariable-regex:
-          metavariable: $S
-          regex: ^[rbuRB]*["']
   - id: regex-built-in-function-javascript
     languages: [javascript, typescript]
     options:

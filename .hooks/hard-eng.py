@@ -311,16 +311,8 @@ def production_files(
     return files
 
 
-def prepare_command(
-    group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
-) -> list[str]:
-    from reports import osv_lockfiles
-
-    command = osv_lockfiles(
-        managed_command(gate["command"], ROOT / group["path"]), ROOT / group["path"]
-    )
-    if not command:
-        return []
+def semgrep_options(gate: Gate, command: list[str]) -> list[str]:
+    """Add Hard Eng's Semgrep rules to security scans and a 60 s limit per rule."""
     if gate.get("role") == "security" and "p/python" in command:
         index = command.index("p/python") + 1
         command = [
@@ -332,14 +324,29 @@ def prepare_command(
             *command[index:],
         ]
     index = command.index("scan") if "scan" in command else 0
-    semgrep = bool(index) and Path(command[index - 1]).name.split("@")[0] == "semgrep"
-    if semgrep and gate.get("role") == "security":
+    if not index or Path(command[index - 1]).name.split("@")[0] != "semgrep":
+        return command
+    if gate.get("role") == "security":
         from hot_paths import RULES
 
         command = [*command[: index + 1], "--config", str(RULES), *command[index + 1 :]]
-    if semgrep and "--timeout" not in command:
+    if "--timeout" not in command:
         # Semgrep's 5 s per-rule limit times out under parallel load, and --strict then fails the gate.
         command = [*command[: index + 1], "--timeout", "60", *command[index + 1 :]]
+    return command
+
+
+def prepare_command(
+    group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
+) -> list[str]:
+    from reports import osv_lockfiles
+
+    command = osv_lockfiles(
+        managed_command(gate["command"], ROOT / group["path"]), ROOT / group["path"]
+    )
+    if not command:
+        return []
+    command = semgrep_options(gate, command)
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 

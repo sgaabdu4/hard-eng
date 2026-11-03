@@ -4,14 +4,13 @@ import re
 import subprocess
 from pathlib import Path, PurePosixPath
 
-from gate_config import Group, changed_files, repository_files
+from gate_config import ALL_ZERO_OBJECT_ID, Group, changed_files, repository_files
 from shipping import ShippingError, load_policy
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
 NOT_APPLICABLE_WORD = re.compile(r"(?i)\bN/A\b")
 TITLE_LINE = re.compile(r"(?m)^# \S.+$")
-ALL_ZERO_OBJECT_ID = re.compile(r"0{40}|0{64}")
 SURFACE_FIELD = re.compile(r"(?m)^Surface:")
 E2E_FIELD = re.compile(r"(?m)^E2E:")
 NOT_APPLICABLE_WITH_TEXT = re.compile(r"N/A — \S.+")
@@ -21,6 +20,7 @@ LOWERCASE_TOKEN = re.compile(r"[a-z0-9%]+")
 RETIRED_STATUS = re.compile(r"(?m)^Status: Retired\b")
 NOT_APPLICABLE_REASON_SEPARATOR = re.compile(r"\s+—\s+\S")
 SECTION_HEADING = re.compile(r"(?m)^## +([^\n]+)\n")
+DOCUMENT_SECTION = re.compile(r"(?m)^##[ \t]+([^\n]+)\n")
 NOT_APPLICABLE_WITH_REASON = re.compile(r"N/A — [^\n]+")
 PROOF_KIND = re.compile(r"(?m)^Proof: (check|guidance) *$")
 SURFACE_VALUE = re.compile(r"(Existing|New|Mock) — \S.+")
@@ -51,7 +51,9 @@ SECTIONS = (
 )
 STAGES = ("Draft", "Ready", "Complete")
 HANDOFFS = ("Clarification", "Approval")
-PLACEHOLDERS = r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"
+PLACEHOLDERS = re.compile(
+    r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"
+)
 
 
 def is_plan_path(path: Path) -> bool:
@@ -148,7 +150,7 @@ def evidence_field(content: str, name: str) -> str:
 
 
 def plan_sections(content: str, *, allow_placeholders: bool = False) -> dict[str, str]:
-    if not allow_placeholders and re.search(PLACEHOLDERS, content):
+    if not allow_placeholders and PLACEHOLDERS.search(content):
         raise ValueError("plan contains unfilled template placeholders")
     if not TITLE_LINE.search(content):
         raise ValueError("plan needs a title")
@@ -253,7 +255,7 @@ def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, lis
         blockers = field(decisions, "Blockers")
     except ValueError as error:
         return None, None, [str(error)]
-    question = not no_blockers(blockers) and re.search(PLACEHOLDERS, blockers) is None
+    question = not no_blockers(blockers) and PLACEHOLDERS.search(blockers) is None
     if handoff not in HANDOFFS:
         errors.append("Handoff must be Clarification or Approval")
     elif handoff == "Clarification" and not question:
@@ -883,3 +885,32 @@ def validate_records(root: Path, base: str | None) -> None:
     validate_decisions(root, base)
     validate_attribution(root, base)
     validate_requirements(root)
+
+
+def validate_documents(root: Path) -> None:
+    for name, required in (
+        ("PRODUCT.md", ("Users", "Problem", "Product Purpose", "Boundaries")),
+        ("DESIGN.md", ("Overview", "Components", "Do's and Don'ts")),
+    ):
+        path = root / name
+        if not path.is_file():
+            raise ValueError(f"{name} is required; fill it from the actual project")
+        content = path.read_text().strip()
+        if not content:
+            raise ValueError(f"{name} is empty; fill it from the actual project")
+        if "[todo:" in content.lower():
+            raise ValueError(f"{name} contains unfilled template prompts")
+        if not TITLE_LINE.search(content):
+            raise ValueError(f"{name} needs a document title using '# Title'")
+        parts = DOCUMENT_SECTION.split(content + "\n")
+        sections = dict(zip((heading.strip() for heading in parts[1::2]), parts[2::2]))
+        for heading in required:
+            if not sections.get(heading, "").strip():
+                raise ValueError(f"{name} needs a filled '## {heading}' section")
+        order = [
+            heading.strip() for heading in parts[1::2] if heading.strip() in required
+        ]
+        if order != list(required):
+            raise ValueError(
+                f"{name} sections must follow the template order without duplicates"
+            )

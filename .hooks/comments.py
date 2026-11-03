@@ -11,11 +11,15 @@ import tokenize
 from pathlib import Path, PurePosixPath
 
 from debt import git_file
-from gate_config import changed_files, generated_sources, initial_base
+from gate_config import (
+    ALL_ZERO_OBJECT_ID,
+    changed_files,
+    generated_sources,
+    initial_base,
+)
 from plans import _is_test as is_test_path
 from plans import default_branch_point
 
-ALL_ZERO_OBJECT_ID = re.compile("0{40}|0{64}")
 DISABLED_CALL = re.compile(r"\.disabled\(")
 QUOTE_OR_BACKSLASH = re.compile(r"[\\'\"]")
 TEST_ATTRIBUTE = re.compile(r"@(?:Test|Suite)\s*\(")
