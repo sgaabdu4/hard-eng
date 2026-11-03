@@ -11,6 +11,7 @@ BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
 NOT_APPLICABLE_WORD = re.compile(r"(?i)\bN/A\b")
 TITLE_LINE = re.compile(r"(?m)^# \S.+$")
+DOCUMENT_TITLE = re.compile(r"(?m)^# \S[^\n]*$")
 SURFACE_FIELD = re.compile(r"(?m)^Surface:")
 E2E_FIELD = re.compile(r"(?m)^E2E:")
 NOT_APPLICABLE_WITH_TEXT = re.compile(r"N/A — \S.+")
@@ -900,7 +901,7 @@ def validate_documents(root: Path) -> None:
             raise ValueError(f"{name} is empty; fill it from the actual project")
         if "[todo:" in content.lower():
             raise ValueError(f"{name} contains unfilled template prompts")
-        if not TITLE_LINE.search(content):
+        if not DOCUMENT_TITLE.search(content):
             raise ValueError(f"{name} needs a document title using '# Title'")
         parts = DOCUMENT_SECTION.split(content + "\n")
         sections = dict(zip((heading.strip() for heading in parts[1::2]), parts[2::2]))

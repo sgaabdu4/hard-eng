@@ -16,3 +16,12 @@ INSERT INTO archive SELECT * FROM users;
 INSERT INTO archive
 SELECT * FROM users;
 -- A json column would go here.
+CREATE TABLE users_backup AS SELECT * FROM users;
+WITH recent AS (SELECT id, name FROM users) SELECT * FROM recent;
+WITH recent AS (
+  SELECT id, name FROM users
+)
+SELECT * FROM recent;
+SELECT * FROM generate_series(1, 10);
+ALTER TABLE files ADD COLUMN content_type text NOT NULL DEFAULT 'application/json';
+SELECT net.http_post(url := 'https://x.test', headers := '{"Content-Type": "application/json"}'::jsonb);

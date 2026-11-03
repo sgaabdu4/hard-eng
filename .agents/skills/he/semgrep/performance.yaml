@@ -5,7 +5,7 @@ rules:
     message: Compile this constant regex once at module level and reuse it.
     paths: &paths
       exclude:
-        [
+        &excluded [
           ".agents/",
           "test/",
           "tests/",
@@ -128,7 +128,7 @@ rules:
       - pattern: '"$SQL"'
       - metavariable-regex: &select-all
           metavariable: $SQL
-          regex: (?is)^(?:(?!exists\s*\(|insert\s+into\b).)*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+          regex: (?is)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b|with\s+(?:recursive\s+)?\w+\s+as\s*\().)*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
   - id: whole-row-sql
     languages: [javascript, typescript]
     options:
@@ -155,7 +155,7 @@ rules:
     message: Select only the columns this code reads instead of the whole row.
     paths: *paths
     patterns:
-      - pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\(|insert\s+into\b)[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+      - pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b|with\s+(?:recursive\s+)?\w+\s+as\s*\()[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
       - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-row-sql-file
     languages: [generic]
@@ -163,9 +163,10 @@ rules:
     message: Select only the columns this code reads instead of the whole row.
     paths:
       include: ["*.sql"]
+      exclude: *excluded
     patterns:
-      - pattern-regex: (?im)^(?:(?!exists\s*\(|insert\s+into\b)(?:[^'\n-]|'[^'\n]*'|-(?!-)))*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
-      - pattern-not-regex: (?is)(?:exists\s*\(|insert\s+into\b[^;]*?)\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b)
+      - pattern-regex: (?im)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b|with\s+(?:recursive\s+)?\w+\s+as\s*\()(?:[^'\n-]|'[^'\n]*'|-(?!-)))*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
+      - pattern-not-regex: (?is)(?:exists\s*\(|insert\s+into\b[^;]*?|create\s+(?:temp(?:orary)?\s+)?table\b[^;]*?\bas\b[^;]*?|\bwith\s+(?:recursive\s+)?\w+\s+as\s*\([^;]*)\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
       - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-row-query-javascript
     languages: [javascript, typescript]
@@ -248,6 +249,12 @@ rules:
           - pattern-inside: "[...]"
       - pattern: await $E
       - pattern-not-inside: |
+          async for $X in $Y:
+            ...
+      - pattern-not-inside: |
+          while True:
+            ...
+      - pattern-not-inside: |
           for $X in $Y:
             ...
             break
@@ -298,6 +305,8 @@ rules:
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C)
       - pattern: await $E
+      - pattern-not-regex: (?ms)^([ \t]*)for\s+await\s*\(.*?^\1\}
+      - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for (...) { ... break; }
       - pattern-not-inside: for (...) { ... return $R; }
       - pattern-not-inside: for (...) { ... return; }
@@ -329,6 +338,8 @@ rules:
           - pattern-inside: while ($C) { ... }
           - pattern-inside: do { ... } while ($C);
       - pattern: await $E
+      - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\(.*?^\1\}
+      - pattern-not-inside: while (true) { ... }
       - pattern-not-inside: for ($I in $C) { ... break; }
       - pattern-not-inside: for ($I in $C) { ... return; }
       - pattern-not-inside: for ($I in $C) { ... return $R; }
@@ -359,6 +370,8 @@ rules:
           - pattern-inside: while $C { ... }
           - pattern-inside: repeat { ... } while $C
       - pattern: await $E
+      - pattern-not-regex: (?ms)^([ \t]*)for\s+(?:try\s+)?await\b.*?^\1\}
+      - pattern-not-inside: while true { ... }
       - pattern-not-inside: |
           for $I in $C {
             ...
@@ -428,6 +441,12 @@ rules:
       - pattern-not: |
           let $A = await $X;
           let $B = await <... $A ...>;
+      - pattern-not: |
+          const $A = await $S.$M(...);
+          const $B = await $S.$N(...);
+      - pattern-not: |
+          let $A = await $S.$M(...);
+          let $B = await $S.$N(...);
   - id: sequential-awaits-python
     languages: [python]
     severity: ERROR
@@ -440,12 +459,15 @@ rules:
       - pattern-not: |
           $A = await $X
           $B = await <... $A ...>
+      - pattern-not: |
+          $A = await $S.$M(...)
+          $B = await $S.$N(...)
   - id: sequential-awaits-dart
     languages: [dart]
     severity: ERROR
     message: The second call does not use the first result. Start both together with Future.wait or a record's .wait.
     paths: *paths
-    pattern-regex: (?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\b[^;]*;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\b(?:(?!\b\1\b)[^;])*;
+    pattern-regex: (?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(\w+)\b[^;]*;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;])*;
   - id: sequential-awaits-swift
     languages: [swift]
     severity: ERROR
@@ -465,6 +487,12 @@ rules:
       - pattern-not: |
           let $A = await $X
           let $B = await <... $A ...>
+      - pattern-not: |
+          let $A = try await $S.$M(...)
+          let $B = try await $S.$N(...)
+      - pattern-not: |
+          let $A = await $S.$M(...)
+          let $B = await $S.$N(...)
   - id: url-parse-in-loop-javascript
     languages: [javascript, typescript]
     severity: ERROR
@@ -500,9 +528,10 @@ rules:
               - pattern-inside: $XS.$M(function ($I, ...) { ... })
               - pattern: new URL(...)
               - pattern-not: new URL(<... $I ...>, ...)
-          - patterns:
-              - pattern-inside: while ($C) { ... }
-              - pattern: new URL(...)
+      - pattern-not-inside: for (const [...] of $LIST) { ... }
+      - pattern-not-inside: for (const {...} of $LIST) { ... }
+      - pattern-not-inside: ([...]) => $B
+      - pattern-not-inside: "({...}) => $B"
       - pattern-not-inside: for (...) { ... $V = $X; ... <... new URL(<... $V ...>, ...) ...>; }
       - pattern-not-inside: for (...) { ... const $V = $X; ... <... new URL(<... $V ...>, ...) ...>; }
       - pattern-not-inside: for (...) { ... let $V = $X; ... <... new URL(<... $V ...>, ...) ...>; }
@@ -524,6 +553,10 @@ rules:
       - pattern-not: urllib.parse.urlparse(<... $I ...>, ...)
       - pattern-not: urllib.parse.urlsplit(<... $I ...>, ...)
       - pattern-not-inside: |
+          for ($K, $V) in $Y:
+            ...
+      - pattern-not-inside: "[$E for ($K, $V) in $Y]"
+      - pattern-not-inside: |
           for $I in $Y:
             ...
             $V = $X
@@ -541,9 +574,9 @@ rules:
     message: A JSON column, or a read of one key from it. Store each key as a real column, or a list as a child table.
     paths:
       include: ["*.sql", "*.prisma"]
+      exclude: *excluded
     patterns:
-      - pattern-regex: (?i)\bjsonb?\b|->>|#>>
-      - pattern-not-regex: (?m)(?:--|//).*$
+      - pattern-regex: (?im)^(?:[^'"\n/-]|'[^'\n]*'|"[^"\n]*"|-(?!-)|/(?!/))*?(?:(?<!::)\bjsonb?\b|->>|#>>)
       - pattern-not-regex: (?s)/\*.*?\*/
   - id: json-column-python
     languages: [python]
@@ -553,8 +586,14 @@ rules:
     message: A JSON column, or a read of one key from it. Store each key as a real column, or a list as a child table.
     paths: *paths
     pattern-either:
-      - pattern: JSONField(...)
-      - pattern: $M.JSONField(...)
+      - patterns:
+          - pattern-either:
+              - pattern: JSONField(...)
+              - pattern: $M.JSONField(...)
+          - pattern-not: serializers.JSONField(...)
+          - pattern-not: forms.JSONField(...)
+          - pattern-not: rest_framework.serializers.JSONField(...)
+          - pattern-not: django.forms.JSONField(...)
       - pattern: sqlalchemy.JSON
       - pattern: sqlalchemy.dialects.postgresql.JSONB
       - patterns:
@@ -609,7 +648,15 @@ rules:
               - metavariable-regex:
                   metavariable: $F
                   regex: ^(get|filter|all|exclude|first|last)$
-              - pattern-not-inside: $M.objects.$F(...).$G(...)
+              - pattern-not-inside: $Q.only(...)
+              - pattern-not-inside: $Q.defer(...)
+              - pattern-not-inside: $Q.values(...)
+              - pattern-not-inside: $Q.values_list(...)
+              - pattern-not-inside: $Q.update(...)
+              - pattern-not-inside: $Q.delete(...)
+              - pattern-not-inside: $Q.exists(...)
+              - pattern-not-inside: $Q.count(...)
+              - pattern-not-inside: $Q.aggregate(...)
           - patterns:
               - pattern: sqlalchemy.select($M)
               - metavariable-regex:

@@ -52,9 +52,11 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
 
 
 def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
-    """HE-HOT-PATH: each Semgrep security gate runs the rules on code already committed."""
+    """HE-HOT-PATH: each security gate fails committed slow code and skips generated files."""
     old = "import re\n\n\ndef old(text):\n    return re.findall(r'a+', text)\n"
     (runner.ROOT / "app.py").write_text(old)
+    (runner.ROOT / "client.py").write_text(old)
+    (runner.ROOT / ".gitattributes").write_text("client.py linguist-generated\n")
     git(runner.ROOT, "add", ".")
     git(runner.ROOT, "commit", "-qm", "base")
     group: Group = {"path": ".", "checks": []}
@@ -70,7 +72,8 @@ def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
         command, cwd=runner.ROOT, capture_output=True, text=True, check=False
     )
 
-    assert str(RULES) not in other
+    assert "--exclude=client.py" in command
+    assert not any("performance.yaml" in part for part in other)
     assert result.returncode == 1
     (found,) = json.loads(result.stdout)["results"]
     assert (found["path"], found["start"]["line"]) == ("app.py", 5)

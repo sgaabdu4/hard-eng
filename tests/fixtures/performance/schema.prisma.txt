@@ -3,4 +3,5 @@ model User {
   id       Int  @id
   // ruleid: json-column
   settings Json
+  kind     String @default("application/json")
 }

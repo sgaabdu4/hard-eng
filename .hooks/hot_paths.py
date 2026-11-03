@@ -1,14 +1,17 @@
-"""HE-HOT-PATH: the security gate runs these rules; `hot-paths` lists their findings."""
+"""HE-HOT-PATH: Hard Eng's Semgrep rules join every security gate; `hot-paths` lists findings."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
+from gate_config import Gate, Group, generated_sources, repository_files
 from tool_setup import managed_command
 
 RULES = (
     Path(__file__).resolve().parents[1] / ".agents/skills/he/semgrep/performance.yaml"
 )
+PYTHON_RULES = RULES.with_name("python.yaml")
 
 
 def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, object]]:
@@ -51,3 +54,36 @@ def scan_all(root: Path, timeout: float = 600) -> int:
         print(describe(result))
     print(f"HE-HOT-PATH: {len(results)} findings")
     return 1 if results else 0
+
+
+def semgrep_options(
+    root: Path, group: Group, gate: Gate, command: list[str]
+) -> list[str]:
+    """Add Hard Eng's rules to security scans, skip generated files, limit each rule to 60 s."""
+    directory = root / group["path"]
+    if gate.get("role") == "security" and "p/python" in command:
+        index = command.index("p/python") + 1
+        command = [
+            *command[:index],
+            "--config",
+            os.path.relpath(PYTHON_RULES, directory),
+            "--exclude-rule",
+            "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
+            *command[index:],
+        ]
+    index = command.index("scan") if "scan" in command else 0
+    if not index or Path(command[index - 1]).name.split("@")[0] != "semgrep":
+        return command
+    if gate.get("role") == "security":
+        names = [
+            str(path.relative_to(directory)) for path in repository_files(directory)
+        ]
+        skipped = [
+            f"--exclude={name}" for name in sorted(generated_sources(directory, names))
+        ]
+        rules = ["--config", os.path.relpath(RULES, directory), *skipped]
+        command = [*command[: index + 1], *rules, *command[index + 1 :]]
+    if "--timeout" not in command:
+        # Semgrep's 5 s per-rule limit times out under parallel load, and --strict then fails the gate.
+        command = [*command[: index + 1], "--timeout", "60", *command[index + 1 :]]
+    return command
