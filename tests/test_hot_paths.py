@@ -24,17 +24,17 @@ def git(root: Path, *args: str) -> None:
 
 def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
     """HE-HOT-PATH: every rule fires on its annotated line and nowhere else."""
-    expected = set()
+    expected = []
     for fixture in sorted(FIXTURES.iterdir()):
         name = fixture.name.removesuffix(".txt")
         lines = fixture.read_text().splitlines()
         for number, line in enumerate(lines, 1):
             if match := ANNOTATION.search(line):
-                expected.add((name, match[1], number + 1))
+                expected.append((name, match[1], number + 1))
                 lines[number - 1] = ""
         (tmp_path / "src").mkdir(exist_ok=True)
         (tmp_path / "src" / name).write_text("\n".join(lines) + "\n")
-    actual = {
+    actual = [
         (
             Path(str(result["path"])).name,
             str(result["check_id"]).rsplit(".", 1)[-1],
@@ -42,8 +42,8 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
         )
         for result in findings(tmp_path, ["src"], 600)
         if isinstance(result["start"], dict)
-    }
-    assert actual == expected
+    ]
+    assert sorted(actual) == sorted(expected)
     rules = yaml.safe_load(RULES.read_text())["rules"]
     assert {rule for _, rule, _ in actual} == {rule["id"] for rule in rules}
 

@@ -16,7 +16,8 @@ export class Parser {
 export function words(text: string, pattern: string, total: number, parts: number) {
   // ruleid: regex-built-in-function-javascript
   const found = /a+b/i.test(text);
-  const global = /x/g.test(text) || /x/gi.test(text) || text.replace(/x/gu, "") === "";
+  // ruleid: regex-built-in-function-javascript
+  const global = /x/i.test(text) && /day/g.test(text) && /x/gi.test(text) && text.replace(/x/gu, "") === "";
   const ratio = total / parts / 2;
   const path = "Error: /tmp/ is missing"; // see /docs/ for more
   // ruleid: regex-built-in-function-javascript

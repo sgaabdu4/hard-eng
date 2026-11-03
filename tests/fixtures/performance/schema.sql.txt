@@ -8,3 +8,4 @@ SELECT id FROM a WHERE EXISTS (
   SELECT * FROM b WHERE b.a = a.id
 );
 -- Never SELECT * FROM users in app code
+/* SELECT * FROM users */
