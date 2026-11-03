@@ -59,4 +59,60 @@ Future<void> load(List<String> ids, Client client, Client users, Client blocks, 
     await client.put(line);
   }
   print([first, third, yes, no, top, bottom, left, right]);
+  for (var start = 0; start < ids.length; start += 2) {
+    await Future.wait(ids.skip(start).take(2).map(client.get));
+    // ruleid: await-in-loop-dart
+    await client.put(ids[start]);
+  }
+  for (var start = 0; start < ids.length; start += 2) {
+    // ruleid: await-in-loop-dart
+    await client.get(ids[start]);
+  }
+  for (final id in ids) {
+    // ruleid: await-in-loop-dart
+    await Future.wait([client.get(id), users.get(id)]);
+  }
+  for (final id in ids) {
+    if (await client.has(id)) throw StateError(id);
+  }
+  for (var start = 0; start < ids.length; start += 2) {
+    await Future.wait(ids.skip(start).take(2).map((id) async => MapEntry(
+      id,
+      await client.get(id),
+    )));
+  }
+  await client.run(() async {
+    for (final id in ids) {
+      // ruleid: await-in-loop-dart
+      await client.get(id);
+    }
+  });
+  final rows = <String, Object>{};
+  for (final id in ids) {
+    // ruleid: await-in-loop-dart
+    rows[id] ??= await client.get(id);
+  }
+  for (final id in ids) {
+    // ruleid: await-in-loop-dart
+    rows[id] = await client.get(id);
+  }
+  final grouped = await client.all(ids, (id) async {
+    final row = await client.get(id);
+    final more = await client.get(row);
+    return more;
+  });
+  print(grouped);
+  final base = await users.get('a');
+  final derived = await client.each(ids, (id) async {
+    print(id);
+    return client.get(base);
+  });
+  print(derived);
+  // ruleid: sequential-awaits-dart
+  final step = await client.step(() async {
+    await client.put('x');
+    return 1;
+  });
+  final after = await orders.get('c');
+  print([step, after]);
 }
