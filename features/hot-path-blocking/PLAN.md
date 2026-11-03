@@ -44,7 +44,7 @@ N/A — command-line checks and skill text; no visual surface.
 
 Result: Pending
 Evidence: Pending.
-E2E: Pending — the security gate command runs on a real repository in `tests/test_hot_paths.py`, and `hot-paths` runs on this repository.
+E2E: Required — the security gate command runs on a real repository in `tests/test_hot_paths.py`, and `hot-paths` runs on this repository.
 
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with the `hard-eng` CI check green, then the `develop` → `main` release PR.
