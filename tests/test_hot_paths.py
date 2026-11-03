@@ -10,6 +10,7 @@ import pytest
 import yaml
 from gate_config import Gate, Group
 from hot_paths import RULES, findings, scan_all
+from reports import validate_semgrep
 
 SOURCE = Path(__file__).resolve().parents[1]
 FIXTURES = SOURCE / "tests/fixtures/performance"
@@ -52,7 +53,7 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
 
 
 def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
-    """HE-HOT-PATH: each security gate fails committed slow code and skips generated files."""
+    """HE-HOT-PATH: each security gate fails committed slow code, says how to fix it and skips generated files."""
     old = "import re\n\n\ndef old(text):\n    return re.findall(r'a+', text)\n"
     (runner.ROOT / "app.py").write_text(old)
     (runner.ROOT / "client.py").write_text(old)
@@ -77,6 +78,10 @@ def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
     assert result.returncode == 1
     (found,) = json.loads(result.stdout)["results"]
     assert (found["path"], found["start"]["line"]) == ("app.py", 5)
+    report = runner.ROOT / "semgrep.json"
+    report.write_text(result.stdout)
+    with pytest.raises(ValueError, match=r"app\.py:5 Compile this constant regex"):
+        validate_semgrep(report)
 
 
 def test_a_repository_scan_lists_every_finding_and_fails(
