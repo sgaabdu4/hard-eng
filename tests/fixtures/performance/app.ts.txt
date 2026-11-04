@@ -189,6 +189,32 @@ async function inOrderSteps(steps, { reason }) {
   }
 }
 
+async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    await step(item);
+  }
+}
+
+async function inOrderSteps(steps: (() => Promise<void>)[], { reason }: { reason: string }): Promise<void> {
+  for (const step of steps) {
+    await step();
+  }
+}
+
+async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }, extra: string): Promise<void> {
+  for (const item of items) {
+    // ruleid: await-in-loop-javascript
+    await step(item);
+  }
+}
+
+async function inOrderSteps(steps: (() => Promise<void>)[], options: { reason: string }): Promise<void> {
+  for (const step of steps) {
+    // ruleid: await-in-loop-javascript
+    await step();
+  }
+}
+
 async function inOrderWithoutReason(items, step) {
   for (const item of items) {
     // ruleid: await-in-loop-javascript
