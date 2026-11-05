@@ -1,5 +1,6 @@
 """A small change ships without a plan; a big one without a plan is refused."""
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -38,3 +39,20 @@ def test_ready_without_a_plan_only_for_a_small_change(
     _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [_check(fixture.head)]))
     with pytest.raises(shipping.ShippingError, match="big change needs a plan"):
         shipping.verify(fixture.root, None, _PR_URL, "ready")
+
+
+def test_small_change_runs_configured_delivery_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(
+        tmp_path,
+        delivery=[{"name": "live", "command": [sys.executable, "-c", "pass"]}],
+    )
+    (fixture.root / "source.txt").write_text("fixture\nsmall fix\n")
+    _native(fixture.root, "commit", "-qam", "small fix")
+    fixture = Fixture(
+        fixture.root, fixture.plan, _native(fixture.root, "rev-parse", "HEAD")
+    )
+    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [_check(fixture.head)]))
+    shipment = shipping.verify(fixture.root, None, _PR_URL, "ready")
+    assert shipment.delivery_target == "Deploy"
