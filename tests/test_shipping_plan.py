@@ -25,7 +25,10 @@ from test_shipping import (
 def test_ready_without_a_plan_only_for_a_small_change(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, delivery: bool, target: str
 ) -> None:
-    check = {"name": "live", "command": [sys.executable, "-c", "pass"]}
+    check: dict[str, object] = {
+        "name": "live",
+        "command": [sys.executable, "-c", "pass"],
+    }
     fixture = _fixture(tmp_path, delivery=[check] if delivery else [])
     (fixture.root / "source.txt").write_text("fixture\nsmall fix\n")
     _native(fixture.root, "commit", "-qam", "small fix")
