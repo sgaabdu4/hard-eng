@@ -121,6 +121,14 @@ ROUTES = [
         "Build the Windows installer and update pipeline for the Flutter desktop app",
         "building-flutter-apps",
     ),
+    (
+        "Run the Trello coordinator now: answer every card comment and move cards with proof",
+        "trello-coordinator",
+    ),
+    (
+        "Check the Trello board and report which card comments still need a person",
+        "trello-coordinator",
+    ),
 ]
 NEAR_MISSES = [
     ("Review the latest commit for defects", "he-build"),
