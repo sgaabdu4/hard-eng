@@ -26,6 +26,7 @@ from agent_checks import (
     judge_escaped_bug,
     judge_failed_baseline,
     judge_grade,
+    judge_hosted_plan,
     judge_outside_service,
     judge_plan_only,
     judge_repeat_failure,
@@ -104,6 +105,33 @@ def test_planning_only_needs_a_usable_plan_for_the_request(
     (root / "features/empty-average").mkdir(parents=True)
     (root / "features/empty-average/PLAN.md").write_text(plan)
     failures = judge_plan_only(Run(root, base, "", [], actions))
+    if problem is None:
+        assert failures == []
+    else:
+        assert any(problem in failure for failure in failures), failures
+
+
+HOSTED = "# Put the calculator online\n\nStaging and production on Cloudflare Workers.\n\nDelivery target: Deploy\n"
+
+
+@pytest.mark.parametrize(
+    ("plan", "problem"),
+    [
+        (None, "wrote no PLAN.md"),
+        (HOSTED.replace("Staging and ", ""), "never names staging"),
+        (HOSTED.replace("Cloudflare Workers", "a server"), "never names cloudflare workers"),
+        (HOSTED.replace("Deploy\n", "Merge\n"), "Delivery target: Deploy"),
+        (HOSTED, None),
+    ],
+)
+def test_hosted_plan_needs_both_environments_on_workers(
+    tmp_path: Path, plan: str | None, problem: str | None
+) -> None:
+    root, base = case_fixture(tmp_path, "hosted-greenfield")
+    if plan is not None:
+        (root / "features/online").mkdir(parents=True)
+        (root / "features/online/PLAN.md").write_text(plan)
+    failures = judge_hosted_plan(Run(root, base, "", [], []))
     if problem is None:
         assert failures == []
     else:
