@@ -435,7 +435,11 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
         )
         positional = [token for token in tokens[1:bracket] if token != "..."]
         documented[tokens[0]] = (len(positional), set(re.findall(r"--[a-z-]+", cell)))
-    assert set(subcommands) == set(documented) == {*mods.commands.HANDLERS, "finish"}
+    assert (
+        set(subcommands)
+        == set(documented)
+        == {*mods.commands.HANDLERS, "finish", "save-secret"}
+    )
     for name, (count, flags) in documented.items():
         actions = subcommands[name]._actions
         assert len([a for a in actions if not a.option_strings]) == count, name

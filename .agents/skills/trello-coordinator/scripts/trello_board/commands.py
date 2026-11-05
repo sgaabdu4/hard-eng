@@ -3,13 +3,13 @@ import json
 import sys
 import urllib.parse
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from . import board, report, state
 from .api import Client, Secrets, TrelloError, redact
-from .config import OPTIONAL_LISTS, REQUIRED_LISTS, Config, load_config
-from .secrets import Place, load_secrets, locate
+from .config import OPTIONAL_LISTS, REQUIRED_LISTS, Config, load_config, resolve_lists
+from .secrets import NAMES, Place, load_secrets, locate, save_secret
 from .shapes import Json, Obj, obj, objs, parse_time, stamp, text
 
 WRITE_COMMANDS = ("comment", "move", "label", "upload", "update", "detach")
@@ -342,6 +342,9 @@ def build_parser() -> tuple[
     for name in ("card", "download"):
         subs[name] = commands.add_parser(name)
     subs["finish"].add_argument("run_id")
+    subs["save-secret"] = commands.add_parser("save-secret")
+    subs["save-secret"].add_argument("name", choices=NAMES)
+    subs["save-secret"].add_argument("file")
     for name in (
         "comment",
         "move",
@@ -378,6 +381,10 @@ def run_command(
     dry_run = bool(vars(args).get("dry_run", False))
     client = Client(secrets, dry_run=dry_run)
     own = fetch_account(client)
+    config = replace(config, account=config.account or own)
+    if not config.lists:
+        names = board.fetch_names(client, config.board, "lists", "name").values()
+        config = resolve_lists(config, names)
     if args.command != "probe" and own.lower() != config.account.lower():
         raise TrelloError("The token belongs to another account than trello.json names")
     session = Session(client, config, place, own, run_id)
@@ -406,8 +413,11 @@ def main(argv: list[str] | None = None) -> int:
     secrets = Secrets("", "")
     try:
         place = locate(Path.cwd())
-        secrets = load_secrets(place.main)
-        payload = guarded(args, place, secrets)
+        if args.command == "save-secret":
+            payload = {"saved": save_secret(place, args.name, Path(args.file))}
+        else:
+            secrets = load_secrets(place.main)
+            payload = guarded(args, place, secrets)
     except TrelloError as error:
         payload = {"error": str(error)}
     sys.stdout.write(

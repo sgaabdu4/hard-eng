@@ -5,7 +5,7 @@ description: Run a repository's Trello board as its coordinator - answer every c
 
 # Trello coordinator
 
-- Setup = tracked `trello.json` (no secrets) + `.env.trello.local` with `TRELLO_KEY` + `TRELLO_TOKEN`, ignored by git. Missing or unignored → stop and say which.
+- Setup = tracked `trello.json` (no secrets; `{"board": "<board link>"}` is enough) + `.env.trello.local` with `TRELLO_KEY` + `TRELLO_TOKEN`. Key or token missing → [ask for it](references/hosts.md#missing-key-or-token); `save-secret` also makes git ignore the file.
 - One coordinator thread per board; the run lease (`check` … `finish <runId>`) enforces it. Ordinary coding threads never load this skill.
 - Budget = least human attention, most value. Each message changes what someone does or closes a question they asked; a clean run sends no message.
 
