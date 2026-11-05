@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path, PurePosixPath
 
 from gate_config import ALL_ZERO_OBJECT_ID, Group, changed_files, repository_files
-from shipping import ShippingError, load_policy
+from shipping import DELIVERY_TARGET_LINE, ShippingError, load_policy, target_problem
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
@@ -416,12 +416,13 @@ def _validate_shipping(root: Path, path: Path, status: str) -> None:
     content = path.read_text()
     if status in {"Ready", "Complete"} and DELIVERY_TARGET_FIELD.search(content):
         policy = load_policy(root)
+        target = DELIVERY_TARGET_LINE.search(plan_sections(content)["Verification"])
         if (
             policy is not None
-            and not policy["delivery"]
-            and DEPLOY_DELIVERY_TARGET.search(plan_sections(content)["Verification"])
+            and target
+            and (problem := target_problem(target[1], policy["delivery"]))
         ):
-            raise ValueError("Deploy target requires configured delivery checks")
+            raise ValueError(problem)
 
 
 def plan_stage(root: Path, path: Path, changed: set[str]) -> str:

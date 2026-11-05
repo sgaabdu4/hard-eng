@@ -231,6 +231,21 @@ def test_ready_returns_identity_after_current_checks(
     assert any("check-runs" in call[-1] for call in fake.calls)
 
 
+def test_configured_delivery_checks_refuse_merge_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(
+        tmp_path,
+        target="Merge",
+        delivery=[{"name": "live", "command": [sys.executable, "-c", "pass"]}],
+    )
+    fake = FakeGitHub(_pull(fixture), [_check(fixture.head)])
+    _patch_gh(monkeypatch, fake)
+    with pytest.raises(shipping.ShippingError, match="need Delivery target: Deploy"):
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert not fake.calls
+
+
 @pytest.mark.parametrize("configured", [False, True])
 def test_deploy_readiness_requires_verifier_without_running_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, configured: bool
