@@ -108,15 +108,26 @@ def test_planning_only_needs_a_usable_plan_for_the_request(
         assert any(problem in failure for failure in failures), failures
 
 
-HOSTED = "# Put the calculator online\n\nStaging and production on Cloudflare Workers.\n\nDelivery target: Deploy\n"
+HOSTED = (
+    DRAFT_PLAN.replace(
+        "## Repository context",
+        "Staging and production on Cloudflare Workers.\n\n## Repository context",
+    )
+    + "\nDelivery target: Deploy\n"
+)
+SKETCH = "# Online\n\nStaging and production on Cloudflare Workers.\n\nDelivery target: Deploy\n"
 
 
 @pytest.mark.parametrize(
     ("plan", "problem"),
     [
         (None, "wrote no PLAN.md"),
+        (SKETCH, "fails the Draft stage check"),
         (HOSTED.replace("Staging and ", ""), "never names staging"),
-        (HOSTED.replace("Cloudflare Workers", "a server"), "never names cloudflare workers"),
+        (
+            HOSTED.replace("Cloudflare Workers", "a server"),
+            "never names cloudflare workers",
+        ),
         (HOSTED.replace("Deploy\n", "Merge\n"), "Delivery target: Deploy"),
         (HOSTED, None),
     ],

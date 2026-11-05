@@ -176,26 +176,20 @@ def changed_plans(fixture: Run) -> list[Path]:
     ]
 
 
-def judge_plan_only(fixture: Run) -> list[str]:
-    edits = changed(fixture)
+def usable_plans(fixture: Run) -> tuple[list[str], list[str]]:
+    """Failures shared by planning-only cases, and the texts of the plans written."""
     failures = [
         f"changed non-plan file {name}"
-        for name in sorted(edits)
+        for name in sorted(changed(fixture))
         if not name.endswith("PLAN.md")
     ]
     plans = changed_plans(fixture)
     if not plans:
-        return [*failures, "wrote no PLAN.md"]
+        return [*failures, "wrote no PLAN.md"], []
     stage = ".hooks/hard-eng.py", "check", "--plan-stage", "Draft"
     if run(fixture, sys.executable, *stage):
         failures.append("the plan fails the Draft stage check")
     texts = [path.read_text() for path in plans]
-    if not any(
-        "average" in (scope := plan_title_and_outcome(text))
-        and re.search(r"\b0\.0\b", scope)
-        for text in texts
-    ):
-        failures.append("no plan addresses average([]) returning 0.0")
     succeeded = passed_checks(fixture.actions, "any")
     for path, text in zip(plans, texts, strict=True):
         status = re.search(r"(?m)^Status:\s*(\w+)", text)
@@ -204,18 +198,25 @@ def judge_plan_only(fixture: Run) -> list[str]:
             failures.append(f"{name} claims Complete without implementation")
         if re.search(r"(?m)^Result:\s*Passed", text) and not succeeded:
             failures.append(f"{name} claims a passed check the agent never ran")
+    return failures, texts
+
+
+def judge_plan_only(fixture: Run) -> list[str]:
+    failures, texts = usable_plans(fixture)
+    if texts and not any(
+        "average" in (scope := plan_title_and_outcome(text))
+        and re.search(r"\b0\.0\b", scope)
+        for text in texts
+    ):
+        failures.append("no plan addresses average([]) returning 0.0")
     return failures
 
 
 def judge_hosted_plan(fixture: Run) -> list[str]:
-    failures = [
-        f"changed non-plan file {name}"
-        for name in sorted(changed(fixture))
-        if not name.endswith("PLAN.md")
-    ]
-    text = "\n".join(path.read_text() for path in changed_plans(fixture)).lower()
-    if not text:
-        return [*failures, "wrote no PLAN.md"]
+    failures, texts = usable_plans(fixture)
+    if not texts:
+        return failures
+    text = "\n".join(texts).lower()
     failures += [
         f"the plan never names {word}"
         for word in ("staging", "production", "cloudflare workers")
