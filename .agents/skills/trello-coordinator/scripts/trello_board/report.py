@@ -111,20 +111,23 @@ def newest(ctx: Context, view: View) -> Event | None:
     return view.after[-1] if view.after and in_scope(ctx, view) else None
 
 
+def may_request(ctx: Context, event: Event) -> bool:
+    allowed = ctx.config.allowed
+    if allowed is None:
+        allowed = frozenset(name.lower() for name in ctx.snapshot.members.values())
+    return event.author.lower() in allowed
+
+
 def requests(ctx: Context, view: View) -> list[Item]:
     event = newest(ctx, view)
-    if event and not is_own(ctx, event) and event.author.lower() in ctx.config.allowed:
+    if event and not is_own(ctx, event) and may_request(ctx, event):
         return [from_event(view, event)]
     return []
 
 
 def information(ctx: Context, view: View) -> list[Item]:
     event = newest(ctx, view)
-    if (
-        event
-        and not is_own(ctx, event)
-        and event.author.lower() not in ctx.config.allowed
-    ):
+    if event and not is_own(ctx, event) and not may_request(ctx, event):
         return [from_event(view, event)]
     return []
 
