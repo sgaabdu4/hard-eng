@@ -1,0 +1,20 @@
+func run(items: [Int]) async throws {
+ let groups = items.slices(1)
+ for batch in groups {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   for item in batch { group.addTask { try await save(item) } }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+ let wide = items.slices(4)
+ for batch in wide {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   for item in batch { group.addTask { try await save(item) } }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+}

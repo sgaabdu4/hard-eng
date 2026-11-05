@@ -1,0 +1,23 @@
+import 'package:async/async.dart';
+
+final word = RegExp(r'\w+');
+// Don't SELECT * FROM users here.
+/* Don't SELECT * FROM users
+   or read jsonb here either. */
+
+bool words(String text, int size, String pattern) {
+  // ruleid: regex-built-in-function-dart
+  final found = RegExp(r'a+b');
+  final dynamic = RegExp(pattern);
+  // ruleid: whole-row-sql-dart
+  final query = 'SELECT * FROM users';
+  final exists = 'SELECT 1 WHERE EXISTS (SELECT * FROM users)';
+  final copy = 'INSERT INTO archive SELECT * FROM users';
+  // ruleid: json-column-dart
+  final key = "SELECT data->>'k' FROM users";
+  // ruleid: bool-array-dart
+  final seen = List<bool>.filled(size, false);
+  // ruleid: in-process-cache-dart
+  final cache = AsyncCache<int>(const Duration(seconds: 1));
+  return query.isEmpty && copy.isEmpty && key.isEmpty && exists.isEmpty && found.hasMatch(text) && dynamic.hasMatch(text) && seen.isEmpty && cache.hashCode > 0;
+}

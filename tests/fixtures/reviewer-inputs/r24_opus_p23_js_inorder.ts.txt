@@ -1,0 +1,36 @@
+// CASE ts_honest expect=pass
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    await step(item);
+  }
+}
+// CASE ts_distinct_template expect=fire
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    consume(await step(item), `${await save(item)}`);
+  }
+}
+// CASE ts_distinct_as expect=fire
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    consume(await step(item), (await save(item)) as unknown as string);
+  }
+}
+// CASE ts_distinct_nonnull expect=fire
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    consume(await step(item), (await save(item))!);
+  }
+}
+// CASE ts_distinct_satisfies expect=fire
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    consume(await step(item), (await save(item)) satisfies unknown);
+  }
+}
+// CASE ts_distinct_generic_call expect=fire
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    consume(await step(item), await save<T>(item));
+  }
+}

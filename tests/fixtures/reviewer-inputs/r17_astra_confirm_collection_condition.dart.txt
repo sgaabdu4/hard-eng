@@ -1,0 +1,11 @@
+var reads = 0;
+Future<bool> include(int index) async {
+  reads++;
+  return index < 4;
+}
+
+Future<void> main() async {
+  final rows = [for (var index = 0; await include(index); index++) index];
+  if (reads != 5 || rows.join(',') != '0,1,2,3') throw StateError('$reads $rows');
+  print('reads=$reads, rows=$rows');
+}

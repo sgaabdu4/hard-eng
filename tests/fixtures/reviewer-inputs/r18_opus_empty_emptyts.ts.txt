@@ -1,0 +1,23 @@
+async function more(i) { return i < 3; }
+async function save(i) {}
+
+// CASE js_single_cond_empty expect=fire
+async function e1() {
+  for (let i = 0; await more(i); i++);
+}
+
+// CASE js_multi_cond_empty expect=fire
+async function e2() {
+  for (let i = 0, j = 1; await more(i + j); i++);
+}
+
+// CASE js_multi_update_empty expect=fire
+async function e3() {
+  for (let i = 0, j = 1; i < 4; await save(i + j), i++);
+}
+
+// CASE js_empty_init_cond_empty expect=fire
+async function e4() {
+  let i = 0;
+  for (; await more(i); i++);
+}

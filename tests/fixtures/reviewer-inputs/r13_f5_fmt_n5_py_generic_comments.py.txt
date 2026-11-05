@@ -1,0 +1,93 @@
+import asyncio
+
+
+# CASE g_comment_inside_gather_call expect=pass
+async def map_with_concurrency[T](items: list[T], width: int, operation) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            # one barrier per chunk
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE g_comment_inside_create_task expect=pass
+async def map_with_concurrency[T](items: list[T], width: int, operation) -> None:
+    for offset in range(0, len(items), width):
+        async with asyncio.TaskGroup() as group:
+            for item in items[offset : offset + width]:
+                group.create_task(
+                    # each item joins this chunk
+                    operation(item)
+                )
+
+
+# CASE g_comment_in_params expect=pass
+async def map_with_concurrency[T](
+    items: list[T],  # source rows
+    width: int,  # chunk size
+    operation,
+) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE g_apostrophe_comment_in_params expect=pass
+async def map_with_concurrency[T](
+    items: list[T],  # can't be a generator
+    width: int,
+    operation,
+) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE g_apostrophe_comment_in_body expect=pass
+async def map_with_concurrency[T](items: list[T], width: int, operation) -> None:
+    # don't start the next chunk until this one ends
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE g_comment_then_extra_await expect=fire
+async def map_with_concurrency[T](items: list[T], width: int, operation) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+        # report progress after each chunk
+        await report(offset)
+
+
+# CASE g_comment_column_zero_then_extra expect=fire
+async def map_with_concurrency[T](items: list[T], width: int, operation) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+        # progress
+        await report(offset)
+
+
+# CASE g_trailing_comment_extra_after_loop expect=fire
+async def map_with_concurrency[T](items: list[T], width: int, operation) -> None:
+    for offset in range(0, len(items), width):  # chunks
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )  # join
+    # then flush
+    for item in items:
+        await flush(item)
+
+
+async def report(offset):
+    return offset
+
+
+async def flush(item):
+    return item

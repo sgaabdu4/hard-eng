@@ -1,0 +1,50 @@
+void use(Object? x) {}
+
+abstract class It {
+  Future<int?> read();
+}
+
+abstract class Api {
+  Future<String?> first();
+  Future<String?> next(String page);
+}
+
+// CASE dart_while_reader expect=pass
+Future<void> r1(It it) async {
+  int? item;
+  while ((item = await it.read()) != null) {
+    use(item);
+  }
+}
+
+// CASE dart_for_reader expect=pass
+Future<void> r2(It it) async {
+  for (int? item; (item = await it.read()) != null;) {
+    use(item);
+  }
+}
+
+// CASE dart_for_page_body_update expect=pass
+Future<void> r6(Api api) async {
+  for (var page = await api.first(), i = 0; page != null; i++) {
+    use(page);
+    page = await api.next(page);
+  }
+}
+
+// CASE dart_while_page_body_update expect=pass
+Future<void> r7(Api api) async {
+  var page = await api.first();
+  while (page != null) {
+    use(page);
+    page = await api.next(page);
+  }
+}
+
+// CASE dart_single_page_body_update expect=pass
+Future<void> r8(Api api) async {
+  for (var page = await api.first(); page != null;) {
+    use(page);
+    page = await api.next(page);
+  }
+}

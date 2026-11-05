@@ -1,0 +1,20 @@
+// CASE dart_started_futures_collect expect=pass
+Future<List<int>> a(List<String> ids, Future<int> Function(String) load) async {
+  final pending = ids.map(load).toList();
+  final out = <int>[];
+  for (final future in pending) {
+    out.add(await future);
+  }
+  return out;
+}
+
+// CASE dart_control_serial expect=fire
+Future<List<int>> b(List<String> ids, Future<int> Function(String) load) async {
+  final out = <int>[];
+  for (final id in ids) {
+    out.add(await load(id));
+  }
+  return out;
+}
+
+// CASE end expect=pass

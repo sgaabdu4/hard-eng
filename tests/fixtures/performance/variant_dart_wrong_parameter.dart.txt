@@ -1,0 +1,6 @@
+Future<void> inOrder<E>(Iterable<E> values, Future<void> Function(E) apply, {required String reason}) async {
+  for (final value in values) {
+    // ruleid: await-in-loop-dart
+    await other(value);
+  }
+}

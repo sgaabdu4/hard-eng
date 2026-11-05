@@ -5,11 +5,12 @@ import re
 import subprocess
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import patch
 
 import pytest
 import yaml
 from gate_config import Gate, Group
-from hot_paths import RULES, findings, scan_all, unowned_paths
+from hot_paths import RULES, findings, require_parsed, scan_all, unowned_paths
 from reports import validate_semgrep
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -26,6 +27,18 @@ def git(root: Path, *args: str) -> None:
     )
 
 
+def coordinates(results: list[dict[str, object]]) -> list[tuple[str, str, int]]:
+    return [
+        (
+            Path(str(result["path"])).name,
+            str(result["check_id"]).rsplit(".", 1)[-1],
+            result["start"]["line"],
+        )
+        for result in results
+        if isinstance(result["start"], dict)
+    ]
+
+
 def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
     """HE-HOT-PATH: every rule fires on its annotated line and nowhere else."""
     expected = []
@@ -38,18 +51,46 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
                 lines[number - 1] = ""
         (tmp_path / "src").mkdir(exist_ok=True)
         (tmp_path / "src" / name).write_text("\n".join(lines) + "\n")
-    actual = [
-        (
-            Path(str(result["path"])).name,
-            str(result["check_id"]).rsplit(".", 1)[-1],
-            result["start"]["line"],
-        )
-        for result in findings(tmp_path, ["src"], 600)
-        if isinstance(result["start"], dict)
-    ]
+    with patch("hot_paths.require_parsed") as parsed:
+        results = findings(tmp_path, ["src"], 900)
+    parsed.assert_called_once_with([])
+    actual = coordinates(results)
     assert sorted(actual) == sorted(expected)
     rules = yaml.safe_load(RULES.read_text())["rules"]
     assert {rule for _, rule, _ in actual} == {rule["id"] for rule in rules}
+
+
+def test_exact_reported_inputs_keep_all_expected_findings(tmp_path: Path) -> None:
+    fixtures = SOURCE / "tests/fixtures/reviewer-inputs"
+    expected = json.loads((fixtures / "expected.json").read_text())
+    for fixture in fixtures.glob("*.txt"):
+        (tmp_path / fixture.name.removesuffix(".txt")).write_bytes(fixture.read_bytes())
+    with patch("hot_paths.require_parsed") as parsed:
+        results = findings(tmp_path, ["."], 900)
+    parsed.assert_called_once()
+    errors = parsed.call_args.args[0]
+    require_parsed(errors)
+    assert sorted(
+        (Path(span["file"]).name, span["start"]["line"], error["type"][0])
+        for error in errors
+        for span in error["spans"]
+    ) == [
+        ("f3_q4_py_generic.py", 52, "PartialParsing"),
+        ("f3_q4fmt_py_generic.py", 70, "PartialParsing"),
+        ("r22_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
+        ("r22_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
+        ("r22_twin_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
+        ("r22_twin_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
+        ("r23_opus_p22_py_py.py", 19, "PartialParsing"),
+        ("r23_twin_opus_p22_py_py.py", 23, "PartialParsing"),
+    ]
+    actual = coordinates(results)
+    assert sorted(actual) == sorted(
+        (name, rule, line)
+        for name, rules in expected.items()
+        for rule, lines in rules.items()
+        for line in lines
+    )
 
 
 def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
@@ -163,3 +204,71 @@ def test_a_partly_parsed_page_passes_the_gate_but_its_findings_fail_it(
                 validate_semgrep(report)
     validate_semgrep(report)
     assert "Semgrep partly scanned page.tsx:" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "fixture_name", ["await-condition.swift.txt", "task-group-next.swift.txt"]
+)
+def test_swift_awaited_throwing_condition_reports_its_parser_gap(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], fixture_name: str
+) -> None:
+    fixture = SOURCE / "tests/fixtures/parse-gaps" / fixture_name
+    (tmp_path / "condition.swift").write_text(fixture.read_text())
+    assert findings(tmp_path, ["condition.swift"], 900) == []
+    assert "Semgrep partly scanned condition.swift:3" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("language", "extension", "forms", "names"),
+    [
+        (
+            "javascript",
+            "js",
+            (
+                "function",
+                "export",
+                "default",
+                "arrow",
+                "method",
+                "expression",
+                "renamed",
+                "default_parameter",
+            ),
+            ("inOrder", "inOrderSteps"),
+        ),
+        (
+            "typescript",
+            "ts",
+            ("typed", "generic_arrow", "typed_method", "typed_default"),
+            ("inOrder", "inOrderSteps"),
+        ),
+        (
+            "dart",
+            "dart",
+            (
+                "generic",
+                "unnamed",
+                "futureor",
+                "typedef",
+                "named_first",
+                "named_last",
+                "method",
+            ),
+            ("inOrder", "inOrderSteps"),
+        ),
+        ("python", "py", ("plain", "typed", "method"), ("in_order", "in_order_steps")),
+        ("swift", "swift", ("plain", "throws", "method"), ("inOrder", "inOrderSteps")),
+    ],
+)
+def test_async_helpers_keep_honest_and_escape_controls_in_each_language(
+    language: str, extension: str, forms: tuple[str, ...], names: tuple[str, ...]
+) -> None:
+    for form in forms:
+        for name in names:
+            for control in ("honest", "escape"):
+                fixture = FIXTURES / (
+                    f"variant_{language}_{form}_{name}_{control}.{extension}.txt"
+                )
+                source = fixture.read_text()
+                assert source.count(name) >= 2
+                assert bool(ANNOTATION.search(source)) == (control == "escape")

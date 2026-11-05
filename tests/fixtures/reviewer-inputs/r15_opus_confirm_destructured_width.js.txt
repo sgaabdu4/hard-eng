@@ -1,0 +1,37 @@
+const width = 1;
+
+async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    await Promise.all(items.slice(offset, offset + width).map(operation));
+  }
+}
+
+async function importAll(items, config, operation) {
+  const { width } = config;
+  await mapLimit(items, width, operation);
+}
+
+async function exportAll({ items, width }, operation) {
+  await mapLimit(items, width, operation);
+}
+
+async function main() {
+  let active = 0;
+  let peak = 0;
+  let completed = 0;
+  const operation = async () => {
+    active++;
+    peak = Math.max(peak, active);
+    await Promise.resolve();
+    active--;
+    completed++;
+  };
+  const items = Array.from({ length: 8 }, (_, index) => index);
+  await importAll(items, { width: 4 }, operation);
+  const first = { peak, completed };
+  peak = 0;
+  completed = 0;
+  await exportAll({ items, width: 4 }, operation);
+  console.log(JSON.stringify({ serialDefault: width, importAll: first, exportAll: { peak, completed } }));
+}
+main();

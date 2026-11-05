@@ -1,0 +1,13 @@
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, {reason}: {reason: string}): Promise<void> {
+  void reason;
+  for (const item of items) {
+    await step(item);
+  }
+}
+
+export async function inOrderSteps(steps: (() => Promise<void>)[], {reason}: {reason: string}): Promise<void> {
+  void reason;
+  for (const step of steps) {
+    await step();
+  }
+}

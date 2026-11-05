@@ -1,0 +1,230 @@
+import Foundation
+
+func work(_ item: Int) async {}
+func save(_ item: Int) async throws {}
+func log(_ item: Int) async {}
+
+@MainActor final class VM {
+  var items: [Int] = []
+  var tasks: [Int: Task<Void, Never>] = [:]
+
+  // CASE attr_capture expect=pass
+  func a() {
+    for item in items {
+      Task { @MainActor [weak self] in
+        await self?.go(item)
+      }
+    }
+  }
+
+  // CASE detached_capture expect=pass
+  func b() {
+    for item in items {
+      Task.detached { [weak self] in
+        await self?.go(item)
+      }
+    }
+  }
+
+  // CASE capture_sig expect=pass
+  func c() {
+    for item in items {
+      Task { [weak self] () async -> Void in
+        await self?.go(item)
+      }
+    }
+  }
+
+  // CASE underscore_assign expect=pass
+  func d() {
+    for item in items {
+      _ = Task { await work(item) }
+    }
+  }
+
+  // CASE dict_store expect=pass
+  func e() {
+    for item in items {
+      tasks[item] = Task(priority: .high) { [weak self] in
+        await self?.go(item)
+      }
+    }
+  }
+
+  // CASE let_generic_noargs expect=pass
+  func f() {
+    for item in items {
+      let t = Task<Void, Never> { await work(item) }
+      tasks[item] = t
+    }
+  }
+
+  // CASE generic_detached expect=pass
+  func g() {
+    for item in items {
+      tasks[item] = Task<Void, Never>.detached { await work(item) }
+    }
+  }
+
+  // CASE if_inside expect=pass
+  func h(flag: Bool) {
+    for item in items {
+      if flag {
+        Task { await work(item) }
+      }
+    }
+  }
+
+  // CASE dispatch_nested expect=pass
+  func i() {
+    for item in items {
+      DispatchQueue.main.async {
+        Task { await work(item) }
+      }
+    }
+  }
+
+  // CASE sibling_after_task expect=fire
+  func j() async {
+    for item in items {
+      Task { await log(item) }
+      await work(item)
+    }
+  }
+
+  // CASE value_await expect=fire
+  func k() async {
+    for item in items {
+      let t = Task { await work(item) }
+      await t.value
+    }
+  }
+
+  // CASE value_inline_generic expect=fire
+  func l() async {
+    for item in items {
+      await Task<Void, Never> { await work(item) }.value
+    }
+  }
+
+  // CASE yield_await expect=fire
+  func m() async {
+    for item in items {
+      Task { await work(item) }
+      await Task.yield()
+    }
+  }
+
+  // CASE init_explicit expect=pass
+  func n() {
+    for item in items {
+      Task.init { await work(item) }
+    }
+  }
+
+  // CASE awaited_arg_generic expect=fire
+  func o() async {
+    for item in items {
+      Task<Void, Never>(priority: await pickPriority()) { await work(item) }
+    }
+  }
+
+  // CASE nested_loop_in_generic expect=fire
+  func p(groups: [[Int]]) {
+    for group in groups {
+      Task<Void, Never> {
+        for item in group {
+          await work(item)
+        }
+      }
+    }
+  }
+
+  // CASE group_join_per_batch expect=fire
+  func q(batches: [[Int]]) async {
+    for batch in batches {
+      await withTaskGroup(of: Void.self) { group in
+        for item in batch {
+          group.addTask { await work(item) }
+        }
+      }
+    }
+  }
+
+  // CASE group_window expect=fire
+  func r() async {
+    await withTaskGroup(of: Void.self) { group in
+      var running = 0
+      for item in items {
+        if running >= 4 {
+          await group.next()
+          running -= 1
+        }
+        group.addTask { await work(item) }
+        running += 1
+      }
+    }
+  }
+
+  // CASE group_operation_label expect=pass
+  func s() async {
+    await withTaskGroup(of: Void.self) { group in
+      for item in items {
+        group.addTask(operation: { await work(item) })
+      }
+    }
+  }
+
+  // CASE group_capture_priority expect=pass
+  func t() async {
+    await withTaskGroup(of: Void.self) { group in
+      for item in items {
+        group.addTask(priority: .low) { [weak self] in
+          await self?.go(item)
+        }
+      }
+    }
+  }
+
+  // CASE throwing_group_unless expect=pass
+  func u() async throws {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items {
+        _ = group.addTaskUnlessCancelled { try await save(item) }
+      }
+      try await group.waitForAll()
+    }
+  }
+
+  // CASE group_next_in_loop expect=fire
+  func v() async {
+    await withTaskGroup(of: Int.self) { group in
+      for item in items {
+        group.addTask {
+          await work(item)
+          return item
+        }
+        _ = await group.next()
+      }
+    }
+  }
+
+  // CASE while_let_task expect=pass
+  func w(queue: [Int]) {
+    var q = queue
+    while let item = q.popLast() {
+      Task { [item] in await work(item) }
+    }
+  }
+
+  // CASE nested_closure_await_outside expect=fire
+  func x() async {
+    for item in items {
+      Task { await work(item) }
+      try? await save(item)
+    }
+  }
+
+  func go(_ item: Int) async {}
+  func pickPriority() async -> TaskPriority { .low }
+}

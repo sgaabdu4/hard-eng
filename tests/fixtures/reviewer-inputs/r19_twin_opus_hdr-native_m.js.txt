@@ -1,0 +1,160 @@
+async function more(i) {
+	return i < 3;
+}
+async function save(i) {}
+function use(i) {}
+let i = 0;
+async function f_let1_cond_semi(n) {
+	for (let i = 0; await more(i); i++);
+}
+async function f_let1_cond_empty(n) {
+	for (let i = 0; await more(i); i++) {}
+}
+async function f_let1_cond_stmt(n) {
+	for (let i = 0; await more(i); i++) {
+		use(i);
+	}
+}
+async function f_let1_upd_semi(n) {
+	for (let i = 0; i < n; await save(i), i++);
+}
+async function f_let1_upd_empty(n) {
+	for (let i = 0; i < n; await save(i), i++) {}
+}
+async function f_let1_upd_stmt(n) {
+	for (let i = 0; i < n; await save(i), i++) {
+		use(i);
+	}
+}
+async function f_let2_cond_semi(n) {
+	for (let i = 0, j = 0; await more(i); i++);
+}
+async function f_let2_cond_empty(n) {
+	for (let i = 0, j = 0; await more(i); i++) {}
+}
+async function f_let2_cond_stmt(n) {
+	for (let i = 0, j = 0; await more(i); i++) {
+		use(i);
+	}
+}
+async function f_let2_upd_semi(n) {
+	for (let i = 0, j = 0; i < n; await save(i), i++);
+}
+async function f_let2_upd_empty(n) {
+	for (let i = 0, j = 0; i < n; await save(i), i++) {}
+}
+async function f_let2_upd_stmt(n) {
+	for (let i = 0, j = 0; i < n; await save(i), i++) {
+		use(i);
+	}
+}
+async function f_var2_cond_semi(n) {
+	for (var i = 0, j = 0; await more(i); i++);
+}
+async function f_var2_cond_empty(n) {
+	for (var i = 0, j = 0; await more(i); i++) {}
+}
+async function f_var2_cond_stmt(n) {
+	for (var i = 0, j = 0; await more(i); i++) {
+		use(i);
+	}
+}
+async function f_var2_upd_semi(n) {
+	for (var i = 0, j = 0; i < n; await save(i), i++);
+}
+async function f_var2_upd_empty(n) {
+	for (var i = 0, j = 0; i < n; await save(i), i++) {}
+}
+async function f_var2_upd_stmt(n) {
+	for (var i = 0, j = 0; i < n; await save(i), i++) {
+		use(i);
+	}
+}
+async function f_let3_cond_semi(n) {
+	for (let i = 0, j = 0, k = 0; await more(i); i++);
+}
+async function f_let3_cond_empty(n) {
+	for (let i = 0, j = 0, k = 0; await more(i); i++) {}
+}
+async function f_let3_cond_stmt(n) {
+	for (let i = 0, j = 0, k = 0; await more(i); i++) {
+		use(i);
+	}
+}
+async function f_let3_upd_semi(n) {
+	for (let i = 0, j = 0, k = 0; i < n; await save(i), i++);
+}
+async function f_let3_upd_empty(n) {
+	for (let i = 0, j = 0, k = 0; i < n; await save(i), i++) {}
+}
+async function f_let3_upd_stmt(n) {
+	for (let i = 0, j = 0, k = 0; i < n; await save(i), i++) {
+		use(i);
+	}
+}
+async function f_noinit_cond_semi(n) {
+	for (; await more(i); i++);
+}
+async function f_noinit_cond_empty(n) {
+	for (; await more(i); i++) {}
+}
+async function f_noinit_cond_stmt(n) {
+	for (; await more(i); i++) {
+		use(i);
+	}
+}
+async function f_noinit_upd_semi(n) {
+	for (; i < n; await save(i), i++);
+}
+async function f_noinit_upd_empty(n) {
+	for (; i < n; await save(i), i++) {}
+}
+async function f_noinit_upd_stmt(n) {
+	for (; i < n; await save(i), i++) {
+		use(i);
+	}
+}
+async function f_noupd_cond_semi(n) {
+	for (let i = 0; await more(i); );
+}
+async function f_noupd_cond_empty(n) {
+	for (let i = 0; await more(i); ) {}
+}
+async function f_noupd_cond_stmt(n) {
+	for (let i = 0; await more(i); ) {
+		use(i);
+	}
+}
+async function f_noupd_upd_semi(n) {
+	for (let i = 0; i < n; await save(i));
+}
+async function f_noupd_upd_empty(n) {
+	for (let i = 0; i < n; await save(i)) {}
+}
+async function f_noupd_upd_stmt(n) {
+	for (let i = 0; i < n; await save(i)) {
+		use(i);
+	}
+}
+async function f_noinit_noupd_cond_semi(n) {
+	for (; await more(i); );
+}
+async function f_noinit_noupd_cond_empty(n) {
+	for (; await more(i); ) {}
+}
+async function f_noinit_noupd_cond_stmt(n) {
+	for (; await more(i); ) {
+		use(i);
+	}
+}
+async function f_noinit_noupd_upd_semi(n) {
+	for (; i < n; await save(i));
+}
+async function f_noinit_noupd_upd_empty(n) {
+	for (; i < n; await save(i)) {}
+}
+async function f_noinit_noupd_upd_stmt(n) {
+	for (; i < n; await save(i)) {
+		use(i);
+	}
+}

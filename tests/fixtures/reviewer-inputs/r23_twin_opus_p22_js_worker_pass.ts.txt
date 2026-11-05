@@ -1,0 +1,132 @@
+// CASE ts_worker_member_op expect=pass
+export async function a<T>(
+	items: T[],
+	width: number,
+	client: { send: (item: T) => Promise<void> },
+) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await client.send(items[index]);
+			}
+		}),
+	);
+}
+// CASE ts_worker_comment_backtick_interp expect=pass
+export async function b<T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(/* see `${await x}` and ' */ items[index]);
+			}
+		}),
+	);
+}
+// CASE ts_worker_line_comment_with_block_open expect=pass
+export async function c<T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(
+					// don't /* await here
+					items[index],
+				);
+			}
+		}),
+	);
+}
+// CASE ts_worker_block_comment_with_line expect=pass
+export async function d<T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(/* a // "b */ items[index]);
+			}
+		}),
+	);
+}
+// CASE ts_worker_results_prettier expect=pass
+export async function e<T, R>(
+	items: T[],
+	width: number,
+	operationWithAVeryLongDescriptiveName: (item: T) => Promise<R>,
+) {
+	const results: R[] = new Array(items.length);
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				results[index] = await operationWithAVeryLongDescriptiveName(
+					items[index]!, // it's never undefined
+				);
+			}
+		}),
+	);
+	return results;
+}
+// CASE ts_worker_jsdoc_comment expect=pass
+export async function f<T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(/** it's the "item" — not `await` */ items[index]);
+			}
+		}),
+	);
+}
+// CASE ts_worker_this_items expect=pass
+export class Pool<T> {
+	constructor(
+		private items: T[],
+		private op: (item: T) => Promise<void>,
+	) {}
+	async run(width: number) {
+		let next = 0;
+		await Promise.all(
+			Array.from({ length: width }, async () => {
+				while (next < this.items.length) {
+					const index = next++;
+					await this.op(this.items[index]);
+				}
+			}),
+		);
+	}
+}
+// CASE ts_inorder_lone_backtick_comment expect=pass
+export async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	{ reason }: { reason: string },
+) {
+	void reason;
+	for (const item of items) {
+		await step(/* ` */ item);
+	}
+}

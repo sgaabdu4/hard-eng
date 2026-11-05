@@ -1,0 +1,5 @@
+async def use(items, session, statuses):
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with session.get(item) as response:
+            statuses.append(response.status)

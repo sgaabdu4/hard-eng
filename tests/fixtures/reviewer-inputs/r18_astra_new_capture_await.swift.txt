@@ -1,0 +1,7 @@
+func run(_ items: [Int]) async {
+  for item in items {
+    await Task { [item] in
+      await save(item)
+    }.value
+  }
+}

@@ -1,0 +1,5 @@
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, {reason}: {reason: string}): Promise<void> { for (const item of items) {
+  await step(item);
+} }
+
+inOrder([], async (value) => {}, {reason: "Each update reads the previous write"});

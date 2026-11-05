@@ -1,0 +1,56 @@
+// CASE swift_top_let_param_shadow expect=pass
+let width = 1
+func runParam(_ items: [Int], _ width: Int) async throws {
+  try await mapWithConcurrency(items, width, save)
+}
+// CASE swift_closure_param_shadow expect=pass
+func closureParam(_ plans: [Plan]) async throws {
+  let limit = 1
+  try await probe(limit)
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    for plan in plans {
+      group.addTask {
+        let limit = plan.limit
+        try await mapWithConcurrency(plan.items, limit, save)
+      }
+    }
+    try await group.waitForAll()
+  }
+}
+// CASE swift_if_let_shadow expect=pass
+func ifLet(_ items: [Int], _ config: Config) async throws {
+  let width = 1
+  try await probe(width)
+  if let width = config.width {
+    try await mapWithConcurrency(items, width, save)
+  }
+}
+// CASE swift_for_in_shadow expect=pass
+func forIn(_ items: [Int], _ widths: [Int]) async throws {
+  let width = 1
+  try await probe(width)
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    for width in widths {
+      group.addTask { try await mapWithConcurrency(items, width, save) }
+    }
+    try await group.waitForAll()
+  }
+}
+// CASE swift_method_param_shadow expect=pass
+let limit2 = 1
+struct Importer {
+  func run(_ items: [Int], _ limit2: Int) async throws {
+    try await mapWithConcurrency(items, limit2, save)
+  }
+}
+// CASE swift_labeled_param_shadow expect=pass
+let width3 = 1
+func labeled(_ items: [Int], width3: Int) async throws {
+  try await mapWithConcurrency(items: items, width: width3, operation: save)
+}
+// CASE swift_control_fire expect=fire
+func control(_ items: [Int]) async throws {
+  let width = 1
+  try await mapWithConcurrency(items, width, save)
+}
+// CASE end expect=pass

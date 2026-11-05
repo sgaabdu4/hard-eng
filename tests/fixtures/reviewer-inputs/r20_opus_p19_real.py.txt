@@ -1,0 +1,71 @@
+import asyncio
+
+
+# CASE execute_per_row expect=fire
+async def p1(session, rows):
+    for row in rows:
+        await session.execute(insert_stmt, row)
+
+
+# CASE async_with_get expect=fire
+async def p2(session, urls):
+    data = []
+    for url in urls:
+        async with session.get(url) as resp:
+            data.append(await resp.json())
+    return data
+
+
+# CASE while_true_queue expect=pass
+async def p3(queue):
+    while True:
+        msg = await queue.get()
+        handle(msg)
+
+
+# CASE retry expect=pass
+async def p4(call):
+    for attempt in range(3):
+        try:
+            return await call()
+        except TimeoutError:
+            await asyncio.sleep(attempt)
+
+
+# CASE gather expect=pass
+async def p5(urls):
+    return await asyncio.gather(*(fetch(u) for u in urls))
+
+
+# CASE create_task expect=pass
+async def p6(urls):
+    tasks = []
+    for u in urls:
+        tasks.append(asyncio.create_task(fetch(u)))
+    await asyncio.gather(*tasks)
+
+
+# CASE dict_items expect=fire
+async def p7(mapping):
+    for key, value in mapping.items():
+        await cache.set(key, value)
+
+
+# CASE taskgroup_per_batch expect=fire
+async def p8(batches):
+    for batch in batches:
+        async with asyncio.TaskGroup() as tg:
+            for row in batch:
+                tg.create_task(save(row))
+
+
+# CASE one_time_iterable expect=pass
+async def p9():
+    for row in await load_rows():
+        use(row)
+
+
+# CASE gather_per_item expect=fire
+async def p10(items):
+    for item in items:
+        await asyncio.gather(left(item), right(item))

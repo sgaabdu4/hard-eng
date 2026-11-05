@@ -1,0 +1,10 @@
+from asyncio import gather
+async def run(groups, read):
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        await gather(*(read(item) for item in batch))
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        await inspect(batch)
+        # ruleid: await-in-loop-python
+        await gather(*(read(item) for item in batch))

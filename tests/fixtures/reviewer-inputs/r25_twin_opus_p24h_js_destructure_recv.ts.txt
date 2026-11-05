@@ -1,0 +1,6 @@
+// CASE js_destructure_recv expect=fire
+export async function d(items, step, getCache) {
+	for (const item of items) {
+		[(await getCache())[item]] = await step(item);
+	}
+}

@@ -1,0 +1,74 @@
+// CASE js_seq_nobrace expect=fire
+async function inOrder(items, step, { reason }) {
+	for (const item of items) await step(item), await save(item);
+}
+// CASE js_dynamic_import expect=fire
+async function inOrder(items, step, { reason }) {
+	for (const item of items) {
+		consume(await step(item), await import(`./plugins/${item}.js`));
+	}
+}
+// CASE js_import_arg expect=fire
+async function inOrder(items, step, { reason }) {
+	for (const item of items) {
+		consume(await step(item), import(await path(item)));
+	}
+}
+// CASE js_array_spread_distinct expect=fire
+async function inOrder(items, step, { reason }) {
+	for (const item of items) {
+		consume(await step(item), [...(await save(item))]);
+	}
+}
+// CASE js_default_destructure expect=fire
+async function inOrder(items, step, { reason }) {
+	for (const item of items) {
+		const { a = await save(item) } = await step(item);
+	}
+}
+// CASE js_assignment_target expect=fire
+async function inOrder(items, step, { reason }) {
+	for (const item of items) {
+		cache[await key(item)] = await step(item);
+	}
+}
+// CASE js_comma_paren expect=fire
+async function inOrder(items, step, { reason }) {
+	for (const item of items) {
+		await save(item), await step(item);
+	}
+}
+// CASE js_steps_member_distinct expect=fire
+async function inOrderSteps(steps, { reason }) {
+	for (const step of steps) {
+		(await step()).merge(await audit());
+	}
+}
+// CASE js_worker_index_await expect=fire
+export async function mapLimit(items, width, operation) {
+	let next = 0;
+	const results = [];
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				results[await slot(index)] = await operation(items[index]);
+			}
+		}),
+	);
+	return results;
+}
+// CASE js_worker_receiver_await expect=fire
+export async function mapLimit(items, width, operation) {
+	let next = 0;
+	const results = [];
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				(await store()).put(await operation(items[index]));
+			}
+		}),
+	);
+	return results;
+}

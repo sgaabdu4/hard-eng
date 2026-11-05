@@ -1,0 +1,19 @@
+inOrder(items, step, { reason: "Each update reads the previous write" });
+// ruleid: in-order-needs-reason-javascript
+inOrder(items, step, { reason: "too short" });
+// ruleid: in-order-needs-reason-javascript
+inOrder(items, step, { reason: "onewordlongerthantwentycharacters" });
+inOrder(items, step, { reason: "1234567890 123456789" });
+// ruleid: in-order-needs-reason-javascript
+inOrder(items, step, { reason: "123456789 123456789" });
+// ruleid: in-order-needs-reason-javascript
+inOrder(items, step);
+order.inOrder(items, step, { reason: "Each update reads the previous write" });
+// ruleid: in-order-needs-reason-javascript
+order.inOrder(items, step, { reason: "x" });
+const why = "Each update reads the previous write";
+inOrder(items, step, { reason: why });
+inOrder(items, step, { reason: `Each update reads the previous write` });
+inOrder(items, step, { reason: "Each update reads " + "the previous write" });
+// ruleid: in-order-needs-reason-javascript
+inOrder(items, step, { reason: `Each update reads ${dynamicValue}` });

@@ -1,0 +1,11 @@
+export async function mapLimit(pages, width, fetchPage) {
+  let next = 0;
+  const out = [];
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < pages.length) {
+      const index = next++;
+      out.push(...await fetchPage(pages[index]));
+    }
+  }));
+  return out;
+}

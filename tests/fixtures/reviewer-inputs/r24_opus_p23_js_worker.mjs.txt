@@ -1,0 +1,72 @@
+// CASE worker_honest expect=pass
+export async function mapLimit(items, width, operation) {
+  let next = 0;
+  const results = [];
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await operation(items[index]);
+    }
+  }));
+  return results;
+}
+// CASE worker_honest_spread_pages expect=pass
+export async function mapLimit(pages, width, fetchPage) {
+  let next = 0;
+  const out = [];
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < pages.length) {
+      const index = next++;
+      out.push(...await fetchPage(pages[index]));
+    }
+  }));
+  return out;
+}
+// CASE worker_distinct_template expect=fire
+export async function mapLimit(items, width, operation) {
+  let next = 0;
+  const results = [];
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = `${await operation(items[index])}:${await audit(items[index])}`;
+    }
+  }));
+  return results;
+}
+// CASE worker_distinct_spread expect=fire
+export async function mapLimit(pages, width, fetchPage) {
+  let next = 0;
+  const out = [];
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < pages.length) {
+      const index = next++;
+      out.push(...await fetchPage(pages[index]), ...await fetchMeta(pages[index]));
+    }
+  }));
+  return out;
+}
+// CASE worker_distinct_op_from_await expect=fire
+export async function mapLimit(items, width, operation) {
+  let next = 0;
+  const results = [];
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await (await resolve(operation))(items[index]);
+    }
+  }));
+  return results;
+}
+// CASE worker_length_one expect=fire
+export async function mapLimit(items, width, operation) {
+  let next = 0;
+  const results = [];
+  await Promise.all(Array.from({ length: 1 }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await operation(items[index]);
+    }
+  }));
+  return results;
+}

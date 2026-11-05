@@ -1,0 +1,7 @@
+Future<void> inOrderSteps({required String reason, required Iterable<Future<void> Function()> items}) async { for (final item in items) {
+  await item();
+} }
+
+Future<void> use() async {
+  await inOrderSteps(items: [], reason: "Each update reads the previous write");
+}

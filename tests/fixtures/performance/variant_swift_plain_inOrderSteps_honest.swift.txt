@@ -1,0 +1,9 @@
+func inOrderSteps(_ items: [() async -> Void], reason: String) async {
+  for item in items {
+    await item()
+  }
+}
+
+func use() async throws {
+  try await inOrderSteps([], reason: "Each update reads the previous write")
+}

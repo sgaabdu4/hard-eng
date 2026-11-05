@@ -1,0 +1,19 @@
+Future<void> carried(items, client) async {
+  var cursor = initial();
+  while (true) {
+    for (final item in items) {
+      cursor = await client.next(item, cursor);
+    }
+  }
+}
+
+Future<void> separate(items, client) async {
+  var cursor = initial();
+  while (true) {
+    for (final item in items) {
+      cursor = await client.next(item, cursor);
+      // ruleid: await-in-loop-dart
+      await client.save(item);
+    }
+  }
+}

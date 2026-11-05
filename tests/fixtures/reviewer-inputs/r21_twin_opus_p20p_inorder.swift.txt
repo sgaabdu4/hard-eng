@@ -1,0 +1,6 @@
+// CASE swift_inorder_two_awaits expect=fire
+func inOrder<T>(_ items: [T], reason: String, _ step: (T) async throws -> Void) async rethrows {
+  for item in items {
+    log(try await step(item), await audit(item))
+  }
+}

@@ -1,0 +1,11 @@
+// CASE ts_chunk_async_arrow_extra expect=fire
+export async function mapLimit(items, width, operation) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		await Promise.all(
+			items.slice(offset, offset + width).map(async (item) => {
+				await audit(item);
+				return operation(item);
+			}),
+		);
+	}
+}

@@ -1,0 +1,19 @@
+// CASE swift_inorder_label expect=pass
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async rethrows {
+  for item in items {
+    try await step(item)
+  }
+}
+// CASE swift_mwc expect=pass
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { try await operation(item) }
+      }
+      try await group.waitForAll()
+    }
+  }
+}

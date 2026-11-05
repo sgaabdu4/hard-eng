@@ -1,0 +1,5 @@
+async def work(items):
+    for start in range(0, len(items), 4):
+        for item in items:
+            # ruleid: await-in-loop-python
+            await asyncio.gather(read(item), other(item))

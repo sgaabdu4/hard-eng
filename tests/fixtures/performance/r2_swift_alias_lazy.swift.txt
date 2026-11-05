@@ -1,0 +1,14 @@
+func run(items: [Int], step: Step) async throws {
+ let serial = inOrder
+ // ruleid: in-order-needs-reason-swift
+ try await serial(items, step)
+ try await serial(items, step, reason: "Each update reads the previous write")
+ var value: Value? = nil
+ for item in items {
+  if value == nil { value = try await load() }
+  if values[item] == nil {
+   // ruleid: await-in-loop-swift
+   values[item] = try await load(item)
+  }
+ }
+}

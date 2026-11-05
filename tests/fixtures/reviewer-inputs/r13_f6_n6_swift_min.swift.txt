@@ -1,0 +1,27 @@
+// CASE sw_min_three_label expect=fire
+func a1(items: [Int], requested: Int, operation: (Int) async -> Void) async {
+  await mapWithConcurrency(items: items, width: min(1, requested, items.count), operation: operation)
+}
+
+// CASE sw_min_three_trailing expect=fire
+func a2(items: [Int], requested: Int) async {
+  await mapWithConcurrency(items: items, width: min(requested, 1, items.count)) { item in await save(item) }
+}
+
+// CASE sw_min_two_label expect=fire
+func a3(items: [Int], requested: Int, operation: (Int) async -> Void) async {
+  await mapWithConcurrency(items: items, width: min(1, requested), operation: operation)
+}
+
+// CASE sw_local_min_three expect=fire
+func a4(items: [Int], requested: Int, operation: (Int) async -> Void) async {
+  let width = min(1, requested, items.count)
+  await mapWithConcurrency(items: items, width: width, operation: operation)
+}
+
+// CASE sw_min_three_four expect=pass
+func h1(items: [Int], requested: Int, operation: (Int) async -> Void) async {
+  await mapWithConcurrency(items: items, width: min(4, requested, items.count), operation: operation)
+}
+
+func save(_ item: Int) async {}

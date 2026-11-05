@@ -1,0 +1,24 @@
+async function work(items) {
+const WIDTH = 4;
+const ONE = 1;
+for (let i = 0; i < items.length; i += 1) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([read(items[i]), other(items[i])]);
+}
+for (let i = 0; i < items.length; i += 2) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([read(items[i]), other(items[i])]);
+}
+for (let i = 0; i < items.length; i += WIDTH) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([read(items[i]), other(items[i])]);
+}
+for (let i = 0; i < items.length; i += ONE) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([read(items[i]), other(items[i])]);
+}
+for (let i = 0; i < items.length; i += unknownWidth) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([read(items[i]), other(items[i])]);
+}
+}

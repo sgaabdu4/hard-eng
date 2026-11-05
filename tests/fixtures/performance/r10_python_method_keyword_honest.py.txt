@@ -1,0 +1,9 @@
+import asyncio
+
+
+class Pool:
+    async def map_with_concurrency(self, items, *, width, operation):
+        for offset in range(0, len(items), width):
+            await asyncio.gather(
+                *(operation(item) for item in items[offset : offset + width])
+            )

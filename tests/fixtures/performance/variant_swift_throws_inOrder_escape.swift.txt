@@ -1,0 +1,12 @@
+func inOrder<T>(_ items: some Sequence<T>, reason: String, _ step: (T) async throws -> Void) async rethrows {
+  for item in items {
+    // ruleid: await-in-loop-swift
+    try await client.put(item)
+    // ruleid: await-in-loop-swift
+    try await audit.save(item)
+  }
+}
+
+func use() async throws {
+  try await inOrder([], reason: "Each update reads the previous write") { value in print(value) }
+}

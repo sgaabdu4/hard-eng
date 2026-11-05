@@ -1,0 +1,11 @@
+class Runner:
+    async def in_order_steps(self, items: list[Step], *, reason: str):
+        for item in items:
+            # ruleid: await-in-loop-python
+            await client.put(item)
+            # ruleid: await-in-loop-python
+            await audit.save(item)
+
+
+async def use():
+    await Runner().in_order_steps([], reason="Each update reads the previous write")

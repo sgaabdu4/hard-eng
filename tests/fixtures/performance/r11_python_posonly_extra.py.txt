@@ -1,0 +1,12 @@
+import asyncio
+from collections.abc import Awaitable, Callable
+
+
+async def map_with_concurrency(items, /, width, operation):
+    for offset in range(0, len(items), width):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+        # ruleid: await-in-loop-python
+        await audit(items[offset])

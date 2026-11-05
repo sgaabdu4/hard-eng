@@ -1,0 +1,18 @@
+async function run(items, save, width, base) {
+	// ok: serial-bounded-helper-javascript
+	await mapLimit<string>(items, save, 1);
+	// ok: serial-bounded-helper-javascript
+	await pool.mapLimit<string, void>(1, items, save);
+	// ruleid: serial-bounded-helper-javascript
+	await mapLimit<string>(items, 1, save, 4);
+	// ruleid: serial-bounded-helper-javascript-options
+	await mapLimit<string>({ limit: 1, metadata: { ...base } }, items, save);
+	await mapLimit<string>(items, save, { concurrency: 1, ...base });
+	await mapLimit<string>(items, save, { ...base, concurrency: 1 });
+	const local: number = 1;
+	// ok: serial-bounded-helper-javascript
+	await mapLimit<string>(items, save, local);
+	const options = { concurrency: 1 };
+	await mapLimit<string>(items, save, options);
+	await mapLimit<string>(items, Math.min(1, width), save);
+}

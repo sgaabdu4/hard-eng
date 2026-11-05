@@ -1,0 +1,170 @@
+import type { InOrderOptions } from "./options";
+
+// CASE ts_fn_opaque expect=pass
+export async function inOrder<T>(
+	items: Iterable<T>,
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> {
+	for (const item of items) {
+		await step(item);
+	}
+}
+
+// CASE ts_steps_opaque expect=pass
+export async function inOrderSteps(
+	steps: ReadonlyArray<() => Promise<void>>,
+	options: InOrderOptions,
+): Promise<void> {
+	for (const step of steps) {
+		await step();
+	}
+}
+
+// CASE ts_fn_formatted expect=pass
+export async function inOrder2<T>(
+	items: readonly T[],
+	step: (item: T) => Promise<void>,
+	options: { readonly reason: string },
+): Promise<void> {
+	for (const item of items) {
+		await step(item);
+	}
+}
+
+// CASE ts_arrow_generic_comma expect=pass
+export const inOrder = async <T>(
+	items: readonly T[],
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> => {
+	for (const item of items) {
+		await step(item);
+	}
+};
+
+// CASE ts_fn_destructured_void expect=pass
+export async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	{ reason }: { reason: string },
+): Promise<void> {
+	void reason;
+	for (const item of items) {
+		await step(item);
+	}
+}
+
+// CASE ts_fn_braceless expect=pass
+export async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> {
+	for (const item of items) await step(item);
+}
+
+// CASE ts_default_export expect=pass
+export default async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> {
+	for (const item of items) {
+		await step(item);
+	}
+}
+
+// CASE ts_fn_expression expect=pass
+export const inOrder3 = async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+) {
+	for (const item of items) {
+		await step(item);
+	}
+};
+
+// CASE ts_static_method expect=pass
+export class Sequence {
+	static async inOrder<T>(
+		items: T[],
+		step: (item: T) => Promise<void>,
+		options: InOrderOptions,
+	): Promise<void> {
+		for (const item of items) {
+			await step(item);
+		}
+	}
+}
+
+// CASE ts_impostor_extra expect=fire
+export async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> {
+	for (const item of items) {
+		await step(item);
+		await log(item);
+	}
+}
+
+// CASE ts_impostor_business expect=fire
+export async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> {
+	for (const item of items) {
+		await saveRow(item);
+	}
+}
+
+// CASE ts_impostor_let_loop expect=fire
+export async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> {
+	for (let i = 0; i < items.length; i++) {
+		await step(items[i]);
+	}
+}
+
+// CASE ts_impostor_while expect=fire
+export async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> {
+	const queue = [...items];
+	while (queue.length) {
+		await step(queue.shift() as T);
+	}
+}
+
+const SHARED_REASON = "Each migration step needs the previous schema in place";
+
+// CASE ts_calls_with_reason expect=pass
+export async function run(rows: Row[]): Promise<void> {
+	await inOrder(
+		rows,
+		async (row) => {
+			await save(row);
+		},
+		{ reason: "Each row update reads the previous balance" },
+	);
+	await inOrder(rows, save, { reason: SHARED_REASON });
+	await inOrder(rows, save, {
+		reason: `Each ${"row"} update reads the previous balance`,
+	});
+	await inOrderSteps([() => a(), () => b()], {
+		reason: "Stage two needs the tables from stage one",
+	});
+	await inOrder(rows, save, {
+		reason:
+			"Each row update reads the balance " + "written by the previous row",
+	});
+}

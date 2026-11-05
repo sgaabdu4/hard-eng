@@ -1,0 +1,18 @@
+// CASE ts_outer_loop_inner_awaited_iterable expect=fire
+export async function total(companies: string[], store: Store) {
+  let sum = 0;
+  for (const company of companies) {
+    for (const row of await store.listRows(company)) {
+      sum += row.amount;
+    }
+  }
+  return sum;
+}
+// CASE ts_single_loop_awaited_iterable expect=pass
+export async function single(store: Store) {
+  let sum = 0;
+  for (const row of await store.listRows('a')) {
+    sum += row.amount;
+  }
+  return sum;
+}

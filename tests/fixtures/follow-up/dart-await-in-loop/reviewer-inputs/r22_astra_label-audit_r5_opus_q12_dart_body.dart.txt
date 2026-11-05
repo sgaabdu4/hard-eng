@@ -1,0 +1,19 @@
+Future<void> run(List<List<Item>> groups) async {
+  for (final batch in groups) {
+    Future<void> saveOne(Item item) async {
+      await save(item);
+      await audit(item);
+    }
+    await Future.wait(batch.map(saveOne));
+  }
+  for (final batch in groups) {
+    try {
+      await Future.wait(batch.map(save));
+    } catch (error) {
+      log(error);
+    }
+  }
+  for (final batch in groups) {
+    if (batch.isNotEmpty) await Future.wait(batch.map(save));
+  }
+}

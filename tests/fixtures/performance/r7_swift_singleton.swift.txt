@@ -1,0 +1,27 @@
+func run(items: [Int]) async throws {
+  for batch in items.chunks(ofCount: 1) {
+    // ruleid: await-in-loop-swift
+    try await withThrowingTaskGroup(of: Void.self) { tasks in
+      for item in batch { tasks.addTask { try await save(item) } }
+      // ruleid: await-in-loop-swift
+      try await tasks.waitForAll()
+    }
+  }
+  let saved = items.chunks(ofCount: 1)
+  for batch in saved {
+    // ruleid: await-in-loop-swift
+    try await withThrowingTaskGroup(of: Void.self) { tasks in
+      for item in batch { tasks.addTask { try await save(item) } }
+      // ruleid: await-in-loop-swift
+      try await tasks.waitForAll()
+    }
+  }
+  for batch in items.chunks(ofCount: 4) {
+    // ruleid: await-in-loop-swift
+    try await withThrowingTaskGroup(of: Void.self) { tasks in
+      for item in batch { tasks.addTask { try await save(item) } }
+      // ruleid: await-in-loop-swift
+      try await tasks.waitForAll()
+    }
+  }
+}

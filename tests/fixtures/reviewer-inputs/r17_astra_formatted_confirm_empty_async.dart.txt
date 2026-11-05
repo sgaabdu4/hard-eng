@@ -1,0 +1,8 @@
+Future<void> main() async {
+  final iterator = [1, 2, 3, 4].iterator;
+  var count = 0;
+  for (; iterator.moveNext(); count++) {}
+  await Future<void>.value();
+  if (count != 4) throw StateError('$count');
+  print('count=$count');
+}

@@ -1,0 +1,155 @@
+// CASE chunk_prelude_assert_string expect=pass
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  assert(width > 0, 'width must be positive; we await one chunk at a time');
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE chunk_prelude_throw expect=pass
+Future<List<R>> mapWithConcurrency2<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  if (width < 1) {
+    throw ArgumentError.value(width, 'width', 'Cannot await zero workers');
+  }
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE chunk_prelude_doc_comment expect=pass
+/// Runs [operation] on [items], at most [width] at a time.
+Future<List<R>> mapWithConcurrency3<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  // Each loop pass awaits one chunk.
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE chunk_prelude_real_await expect=fire
+Future<List<R>> mapWithConcurrency4<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  await warmUp();
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE chunk_prelude_await_decl expect=fire
+Future<List<R>> mapWithConcurrency5<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final limit = await loadLimit();
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE chunk_prelude_await_if expect=fire
+Future<List<R>> mapWithConcurrency6<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  if (items.isEmpty) {
+    await audit();
+  }
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE dart_inorder_canonical expect=pass
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T item) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    await step(item);
+  }
+}
+
+// CASE dart_steps_canonical expect=pass
+Future<void> inOrderSteps(
+  List<Future<void> Function()> steps, {
+  required String reason,
+}) async {
+  for (final step in steps) {
+    await step();
+  }
+}
+
+// CASE dart_inorder_static expect=pass
+class Ordered {
+  static Future<void> inOrder<T>(
+    Iterable<T> items,
+    Future<void> Function(T item) step, {
+    required String reason,
+  }) async {
+    for (final item in items) {
+      await step(item);
+    }
+  }
+}
+
+// CASE dart_inorder_impostor_extra expect=fire
+Future<void> inOrder2<T>(
+  Iterable<T> items,
+  Future<void> Function(T item) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    await step(item);
+    await log(item);
+  }
+}
+
+const migrationReason = 'Each migration step needs the previous schema in place';
+
+// CASE dart_calls expect=pass
+Future<void> run(List<int> rows) async {
+  await inOrder(rows, (row) async => save(row), reason: 'Each row update reads the previous balance');
+  await inOrder(rows, save, reason: migrationReason);
+  await inOrderSteps([() => a(), () => b()], reason: 'Stage two needs the tables from stage one');
+  await inOrder(
+    rows,
+    save,
+    reason: 'Each row update reads the balance '
+        'written by the previous row',
+  );
+}

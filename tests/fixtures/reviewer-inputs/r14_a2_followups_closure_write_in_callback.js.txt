@@ -1,0 +1,5 @@
+async function run(items, op) {
+  let width = 1;
+  await prepare(() => { width = 4; });
+  await mapLimit(items, width, op);
+}

@@ -1,0 +1,46 @@
+import Foundation
+
+let width = 1
+
+actor Counter {
+  var active = 0
+  var peak = 0
+  var completed = 0
+  func enter() { active += 1; peak = max(peak, active) }
+  func leave() { active -= 1; completed += 1 }
+}
+
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { try await operation(item) }
+      }
+      try await group.waitForAll()
+    }
+  }
+}
+
+struct Importer {
+  let width: Int
+  func run(_ items: [Int], _ operation: @escaping @Sendable (Int) async throws -> Void) async throws {
+    try await mapWithConcurrency(items: items, width: width, operation: operation)
+  }
+}
+
+let counter = Counter()
+let semaphore = DispatchSemaphore(value: 0)
+Task {
+  try await Importer(width: 4).run(Array(0..<8)) { _ in
+    await counter.enter()
+    try await Task.sleep(nanoseconds: 20_000_000)
+    await counter.leave()
+  }
+  let peak = await counter.peak
+  let completed = await counter.completed
+  print("{\"serialDefault\":\(width),\"peak\":\(peak),\"completed\":\(completed)}")
+  semaphore.signal()
+}
+semaphore.wait()

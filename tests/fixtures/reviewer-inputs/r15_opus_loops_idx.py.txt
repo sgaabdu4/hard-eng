@@ -1,0 +1,50 @@
+# CASE py_list_comprehension_await expect=fire
+async def a(items):
+    return [await save(item) for item in items]
+
+
+# CASE py_dict_comprehension_await expect=fire
+async def b(items):
+    return {item: await load(item) for item in items}
+
+
+# CASE py_while_index expect=fire
+async def c(items):
+    i = 0
+    while i < len(items):
+        await save(items[i])
+        i += 1
+
+
+# CASE py_while_pop expect=fire
+async def d(items):
+    queue = list(items)
+    while queue:
+        item = queue.pop()
+        await save(item)
+
+
+# CASE py_wait_for expect=fire
+async def e(items):
+    for item in items:
+        await asyncio.wait_for(save(item), 5)
+
+
+# CASE py_enumerate expect=fire
+async def f(items):
+    for index, item in enumerate(items):
+        await save(index, item)
+
+
+# CASE py_executor expect=fire
+async def g(loop, items):
+    for item in items:
+        await loop.run_in_executor(None, work, item)
+
+
+# CASE py_set_comprehension_await expect=fire
+async def h(items):
+    return {await load(item) for item in items}
+
+
+# CASE end expect=pass

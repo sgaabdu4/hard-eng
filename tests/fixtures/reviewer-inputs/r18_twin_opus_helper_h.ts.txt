@@ -1,0 +1,23 @@
+// CASE ts_generic_doc expect=pass
+/** Runs fn on at most limit items at a time. */
+export async function mapLimit<T>(
+	items: readonly T[],
+	limit: number,
+	fn: (item: T) => Promise<unknown>,
+): Promise<void> {
+	// Each chunk runs in parallel; for (let i = 0; i < n; i++) would not.
+	for (let offset = 0; offset < items.length; offset += limit) {
+		await Promise.all(items.slice(offset, offset + limit).map(fn));
+	}
+}
+
+// CASE ts_multi_decl_impostor expect=fire
+export async function mapLimit2<T>(
+	items: readonly T[],
+	limit: number,
+	fn: (item: T) => Promise<unknown>,
+): Promise<void> {
+	for (let offset = 0, n = items.length; offset < n; offset += limit) {
+		await Promise.all(items.slice(offset, offset + limit).map(fn));
+	}
+}

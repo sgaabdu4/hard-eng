@@ -1,0 +1,18 @@
+async function run(items, width) {
+ let size = 4;
+ size = 1;
+ // ruleid: await-in-loop-javascript
+ for (let i = 0; i < items.length; i += size) { await Promise.all(items.slice(i,i+size).map(read)); }
+ for (let i = 0; i < items.length; i = i + width) {
+  // ruleid: await-in-loop-javascript
+  if (items.length) { await Promise.all(items.slice(i,i+width).map(read)); }
+  // ruleid: await-in-loop-javascript
+  await other(i);
+ }
+ for (let i = 0; i < items.length; i++) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([read(items[i])]);
+ }
+ // ruleid: await-in-loop-javascript
+ for (const batch of chunk(items, width)) { await Promise.all(batch.map(read)); }
+}

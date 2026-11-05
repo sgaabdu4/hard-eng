@@ -1,0 +1,7 @@
+func run(_ items: [Int]) async {
+  for item in items {
+    group.addTask(priority: await priority(item)) { [item] in
+      await save(item)
+    }
+  }
+}

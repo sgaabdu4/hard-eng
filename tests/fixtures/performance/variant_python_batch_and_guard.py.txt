@@ -1,0 +1,13 @@
+import asyncio
+import itertools
+
+async def work(items):
+    for batch in itertools.batched(items, 2):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in batch))
+    for batch in itertools.batched(items, 1):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in batch))
+    for item in items:
+        if await blocked(item):
+            raise Denied()

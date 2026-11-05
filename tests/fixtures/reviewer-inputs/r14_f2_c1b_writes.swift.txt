@@ -1,0 +1,43 @@
+import Foundation
+
+// CASE swift_tuple_write expect=pass
+func w1(_ items: [String], _ op: @escaping (String) async throws -> Void, parse: () -> (Int, Int)) async throws {
+    var width = 1
+    var retries = 0
+    (width, retries) = parse()
+    try await mapWithConcurrency(items, width: width, operation: op)
+}
+
+// CASE swift_plus_equals expect=pass
+func w2(_ items: [String], _ op: @escaping (String) async throws -> Void, extra: Int) async throws {
+    var width = 1
+    width += extra
+    try await mapWithConcurrency(items, width: width, operation: op)
+}
+
+// CASE swift_guard_let expect=pass
+func w3(_ items: [String], _ op: @escaping (String) async throws -> Void, config: [String: Int]) async throws {
+    var width = 1
+    if let configured = config["width"] {
+        width = configured
+    }
+    try await mapWithConcurrency(items, width: width, operation: op)
+}
+
+// CASE swift_do_catch expect=pass
+func w4(_ items: [String], _ op: @escaping (String) async throws -> Void, load: () async throws -> Int) async throws {
+    var width = 1
+    do {
+        width = try await load()
+    } catch {}
+    try await mapWithConcurrency(items, width: width, operation: op)
+}
+
+// CASE swift_inout expect=pass
+func w5(_ items: [String], _ op: @escaping (String) async throws -> Void, tune: (inout Int) -> Void) async throws {
+    var width = 1
+    tune(&width)
+    try await mapWithConcurrency(items, width: width, operation: op)
+}
+
+// CASE swift_end expect=pass

@@ -1,0 +1,11 @@
+Future<void> run(items, read) async {
+ final a = [0, for (final item in items)
+  // ruleid: await-in-loop-dart
+  await read(item)];
+ final b = [for (final item in items)
+  // ruleid: await-in-loop-dart
+  await read(item), 0];
+ final c = {0: 0, for (final item in items) item:
+  // ruleid: await-in-loop-dart
+  await read(item)};
+}

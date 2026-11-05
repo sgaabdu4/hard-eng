@@ -1,0 +1,17 @@
+Future<String?> run(rows, String? cursor) async {
+ for (final row in rows) { cursor = await client.next(row, cursor); }
+ return cursor;
+}
+Future<void> reset(rows, String? cursor) async {
+ for (final row in rows) {
+  cursor = null;
+  // ruleid: await-in-loop-dart
+  cursor = await client.next(row, cursor);
+ }
+}
+Future<void> perItem(rows) async {
+ for (var row in rows) {
+  // ruleid: await-in-loop-dart
+  row = await enrich(row);
+ }
+}

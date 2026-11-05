@@ -1,0 +1,90 @@
+// CASE js_honest expect=pass
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item));
+  }
+}
+// CASE js_distinct_plain expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), await save(item));
+  }
+}
+// CASE js_distinct_template expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), `${await save(item)}`);
+  }
+}
+// CASE js_distinct_tagged expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), sql`select ${await save(item)}`);
+  }
+}
+// CASE js_distinct_raw expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), String.raw`${await save(item)}`);
+  }
+}
+// CASE js_distinct_nested_template expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), `${`${await save(item)}`}`);
+  }
+}
+// CASE js_distinct_optional_call expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), await save?.(item));
+  }
+}
+// CASE js_distinct_same_callee_other_arg expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), await step(item.next));
+  }
+}
+// CASE js_distinct_logical expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    (await step(item)) ?? (await save(item));
+  }
+}
+// CASE js_distinct_awaited_iife expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), await (async () => save(item))());
+  }
+}
+// CASE js_distinct_object_value expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume({ result: await step(item), audit: await save(item) });
+  }
+}
+// CASE js_distinct_regex_then expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), /"/, await save(item), /"/);
+  }
+}
+// CASE js_distinct_string_then expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), "'", await save(item), "'");
+  }
+}
+// CASE js_steps_distinct expect=fire
+async function inOrderSteps(steps, { reason }) {
+  for (const step of steps) {
+    consume(await step(), `${await audit()}`);
+  }
+}
+// CASE js_distinct_member_await_key expect=fire
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(await step(item), cache[await key(item)]);
+  }
+}

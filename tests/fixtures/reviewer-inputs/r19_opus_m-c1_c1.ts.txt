@@ -1,0 +1,34 @@
+declare function mapLimit<T>(items: T[], width: number, op: (x: T) => Promise<void>, retries?: number): Promise<void>;
+declare const lib: { mapLimit: typeof mapLimit };
+declare const items: number[];
+declare function op(x: number): Promise<void>;
+
+// CASE retries_one_fourth_arg expect=pass
+export async function c1() {
+  await mapLimit(items, 8, op, 1);
+}
+
+// CASE nested_option_limit_one expect=pass
+export async function c2() {
+  await (lib.mapLimit as any)(items, op, { retry: { limit: 1 }, width: 8 });
+}
+
+// CASE width_expression expect=pass
+export async function c3(n: number) {
+  await mapLimit(items, n - 1, op);
+}
+
+// CASE first_arg_one expect=pass
+export async function c4() {
+  await (mapLimit as any)(1, items, op);
+}
+
+// CASE literal_one expect=fire
+export async function c5() {
+  await mapLimit(items, 1, op);
+}
+
+// CASE string_one expect=pass
+export async function c6() {
+  await (mapLimit as any)(items, "1", op);
+}

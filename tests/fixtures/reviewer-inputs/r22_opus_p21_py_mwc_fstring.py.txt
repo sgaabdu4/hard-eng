@@ -1,0 +1,7 @@
+# CASE py_mwc_fstring_extra expect=fire
+import asyncio
+
+
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        log(await asyncio.gather(*(operation(item) for item in items[offset : offset + width])), f"{await flush(offset)}")

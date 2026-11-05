@@ -1,0 +1,18 @@
+in_order(items, step, reason="Each update reads the previous write")
+# ruleid: in-order-needs-reason-python
+in_order(items, step, reason="too short")
+# ruleid: in-order-needs-reason-python
+in_order(items, step, reason="onewordlongerthantwentycharacters")
+in_order(items, step, reason="1234567890 123456789")
+# ruleid: in-order-needs-reason-python
+in_order(items, step, reason="123456789 123456789")
+# ruleid: in-order-needs-reason-python
+in_order(items, step)
+order.in_order(items, step, reason="Each update reads the previous write")
+# ruleid: in-order-needs-reason-python
+order.in_order(items, step, reason="x")
+WHY = "Each update reads the previous write"
+in_order(items, step, reason=WHY)
+in_order(items, step, reason="Each update reads " + "the previous write")
+in_order(items, step, reason="""Each update reads
+the previous write""")

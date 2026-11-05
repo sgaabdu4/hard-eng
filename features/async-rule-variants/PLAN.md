@@ -1,0 +1,64 @@
+# Recognize async rule variants without hiding serial work
+
+Status: Complete
+
+## Outcome + scope
+
+Accept canonical ordered helpers across supported declaration forms. Preserve findings for unrelated helper bodies and nested serial work. Require the existing named bounded-concurrency helper for independent batch work; raw-loop joins remain findings. Cover Dart, JavaScript, TypeScript, Python and Swift. Keep consumer source and delivery outside this change.
+
+## Repository context
+
+Owners: `.agents/skills/he/semgrep/performance.yaml`, `.agents/skills/he/references/efficiency.md`, `tests/fixtures/performance/`, `tests/fixtures/parse-gaps/`, and `tests/test_hot_paths.py`.
+Same cause: Earlier async fixes matched selected signatures and broad callback scopes. Those checks missed typed declarations and hid nested loops. This repair replaces those exemptions and tests honest forms beside escape forms in every supported language.
+
+## Decisions + authorization
+
+Blockers: None.
+Authority: The maintainer authorized implementation, native verification, read-only consumer comparisons and local commits in this clone. No push, pull request or merge is authorized. Public examples remain synthetic. Consumer evidence stays outside this repository.
+
+## Acceptance + steps
+
+- [x] Require a reason for literal-one bounds at the call in the canonical second positional slot, unless a named width takes precedence. Named and inline bounds also require literal one. Identifier widths have no coverage; constant and symbolic propagation are disabled for C1. Inline options retain outer-spread and duplicate-key exclusions. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines` covers the literal controls and explicitly revised identifier expectations; the exact-input test covers destructured and member widths.
+- [x] Preserve exact reported inputs for awaited generic calls, reordered width positions, options and commented canonical bodies. Parameter and join-call comments preserve only the canonical helper body; extra work still fires. Proof: `tests/test_hot_paths.py::test_exact_reported_inputs_keep_all_expected_findings`; `reviewer-inputs/expected.json` states every expected coordinate, including retained raw-loop controls and approved scope changes.
+- [x] Preserve owned exits, sleeps and condition updates inside async contexts without hiding separate inner work or treating lambda returns as exits. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines` covers the context-pass boundary fixtures.
+
+- [x] Judge nested loops independently of ancestor exemptions, detect Python TaskGroup joins, preserve canonical helper declaration variants and reject extra awaited work. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
+- [x] Canonical helper declarations pass across supported parameter orders, markers and PEP 695 forms; unrelated same-name bodies fire. Native Python `def` patterns cover async helpers when generic syntax removes parser flags. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
+- [x] Registered callbacks pass while direct sibling awaits and inner serial loops fire. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
+- [x] Task and Task.detached callbacks accept ordinary arguments while argument evaluation and inner loops remain checked. Classic-for initializers run once in JavaScript, TypeScript and Dart; condition, update, body and repeated inner initialization remain checked. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines` covers `tests/fixtures/performance/r16_*`; `tests/test_hot_paths.py::test_exact_reported_inputs_keep_all_expected_findings` covers exact inputs. Started-work joins keep their findings; the four loop messages describe per-pass awaits.
+- [x] Guard empty loop bodies before submatching in all four languages, including early-exit branches. Preserve task capture lists, generic and bound tasks, and task-group callback boundaries. Detect repeated work with multiple classic-for declarations or empty clauses; retain one-time initializer exclusion and braceless early exits. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines` covers `r17_*` and strengthened initializer controls. `tests/test_hot_paths.py::test_exact_reported_inputs_keep_all_expected_findings` validates exact sources and rejects scan errors through the native validator.
+- [x] Raw-loop batch joins fire regardless of step width, chunk names, saved work or join layout. Only canonical bounded-helper bodies pass; same-named unrelated bodies fire. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines` covers the new helper fixtures and explicitly flipped raw-loop fixtures.
+- [x] Static reason forms pass; missing, short, single-word and dynamic reasons fire. Native object matching rejects duplicate reason keys. Spreads are accepted; a later spread overwriting reason is outside scope. Hidden reducers and Dart collection bodies fire. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
+- [x] Fixture scans reject parser errors. A separate Swift fixture demonstrates the known awaited-condition parser gap. Proof: `tests/test_hot_paths.py::test_swift_awaited_throwing_condition_reports_its_parser_gap`.
+- [x] Scope canonical helper and worker allowances to their own loop statements. Reject noncanonical awaits in arguments, callees, receivers, targets or larger statements in every language. Identical canonical duplicates within one statement are outside scope. Judge canonical join callbacks separately. Preserve comments, generic joins and TypeScript non-null indexes. Proof: `tests/test_hot_paths.py::test_exact_reported_inputs_keep_all_expected_findings`, duplicate-await controls and chunk-callback annotations.
+- [x] Reverting only the rule file fails the expanded fixtures. Compare both directions of the consumer corpus and classify every changed site. Pass the full native check. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines` and HE-HOT-PATH.
+- [x] Verify the review repairs, rule-only negative control and fresh corpus classification. Keep carried outer awaits accepted while detecting independent inner awaits. JS/TS ordered helpers pass by canonical body alone, including opaque options types; calls still require a written reason. Other language helper contracts retain their reason parameters. Preserve lazy scalar loads, named callbacks and one-time loop inputs. Proof: `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`; the final native gate validates this integrated result.
+- [x] Repair the approved follow-up cases: repeated lazy loads, filtered and nested comprehensions, static shorthand reasons, named options types, single-statement loops, indexed collections, reducer variants, native batches, callback expressions, break ownership and cleanup exits. Limit carried-result targets to plain locals. Proof: `tests/fixtures/performance/r3_*` through `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
+
+## Superseded batch decisions
+
+The earlier nonliteral-width, chunk-list and statement-shape batch passes are replaced by the named bounded-helper policy. Ordered helpers, reasons, carried results, lazy loads, reducers, collection-for detection and callback boundaries remain required.
+
+## Baseline + execution
+
+Result: Passed
+Evidence: The starting develop rule file matched all 123 original fixture coordinates, with zero parser errors. New declaration fixtures failed against the original rules. Round one passed its native gate and 12 focused tests. Native parsers accepted its 158 files. The review then found contract regressions and missing controls, which the second round reproduces and repairs.
+Execution: One implementation worker owns the rules and fixtures. Independent review follows local verification under the maintainer's coordination.
+
+## Risks + recovery
+
+Semgrep cannot parse the unparenthesized Swift throwing awaited condition or the awaited while-let task-group result. Explicit gap fixtures record both limits. Consumer parser gaps remain visible in private comparison results. Static patterns cannot prove the truth of an ordering reason. Restore only this change if behavior regresses.
+
+Native patterns own loop headers, bodies, callback boundaries and exit ownership. The remaining type-association and context-header source lexers are removed. JS/TS canonical ordered bodies need no type association; calls own the reason requirement. Classic-for condition and update captures cover the reviewed declaration and empty-clause shapes. Qualified generic Swift Task callbacks pass. The Dart chunk allowance covers the chunk loop only; separate prelude loops remain checked. Native generic joins accept explicit result types. Every canonical helper and worker statement rejects noncanonical awaits through a native captured-statement predicate. Only native captured-statement patterns judge extra awaited work. Textual await counters are removed. Identical duplicates of the canonical awaited call within one statement are outside scope; distinct extra awaits still invalidate the exemption. Known concurrent callback bodies retain their own canonical awaits; extra callback work invalidates the helper shape. Commented arguments and TypeScript non-null indexes pass. Python nested-loop ownership uses native patterns instead of a statement-range regex. Native tuple/list patterns detect direct and nested lazy resets without submatching arbitrary assignment receivers. Python list-comprehension matching accepts unbounded filters while preserving literal-list and one-time-input controls. The retained Dart stream exclusion does not accept comments between its keywords. C1 remains unchanged.
+
+Semgrep also drops async-context flags in Python modules containing match statements. General contexts in those modules remain pre-existing misses shared with released; native task-group constructor patterns preserve known join detection. No source lexer or result-handler workaround is used.
+
+## ux_reference
+
+N/A — Scanner rules and synthetic fixtures have no visual interface.
+
+## Verification
+
+Result: Passed
+Evidence: The raw scanner matches all 1169 annotated coordinates. The exact suite covers 1933 sources and 3889 findings, retaining its six known parser reports. Eighteen duplicate-only annotation expectations and ninety old exact coordinates are explicitly revised under the native-only decision; their input programs remain unchanged. The new inputs reject extra awaited receivers, callees, targets, arguments and noncanonical extra awaits inside interpolation. Keyword member names preserve honest worker passes. Canonical comments, non-null indexes and concurrent chunk callbacks still pass. The accepted native limitation is stated explicitly instead of restoring a textual counter. Regex literals, spread expressions and property/type names preserve honest worker passes. Multi-case reviewer files retain their exact contents and raw assertions; separate native language checks record duplicate declarations. Python and JS/TS awaited assignment receivers scan without matching errors. Native array/object binding-element checks preserve JS destructuring resets. Direct and nested destructuring resets still invalidate one-time lazy-load exemptions; unrelated resets remain accepted. Comments with apostrophes and regex-valued options preserve written reasons through native object matching. One spread-after-reason annotation is revised under the accepted scope; all old exact expectations remain unchanged. Five sweep fixtures cover at least thirty common idioms each, including TSX, with zero scan errors across the configured rules. Extended sweeps and exact inputs preserve nested empty-loop break/return cases; native guards prevent missing-range scan errors. Earlier header, ordered-helper, callback and handle controls remain covered. C1 rules are unchanged. Private records retain the four-way historical replay, every released-coordinate removal, parser comparison, corpus classification and native gate result. Every released-coordinate removal in the history and fixture ledgers uses actual exemption-family ablation. Multiple owners retain their full causal evidence. Dart collection-for header awaits, loop-built promise chains, computed keys, the Dart single-item impostor, condition-update allowance, identical canonical duplicates, duplicated chunk-header awaits and identifier widths remain outside scope. Released-relative parser limits, void Dart workers and general async-context flag loss are recorded. The Complete gate verifies the integrated result.
+E2E: N/A — No application journey changes. The fixture tests execute the real scanner.

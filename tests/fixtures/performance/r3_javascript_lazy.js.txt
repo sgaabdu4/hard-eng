@@ -1,0 +1,40 @@
+async function run(items, read) {
+ let saved = null;
+ for (const item of items) {
+  saved ??= await read();
+ }
+ for (const item of items) {
+  let row = cache[item];
+  // ruleid: await-in-loop-javascript
+  row ??= await read(item);
+ }
+ for (const item of items) {
+  saved = null;
+  // ruleid: await-in-loop-javascript
+  saved ??= await read(item);
+ }
+ for (const group of items) {
+  let local = null;
+  for (const item of group) {
+   // ruleid: await-in-loop-javascript
+   local ??= await read(item);
+  }
+ }
+}
+async function resetByAwait(items, read) {
+ let saved;
+ for (const item of items) {
+  // ruleid: await-in-loop-javascript
+  saved = await refresh(item);
+  // ruleid: await-in-loop-javascript
+  saved ??= await read(item);
+ }
+}
+async function unrelatedReset(items, read) {
+ let saved;
+ let count = 0;
+ for (const item of items) {
+  count = item;
+  if (saved == null) saved = await read();
+ }
+}

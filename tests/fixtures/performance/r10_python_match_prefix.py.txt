@@ -1,0 +1,22 @@
+def select(message):
+    match message:
+        case "stop":
+            return True
+        case _:
+            return False
+
+
+async def statuses(items, session, output):
+    for item in items:
+
+        async with session.get(item) as response:
+            output.append(response.status)
+
+
+async def groups(items, operation):
+    import anyio
+
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with anyio.create_task_group() as group:
+            group.start_soon(operation, item)

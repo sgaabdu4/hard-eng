@@ -1,0 +1,9 @@
+// CASE dart_inner_iterable_return expect=fire
+Future<Row?> firstPlain(List<String> groups, Store store) async {
+  for (final group in groups) {
+    for (final row in await store.rows(group)) {
+      if (row.ok) return row;
+    }
+  }
+  return null;
+}

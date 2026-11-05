@@ -1,0 +1,69 @@
+// CASE ts_awaited_callee_receiver expect=fire
+export async function mapLimit<T>(items: T[], width: number, pool: () => Promise<{ send(item: T): Promise<void> }>): Promise<void> {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await (await pool()).send(items[index]);
+    }
+  }));
+}
+
+// CASE ts_awaited_callee_index expect=fire
+export async function mapLimit2<T>(items: T[], width: number, clients: { send(item: T): Promise<void> }[]): Promise<void> {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await clients[await pickSlot()].send(items[index]);
+    }
+  }));
+}
+
+// CASE ts_results_awaited_callee expect=fire
+export async function mapLimit3<T, R>(items: T[], width: number, pool: () => Promise<{ run(item: T): Promise<R> }>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await (await pool()).run(items[index]);
+    }
+  }));
+  return results;
+}
+
+// CASE ts_nullish_fallback expect=fire
+export async function mapLimit4<T, R>(items: T[], width: number, op: (item: T) => Promise<R | undefined>, fallback: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = (await op(items[index])) ?? (await fallback(items[index]));
+    }
+  }));
+  return results;
+}
+
+// CASE ts_call_chain_then expect=fire
+export async function mapLimit5<T>(items: T[], width: number, op: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await op(items[index]).then(() => audit(index));
+    }
+  }));
+}
+
+// CASE ts_iife_callee expect=fire
+export async function mapLimit6<T>(items: T[], width: number): Promise<void> {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await (async (item: T) => { await save(item); await audit(item); })(items[index]);
+    }
+  }));
+}

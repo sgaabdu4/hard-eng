@@ -1,0 +1,37 @@
+func run(items: [[Int]]) async throws {
+ var saved: Value? = nil
+ for item in items { if saved == nil { saved = try await read() } }
+ for item in items {
+  var row = cache[item]
+  // ruleid: await-in-loop-swift
+  if row == nil { row = try await read(item) }
+ }
+ for item in items {
+  saved = nil
+  // ruleid: await-in-loop-swift
+  if saved == nil { saved = try await read(item) }
+ }
+ for group in items {
+  var local: Value? = nil
+  for item in group {
+   // ruleid: await-in-loop-swift
+   if local == nil { local = try await read(item) }
+  }
+ }
+}
+func resetByAwait(items: [Int]) async throws {
+ var saved: Value? = nil
+ for item in items {
+  // ruleid: await-in-loop-swift
+  saved = try await refresh(item)
+  // ruleid: await-in-loop-swift
+  if saved == nil { saved = try await read(item) }
+ }
+}
+func unrelatedReset(items: [Int]) async throws {
+ var saved: Value? = nil
+ for item in items {
+  count = item
+  if saved == nil { saved = try await read() }
+ }
+}

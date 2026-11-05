@@ -1,0 +1,30 @@
+async function repeated(items) {
+	for (let i = 0, n = items.length, last = n - 1; i < n; i++) {
+		// ruleid: await-in-loop-javascript
+		await save(items[i]);
+	}
+	let i = 0;
+	for (; i < items.length; i++) {
+		// ruleid: await-in-loop-javascript
+		await save(items[i]);
+	}
+	for (let i = items.length; i-- > 0; ) {
+		// ruleid: await-in-loop-javascript
+		await save(items[i]);
+	}
+	for (let i = 0; i < items.length; i++) if (await ready(i)) return i;
+	for (const item of items) if (await ready(item)) break;
+	for (let i = 0; i < items.length; i++) await sleep(100);
+	for (let i = 0; i < items.length; i++) {
+		const helper = () => {
+			return true;
+		};
+		// ruleid: await-in-loop-javascript
+		await save(items[i]);
+	}
+	for (let i = 0; i < items.length; i++)
+		if (items[i]) {
+			// ruleid: await-in-loop-javascript
+			await save(items[i]);
+		}
+}

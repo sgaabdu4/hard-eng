@@ -1,0 +1,2 @@
+async def run(items, width, op, options):
+    await map_with_concurrency(items, width, op, 1)

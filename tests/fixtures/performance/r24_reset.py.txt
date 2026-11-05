@@ -1,0 +1,42 @@
+async def tuple_reset(items, pairs, read):
+    saved = None
+    for item in items:
+        saved, other = pairs[item]
+        if saved is None:
+            # ruleid: await-in-loop-python
+            saved = await read(item)
+
+
+async def list_reset(items, pairs, read):
+    saved = None
+    for item in items:
+        [other, saved] = pairs[item]
+        if saved is None:
+            # ruleid: await-in-loop-python
+            saved = await read(item)
+
+
+async def nested_tuple_reset(items, pairs, read):
+    saved = None
+    for item in items:
+        ((other, saved), tail) = pairs[item]
+        if saved is None:
+            # ruleid: await-in-loop-python
+            saved = await read(item)
+
+
+async def nested_list_reset(items, pairs, read):
+    saved = None
+    for item in items:
+        [other, (saved, tail)] = pairs[item]
+        if saved is None:
+            # ruleid: await-in-loop-python
+            saved = await read(item)
+
+
+async def unrelated_reset(items, pairs, read):
+    saved = None
+    for item in items:
+        other, tail = pairs[item]
+        if saved is None:
+            saved = await read(item)

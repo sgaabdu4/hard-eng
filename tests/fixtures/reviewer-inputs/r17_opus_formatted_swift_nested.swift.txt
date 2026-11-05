@@ -1,0 +1,165 @@
+// CASE prio_while_let expect=fire
+func n1(_ streams: [Stream]) {
+  for stream in streams {
+    tasks.append(
+      Task(priority: .utility) {
+        var iterator = stream.makeIterator()
+        while let next = await iterator.next() {
+          await handle(next)
+        }
+      })
+  }
+}
+
+// CASE plain_while_let expect=fire
+func n1b(_ streams: [Stream]) {
+  for stream in streams {
+    tasks.append(
+      Task {
+        var iterator = stream.makeIterator()
+        while let next = await iterator.next() {
+          await handle(next)
+        }
+      })
+  }
+}
+
+// CASE prio_for_case_let expect=fire
+func n2(_ groups: [[Int?]]) {
+  for group in groups {
+    tasks.append(
+      Task(priority: .utility) {
+        for case let value? in group {
+          await work(value)
+        }
+      })
+  }
+}
+
+// CASE plain_for_case_let expect=fire
+func n2b(_ groups: [[Int?]]) {
+  for group in groups {
+    tasks.append(
+      Task {
+        for case let value? in group {
+          await work(value)
+        }
+      })
+  }
+}
+
+// CASE prio_for_where expect=fire
+func n3(_ groups: [[Int]]) {
+  for group in groups {
+    tasks.append(
+      Task(priority: .utility) {
+        for value in group where value > 0 {
+          await work(value)
+        }
+      })
+  }
+}
+
+// CASE plain_for_where expect=fire
+func n3b(_ groups: [[Int]]) {
+  for group in groups {
+    tasks.append(
+      Task {
+        for value in group where value > 0 {
+          await work(value)
+        }
+      })
+  }
+}
+
+// CASE prio_labeled expect=fire
+func n4(_ groups: [[Int]]) {
+  for group in groups {
+    tasks.append(
+      Task(priority: .utility) {
+        inner: for value in group {
+          await work(value)
+        }
+      })
+  }
+}
+
+// CASE plain_labeled expect=fire
+func n4b(_ groups: [[Int]]) {
+  for group in groups {
+    tasks.append(
+      Task {
+        inner: for value in group {
+          await work(value)
+        }
+      })
+  }
+}
+
+// CASE prio_for_in_plain expect=fire
+func n5(_ groups: [[Int]]) {
+  for group in groups {
+    tasks.append(
+      Task(priority: .utility) {
+        for value in group {
+          await work(value)
+        }
+      })
+  }
+}
+
+// CASE prio_repeat expect=fire
+func n6(_ groups: [[Int]]) {
+  for group in groups {
+    tasks.append(
+      Task(priority: .utility) {
+        var index = 0
+        repeat {
+          await work(group[index])
+          index += 1
+        } while index < group.count
+      })
+  }
+}
+
+// CASE prio_enumerated expect=fire
+func n7(_ groups: [[Int]]) {
+  for group in groups {
+    tasks.append(
+      Task(priority: .utility) {
+        for (offset, value) in group.enumerated() {
+          await work(offset + value)
+        }
+      })
+  }
+}
+
+// CASE detached_prio_for_where expect=fire
+func n8(_ groups: [[Int]]) {
+  for group in groups {
+    tasks.append(
+      Task.detached(priority: .utility) {
+        for value in group where value > 0 {
+          await work(value)
+        }
+      })
+  }
+}
+
+// CASE top_task_loop_inside expect=fire
+func n9(_ ids: [Int]) {
+  Task(priority: .utility) {
+    for id in ids where id > 0 {
+      await work(id)
+    }
+  }
+}
+
+// CASE top_task_loop_inside_plain expect=fire
+func n9b(_ ids: [Int]) {
+  Task {
+    for id in ids where id > 0 {
+      await work(id)
+    }
+  }
+}

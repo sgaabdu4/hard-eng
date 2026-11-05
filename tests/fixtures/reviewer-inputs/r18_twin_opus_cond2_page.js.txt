@@ -1,0 +1,27 @@
+function use(x) {}
+
+// CASE js_single_update_body_page expect=pass
+async function p1(api) {
+	let n = 0;
+	for (let page = await api.first(); page; n++) {
+		use(page);
+		page = await api.next(page);
+	}
+}
+
+// CASE js_single_empty_update_body_page expect=pass
+async function p2(api) {
+	for (let page = await api.first(); page; ) {
+		use(page);
+		page = await api.next(page);
+	}
+}
+
+// CASE js_empty_init_body_page expect=pass
+async function p3(api) {
+	let page = await api.first();
+	for (; page; ) {
+		use(page);
+		page = await api.next(page);
+	}
+}

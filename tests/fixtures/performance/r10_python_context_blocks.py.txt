@@ -1,0 +1,33 @@
+async def nested(pages, rows, pool, save):
+    while True:
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                for row in rows:
+                    # ruleid: await-in-loop-python
+                    await save(row)
+        break
+
+
+async def matched(pages, session, save):
+    while True:
+        match pages:
+            case [page, *_]:
+                async with session():
+                    while page.remaining:
+                        # ruleid: await-in-loop-python
+                        await save(page)
+        break
+
+
+async def controls(pages, session, save, stop, in_order):
+    while True:
+        async with session():
+            for row in pages:
+                if await stop(row):
+                    break
+            for row in await pages.load():
+                print(row)
+            await in_order(
+                pages, save, reason="Each update requires the previous state"
+            )
+        break

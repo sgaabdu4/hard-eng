@@ -1,0 +1,6 @@
+// CASE js_wrapped_op_helper expect=pass
+export async function mapLimit(items, width, op) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    await Promise.all(items.slice(offset, offset + width).map((item) => op(item)));
+  }
+}

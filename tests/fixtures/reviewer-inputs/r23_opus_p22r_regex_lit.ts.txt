@@ -1,0 +1,17 @@
+// CASE ts_worker_regex_literal_swallow_dup expect=fire
+export async function a<T>(items: T[], width: number, operation: (item: T) => Promise<string>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge((await operation(items[index])).replace(/'/g, ""), await operation(items[index]), "'");
+    }
+  }));
+}
+// CASE ts_inorder_regex_literal_single expect=pass
+export async function inOrder<T>(items: T[], step: (item: T) => Promise<void>, { reason }: { reason: string }) {
+  void reason;
+  for (const item of items) {
+    log(await step(item), /it's/);
+  }
+}

@@ -1,0 +1,13 @@
+async function inOrder(items, step, { reason }) {
+  for (const item of items) {
+    consume(
+
+      await step(item),
+
+      await step(item),
+    );
+  }
+}
+async function inOrderSteps(steps, { reason }) {
+  for (const step of steps) { await step(/* await is only comment text */); }
+}

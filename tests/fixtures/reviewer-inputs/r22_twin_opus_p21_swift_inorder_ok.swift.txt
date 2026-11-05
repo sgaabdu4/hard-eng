@@ -1,0 +1,6 @@
+// CASE swift_inorder_comment_apostrophe expect=pass
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async rethrows {
+  for item in items {
+    try await step( /* don't "await" anything else */item)
+  }
+}

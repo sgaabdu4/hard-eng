@@ -1,0 +1,6 @@
+async function run(items, operation, options) {
+	await mapLimit(items, operation, { concurrency: 1, ...options });
+}
+async function control(items, operation, options) {
+	await mapLimit(items, operation, { ...options, concurrency: 1 });
+}

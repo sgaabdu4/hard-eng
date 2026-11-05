@@ -1,0 +1,23 @@
+async def run(items, read):
+    groups = list(batched(items, 1))
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*[read(item) for item in batch])
+    saved: list[tuple] = list(batched(items, n=1))
+    for batch in saved:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*batch)
+    for batch in list(batched(items, 1)):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*batch)
+    individual = [items[i:i+1] for i in range(0, len(items))]
+    for batch in individual:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*batch)
+    wide = list(batched(items, 4))
+    for batch in [items[i:i+1] for i in range(0, len(items))]:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*batch)
+    for batch in wide:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*batch)

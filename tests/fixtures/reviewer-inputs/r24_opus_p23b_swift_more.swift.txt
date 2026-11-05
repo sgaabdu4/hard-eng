@@ -1,0 +1,54 @@
+// CASE swift_array_literal expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), [await save(item)])
+  }
+}
+// CASE swift_tuple expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), (await save(item), 1))
+  }
+}
+// CASE swift_nil_coalesce expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), cache[item] ?? (await save(item)))
+  }
+}
+// CASE swift_subscript expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), table[await key(item)])
+  }
+}
+// CASE swift_cast expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), await save(item) as Any)
+  }
+}
+// CASE swift_try_bang expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), try! await save(item))
+  }
+}
+// CASE swift_trailing_closure_awaited expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), await run { await save(item) })
+  }
+}
+// CASE swift_assign expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    cache[item] = (try await step(item), await save(item))
+  }
+}
+// CASE swift_nested_interp expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), "a \("b \(await save(item))")")
+  }
+}

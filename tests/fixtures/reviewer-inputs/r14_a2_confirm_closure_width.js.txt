@@ -1,0 +1,27 @@
+async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    await Promise.all(items.slice(offset, offset + width).map(operation));
+  }
+}
+
+async function run(items, operation) {
+  let width = 1;
+  const execute = () => mapLimit(items, width, operation);
+  width = 4;
+  await execute();
+}
+
+async function main() {
+  let active = 0;
+  let peak = 0;
+  let completed = 0;
+  await run(Array.from({ length: 8 }, (_, index) => index), async () => {
+    active++;
+    peak = Math.max(peak, active);
+    await Promise.resolve();
+    active--;
+    completed++;
+  });
+  console.log(JSON.stringify({ peak, completed }));
+}
+main();

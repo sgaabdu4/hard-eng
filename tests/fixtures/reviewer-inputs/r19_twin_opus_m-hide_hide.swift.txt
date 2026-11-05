@@ -1,0 +1,50 @@
+func save(_ x: Int) async -> Int { x }
+func use(_ x: Int) {}
+
+// CASE awaited_local_function expect=fire
+func h1(_ items: [Int]) async {
+  for item in items {
+    func step() async { _ = await save(item) }
+    await step()
+  }
+}
+
+// CASE task_group_per_pass expect=fire
+func h2(_ groups: [[Int]]) async {
+  for group in groups {
+    await withTaskGroup(of: Int.self) { g in
+      for x in group { g.addTask { await save(x) } }
+    }
+  }
+}
+
+// CASE enumerated expect=fire
+func h3(_ items: [Int]) async {
+  for (i, item) in items.enumerated() {
+    use(await save(item + i))
+  }
+}
+
+// CASE while_index expect=fire
+func h4(_ items: [Int]) async {
+  var i = 0
+  while i < items.count {
+    use(await save(items[i]))
+    i += 1
+  }
+}
+
+// CASE where_clause expect=fire
+func h5(_ items: [Int]) async {
+  for item in items where item > 0 {
+    use(await save(item))
+  }
+}
+
+// CASE async_let_in_loop expect=fire
+func h6(_ items: [Int]) async {
+  for item in items {
+    async let a = save(item)
+    use(await a)
+  }
+}

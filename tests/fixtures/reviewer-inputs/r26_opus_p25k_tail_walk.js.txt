@@ -1,0 +1,9 @@
+export function lastOfFirstNonEmpty(lists) {
+  let last = null;
+  for (const head of lists) {
+    if (!head) continue;
+    for (last = head; last.next; last = last.next);
+    break;
+  }
+  return last;
+}

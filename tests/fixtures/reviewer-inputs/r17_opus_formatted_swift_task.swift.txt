@@ -1,0 +1,99 @@
+// CASE await_task_value_inline expect=fire
+func s1(_ items: [Int]) async -> [Int] {
+  var out: [Int] = []
+  for item in items {
+    out.append(await Task(priority: .utility) { await work(item) }.value)
+  }
+  return out
+}
+
+// CASE await_task_value_multiline expect=fire
+func s2(_ items: [Int]) async -> [Int] {
+  var out: [Int] = []
+  for item in items {
+    let value = await Task(priority: .utility) {
+      await work(item)
+    }.value
+    out.append(value)
+  }
+  return out
+}
+
+// CASE try_await_detached_value expect=fire
+func s3(_ items: [Int]) async throws -> [Int] {
+  var out: [Int] = []
+  for item in items {
+    let value = try await Task.detached(priority: .background) {
+      try await load(item)
+    }.value
+    out.append(value)
+  }
+  return out
+}
+
+// CASE await_task_result expect=fire
+func s4(_ items: [Int]) async {
+  for item in items {
+    _ = await Task(priority: .low) {
+      try await load(item)
+    }.result
+  }
+}
+
+// CASE create_then_await_handle expect=fire
+func s5(_ items: [Int]) async {
+  for item in items {
+    let task = Task(priority: .high) {
+      await work(item)
+    }
+    await task.value
+  }
+}
+
+// CASE create_then_await_handle_plain expect=fire
+func s5b(_ items: [Int]) async {
+  for item in items {
+    let task = Task {
+      await work(item)
+    }
+    _ = await task.value
+  }
+}
+
+// CASE awaited_argument expect=fire
+func s6(_ items: [Int]) async {
+  var tasks: [Task<Void, Never>] = []
+  for item in items {
+    tasks.append(
+      Task(priority: await pick(item)) {
+        await work(item)
+      })
+  }
+}
+
+// CASE paren_await_value expect=fire
+func s7(_ items: [Int]) async -> [Int] {
+  var out: [Int] = []
+  for item in items {
+    let value = await (Task(priority: .utility) { await work(item) }).value
+    out.append(value)
+  }
+  return out
+}
+
+// CASE sibling_await_after_task expect=fire
+func s8(_ items: [Int]) async {
+  for item in items {
+    tasks.append(Task(priority: .utility) { await work(item) })
+    await log(item)
+  }
+}
+
+// CASE operation_label_value expect=fire
+func s9(_ items: [Int]) async -> [Int] {
+  var out: [Int] = []
+  for item in items {
+    out.append(await Task(priority: .utility, operation: { await work(item) }).value)
+  }
+  return out
+}

@@ -1,0 +1,34 @@
+// CASE braceless_if_return expect=pass
+Future<int> e1(int n) async {
+  for (var i = 0; i < n; i++) if (await isFree(i)) return i;
+  return -1;
+}
+
+// CASE braced_if_return_control expect=pass
+Future<int> e3(int n) async {
+  for (var i = 0; i < n; i++) {
+    if (await isFree(i)) return i;
+  }
+  return -1;
+}
+
+// CASE braced_try_return expect=pass
+Future<String> e9(List<String> urls) async {
+  Object? last;
+  for (var i = 0; i < urls.length; i++) {
+    try {
+      return await fetchOne(urls[i]);
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last!;
+}
+
+// CASE retry_attempt_sleep expect=pass
+Future<void> e10() async {
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    if (await tryOnce()) return;
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+}

@@ -1,0 +1,37 @@
+Future<void> save(Object? x) async {}
+
+// CASE dart_multi_arrow expect=pass
+void a1(List<int> ids, List<Future<void> Function()> handlers) {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    handlers.add(() async => await save(ids[i]));
+  }
+}
+
+// CASE dart_multi_block expect=pass
+void a2(List<int> ids, List<Future<void> Function()> handlers) {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    handlers.add(() async {
+      await save(ids[i]);
+    });
+  }
+}
+
+// CASE dart_reverse_block expect=pass
+void a3(List<int> ids, List<Future<void> Function()> handlers) {
+  for (var i = ids.length; i-- > 0;) {
+    handlers.add(() async {
+      await save(ids[i]);
+    });
+  }
+}
+
+// CASE dart_multi_named_fn expect=pass
+void a4(List<int> ids, List<Future<void> Function()> handlers) {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    Future<void> job() async {
+      await save(ids[i]);
+    }
+
+    handlers.add(job);
+  }
+}

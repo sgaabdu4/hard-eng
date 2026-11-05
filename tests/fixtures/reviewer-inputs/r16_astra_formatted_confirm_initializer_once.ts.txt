@@ -1,0 +1,17 @@
+let loads = 0;
+async function loadStart() {
+	loads += 1;
+	return 2;
+}
+async function collectRemaining() {
+	const visited = [];
+	for (let index = await loadStart(); index < 6; index++) {
+		visited.push(index);
+	}
+	return visited;
+}
+collectRemaining().then((visited) => {
+	if (loads !== 1 || JSON.stringify(visited) !== "[2,3,4,5]")
+		throw new Error("Wrong loop behavior");
+	console.log(JSON.stringify({ loads, visited }));
+});

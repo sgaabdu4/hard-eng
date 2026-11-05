@@ -1,0 +1,116 @@
+import Foundation
+
+func work(_ item: Int) async {}
+func save(_ item: Int) async throws {}
+
+final class Runner {
+  var items: [Int] = []
+  var tasks: [Task<Void, Never>] = []
+
+  // CASE generic_block_comment expect=pass
+  func a() {
+    for item in items {
+      tasks.append(Task<Void, Never> {
+        /* we don't wait */
+        await work(item)
+      })
+    }
+  }
+
+  // CASE generic_two_apostrophes expect=pass
+  func b() {
+    for item in items {
+      tasks.append(Task<Void, Never> {
+        // it's fine, we don't wait
+        await work(item)
+      })
+    }
+  }
+
+  // CASE generic_multiline_string expect=pass
+  func c() {
+    for item in items {
+      tasks.append(Task<Void, Never> {
+        let note = """
+          item \(item)
+          """
+        print(note)
+        await work(item)
+      })
+    }
+  }
+
+  // CASE generic_error_comment expect=pass
+  func d() {
+    for item in items {
+      let t = Task<Void, Error> {
+        // Don't retry here.
+        try await save(item)
+      }
+      _ = t
+    }
+  }
+
+  // CASE group_priority_operation expect=pass
+  func e() async {
+    await withTaskGroup(of: Void.self) { group in
+      for item in items {
+        group.addTask(priority: .high, operation: {
+          await work(item)
+        })
+      }
+    }
+  }
+
+  // CASE group_unless_operation expect=pass
+  func f() async {
+    await withTaskGroup(of: Void.self) { group in
+      for item in items {
+        _ = group.addTaskUnlessCancelled(operation: {
+          await work(item)
+        })
+      }
+    }
+  }
+
+  // CASE throwing_group_operation expect=pass
+  func g() async throws {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items {
+        group.addTask(operation: { try await save(item) })
+      }
+      try await group.waitForAll()
+    }
+  }
+
+  // CASE task_operation_capture expect=pass
+  func h() {
+    for item in items {
+      Task(operation: { [weak self] in
+        await self?.go(item)
+      })
+    }
+  }
+
+  // CASE group_operation_sibling expect=fire
+  func i() async {
+    await withTaskGroup(of: Void.self) { group in
+      for item in items {
+        group.addTask(operation: { await work(item) })
+        await work(item)
+      }
+    }
+  }
+
+  // CASE nongeneric_comment expect=pass
+  func j() {
+    for item in items {
+      Task {
+        // don't block
+        await work(item)
+      }
+    }
+  }
+
+  func go(_ item: Int) async {}
+}

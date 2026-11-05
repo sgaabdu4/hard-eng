@@ -1,0 +1,36 @@
+async def run(items, read):
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read()
+    for item in items:
+        row = cache.get(item)
+        if row is None:
+            # ruleid: await-in-loop-python
+            row = await read(item)
+    for item in items:
+        saved = None
+        if saved is None:
+            # ruleid: await-in-loop-python
+            saved = await read(item)
+    for group in items:
+        local = None
+        for item in group:
+            if local is None:
+                # ruleid: await-in-loop-python
+                local = await read(item)
+async def reset_by_await(items, read):
+    saved = None
+    for item in items:
+        # ruleid: await-in-loop-python
+        saved = await refresh(item)
+        if saved is None:
+            # ruleid: await-in-loop-python
+            saved = await read(item)
+
+async def unrelated_reset(items, read):
+    saved = None
+    for item in items:
+        count = item
+        if saved is None:
+            saved = await read()

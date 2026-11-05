@@ -1,0 +1,10 @@
+class Runner { static Future<void> inOrderSteps(Iterable<Future<void> Function()> items, {required String reason}) async { for (final item in items) {
+  // ruleid: await-in-loop-dart
+  await client.put(item);
+  // ruleid: await-in-loop-dart
+  await audit.save(item);
+} } }
+
+Future<void> use() async {
+  await Runner.inOrderSteps([], reason: "Each update reads the previous write");
+}

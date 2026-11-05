@@ -1,0 +1,4 @@
+async def a(items, op):
+    await map_with_concurrency(items, 4, op, retries=1)
+    await map_with_concurrency(items[:1], 4, op)
+    await map_with_concurrency(items, width=8, operation=op, timeout=1)

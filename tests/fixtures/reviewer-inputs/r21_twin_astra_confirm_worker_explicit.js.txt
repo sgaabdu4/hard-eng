@@ -1,0 +1,12 @@
+export async function sendItems(items, width, connect) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				const client = await connect();
+				await client.send(items[index]);
+			}
+		}),
+	);
+}

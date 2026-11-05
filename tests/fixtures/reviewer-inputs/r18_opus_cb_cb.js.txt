@@ -1,0 +1,46 @@
+async function save(x) {}
+
+// CASE js_multi_arrow_expr expect=pass
+function a1(ids, handlers) {
+  for (let i = 0, n = ids.length; i < n; i++) handlers.push(async () => await save(ids[i]));
+}
+
+// CASE js_multi_fn_expr expect=pass
+function a2(ids, handlers) {
+  for (let i = 0, n = ids.length; i < n; i++) {
+    handlers.push(async function () {
+      await save(ids[i]);
+    });
+  }
+}
+
+// CASE js_multi_object_method expect=pass
+function a3(ids, jobs) {
+  for (let i = 0, n = ids.length; i < n; i++) {
+    jobs.push({
+      async run() {
+        await save(ids[i]);
+      },
+    });
+  }
+}
+
+// CASE js_single_object_method expect=pass
+function a4(ids, jobs) {
+  for (let i = 0; i < ids.length; i++) {
+    jobs.push({
+      async run() {
+        await save(ids[i]);
+      },
+    });
+  }
+}
+
+// CASE js_reverse_listener expect=pass
+function a5(els) {
+  for (let i = els.length; i--; ) {
+    els[i].addEventListener("click", async (e) => {
+      await save(e);
+    });
+  }
+}

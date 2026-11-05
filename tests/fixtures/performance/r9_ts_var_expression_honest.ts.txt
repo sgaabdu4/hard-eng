@@ -1,0 +1,9 @@
+var mapLimit = async function (
+	items: number[],
+	width: number,
+	operation: (item: number) => Promise<void>,
+) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		await Promise.all(items.slice(offset, offset + width).map(operation));
+	}
+};

@@ -1,0 +1,13 @@
+async def run(items):
+    for item in items:
+        if failed(item):
+            await cleanup(item)
+            raise ValueError('failed')
+    for item in items:
+        try:
+            if failed(item):
+                # ruleid: await-in-loop-python
+                await cleanup(item)
+                raise ValueError('failed')
+        except ValueError:
+            pass

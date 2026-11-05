@@ -1,0 +1,15 @@
+// CASE dart_chunk_prelude_mid_comment_await expect=pass
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  // Do not await items one by one here.
+  assert(width > 0);
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}

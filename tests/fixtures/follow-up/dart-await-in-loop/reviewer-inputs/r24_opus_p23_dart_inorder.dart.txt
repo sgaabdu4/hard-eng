@@ -1,0 +1,52 @@
+// CASE dart_honest expect=pass
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+  for (final item in items) {
+    consume(await step(item));
+  }
+}
+// CASE dart_distinct_plain expect=fire
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+  for (final item in items) {
+    consume(await step(item), await save(item));
+  }
+}
+// CASE dart_distinct_interp expect=fire
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+  for (final item in items) {
+    consume(await step(item), '${await save(item)}');
+  }
+}
+// CASE dart_distinct_triple_interp expect=fire
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+  for (final item in items) {
+    consume(await step(item), '''${await save(item)}''');
+  }
+}
+// CASE dart_distinct_adjacent expect=fire
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+  for (final item in items) {
+    consume(await step(item), 'a' '${await save(item)}');
+  }
+}
+// CASE dart_distinct_collection_if expect=fire
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+  for (final item in items) {
+    consume(await step(item), [if (item != null) await save(item)]);
+  }
+}
+// CASE dart_distinct_cascade expect=fire
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+  for (final item in items) {
+    buffer..add(await step(item))..add(await save(item));
+  }
+}
+// CASE dart_distinct_named_arg expect=fire
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+  for (final item in items) {
+    consume(await step(item), audit: await save(item));
+  }
+}
+// CASE dart_steps_distinct_interp expect=fire
+Future<void> inOrderSteps(List<Future<void> Function()> steps, {required String reason}) async {
+  for (final step in steps) { consume(await step(), '${await audit()}'); }
+}

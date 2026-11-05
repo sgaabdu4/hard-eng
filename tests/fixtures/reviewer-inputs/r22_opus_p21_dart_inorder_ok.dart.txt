@@ -1,0 +1,6 @@
+// CASE dart_inorder_comment_apostrophe expect=pass
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T item) step, {required String reason}) async {
+  for (final item in items) {
+    await step(/* don't "await" anything else */ item);
+  }
+}

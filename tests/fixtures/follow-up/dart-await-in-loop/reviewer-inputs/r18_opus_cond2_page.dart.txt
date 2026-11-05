@@ -1,0 +1,15 @@
+void use(Object? x) {}
+
+abstract class Api {
+  Future<String?> first();
+  Future<String?> next(String page);
+}
+
+// CASE dart_single_update_body_page expect=pass
+Future<void> p1(Api api) async {
+  var n = 0;
+  for (var page = await api.first(); page != null; n++) {
+    use(page);
+    page = await api.next(page);
+  }
+}

@@ -1,0 +1,8 @@
+Future<void> run(items, read) async {
+ for (final item in items) {
+  Future<void> callback() async => await read(item);
+  callbacks.add(callback);
+  // ruleid: await-in-loop-dart
+  await callback();
+ }
+}

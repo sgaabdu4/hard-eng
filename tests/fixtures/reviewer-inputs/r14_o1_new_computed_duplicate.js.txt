@@ -1,0 +1,3 @@
+async function run(items, width, op, options) {
+  await mapLimit(items, op, { concurrency: 1, ["concurrency"]: 4 });
+}

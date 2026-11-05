@@ -1,0 +1,3 @@
+func inOrder<T>(_ items: [T], step: (T) async throws -> Void, reason: String) async rethrows {
+  for item in items { try await (step(item)) }
+}

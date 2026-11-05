@@ -1,0 +1,9 @@
+export async function a(items: string[], op: (s: string) => Promise<void>) {
+  await mapLimit(items, 10, op);
+  await mapLimit(items, op, { concurrency: 10, timeout: 1 });
+  await mapLimit(items, op, { limit: 5, retries: 1 });
+  await mapLimit(items, 4, op, { attempts: 1 });
+  await retry(() => mapLimit(items, 8, op), { attempts: 1 });
+  await mapLimit(items.slice(0, 1), 4, op);
+  await mapLimit([items[1]], 4, op);
+}

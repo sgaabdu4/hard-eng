@@ -1,0 +1,47 @@
+async function once() {
+	for (let index = await loadStart(); index < 6; index++) {
+		consume(index);
+	}
+	let index;
+	for (index = await loadStart(); index < 6; index++) consume(index);
+	for (await prepare(); index < 6; index++) consume(index);
+	for (
+		let rows = await loadRows(), cursor = 0;
+		cursor < rows.length;
+		cursor++
+	) {
+		// ruleid: await-in-loop-javascript
+		await save(rows[cursor]);
+	}
+	for (
+		let left = await loadStart(), right = await loadEnd();
+		left < right;
+		left++
+	) {
+		// ruleid: await-in-loop-javascript
+		await save(left);
+	}
+}
+
+async function repeated(groups) {
+	// ruleid: await-in-loop-javascript
+	for (let index = 0; await hasNext(); index++) consume(index);
+	// ruleid: await-in-loop-javascript
+	for (let index = 0; index < 6; await advance()) consume(index);
+	for (let index = await loadStart(); index < 6; index++) {
+		// ruleid: await-in-loop-javascript
+		await save(index);
+	}
+	for (const group of groups) {
+		// ruleid: await-in-loop-javascript
+		for (let index = await loadStart(group); index < 6; index++) consume(index);
+	}
+	for (let outer = 0; outer < 4; outer++) {
+		// ruleid: await-in-loop-javascript
+		for (let index = await loadStart(outer); index < 6; index++) consume(index);
+	}
+	// ruleid: await-in-loop-javascript
+	for (let index = 0; await hasNext(); index++, tick()) consume(index);
+	// ruleid: await-in-loop-javascript
+	for (let index = 0; index < 6; index++, await advance()) consume(index);
+}

@@ -1,0 +1,24 @@
+// CASE chunk_honest expect=pass
+async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    await Promise.all(items.slice(offset, offset + width).map(operation));
+  }
+}
+// CASE chunk_distinct_template expect=fire
+async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    log(await Promise.all(items.slice(offset, offset + width).map(operation)), `${await audit(offset)}`);
+  }
+}
+// CASE chunk_distinct_plain expect=fire
+async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    log(await Promise.all(items.slice(offset, offset + width).map(operation)), await audit(offset));
+  }
+}
+// CASE chunk_distinct_second_join expect=fire
+async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    log(await Promise.all(items.slice(offset, offset + width).map(operation)), await Promise.all(items.slice(offset, offset + width).map(audit)));
+  }
+}

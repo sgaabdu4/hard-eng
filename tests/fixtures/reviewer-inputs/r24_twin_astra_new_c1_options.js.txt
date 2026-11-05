@@ -1,0 +1,10 @@
+async function run(items, op, options) {
+	await mapLimit(items, op, { concurrency: 4 });
+	await mapLimit(items, 4, op);
+	await mapLimit(items, op, { concurrency: 1 });
+	await mapLimit(items, 1, op);
+	await mapLimit(items, op, { concurrency: 4, nested: { concurrency: 1 } });
+	await inOrder(items, op, {
+		reason: "Each update needs the preceding result",
+	});
+}

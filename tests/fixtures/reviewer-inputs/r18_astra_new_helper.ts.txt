@@ -1,0 +1,5 @@
+async function run(items) {
+  for (let i=0,n=items.length;i<n;i++) {
+    await mapLimit(items[i], 4, save);
+  }
+}

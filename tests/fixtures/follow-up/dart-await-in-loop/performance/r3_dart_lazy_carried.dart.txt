@@ -1,0 +1,45 @@
+Future<void> run(items, read) async {
+ Object? saved;
+ for (final item in items) { saved ??= await read(); }
+ for (final item in items) {
+  var row = cache[item];
+  // ruleid: await-in-loop-dart
+  row ??= await read(item);
+ }
+ for (final item in items) {
+  saved = null;
+  // ruleid: await-in-loop-dart
+  if (saved == null) saved = await read(item);
+ }
+ for (final group in items) {
+  String? blocking;
+  for (final item in group) {
+   // ruleid: await-in-loop-dart
+   blocking ??= await read(item);
+  }
+ }
+ var cursor = 'start';
+ for (final item in items) {
+  cursor = await next(cursor, item);
+  // ruleid: await-in-loop-dart
+  rows[item] = await enrich(rows[item]);
+  // ruleid: await-in-loop-dart
+  item.field = await refresh(item.field);
+ }
+}
+Future<void> resetByAwait(items, read) async {
+ Object? saved;
+ for (final item in items) {
+  // ruleid: await-in-loop-dart
+  saved = await refresh(item);
+  // ruleid: await-in-loop-dart
+  saved ??= await read(item);
+ }
+}
+Future<void> unrelatedReset(items, read) async {
+ Object? saved;
+ for (final item in items) {
+  count = item;
+  if (saved == null) saved = await read();
+ }
+}

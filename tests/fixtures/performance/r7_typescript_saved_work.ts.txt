@@ -1,0 +1,20 @@
+async function run(
+	groups: Row[][],
+	other: Row[],
+	read: (item: Row) => Promise<Row>,
+) {
+	for (const batch of groups) {
+		const tasks: Promise<Row>[] = batch
+			.filter((item) => item.enabled)
+			.map(read);
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all(tasks);
+	}
+	for (const batch of groups) {
+		const tasks: Promise<Row>[] = other
+			.filter((item) => item.enabled)
+			.map(read);
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all(tasks);
+	}
+}

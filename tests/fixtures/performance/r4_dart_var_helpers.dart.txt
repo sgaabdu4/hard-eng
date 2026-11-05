@@ -1,0 +1,12 @@
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+ for (var item in items) { await step(item); }
+}
+Future<void> inOrderSteps(List<Future<void> Function()> steps, {required String reason}) async {
+ for (var step in steps) { await step(); }
+}
+Future<void> unrelated(items, step) async {
+ for (var item in items) {
+  // ruleid: await-in-loop-dart
+  await step(item);
+ }
+}

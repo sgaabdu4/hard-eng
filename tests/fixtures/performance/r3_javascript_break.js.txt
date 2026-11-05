@@ -1,0 +1,14 @@
+async function run(items) {
+ for (const item of items) {
+  switch (item.kind) { case 'a':
+   // ruleid: await-in-loop-javascript
+   await save(item); break;
+  }
+ }
+ for (const item of items) {
+  for (const child of item.children) { if (child.done) break; }
+  // ruleid: await-in-loop-javascript
+  await save(item);
+ }
+ for (const item of items) { await save(item); if (item.done) break; }
+}

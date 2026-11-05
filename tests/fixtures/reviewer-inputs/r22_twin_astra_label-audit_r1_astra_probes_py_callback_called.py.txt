@@ -1,0 +1,7 @@
+async def run(items, write):
+    for item in items:
+
+        async def cb():
+            await write(item)
+
+        await cb()

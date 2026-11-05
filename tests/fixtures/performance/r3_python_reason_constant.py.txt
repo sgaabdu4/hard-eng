@@ -1,0 +1,4 @@
+reason = 'Each update reads the previous write'
+async def run(items, step):
+    await in_order(items, step, reason=reason)
+    await in_order_steps([step], reason=reason)

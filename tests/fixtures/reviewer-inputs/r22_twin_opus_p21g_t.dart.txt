@@ -1,0 +1,10 @@
+// CASE dart_inorder_trailing_comment_await expect=pass
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T item) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    await step(item); // don't await anything else; it's "serial"
+  }
+}

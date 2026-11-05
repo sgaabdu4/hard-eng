@@ -1,0 +1,75 @@
+func save(_ i: Int) async {}
+
+// CASE qualified_plain expect=pass
+func q1(_ items: [Int]) {
+  for item in items {
+    _Concurrency.Task {
+      await save(item)
+    }
+  }
+}
+
+// CASE qualified_plain_capture expect=pass
+func q2(_ items: [Int]) {
+  for item in items {
+    _Concurrency.Task { [item] in
+      await save(item)
+    }
+  }
+}
+
+// CASE qualified_generic_nocapture expect=pass
+func q3(_ items: [Int]) {
+  for item in items {
+    _Concurrency.Task<Void, Never> {
+      await save(item)
+    }
+  }
+}
+
+// CASE qualified_generic_capture_bound expect=pass
+func q4(_ items: [Int]) {
+  for item in items {
+    let task = _Concurrency.Task<Void, Never> { [item] in
+      await save(item)
+    }
+    _ = task
+  }
+}
+
+// CASE generic_capture_bound expect=pass
+func q5(_ items: [Int]) {
+  for item in items {
+    let task = Task<Void, Never> { [item] in
+      await save(item)
+    }
+    _ = task
+  }
+}
+
+// CASE qualified_detached expect=pass
+func q6(_ items: [Int]) {
+  for item in items {
+    _Concurrency.Task.detached {
+      await save(item)
+    }
+  }
+}
+
+// CASE qualified_plain_bound expect=pass
+func q7(_ items: [Int]) {
+  var tasks: [_Concurrency.Task<Void, Never>] = []
+  for item in items {
+    let task = _Concurrency.Task { await save(item) }
+    tasks.append(task)
+  }
+  _ = tasks
+}
+
+// CASE qualified_handle_value expect=fire
+func q8(_ items: [Int]) async {
+  for item in items {
+    let task = _Concurrency.Task { await save(item) }
+    await task.value
+  }
+}

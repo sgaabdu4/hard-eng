@@ -1,0 +1,10 @@
+Future<void> work() async {
+await inOrder(items, (item) async {
+ callbacks.add(() async {
+ // ruleid: sequential-awaits-dart
+ final first = await users.get(item);
+ final second = await orders.get(item);
+ print(first, second);
+ });
+ }, reason: "Each update reads the previous write");
+}

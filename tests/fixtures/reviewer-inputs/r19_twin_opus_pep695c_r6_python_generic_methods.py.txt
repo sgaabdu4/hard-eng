@@ -1,0 +1,22 @@
+from collections.abc import Iterable, Callable, Awaitable
+from typing import TypeVar
+
+T = TypeVar("T")
+
+
+class Runner:
+    @decorate
+    async def in_order[T](
+        self, items: Iterable[T], step: Callable[[T], Awaitable[None]], *, reason: str
+    ) -> None:
+        """Run supplied work in order."""
+        for item in items:
+            await step(item)
+
+    async def in_order_steps(
+        self, steps: Iterable[Callable[[], Awaitable[T]]], *, reason: str
+    ) -> None:
+        """Run supplied work in order."""
+        del reason
+        for step in steps:
+            await step()

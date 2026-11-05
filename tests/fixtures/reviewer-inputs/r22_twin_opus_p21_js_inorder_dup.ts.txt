@@ -1,0 +1,11 @@
+// CASE ts_inorder_duplicate_comment_quote expect=fire
+export async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	{ reason }: { reason: string },
+) {
+	void reason;
+	for (const item of items) {
+		pair(await step(item) /* it's */, await step(item), "x");
+	}
+}

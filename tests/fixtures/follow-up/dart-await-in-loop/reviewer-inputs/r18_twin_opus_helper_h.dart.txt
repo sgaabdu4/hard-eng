@@ -1,0 +1,52 @@
+// CASE dart_chunk_doc_comment expect=pass
+/// Runs [operation] on at most [limit] items at a time.
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int limit,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  final width = limit;
+  // for (var i = 0; i < n; i++) would run one at a time.
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map((item) => operation(item))));
+  }
+  return results;
+}
+
+// CASE dart_worker_doc_comment expect=pass
+class Pool {
+  /// Bounded helper.
+  static Future<List<R>> mapWithConcurrency<T, R>(
+    List<T> items,
+    int width,
+    Future<R> Function(T) operation,
+  ) async {
+    final results = List<R?>.filled(items.length, null);
+    var next = 0;
+    await Future.wait(
+      List.generate(width, (_) async {
+        while (next < items.length) {
+          final index = next++;
+          results[index] = await operation(items[index]);
+        }
+      }),
+    );
+    return results.cast<R>();
+  }
+}
+
+// CASE dart_chunk_impostor_extra expect=fire
+Future<List<R>> mapWithConcurrency2<T, R>(
+  List<T> items,
+  int limit,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0, n = items.length; offset < n; offset += limit) {
+    final group = items.skip(offset).take(limit);
+    results.addAll(await Future.wait(group.map((item) => operation(item))));
+  }
+  return results;
+}

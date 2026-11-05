@@ -1,0 +1,46 @@
+# CASE py_dictcomp expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), {k: await save(k) for k in item})
+
+
+# CASE py_star_list expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), *[await save(item)])
+
+
+# CASE py_subscript expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        cache[await key(item)] = await step(item)
+
+
+# CASE py_attr_receiver expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        (await store()).put(await step(item))
+
+
+# CASE py_genexp_await expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), list(await save(x) for x in item))
+
+
+# CASE py_sleep expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), await asyncio.sleep(0.1))
+
+
+# CASE py_annassign expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        result: int = await step(item) + await save(item)
+
+
+# CASE py_return_in_lambda_default expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), await save(item) or None)

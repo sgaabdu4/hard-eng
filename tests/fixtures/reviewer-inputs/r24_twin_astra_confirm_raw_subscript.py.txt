@@ -1,0 +1,3 @@
+async def fill(items, step):
+    for item in items:
+        cache[await key(item)] = await step(item)

@@ -1,0 +1,27 @@
+const SERIAL = 1 as const;
+
+// CASE ts_type_args expect=fire
+export async function a1(items: string[], op: (s: string) => Promise<void>) {
+  await mapLimit<string>(items, 1, op);
+}
+
+// CASE ts_module_const_as_const expect=fire
+export async function a2(items: string[], op: (s: string) => Promise<void>) {
+  await mapLimit(items, SERIAL, op);
+}
+
+// CASE ts_typed_local expect=fire
+export async function a3(items: string[], op: (s: string) => Promise<void>) {
+  const width: number = 1;
+  await mapLimit(items, width, op);
+}
+
+// CASE ts_satisfies expect=fire
+export async function a4(items: string[], op: (s: string) => Promise<void>) {
+  await mapLimit(items, 1 satisfies number, op);
+}
+
+// CASE ts_honest_param expect=pass
+export async function h1(items: string[], op: (s: string) => Promise<void>, width: number) {
+  await mapLimit<string>(items, width, op);
+}

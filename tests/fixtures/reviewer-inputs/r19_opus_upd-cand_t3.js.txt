@@ -1,0 +1,11 @@
+async function more(i) { return i < 3; }
+async function c1(n) {
+  for (let i = 0, j = 0, k = 0; await more(i + j + k); i++) {}
+}
+async function c2(n) {
+  for (var i = 0, j = 0; await more(i + j); i++) {}
+}
+async function c3() {
+  let i = 0;
+  for (; await more(i); ) { i++; }
+}

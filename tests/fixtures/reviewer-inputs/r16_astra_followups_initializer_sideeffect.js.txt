@@ -1,0 +1,3 @@
+async function run(items, op) {
+  for (await op(items); condition(); advance()) { consume(items); }
+}

@@ -1,0 +1,4 @@
+# CASE py_inorder_awaited_callee expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        await (await resolve(step))(item)

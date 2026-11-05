@@ -1,0 +1,13 @@
+func run(_ items: [Int], _ operation: (Int) async -> Void, _ configured: Int) async {
+  let width: Int = 1
+  // ok: serial-bounded-helper-swift
+  await mapWithConcurrency(items, width, operation)
+  // ok: serial-bounded-helper-swift
+  await pool.mapWithConcurrency(items, width: width, operation: operation)
+  var mutable = 1
+  await mapWithConcurrency(items, width: mutable, operation: operation)
+  await mapWithConcurrency(items, configured, operation, 1)
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items, 1, operation, 4)
+  await mapWithConcurrency(items, operation, 1)
+}

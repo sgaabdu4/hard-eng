@@ -1,0 +1,30 @@
+Future<void> mapped(groups, read) async {
+  while (true) {
+    for (final batch in groups) {
+      // ruleid: await-in-loop-dart
+      await Future.wait(
+        batch.map((item) async {
+          await read(item);
+        }),
+      );
+    }
+  }
+}
+
+Future<void> built(groups, checks, read) async {
+  while (true) {
+    for (final batch in groups) {
+      // ruleid: await-in-loop-dart
+      await Future.wait([
+        for (final item in batch)
+          () async {
+            await read(item);
+            for (final check in checks) {
+              // ruleid: await-in-loop-dart
+              await check(item);
+            }
+          }(),
+      ]);
+    }
+  }
+}

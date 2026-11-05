@@ -1,0 +1,71 @@
+async function run(items, read) {
+ for (const user of batch) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([read(user), notify(user)]);
+ }
+ for (const user of receive(queue, 10)) {
+  // ruleid: await-in-loop-javascript
+  await Promise.allSettled([read(user), notify(user)]);
+ }
+ // ruleid: await-in-loop-javascript
+ for (const piece of parts) { await Promise.all(piece.map(read)); }
+ // ruleid: await-in-loop-javascript
+ for (const piece of grouped.parts) { await Promise.allSettled(piece.map(read)); }
+ // ruleid: await-in-loop-javascript
+ for (const [index, piece] of parts.entries()) { await Promise.all(piece.map(read)); }
+ // ruleid: await-in-loop-javascript
+ for (const piece of promises) { await Promise.all([...piece]); }
+ // ruleid: await-in-loop-javascript
+ for (const piece of parts) { console.log('await'); await Promise.all(piece.map(read)); }
+ for (const piece of parts) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(other.map(read));
+ }
+ const oneGroup = {parts: split(items, 1)};
+ for (const piece of oneGroup.parts) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(piece.map(read));
+ }
+ const ONE = 1;
+ // ruleid: await-in-loop-javascript
+ for (const piece of split(items, ONE)) { await Promise.all(piece.map(read)); }
+ const individual = [];
+ for (let i = 0; i < items.length; i++) individual.push(items.slice(i, i + 1));
+ for (const piece of individual) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(piece.map(read));
+ }
+ const singles = split(items, 1);
+ for (const piece of singles) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(piece.map(read));
+ }
+ for (const piece of split(items, 1)) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(piece.map(read));
+ }
+ for (const piece of parts) {
+  // ruleid: await-in-loop-javascript
+  await inspect(piece);
+  // ruleid: await-in-loop-javascript
+  await Promise.all(piece.map(read));
+ }
+ for (const piece of parts) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(piece.map(read));
+  // ruleid: await-in-loop-javascript
+  await Promise.all(piece.map(notify));
+ }
+ for (const piece of batches) {
+  // ruleid: await-in-loop-javascript
+  await inspect(piece);
+  // ruleid: await-in-loop-javascript
+  await Promise.all(piece.map(read));
+ }
+ for (const piece of parts) {
+  for (const item of piece) {
+   // ruleid: await-in-loop-javascript
+   await Promise.all([read(item), notify(item)]);
+  }
+ }
+}

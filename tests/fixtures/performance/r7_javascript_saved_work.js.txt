@@ -1,0 +1,35 @@
+async function run(groups, other, read, output) {
+	let done = 0
+	for (const batch of groups) {
+		// ruleid: await-in-loop-javascript
+		await Promise.all(batch.filter((item) => item.enabled).map(read))
+		done += batch.length
+	}
+	for (const batch of groups) {
+		report(batch.length)
+		const tasks = batch.filter((item) => item.enabled).map(read)
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all(tasks)
+		output.push(...rows)
+	}
+	for (const batch of groups) {
+		const tasks = batch.map(async (item) => {
+			const row = await read(item)
+			return row
+		})
+		// ruleid: await-in-loop-javascript
+		output.push(...(await Promise.all(tasks)))
+	}
+	for (const batch of groups) {
+		const tasks = other.map(read)
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all(tasks)
+	}
+	for (const batch of groups) {
+		const tasks = batch.map(read)
+		// ruleid: await-in-loop-javascript
+		await reportAsync(batch)
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all(tasks)
+	}
+}

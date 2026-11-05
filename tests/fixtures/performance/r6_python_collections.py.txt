@@ -1,0 +1,16 @@
+async def run(groups, read):
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in batch if valid(item)))
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*[read(item) for item in sorted(batch) if item], return_exceptions=True)
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*list(map(read, tuple(batch))))
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in other if valid(item)))
+    for item in items:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(read(item), notify(item))

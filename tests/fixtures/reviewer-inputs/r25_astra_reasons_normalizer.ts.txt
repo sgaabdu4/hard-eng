@@ -1,0 +1,6 @@
+async function run(items, step) {
+  await inOrder(items, step, {
+    reason: "Each write depends on the prior saved state",
+    normalize: value => value.replace(/"/g, ''),
+  });
+}

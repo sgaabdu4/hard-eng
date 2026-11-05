@@ -1,0 +1,15 @@
+Future<void> work(groups) async {
+  for (final group in groups) {
+    // ruleid: await-in-loop-dart
+    for (final item in await read(group)) { print(item); }
+  }
+  for (var index = 0; index < groups.length; index++) {
+    // ruleid: await-in-loop-dart
+    final list = [for (final item in await read(index)) item.id];
+    print(list);
+  }
+  for (final item in await read()) {
+    // ruleid: await-in-loop-dart
+    for (final item in await read()) { print(item); }
+  }
+}
