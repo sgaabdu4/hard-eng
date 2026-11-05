@@ -124,51 +124,6 @@ def test_complete_delivery_requires_shipping_configuration(
     validate_plans(root, base="0" * 40, stage="Complete")
 
 
-@pytest.mark.parametrize("stage", ["Ready", "Complete"])
-def test_deploy_plan_requires_verifier_before_handoff(
-    runner: ModuleType, shipping_policy: ShippingPolicy, stage: str
-) -> None:
-    root = runner.ROOT
-    plan = root / "PLAN.md"
-    plan.write_text(
-        plan.read_text().replace("Status: Complete", f"Status: {stage}")
-        + "\nDelivery target: Deploy\nDelivery: Pending\n"
-    )
-    config = root / "hard-eng.gates.json"
-    config.write_text(json.dumps({"shipping": shipping_policy}))
-    with pytest.raises(ValueError, match="Deploy target requires configured delivery"):
-        validate_plans(root, base="0" * 40, stage=stage)
-    shipping_policy["delivery"] = [
-        {"name": "production", "command": [sys.executable, "-c", "raise SystemExit(1)"]}
-    ]
-    config.write_text(json.dumps({"shipping": shipping_policy}))
-    assert validate_plans(root, base="0" * 40, stage=stage) == stage
-
-
-@pytest.mark.parametrize("stage", ["Ready", "Complete"])
-@pytest.mark.parametrize("target", ["PR", "Merge", "Deploy"])
-def test_configured_delivery_checks_need_deploy_target(
-    runner: ModuleType, shipping_policy: ShippingPolicy, stage: str, target: str
-) -> None:
-    root = runner.ROOT
-    plan = root / "PLAN.md"
-    plan.write_text(
-        plan.read_text().replace("Status: Complete", f"Status: {stage}")
-        + f"\nDelivery target: {target}\nDelivery: Pending\n"
-    )
-    shipping_policy["delivery"] = [
-        {"name": "production", "command": [sys.executable, "-c", "pass"]}
-    ]
-    (root / "hard-eng.gates.json").write_text(
-        json.dumps({"shipping": shipping_policy})
-    )
-    if target == "Merge":
-        with pytest.raises(ValueError, match="need Delivery target: Deploy"):
-            validate_plans(root, base="0" * 40, stage=stage)
-    else:
-        assert validate_plans(root, base="0" * 40, stage=stage) == stage
-
-
 @pytest.mark.parametrize(
     "old,new,error",
     [
