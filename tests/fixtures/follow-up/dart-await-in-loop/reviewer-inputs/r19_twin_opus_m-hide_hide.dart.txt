@@ -1,0 +1,76 @@
+Future<int> save(Object? x) async => 1;
+void use(Object? x) {}
+
+// CASE awaited_iife expect=fire
+Future<void> h1(List<int> items) async {
+  for (final item in items) {
+    await (() async {
+      await save(item);
+    })();
+  }
+}
+
+// CASE awaited_local_function expect=fire
+Future<void> h2(List<int> items) async {
+  for (final item in items) {
+    Future<void> step() async {
+      await save(item);
+    }
+
+    await step();
+  }
+}
+
+// CASE then_chain expect=fire
+Future<void> h3(List<int> items) async {
+  for (final item in items) {
+    await save(item).then((r) => r);
+  }
+}
+
+// CASE join_per_pass expect=fire
+Future<void> h4(List<List<int>> groups) async {
+  for (final group in groups) {
+    await Future.wait(group.map(save));
+  }
+}
+
+// CASE try_finally expect=fire
+Future<void> h5(List<int> items) async {
+  for (final item in items) {
+    try {
+      use(item);
+    } finally {
+      await save(item);
+    }
+  }
+}
+
+// CASE do_while expect=fire
+Future<void> h6(List<int> items) async {
+  var i = 0;
+  do {
+    await save(items[i]);
+  } while (++i < items.length);
+}
+
+// CASE for_each_async_unawaited expect=pass
+void h7(List<int> items) {
+  items.forEach((item) async {
+    await save(item);
+  });
+}
+
+// CASE map_entries expect=fire
+Future<void> h8(Map<String, int> m) async {
+  for (final MapEntry(:key, :value) in m.entries) {
+    await save('$key$value');
+  }
+}
+
+// CASE cascade_await expect=fire
+Future<void> h9(List<int> items, List<int> out) async {
+  for (final item in items) {
+    out.add(await save(item));
+  }
+}

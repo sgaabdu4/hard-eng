@@ -1,0 +1,15 @@
+async def f(repo, load):
+    # CASE tuple_target_first_await expect=pass
+    a = [k for k, v in await load()]
+    # CASE attr_after_await_first expect=pass
+    b = [v for v in (await load()).values()]
+    # CASE method_first_await expect=pass
+    c = [row.id for row in await repo.list_rows(limit=10)]
+    # CASE first_await_filter expect=pass
+    d = [row for row in await repo.list_rows() if row.active]
+    # CASE body_await_tuple_target expect=fire
+    e = [await repo.save(k, v) for k, v in pairs]
+    # CASE dict_first_await expect=pass
+    g = {k: v for k, v in (await load()).items()}
+    # CASE set_first_await expect=pass
+    h = {x for x in await load()}

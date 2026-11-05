@@ -1,0 +1,8 @@
+inOrderSteps([], reason: "1234567890 " + "123456789")
+// ruleid: in-order-needs-reason-swift
+inOrderSteps([], reason: "123456789 " + "123456789")
+// ruleid: in-order-needs-reason-swift
+inOrderSteps([], reason: "abcdefghijklmnop" + "qrstuvwxyz")
+inOrderSteps([], reason: "Each update reads the previous write")
+// ruleid: in-order-needs-reason-swift
+inOrderSteps([])

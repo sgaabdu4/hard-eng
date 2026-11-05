@@ -1,0 +1,10 @@
+Future<void> inOrder<E>({required Iterable<E> items, required Step<E> step, required String reason}) async { for (final item in items) {
+  // ruleid: await-in-loop-dart
+  await client.put(item);
+  // ruleid: await-in-loop-dart
+  await audit.save(item);
+} }
+
+Future<void> use() async {
+  await inOrder(items: [], step: (value) async {}, reason: "Each update reads the previous write");
+}

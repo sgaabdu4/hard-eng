@@ -1,0 +1,15 @@
+Future<void> run(items, read) async {
+ final groups = items.slices(1);
+ for (final batch in groups) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(batch.map(read));
+ }
+ var mutable = items.slices(1);
+ for (final batch in mutable) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(batch.map(read));
+ }
+ final wide = items.slices(4);
+ // ruleid: await-in-loop-dart
+ for (final batch in wide) { await Future.wait(batch.map(read)); }
+}

@@ -1,0 +1,111 @@
+Future<void> outer_break(
+  pages,
+  rows,
+  save,
+  load,
+  cursor,
+  nextCursor,
+  last,
+) async {
+  for (final page in pages) {
+    await load();
+    for (final row in rows) {
+      // ruleid: await-in-loop-dart
+      await save(row);
+    }
+    if (last) break;
+  }
+}
+
+Future<void> outer_return(
+  pages,
+  rows,
+  save,
+  load,
+  cursor,
+  nextCursor,
+  last,
+) async {
+  for (final page in pages) {
+    await load();
+    for (final row in rows) {
+      // ruleid: await-in-loop-dart
+      await save(row);
+    }
+    if (last) return;
+  }
+}
+
+Future<void> outer_sleep(
+  pages,
+  rows,
+  save,
+  load,
+  cursor,
+  nextCursor,
+  last,
+) async {
+  for (final page in pages) {
+    await load();
+    for (final row in rows) {
+      // ruleid: await-in-loop-dart
+      await save(row);
+    }
+    await Future.delayed(Duration(seconds: 1));
+  }
+}
+
+Future<void> outer_condition(
+  pages,
+  rows,
+  save,
+  load,
+  cursor,
+  nextCursor,
+  last,
+) async {
+  while (cursor != null) {
+    await load();
+    for (final row in rows) {
+      // ruleid: await-in-loop-dart
+      await save(row);
+    }
+    cursor = nextCursor;
+  }
+}
+
+Future<void> outer_true(
+  pages,
+  rows,
+  save,
+  load,
+  cursor,
+  nextCursor,
+  last,
+) async {
+  while (true) {
+    await load();
+    for (final row in rows) {
+      // ruleid: await-in-loop-dart
+      await save(row);
+    }
+  }
+}
+
+Future<void> outer_stream(
+  pages,
+  rows,
+  save,
+  load,
+  cursor,
+  nextCursor,
+  last,
+) async {
+  await for (final page in pages) {
+    await load();
+    for (final row in rows) {
+      // ruleid: await-in-loop-dart
+      await save(row);
+    }
+  }
+}

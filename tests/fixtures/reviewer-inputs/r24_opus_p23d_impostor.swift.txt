@@ -1,0 +1,11 @@
+// CASE swift_chunk_literal_one expect=fire
+func mapWithConcurrency(items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void) async throws {
+  for offset in stride(from: 0, to: items.count, by: 1) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + 1, items.count)] {
+        group.addTask { try await operation(item) }
+      }
+      try await group.waitForAll()
+    }
+  }
+}

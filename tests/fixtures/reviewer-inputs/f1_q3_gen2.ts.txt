@@ -1,0 +1,26 @@
+async function a(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit<string>(items, 1, op);
+}
+async function b(items: string[], op: (item: string) => Promise<void>) {
+	const r = await mapLimit<string>(items, 1, op);
+	return r;
+}
+async function c(items: string[], op: (item: string) => Promise<void>) {
+	return mapLimit<string>(items, 1, op);
+}
+async function d(items: string[], op: (item: string) => Promise<void>) {
+	const r = mapLimit<string>(items, 1, op);
+	await r;
+}
+async function e(items: string[], op: (item: string) => Promise<void>) {
+	await lib.mapLimit<string>(items, 1, op);
+}
+function f(items: string[], op: (item: string) => Promise<void>) {
+	void mapLimit<string>(items, 1, op);
+}
+async function g(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit<string>(items, op, { concurrency: 1 });
+}
+async function h(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit<string, void>(items, 1, op);
+}

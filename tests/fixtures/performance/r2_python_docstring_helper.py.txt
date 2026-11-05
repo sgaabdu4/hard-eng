@@ -1,0 +1,19 @@
+async def in_order(items, step, *, reason):
+    """Run steps in the supplied order."""
+    for item in items:
+        await step(item)
+
+async def in_order_steps(steps):
+    for step in steps:
+        # ruleid: await-in-loop-python
+        await step()
+
+async def use():
+    await in_order(items, step, reason="Each update reads the previous write")
+    await OrderedStages().in_order_steps([], reason="Each stage reads the previous stage output")
+
+class OrderedStages:
+    async def in_order_steps(self, steps, *, reason):
+        """Run stages in the supplied order."""
+        for step in steps:
+            await step()

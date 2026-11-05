@@ -1,0 +1,4 @@
+type Options = { reason: string };
+export async function inOrder<T>(items: T[], step: (item: T) => Promise<void>, options: Options) {
+ for (const item of items) { await step(item); }
+}

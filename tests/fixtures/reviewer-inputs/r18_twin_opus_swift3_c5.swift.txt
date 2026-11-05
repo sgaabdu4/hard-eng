@@ -1,0 +1,17 @@
+func work(_ item: Int) async {}
+
+final class Runner {
+  var items: [Int] = []
+  var tasks: [Task<Void, Never>] = []
+
+  // CASE comment_brace expect=pass
+  func start() {
+    for item in items {
+      tasks.append(
+        Task<Void, Never> {
+          // Runs the { work } off the main actor
+          await work(item)
+        })
+    }
+  }
+}

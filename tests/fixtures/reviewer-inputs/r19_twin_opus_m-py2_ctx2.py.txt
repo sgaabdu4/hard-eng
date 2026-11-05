@@ -1,0 +1,42 @@
+async def save(x):
+    pass
+
+
+# CASE fstring_nested_quotes expect=fire
+async def p1(items, session, base):
+    for item in items:
+        async with session.get(f"{base}/{item['id']}") as resp:
+            await save(resp)
+
+
+# CASE backslash_continuation expect=fire
+async def p2(items, session):
+    for item in items:
+        async with session.get(item) as a, session.get(item) as b:
+            pass
+
+
+# CASE hash_in_string expect=fire
+async def p3(items, session):
+    for item in items:
+        async with session.get("https://x.test/#" + item) as resp:
+            pass
+
+
+# CASE triple_string_arg expect=fire
+async def p4(items, db):
+    for item in items:
+        async with db.execute(
+            """
+            SELECT 1 -- it's fine
+        """,
+            item,
+        ) as cur:
+            pass
+
+
+# CASE single_quote_apostrophe_string expect=fire
+async def p5(items, session):
+    for item in items:
+        async with session.post(item, data="it's") as resp:
+            pass

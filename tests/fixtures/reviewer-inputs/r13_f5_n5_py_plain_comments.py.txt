@@ -1,0 +1,20 @@
+import asyncio
+
+
+# CASE p_comment_inside_gather_call expect=pass
+async def map_with_concurrency(items: list, width: int, operation) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            # one barrier per chunk
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE p_apostrophe_comment_in_params expect=pass
+async def map_with_concurrency(
+    items: list,  # can't be a generator
+    width: int,
+    operation,
+) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))

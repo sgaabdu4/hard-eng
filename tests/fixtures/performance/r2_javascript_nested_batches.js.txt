@@ -1,0 +1,8 @@
+async function run(items, width) {
+ for (const batch of chunk(items, width)) {
+  for (let start = 0; start < batch.length; start += 2) {
+   // ruleid: await-in-loop-javascript
+   await Promise.all(batch.slice(start, start + 2).map(read));
+  }
+ }
+}

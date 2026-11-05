@@ -1,0 +1,9 @@
+async function run(items) {
+  for (let i = 0; i < items.length; await save(items[i]), i++);
+  for (let i = 0; i < items.length; await save(items[i]), i++) {}
+  for (let i = 0; i < items.length; i++, await save(items[i])) {}
+  for (let i = 0; i < items.length; i++, await save(items[i]), await audit()) {}
+  for (; await more(); ) {}
+  for (let i = 0; await read(i), i < 3; i++) {}
+  for (let i = 0; i < 3; (await save(i))) {}
+}

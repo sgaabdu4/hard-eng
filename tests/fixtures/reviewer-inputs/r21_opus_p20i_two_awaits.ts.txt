@@ -1,0 +1,75 @@
+// CASE ts_object_two_awaits expect=fire
+export async function loadProfiles(ids: string[], width: number): Promise<Profile[]> {
+  const results: Profile[] = new Array(ids.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < ids.length) {
+      const index = next++;
+      results[index] = { user: await loadUser(ids[index]), orders: await loadOrders(ids[index]) };
+    }
+  }));
+  return results;
+}
+
+// CASE ts_array_two_awaits expect=fire
+export async function loadPairs(ids: string[], width: number): Promise<[User, Order[]][]> {
+  const results: [User, Order[]][] = new Array(ids.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < ids.length) {
+      const index = next++;
+      results[index] = [await loadUser(ids[index]), await loadOrders(ids[index])];
+    }
+  }));
+  return results;
+}
+
+// CASE ts_sum_two_awaits expect=fire
+export async function totals(ids: string[], width: number): Promise<number[]> {
+  const results: number[] = new Array(ids.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < ids.length) {
+      const index = next++;
+      results[index] = (await paid(ids[index])) + (await owed(ids[index]));
+    }
+  }));
+  return results;
+}
+
+// CASE ts_call_wrapping_two_awaits expect=fire
+export async function merged(ids: string[], width: number): Promise<Merged[]> {
+  const results: Merged[] = new Array(ids.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < ids.length) {
+      const index = next++;
+      results[index] = merge(await loadUser(ids[index]), await loadOrders(ids[index]));
+    }
+  }));
+  return results;
+}
+
+// CASE ts_void_two_awaits_in_call expect=fire
+export async function syncAll(ids: string[], width: number): Promise<void> {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < ids.length) {
+      const index = next++;
+      report(await push(ids[index]), await verify(ids[index]));
+    }
+  }));
+}
+
+// CASE ts_canonical_control expect=pass
+export async function canonical(ids: string[], width: number, op: (id: string) => Promise<Profile>): Promise<Profile[]> {
+  const results: Profile[] = new Array(ids.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < ids.length) {
+      const index = next++;
+      results[index] = await op(ids[index]);
+    }
+  }));
+  return results;
+}

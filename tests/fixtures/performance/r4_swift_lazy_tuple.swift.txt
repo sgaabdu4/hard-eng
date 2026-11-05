@@ -1,0 +1,16 @@
+func run(items: [(Value?, Int)]) async throws {
+ var value: Value? = nil
+ var key = 0
+ for item in items {
+  (value, key) = item
+  // ruleid: await-in-loop-swift
+  if value == nil { value = try await read(key) }
+ }
+}
+func once(items: [(Int, Int)]) async throws {
+ var value: Value? = nil
+ for item in items {
+  (key, other) = item
+  if value == nil { value = try await read() }
+ }
+}

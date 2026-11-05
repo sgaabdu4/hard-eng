@@ -1,0 +1,16 @@
+async function call() {
+	return "ok";
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// CASE js_retry_backoff_multi expect=pass
+async function withRetry() {
+	for (let attempt = 0, delay = 200; attempt < 5; attempt++, delay *= 2) {
+		try {
+			return await call();
+		} catch {
+			await sleep(delay);
+		}
+	}
+	throw new Error("gave up");
+}

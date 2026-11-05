@@ -1,0 +1,79 @@
+import asyncio
+
+
+async def break_honest(items, item, session, save):
+    for item in items:
+        async with session.lock():
+            await save(item)
+            if item:
+                break
+
+
+async def break_raw(items, item, session, save):
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with session.lock():
+            # ruleid: await-in-loop-python
+            await save(item)
+
+
+async def return_honest(items, item, session, save):
+    for item in items:
+        async with session.lock():
+            await save(item)
+            if item:
+                return item
+
+
+async def return_raw(items, item, session, save):
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with session.lock():
+            # ruleid: await-in-loop-python
+            await save(item)
+
+
+async def bare_return_honest(items, item, session, save):
+    for item in items:
+        async with session.lock():
+            await save(item)
+            if item:
+                return
+
+
+async def bare_return_raw(items, item, session, save):
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with session.lock():
+            # ruleid: await-in-loop-python
+            await save(item)
+
+
+async def sleep_honest(items, item, session, save):
+    for item in items:
+        async with session.lock():
+            await save(item)
+            await asyncio.sleep(1)
+
+
+async def sleep_raw(items, item, session, save):
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with session.lock():
+            # ruleid: await-in-loop-python
+            await save(item)
+
+
+async def condition_honest(items, item, session, save):
+    while item:
+        async with session.lock():
+            await save(item)
+            item = items.next
+
+
+async def condition_raw(items, item, session, save):
+    while item:
+        # ruleid: await-in-loop-python
+        async with session.lock():
+            # ruleid: await-in-loop-python
+            await save(item)

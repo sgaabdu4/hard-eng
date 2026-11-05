@@ -1,0 +1,23 @@
+async def calls(items, save, width, count):
+    # ok: serial-bounded-helper-python
+    await map_with_concurrency(1, items, save)
+    # ok: serial-bounded-helper-python
+    await map_with_concurrency(items, save, 1)
+    # ok: serial-bounded-helper-python
+    await map_with_concurrency(items, save, min(count, 1, len(items), width))
+    # ok: serial-bounded-helper-python
+    await map_with_concurrency(items, min(count, len(items), 1), save)
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, save, max_concurrency=1)
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, save, concurrency=1)
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, save, limit=1)
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, save, width=1)
+    await map_with_concurrency(items, save, 4)
+    await map_with_concurrency(width, items, save)
+    await map_with_concurrency(items, save, width)
+    await map_with_concurrency(items, 4, save, 1)
+    await map_with_concurrency(items, 4, save, retries=1)
+    await map_with_concurrency(items, save, min(4, count, len(items)))

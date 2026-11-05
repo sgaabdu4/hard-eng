@@ -1,0 +1,10 @@
+// CASE tsx_dom_reset_then_await expect=fire
+export async function resetAndSave(
+	form: HTMLFormElement,
+	save: (name: string) => Promise<void>,
+) {
+	for (const input of Array.from(form.querySelectorAll("input"))) {
+		(input as HTMLInputElement).value = "";
+		await save(input.name);
+	}
+}

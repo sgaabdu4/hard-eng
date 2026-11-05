@@ -1,0 +1,7 @@
+class Runner { static Future<void> inOrder<E>(Iterable<E> items, Step<E> step, {required String reason}) async { for (final item in items) {
+  await step(item);
+} } }
+
+Future<void> use() async {
+  await Runner.inOrder([], (value) async {}, reason: "Each update reads the previous write");
+}

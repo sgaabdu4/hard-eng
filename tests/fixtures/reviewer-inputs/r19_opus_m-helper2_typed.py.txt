@@ -1,0 +1,14 @@
+import asyncio
+from typing import Awaitable, Callable, Sequence, TypeVar
+
+T = TypeVar("T")
+
+
+# CASE py_typed expect=pass
+async def map_with_concurrency(
+    items: Sequence[T], width: int, operation: Callable[[T], Awaitable[None]]
+) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )

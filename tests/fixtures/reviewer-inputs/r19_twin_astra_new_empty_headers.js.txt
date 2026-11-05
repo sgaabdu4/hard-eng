@@ -1,0 +1,6 @@
+async function process() {
+	for (; await more(); );
+	for (let i = 0, j = 1; await more(i); i++);
+	for (let i = 0, j = 1; i < 3; await save(i), i++);
+	for (let i = 0; await more(i); i++);
+}

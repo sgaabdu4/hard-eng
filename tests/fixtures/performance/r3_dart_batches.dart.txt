@@ -1,0 +1,23 @@
+Future<void> run(items, int width) async {
+ for (final item in sessionsFor(items, 'active')) {
+  // ruleid: await-in-loop-dart
+  await Future.wait([save(item), notify(item)]);
+ }
+ final batches = items.slices(width);
+ // ruleid: await-in-loop-dart
+ for (final batch in batches) { await Future.wait(batch.map(save)); }
+ // ruleid: await-in-loop-dart
+ for (final batch in List.generate(count, (i) => items.skip(i * width).take(width))) { await Future.wait(batch.map(save)); }
+ for (final batch in batches) {
+  for (final item in batch) {
+   // ruleid: await-in-loop-dart
+   await (save(item), notify(item)).wait;
+  }
+ }
+ // ruleid: await-in-loop-dart
+ for (var i = items.length; i > 0; i -= width) { await (save(items[i-1]), notify(items[i-1])).wait; }
+ for (var i = items.length; i > 0; i -= 1) {
+  // ruleid: await-in-loop-dart
+  await Future.wait([save(items[i-1])]);
+ }
+}

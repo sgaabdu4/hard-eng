@@ -1,0 +1,51 @@
+async function run(groups, other, read, output) {
+	for (const batch of groups) {
+		// A synchronous prelude does not await.
+		report(batch.length);
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all(
+			batch.filter((item) => item.enabled).map(read),
+		);
+		output.push(...rows);
+	}
+	for (const batch of groups) {
+		if (batch.length)
+			output.push(
+				// ruleid: await-in-loop-javascript
+				...(await Promise.all(batch.filter((item) => item.enabled).map(read))),
+			);
+	}
+	for (const batch of groups) {
+		// ruleid: await-in-loop-javascript
+		await Promise.all(
+			batch
+				.filter((item) => item.enabled && item.readyForAnotherAttempt)
+				.map((item) =>
+					read(item, "a long collection argument that the formatter wraps"),
+				),
+		);
+	}
+	for (const batch of groups) {
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all(
+			other.filter((item) => item.enabled).map(read),
+		);
+	}
+	for (const item of other) {
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all([read(item), notify(item)]);
+	}
+	for (const batch of groups) {
+		// ruleid: await-in-loop-javascript
+		await reportAsync(batch);
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all(
+			batch.filter((item) => item.enabled).map(read),
+		);
+	}
+}
+async function first(groups, read) {
+	for (const batch of groups)
+		// ok: await-in-loop-javascript
+		return await Promise.all(batch.filter((item) => item.enabled).map(read));
+}

@@ -1,0 +1,14 @@
+const saved = [];
+async function save(item) {
+	saved.push(item);
+}
+async function run(items) {
+	for (let i = 0, n = items.length; i < n; i++) {
+		const name = items[i].replace(/\)/g, "");
+		await save(name);
+	}
+}
+run(["a", "b", "c"]).then(() => {
+	if (saved.join(",") !== "a,b,c") throw Error(String(saved));
+	console.log(JSON.stringify({ saved }));
+});

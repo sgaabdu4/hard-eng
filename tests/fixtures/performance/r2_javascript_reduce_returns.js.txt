@@ -1,0 +1,8 @@
+async function run(items) {
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce(async (previous, item) => { await previous; return write(item); }, Promise.resolve());
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce(async function (previous, item) { await previous; return write(item); }, Promise.resolve());
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce((previous, item) => previous.then(() => write(item)).then(() => audit(item)), Promise.resolve());
+}

@@ -1,0 +1,48 @@
+import { mapLimit } from "./concurrency.js";
+// CASE js_array_destructure_write expect=pass
+export async function w1(items, op, parse, config) {
+  let width = 1;
+  [width] = parse(config);
+  await mapLimit(items, width, op);
+}
+// CASE js_object_destructure_plain expect=pass
+export async function w2(items, op, config) {
+  let width = 1;
+  ({ width } = config);
+  await mapLimit(items, width, op);
+}
+// CASE js_then_callback_write expect=pass
+export async function w3(items, op, loadConfig) {
+  let width = 1;
+  await loadConfig().then((config) => {
+    width = config.width;
+  });
+  await mapLimit(items, width, op);
+}
+// CASE js_increment expect=pass
+export async function w4(items, op, fast) {
+  let width = 1;
+  if (fast) width++;
+  await mapLimit(items, width, op);
+}
+// CASE js_logical_and_assign expect=pass
+export async function w5(items, op, config) {
+  let width = 1;
+  width &&= config.width;
+  await mapLimit(items, width, op);
+}
+// CASE js_options_destructure_write expect=pass
+export async function w6(items, op, config) {
+  let concurrency = 1;
+  ({ concurrency } = config);
+  await mapLimit(items, op, { concurrency });
+}
+// CASE js_for_of_write expect=pass
+export async function w7(items, op, widths) {
+  let width = 1;
+  for (width of widths) {
+    if (width > 4) break;
+  }
+  await mapLimit(items, width, op);
+}
+// CASE js_end expect=pass

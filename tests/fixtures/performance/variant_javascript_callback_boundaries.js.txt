@@ -1,0 +1,15 @@
+async function work() {
+for (const item of items) {
+  callbacks.push(async () => {
+    await read(item);
+  });
+  // ruleid: await-in-loop-javascript
+  await read(item);
+  callbacks.push(async () => {
+    for (const item of items) {
+      // ruleid: await-in-loop-javascript
+      await read(item);
+    }
+  });
+}
+}

@@ -1,0 +1,7 @@
+// CASE js_paren_object_destructure expect=fire
+export async function read(items, step) {
+	let a, b;
+	for (const item of items) {
+		({ a, b } = await step(item));
+	}
+}

@@ -1,0 +1,17 @@
+async def run(items, groups, read):
+    a = [
+        # ruleid: await-in-loop-python
+        await read(item) for item in items if item > 0 if item < 10
+    ]
+    b = {item for item in items if item > 0 if
+        # ruleid: await-in-loop-python
+        await read(item) if item < 10}
+    c = {item:
+        # ruleid: await-in-loop-python
+        await read(item) for item in items if item if ready(item) if valid(item) if enabled(item)}
+    d = [
+        # ruleid: await-in-loop-python
+        await read(item) for group in groups if group if ready(group) for item in group if item if valid(item)]
+    once = [item for item in await read() if item if valid(item)]
+    literal = [await read()]
+    misleading = [await read(), 'for item in items']

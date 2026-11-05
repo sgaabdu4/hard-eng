@@ -1,0 +1,28 @@
+// CASE swift_member_recv expect=fire
+func a(items: [Int], step: (Int) async -> Int, getCache: () async -> Cache) async {
+  for item in items {
+    (await getCache()).value = await step(item)
+  }
+}
+// CASE swift_subscript_recv expect=fire
+func b(items: [Int], step: (Int) async -> Int, getCache: () async -> Cache) async {
+  for item in items {
+    (await getCache())[item] = await step(item)
+  }
+}
+// CASE swift_tuple_recv expect=fire
+func c(items: [Int], step: (Int) async -> (Int, Int), getCache: () async -> Cache) async {
+  for item in items {
+    ((await getCache()).value, other) = await step(item)
+  }
+}
+// CASE swift_lazy_plus_recv expect=fire
+func d(
+  items: [Int], step: (Int) async -> Int, read: (Int) async -> Row, getCache: () async -> Cache
+) async {
+  var saved: Row? = nil
+  for item in items {
+    if saved == nil { saved = await read(item) }
+    (await getCache()).value = await step(item)
+  }
+}

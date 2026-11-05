@@ -1,0 +1,46 @@
+import asyncio
+
+
+async def nested(items, session, save):
+    for item in items:
+        async with session.lock():
+            async with session.get(item) as response:
+                if response.ok:
+                    return await save(item)
+
+
+async def inner(items, rows, session, save):
+    for item in items:
+        async with session.lock():
+            for row in rows:
+                # ruleid: await-in-loop-python
+                await save(row)
+            if item:
+                break
+
+
+async def callback(items, session, save):
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with session.lock():
+
+            async def finish():
+                return item
+
+            # ruleid: await-in-loop-python
+            await save(item)
+
+
+async def branch(items, session):
+    for item in items:
+        async with session.get(item) as response:
+            if not response.ok:
+                continue
+            else:
+                break
+
+
+async def raw_lambda(items):
+    for batch in items:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*map(lambda item: save(item, True), batch))

@@ -1,0 +1,18 @@
+// CASE swift_outer_loop_inner_awaited_iterable expect=fire
+func total(companies: [String], store: Store) async throws -> Int {
+  var sum = 0
+  for company in companies {
+    for row in try await store.listRows(company) {
+      sum += row.amount
+    }
+  }
+  return sum
+}
+// CASE swift_single_loop_awaited_iterable expect=pass
+func single(store: Store) async throws -> Int {
+  var sum = 0
+  for row in try await store.listRows("a") {
+    sum += row.amount
+  }
+  return sum
+}

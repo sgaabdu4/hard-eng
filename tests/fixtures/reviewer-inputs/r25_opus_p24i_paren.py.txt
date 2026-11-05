@@ -1,0 +1,4 @@
+# CASE py_paren_receiver expect=fire
+async def fill(items, cache, step):
+    for item in items:
+        (cache)[item] = await step(item)

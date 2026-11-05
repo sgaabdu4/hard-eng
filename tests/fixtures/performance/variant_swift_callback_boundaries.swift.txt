@@ -1,0 +1,15 @@
+func work() async throws {
+for item in items {
+  group.addTask {
+    try await read(item)
+  }
+  // ruleid: await-in-loop-swift
+  try await read(item)
+  group.addTask {
+    for item in items {
+      // ruleid: await-in-loop-swift
+      try await read(item)
+    }
+  }
+}
+}

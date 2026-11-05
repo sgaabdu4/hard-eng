@@ -1,0 +1,18 @@
+Future<void> run(items, step) async {
+ await inOrder(items, step, reason: orderReason);
+}
+class Runner {
+ Future<void> run(items, step) async {
+  await inOrderSteps([step], reason: orderReason);
+ }
+ Future<void> shadow(items, step, String orderReason) async {
+  // ruleid: in-order-needs-reason-dart
+  await inOrder(items, step, reason: orderReason);
+ }
+}
+const String orderReason = 'Each update reads the previous write';
+Future<void> short(items, step) async {
+ // ruleid: in-order-needs-reason-dart
+ await inOrder(items, step, reason: shortReason);
+}
+const String shortReason = 'too short';

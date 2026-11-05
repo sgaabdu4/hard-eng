@@ -1,0 +1,32 @@
+async function mapLimit(items, width, operation) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		await Promise.all(items.slice(offset, offset + width).map(operation));
+	}
+}
+
+async function run(items, operation, settings) {
+	const width = 1;
+	const defaults = { width };
+	const execute = ({ width }) => mapLimit(items, width, operation);
+	await execute({ ...defaults, ...settings });
+}
+
+async function main() {
+	let active = 0;
+	let peak = 0;
+	let completed = 0;
+	await run(
+		Array.from({ length: 8 }, (_, index) => index),
+		async () => {
+			active++;
+			peak = Math.max(peak, active);
+			await Promise.resolve();
+			active--;
+			completed++;
+		},
+		{ width: 4 },
+	);
+	if (peak !== 4 || completed !== 8) throw new Error("Unexpected concurrency");
+	console.log(JSON.stringify({ peak, completed }));
+}
+main();

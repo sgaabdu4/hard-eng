@@ -1,0 +1,39 @@
+def remove(root, names):
+    for name in names:
+        (root / name).unlink()
+
+
+async def process(root, name, rows, save):
+    while True:
+        (root / name).unlink()
+        for row in rows:
+            # ruleid: await-in-loop-python
+            await save(row)
+
+
+async def stopped(root, names, rows, save):
+    for name in names:
+        (root / name).unlink()
+        for row in rows:
+            # ruleid: await-in-loop-python
+            await save(row)
+        break
+
+
+async def direct(root, names, save):
+    for name in names:
+        (root / name).unlink()
+        # ruleid: await-in-loop-python
+        await save(name)
+
+
+async def once(load):
+    for row in await load():
+        print(row)
+
+
+async def per_group(groups, load):
+    for group in groups:
+        # ruleid: await-in-loop-python
+        for row in await load(group):
+            print(row)

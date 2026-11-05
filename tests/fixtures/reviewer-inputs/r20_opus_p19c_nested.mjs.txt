@@ -1,0 +1,42 @@
+// CASE abort_cleanup_nested_loop expect=fire
+export async function a1(batches) {
+  for (const batch of batches) {
+    const results = await Promise.all(batch.map(read));
+    if (failed(results)) {
+      for (const r of results) {
+        await rollback(r);
+      }
+      throw new Error("failed");
+    }
+  }
+}
+// CASE early_exit_nested_loop expect=fire
+export async function a2(groups) {
+  for (const group of groups) {
+    for (const item of group.items) {
+      await save(item);
+    }
+    if (await done(group)) return group;
+  }
+  return null;
+}
+// CASE lazy_nested_loop expect=fire
+export async function a3(groups) {
+  let client;
+  for (const group of groups) {
+    client ??= await connect();
+    for (const item of group) {
+      await client.send(item);
+    }
+  }
+}
+// CASE single_abort_cleanup expect=pass
+export async function a4(items) {
+  for (const item of items) {
+    if (!valid(item)) {
+      await rollback(item);
+      throw new Error("invalid");
+    }
+    buffer(item);
+  }
+}

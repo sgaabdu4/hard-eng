@@ -1,0 +1,35 @@
+Future<void> run(groups, other, read, output) async {
+  for (final batch in groups) {
+    final futures = <Future<Row>>[];
+    for (final item in batch) futures.add(read(item));
+    // ruleid: await-in-loop-dart
+    output.addAll(await Future.wait(futures));
+  }
+  for (final batch in groups) {
+    final futures = <Future<Row>>[];
+    for (final item in batch) {
+      futures.add(read(item));
+    }
+    report(futures.length);
+    // ruleid: await-in-loop-dart
+    final rows = await Future.wait<Row>(futures);
+    output.addAll(rows);
+  }
+  for (final batch in groups) {
+    final futures = <Future<Row>>[];
+    for (final item in other) {
+      futures.add(read(item));
+    }
+    // ruleid: await-in-loop-dart
+    await Future.wait(futures);
+  }
+  for (final batch in groups) {
+    final futures = <Future<Row>>[];
+    for (final item in batch) {
+      // ruleid: await-in-loop-dart
+      futures.add(await read(item));
+    }
+    // ruleid: await-in-loop-dart
+    await Future.wait(futures);
+  }
+}

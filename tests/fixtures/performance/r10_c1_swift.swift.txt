@@ -1,0 +1,14 @@
+func use(items: [Int], operation: (Int) async -> Void, width: Int) async {
+  let serial = 1
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items, 1, operation)
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items: items, width: 1, operation: operation)
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items: items, width: 1) { item in await operation(item) }
+  // ok: serial-bounded-helper-swift
+  await mapWithConcurrency(items, serial, operation)
+  await mapWithConcurrency(items, 4, operation)
+  await mapWithConcurrency(items: items, width: 4, operation: operation)
+  await mapWithConcurrency(items, width, operation)
+}

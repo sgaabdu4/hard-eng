@@ -1,0 +1,9 @@
+// CASE js_top_const_vs_class_field_this expect=pass
+const width = 1;
+class Importer {
+  width = 4;
+  async run(items) {
+    await mapLimit(items, this.width, save);
+  }
+}
+// CASE end expect=pass

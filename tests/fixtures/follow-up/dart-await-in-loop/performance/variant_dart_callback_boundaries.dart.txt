@@ -1,0 +1,15 @@
+Future<void> work() async {
+for (final item in items) {
+  callbacks.add(() async {
+    await read(item);
+  });
+  // ruleid: await-in-loop-dart
+  await read(item);
+  callbacks.add(() async {
+    for (final item in items) {
+      // ruleid: await-in-loop-dart
+      await read(item);
+    }
+  });
+}
+}

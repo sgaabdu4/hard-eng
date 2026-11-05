@@ -1,0 +1,22 @@
+func run(items: [Int], width: Int) async throws {
+ for start in stride(from: 0, to: items.count, by: width) {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   for item in items[start..<min(start+width, items.count)] {
+    group.addTask { try await read(item) }
+   }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+  // ruleid: await-in-loop-swift
+  try await other(start)
+ }
+ for start in stride(from: 0, to: items.count, by: 1) {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   group.addTask { try await read(items[start]) }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+}

@@ -1,0 +1,34 @@
+Future<void> run(groups, other, read, output) async {
+  for (final batch in groups) {
+    report(batch.length);
+    final List<Future<Row>> tasks = batch
+        .where((item) => item.enabled)
+        .map<Future<Row>>(read)
+        .toList();
+    // ruleid: await-in-loop-dart
+    final rows = await Future.wait<Row>(tasks, eagerError: true);
+    output.addAll(rows);
+  }
+  for (final batch in groups) {
+    final futures = batch.map((item) async {
+      final row = await read(item);
+      return row;
+    }).toList();
+    // ruleid: await-in-loop-dart
+    output.addAll(await futures.wait);
+  }
+  for (final batch in groups) {
+    final List<Future<Row>> tasks = other.map<Future<Row>>(read).toList();
+    // ruleid: await-in-loop-dart
+    final rows = await Future.wait<Row>(tasks);
+  }
+  for (final batch in groups) {
+    final futures = [
+      for (final item in batch)
+        // ruleid: await-in-loop-dart
+        await read(item),
+    ];
+    // ruleid: await-in-loop-dart
+    await Future.wait(futures);
+  }
+}

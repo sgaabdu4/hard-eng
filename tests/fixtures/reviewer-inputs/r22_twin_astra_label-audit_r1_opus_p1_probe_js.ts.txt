@@ -1,0 +1,188 @@
+async function j01Braceless(items: string[], db: Db) {
+	// want: await-in-loop-javascript
+	for (const item of items) await db.put(item);
+}
+
+async function j02ThenChainLoop(items: string[], db: Db) {
+	let chain = Promise.resolve();
+	for (const item of items) {
+		chain = chain.then(() => db.put(item));
+	}
+	await chain;
+}
+
+async function j03ReduceReturn(items: string[], db: Db) {
+	// want: hidden-sequential-loop-javascript
+	await items.reduce(async (previous, item) => {
+		await previous;
+		return db.put(item);
+	}, Promise.resolve());
+}
+
+async function j04ReduceThenThen(items: string[], db: Db) {
+	// want: hidden-sequential-loop-javascript
+	await items.reduce(
+		(previous, item) =>
+			previous.then(() => db.put(item)).then(() => db.audit(item)),
+		Promise.resolve(),
+	);
+}
+
+async function j05ReduceCast(items: string[], db: Db) {
+	// want: hidden-sequential-loop-javascript
+	await items.reduce(
+		(previous, item) => previous.then(() => db.put(item)),
+		Promise.resolve() as Promise<void>,
+	);
+}
+
+async function j06StepConstBatchAssign(items: string[], db: Db) {
+	const SIZE = 10;
+	const out: string[] = [];
+	for (let i = 0; i < items.length; i += SIZE) {
+		const rows = await Promise.all(
+			items.slice(i, i + SIZE).map((item) => db.get(item)),
+		);
+		out.push(...rows);
+	}
+}
+
+async function j07StepLiteralBatchPush(items: string[], db: Db) {
+	const out: string[] = [];
+	for (let i = 0; i < items.length; i += 10) {
+		out.push(
+			...(await Promise.all(
+				items.slice(i, i + 10).map((item) => db.get(item)),
+			)),
+		);
+	}
+}
+
+async function j08StepBatchSibling(items: string[], db: Db) {
+	for (let i = 0; i < items.length; i += 10) {
+		await Promise.all(items.slice(i, i + 10).map((item) => db.get(item)));
+		// want: await-in-loop-javascript
+		await db.audit(i);
+	}
+}
+
+async function j09ReturnInClosure(items: string[], db: Db) {
+	for (const item of items) {
+		const kept = items.filter((other) => {
+			return other !== item;
+		});
+		// want: await-in-loop-javascript
+		await db.put(kept[0]);
+	}
+}
+
+async function j10MemberAndTyped(runner: Runner, items: string[], db: Db) {
+	// want: in-order-needs-reason-javascript
+	await runner.inOrder(items, db.put);
+	// want: in-order-needs-reason-javascript
+	await runner.inOrder<string>(items, db.put, { reason: "" });
+	// want: in-order-needs-reason-javascript
+	await inOrder<string>(items, db.put);
+	// want: in-order-needs-reason-javascript
+	await inOrder(items, async (item) => {
+		await db.put(item);
+	});
+}
+
+async function j11ObjectMethodCallback(
+	items: string[],
+	db: Db,
+	handlers: object[],
+) {
+	for (const item of items) {
+		handlers.push({
+			async run() {
+				await db.put(item);
+			},
+		});
+	}
+}
+
+async function j12ImmediatelyCalled(items: string[], db: Db) {
+	for (const item of items) {
+		// want: await-in-loop-javascript
+		await (async () => {
+			await db.put(item);
+		})();
+	}
+}
+
+async function j13TypedCallback(
+	items: string[],
+	db: Db,
+	callbacks: (() => Promise<void>)[],
+) {
+	for (const item of items) {
+		callbacks.push(async (): Promise<void> => {
+			await db.put(item);
+		});
+	}
+}
+
+async function j14DoubleAwaitSameExpr(
+	items: string[],
+	db: Db,
+	callbacks: (() => Promise<void>)[],
+) {
+	for (const item of items) {
+		callbacks.push(async () => {
+			await db.put(item);
+		});
+		// want: await-in-loop-javascript
+		await db.put(item);
+	}
+}
+
+class J15Order {
+	async inOrder<T>(
+		items: Iterable<T>,
+		step: (item: T) => Promise<void>,
+		{ reason }: { reason: string },
+	): Promise<void> {
+		void reason;
+		for (const item of items) {
+			await step(item);
+		}
+		for (const item of items) {
+			// want: await-in-loop-javascript
+			await audit(item);
+		}
+	}
+}
+
+export const inOrderSteps = async (
+	steps: (() => Promise<void>)[],
+	{ reason }: { reason: string },
+): Promise<void> => {
+	for (const step of steps) {
+		await step();
+	}
+	for (const step of steps) {
+		// want: await-in-loop-javascript
+		await audit(step);
+	}
+};
+
+async function j17StepPair(items: string[], db: Db) {
+	await inOrder(
+		items,
+		async (item) => {
+			// want: sequential-awaits-javascript
+			const a = await db.get(item);
+			const b = await db.other(item);
+			console.log(a, b);
+		},
+		{ reason: "Each write reads the previous write state" },
+	);
+}
+
+async function j18StepWidthAssign(items: string[], db: Db) {
+	for (let i = 0; i < items.length; i = i + 10) {
+		await Promise.all(items.slice(i, i + 10).map((item) => db.get(item)));
+	}
+}

@@ -1,0 +1,15 @@
+async def run(items, width):
+    size = 4
+    size = 1
+    for i in range(0, len(items), size):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*items[i:i+size])
+    for i in range(0, len(items), width):
+        if items:
+            # ruleid: await-in-loop-python
+            await asyncio.gather(*items[i:i+width])
+        # ruleid: await-in-loop-python
+        await other(i)
+    for i in range(0, len(items), 1):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(read(items[i]))

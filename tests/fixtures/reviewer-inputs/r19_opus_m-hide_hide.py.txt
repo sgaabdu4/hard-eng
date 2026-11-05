@@ -1,0 +1,56 @@
+import asyncio
+
+
+async def save(x):
+    return x
+
+
+def use(x):
+    pass
+
+
+# CASE awaited_local_function expect=fire
+async def h1(items):
+    for item in items:
+        async def step():
+            await save(item)
+        await step()
+
+
+# CASE join_per_pass expect=fire
+async def h2(groups):
+    for group in groups:
+        await asyncio.gather(*(save(x) for x in group))
+
+
+# CASE try_finally expect=fire
+async def h3(items):
+    for item in items:
+        try:
+            use(item)
+        finally:
+            await save(item)
+
+
+# CASE enumerate_destructure expect=fire
+async def h4(items):
+    for i, item in enumerate(items):
+        await save((i, item))
+
+
+# CASE while_pop expect=fire
+async def h5(items):
+    while items:
+        await save(items.pop())
+
+
+# CASE await_in_call_arg expect=fire
+async def h6(items):
+    for item in items:
+        use(await save(item))
+
+
+# CASE wait_for_per_item expect=fire
+async def h7(items):
+    for item in items:
+        await asyncio.wait_for(save(item), 1)

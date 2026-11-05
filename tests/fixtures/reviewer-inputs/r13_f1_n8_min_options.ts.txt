@@ -1,0 +1,44 @@
+// CASE shorthand_const_min expect=fire
+export async function shorthandConstMin(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const concurrency = Math.min(1, n);
+	await mapLimit(items, op, { concurrency });
+}
+
+// CASE key_from_const_min expect=fire
+export async function keyFromConstMin(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const width = Math.min(1, n);
+	await mapLimit(items, op, { concurrency: width });
+}
+
+// CASE local_options_from_const_min expect=fire
+export async function localOptionsFromConstMin(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const width = Math.min(1, n);
+	const options = { concurrency: width };
+	await mapLimit(items, op, options);
+}
+
+// CASE limit_shorthand_const_min expect=fire
+export async function limitShorthandConstMin(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const limit = Math.min(n, 1);
+	await mapLimit(items, op, { limit });
+}
+
+// CASE local_options_inline_min expect=fire
+export async function localOptionsInlineMin(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const options = { concurrency: Math.min(1, n) };
+	await mapLimit(items, op, options);
+}
+
+// CASE shorthand_const_one expect=fire
+export async function shorthandConstOne(items: string[], op: (s: string) => Promise<void>) {
+	const concurrency = 1;
+	await mapLimit(items, op, { concurrency });
+}
+
+// CASE shorthand_const_min_four expect=pass
+export async function shorthandConstMinFour(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const concurrency = Math.min(4, n);
+	await mapLimit(items, op, { concurrency });
+}
+
+declare function mapLimit<T>(...args: unknown[]): Promise<void>;

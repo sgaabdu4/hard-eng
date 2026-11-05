@@ -1,0 +1,8 @@
+import asyncio as aio
+async def run(groups, read):
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        await aio.gather(*[read(item) for item in batch if item])
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        await aio.gather(*[read(item) for item in other])

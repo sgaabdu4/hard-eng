@@ -1,0 +1,30 @@
+# CASE py_asyncwith_inner_iterable_no_return expect=fire
+async def collect(groups, session, save):
+    for group in groups:
+        async with session.get(group) as response:
+            for row in await response.json():
+                save(row)
+
+
+# CASE py_asyncwith_inner_iterable_return expect=fire
+async def first(groups, session):
+    for group in groups:
+        async with session.get(group) as response:
+            for row in await response.json():
+                if row:
+                    return row
+
+
+# CASE py_plain_inner_iterable_return expect=fire
+async def first_plain(groups, store):
+    for group in groups:
+        for row in await store.rows(group):
+            if row:
+                return row
+
+
+# CASE py_asyncwith_body_await expect=fire
+async def bodies(groups, session, save):
+    for group in groups:
+        async with session.get(group) as response:
+            save(await response.json())

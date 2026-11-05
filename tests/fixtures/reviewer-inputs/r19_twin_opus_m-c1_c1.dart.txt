@@ -1,0 +1,16 @@
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) op, {
+  int? limit,
+}) async => [];
+
+// CASE result_limit_named expect=pass
+Future<void> c1(List<int> items, Future<int> Function(int) op) async {
+  await mapWithConcurrency(items, 8, op, limit: 1);
+}
+
+// CASE literal_one expect=fire
+Future<void> c2(List<int> items, Future<int> Function(int) op) async {
+  await mapWithConcurrency(items, 1, op);
+}

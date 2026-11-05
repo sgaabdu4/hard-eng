@@ -1,0 +1,8 @@
+int firstGap(List<String> rows) {
+  for (final row in rows) {
+    var j = 0;
+    for (; j < row.length && row[j] == ' '; j++);
+    if (j > 0) break;
+  }
+  return 0;
+}

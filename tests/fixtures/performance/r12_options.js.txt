@@ -1,0 +1,35 @@
+async function inline(items, op, options, count) {
+	await mapLimit(items, op, { concurrency: 1, ...options });
+	// ok: serial-bounded-helper-javascript
+	await mapLimit(items, op, { ...options, concurrency: 1 });
+	// ok: serial-bounded-helper-javascript
+	await mapLimit(items, Math.min(count, items.length, 1), op);
+	// ok: serial-bounded-helper-javascript
+	await mapLimit(items, Math.min(count, 1, items.length, 8), op);
+	await mapLimit(items, Math.min(count, items.length, 4), op);
+}
+async function local(items, op) {
+	const options = { concurrency: 1 };
+	// ok: serial-bounded-helper-javascript
+	await mapLimit(items, op, options);
+}
+async function branch(items, op, fast) {
+	const options = { concurrency: 1 };
+	if (fast) options.concurrency = 8;
+	await mapLimit(items, op, options);
+}
+async function later(items, op) {
+	const options = { concurrency: 1 };
+	await mapLimit(items, op, options);
+	options.concurrency = 8;
+}
+async function bracket(items, op) {
+	const options = { concurrency: 1 };
+	options["concurrency"] = 8;
+	await mapLimit(items, op, options);
+}
+async function shadowed(items, op) {
+	const concurrency = 1;
+	// ok: serial-bounded-helper-javascript-options
+	await mapLimit(items, op, { concurrency });
+}

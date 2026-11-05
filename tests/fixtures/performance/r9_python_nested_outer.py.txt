@@ -1,0 +1,57 @@
+import asyncio
+
+
+async def outer_break(pages, rows, save, load, cursor):
+    for page in pages:
+        page = await load()
+        for row in rows:
+            # ruleid: await-in-loop-python
+            await save(row)
+        if page.last:
+            break
+
+
+async def outer_return(pages, rows, save, load, cursor):
+    for page in pages:
+        page = await load()
+        for row in rows:
+            # ruleid: await-in-loop-python
+            await save(row)
+        if page.last:
+            return
+
+
+async def outer_sleep(pages, rows, save, load, cursor):
+    for page in pages:
+        page = await load()
+        for row in rows:
+            # ruleid: await-in-loop-python
+            await save(row)
+        await asyncio.sleep(1)
+
+
+async def outer_condition(pages, rows, save, load, cursor):
+    while cursor:
+        page = await load()
+        for row in rows:
+            # ruleid: await-in-loop-python
+            await save(row)
+        cursor = page.next
+
+
+async def outer_true(pages, rows, save, load, cursor):
+    while True:
+        page = await load()
+        for row in rows:
+            # ruleid: await-in-loop-python
+            await save(row)
+        pass
+
+
+async def outer_stream(pages, rows, save, load, cursor):
+    async for page in pages:
+        page = await load()
+        for row in rows:
+            # ruleid: await-in-loop-python
+            await save(row)
+        pass

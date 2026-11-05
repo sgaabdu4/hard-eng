@@ -1,0 +1,28 @@
+import type { ImportedOptions } from "./options";
+
+export async function inOrder<T>(items: T[], step: (item: T) => Promise<void>, options: ImportedOptions) {
+  for (const item of items) {
+    await step(item);
+  }
+}
+
+export async function inOrderSteps(steps: (() => Promise<void>)[], options: ImportedOptions) {
+  for (const step of steps) {
+    await step();
+  }
+}
+
+class Impostor {
+  async inOrder<T>(items: T[], step: (item: T) => Promise<void>, options: ImportedOptions) {
+    for (const item of items) {
+      // ruleid: await-in-loop-javascript
+      await step(item);
+      // ruleid: await-in-loop-javascript
+      await audit(item);
+    }
+  }
+}
+
+// ruleid: in-order-needs-reason-javascript
+inOrder(items, operation);
+inOrder(items, operation, { reason: "Each update reads the prior result" });

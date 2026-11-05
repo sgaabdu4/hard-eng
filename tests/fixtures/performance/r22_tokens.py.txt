@@ -1,0 +1,12 @@
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(
+
+            await step(item),
+
+            f"plain await {await step(item)}",
+        )
+
+async def in_order_steps(steps, *, reason):
+    for step in steps:
+        consume(f"plain await {await step():await}")

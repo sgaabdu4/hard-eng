@@ -1,0 +1,8 @@
+typedef Step = Future<void> Function();
+Future<void> inOrderSteps(Iterable<Step> items, {required String reason}) async { for (final item in items) {
+  await item();
+} }
+
+Future<void> use() async {
+  await inOrderSteps([], reason: "Each update reads the previous write");
+}

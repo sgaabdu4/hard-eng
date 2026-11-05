@@ -1,0 +1,14 @@
+async function run(items, operation, config) {
+	const width: number = 1;
+	// ok: serial-bounded-helper-javascript
+	await pool.mapLimit<string>(items, width, operation);
+	const concurrency: number = 1;
+	// ok: serial-bounded-helper-javascript-options
+	await mapLimit<string>(items, operation, { concurrency });
+	let mutable = 1;
+	({ mutable } = config);
+	await mapLimit<string>(items, mutable, operation);
+	await mapLimit<string>(items, mutable, operation, 1);
+	// ruleid: serial-bounded-helper-javascript
+	await mapLimit<string>(items, 1, operation, 4);
+}

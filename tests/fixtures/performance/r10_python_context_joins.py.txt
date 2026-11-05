@@ -1,0 +1,33 @@
+import asyncio
+import anyio
+from asyncio import TaskGroup
+from anyio import create_task_group
+
+
+async def joins(items, operation, session, statuses):
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with asyncio.timeout(10), asyncio.TaskGroup() as group:
+            group.create_task(operation(item))
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with asyncio.timeout(10):
+            # ruleid: await-in-loop-python
+            async with TaskGroup() as group:
+                group.create_task(operation(item))
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with anyio.create_task_group() as group:
+            group.start_soon(operation, item)
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with create_task_group() as group:
+            group.start_soon(operation, item)
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with session.get(item) as response:
+            statuses.append(response.status)
+    while items:
+        # ruleid: await-in-loop-python
+        async with session.lock():
+            statuses.append(len(items))

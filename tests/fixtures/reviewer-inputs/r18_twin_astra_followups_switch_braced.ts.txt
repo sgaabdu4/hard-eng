@@ -1,0 +1,20 @@
+const saved = [];
+async function save(item) {
+	saved.push(item);
+}
+async function run(items) {
+	for (let i = 0, n = items.length; i < n; i++) {
+		switch (items[i]) {
+			case "a":
+				await save(items[i]);
+				break;
+			default:
+				await save(items[i]);
+				break;
+		}
+	}
+}
+run(["a", "b", "c"]).then(() => {
+	if (saved.join(",") !== "a,b,c") throw Error(String(saved));
+	console.log(JSON.stringify({ saved }));
+});

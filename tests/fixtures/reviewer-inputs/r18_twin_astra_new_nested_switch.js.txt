@@ -1,0 +1,10 @@
+async function run(items) {
+	for (let i = 0, n = items.length; i < n; i++)
+		if (items[i]) {
+			switch (items[i]) {
+				case 1:
+					break;
+			}
+			await save(items[i]);
+		}
+}

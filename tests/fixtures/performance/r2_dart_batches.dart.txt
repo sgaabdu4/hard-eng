@@ -1,0 +1,14 @@
+Future<void> run(items, int width) async {
+ for (var i = 0; i < items.length; i = i + width) {
+  // ruleid: await-in-loop-dart
+  if (items.isNotEmpty) { await Future.wait(items.skip(i).take(width).map(read)); }
+  // ruleid: await-in-loop-dart
+  await other(i);
+ }
+ for (var i = 0; i < items.length; ++i) {
+  // ruleid: await-in-loop-dart
+  await Future.wait([read(items[i])]);
+ }
+ // ruleid: await-in-loop-dart
+ for (final batch in items.slices(width)) { await Future.wait(batch.map(read)); }
+}

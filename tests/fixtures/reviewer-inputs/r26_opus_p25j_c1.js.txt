@@ -1,0 +1,16 @@
+export function words(s) {
+  const out = [];
+  for (let i = 0; i < s.length; i++) {
+    switch (s[i]) {
+      case ' ': {
+        let j = i + 1;
+        for (; j < s.length && s[j] === ' '; j++);
+        i = j - 1;
+        break;
+      }
+      default:
+        out.push(s[i]);
+    }
+  }
+  return out;
+}

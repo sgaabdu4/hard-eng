@@ -1,0 +1,12 @@
+async def run(items, step):
+    serial = in_order
+    # ruleid: in-order-needs-reason-python
+    await serial(items, step)
+    await serial(items, step, reason="Each update reads the previous write")
+    value = None
+    for item in items:
+        if value is None:
+            value = await load()
+        if values[item] is None:
+            # ruleid: await-in-loop-python
+            values[item] = await load(item)

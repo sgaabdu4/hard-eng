@@ -1,0 +1,5 @@
+async function run(items) {
+	for (let i = 0, n = await size(); i < n; i++) {
+		console.log(i);
+	}
+}

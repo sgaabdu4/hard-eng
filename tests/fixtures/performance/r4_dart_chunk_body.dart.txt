@@ -1,0 +1,65 @@
+Future<void> run(items, read) async {
+ for (final user in batch) {
+  // ruleid: await-in-loop-dart
+  await Future.wait([read(user), notify(user)]);
+ }
+ for (final user in receive(queue, 10)) {
+  // ruleid: await-in-loop-dart
+  await (read(user), notify(user)).wait;
+ }
+ // ruleid: await-in-loop-dart
+ for (final piece in parts) { await Future.wait(piece.map(read)); }
+ // ruleid: await-in-loop-dart
+ for (var piece in parts) { await Future.wait(piece.map(read)); }
+ // ruleid: await-in-loop-dart
+ for (final List<String> piece in parts) { await Future.wait(piece.map(read)); }
+ // ruleid: await-in-loop-dart
+ for (final piece in parts) { await piece.map(read).wait; }
+ // ruleid: await-in-loop-dart
+ for (final piece in grouped.parts) { await Future.wait(piece.map(read)); }
+ // ruleid: await-in-loop-dart
+ for (final piece in records) { await piece.wait; }
+ for (final piece in parts) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(other.map(read));
+ }
+ const one = 1;
+ // ruleid: await-in-loop-dart
+ for (final piece in split(items, one)) { await Future.wait(piece.map(read)); }
+ for (final piece in List.generate(count, (i) => items.skip(i * 1).take(1))) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(piece.map(read));
+ }
+ final individual = List.generate(count, (i) => items.skip(i * 1).take(1));
+ for (final piece in individual) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(piece.map(read));
+ }
+ final singles = split(items, 1);
+ for (final piece in singles) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(piece.map(read));
+ }
+ for (final piece in split(items, 1)) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(piece.map(read));
+ }
+ for (final piece in parts) {
+  // ruleid: await-in-loop-dart
+  await inspect(piece);
+  // ruleid: await-in-loop-dart
+  await Future.wait(piece.map(read));
+ }
+ for (final piece in parts) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(piece.map(read));
+  // ruleid: await-in-loop-dart
+  await Future.wait(piece.map(notify));
+ }
+ for (final piece in parts) {
+  for (final item in piece) {
+   // ruleid: await-in-loop-dart
+   await (read(item), notify(item)).wait;
+  }
+ }
+}

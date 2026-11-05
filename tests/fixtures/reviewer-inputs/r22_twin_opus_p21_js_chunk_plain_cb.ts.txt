@@ -1,0 +1,8 @@
+// CASE ts_chunk_plain_arrow expect=pass
+export async function mapLimit(items, width, operation) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		await Promise.all(
+			items.slice(offset, offset + width).map((item) => operation(item)),
+		);
+	}
+}

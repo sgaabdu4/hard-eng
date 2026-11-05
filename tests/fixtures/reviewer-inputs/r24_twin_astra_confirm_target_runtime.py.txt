@@ -1,0 +1,27 @@
+import asyncio
+
+calls = []
+cache = {}
+
+
+async def get_cache():
+    calls.append("cache")
+    return cache
+
+
+async def step(item):
+    calls.append(item)
+    return item * 2
+
+
+async def in_order(items, step, *, reason):
+    for item in items:
+        (await get_cache())[item] = await step(item)
+
+
+asyncio.run(
+    in_order([1, 2], step, reason="Each cache update must complete before the next")
+)
+assert cache == {1: 2, 2: 4}
+assert calls == [1, "cache", 2, "cache"]
+print("valid Python; expected writes and await order")

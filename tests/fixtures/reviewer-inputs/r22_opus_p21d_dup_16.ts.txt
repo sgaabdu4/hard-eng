@@ -1,0 +1,10 @@
+// CASE ts_dup_quotes_before_16 expect=fire
+export async function run<T>(items: T[], width: number, operation: (item: T) => Promise<void>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge('k0', 'k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8', 'k9', 'k10', 'k11', 'k12', 'k13', 'k14', 'k15', await operation(items[index]), await operation(items[index]));
+    }
+  }));
+}

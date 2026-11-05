@@ -1,0 +1,48 @@
+// CASE js_subscript_recv expect=fire
+export async function a(items, step, getCache) {
+	for (const item of items) {
+		(await getCache())[item] = await step(item);
+	}
+}
+// CASE js_member_recv expect=fire
+export async function b(items, step, getCache) {
+	for (const item of items) {
+		(await getCache()).value = await step(item);
+	}
+}
+// CASE js_sync_rhs expect=fire
+export async function c(items, getCache) {
+	for (const item of items) {
+		(await getCache())[item] = item;
+	}
+}
+// CASE js_destructure_recv expect=fire
+export async function d(items, step, getCache) {
+	for (const item of items) {
+		[(await getCache())[item]] = await step(item);
+	}
+}
+// CASE js_lazy_plus_recv expect=fire
+export async function e(items, step, read, getCache) {
+	let saved;
+	for (const item of items) {
+		saved ??= await read(item);
+		(await getCache())[item] = await step(item);
+	}
+}
+// CASE js_lazy_reset_destructure expect=fire
+export async function f(items, rows, read) {
+	let saved = null;
+	for (const item of items) {
+		[saved] = rows[item];
+		if (saved == null) saved = await read(item);
+	}
+}
+// CASE js_lazy_reset_object_destructure expect=fire
+export async function g(items, rows, read) {
+	let saved = null;
+	for (const item of items) {
+		({ saved } = rows[item]);
+		if (saved == null) saved = await read(item);
+	}
+}

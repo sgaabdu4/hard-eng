@@ -1,0 +1,82 @@
+# CASE py_honest expect=pass
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item))
+
+
+# CASE py_distinct_plain expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), await save(item))
+
+
+# CASE py_distinct_fstring expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), f"{await save(item)}")
+
+
+# CASE py_distinct_fstring_spec expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), f"{item:{await width(item)}}")
+
+
+# CASE py_distinct_fstring_conv expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), f"{await save(item)!r}")
+
+
+# CASE py_distinct_fstring_debug expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), f"{await save(item)=}")
+
+
+# CASE py_distinct_nested_fstring expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), f"{f'{await save(item)}'}")
+
+
+# CASE py_distinct_triple_fstring expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), f"""{await save(item)}""")
+
+
+# CASE py_distinct_conditional expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item) if item else await save(item))
+
+
+# CASE py_distinct_walrus expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), (saved := await save(item)))
+
+
+# CASE py_distinct_async_comprehension expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), [row async for row in stream(item)])
+
+
+# CASE py_distinct_await_comprehension expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), [await save(row) for row in item.rows])
+
+
+# CASE py_distinct_keyword expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), await step(item=item))
+
+
+# CASE py_steps_distinct_fstring expect=fire
+async def in_order_steps(steps, *, reason):
+    for step in steps:
+        consume(await step(), f"{await audit()}")

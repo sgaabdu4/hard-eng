@@ -1,0 +1,37 @@
+import Foundation
+
+actor Tracker {
+  var active = 0
+  var peak = 0
+  var completed = 0
+  func work(_ item: Int) async {
+    active += 1
+    peak = max(peak, active)
+    try? await Task.sleep(for: .milliseconds(40))
+    active -= 1
+    completed += 1
+  }
+  func snapshot() -> (Int, Int) { (peak, completed) }
+}
+
+func launch(_ items: [Int], tracker: Tracker) -> [Task<Void, Never>] {
+  var tasks: [Task<Void, Never>] = []
+  for item in items {
+    tasks.append(
+      Task<Void, Never>(priority: .utility) {
+        await tracker.work(item)
+      })
+  }
+  return tasks
+}
+
+let tracker = Tracker()
+let tasks = launch([1, 2, 3, 4], tracker: tracker)
+await withTaskGroup(of: Void.self) { group in
+  for task in tasks {
+    group.addTask { await task.value }
+  }
+}
+let (peak, completed) = await tracker.snapshot()
+precondition(peak == 4 && completed == 4)
+print("peak=\(peak), completed=\(completed)")

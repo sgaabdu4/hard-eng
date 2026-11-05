@@ -1,0 +1,29 @@
+Future<void> save(Object? x) async {}
+
+// CASE string_semicolon_header expect=fire
+Future<void> h1(List<String> items) async {
+  for (var i = 0, sep = ';'; i < items.length; i++) {
+    await save(items[i] + sep);
+  }
+}
+
+// CASE comment_in_header expect=fire
+Future<void> h2(List<String> items) async {
+  for (var i = 0 /* start */, n = items.length; i < n; i++) {
+    await save(items[i]);
+  }
+}
+
+// CASE interpolation_header expect=fire
+Future<void> h3(List<String> items) async {
+  for (var i = 0, tag = 'a;${items.length}'; i < items.length; i++) {
+    await save(tag);
+  }
+}
+
+// CASE final_typed_two expect=fire
+Future<void> h4(List<String> items) async {
+  for (int i = 0, n = items.length; i < n; i += 2) {
+    await save(items[i]);
+  }
+}

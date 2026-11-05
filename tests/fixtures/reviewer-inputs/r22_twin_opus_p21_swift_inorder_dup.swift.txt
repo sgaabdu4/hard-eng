@@ -1,0 +1,6 @@
+// CASE swift_inorder_dup_comment_quote expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async rethrows {
+  for item in items {
+    pair(try await step(item) /* it's */, try await step(item), "x")
+  }
+}

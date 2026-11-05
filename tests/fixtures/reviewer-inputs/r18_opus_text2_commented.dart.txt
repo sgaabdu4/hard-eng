@@ -1,0 +1,34 @@
+Future<void> process(Object? x) async {}
+Future<void> processAll(List<int> xs) async {}
+
+// CASE dart_commented_out_loop expect=pass
+Future<void> d1(List<int> items) async {
+  // for (var i = 0; i < items.length; i++) {
+  //   await process(items[i]);
+  // }
+  await processAll(items);
+}
+
+// CASE dart_block_commented_loop expect=pass
+Future<void> d2(List<int> items) async {
+  /*
+  for (var i = 0; i < items.length; i++) {
+    await process(items[i]);
+  }
+  */
+  await processAll(items);
+}
+
+// CASE dart_doc_sample expect=pass
+/// Saves all items at once.
+///
+/// Before this helper we wrote `for (var i = 0; i < n; i++) await save(i);`.
+Future<void> d3(List<int> items) async {
+  await processAll(items);
+}
+
+// CASE dart_line_comment_no_brace expect=pass
+Future<void> d4(List<int> items) async {
+  // Used to be: for (var i = 0; i < items.length; i++) await process(items[i]);
+  await processAll(items);
+}

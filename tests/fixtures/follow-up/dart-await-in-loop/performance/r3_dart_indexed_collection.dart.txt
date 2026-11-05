@@ -1,0 +1,8 @@
+Future<void> run(items, read) async {
+ final values = [0, for (var i = 0; i < items.length; i++)
+  // ruleid: await-in-loop-dart
+  await read(items[i]), 0];
+ final indexed = {0: 0, for (var i = 0; i < items.length; i++) i:
+  // ruleid: await-in-loop-dart
+  await read(items[i])};
+}

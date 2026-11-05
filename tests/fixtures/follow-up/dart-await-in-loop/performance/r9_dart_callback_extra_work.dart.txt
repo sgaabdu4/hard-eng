@@ -1,0 +1,21 @@
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+  audit,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(
+      // ruleid: await-in-loop-dart
+      await Future.wait(
+        group.map((item) async {
+          await audit(item);
+          return operation(item);
+        }),
+      ),
+    );
+  }
+  return results;
+}

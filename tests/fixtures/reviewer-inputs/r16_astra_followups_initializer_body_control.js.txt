@@ -1,0 +1,3 @@
+async function run(items, op) {
+  for (let i = await op(items); i < 10; i++) { await op(i); }
+}

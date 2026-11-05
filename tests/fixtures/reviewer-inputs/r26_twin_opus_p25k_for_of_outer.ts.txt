@@ -1,0 +1,8 @@
+export function firstIndent(lines: string[]): number {
+	let width = 0;
+	for (const line of lines) {
+		for (width = 0; width < line.length && line[width] === " "; width++);
+		if (width > 0) break;
+	}
+	return width;
+}

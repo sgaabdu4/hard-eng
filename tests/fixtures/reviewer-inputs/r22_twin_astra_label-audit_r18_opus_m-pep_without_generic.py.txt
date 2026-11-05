@@ -1,0 +1,50 @@
+import asyncio
+import contextlib
+
+
+async def save(x):
+    pass
+
+
+# CASE async_for_stream expect=pass
+async def p1(stream):
+    async for row in stream:
+        await save(row)
+
+
+# CASE nested_async_def_callback expect=pass
+async def p2(items):
+    jobs = []
+    for item in items:
+
+        async def job(item=item):
+            await save(item)
+
+        jobs.append(job())
+    await asyncio.gather(*jobs)
+
+
+# CASE async_with_per_item expect=fire
+async def p3(items):
+    for item in items:
+        async with contextlib.AsyncExitStack():
+            pass
+
+
+# CASE sync_with_per_item expect=pass
+async def p4(items):
+    for item in items:
+        with contextlib.nullcontext():
+            print(item)
+
+
+# CASE plain_loop_await expect=fire
+async def p5(items):
+    for item in items:
+        await save(item)
+
+
+# CASE in_order_honest expect=pass
+async def in_order(items, step, *, reason):
+    for item in items:
+        await step(item)

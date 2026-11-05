@@ -1,0 +1,57 @@
+Future<void> save(Object? x) async {}
+
+// CASE dart_callback_no_comment expect=pass
+Future<void> c1(List<int> ids, void Function(Future<void> Function()) register) async {
+  for (final id in ids) {
+    register(() async {
+      await save(id);
+    });
+  }
+}
+
+// CASE dart_callback_comment_for expect=pass
+Future<void> c2(List<int> ids, void Function(Future<void> Function()) register) async {
+  for (final id in ids) {
+    register(() async {
+      // Replaces for (var i = 0; i < n; i++) in the old code
+      await save(id);
+    });
+  }
+}
+
+// CASE dart_callback_doc_for expect=pass
+Future<void> c3(List<int> ids, void Function(Future<void> Function()) register) async {
+  for (final id in ids) {
+    register(() async {
+      // Do not use for (;;) here.
+      await save(id);
+    });
+  }
+}
+
+// CASE dart_callback_string_for expect=pass
+Future<void> c4(List<int> ids, void Function(Future<void> Function()) register) async {
+  for (final id in ids) {
+    register(() async {
+      await save('for (var i = 0; i < 3; i++) $id');
+    });
+  }
+}
+
+// CASE dart_toplevel_comment_for expect=pass
+Future<void> c5() async {
+  // Old code: for (var i = 0; i < n; i++)
+  await save(1);
+}
+
+// CASE dart_toplevel_string_for expect=pass
+Future<void> c6() async {
+  final code = 'for (var i = 0; i < n; i++) {';
+  await save(code);
+}
+
+// CASE dart_word_for expect=pass
+Future<void> c7() async {
+  // Wait for (at most) one second; then retry once; if it fails, stop
+  await save(1);
+}

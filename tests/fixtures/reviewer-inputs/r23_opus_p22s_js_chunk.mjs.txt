@@ -1,0 +1,34 @@
+// CASE js_chunk_canonical expect=pass
+export async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    await Promise.all(items.slice(offset, offset + width).map(operation));
+  }
+}
+// CASE js_chunk_collect_push_spread expect=pass
+export async function mapLimit(items, width, operation) {
+  const results = [];
+  for (let offset = 0; offset < items.length; offset += width) {
+    results.push(...await Promise.all(items.slice(offset, offset + width).map(operation)));
+  }
+  return results;
+}
+// CASE js_chunk_collect_push_paren_spread expect=pass
+export async function mapLimit(items, width, operation) {
+  const results = [];
+  for (let offset = 0; offset < items.length; offset += width) {
+    results.push(...(await Promise.all(items.slice(offset, offset + width).map(operation))));
+  }
+  return results;
+}
+// CASE js_chunk_void_spread expect=pass
+export async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    sink.push(...await Promise.all(items.slice(offset, offset + width).map(operation)));
+  }
+}
+// CASE js_chunk_void_wrapped expect=pass
+export async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    sink.push(await Promise.all(items.slice(offset, offset + width).map(operation)));
+  }
+}

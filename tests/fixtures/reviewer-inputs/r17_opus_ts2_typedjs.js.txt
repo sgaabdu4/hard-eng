@@ -1,0 +1,48 @@
+// CASE typed_decl expect=fire
+async function t1(ids) {
+  for (let i = 0; i < ids.length; i++) {
+    await save(ids[i]);
+  }
+}
+
+// CASE prefix_update expect=fire
+async function t2(ids) {
+  for (let i = 0; i < ids.length; ++i) {
+    await save(ids[i]);
+  }
+}
+
+// CASE step_update expect=fire
+async function t3(ids) {
+  for (let i = 0; i < ids.length; i += 2) {
+    await save(ids[i]);
+  }
+}
+
+// CASE reverse_empty_update expect=fire
+async function t4(ids) {
+  for (let i = ids.length; i--; ) {
+    await remove(ids[i]);
+  }
+}
+
+// CASE reverse_decrement_update expect=fire
+async function t5(ids) {
+  for (let i = ids.length - 1; i >= 0; i--) {
+    await remove(ids[i]);
+  }
+}
+
+// CASE typed_multi expect=fire
+async function t6(ids) {
+  for (let i = 0, n = ids.length; i < n; i++) {
+    await save(ids[i]);
+  }
+}
+
+// CASE as_cast_init expect=fire
+async function t7(ids) {
+  for (let i = 0; i < ids.length; i++) {
+    await save(ids[i]);
+  }
+}

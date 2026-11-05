@@ -1,0 +1,34 @@
+// CASE abort_cleanup_nested_loop expect=fire
+Future<void> a1(List<List<int>> batches) async {
+  for (final batch in batches) {
+    final results = await Future.wait(batch.map(read));
+    if (failed(results)) {
+      for (final r in results) {
+        await rollback(r);
+      }
+      throw StateError('failed');
+    }
+  }
+}
+
+// CASE early_exit_nested_loop expect=fire
+Future<Object?> a2(List<Group> groups) async {
+  for (final group in groups) {
+    for (final item in group.items) {
+      await save(item);
+    }
+    if (await done(group)) return group;
+  }
+  return null;
+}
+
+// CASE lazy_nested_loop expect=fire
+Future<void> a3(List<List<int>> groups) async {
+  Client? client;
+  for (final group in groups) {
+    client ??= await connect();
+    for (final item in group) {
+      await client.send(item);
+    }
+  }
+}

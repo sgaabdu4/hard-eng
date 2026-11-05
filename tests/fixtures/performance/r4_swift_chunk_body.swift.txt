@@ -1,0 +1,72 @@
+func run(items: [[Int]]) async throws {
+ for user in batch {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   group.addTask { try await save(user) }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+ for piece in parts {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   for item in piece { group.addTask { try await save(item) } }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+ for piece in grouped.parts {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   for item in piece { group.addTask { try await save(item) } }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+ let singles = split(items, 1)
+ let individual = stride(from: 0, to: items.count, by: 1).map { [items[$0]] }
+ for piece in individual {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   for item in piece { group.addTask { try await save(item) } }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+ for piece in parts {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   for item in other { group.addTask { try await save(item) } }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+ for piece in singles {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   for item in piece { group.addTask { try await save(item) } }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+ for piece in parts {
+  // ruleid: await-in-loop-swift
+  try await inspect(piece)
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   for item in piece { group.addTask { try await save(item) } }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+ for piece in parts {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   // ruleid: await-in-loop-swift
+   try await inspect(piece)
+   for item in piece { group.addTask { try await save(item) } }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+}

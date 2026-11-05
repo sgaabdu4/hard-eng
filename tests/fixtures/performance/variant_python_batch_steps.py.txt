@@ -1,0 +1,18 @@
+async def work(items):
+    WIDTH = 4
+    ONE = 1
+    for i in range(0, len(items), 1):
+      # ruleid: await-in-loop-python
+      await asyncio.gather(read(items[i]), other(items[i]))
+    for i in range(0, len(items), 2):
+      # ruleid: await-in-loop-python
+      await asyncio.gather(read(items[i]), other(items[i]))
+    for i in range(0, len(items), WIDTH):
+      # ruleid: await-in-loop-python
+      await asyncio.gather(read(items[i]), other(items[i]))
+    for i in range(0, len(items), ONE):
+      # ruleid: await-in-loop-python
+      await asyncio.gather(read(items[i]), other(items[i]))
+    for i in range(0, len(items), unknownWidth):
+      # ruleid: await-in-loop-python
+      await asyncio.gather(read(items[i]), other(items[i]))

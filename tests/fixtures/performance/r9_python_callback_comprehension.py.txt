@@ -1,0 +1,8 @@
+async def callbacks(users, rows, register, save):
+    for user in users:
+
+        async def callback():
+            # ruleid: await-in-loop-python
+            [await save(row) for row in rows]
+
+        register(callback)

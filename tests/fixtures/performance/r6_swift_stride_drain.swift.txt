@@ -1,0 +1,12 @@
+func run(items: [Int]) async throws {
+ for start in stride(from: 0, to: items.count, by: 4) {
+  let batch = items[start..<min(start + 4, items.count)]
+  // ruleid: await-in-loop-swift
+  let rows = try await withThrowingTaskGroup(of: Int.self) { group in
+   for item in batch { group.addTask { try await read(item) } }
+   // ruleid: await-in-loop-swift
+   return try await group.reduce(into: [Int]()) { $0.append($1) }
+  }
+  consume(rows)
+ }
+}

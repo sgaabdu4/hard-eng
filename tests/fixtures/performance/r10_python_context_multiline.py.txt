@@ -1,0 +1,20 @@
+def select(message):
+    match message:
+        case "stop":
+            return True
+        case _:
+            return False
+
+
+async def use(items, session, output):
+    for item in items:
+        async with (
+
+            session.get(item) as response,
+            session.lock(),
+        ):
+            with session.sync_lock():
+                output.append(response.status)
+    for item in items:
+        with session.sync_lock():
+            output.append(item)

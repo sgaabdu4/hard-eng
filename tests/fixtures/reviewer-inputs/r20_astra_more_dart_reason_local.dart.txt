@@ -1,0 +1,7 @@
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T) step, {required String reason}) async {
+ for(final item in items) { await step(item); }
+}
+Future<void> run(List<int> items, Future<void> Function(int) step) async {
+ const reason = 'Each write depends on the prior transaction';
+ await inOrder(items, step, reason: reason);
+}

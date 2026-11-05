@@ -1,0 +1,3 @@
+async def in_order(items, step, *, reason):
+    for item in items:
+        await step(await prepare(item))

@@ -1,0 +1,22 @@
+Future<void> save(Object? x) async {}
+
+// CASE dart_apostrophe_in_raw_after_await expect=pass
+Future<String> clean(List<String> names) async {
+  for (var i = 0, n = names.length; i < n; i++) {
+    names[i] = names[i].replaceAll(r'\', '');
+  }
+  await save(names);
+  return 'done';
+}
+
+// CASE dart_triple_after_await expect=pass
+Future<String> note(List<String> names) async {
+  for (var i = 0, n = names.length; i < n; i++) {
+    names[i] = '''it's ${names[i]}''';
+  }
+  await save(names);
+  return 'done';
+}
+
+// CASE dart_end expect=pass
+void end() {}

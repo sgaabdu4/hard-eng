@@ -1,0 +1,144 @@
+import asyncio
+import contextlib
+
+
+async def save(x):
+    pass
+
+
+def lock_for(x):
+    return contextlib.nullcontext()
+
+
+def alock_for(x):
+    return contextlib.AsyncExitStack()
+
+
+# CASE async_with_per_item expect=fire
+async def p1(items):
+    for item in items:
+        async with alock_for(item):
+            pass
+
+
+# CASE async_with_two_managers expect=fire
+async def p2(items):
+    for item in items:
+        async with alock_for(item), alock_for(item + 1):
+            pass
+
+
+# CASE async_with_parenthesized_multiline expect=fire
+async def p3(items):
+    for item in items:
+        async with (
+            alock_for(item) as a,
+            alock_for(item) as b,
+        ):
+            pass
+
+
+# CASE async_with_comment_in_header expect=fire
+async def p4(items):
+    for item in items:
+        async with (  # one lock per item
+            alock_for(item) as a
+        ):
+            pass
+
+
+# CASE async_with_string_with_colon expect=fire
+async def p5(items, session):
+    for item in items:
+        async with session.get("https://x.test/a:b") as resp:
+            pass
+
+
+# CASE sync_with_per_item expect=pass
+async def p6(items):
+    for item in items:
+        with lock_for(item):
+            print(item)
+
+
+# CASE sync_with_after_async_with_line expect=pass
+async def p7(items, pool):
+    async with pool:
+        pass
+    for item in items:
+        with lock_for(item):
+            print(item)
+
+
+# CASE sync_with_body_mentions_async_with_string expect=pass
+async def p8(items):
+    for item in items:
+        with lock_for(item):
+            print("async with x:")
+
+
+# CASE while_async_with expect=fire
+async def p9(queue):
+    while queue:
+        async with alock_for(queue.pop()):
+            pass
+
+
+# CASE gather_in_loop expect=fire
+async def p10(groups):
+    for group in groups:
+        await asyncio.gather(*(save(x) for x in group))
+
+
+# CASE comprehension_await expect=fire
+async def p11(items):
+    return [await save(x) for x in items]
+
+
+# CASE comprehension_await_two_filters expect=fire
+async def p12(items):
+    return [await save(x) for x in items if x if x > 1]
+
+
+# CASE comprehension_five_filters expect=fire
+async def p13(items):
+    return [await save(x) for x in items if x if x > 1 if x > 2 if x > 3 if x > 4]
+
+
+# CASE dict_comprehension_await expect=fire
+async def p14(items):
+    return {x: await save(x) for x in items}
+
+
+# CASE async_for_stream expect=pass
+async def p15(stream):
+    async for row in stream:
+        await save(row)
+
+
+# CASE for_body_comment_only_await expect=pass
+async def p16(items):
+    for item in items:
+        print(item)  # await later
+
+
+# CASE for_else_await expect=pass
+async def p17(items):
+    for item in items:
+        if item:
+            break
+    else:
+        await save(None)
+
+
+# CASE async_with_in_nested_def expect=pass
+async def p18(items):
+    jobs = []
+    for item in items:
+
+        async def job(item=item):
+            async with alock_for(item):
+                pass
+
+        jobs.append(job())
+    await asyncio.gather(*jobs)

@@ -1,0 +1,33 @@
+import asyncio
+
+
+async def map_with_concurrency[T](items: list[T], width: int, operation) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+async def map_with_concurrency_bad[T](items: list[T], width: int, operation) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+        await asyncio.sleep(0)
+
+
+class Pool:
+    async def map_with_concurrency[T](
+        self, items: list[T], width: int, operation
+    ) -> None:
+        for offset in range(0, len(items), width):
+            await asyncio.gather(
+                *(operation(item) for item in items[offset : offset + width])
+            )
+
+
+async def plain(items, width, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )

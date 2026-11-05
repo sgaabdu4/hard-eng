@@ -1,0 +1,33 @@
+// CASE swift_mwc_raw_string_comment expect=pass
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { try await operation( /* #"it's "await""# \(await x) */item) }
+      }
+      try await group.waitForAll()
+    }
+  }
+}
+// CASE swift_inorder_multiline_comment expect=pass
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async rethrows {
+  for item in items {
+    try await step(
+      item  // it's `await` "x"
+    )
+  }
+}
+// CASE swift_inorder_raw_interp_dup expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> String, reason: String) async rethrows {
+  for item in items {
+    log(try await step(item), #"\#(try await step(item))"#)
+  }
+}
+// CASE swift_inorder_plain_interp_dup_control expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> String, reason: String) async rethrows {
+  for item in items {
+    log(try await step(item), "\(try await step(item))")
+  }
+}

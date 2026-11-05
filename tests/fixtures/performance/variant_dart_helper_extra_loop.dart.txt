@@ -1,0 +1,10 @@
+Future<void> inOrder<T>(Iterable<T> items, Step<T> step, {required String reason}) async {
+for (final item in items) {
+ // ruleid: await-in-loop-dart
+ await step(item);
+}
+for (final item in items) {
+ // ruleid: await-in-loop-dart
+ await client.get(item);
+}
+}

@@ -1,0 +1,5 @@
+void empty(items, bool pending) {
+  for (final item in items) {}
+  while (pending) {}
+  do {} while (pending);
+}

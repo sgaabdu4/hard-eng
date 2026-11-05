@@ -86,6 +86,7 @@ export async function load(blocks: Db, session: Db, db: Db, users: Db, orders: D
   const third = await db.get(total);
   const fourth = await db.get(third);
   for (let start = 0; start < ids.length; start += 2) {
+    // ruleid: await-in-loop-javascript
     await Promise.all(ids.slice(start, start + 2).map(db.get));
     // ruleid: await-in-loop-javascript
     await db.put(ids[start]);
@@ -203,14 +204,12 @@ async function inOrderSteps(steps: (() => Promise<void>)[], { reason }: { reason
 
 async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }, extra: string): Promise<void> {
   for (const item of items) {
-    // ruleid: await-in-loop-javascript
     await step(item);
   }
 }
 
 async function inOrderSteps(steps: (() => Promise<void>)[], options: { reason: string }): Promise<void> {
   for (const step of steps) {
-    // ruleid: await-in-loop-javascript
     await step();
   }
 }
@@ -225,7 +224,7 @@ async function inOrderWithoutReason(items, step) {
 class OtherOrder {
   async inOrder(items, step, options) {
     for (const item of items) {
-      // ruleid: await-in-loop-javascript
+
       await step(item);
     }
   }
@@ -233,20 +232,20 @@ class OtherOrder {
 
 async function inOrder(items, step, { reason }, extra) {
   for (const item of items) {
-    // ruleid: await-in-loop-javascript
     await step(item);
   }
 }
 
 async function inOrderSteps(steps, options) {
   for (const step of steps) {
-    // ruleid: await-in-loop-javascript
+
     await step();
   }
 }
 
 async function reviewedOrder(items, client, orders, reason) {
   await inOrder(items, async (item) => {
+    // ruleid: sequential-awaits-javascript
     const first = await client.get(item);
     const second = await orders.get(item);
     console.log(first, second);
@@ -257,6 +256,7 @@ async function reviewedOrder(items, client, orders, reason) {
   }, { reason: "Each update reads the previous write" });
   await inOrderSteps([
     async () => {
+      // ruleid: sequential-awaits-javascript
       const first = await client.get("a");
       const second = await orders.get("b");
       console.log(first, second);

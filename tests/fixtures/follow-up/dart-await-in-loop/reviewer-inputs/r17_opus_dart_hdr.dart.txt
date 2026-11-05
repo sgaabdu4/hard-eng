@@ -1,0 +1,123 @@
+// CASE init_decl_once expect=pass
+Future<void> a1(int n) async {
+  for (var i = await loadStart(); i < n; i++) {
+    use(i);
+  }
+}
+
+// CASE cond_await expect=fire
+Future<void> a2() async {
+  for (var page = 0; await hasMore(page); page++) {
+    use(page);
+  }
+}
+
+// CASE cond_compare expect=fire
+Future<void> a3(dynamic queue) async {
+  for (var i = 0; i < await queue.size(); i++) {
+    use(i);
+  }
+}
+
+// CASE update_cursor expect=fire
+Future<void> a4(dynamic api) async {
+  for (var page = await api.first(); page != null; page = await api.next(page)) {
+    use(page);
+  }
+}
+
+// CASE body_braceless_await expect=fire
+Future<void> a5(List<int> ids) async {
+  for (var i = 0; i < ids.length; i++) await save(ids[i]);
+}
+
+// CASE body_braceless_add expect=fire
+Future<List<int>> a6(List<int> ids) async {
+  final out = <int>[];
+  for (var i = 0; i < ids.length; i++) out.add(await load(ids[i]));
+  return out;
+}
+
+// CASE multi_decl_body expect=fire
+Future<void> a7(List<int> rows) async {
+  for (var i = 0, n = rows.length; i < n; i++) {
+    await save(rows[i]);
+  }
+}
+
+// CASE multi_two_counters expect=fire
+Future<void> a8(List<int> a) async {
+  for (var i = 0, j = a.length - 1; i < j; i++, j--) {
+    await swap(a[i], a[j]);
+  }
+}
+
+// CASE empty_update_body expect=fire
+Future<void> a9(List<int> ids) async {
+  for (var i = 0; i < ids.length;) {
+    await save(ids[i]);
+    i += 1;
+  }
+}
+
+// CASE empty_init_body expect=fire
+Future<void> a10(List<int> ids) async {
+  var i = 0;
+  for (; i < ids.length; i++) {
+    await save(ids[i]);
+  }
+}
+
+// CASE nested_inner_init expect=fire
+Future<void> a11(List<int> groups) async {
+  for (final g in groups) {
+    for (var i = await firstIndex(g); i < 3; i++) {
+      use(i);
+    }
+  }
+}
+
+// CASE collection_classic expect=fire
+Future<List<int>> a12(List<int> ids) async {
+  return [for (var i = 0; i < ids.length; i++) await load(ids[i])];
+}
+
+// CASE multi_init_await_body expect=fire
+Future<void> a13() async {
+  for (var rows = await loadRows(), i = 0; i < rows.length; i++) {
+    await save(rows[i]);
+  }
+}
+
+// CASE typed_init_body expect=fire
+Future<void> a14(List<int> ids) async {
+  for (int i = 0; i < ids.length; i++) {
+    await save(ids[i]);
+  }
+}
+
+// CASE typed_multi_body expect=fire
+Future<void> a15(List<int> ids) async {
+  for (int i = 0, n = ids.length; i < n; i++) {
+    await save(ids[i]);
+  }
+}
+
+// CASE body_try expect=fire
+Future<void> a16(List<int> ids) async {
+  for (var i = 0; i < ids.length; i++) {
+    try {
+      await save(ids[i]);
+    } catch (e) {
+      use(0);
+    }
+  }
+}
+
+// CASE labeled expect=fire
+Future<void> a17(List<int> ids) async {
+  outer:
+  for (var i = 0; i < ids.length; i++) {
+    await save(ids[i]);
+  }
+}

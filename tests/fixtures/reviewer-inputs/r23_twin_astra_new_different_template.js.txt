@@ -1,0 +1,13 @@
+export async function mapLimit(items, width, operation) {
+	let next = 0;
+	const results = [];
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				consume(await operation(items[index]), `${await record(items[index])}`);
+			}
+		}),
+	);
+	return results;
+}

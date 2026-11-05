@@ -1,0 +1,6 @@
+class Runner { async inOrderSteps<T>(items: (() => Promise<void>)[], options: Options): Promise<void> { for (const item of items) {
+  await item();
+} } }
+type Options = {reason: string};
+
+new Runner().inOrderSteps([], {reason: "Each update reads the previous write"});

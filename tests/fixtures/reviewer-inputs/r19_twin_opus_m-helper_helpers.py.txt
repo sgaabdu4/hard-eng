@@ -1,0 +1,54 @@
+import asyncio
+from typing import Awaitable, Callable, Sequence, TypeVar
+
+T = TypeVar("T")
+
+
+# CASE py_canonical expect=pass
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE py_typed_docstring expect=pass
+async def map_with_concurrency_typed(
+    items: Sequence[T], width: int, operation: Callable[[T], Awaitable[None]]
+) -> None:
+    """Run operation on items, at most width at a time."""
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE py_comment_in_body expect=pass
+async def map_with_concurrency_c(items, width, operation):
+    for offset in range(0, len(items), width):
+        # Await one chunk at a time.
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE py_method expect=pass
+class Pool:
+    async def map_with_concurrency(self, items, width, operation):
+        for offset in range(0, len(items), width):
+            await asyncio.gather(
+                *(operation(item) for item in items[offset : offset + width])
+            )
+
+
+# CASE py_impostor_serial_inner expect=fire
+async def map_with_concurrency_bad(items, width, operation):
+    for offset in range(0, len(items), width):
+        for item in items[offset : offset + width]:
+            await operation(item)
+
+
+# CASE py_in_order_canonical expect=pass
+async def in_order(items, step, *, reason):
+    for item in items:
+        await step(item)

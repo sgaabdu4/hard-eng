@@ -1,0 +1,16 @@
+func work() async throws {
+  // ruleid: sequential-awaits-swift
+  let first = try await users.get(1)
+  var second = await orders.get(2)
+  print(first, second)
+  // ruleid: sequential-awaits-swift
+  var third = await accounts.get(3)
+  let fourth = try await records.get(4)
+  print(third, fourth)
+  let head = try await users.get(1)
+  let tail = try await orders.many { head + 1 }
+  print(head, tail)
+  let left = try await users.get(1)
+  let right = try await orders.each({ value in value + left })
+  print(left, right)
+}

@@ -1,0 +1,36 @@
+import asyncio
+from asyncio import TaskGroup
+
+
+async def per_item(users, save, notify):
+    for user in users:
+        # ruleid: await-in-loop-python
+        async with asyncio.TaskGroup() as group:
+            group.create_task(save(user))
+            group.create_task(notify(user))
+
+
+async def per_batch(groups, read):
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        async with TaskGroup() as group:
+            for item in batch:
+                group.create_task(read(item))
+
+
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        async with asyncio.TaskGroup() as group:
+            for item in items[offset : offset + width]:
+                group.create_task(operation(item))
+
+
+class WrongBody:
+    async def map_with_concurrency(self, items, width, operation):
+        for offset in range(0, len(items), width):
+            # ruleid: await-in-loop-python
+            async with TaskGroup() as group:
+                for item in items[offset : offset + width]:
+                    group.create_task(operation(item))
+            # ruleid: await-in-loop-python
+            await audit()

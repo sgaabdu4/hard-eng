@@ -1,0 +1,181 @@
+// CASE ts_plain_control expect=pass
+export async function mapLimit<T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+): Promise<void> {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(items[index]);
+			}
+		}),
+	);
+}
+
+// CASE ts_trailing_comment expect=pass
+export async function mapLimit2<T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+): Promise<void> {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(items[index]); // claimed slot
+			}
+		}),
+	);
+}
+
+// CASE ts_results_non_null expect=pass
+export async function mapLimit3<T, R>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<R>,
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				results[index] = await operation(items[index]!);
+			}
+		}),
+	);
+	return results;
+}
+
+// CASE ts_extra_awaited_arg expect=fire
+export async function mapLimit4<T>(
+	items: T[],
+	width: number,
+	operation: (item: T, token: string) => Promise<void>,
+): Promise<void> {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(items[index], await token());
+			}
+		}),
+	);
+}
+
+// CASE ts_awaited_inner_arg expect=fire
+export async function mapLimit5<T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+): Promise<void> {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(await prepare(items[index]));
+			}
+		}),
+	);
+}
+
+// CASE ts_two_stmt_worker expect=fire
+export async function mapLimit6<T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+): Promise<void> {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await audit(index);
+				await operation(items[index]);
+			}
+		}),
+	);
+}
+
+// CASE ts_width_one expect=fire
+export async function serialWorker<T>(
+	items: T[],
+	operation: (item: T) => Promise<void>,
+): Promise<void> {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: 1 }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(items[index]);
+			}
+		}),
+	);
+}
+
+// CASE ts_non_null_awaited_extra expect=fire
+export async function mapLimit7<T>(
+	items: T[],
+	width: number,
+	operation: (item: T, token: string) => Promise<void>,
+): Promise<void> {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(items[index]!, await token());
+			}
+		}),
+	);
+}
+
+// CASE ts_nested_await_arg_expression expect=fire
+export async function mapLimit8<T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+): Promise<void> {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(items[(await nextSlot()) ?? index]);
+			}
+		}),
+	);
+}
+
+// CASE ts_member_op expect=pass
+export async function mapLimit9<T>(
+	items: T[],
+	width: number,
+	client: { send(item: T): Promise<void> },
+): Promise<void> {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await client.send(items[index]);
+			}
+		}),
+	);
+}
+
+// CASE ts_plain_loop_control expect=fire
+export async function plain<T>(
+	items: T[],
+	operation: (item: T) => Promise<void>,
+): Promise<void> {
+	for (const item of items) {
+		await operation(item);
+	}
+}

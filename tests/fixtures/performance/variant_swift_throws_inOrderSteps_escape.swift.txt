@@ -1,0 +1,12 @@
+func inOrderSteps(_ items: [() async throws -> Void], reason: String) async throws {
+  for item in items {
+    // ruleid: await-in-loop-swift
+    try await client.put(item)
+    // ruleid: await-in-loop-swift
+    try await audit.save(item)
+  }
+}
+
+func use() async throws {
+  try await inOrderSteps([], reason: "Each update reads the previous write")
+}

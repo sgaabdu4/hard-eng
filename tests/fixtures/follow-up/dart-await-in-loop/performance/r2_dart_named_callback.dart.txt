@@ -1,0 +1,15 @@
+Future<void> run(items) async {
+ for (final item in items) {
+  Future<void> callback() async { await write(item); }
+  callbacks.add(callback);
+  // ruleid: await-in-loop-dart
+  await callback();
+  Future<void> nested() async {
+   for (final child in children) {
+    // ruleid: await-in-loop-dart
+    await write(child);
+   }
+  }
+  callbacks.add(nested);
+ }
+}

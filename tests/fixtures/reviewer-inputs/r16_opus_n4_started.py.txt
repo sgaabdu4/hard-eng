@@ -1,0 +1,45 @@
+import asyncio
+
+
+# CASE py_as_completed expect=pass
+async def a(urls, fetch):
+    results = []
+    for done in asyncio.as_completed([fetch(url) for url in urls]):
+        results.append(await done)
+    return results
+
+
+# CASE py_created_tasks_collect expect=pass
+async def b(urls, fetch):
+    tasks = [asyncio.create_task(fetch(url)) for url in urls]
+    results = []
+    for task in tasks:
+        results.append(await task)
+    return results
+
+
+# CASE py_created_tasks_try_each expect=pass
+async def c(urls, fetch, log):
+    tasks = [asyncio.create_task(fetch(url)) for url in urls]
+    for task in tasks:
+        try:
+            await task
+        except Exception as error:
+            log(error)
+
+
+# CASE py_as_completed_timeout expect=pass
+async def d(aws):
+    for done in asyncio.as_completed(aws, timeout=30):
+        print(await done)
+
+
+# CASE py_control_serial expect=fire
+async def e(urls, fetch):
+    results = []
+    for url in urls:
+        results.append(await fetch(url))
+    return results
+
+
+# CASE end expect=pass

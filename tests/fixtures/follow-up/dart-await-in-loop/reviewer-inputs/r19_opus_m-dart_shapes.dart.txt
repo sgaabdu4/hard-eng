@@ -1,0 +1,277 @@
+Future<void> save(Object? x) async {}
+Future<bool> isFree(int x) async => x > 2;
+Future<bool> more(int i) async => i < 3;
+
+// CASE one_decl_plain expect=fire
+Future<void> a1(List<int> items) async {
+  for (var i = 0; i < items.length; i++) {
+    await save(items[i]);
+  }
+}
+
+// CASE two_decl_plain expect=fire
+Future<void> a2(List<int> items) async {
+  for (var i = 0, n = items.length; i < n; i++) {
+    await save(items[i]);
+  }
+}
+
+// CASE typed_two_decl_plain expect=fire
+Future<void> a3(List<int> items) async {
+  for (int i = 0, n = items.length; i < n; i++) {
+    await save(items[i]);
+  }
+}
+
+// CASE three_decl_plain expect=fire
+Future<void> a4(List<int> items) async {
+  for (var i = 0, n = items.length, step = 1; i < n; i += step) {
+    await save(items[i]);
+  }
+}
+
+// CASE empty_init_plain expect=fire
+Future<void> a5(List<int> items) async {
+  var i = 0;
+  for (; i < items.length; i++) {
+    await save(items[i]);
+  }
+}
+
+// CASE empty_update_plain expect=fire
+Future<void> a6(List<int> items) async {
+  for (var i = 0; i < items.length;) {
+    await save(items[i]);
+    i++;
+  }
+}
+
+// CASE two_decl_braceless expect=fire
+Future<void> a7(List<int> items) async {
+  for (var i = 0, n = items.length; i < n; i++) await save(items[i]);
+}
+
+// CASE two_decl_raw_string expect=fire
+Future<void> a8(List<String> names) async {
+  for (var i = 0, n = names.length; i < n; i++) {
+    await save(names[i].replaceAll(r'\', ''));
+  }
+}
+
+// CASE two_decl_triple_string expect=fire
+Future<void> a9(List<String> names) async {
+  for (var i = 0, n = names.length; i < n; i++) {
+    await save('''Don't {${names[i]}''');
+  }
+}
+
+// CASE two_decl_early_return expect=pass
+Future<int> b1(List<int> ids) async {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return -1;
+}
+
+// CASE two_decl_braced_break expect=pass
+Future<int> b2(List<int> ids) async {
+  var found = -1;
+  for (var i = 0, n = ids.length; i < n; i++) {
+    if (await isFree(ids[i])) {
+      found = ids[i];
+      break;
+    }
+  }
+  return found;
+}
+
+// CASE empty_update_reverse_return expect=pass
+Future<int> b3(List<int> ids) async {
+  for (var i = ids.length; i-- > 0;) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return -1;
+}
+
+// CASE two_decl_retry_delay expect=pass
+Future<int> b4(Future<int> Function() call) async {
+  for (var attempt = 0, delay = 200; attempt < 5; attempt++, delay *= 2) {
+    try {
+      return await call();
+    } catch (_) {
+      await Future.delayed(Duration(milliseconds: delay));
+    }
+  }
+  throw StateError('failed');
+}
+
+// CASE two_decl_local_function expect=pass
+Future<void> b5(List<int> items) async {
+  final jobs = <Future<void> Function()>[];
+  for (var i = 0, n = items.length; i < n; i++) {
+    Future<void> job() async {
+      await save(items[i]);
+    }
+    jobs.add(job);
+  }
+  await Future.wait(jobs.map((j) => j()));
+}
+
+// CASE braceless_switch_break expect=fire
+Future<void> c1(List<String> events) async {
+  for (final evt in events)
+    switch (evt) {
+      case 'save':
+        await save(evt);
+        break;
+      default:
+        await save(evt);
+    }
+}
+
+// CASE two_decl_braced_switch_break expect=fire
+Future<void> c2(List<String> events) async {
+  for (var i = 0, n = events.length; i < n; i++) {
+    switch (events[i]) {
+      case 'save':
+        await save(events[i]);
+        break;
+      default:
+        await save(events[i]);
+    }
+  }
+}
+
+// CASE for_in_inner_break_outer_await expect=fire
+Future<void> c3(List<List<int>> orders) async {
+  for (final order in orders) {
+    for (final line in order) {
+      if (line < 0) break;
+    }
+    await save(order);
+  }
+}
+
+// CASE two_decl_inner_break_outer_await expect=fire
+Future<void> c4(List<List<int>> orders) async {
+  for (var i = 0, n = orders.length; i < n; i++) {
+    for (final line in orders[i]) {
+      if (line < 0) break;
+    }
+    await save(orders[i]);
+  }
+}
+
+// CASE for_in_callback_return_outer_await expect=fire
+Future<void> c5(List<List<int>> orders) async {
+  for (final order in orders) {
+    final lines = order.where((line) {
+      if (line < 0) return false;
+      return line > 0;
+    }).toList();
+    await save(lines);
+  }
+}
+
+// CASE infinite_for_worker expect=pass
+Future<void> d1(Stream<int> q, Future<int?> Function() next) async {
+  for (;;) {
+    final job = await next();
+    if (job == null) break;
+    await save(job);
+  }
+}
+
+// CASE infinite_for_nested_per_item expect=fire
+Future<void> d2(Future<List<int>> Function() next) async {
+  for (;;) {
+    final batch = await next();
+    for (final item in batch) {
+      await save(item);
+    }
+  }
+}
+
+// CASE comment_header_no_loop expect=pass
+Future<void> e1(List<int> items) async {
+  // for (var i = 0, n = items.length; i < n; i++) {
+  //   await save(items[i]);
+  // }
+  await save(items);
+}
+
+// CASE string_header_no_loop expect=pass
+Future<void> e2() async {
+  const doc = 'for (var i = 0; i < n; i++) {';
+  await save(doc);
+}
+
+// CASE two_decl_cond_empty_body expect=fire
+Future<void> f1() async {
+  for (var i = 0, j = 1; await more(i + j); i++);
+}
+
+// CASE one_decl_update_empty_body expect=fire
+Future<void> f2() async {
+  for (var i = 0; i < 4; await save(i), i++);
+}
+
+// CASE two_decl_update_braced_empty expect=fire
+Future<void> f3() async {
+  for (var i = 0, j = 0; i < 4; await save(i + j), i++) {}
+}
+
+// CASE two_decl_nested_inner_per_item expect=fire
+Future<void> g1(List<List<int>> groups) async {
+  for (var g = 0, n = groups.length; g < n; g++) {
+    for (final item in groups[g]) {
+      await save(item);
+    }
+  }
+}
+
+// CASE labeled_continue expect=fire
+Future<void> g2(List<List<int>> groups) async {
+  outer:
+  for (final group in groups) {
+    for (final item in group) {
+      if (item < 0) continue outer;
+      await save(item);
+    }
+  }
+}
+
+// CASE await_for_stream expect=pass
+Future<void> h1(Stream<int> stream) async {
+  await for (final chunk in stream) {
+    await save(chunk);
+  }
+}
+
+// CASE await_for_nested_per_item expect=fire
+Future<void> h2(Stream<List<int>> stream) async {
+  await for (final chunk in stream) {
+    for (final row in chunk) {
+      await save(row);
+    }
+  }
+}
+
+// CASE lazy_cache_once expect=pass
+Future<void> i1(List<int> items, Map<String, Object> cache) async {
+  Object? client;
+  for (final item in items) {
+    client ??= await connect();
+    use(client, item);
+  }
+}
+Future<Object> connect() async => Object();
+void use(Object? a, int b) {}
+
+// CASE while_reader_assign expect=pass
+Future<void> i2(Future<int?> Function() read) async {
+  int? row;
+  while ((row = await read()) != null) {
+    use(row, 0);
+  }
+}

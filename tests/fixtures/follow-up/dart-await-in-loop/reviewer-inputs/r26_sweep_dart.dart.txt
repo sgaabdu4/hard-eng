@@ -1,0 +1,51 @@
+Future<void> sweep(dynamic items, dynamic node, dynamic cache, dynamic values, dynamic otherValues, dynamic defaults, dynamic owner, dynamic client, dynamic save) async {
+ var index = 0;
+ for (final item in items) {
+  node.hidden = true;
+  (node).value = item;
+  (node as Widget).value = item;
+  cache[item] = item;
+  (cache)[item] = item;
+  (await getCache())[item] = item;
+  (await getBox()).value = item;
+  final label = node?.label;
+  client?.notify(item);
+  node..value = item..hidden = false;
+  node?..value = item;
+  final copy = [...values, item];
+  final copy2 = [...?otherValues, item];
+  final opts = {...defaults, 'value': item};
+  final text = 'item $item';
+  final message = 'item ${item.toString()}';
+  final raw = r'\s+';
+  final clean = text.replaceAll(RegExp(r'"'), '');
+  // Don't reorder these writes.
+  await inOrder([item], save, reason: 'Each write depends on the prior saved state');
+  owner.cache ??= {};
+  final value = label ?? 'unknown';
+  owner.count++;
+  final int count = values.length;
+  final List<String> keys = values.map((x) => x.toString()).toList();
+  final filtered = [if (node.ready) item];
+  final mapped = [for (final value in values) value.toString()];
+  final (left, right) = (item, index);
+  final pair = (left: item, right: index);
+  final status = switch (index) { 0 => 'first', _ => 'next' };
+  try { sink(item); } finally { node.done = true; }
+  @deprecated
+  void local() { sink(item); }
+  await save(item);
+
+ }
+}
+
+void scanEmptyBodies(List<String> groups) {
+  for (final line in groups) {
+    for (var i = 0; i < line.length; i++) {}
+    if (line.isNotEmpty) break;
+  }
+  for (final line in groups) {
+    for (var i = 0; i < line.length; i++) {}
+    if (line.isNotEmpty) return;
+  }
+}

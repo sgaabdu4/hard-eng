@@ -1,0 +1,24 @@
+func run(groups: [[Int]]) async throws {
+ for batch in groups {
+  async let rows = withThrowingTaskGroup(of: Int.self) { group in
+   for item in batch { group.addTask { try await read(item) } }
+   var rows: [Int] = []
+   for try await row in group { rows.append(row) }
+   return rows
+  }
+  // ruleid: await-in-loop-swift
+  consume(try await rows)
+ }
+ for batch in groups {
+  async let rows = withThrowingTaskGroup(of: Int.self) { group in
+   for item in batch { group.addTask { try await read(item) } }
+   var rows: [Int] = []
+   for try await row in group { rows.append(row) }
+   return rows
+  }
+  // ruleid: await-in-loop-swift
+  try await inspect(batch)
+  // ruleid: await-in-loop-swift
+  consume(try await rows)
+ }
+}

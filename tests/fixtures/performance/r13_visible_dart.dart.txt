@@ -1,0 +1,13 @@
+Future<void> run(dynamic items, dynamic save, int width) async {
+  await mapWithConcurrency(items, 4, save, 1);
+  // ruleid: serial-bounded-helper-dart
+  await mapWithConcurrency(items, 1, save, 4);
+  // ok: serial-bounded-helper-dart
+  await mapWithConcurrency(items, save, 1, retries: 5);
+  await mapWithConcurrency(items, 1, save, width: 4);
+  // ruleid: serial-bounded-helper-dart
+  await mapWithConcurrency(items, 4, save, width: 1);
+  const local = 1;
+  // ok: serial-bounded-helper-dart
+  await pool.mapWithConcurrency<int, void>(items, save, local);
+}

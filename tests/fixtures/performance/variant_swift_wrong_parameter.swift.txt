@@ -1,0 +1,6 @@
+func inOrder<T>(_ items: [T], reason: String, _ stepper: (T) async throws -> Void) async throws {
+  for item in items {
+    // ruleid: await-in-loop-swift
+    try await step(item)
+  }
+}

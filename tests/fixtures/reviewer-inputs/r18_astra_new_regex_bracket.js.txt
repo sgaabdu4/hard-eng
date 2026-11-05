@@ -1,0 +1,5 @@
+async function run(items) {
+  for (let i=0,n=items.length;i<n;i++) {
+    if (/\)/.test(items[i])) await save(items[i]);
+  }
+}

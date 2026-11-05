@@ -1,0 +1,8 @@
+func run(_ items: [Int], _ op: (Int) async -> Void) async {
+  for item in items { await op(item) }
+  for item in items {
+    let task = Task { await op(item) }
+    await task.value
+  }
+  for item in items { Task { await op(item) } }
+}

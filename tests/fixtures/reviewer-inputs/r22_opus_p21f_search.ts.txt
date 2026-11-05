@@ -1,0 +1,9 @@
+// CASE ts_inner_iterable_return expect=fire
+export async function firstPlain(groups: string[], store: Store) {
+  for (const group of groups) {
+    for (const row of await store.rows(group)) {
+      if (row) return row;
+    }
+  }
+  return null;
+}

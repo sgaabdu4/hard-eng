@@ -1,0 +1,8 @@
+Future<void> run(items, int width) async {
+ for (final batch in chunks(items, width)) {
+  for (var start = 0; start < batch.length; start += 2) {
+   // ruleid: await-in-loop-dart
+   await Future.wait(batch.skip(start).take(2).map(read));
+  }
+ }
+}

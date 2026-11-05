@@ -1,0 +1,16 @@
+async def run(items, width):
+    for batch in prepared_batches:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(save(item) for item in batch))
+    for batch in prepare_chunks(items, width):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(save(item) for item in batch))
+    for start in range(len(items), 0, -width):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(save(item) for item in items[start-width:start]))
+    for item in unique(items):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(save(item), notify(item))
+    for start in range(0, len(items), 1):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(save(items[start]))

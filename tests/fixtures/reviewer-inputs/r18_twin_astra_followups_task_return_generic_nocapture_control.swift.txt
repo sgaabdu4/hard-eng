@@ -1,0 +1,23 @@
+import Foundation
+
+actor Store {
+  var saved: [Int] = []
+  func save(_ item: Int) { saved.append(item) }
+  func count() -> Int { saved.count }
+}
+@main struct Main {
+  static func main() async {
+    let store = Store()
+    var tasks: [Task<Void, Never>] = []
+    for item in [1, 2, 3] {
+      let task = Task<Void, Never> {
+        print(item)
+      }
+      tasks.append(task)
+      await store.save(item)
+    }
+    let count = await store.count()
+    precondition(count == 3)
+    print("saved=3")
+  }
+}

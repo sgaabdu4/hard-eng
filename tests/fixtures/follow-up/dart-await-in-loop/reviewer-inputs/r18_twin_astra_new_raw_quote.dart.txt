@@ -1,0 +1,6 @@
+Future<void> run(List<int> items) async {
+  for (var i = 0, n = items.length; i < n; i++) {
+    print(r"\");
+    await save(items[i]);
+  }
+}

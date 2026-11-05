@@ -1,0 +1,6 @@
+// CASE js_sync_rhs expect=fire
+export async function c(items, getCache) {
+  for (const item of items) {
+    (await getCache())[item] = item;
+  }
+}

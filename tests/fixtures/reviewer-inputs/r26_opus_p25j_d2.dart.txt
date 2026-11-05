@@ -1,0 +1,8 @@
+int scan(String s) {
+  for (var i = 0; i < s.length; i++) {
+    var j = i;
+    for (; j < s.length && s[j] == ' '; j++) {}
+    if (j > i) break;
+  }
+  return 0;
+}

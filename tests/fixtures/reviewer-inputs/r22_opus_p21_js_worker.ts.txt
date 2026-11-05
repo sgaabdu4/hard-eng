@@ -1,0 +1,139 @@
+// CASE ts_worker_template_extra expect=fire
+export async function a<T>(items: T[], width: number, operation: (item: T, tag: string) => Promise<void>, label: (x: T) => Promise<string>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await operation(items[index], `${await label(items[index])}`);
+    }
+  }));
+}
+// CASE ts_worker_template_sibling expect=fire
+export async function b<T>(items: T[], width: number, operation: (item: T) => Promise<void>, label: (x: T) => Promise<string>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      log(await operation(items[index]), `${await label(items[index])}`);
+    }
+  }));
+}
+// CASE ts_worker_ternary_extra expect=fire
+export async function c<T>(items: T[], width: number, operation: (item: T) => Promise<void>, fallback: (x: T) => Promise<void>, ok: boolean) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      ok ? await operation(items[index]) : await fallback(items[index]);
+    }
+  }));
+}
+// CASE ts_worker_spread_extra expect=fire
+export async function d<T>(items: T[], width: number, operation: (item: T) => Promise<number[]>, more: (x: T) => Promise<number[]>, results: number[][]) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = [...(await operation(items[index])), ...(await more(items[index]))];
+    }
+  }));
+}
+// CASE ts_worker_default_param_extra expect=fire
+export async function e<T>(items: T[], width: number, operation: (item: T, cb: unknown) => Promise<void>, prep: () => Promise<number>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await operation(items[index], (n = await prep()) => n);
+    }
+  }));
+}
+// CASE ts_worker_nested_callback_await expect=fire
+export async function f<T>(items: T[], width: number, operation: (item: T, cb: () => Promise<void>) => Promise<void>, audit: (x: T) => Promise<void>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await operation(items[index], async () => { await audit(items[index]); });
+    }
+  }));
+}
+// CASE ts_worker_duplicate_comment_quote expect=fire
+export async function g<T>(items: T[], width: number, operation: (item: T) => Promise<number>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge(await operation(items[index]) /* don't */, await operation(items[index]), 'x');
+    }
+  }));
+}
+// CASE ts_worker_duplicate_template expect=fire
+export async function h<T>(items: T[], width: number, operation: (item: T) => Promise<number>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      log(await operation(items[index]), `${await operation(items[index])}`);
+    }
+  }));
+}
+// CASE ts_worker_honest_comment_apostrophe expect=pass
+export async function i<T>(items: T[], width: number, operation: (item: T) => Promise<void>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await operation(/* don't "await" twice */ items[index]);
+    }
+  }));
+}
+// CASE ts_worker_honest_line_comment_await expect=pass
+export async function j<T>(items: T[], width: number, operation: (item: T) => Promise<void>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await operation(
+        // we don't await anything else here
+        items[index],
+      );
+    }
+  }));
+}
+// CASE ts_worker_honest_results_multiline expect=pass
+export async function k<T, R>(items: T[], width: number, operation: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await operation(
+          items[index]!, // it's safe: index < length
+        );
+      }
+    }),
+  );
+  return results;
+}
+// CASE ts_worker_cast expect=pass
+export async function l<T>(items: unknown[], width: number, operation: (item: T) => Promise<void>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await operation(items[index] as T);
+    }
+  }));
+}
+// CASE ts_worker_type_args expect=pass
+export async function m<T>(items: T[], width: number, operation: <U>(item: U) => Promise<void>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await operation<T>(items[index]);
+    }
+  }));
+}

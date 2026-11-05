@@ -1,0 +1,78 @@
+// CASE dart_switch_expr expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    consume(await step(item), switch (item) {
+      _ => await save(item),
+    });
+  }
+}
+
+// CASE dart_record expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    final (a, b) = (await step(item), await save(item));
+  }
+}
+
+// CASE dart_null_aware expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    consume(await step(item), cache[item] ?? await save(item));
+  }
+}
+
+// CASE dart_index_target expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    cache[await key(item)] = await step(item);
+  }
+}
+
+// CASE dart_map_literal expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    consume({'step': await step(item), 'audit': await save(item)});
+  }
+}
+
+// CASE dart_spread_distinct expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    consume(await step(item), [...await save(item)]);
+  }
+}
+
+// CASE dart_simple_interp_then_await expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    consume(await step(item), '$item ${await save(item)}');
+  }
+}

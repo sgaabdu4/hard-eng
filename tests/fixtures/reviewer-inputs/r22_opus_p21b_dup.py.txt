@@ -1,0 +1,8 @@
+# CASE py_dup_plain expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        log(await step(item), await step(item))
+# CASE py_dup_two_strings expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        log(await step(item), "a", await step(item), "b")

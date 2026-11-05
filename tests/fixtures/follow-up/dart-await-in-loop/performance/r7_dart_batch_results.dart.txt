@@ -1,0 +1,64 @@
+Future<void> run(groups, other, read, output) async {
+  for (final batch in groups) {
+    // A synchronous prelude does not await.
+    report(batch.length);
+    // ruleid: await-in-loop-dart
+    final rows = await Future.wait<Row>(
+      batch.where((item) => item.enabled).map(read),
+      eagerError: true,
+    );
+    output.addAll(rows);
+  }
+  for (final batch in groups) {
+    if (batch.isNotEmpty)
+      output.addAll(
+        // ruleid: await-in-loop-dart
+        await Future.wait(batch.where((item) => item.enabled).map(read)),
+      );
+  }
+  for (final batch in groups) {
+    // ruleid: await-in-loop-dart
+    final rows = await batch
+        .where((item) => item.enabled)
+        .map<Future<Row>>(read)
+        .wait;
+  }
+  for (final batch in groups) {
+    // ruleid: await-in-loop-dart
+    await Future.wait(
+      batch
+          .where((item) => item.enabled && item.readyForAnotherAttempt)
+          .map(
+            (item) => read(
+              item,
+              'a long collection argument that the formatter wraps',
+            ),
+          ),
+      eagerError: true,
+      cleanUp: clean,
+    );
+  }
+  for (final batch in groups) {
+    // ruleid: await-in-loop-dart
+    final rows = await Future.wait(
+      other.where((item) => item.enabled).map(read),
+    );
+  }
+  for (final item in other) {
+    // ruleid: await-in-loop-dart
+    final rows = await Future.wait([read(item), notify(item)]);
+  }
+  for (final batch in groups) {
+    // ruleid: await-in-loop-dart
+    await reportAsync(batch);
+    // ruleid: await-in-loop-dart
+    final rows = await Future.wait(
+      batch.where((item) => item.enabled).map(read),
+    );
+  }
+}
+
+Future<dynamic> first(groups, read) async {
+  for (final batch in groups)
+    return await Future.wait(batch.where((item) => item.enabled).map(read));
+}

@@ -1,0 +1,34 @@
+Future<void> update(store, groups) async {
+  for (final row in await store.rows()) {
+    print(row);
+  }
+  for (final group in groups) {
+    // ruleid: await-in-loop-dart
+    for (final row in await store.rows(group)) {
+      print(row);
+    }
+  }
+  for (final row in await store.rows()) {
+    // ruleid: await-in-loop-dart
+    await store.save(row);
+  }
+}
+
+void register(kinds, store) {
+  for (final kind in kinds) {
+    group(kind, () {
+      beforeEach(() async {
+        for (final row in await store.rows()) {
+          // ruleid: await-in-loop-dart
+          await store.save(row);
+        }
+        for (final batch in store.batches) {
+          // ruleid: await-in-loop-dart
+          for (final row in await store.rows(batch)) {
+            print(row);
+          }
+        }
+      });
+    });
+  }
+}

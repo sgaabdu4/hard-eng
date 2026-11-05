@@ -1,0 +1,5 @@
+Future<void> a(List<String> items, Future<void> Function(String) op) async {
+  await mapWithConcurrency(items, 4, op, retries: 1);
+  await mapWithConcurrency(items.take(1).toList(), 4, op);
+  await mapWithConcurrency(items, width: 8, operation: op, timeout: 1);
+}

@@ -1,0 +1,4 @@
+async function run(items, step, options) {
+ await inOrder(items, step, {reason: "Each reason: every step ... reads previous output"});
+ await inOrder(items, step, {reason: "Each update reads the previous write", metadata: {reason: "", ...options}});
+}

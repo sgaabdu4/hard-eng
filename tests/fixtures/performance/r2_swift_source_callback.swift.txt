@@ -1,0 +1,20 @@
+func run(items: [Int]) async {
+ for item in await load() { print(item) }
+ for group in items {
+  // ruleid: await-in-loop-swift
+  for item in await load(group) { print(item) }
+ }
+ for item in items {
+  func callback() async { await write(item) }
+  callbacks.append(callback)
+  // ruleid: await-in-loop-swift
+  await callback()
+  func nested() async {
+   for child in children {
+    // ruleid: await-in-loop-swift
+    await write(child)
+   }
+  }
+  callbacks.append(nested)
+ }
+}

@@ -1,0 +1,25 @@
+// CASE honest_worker_with_cast_elsewhere expect=pass
+export async function mapLimit<T, R>(items: T[], width: number, operation: (item: T) => Promise<R>): Promise<R[]> {
+  let next = 0;
+  const results: R[] = [];
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await operation(items[index]);
+    }
+  }));
+  return results;
+}
+
+export function stamp(rows: unknown[]) {
+  for (const row of rows) {
+    (row as { stamped: boolean }).stamped = true;
+  }
+}
+
+// CASE per_item_in_same_file expect=fire
+export async function saveAll(items: string[], put: (item: string) => Promise<void>) {
+  for (const item of items) {
+    await put(item);
+  }
+}

@@ -1,0 +1,81 @@
+// CASE dart_awaited_callee_receiver expect=fire
+Future<List<R?>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<Client<T, R>> Function() pool,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await (await pool()).send(items[index]);
+      }
+    }),
+  );
+  return results;
+}
+
+// CASE dart_awaited_callee_index expect=fire
+Future<List<R?>> mapWithConcurrency2<T, R>(
+  List<T> items,
+  int width,
+  List<Client<T, R>> clients,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await clients[await pickSlot()].send(items[index]);
+      }
+    }),
+  );
+  return results;
+}
+
+// CASE dart_then_chain expect=fire
+Future<List<R?>> mapWithConcurrency3<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await operation(items[index]).then((value) async {
+          await audit(value);
+          return value;
+        });
+      }
+    }),
+  );
+  return results;
+}
+
+// CASE dart_iife_callee expect=fire
+Future<List<R?>> mapWithConcurrency4<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await ((T item) async {
+          await audit(item);
+          return operation(item);
+        })(items[index]);
+      }
+    }),
+  );
+  return results;
+}

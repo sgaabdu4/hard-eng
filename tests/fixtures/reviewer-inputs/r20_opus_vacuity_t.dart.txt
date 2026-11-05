@@ -1,0 +1,21 @@
+Future<int> plain() async {
+  report();
+  return 1;
+}
+
+Future<int> awaited() async {
+  await warmUp();
+  return 1;
+}
+
+Future<int> awaitedDecl() async {
+  final limit = await loadLimit();
+  return 1;
+}
+
+Future<int> awaitedLoop() async {
+  for (final item in items) {
+    await validate(item);
+  }
+  return 1;
+}

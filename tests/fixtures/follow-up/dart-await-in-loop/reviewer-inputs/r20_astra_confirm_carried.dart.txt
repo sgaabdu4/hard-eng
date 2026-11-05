@@ -1,0 +1,18 @@
+Future<void> optional(rows, [String? cursor]) async {
+ for (final row in rows) { cursor = await client.next(row, cursor); }
+}
+Future<void> run(rows) async {
+ final handler = (String? cursor) async {
+  for (final row in rows) { cursor = await client.next(row, cursor); }
+ };
+}
+Future<void> named(rows, String? token) async {
+ for (final row in rows) { token = await client.push(row, token: token); }
+}
+Future<void> perPass(rows) async {
+ for (final raw in rows) {
+  var token = raw;
+
+  token = await client.push(raw, token: token);
+ }
+}

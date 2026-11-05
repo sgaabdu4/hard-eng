@@ -1,0 +1,13 @@
+let next = 0;
+const saved = [];
+async function more() {
+  saved.push(next++);
+  return next < 3;
+}
+async function run() {
+  for (; await more(); );
+}
+run().then(() => {
+  if (saved.join(',') !== '0,1,2') throw new Error(String(saved));
+  console.log('saved=' + saved);
+});

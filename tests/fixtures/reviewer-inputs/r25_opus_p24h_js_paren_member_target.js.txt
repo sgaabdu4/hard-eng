@@ -1,0 +1,6 @@
+// CASE js_paren_member_target_no_await expect=fire
+export async function f(items, cache, step) {
+  for (const item of items) {
+    (cache)[item] = await step(item);
+  }
+}

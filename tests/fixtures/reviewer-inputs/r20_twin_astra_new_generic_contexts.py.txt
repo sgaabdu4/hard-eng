@@ -1,0 +1,14 @@
+import asyncio
+
+
+def identity[T](x: T) -> T:
+    return x
+
+
+async def run(items, session):
+    for item in items:
+        async with session.get(item) as response:
+            consume(response)
+    for item in items:
+        async with asyncio.TaskGroup() as group:
+            group.create_task(save(item))

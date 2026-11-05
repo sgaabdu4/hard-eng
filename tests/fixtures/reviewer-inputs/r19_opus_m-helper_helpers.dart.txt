@@ -1,0 +1,151 @@
+// CASE dart_worker_canonical expect=pass
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await operation(items[index]);
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_worker_comment expect=pass
+Future<List<R>> mapWithConcurrency2<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        // Each worker takes the next free index.
+        final index = next++;
+        results[index] = await operation(items[index]);
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_chunk_canonical expect=pass
+Future<List<R>> mapInChunks<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE dart_chunk_prelude_comment_await expect=pass
+Future<List<R>> mapInChunks2<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  // We await each chunk so at most width calls run.
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE dart_chunk_prelude_mid_comment_await expect=pass
+Future<List<R>> mapInChunks3<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  // Do not await items one by one here.
+  assert(width > 0);
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE dart_worker_static_method expect=pass
+class Pool {
+  static Future<List<R>> mapWithConcurrency<T, R>(
+    List<T> items,
+    int width,
+    Future<R> Function(T) operation,
+  ) async {
+    final results = List<R?>.filled(items.length, null);
+    var next = 0;
+    await Future.wait(
+      List.generate(width, (_) async {
+        while (next < items.length) {
+          final index = next++;
+          results[index] = await operation(items[index]);
+        }
+      }),
+    );
+    return results.cast<R>();
+  }
+}
+
+// CASE dart_worker_impostor_extra_await expect=fire
+Future<List<R>> mapWithConcurrency3<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await operation(items[index]);
+        await Future<void>.value();
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_chunk_impostor_inner_loop expect=fire
+Future<List<R>> mapInChunks4<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    for (final item in group) {
+      results.add(await operation(item));
+    }
+  }
+  return results;
+}
+
+// CASE dart_inorder_canonical expect=pass
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T item) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    await step(item);
+  }
+}

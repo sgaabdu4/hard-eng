@@ -1,0 +1,9 @@
+async def run(items, groups, read):
+    # ruleid: await-in-loop-python
+    five = [await read(x) for x in items if x if x > 1 if x > 2 if x > 3 if x > 4]
+    # ruleid: await-in-loop-python
+    seven = [await read(x) for x in items if x if x > 1 if x > 2 if x > 3 if x > 4 if x > 5 if x > 6]
+    # ruleid: await-in-loop-python
+    nested = [await read(x) for group in groups for x in group if x if x > 1 if x > 2]
+    once = [x for x in await read() if x if x > 1]
+    literal = [await read()]

@@ -1,0 +1,10 @@
+// CASE for_in_cast_copy_with_await expect=fire
+export async function hydrate(
+	target: object,
+	source: Record<string, string>,
+	load: (id: string) => Promise<unknown>,
+) {
+	for (const key in source) {
+		(target as Record<string, unknown>)[key] = await load(source[key]);
+	}
+}

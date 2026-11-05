@@ -1,0 +1,16 @@
+func run(_ items: [Int], _ save: (Int) async -> Void, _ width: Int) async {
+  await mapWithConcurrency(items, 4, save, 1)
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items, 1, save, 4)
+  // ok: serial-bounded-helper-swift
+  await mapWithConcurrency(items, save, 1, retries: 5)
+  await mapWithConcurrency(items, 1, save, width: 4)
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items, 4, save, width: 1)
+  let local = 1
+  // ok: serial-bounded-helper-swift
+  await pool.mapWithConcurrency(items, save, local)
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items, concurrency: 1) { item in await save(item) }
+  await mapWithConcurrency(items, width: min(4, width), operation: save)
+}

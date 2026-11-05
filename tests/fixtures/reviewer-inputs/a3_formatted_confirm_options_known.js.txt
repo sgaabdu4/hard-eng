@@ -1,0 +1,4 @@
+async function run(items, operation) {
+	const options = { concurrency: 4 };
+	await mapLimit(items, operation, { concurrency: 1, ...options });
+}

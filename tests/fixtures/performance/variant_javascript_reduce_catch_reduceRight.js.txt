@@ -1,0 +1,4 @@
+// ruleid: hidden-sequential-loop-javascript
+items.reduceRight((previous, item) => previous.then(() => write(item)).catch(failed), Promise.resolve(undefined));
+items.reduceRight((total, item) => total + item, 0);
+items.reduceRight((previous, item) => write(item), Promise.resolve());

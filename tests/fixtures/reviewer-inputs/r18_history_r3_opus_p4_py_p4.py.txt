@@ -1,0 +1,80 @@
+async def walrus_lazy(ids, cache):
+    for id_ in ids:
+        if (row := cache.get(id_)) is None:
+            # want: await-in-loop-python
+            row = await load(id_)
+        use(row)
+
+
+async def loop_var_lazy(profiles):
+    for profile in profiles:
+        if profile is None:
+            # want: await-in-loop-python
+            profile = await fetch_default()
+        use(profile)
+
+
+async def tuple_reset(assignments, clients):
+    blocking = None
+    for a in assignments:
+        blocking, seen = None, 0
+        for c in clients:
+            if blocking is None:
+                # want: await-in-loop-python
+                blocking = await active_change(c)
+        use(a, blocking, seen)
+
+
+async def loop_var_reassign(rows):
+    out = []
+    for row in rows:
+        # want: await-in-loop-python
+        row = await enrich(row)
+        out.append(row)
+
+
+async def abort_nested_raise(items, strict):
+    for item in items:
+        if failed(item):
+            # want: await-in-loop-python
+            await cleanup(item)
+            if strict:
+                raise ValueError("failed")
+
+
+async def except_reraise(items):
+    for item in items:
+        try:
+            # want: await-in-loop-python
+            await save(item)
+        except Exception:
+            await cleanup(item)
+            raise
+
+
+SHORT = "in order"
+
+
+async def short_const(rows):
+    # want: in-order-needs-reason-python
+    await in_order(rows, save, reason=SHORT)
+
+
+async def comp_three(a, b, c):
+    # want: await-in-loop-python
+    return [await f(x, y, z) for x in a for y in b for z in c]
+
+
+async def comp_three_filter(a, b, c):
+    # want: await-in-loop-python
+    return [await f(x, y, z) for x in a if x for y in b if y for z in c if z]
+
+
+async def comp_source_second(groups):
+    # want: await-in-loop-python
+    return [x for g in groups if g for x in await load(g)]
+
+
+async def comp_second_source_three(groups, more):
+    # want: await-in-loop-python
+    return [x for g in groups for m in more for x in await load(g, m)]

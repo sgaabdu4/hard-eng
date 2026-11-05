@@ -1,0 +1,46 @@
+export async function sweep(items, nodes, cache, rows, values, defaults, owner, client, sink, save) {
+ let first, second, third, rest;
+ for (const [index, item] of items.entries()) {
+  const node = nodes[index];
+  node.hidden = true;
+  (node).style.display = 'none';
+  (cache)[item] = item;
+  (await getCache())[item] = item;
+  (await getBox()).value = item;
+  (owner.cache ??= {})[item] = item;
+  [first, second] = rows[item];
+  ({ value: first } = rows[item]);
+  ({ data: [first, second] } = rows[item]);
+  ({ value: first = 0 } = rows[item]);
+  [first, ...rest] = rows[item];
+  client?.notify?.(item);
+  const label = node?.dataset?.label;
+  const opts = { ...defaults, value: item };
+  const copy = [...values, item];
+  sink.push(...values);
+  const text = `item ${item}`;
+  const raw = String.raw`item ${item}`;
+  const clean = text.replace(/"/g, '');
+  const escaped = text.replace(/["']/g, '');
+  await inOrder([item], save, { reason: 'Each write depends on the prior saved state', /* Don't reorder. */ });
+  await inOrder([item], save, { reason: 'Each write depends on the prior saved state', normalize: x => x.replace(/"/g, '') });
+  const value = label ?? text;
+  owner.ready ||= value;
+  owner.ready &&= value;
+  owner.count++;
+  const page = values.slice(0, 4);
+  const keys = page.map(x => String(x));
+  const unique = new Set(keys);
+  const indexed = new Map(keys.map((x, i) => [x, i]));
+  try { sink.push(value); } finally { owner.done = true; }
+  await save(item);
+  (node as HTMLElement).style.display = 'none';
+  (cache as Record<string, unknown>)[item] = item;
+  node!.hidden = true;
+  const typed = { value: item } satisfies { value: unknown };
+  const view = <span title={text}>{label}</span>;
+  const result: string = String(item);
+  @sealed class Local { value = item; }
+
+ }
+}

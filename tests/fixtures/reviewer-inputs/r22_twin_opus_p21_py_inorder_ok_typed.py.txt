@@ -1,0 +1,13 @@
+# CASE py_inorder_typed_docstring expect=pass
+from collections.abc import Awaitable, Callable, Iterable
+
+
+async def in_order[T](
+    items: Iterable[T],
+    step: Callable[[T], Awaitable[None]],
+    *,
+    reason: str,
+) -> None:
+    """Run each step one at a time; don't await anything else."""
+    for item in items:
+        await step(item)

@@ -1,0 +1,45 @@
+import { cpus } from "node:os";
+
+const SERIAL = 1;
+const MODULE_WIDTH = Math.min(1, cpus().length);
+
+// CASE js_let_min_one expect=fire
+export async function letMinOne(items, op, n) {
+  let width = Math.min(1, n);
+  await mapLimit(items, width, op);
+}
+
+// CASE js_var_min_one expect=fire
+export async function varMinOne(items, op, n) {
+  var width = Math.min(1, n);
+  await mapLimit(items, width, op);
+}
+
+// CASE js_module_min_one expect=fire
+export async function moduleMinOne(items, op) {
+  await mapLimit(items, MODULE_WIDTH, op);
+}
+
+// CASE js_module_const_one expect=fire
+export async function moduleConstOne(items, op) {
+  await mapLimit(items, SERIAL, op);
+}
+
+// CASE js_local_const_one expect=fire
+export async function localConstOne(items, op) {
+  const width = 1;
+  await mapLimit(items, width, op);
+}
+
+// CASE js_options_width_from_min expect=fire
+export async function optionsFromMin(items, op, n) {
+  const concurrency = Math.min(1, n);
+  await mapLimit(items, op, { concurrency });
+}
+
+// CASE js_options_width_from_local_one expect=fire
+export async function optionsFromOne(items, op) {
+  const concurrency = 1;
+  await mapLimit(items, op, { concurrency });
+}
+

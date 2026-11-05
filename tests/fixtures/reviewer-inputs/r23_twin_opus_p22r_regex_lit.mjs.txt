@@ -1,0 +1,37 @@
+// CASE js_inorder_regex_literal_apostrophe expect=pass
+export async function inOrder(items, step, { reason }) {
+	void reason;
+	for (const item of items) {
+		log(await step(item), /it's/);
+	}
+}
+// CASE js_chunk_regex_literal_quote expect=pass
+export async function mapLimit(items, width, operation) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		sink.push(
+			(await Promise.all(items.slice(offset, offset + width).map(operation)))
+				.join(",")
+				.replace(/"/g, ""),
+		);
+	}
+}
+// CASE js_chunk_regex_literal_control expect=pass
+export async function mapLimit(items, width, operation) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		sink.push(
+			(await Promise.all(items.slice(offset, offset + width).map(operation)))
+				.join(",")
+				.replace(/x/g, ""),
+		);
+	}
+}
+// CASE js_chunk_regex_literal_block_open expect=pass
+export async function mapLimit(items, width, operation) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		sink.push(
+			(await Promise.all(items.slice(offset, offset + width).map(operation)))
+				.join(",")
+				.replace(/\/*$/, ""),
+		);
+	}
+}

@@ -1,0 +1,9 @@
+const saved = [];
+async function save(item) { saved.push(item); }
+async function run(items) {
+  for (let i = 0, n = items.length; i < n; await save(items[i]), i++);
+}
+run([1, 2, 3]).then(() => {
+  if (saved.join(',') !== '1,2,3') throw new Error(String(saved));
+  console.log('saved=' + saved);
+});

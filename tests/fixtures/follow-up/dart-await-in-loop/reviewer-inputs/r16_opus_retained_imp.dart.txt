@@ -1,0 +1,45 @@
+// CASE dart_honest expect=pass
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+// CASE dart_take_one expect=fire
+class A {
+  Future<List<R>> mapWithConcurrency<T, R>(
+    List<T> items,
+    int width,
+    Future<R> Function(T) operation,
+  ) async {
+    final results = <R>[];
+    for (var offset = 0; offset < items.length; offset += 1) {
+      final group = items.skip(offset).take(1);
+      results.addAll(await Future.wait(group.map(operation)));
+    }
+    return results;
+  }
+}
+// CASE dart_extra_await expect=fire
+class B {
+  Future<List<R>> mapWithConcurrency<T, R>(
+    List<T> items,
+    int width,
+    Future<R> Function(T) operation,
+  ) async {
+    final results = <R>[];
+    for (var offset = 0; offset < items.length; offset += width) {
+      final group = items.skip(offset).take(width);
+      results.addAll(await Future.wait(group.map(operation)));
+      await flush(offset);
+    }
+    return results;
+  }
+}
+// CASE end expect=pass

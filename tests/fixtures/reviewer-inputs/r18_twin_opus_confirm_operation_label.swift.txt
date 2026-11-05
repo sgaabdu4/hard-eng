@@ -1,0 +1,71 @@
+actor Tracker {
+  var active = 0
+  var peak = 0
+  var completed = 0
+  func work(_ item: Int) async {
+    active += 1
+    peak = max(peak, active)
+    try? await Task.sleep(nanoseconds: 50_000_000)
+    active -= 1
+    completed += 1
+  }
+  func report() -> (Int, Int) { (peak, completed) }
+}
+
+// CASE group_operation_label expect=pass
+func runGroup(_ items: [Int], tracker: Tracker) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask(operation: {
+        await tracker.work(item)
+      })
+    }
+  }
+}
+
+// CASE task_operation_capture expect=pass
+func launch(_ items: [Int], tracker: Tracker) -> [Task<Void, Never>] {
+  var tasks: [Task<Void, Never>] = []
+  for item in items {
+    tasks.append(
+      Task(operation: { [tracker] in
+        await tracker.work(item)
+      }))
+  }
+  return tasks
+}
+
+// CASE generic_task_apostrophe_comment expect=pass
+func launchTyped(_ items: [Int], tracker: Tracker) -> [Task<Void, Never>] {
+  var tasks: [Task<Void, Never>] = []
+  for item in items {
+    tasks.append(
+      Task<Void, Never> {
+        // Don't wait here; the caller joins later.
+        await tracker.work(item)
+      })
+  }
+  return tasks
+}
+
+// CASE harness expect=fire
+@main
+struct Main {
+  static func main() async {
+    let a = Tracker()
+    await runGroup([1, 2, 3, 4], tracker: a)
+    let b = Tracker()
+    for task in launch([1, 2, 3, 4], tracker: b) { await task.value }
+    let c = Tracker()
+    for task in launchTyped([1, 2, 3, 4], tracker: c) { await task.value }
+    let (pa, ca) = await a.report()
+    let (pb, cb) = await b.report()
+    let (pc, cc) = await c.report()
+    print("groupOperation peak=\(pa), completed=\(ca)")
+    print("taskOperation peak=\(pb), completed=\(cb)")
+    print("typedComment peak=\(pc), completed=\(cc)")
+    if pa != 4 || pb != 4 || pc != 4 || ca != 4 || cb != 4 || cc != 4 {
+      fatalError("not concurrent")
+    }
+  }
+}

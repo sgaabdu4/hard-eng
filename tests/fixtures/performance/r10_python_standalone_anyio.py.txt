@@ -1,0 +1,8 @@
+import anyio
+
+
+async def use(items, operation):
+    for item in items:
+        # ruleid: await-in-loop-python
+        async with anyio.create_task_group() as group:
+            group.start_soon(operation, item)

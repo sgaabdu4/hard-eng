@@ -1,0 +1,34 @@
+func work(items: [Item]) async throws {
+let WIDTH = 4
+let ONE = 1
+for i in stride(from: 0, to: items.count, by: 1) {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    group.addTask { try await read(items[i]) }
+  }
+}
+for i in stride(from: 0, to: items.count, by: 2) {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    group.addTask { try await read(items[i]) }
+  }
+}
+for i in stride(from: 0, to: items.count, by: WIDTH) {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    group.addTask { try await read(items[i]) }
+  }
+}
+for i in stride(from: 0, to: items.count, by: ONE) {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    group.addTask { try await read(items[i]) }
+  }
+}
+for i in stride(from: 0, to: items.count, by: unknownWidth) {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    group.addTask { try await read(items[i]) }
+  }
+}
+}

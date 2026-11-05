@@ -1,0 +1,8231 @@
+{
+  "dart_nested_join.dart": {
+    "await-in-loop-dart": [
+      3
+    ]
+  },
+  "a1_formatted_confirm_generic_one.ts": {
+    "serial-bounded-helper-javascript": [
+      2
+    ]
+  },
+  "a1_formatted_confirm_prior_typescript.ts": {
+    "serial-bounded-helper-javascript": [
+      5
+    ]
+  },
+  "a2_formatted_confirm_min_three.js": {},
+  "a2_formatted_confirm_min_three.py": {},
+  "a2_formatted_confirm_min_three.ts": {},
+  "a3_formatted_confirm_options_known.js": {},
+  "a3_formatted_confirm_options_override.js": {},
+  "a3_formatted_confirm_options_override.ts": {},
+  "a3_formatted_new_c1_spread_one.ts": {},
+  "a3_formatted_new_c1_spread_override.ts": {},
+  "a4_formatted_confirm_comment_group.py": {},
+  "a4_formatted_confirm_generic_helper_comment.py": {},
+  "f1_q2_js_c1.ts": {
+    "serial-bounded-helper-javascript": [
+      29,
+      64
+    ],
+    "serial-bounded-helper-javascript-options": [
+      38
+    ]
+  },
+  "f1_q3_gen.ts": {
+    "serial-bounded-helper-javascript": [
+      17
+    ],
+    "serial-bounded-helper-javascript-options": [
+      2,
+      5,
+      8,
+      11,
+      14,
+      20
+    ]
+  },
+  "f1_q3_gen2.ts": {
+    "serial-bounded-helper-javascript": [
+      2,
+      5,
+      9,
+      12,
+      16,
+      19,
+      25
+    ],
+    "serial-bounded-helper-javascript-options": [
+      22
+    ]
+  },
+  "f1_r10opus_p4_c1.ts": {
+    "serial-bounded-helper-javascript": [
+      5
+    ]
+  },
+  "f2_q2_py_c1.py": {
+    "await-in-loop-python": [
+      58
+    ],
+    "serial-bounded-helper-python": [
+      63
+    ]
+  },
+  "f2_q9_order.py": {},
+  "f3_q4_py_generic.py": {
+    "await-in-loop-python": [
+      67,
+      69,
+      75,
+      77,
+      84
+    ]
+  },
+  "f3_q4_py_plain.py": {
+    "await-in-loop-python": [
+      20,
+      22,
+      29,
+      35
+    ]
+  },
+  "f3_q4fmt_py_generic.py": {
+    "await-in-loop-python": [
+      89,
+      93,
+      99,
+      103,
+      110
+    ]
+  },
+  "f4_q6_prop.ts": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r13_a1_confirm_options_property_unrelated_nested.js": {
+    "serial-bounded-helper-javascript-options": [
+      2
+    ]
+  },
+  "r13_a1_confirm_options_property_unrelated_nested.ts": {
+    "serial-bounded-helper-javascript-options": [
+      2
+    ]
+  },
+  "r13_a1_confirm_options_property_unrelated_spread.js": {
+    "serial-bounded-helper-javascript-options": [
+      2
+    ]
+  },
+  "r13_a1_confirm_options_property_unrelated_spread.ts": {
+    "serial-bounded-helper-javascript-options": [
+      2
+    ]
+  },
+  "r13_a1_confirm_options_quoted_key.js": {
+    "serial-bounded-helper-javascript-options": [
+      2
+    ]
+  },
+  "r13_a1_confirm_options_quoted_key.ts": {
+    "serial-bounded-helper-javascript-options": [
+      2
+    ]
+  },
+  "r13_a1_new_options_property_before_duplicate.js": {},
+  "r13_a1_new_options_property_before_duplicate.ts": {},
+  "r13_a2_confirm_options_two_phases.js": {},
+  "r13_a2_confirm_options_two_phases.ts": {},
+  "r13_a2_confirm_options_write_after.js": {},
+  "r13_a2_confirm_options_write_after.ts": {},
+  "r13_a3_confirm_options_assign_before.js": {},
+  "r13_a3_confirm_options_assign_before.ts": {},
+  "r13_a3_new_options_assign_conditional.js": {},
+  "r13_a3_new_options_assign_conditional.ts": {},
+  "r13_a4_confirm_options_min_cap.js": {},
+  "r13_a4_confirm_options_min_cap.ts": {},
+  "r13_f1_n1_js_width.js": {},
+  "r13_f1_n1_js_width.ts": {},
+  "r13_f1_n8_min_options.ts": {},
+  "r13_f1_n9_opts_more.js": {},
+  "r13_f2_n10_local_dots.ts": {},
+  "r13_f2_n2_options.ts": {
+    "serial-bounded-helper-javascript-options": [
+      55,
+      66,
+      71,
+      76,
+      81
+    ]
+  },
+  "r13_f3_n2_options.ts": {
+    "serial-bounded-helper-javascript-options": [
+      55,
+      66,
+      71,
+      76,
+      81
+    ]
+  },
+  "r13_f4_n4_py_positional.py": {
+    "serial-bounded-helper-python": [
+      79
+    ]
+  },
+  "r13_f5_fmt_n5_py_generic_comments.py": {
+    "await-in-loop-python": [
+      60,
+      64,
+      70,
+      74,
+      80,
+      85
+    ]
+  },
+  "r13_f5_n5_py_generic_comments.py": {
+    "await-in-loop-python": [
+      54,
+      56,
+      62,
+      64,
+      70,
+      73
+    ]
+  },
+  "r13_f5_n5_py_plain_comments.py": {},
+  "r13_f6_n6_dart_order.dart": {},
+  "r13_f6_n6_swift_min.swift": {},
+  "r13_o1_n6_dart_named_helper.dart": {},
+  "r13_o2_n2_options.ts": {
+    "serial-bounded-helper-javascript-options": [
+      55,
+      66,
+      71,
+      76,
+      81
+    ]
+  },
+  "r13_o3_n7_js_helper_wrap.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r13_o3_n7_py_helper_listcomp.py": {
+    "await-in-loop-python": [
+      7
+    ]
+  },
+  "r14_a1_confirm_timeout_width.dart": {},
+  "r14_a1_new_positional_retry_dynamic.dart": {},
+  "r14_a1_new_positional_retry_dynamic.js": {},
+  "r14_a1_new_positional_retry_dynamic.py": {},
+  "r14_a1_new_positional_retry_dynamic.swift": {},
+  "r14_a1_new_positional_retry_dynamic.ts": {},
+  "r14_a1_new_positional_retry_options.js": {},
+  "r14_a1_new_positional_retry_options.ts": {},
+  "r14_a1_new_positional_retry_spread.js": {},
+  "r14_a1_new_positional_retry_spread.ts": {},
+  "r14_a2_confirm_closure_width.js": {},
+  "r14_a2_followups_closure_later_width.ts": {},
+  "r14_a2_followups_closure_write_in_callback.js": {},
+  "r14_a2_followups_closure_write_in_callback.ts": {},
+  "r14_f1_c1d_extra.dart": {},
+  "r14_f1_c1d_extra.js": {
+    "serial-bounded-helper-javascript-options": [
+      13
+    ]
+  },
+  "r14_f1_c1d_extra.py": {},
+  "r14_f1_c1d_extra.swift": {},
+  "r14_f2_c1_js_fp.js": {},
+  "r14_f2_c1b_writes.js": {},
+  "r14_f2_c1b_writes.py": {},
+  "r14_f2_c1b_writes.swift": {},
+  "r14_o1_new_computed_duplicate.js": {
+    "serial-bounded-helper-javascript-options": [
+      2
+    ]
+  },
+  "r14_o1_new_computed_duplicate.ts": {
+    "serial-bounded-helper-javascript-options": [
+      2
+    ]
+  },
+  "r14_o1_new_computed_one.js": {},
+  "r14_o1_new_computed_one.ts": {},
+  "r15_astra_confirm_shadow_width.js": {},
+  "r15_astra_confirm_shadow_width.ts": {},
+  "r15_astra_followups_array_arrow.js": {},
+  "r15_astra_followups_array_arrow.ts": {},
+  "r15_astra_followups_block_array.js": {},
+  "r15_astra_followups_block_array.ts": {},
+  "r15_astra_followups_block_destructured.js": {},
+  "r15_astra_followups_block_destructured.ts": {},
+  "r15_astra_followups_control_captured.js": {},
+  "r15_astra_followups_control_captured.ts": {},
+  "r15_astra_followups_control_plain.js": {},
+  "r15_astra_followups_control_plain.ts": {},
+  "r15_astra_followups_control_rename.js": {},
+  "r15_astra_followups_control_rename.ts": {},
+  "r15_astra_followups_nested_object.js": {},
+  "r15_astra_followups_nested_object.ts": {},
+  "r15_astra_followups_object_arrow.js": {},
+  "r15_astra_followups_object_arrow.ts": {},
+  "r15_astra_followups_object_function.js": {},
+  "r15_astra_followups_object_function.ts": {},
+  "r15_astra_followups_object_method.js": {},
+  "r15_astra_followups_object_method.ts": {},
+  "r15_astra_followups_object_options.js": {},
+  "r15_astra_followups_object_options.ts": {},
+  "r15_astra_followups_renamed_object.js": {},
+  "r15_astra_followups_renamed_object.ts": {},
+  "r15_astra_formatted_shadow_width.js": {},
+  "r15_opus_c1d_destructure.dart": {},
+  "r15_opus_c1d_destructure.js": {},
+  "r15_opus_c1d_destructure.swift": {},
+  "r15_opus_c1d_destructure.ts": {},
+  "r15_opus_c1f_fields.dart": {},
+  "r15_opus_c1f_fields.swift": {},
+  "r15_opus_c1f_fields.ts": {},
+  "r15_opus_c1g_members.dart": {},
+  "r15_opus_c1g_members.js": {},
+  "r15_opus_c1g_members.swift": {},
+  "r15_opus_c1h_more.js": {},
+  "r15_opus_c1s_shadow.dart": {},
+  "r15_opus_c1s_shadow.js": {
+    "await-in-loop-javascript": [
+      25
+    ]
+  },
+  "r15_opus_c1s_shadow.swift": {},
+  "r15_opus_c1s_shadow.ts": {
+    "await-in-loop-javascript": [
+      25
+    ]
+  },
+  "r15_opus_confirm_destructured_width.js": {},
+  "r15_opus_confirm_destructured_width.ts": {},
+  "r15_opus_confirm_member_width.dart": {},
+  "r15_opus_confirm_member_width.swift": {
+    "sequential-awaits-swift": [
+      41
+    ]
+  },
+  "r15_opus_confirm_same_function_arrow.js": {},
+  "r15_opus_loops_idx.dart": {
+    "await-in-loop-dart": [
+      5,
+      13,
+      18,
+      23,
+      38,
+      45
+    ]
+  },
+  "r15_opus_loops_idx.js": {
+    "await-in-loop-javascript": [
+      5,
+      12,
+      18,
+      24,
+      32,
+      38,
+      54,
+      60,
+      66,
+      72,
+      80
+    ]
+  },
+  "r15_opus_loops_idx.py": {
+    "await-in-loop-python": [
+      3,
+      8,
+      15,
+      24,
+      30,
+      36,
+      42,
+      47
+    ]
+  },
+  "r15_opus_loops_idx.swift": {
+    "await-in-loop-swift": [
+      5,
+      13,
+      21,
+      27,
+      34,
+      40
+    ]
+  },
+  "r15_opus_loops_idx.ts": {
+    "await-in-loop-javascript": [
+      5,
+      12,
+      18,
+      24,
+      32,
+      38,
+      54,
+      60,
+      66,
+      72,
+      80
+    ]
+  },
+  "r16_astra_confirm_initializer_once.js": {},
+  "r16_astra_confirm_initializer_once.ts": {},
+  "r16_astra_confirm_task_priority.swift": {},
+  "r16_astra_followups_initializer_assign.js": {},
+  "r16_astra_followups_initializer_assign.ts": {},
+  "r16_astra_followups_initializer_body_control.js": {
+    "await-in-loop-javascript": [
+      2
+    ]
+  },
+  "r16_astra_followups_initializer_body_control.ts": {
+    "await-in-loop-javascript": [
+      2
+    ]
+  },
+  "r16_astra_followups_initializer_index.js": {},
+  "r16_astra_followups_initializer_index.ts": {},
+  "r16_astra_followups_initializer_rows.js": {},
+  "r16_astra_followups_initializer_rows.ts": {},
+  "r16_astra_followups_initializer_rows_only.js": {},
+  "r16_astra_followups_initializer_rows_only.ts": {},
+  "r16_astra_followups_initializer_sideeffect.js": {},
+  "r16_astra_followups_initializer_sideeffect.ts": {},
+  "r16_astra_followups_swift_detached.swift": {},
+  "r16_astra_followups_swift_detached_priority.swift": {},
+  "r16_astra_followups_swift_task.swift": {},
+  "r16_astra_followups_swift_task_priority.swift": {},
+  "r16_astra_formatted_confirm_initializer_once.js": {},
+  "r16_astra_formatted_confirm_initializer_once.ts": {},
+  "r16_astra_formatted_confirm_task_priority.swift": {},
+  "r16_opus_n4_started.dart": {
+    "await-in-loop-dart": [
+      6,
+      15
+    ]
+  },
+  "r16_opus_n4_started.js": {
+    "await-in-loop-javascript": [
+      6,
+      15,
+      25
+    ]
+  },
+  "r16_opus_n4_started.py": {
+    "await-in-loop-python": [
+      8,
+      17,
+      26,
+      34,
+      41
+    ]
+  },
+  "r16_opus_n4_started.swift": {
+    "await-in-loop-swift": [
+      6,
+      38
+    ]
+  },
+  "r17_astra_confirm_capture_task.swift": {},
+  "r17_astra_confirm_collection_condition.dart": {},
+  "r17_astra_confirm_collection_update.dart": {},
+  "r17_astra_confirm_empty_async.dart": {},
+  "r17_astra_confirm_empty_sync.dart": {},
+  "r17_astra_confirm_empty_update.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r17_astra_confirm_task_group.swift": {},
+  "r17_astra_confirm_typed_task.swift": {},
+  "r17_astra_formatted_confirm_capture_task.swift": {},
+  "r17_astra_formatted_confirm_collection_condition.dart": {},
+  "r17_astra_formatted_confirm_collection_update.dart": {},
+  "r17_astra_formatted_confirm_empty_async.dart": {},
+  "r17_astra_formatted_confirm_empty_sync.dart": {},
+  "r17_astra_formatted_confirm_empty_update.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r17_astra_formatted_confirm_task_group.swift": {},
+  "r17_astra_formatted_confirm_typed_task.swift": {},
+  "r17_astra_formatted_new_await_argument.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_formatted_new_await_result.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_formatted_new_await_value.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_formatted_new_await_value_noargs.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_formatted_new_capture.swift": {},
+  "r17_astra_formatted_new_collection_condition.dart": {},
+  "r17_astra_formatted_new_collection_update.dart": {},
+  "r17_astra_formatted_new_condition_block.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_formatted_new_condition_empty.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_formatted_new_condition_nested.dart": {
+    "await-in-loop-dart": [
+      2,
+      2
+    ]
+  },
+  "r17_astra_formatted_new_detached_generic.swift": {},
+  "r17_astra_formatted_new_generic.swift": {},
+  "r17_astra_formatted_new_generic_noargs.swift": {},
+  "r17_astra_formatted_new_group_priority.swift": {},
+  "r17_astra_formatted_new_group_unless_cancelled.swift": {},
+  "r17_astra_formatted_new_nested_loop.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_formatted_new_nested_repeat.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_formatted_new_nested_while.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_formatted_new_qualified.swift": {},
+  "r17_astra_formatted_new_saved_handle.swift": {
+    "await-in-loop-swift": [
+      4
+    ]
+  },
+  "r17_astra_formatted_new_sibling_await.swift": {
+    "await-in-loop-swift": [
+      4
+    ]
+  },
+  "r17_astra_formatted_new_update_comma.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_formatted_new_update_empty.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_new_await_argument.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_new_await_result.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_new_await_value.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_new_await_value_noargs.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_new_capture.swift": {},
+  "r17_astra_new_collection_condition.dart": {},
+  "r17_astra_new_collection_update.dart": {},
+  "r17_astra_new_condition_block.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_new_condition_empty.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_new_condition_nested.dart": {
+    "await-in-loop-dart": [
+      2,
+      2
+    ]
+  },
+  "r17_astra_new_detached_generic.swift": {},
+  "r17_astra_new_generic.swift": {},
+  "r17_astra_new_generic_noargs.swift": {},
+  "r17_astra_new_group_priority.swift": {},
+  "r17_astra_new_group_unless_cancelled.swift": {},
+  "r17_astra_new_nested_loop.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_new_nested_repeat.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_new_nested_while.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_new_qualified.swift": {},
+  "r17_astra_new_saved_handle.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_new_sibling_await.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r17_astra_new_update_comma.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_new_update_empty.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_opus_confirm_multi_decl_serial.js": {
+    "await-in-loop-javascript": [
+      14
+    ]
+  },
+  "r17_opus_confirm_multi_decl_serial.ts": {
+    "await-in-loop-javascript": [
+      14
+    ]
+  },
+  "r17_opus_confirm_task_shapes.swift": {
+    "await-in-loop-swift": [
+      69,
+      70
+    ]
+  },
+  "r17_opus_early_early.dart": {},
+  "r17_opus_early_early.js": {},
+  "r17_opus_early_earlyts.ts": {},
+  "r17_opus_formatted_confirm_multi_decl_serial.js": {
+    "await-in-loop-javascript": [
+      14
+    ]
+  },
+  "r17_opus_formatted_confirm_multi_decl_serial.ts": {
+    "await-in-loop-javascript": [
+      14
+    ]
+  },
+  "r17_opus_formatted_confirm_task_shapes.swift": {
+    "await-in-loop-swift": [
+      71,
+      72
+    ]
+  },
+  "r17_opus_formatted_early_early.dart": {},
+  "r17_opus_formatted_early_early.js": {},
+  "r17_opus_formatted_early_earlyts.ts": {},
+  "r17_opus_formatted_js_hdr.js": {
+    "await-in-loop-javascript": [
+      13,
+      21,
+      28,
+      36,
+      44,
+      51,
+      57,
+      64,
+      70,
+      76,
+      83,
+      92,
+      102,
+      108,
+      114,
+      136,
+      143,
+      159,
+      170,
+      179,
+      179,
+      186,
+      194
+    ]
+  },
+  "r17_opus_formatted_js_hdrts.ts": {
+    "await-in-loop-javascript": [
+      13,
+      21,
+      28,
+      36,
+      44,
+      51,
+      57,
+      64,
+      70,
+      76,
+      83,
+      92,
+      102,
+      108,
+      114,
+      136,
+      143,
+      159,
+      170,
+      179,
+      179,
+      186,
+      194
+    ]
+  },
+  "r17_opus_formatted_jsmulti_multi.js": {
+    "await-in-loop-javascript": [
+      4,
+      12,
+      20,
+      27,
+      34,
+      41,
+      48,
+      56,
+      65,
+      73
+    ]
+  },
+  "r17_opus_formatted_jsmulti_multits.ts": {
+    "await-in-loop-javascript": [
+      4,
+      12,
+      20,
+      27,
+      34,
+      41,
+      48,
+      56,
+      65,
+      73
+    ]
+  },
+  "r17_opus_formatted_swift2_iso.swift": {},
+  "r17_opus_formatted_swift3_group.swift": {},
+  "r17_opus_formatted_swift_fp.swift": {},
+  "r17_opus_formatted_swift_nested.swift": {
+    "await-in-loop-swift": [
+      7,
+      8,
+      20,
+      21,
+      33,
+      45,
+      57,
+      69,
+      81,
+      93,
+      105,
+      118,
+      131,
+      143,
+      153,
+      162
+    ]
+  },
+  "r17_opus_formatted_swift_task.swift": {
+    "await-in-loop-swift": [
+      5,
+      14,
+      26,
+      37,
+      49,
+      59,
+      68,
+      78,
+      88,
+      96
+    ]
+  },
+  "r17_opus_formatted_ts2_typed.ts": {
+    "await-in-loop-javascript": [
+      4,
+      11,
+      18,
+      25,
+      32,
+      39,
+      46
+    ]
+  },
+  "r17_opus_formatted_ts2_typedjs.js": {
+    "await-in-loop-javascript": [
+      4,
+      11,
+      18,
+      25,
+      32,
+      39,
+      46
+    ]
+  },
+  "r17_opus_js_hdr.js": {
+    "await-in-loop-javascript": [
+      13,
+      21,
+      28,
+      36,
+      44,
+      51,
+      57,
+      64,
+      70,
+      76,
+      83,
+      92,
+      102,
+      108,
+      114,
+      136,
+      143,
+      159,
+      170,
+      179,
+      179,
+      186,
+      194
+    ]
+  },
+  "r17_opus_js_hdrts.ts": {
+    "await-in-loop-javascript": [
+      13,
+      21,
+      28,
+      36,
+      44,
+      51,
+      57,
+      64,
+      70,
+      76,
+      83,
+      92,
+      102,
+      108,
+      114,
+      136,
+      143,
+      159,
+      170,
+      179,
+      179,
+      186,
+      194
+    ]
+  },
+  "r17_opus_jsmulti_multi.js": {
+    "await-in-loop-javascript": [
+      4,
+      12,
+      20,
+      27,
+      34,
+      41,
+      48,
+      56,
+      65,
+      73
+    ]
+  },
+  "r17_opus_jsmulti_multits.ts": {
+    "await-in-loop-javascript": [
+      4,
+      12,
+      20,
+      27,
+      34,
+      41,
+      48,
+      56,
+      65,
+      73
+    ]
+  },
+  "r17_opus_swift2_iso.swift": {},
+  "r17_opus_swift3_group.swift": {},
+  "r17_opus_swift_fp.swift": {},
+  "r17_opus_swift_nested.swift": {
+    "await-in-loop-swift": [
+      6,
+      7,
+      18,
+      19,
+      30,
+      41,
+      52,
+      63,
+      74,
+      85,
+      96,
+      108,
+      120,
+      131,
+      141,
+      150
+    ]
+  },
+  "r17_opus_swift_task.swift": {
+    "await-in-loop-swift": [
+      5,
+      14,
+      26,
+      37,
+      49,
+      59,
+      67,
+      77,
+      87,
+      95
+    ]
+  },
+  "r17_opus_ts2_typed.ts": {
+    "await-in-loop-javascript": [
+      4,
+      11,
+      18,
+      25,
+      32,
+      39,
+      46
+    ]
+  },
+  "r17_opus_ts2_typedjs.js": {
+    "await-in-loop-javascript": [
+      4,
+      11,
+      18,
+      25,
+      32,
+      39,
+      46
+    ]
+  },
+  "r18_astra_confirm_asi.js": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r18_astra_confirm_asi.ts": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r18_astra_confirm_condition_read.js": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r18_astra_confirm_condition_read.ts": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r18_astra_confirm_condition_while.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_confirm_condition_while.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_confirm_empty_update.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r18_astra_confirm_regex.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_confirm_regex.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_confirm_switch.js": {
+    "await-in-loop-javascript": [
+      5,
+      6
+    ]
+  },
+  "r18_astra_confirm_switch.ts": {
+    "await-in-loop-javascript": [
+      5,
+      6
+    ]
+  },
+  "r18_astra_confirm_task_return.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_confirm_task_return_arg.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_confirm_task_return_generic_nocapture.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_confirm_task_return_plain.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_followups_asi_semicolon.js": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r18_astra_followups_asi_semicolon.ts": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r18_astra_followups_empty_update_block.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r18_astra_followups_empty_update_space.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r18_astra_followups_multiline_single.dart": {
+    "await-in-loop-dart": [
+      9
+    ]
+  },
+  "r18_astra_followups_raw_string_single.dart": {
+    "await-in-loop-dart": [
+      8
+    ]
+  },
+  "r18_astra_followups_regex_single.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_followups_regex_single.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_followups_switch_braced.js": {
+    "await-in-loop-javascript": [
+      5,
+      6
+    ]
+  },
+  "r18_astra_followups_switch_braced.ts": {
+    "await-in-loop-javascript": [
+      5,
+      6
+    ]
+  },
+  "r18_astra_followups_switch_single.js": {
+    "await-in-loop-javascript": [
+      5,
+      6
+    ]
+  },
+  "r18_astra_followups_switch_single.ts": {
+    "await-in-loop-javascript": [
+      5,
+      6
+    ]
+  },
+  "r18_astra_followups_task_return_arg_control.swift": {
+    "await-in-loop-swift": [
+      16
+    ]
+  },
+  "r18_astra_followups_task_return_arg_guard.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_followups_task_return_arg_handle.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_followups_task_return_control.swift": {
+    "await-in-loop-swift": [
+      16
+    ]
+  },
+  "r18_astra_followups_task_return_generic_nocapture_control.swift": {
+    "await-in-loop-swift": [
+      16
+    ]
+  },
+  "r18_astra_followups_task_return_generic_nocapture_guard.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_followups_task_return_generic_nocapture_handle.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_followups_task_return_guard.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_followups_task_return_handle.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_followups_task_return_plain_control.swift": {
+    "await-in-loop-swift": [
+      16
+    ]
+  },
+  "r18_astra_followups_task_return_plain_guard.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_followups_task_return_plain_handle.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_formatted_confirm_asi.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_formatted_confirm_asi.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_formatted_confirm_condition_read.js": {
+    "await-in-loop-javascript": [
+      9
+    ]
+  },
+  "r18_astra_formatted_confirm_condition_read.ts": {
+    "await-in-loop-javascript": [
+      9
+    ]
+  },
+  "r18_astra_formatted_confirm_condition_while.js": {
+    "await-in-loop-javascript": [
+      10
+    ]
+  },
+  "r18_astra_formatted_confirm_condition_while.ts": {
+    "await-in-loop-javascript": [
+      10
+    ]
+  },
+  "r18_astra_formatted_confirm_empty_update.dart": {
+    "await-in-loop-dart": [
+      9
+    ]
+  },
+  "r18_astra_formatted_confirm_regex.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_astra_formatted_confirm_regex.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_astra_formatted_confirm_switch.js": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_astra_formatted_confirm_switch.ts": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_astra_formatted_confirm_task_return.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_confirm_task_return_arg.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_confirm_task_return_generic_nocapture.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_confirm_task_return_plain.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_followups_asi_semicolon.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_formatted_followups_asi_semicolon.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_astra_formatted_followups_empty_update_block.dart": {
+    "await-in-loop-dart": [
+      9
+    ]
+  },
+  "r18_astra_formatted_followups_empty_update_space.dart": {
+    "await-in-loop-dart": [
+      9
+    ]
+  },
+  "r18_astra_formatted_followups_multiline_single.dart": {
+    "await-in-loop-dart": [
+      12
+    ]
+  },
+  "r18_astra_formatted_followups_raw_string_single.dart": {
+    "await-in-loop-dart": [
+      11
+    ]
+  },
+  "r18_astra_formatted_followups_regex_single.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_astra_formatted_followups_regex_single.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_astra_formatted_followups_switch_braced.js": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_astra_formatted_followups_switch_braced.ts": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_astra_formatted_followups_switch_single.js": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_astra_formatted_followups_switch_single.ts": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_arg_control.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_arg_guard.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_arg_handle.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_control.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_generic_nocapture_control.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_generic_nocapture_guard.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_generic_nocapture_handle.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_guard.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_handle.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_plain_control.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_plain_guard.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_formatted_followups_task_return_plain_handle.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_astra_nested_outer_empty_update.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r18_astra_nested_outer_empty_update.js": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r18_astra_nested_outer_empty_update.ts": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r18_astra_nested_outer_multi.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r18_astra_nested_outer_multi.js": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r18_astra_nested_outer_multi.ts": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r18_astra_nested_outer_single.js": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r18_astra_nested_outer_single.ts": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r18_astra_new_asi.js": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_asi.ts": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_await_template.js": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_await_template.ts": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_callback.js": {},
+  "r18_astra_new_callback.ts": {},
+  "r18_astra_new_capture_await.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r18_astra_new_empty_condition.js": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_empty_condition.ts": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_empty_update.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r18_astra_new_generic_await.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r18_astra_new_generic_await_handle.swift": {
+    "await-in-loop-swift": [
+      6
+    ]
+  },
+  "r18_astra_new_generic_comment_close.swift": {},
+  "r18_astra_new_generic_comment_open.swift": {},
+  "r18_astra_new_generic_comment_quote.swift": {},
+  "r18_astra_new_generic_raw_string.swift": {},
+  "r18_astra_new_generic_return.swift": {
+    "await-in-loop-swift": [
+      7
+    ]
+  },
+  "r18_astra_new_generic_sibling.swift": {
+    "await-in-loop-swift": [
+      6
+    ]
+  },
+  "r18_astra_new_group_await_arg.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r18_astra_new_group_bound.swift": {},
+  "r18_astra_new_helper.js": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_helper.ts": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_init_only.dart": {},
+  "r18_astra_new_initializer_only.js": {},
+  "r18_astra_new_initializer_only.ts": {},
+  "r18_astra_new_nested_generic.swift": {
+    "await-in-loop-swift": [
+      4
+    ]
+  },
+  "r18_astra_new_nested_initializer.js": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_nested_initializer.ts": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_nested_switch.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r18_astra_new_nested_switch.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r18_astra_new_qualified_generic.swift": {},
+  "r18_astra_new_regex_brace.js": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_regex_brace.ts": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_regex_bracket.js": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_regex_bracket.ts": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      3
+    ]
+  },
+  "r18_astra_new_regex_init.js": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      2
+    ]
+  },
+  "r18_astra_new_regex_init.ts": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      2
+    ]
+  },
+  "r18_astra_new_switch_break.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r18_astra_new_switch_break.ts": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r18_history_r3_opus_p3_fn_py_fn.py": {
+    "await-in-loop-python": [
+      11,
+      18,
+      27,
+      35,
+      42,
+      52,
+      60,
+      66,
+      72,
+      77,
+      79,
+      88,
+      94,
+      102,
+      107,
+      112,
+      117,
+      122,
+      129,
+      136,
+      143
+    ]
+  },
+  "r18_history_r3_opus_p4_py_p4.py": {
+    "await-in-loop-python": [
+      5,
+      13,
+      24,
+      32,
+      40,
+      49,
+      51,
+      65,
+      70,
+      75,
+      80
+    ],
+    "in-order-needs-reason-python": [
+      60
+    ]
+  },
+  "r18_opus_cb_cb.dart": {},
+  "r18_opus_cb_cb.js": {},
+  "r18_opus_cond2_page.js": {
+    "await-in-loop-javascript": [
+      8,
+      16,
+      25
+    ]
+  },
+  "r18_opus_cond_reader.js": {
+    "await-in-loop-javascript": [
+      6,
+      13,
+      21,
+      29,
+      36,
+      45
+    ]
+  },
+  "r18_opus_confirm-fmt_multi_exit.dart": {},
+  "r18_opus_confirm-fmt_operation_label.swift": {
+    "await-in-loop-swift": [
+      58,
+      60
+    ]
+  },
+  "r18_opus_confirm-fmt_switch_braceless.js": {
+    "await-in-loop-javascript": [
+      17,
+      20,
+      29,
+      32
+    ]
+  },
+  "r18_opus_confirm-fmt_switch_braceless.ts": {
+    "await-in-loop-javascript": [
+      17,
+      20,
+      29,
+      32
+    ]
+  },
+  "r18_opus_confirm_multi_exit.dart": {},
+  "r18_opus_confirm_operation_label.swift": {
+    "await-in-loop-swift": [
+      56,
+      58
+    ]
+  },
+  "r18_opus_confirm_switch_braceless.js": {
+    "await-in-loop-javascript": [
+      17,
+      20,
+      29,
+      32
+    ]
+  },
+  "r18_opus_confirm_switch_braceless.ts": {
+    "await-in-loop-javascript": [
+      17,
+      20,
+      29,
+      32
+    ]
+  },
+  "r18_opus_dart2_exits.dart": {},
+  "r18_opus_dart2_exits_js.js": {},
+  "r18_opus_empty_empty.js": {
+    "await-in-loop-javascript": [
+      6,
+      11,
+      16,
+      22
+    ]
+  },
+  "r18_opus_empty_emptyts.ts": {
+    "await-in-loop-javascript": [
+      6,
+      11,
+      16,
+      22
+    ]
+  },
+  "r18_opus_fmt_ce.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r18_opus_fmt_ue.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r18_opus_helper_h.ts": {
+    "await-in-loop-javascript": [
+      17
+    ]
+  },
+  "r18_opus_js_brace.js": {
+    "await-in-loop-javascript": [
+      13,
+      16,
+      26,
+      29,
+      40,
+      43,
+      52,
+      107,
+      115,
+      122,
+      128,
+      193
+    ]
+  },
+  "r18_opus_js_bracets.ts": {
+    "await-in-loop-javascript": [
+      13,
+      16,
+      26,
+      29,
+      40,
+      43,
+      52,
+      107,
+      115,
+      122,
+      128,
+      193
+    ]
+  },
+  "r18_opus_retry_retry.dart": {},
+  "r18_opus_retry_retry.js": {},
+  "r18_opus_retry_retryts.ts": {},
+  "r18_opus_swift2_more.swift": {
+    "await-in-loop-swift": [
+      100
+    ]
+  },
+  "r18_opus_swift3_c1.swift": {},
+  "r18_opus_swift3_c2.swift": {},
+  "r18_opus_swift3_c3.swift": {},
+  "r18_opus_swift3_c4.swift": {},
+  "r18_opus_swift3_c5.swift": {},
+  "r18_opus_swift4_append_apos.swift": {},
+  "r18_opus_swift4_append_brace.swift": {},
+  "r18_opus_swift4_append_plain.swift": {},
+  "r18_opus_swift4_bare_apos.swift": {},
+  "r18_opus_swift4_bare_brace.swift": {},
+  "r18_opus_swift4_bare_plain.swift": {},
+  "r18_opus_swift4_dict_apos.swift": {},
+  "r18_opus_swift4_dict_brace.swift": {},
+  "r18_opus_swift4_dict_plain.swift": {},
+  "r18_opus_swift5_labels.swift": {},
+  "r18_opus_swift_boundary.swift": {
+    "await-in-loop-swift": [
+      16,
+      26,
+      36,
+      84,
+      92
+    ]
+  },
+  "r18_opus_swift_shapes.swift": {
+    "await-in-loop-swift": [
+      91,
+      99,
+      106,
+      114,
+      128,
+      137,
+      146,
+      160,
+      204,
+      221
+    ]
+  },
+  "r18_opus_text2_commented.dart": {},
+  "r18_opus_text2_commented.js": {},
+  "r18_opus_text_comment.dart": {},
+  "r18_opus_text_comment.js": {},
+  "r18_opus_textjs_quote.dart": {},
+  "r18_opus_textjs_quote.js": {},
+  "r18_r16_condition_empty.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r18_r16_update_empty.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r18_twin_astra_confirm_asi.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_twin_astra_confirm_asi.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_twin_astra_confirm_condition_read.js": {
+    "await-in-loop-javascript": [
+      9
+    ]
+  },
+  "r18_twin_astra_confirm_condition_read.ts": {
+    "await-in-loop-javascript": [
+      9
+    ]
+  },
+  "r18_twin_astra_confirm_condition_while.js": {
+    "await-in-loop-javascript": [
+      10
+    ]
+  },
+  "r18_twin_astra_confirm_condition_while.ts": {
+    "await-in-loop-javascript": [
+      10
+    ]
+  },
+  "r18_twin_astra_confirm_empty_update.dart": {
+    "await-in-loop-dart": [
+      9
+    ]
+  },
+  "r18_twin_astra_confirm_regex.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_twin_astra_confirm_regex.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_twin_astra_confirm_switch.js": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_twin_astra_confirm_switch.ts": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_twin_astra_confirm_task_return.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_confirm_task_return_arg.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_confirm_task_return_generic_nocapture.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_confirm_task_return_plain.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_followups_asi_semicolon.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_twin_astra_followups_asi_semicolon.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r18_twin_astra_followups_empty_update_block.dart": {
+    "await-in-loop-dart": [
+      9
+    ]
+  },
+  "r18_twin_astra_followups_empty_update_space.dart": {
+    "await-in-loop-dart": [
+      9
+    ]
+  },
+  "r18_twin_astra_followups_multiline_single.dart": {
+    "await-in-loop-dart": [
+      12
+    ]
+  },
+  "r18_twin_astra_followups_raw_string_single.dart": {
+    "await-in-loop-dart": [
+      11
+    ]
+  },
+  "r18_twin_astra_followups_regex_single.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_twin_astra_followups_regex_single.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_twin_astra_followups_switch_braced.js": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_twin_astra_followups_switch_braced.ts": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_twin_astra_followups_switch_single.js": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_twin_astra_followups_switch_single.ts": {
+    "await-in-loop-javascript": [
+      9,
+      12
+    ]
+  },
+  "r18_twin_astra_followups_task_return_arg_control.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_twin_astra_followups_task_return_arg_guard.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_followups_task_return_arg_handle.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_followups_task_return_control.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_twin_astra_followups_task_return_generic_nocapture_control.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_twin_astra_followups_task_return_generic_nocapture_guard.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_followups_task_return_generic_nocapture_handle.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_followups_task_return_guard.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_followups_task_return_handle.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_followups_task_return_plain_control.swift": {
+    "await-in-loop-swift": [
+      17
+    ]
+  },
+  "r18_twin_astra_followups_task_return_plain_guard.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_followups_task_return_plain_handle.swift": {
+    "await-in-loop-swift": [
+      18
+    ]
+  },
+  "r18_twin_astra_nested_outer_empty_update.dart": {
+    "await-in-loop-dart": [
+      13
+    ]
+  },
+  "r18_twin_astra_nested_outer_empty_update.js": {
+    "await-in-loop-javascript": [
+      12
+    ]
+  },
+  "r18_twin_astra_nested_outer_empty_update.ts": {
+    "await-in-loop-javascript": [
+      12
+    ]
+  },
+  "r18_twin_astra_nested_outer_multi.dart": {
+    "await-in-loop-dart": [
+      13
+    ]
+  },
+  "r18_twin_astra_nested_outer_multi.js": {
+    "await-in-loop-javascript": [
+      12
+    ]
+  },
+  "r18_twin_astra_nested_outer_multi.ts": {
+    "await-in-loop-javascript": [
+      12
+    ]
+  },
+  "r18_twin_astra_nested_outer_single.js": {
+    "await-in-loop-javascript": [
+      12
+    ]
+  },
+  "r18_twin_astra_nested_outer_single.ts": {
+    "await-in-loop-javascript": [
+      12
+    ]
+  },
+  "r18_twin_astra_new_asi.js": {
+    "await-in-loop-javascript": [
+      2
+    ]
+  },
+  "r18_twin_astra_new_asi.ts": {
+    "await-in-loop-javascript": [
+      2
+    ]
+  },
+  "r18_twin_astra_new_await_template.js": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_await_template.ts": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_callback.js": {},
+  "r18_twin_astra_new_callback.ts": {},
+  "r18_twin_astra_new_capture_await.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_empty_condition.js": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_empty_condition.ts": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_empty_update.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r18_twin_astra_new_generic_await.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_generic_await_handle.swift": {
+    "await-in-loop-swift": [
+      6
+    ]
+  },
+  "r18_twin_astra_new_generic_comment_close.swift": {},
+  "r18_twin_astra_new_generic_comment_open.swift": {},
+  "r18_twin_astra_new_generic_comment_quote.swift": {},
+  "r18_twin_astra_new_generic_raw_string.swift": {},
+  "r18_twin_astra_new_generic_return.swift": {
+    "await-in-loop-swift": [
+      7
+    ]
+  },
+  "r18_twin_astra_new_generic_sibling.swift": {
+    "await-in-loop-swift": [
+      6
+    ]
+  },
+  "r18_twin_astra_new_group_await_arg.swift": {
+    "await-in-loop-swift": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_group_bound.swift": {},
+  "r18_twin_astra_new_helper.js": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_helper.ts": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_init_only.dart": {},
+  "r18_twin_astra_new_initializer_only.js": {},
+  "r18_twin_astra_new_initializer_only.ts": {},
+  "r18_twin_astra_new_nested_generic.swift": {
+    "await-in-loop-swift": [
+      4
+    ]
+  },
+  "r18_twin_astra_new_nested_initializer.js": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_nested_initializer.ts": {
+    "await-in-loop-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_nested_switch.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_twin_astra_new_nested_switch.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r18_twin_astra_new_qualified_generic.swift": {},
+  "r18_twin_astra_new_regex_brace.js": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_regex_brace.ts": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_regex_bracket.js": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_regex_bracket.ts": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_regex_init.js": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      2
+    ]
+  },
+  "r18_twin_astra_new_regex_init.ts": {
+    "await-in-loop-javascript": [
+      3
+    ],
+    "regex-built-in-function-javascript": [
+      2
+    ]
+  },
+  "r18_twin_astra_new_switch_break.js": {
+    "await-in-loop-javascript": [
+      5,
+      8
+    ]
+  },
+  "r18_twin_astra_new_switch_break.ts": {
+    "await-in-loop-javascript": [
+      5,
+      8
+    ]
+  },
+  "r18_twin_opus_cb_cb.dart": {},
+  "r18_twin_opus_cb_cb.js": {},
+  "r18_twin_opus_cond2_page.js": {
+    "await-in-loop-javascript": [
+      8,
+      16,
+      25
+    ]
+  },
+  "r18_twin_opus_cond_reader.js": {
+    "await-in-loop-javascript": [
+      6,
+      13,
+      21,
+      29,
+      36,
+      45
+    ]
+  },
+  "r18_twin_opus_confirm_multi_exit.dart": {},
+  "r18_twin_opus_confirm_operation_label.swift": {
+    "await-in-loop-swift": [
+      58,
+      60
+    ]
+  },
+  "r18_twin_opus_confirm_switch_braceless.js": {
+    "await-in-loop-javascript": [
+      17,
+      20,
+      29,
+      32
+    ]
+  },
+  "r18_twin_opus_confirm_switch_braceless.ts": {
+    "await-in-loop-javascript": [
+      17,
+      20,
+      29,
+      32
+    ]
+  },
+  "r18_twin_opus_dart2_exits.dart": {},
+  "r18_twin_opus_dart2_exits_js.js": {},
+  "r18_twin_opus_empty_empty.js": {
+    "await-in-loop-javascript": [
+      8,
+      13,
+      18,
+      24
+    ]
+  },
+  "r18_twin_opus_empty_emptyts.ts": {
+    "await-in-loop-javascript": [
+      8,
+      13,
+      18,
+      24
+    ]
+  },
+  "r18_twin_opus_helper_h.ts": {
+    "await-in-loop-javascript": [
+      21
+    ]
+  },
+  "r18_twin_opus_js_brace.js": {
+    "await-in-loop-javascript": [
+      17,
+      20,
+      30,
+      33,
+      44,
+      47,
+      56,
+      120,
+      128,
+      135,
+      141,
+      206
+    ]
+  },
+  "r18_twin_opus_js_bracets.ts": {
+    "await-in-loop-javascript": [
+      17,
+      20,
+      30,
+      33,
+      44,
+      47,
+      56,
+      120,
+      128,
+      135,
+      141,
+      206
+    ]
+  },
+  "r18_twin_opus_retry_retry.dart": {},
+  "r18_twin_opus_retry_retry.js": {},
+  "r18_twin_opus_retry_retryts.ts": {},
+  "r18_twin_opus_swift2_more.swift": {
+    "await-in-loop-swift": [
+      105
+    ]
+  },
+  "r18_twin_opus_swift3_c1.swift": {},
+  "r18_twin_opus_swift3_c2.swift": {},
+  "r18_twin_opus_swift3_c3.swift": {},
+  "r18_twin_opus_swift3_c4.swift": {},
+  "r18_twin_opus_swift3_c5.swift": {},
+  "r18_twin_opus_swift4_append_apos.swift": {},
+  "r18_twin_opus_swift4_append_brace.swift": {},
+  "r18_twin_opus_swift4_append_plain.swift": {},
+  "r18_twin_opus_swift4_bare_apos.swift": {},
+  "r18_twin_opus_swift4_bare_brace.swift": {},
+  "r18_twin_opus_swift4_bare_plain.swift": {},
+  "r18_twin_opus_swift4_dict_apos.swift": {},
+  "r18_twin_opus_swift4_dict_brace.swift": {},
+  "r18_twin_opus_swift4_dict_plain.swift": {},
+  "r18_twin_opus_swift5_labels.swift": {},
+  "r18_twin_opus_swift_boundary.swift": {
+    "await-in-loop-swift": [
+      16,
+      26,
+      36,
+      87,
+      95
+    ]
+  },
+  "r18_twin_opus_swift_shapes.swift": {
+    "await-in-loop-swift": [
+      91,
+      99,
+      106,
+      114,
+      128,
+      137,
+      146,
+      160,
+      207,
+      224
+    ]
+  },
+  "r18_twin_opus_text2_commented.dart": {},
+  "r18_twin_opus_text2_commented.js": {},
+  "r18_twin_opus_text_comment.dart": {},
+  "r18_twin_opus_text_comment.js": {},
+  "r18_twin_opus_textjs_quote.dart": {},
+  "r18_twin_opus_textjs_quote.js": {},
+  "r18_twin_r16_condition_empty.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r18_twin_r16_update_empty.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r19_astra_confirm_header_condition.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r19_astra_confirm_header_condition.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r19_astra_confirm_header_update.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r19_astra_confirm_header_update.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r19_astra_confirm_nested_options.ts": {},
+  "r19_astra_formatted_header_condition.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r19_astra_formatted_header_condition.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r19_astra_formatted_header_update.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r19_astra_formatted_header_update.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r19_astra_formatted_nested_options.ts": {},
+  "r19_astra_new_comment_type.ts": {},
+  "r19_astra_new_context.py": {
+    "await-in-loop-python": [
+      3,
+      8,
+      14
+    ]
+  },
+  "r19_astra_new_control.ts": {},
+  "r19_astra_new_empty_headers.js": {
+    "await-in-loop-javascript": [
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "r19_astra_new_empty_headers.ts": {
+    "await-in-loop-javascript": [
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "r19_astra_new_generic_type.ts": {},
+  "r19_astra_new_interface_extends.ts": {},
+  "r19_astra_new_nested_after.ts": {},
+  "r19_astra_new_nested_type.ts": {},
+  "r19_astra_regression_headers.js": {
+    "await-in-loop-javascript": [
+      2,
+      3,
+      4,
+      5,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "r19_astra_regression_headers.ts": {
+    "await-in-loop-javascript": [
+      2,
+      3,
+      4,
+      5,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "r19_opus_hdr-native_m.js": {
+    "await-in-loop-javascript": [
+      6,
+      9,
+      12,
+      15,
+      18,
+      21,
+      24,
+      27,
+      30,
+      33,
+      36,
+      39,
+      42,
+      45,
+      48,
+      51,
+      54,
+      57,
+      60,
+      63,
+      66,
+      69,
+      72,
+      75,
+      78,
+      81,
+      84,
+      87,
+      90,
+      93,
+      96,
+      99,
+      102,
+      105,
+      108,
+      111,
+      114,
+      117,
+      120,
+      123,
+      126,
+      129
+    ]
+  },
+  "r19_opus_hdrmx_m.js": {
+    "await-in-loop-javascript": [
+      6,
+      9,
+      12,
+      15,
+      18,
+      21,
+      24,
+      27,
+      30,
+      33,
+      36,
+      39,
+      42,
+      45,
+      48,
+      51,
+      54,
+      57,
+      60,
+      63,
+      66,
+      69,
+      72,
+      75,
+      78,
+      81,
+      84,
+      87,
+      90,
+      93,
+      96,
+      99,
+      102,
+      105,
+      108,
+      111,
+      114,
+      117,
+      120,
+      123,
+      126,
+      129
+    ]
+  },
+  "r19_opus_hdrmx_mts.ts": {
+    "await-in-loop-javascript": [
+      6,
+      9,
+      12,
+      15,
+      18,
+      21,
+      24,
+      27,
+      30,
+      33,
+      36,
+      39,
+      42,
+      45,
+      48,
+      51,
+      54,
+      57,
+      60,
+      63,
+      66,
+      69,
+      72,
+      75,
+      78,
+      81,
+      84,
+      87,
+      90,
+      93,
+      96,
+      99,
+      102,
+      105,
+      108,
+      111,
+      114,
+      117,
+      120,
+      123,
+      126,
+      129
+    ]
+  },
+  "r19_opus_m-c1_c1.dart": {
+    "serial-bounded-helper-dart": [
+      5,
+      10
+    ]
+  },
+  "r19_opus_m-c1_c1.py": {
+    "serial-bounded-helper-python": [
+      7,
+      12
+    ]
+  },
+  "r19_opus_m-c1_c1.ts": {
+    "serial-bounded-helper-javascript": [
+      28
+    ]
+  },
+  "r19_opus_m-comp_comp.py": {
+    "await-in-loop-python": [
+      15,
+      20,
+      25,
+      35,
+      40,
+      45,
+      50,
+      55,
+      60,
+      65,
+      70,
+      75,
+      80,
+      85,
+      90,
+      95
+    ]
+  },
+  "r19_opus_m-hdr_hdr.js": {
+    "await-in-loop-javascript": [
+      6,
+      13,
+      20,
+      27
+    ]
+  },
+  "r19_opus_m-helper2_comment.py": {},
+  "r19_opus_m-helper2_comment.swift": {},
+  "r19_opus_m-helper2_generic.swift": {},
+  "r19_opus_m-helper2_mid_comment.dart": {},
+  "r19_opus_m-helper2_mid_comment_plain.dart": {},
+  "r19_opus_m-helper2_prelude_string.dart": {},
+  "r19_opus_m-helper2_typed.py": {},
+  "r19_opus_m-helper2_typed_doc.py": {},
+  "r19_opus_m-helper_helpers.dart": {
+    "await-in-loop-dart": [
+      118,
+      119,
+      136
+    ]
+  },
+  "r19_opus_m-helper_helpers.py": {
+    "await-in-loop-python": [
+      21,
+      30,
+      48
+    ]
+  },
+  "r19_opus_m-helper_helpers.swift": {
+    "await-in-loop-swift": [
+      21,
+      25,
+      36
+    ]
+  },
+  "r19_opus_m-helper_helpers.ts": {
+    "await-in-loop-javascript": [
+      115,
+      116,
+      130,
+      146,
+      150
+    ]
+  },
+  "r19_opus_m-helper_helpers2.ts": {},
+  "r19_opus_m-helper_helpers3.ts": {},
+  "r19_opus_m-helper_helpers4.ts": {},
+  "r19_opus_m-helper_helpers5.ts": {},
+  "r19_opus_m-hide_hide.js": {
+    "await-in-loop-javascript": [
+      6,
+      18,
+      25,
+      32,
+      39,
+      46,
+      53,
+      61,
+      76,
+      84,
+      94,
+      102,
+      110
+    ]
+  },
+  "r19_opus_m-hide_hide.py": {
+    "await-in-loop-python": [
+      17,
+      23,
+      32,
+      38,
+      44,
+      50,
+      56
+    ]
+  },
+  "r19_opus_m-hide_hide.swift": {
+    "await-in-loop-swift": [
+      8,
+      15,
+      24,
+      32,
+      40,
+      48
+    ]
+  },
+  "r19_opus_m-hide_hide_ts.ts": {
+    "await-in-loop-javascript": [
+      6,
+      18,
+      25,
+      32,
+      39,
+      46,
+      53,
+      61,
+      76,
+      84,
+      94,
+      102,
+      110
+    ]
+  },
+  "r19_opus_m-js_shapes.js": {
+    "await-in-loop-javascript": [
+      9,
+      16,
+      23,
+      31,
+      38,
+      46,
+      52,
+      58,
+      64,
+      71,
+      120,
+      123,
+      133,
+      143,
+      154,
+      164,
+      195,
+      205,
+      226,
+      231,
+      236,
+      243,
+      253,
+      269,
+      278,
+      285,
+      292
+    ]
+  },
+  "r19_opus_m-js_shapes_ts.ts": {
+    "await-in-loop-javascript": [
+      9,
+      16,
+      23,
+      31,
+      38,
+      46,
+      52,
+      58,
+      64,
+      71,
+      120,
+      123,
+      133,
+      143,
+      154,
+      164,
+      195,
+      205,
+      226,
+      231,
+      236,
+      243,
+      253,
+      269,
+      278,
+      285,
+      292
+    ]
+  },
+  "r19_opus_m-pep_with_generic.py": {
+    "await-in-loop-python": [
+      16,
+      46
+    ]
+  },
+  "r19_opus_m-pep_without_generic.py": {
+    "await-in-loop-python": [
+      30,
+      44
+    ]
+  },
+  "r19_opus_m-py2_ctx2.py": {
+    "await-in-loop-python": [
+      8,
+      9,
+      15,
+      23,
+      30,
+      39
+    ]
+  },
+  "r19_opus_m-py_ctx.py": {
+    "await-in-loop-python": [
+      20,
+      27,
+      35,
+      45,
+      53,
+      83,
+      90,
+      95,
+      100,
+      105,
+      110
+    ]
+  },
+  "r19_opus_m-qual_astra_exact_qualified_generic.swift": {},
+  "r19_opus_m-qual_qual.swift": {
+    "await-in-loop-swift": [
+      73
+    ]
+  },
+  "r19_opus_m-swift_tasks.swift": {
+    "await-in-loop-swift": [
+      22,
+      34,
+      58,
+      69,
+      111,
+      119,
+      127,
+      135,
+      168,
+      179,
+      186,
+      202
+    ]
+  },
+  "r19_opus_pep695_clean.py": {
+    "await-in-loop-python": [
+      13
+    ]
+  },
+  "r19_opus_pep695_target.py": {
+    "await-in-loop-python": [
+      13
+    ]
+  },
+  "r19_opus_pep695_target2.py": {
+    "await-in-loop-python": [
+      29
+    ]
+  },
+  "r19_opus_pep695b_r11.py": {},
+  "r19_opus_pep695b_r5.py": {
+    "await-in-loop-python": [
+      21
+    ]
+  },
+  "r19_opus_pep695b_r5_nongeneric_only.py": {},
+  "r19_opus_pep695b_r6.py": {},
+  "r19_opus_pep695b_r6_nongeneric_only.py": {},
+  "r19_opus_pep695c_generic_then_order.py": {},
+  "r19_opus_pep695c_order_then_generic.py": {},
+  "r19_opus_pep695c_r11_python_pep695_honest.py": {},
+  "r19_opus_pep695c_r11_python_pep695_typed_honest.py": {},
+  "r19_opus_pep695c_r12_generic_comments.py": {
+    "await-in-loop-python": [
+      18,
+      22
+    ]
+  },
+  "r19_opus_pep695c_r5_python_generic_helpers.py": {
+    "await-in-loop-python": [
+      21
+    ]
+  },
+  "r19_opus_pep695c_r6_python_generic_layout.py": {
+    "await-in-loop-python": [
+      30
+    ]
+  },
+  "r19_opus_pep695c_r6_python_generic_methods.py": {},
+  "r19_opus_pyasync_t.py": {
+    "await-in-loop-python": [
+      3,
+      6,
+      15,
+      19
+    ]
+  },
+  "r19_opus_qual-native_target.swift": {
+    "await-in-loop-swift": [
+      73
+    ]
+  },
+  "r19_opus_upd-cand_t.js": {
+    "await-in-loop-javascript": [
+      3,
+      6,
+      9,
+      12
+    ]
+  },
+  "r19_opus_upd-cand_t2.js": {
+    "await-in-loop-javascript": [
+      4,
+      8,
+      11,
+      14,
+      17,
+      22
+    ]
+  },
+  "r19_opus_upd-cand_t2ts.ts": {
+    "await-in-loop-javascript": [
+      4,
+      8,
+      11,
+      14,
+      17,
+      22
+    ]
+  },
+  "r19_opus_upd-cand_t3.js": {
+    "await-in-loop-javascript": [
+      3,
+      6,
+      10
+    ]
+  },
+  "r19_opus_upd-native_t.js": {
+    "await-in-loop-javascript": [
+      3,
+      6,
+      9,
+      12
+    ]
+  },
+  "r19_twin_astra_confirm_header_condition.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r19_twin_astra_confirm_header_condition.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r19_twin_astra_confirm_header_update.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r19_twin_astra_confirm_header_update.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r19_twin_astra_confirm_nested_options.ts": {},
+  "r19_twin_astra_new_comment_type.ts": {},
+  "r19_twin_astra_new_context.py": {
+    "await-in-loop-python": [
+      3,
+      9,
+      15
+    ]
+  },
+  "r19_twin_astra_new_control.ts": {},
+  "r19_twin_astra_new_empty_headers.js": {
+    "await-in-loop-javascript": [
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "r19_twin_astra_new_empty_headers.ts": {
+    "await-in-loop-javascript": [
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "r19_twin_astra_new_generic_type.ts": {},
+  "r19_twin_astra_new_interface_extends.ts": {},
+  "r19_twin_astra_new_nested_after.ts": {},
+  "r19_twin_astra_new_nested_type.ts": {},
+  "r19_twin_astra_regression_headers.js": {
+    "await-in-loop-javascript": [
+      2,
+      3,
+      4,
+      5,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "r19_twin_astra_regression_headers.ts": {
+    "await-in-loop-javascript": [
+      2,
+      3,
+      4,
+      5,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "r19_twin_opus_hdr-native_m.js": {
+    "await-in-loop-javascript": [
+      8,
+      11,
+      14,
+      19,
+      22,
+      25,
+      30,
+      33,
+      36,
+      41,
+      44,
+      47,
+      52,
+      55,
+      58,
+      63,
+      66,
+      69,
+      74,
+      77,
+      80,
+      85,
+      88,
+      91,
+      96,
+      99,
+      102,
+      107,
+      110,
+      113,
+      118,
+      121,
+      124,
+      129,
+      132,
+      135,
+      140,
+      143,
+      146,
+      151,
+      154,
+      157
+    ]
+  },
+  "r19_twin_opus_hdrmx_m.js": {
+    "await-in-loop-javascript": [
+      8,
+      11,
+      14,
+      19,
+      22,
+      25,
+      30,
+      33,
+      36,
+      41,
+      44,
+      47,
+      52,
+      55,
+      58,
+      63,
+      66,
+      69,
+      74,
+      77,
+      80,
+      85,
+      88,
+      91,
+      96,
+      99,
+      102,
+      107,
+      110,
+      113,
+      118,
+      121,
+      124,
+      129,
+      132,
+      135,
+      140,
+      143,
+      146,
+      151,
+      154,
+      157
+    ]
+  },
+  "r19_twin_opus_hdrmx_mts.ts": {
+    "await-in-loop-javascript": [
+      8,
+      11,
+      14,
+      19,
+      22,
+      25,
+      30,
+      33,
+      36,
+      41,
+      44,
+      47,
+      52,
+      55,
+      58,
+      63,
+      66,
+      69,
+      74,
+      77,
+      80,
+      85,
+      88,
+      91,
+      96,
+      99,
+      102,
+      107,
+      110,
+      113,
+      118,
+      121,
+      124,
+      129,
+      132,
+      135,
+      140,
+      143,
+      146,
+      151,
+      154,
+      157
+    ]
+  },
+  "r19_twin_opus_m-c1_c1.dart": {
+    "serial-bounded-helper-dart": [
+      10,
+      15
+    ]
+  },
+  "r19_twin_opus_m-c1_c1.py": {
+    "serial-bounded-helper-python": [
+      7,
+      12
+    ]
+  },
+  "r19_twin_opus_m-c1_c1.ts": {
+    "serial-bounded-helper-javascript": [
+      33
+    ]
+  },
+  "r19_twin_opus_m-comp_comp.py": {
+    "await-in-loop-python": [
+      15,
+      20,
+      25,
+      35,
+      40,
+      45,
+      50,
+      55,
+      60,
+      65,
+      70,
+      75,
+      80,
+      85,
+      90,
+      95
+    ]
+  },
+  "r19_twin_opus_m-hdr_hdr.js": {
+    "await-in-loop-javascript": [
+      6,
+      13,
+      20,
+      27
+    ]
+  },
+  "r19_twin_opus_m-helper2_comment.py": {},
+  "r19_twin_opus_m-helper2_comment.swift": {},
+  "r19_twin_opus_m-helper2_generic.swift": {},
+  "r19_twin_opus_m-helper2_mid_comment.dart": {},
+  "r19_twin_opus_m-helper2_mid_comment_plain.dart": {},
+  "r19_twin_opus_m-helper2_prelude_string.dart": {},
+  "r19_twin_opus_m-helper2_typed.py": {},
+  "r19_twin_opus_m-helper2_typed_doc.py": {},
+  "r19_twin_opus_m-helper_helpers.dart": {
+    "await-in-loop-dart": [
+      118,
+      119,
+      136
+    ]
+  },
+  "r19_twin_opus_m-helper_helpers.py": {
+    "await-in-loop-python": [
+      21,
+      30,
+      48
+    ]
+  },
+  "r19_twin_opus_m-helper_helpers.swift": {
+    "await-in-loop-swift": [
+      21,
+      25,
+      36
+    ]
+  },
+  "r19_twin_opus_m-helper_helpers.ts": {
+    "await-in-loop-javascript": [
+      119,
+      120,
+      137,
+      153,
+      157
+    ]
+  },
+  "r19_twin_opus_m-helper_helpers2.ts": {},
+  "r19_twin_opus_m-helper_helpers3.ts": {},
+  "r19_twin_opus_m-helper_helpers4.ts": {},
+  "r19_twin_opus_m-helper_helpers5.ts": {},
+  "r19_twin_opus_m-hide_hide.js": {
+    "await-in-loop-javascript": [
+      8,
+      20,
+      27,
+      34,
+      41,
+      48,
+      55,
+      63,
+      78,
+      86,
+      96,
+      104,
+      112
+    ]
+  },
+  "r19_twin_opus_m-hide_hide.py": {
+    "await-in-loop-python": [
+      19,
+      25,
+      34,
+      40,
+      46,
+      52,
+      58
+    ]
+  },
+  "r19_twin_opus_m-hide_hide.swift": {
+    "await-in-loop-swift": [
+      8,
+      15,
+      24,
+      32,
+      40,
+      48
+    ]
+  },
+  "r19_twin_opus_m-hide_hide_ts.ts": {
+    "await-in-loop-javascript": [
+      8,
+      20,
+      27,
+      34,
+      41,
+      48,
+      55,
+      63,
+      78,
+      86,
+      96,
+      104,
+      112
+    ]
+  },
+  "r19_twin_opus_m-js_shapes.js": {
+    "await-in-loop-javascript": [
+      13,
+      20,
+      27,
+      35,
+      42,
+      50,
+      56,
+      61,
+      67,
+      74,
+      123,
+      126,
+      136,
+      146,
+      157,
+      167,
+      198,
+      208,
+      229,
+      234,
+      239,
+      246,
+      256,
+      272,
+      281,
+      288,
+      295
+    ]
+  },
+  "r19_twin_opus_m-js_shapes_ts.ts": {
+    "await-in-loop-javascript": [
+      13,
+      20,
+      27,
+      35,
+      42,
+      50,
+      56,
+      61,
+      67,
+      74,
+      123,
+      126,
+      136,
+      146,
+      157,
+      167,
+      198,
+      208,
+      229,
+      234,
+      239,
+      246,
+      256,
+      272,
+      281,
+      288,
+      295
+    ]
+  },
+  "r19_twin_opus_m-pep_with_generic.py": {
+    "await-in-loop-python": [
+      16,
+      48
+    ]
+  },
+  "r19_twin_opus_m-pep_without_generic.py": {
+    "await-in-loop-python": [
+      30,
+      44
+    ]
+  },
+  "r19_twin_opus_m-py2_ctx2.py": {
+    "await-in-loop-python": [
+      8,
+      9,
+      15,
+      22,
+      29,
+      41
+    ]
+  },
+  "r19_twin_opus_m-py_ctx.py": {
+    "await-in-loop-python": [
+      20,
+      27,
+      35,
+      45,
+      53,
+      83,
+      90,
+      95,
+      100,
+      105,
+      110
+    ]
+  },
+  "r19_twin_opus_m-qual_astra_exact_qualified_generic.swift": {},
+  "r19_twin_opus_m-qual_qual.swift": {
+    "await-in-loop-swift": [
+      73
+    ]
+  },
+  "r19_twin_opus_m-swift_tasks.swift": {
+    "await-in-loop-swift": [
+      22,
+      34,
+      58,
+      69,
+      111,
+      119,
+      127,
+      135,
+      169,
+      180,
+      187,
+      203
+    ]
+  },
+  "r19_twin_opus_pep695_clean.py": {
+    "await-in-loop-python": [
+      13
+    ]
+  },
+  "r19_twin_opus_pep695_target.py": {
+    "await-in-loop-python": [
+      13
+    ]
+  },
+  "r19_twin_opus_pep695_target2.py": {
+    "await-in-loop-python": [
+      31
+    ]
+  },
+  "r19_twin_opus_pep695b_r11.py": {},
+  "r19_twin_opus_pep695b_r5.py": {
+    "await-in-loop-python": [
+      34
+    ]
+  },
+  "r19_twin_opus_pep695b_r5_nongeneric_only.py": {},
+  "r19_twin_opus_pep695b_r6.py": {},
+  "r19_twin_opus_pep695b_r6_nongeneric_only.py": {},
+  "r19_twin_opus_pep695c_generic_then_order.py": {},
+  "r19_twin_opus_pep695c_order_then_generic.py": {},
+  "r19_twin_opus_pep695c_r11_python_pep695_honest.py": {},
+  "r19_twin_opus_pep695c_r11_python_pep695_typed_honest.py": {},
+  "r19_twin_opus_pep695c_r12_generic_comments.py": {
+    "await-in-loop-python": [
+      17,
+      21
+    ]
+  },
+  "r19_twin_opus_pep695c_r5_python_generic_helpers.py": {
+    "await-in-loop-python": [
+      30
+    ]
+  },
+  "r19_twin_opus_pep695c_r6_python_generic_layout.py": {
+    "await-in-loop-python": [
+      27
+    ]
+  },
+  "r19_twin_opus_pep695c_r6_python_generic_methods.py": {},
+  "r19_twin_opus_pyasync_t.py": {
+    "await-in-loop-python": [
+      3,
+      6,
+      15,
+      19
+    ]
+  },
+  "r19_twin_opus_qual-native_target.swift": {
+    "await-in-loop-swift": [
+      73
+    ]
+  },
+  "r19_twin_opus_upd-cand_t.js": {
+    "await-in-loop-javascript": [
+      3,
+      6,
+      9,
+      12
+    ]
+  },
+  "r19_twin_opus_upd-cand_t2.js": {
+    "await-in-loop-javascript": [
+      6,
+      10,
+      13,
+      16,
+      22,
+      28
+    ]
+  },
+  "r19_twin_opus_upd-cand_t2ts.ts": {
+    "await-in-loop-javascript": [
+      6,
+      10,
+      13,
+      16,
+      22,
+      28
+    ]
+  },
+  "r19_twin_opus_upd-cand_t3.js": {
+    "await-in-loop-javascript": [
+      5,
+      8,
+      12
+    ]
+  },
+  "r19_twin_opus_upd-native_t.js": {
+    "await-in-loop-javascript": [
+      3,
+      6,
+      9,
+      12
+    ]
+  },
+  "r20_astra_confirm_chunk_extra_before.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r20_astra_confirm_chunk_extra_before_formatted.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r20_astra_confirm_runtime_prelude.dart": {},
+  "r20_astra_confirm_runtime_typed.dart": {},
+  "r20_astra_confirm_typed_join.dart": {},
+  "r20_astra_confirm_untyped_join.dart": {},
+  "r20_astra_formatted_comment.dart": {},
+  "r20_astra_formatted_comment.ts": {},
+  "r20_astra_formatted_non_null.ts": {},
+  "r20_astra_formatted_typed_join.dart": {},
+  "r20_astra_more_dart_local.dart": {},
+  "r20_astra_more_dart_method.dart": {},
+  "r20_astra_more_dart_plain.dart": {},
+  "r20_astra_more_dart_reason_local.dart": {},
+  "r20_astra_more_dart_static.dart": {},
+  "r20_astra_more_dart_typed_join.dart": {},
+  "r20_astra_more_prelude_for.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r20_astra_more_prelude_nested.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r20_astra_more_prelude_while.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r20_astra_more_swift_method.swift": {},
+  "r20_astra_more_swift_nonisolated.swift": {},
+  "r20_astra_more_swift_plain.swift": {},
+  "r20_astra_more_swift_static.swift": {},
+  "r20_astra_more_swift_typed_error.swift": {},
+  "r20_astra_new_contexts.py": {
+    "await-in-loop-python": [
+      7,
+      10
+    ]
+  },
+  "r20_astra_new_extra_arrow.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_arrow.ts": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_default.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_default.ts": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_expression.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_expression.ts": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_field.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_field.ts": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_function.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_function.ts": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_method.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_method.ts": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_object.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_object.ts": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_static.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_extra_static.ts": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_generic_contexts.py": {
+    "await-in-loop-python": [
+      8
+    ]
+  },
+  "r20_astra_new_header_callbacks.js": {},
+  "r20_astra_new_header_callbacks.ts": {},
+  "r20_astra_new_header_readonly.js": {
+    "await-in-loop-javascript": [
+      3,
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_header_readonly.ts": {
+    "await-in-loop-javascript": [
+      3,
+      3,
+      4
+    ]
+  },
+  "r20_astra_new_helper_arrow.js": {},
+  "r20_astra_new_helper_arrow.ts": {},
+  "r20_astra_new_helper_default.js": {},
+  "r20_astra_new_helper_default.ts": {},
+  "r20_astra_new_helper_expression.js": {},
+  "r20_astra_new_helper_expression.ts": {},
+  "r20_astra_new_helper_field.js": {},
+  "r20_astra_new_helper_field.ts": {},
+  "r20_astra_new_helper_function.js": {},
+  "r20_astra_new_helper_function.ts": {},
+  "r20_astra_new_helper_method.js": {},
+  "r20_astra_new_helper_method.ts": {},
+  "r20_astra_new_helper_object.js": {},
+  "r20_astra_new_helper_object.ts": {},
+  "r20_astra_new_helper_static.js": {},
+  "r20_astra_new_helper_static.ts": {},
+  "r20_astra_new_literal_lists.py": {
+    "await-in-loop-python": [
+      5,
+      7,
+      8
+    ]
+  },
+  "r20_astra_new_order_arrow.js": {},
+  "r20_astra_new_order_arrow.ts": {},
+  "r20_astra_new_order_default.js": {},
+  "r20_astra_new_order_default.ts": {},
+  "r20_astra_new_order_expression.js": {},
+  "r20_astra_new_order_expression.ts": {},
+  "r20_astra_new_order_field.js": {},
+  "r20_astra_new_order_field.ts": {},
+  "r20_astra_new_order_function.js": {},
+  "r20_astra_new_order_function.ts": {},
+  "r20_astra_new_order_method.js": {},
+  "r20_astra_new_order_method.ts": {},
+  "r20_astra_new_order_object.js": {},
+  "r20_astra_new_order_object.ts": {},
+  "r20_astra_new_order_static.js": {},
+  "r20_astra_new_order_static.ts": {},
+  "r20_astra_new_reasons.js": {},
+  "r20_astra_new_reasons.ts": {},
+  "r20_astra_range-probe_nested.py": {
+    "await-in-loop-python": [
+      4
+    ]
+  },
+  "r20_astra_workers_comment.dart": {},
+  "r20_astra_workers_comment.ts": {},
+  "r20_astra_workers_control.dart": {},
+  "r20_astra_workers_control.ts": {},
+  "r20_astra_workers_non_null.ts": {},
+  "r20_history_r8_astra_formatted_chunk_extra_before.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r20_history_r8_astra_new_chunk_extra_before.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r20_opus_p19_comp.py": {
+    "await-in-loop-python": [
+      3,
+      5,
+      11,
+      13,
+      15,
+      17,
+      25,
+      27,
+      29,
+      31,
+      33,
+      35,
+      37,
+      43
+    ]
+  },
+  "r20_opus_p19_headers.js": {
+    "await-in-loop-javascript": [
+      12,
+      17,
+      21,
+      37,
+      41,
+      45,
+      50,
+      54
+    ]
+  },
+  "r20_opus_p19_headers_ts.ts": {
+    "await-in-loop-javascript": [
+      12,
+      17,
+      21,
+      37,
+      41,
+      45,
+      50,
+      54
+    ]
+  },
+  "r20_opus_p19_helpers.dart": {
+    "await-in-loop-dart": [
+      137,
+      138
+    ]
+  },
+  "r20_opus_p19_helpers_js.mjs": {
+    "await-in-loop-javascript": [
+      20,
+      50,
+      51,
+      59,
+      61
+    ]
+  },
+  "r20_opus_p19_helpers_pep.py": {
+    "await-in-loop-python": [
+      27,
+      42,
+      43,
+      49,
+      55,
+      61,
+      74
+    ]
+  },
+  "r20_opus_p19_helpers_plain.py": {
+    "await-in-loop-python": [
+      29,
+      44,
+      45,
+      51,
+      57,
+      63,
+      69,
+      76
+    ]
+  },
+  "r20_opus_p19_helpers_ts.ts": {
+    "await-in-loop-javascript": [
+      24,
+      62,
+      78,
+      79,
+      86,
+      93,
+      101
+    ]
+  },
+  "r20_opus_p19_real.mjs": {
+    "await-in-loop-javascript": [
+      5,
+      13,
+      19,
+      26,
+      32,
+      39,
+      47,
+      56,
+      65,
+      75,
+      75,
+      142
+    ]
+  },
+  "r20_opus_p19_real.py": {
+    "await-in-loop-python": [
+      7,
+      14,
+      15,
+      51,
+      57,
+      71
+    ]
+  },
+  "r20_opus_p19_real.ts": {
+    "await-in-loop-javascript": [
+      5,
+      13,
+      19,
+      26,
+      32,
+      39,
+      47,
+      56,
+      65,
+      75,
+      75,
+      142
+    ]
+  },
+  "r20_opus_p19_real_match.py": {
+    "await-in-loop-python": [
+      15,
+      23,
+      59,
+      65,
+      79
+    ]
+  },
+  "r20_opus_p19_tasks.swift": {
+    "await-in-loop-swift": [
+      18,
+      30,
+      44,
+      52,
+      60,
+      72,
+      73
+    ]
+  },
+  "r20_opus_p19b_bodies.js": {
+    "await-in-loop-javascript": [
+      3,
+      7
+    ]
+  },
+  "r20_opus_p19b_names.mjs": {},
+  "r20_opus_p19b_names.py": {
+    "await-in-loop-python": [
+      15
+    ]
+  },
+  "r20_opus_p19b_names.ts": {},
+  "r20_opus_p19b_prelude_loop.dart": {
+    "await-in-loop-dart": [
+      8,
+      26,
+      43,
+      74
+    ]
+  },
+  "r20_opus_p19c_nested.mjs": {
+    "await-in-loop-javascript": [
+      4,
+      7,
+      17,
+      29
+    ]
+  },
+  "r20_opus_p19c_nested.py": {
+    "await-in-loop-python": [
+      4,
+      7,
+      15,
+      23,
+      28
+    ]
+  },
+  "r20_opus_p19d_first_iter.py": {
+    "await-in-loop-python": [
+      5,
+      11
+    ]
+  },
+  "r20_opus_p19d_worker_prelude.dart": {
+    "await-in-loop-dart": [
+      8
+    ]
+  },
+  "r20_opus_vacuity_mid_comment.dart": {},
+  "r20_opus_vacuity_prelude_loop.dart": {
+    "await-in-loop-dart": [
+      8,
+      26,
+      43,
+      74
+    ]
+  },
+  "r20_opus_vacuity_t.dart": {
+    "await-in-loop-dart": [
+      18
+    ]
+  },
+  "r20_twin_astra_confirm_chunk_extra_before.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r20_twin_astra_confirm_chunk_extra_before_formatted.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r20_twin_astra_confirm_runtime_prelude.dart": {},
+  "r20_twin_astra_confirm_runtime_typed.dart": {},
+  "r20_twin_astra_confirm_typed_join.dart": {},
+  "r20_twin_astra_confirm_untyped_join.dart": {},
+  "r20_twin_astra_more_dart_local.dart": {},
+  "r20_twin_astra_more_dart_method.dart": {},
+  "r20_twin_astra_more_dart_plain.dart": {},
+  "r20_twin_astra_more_dart_reason_local.dart": {},
+  "r20_twin_astra_more_dart_static.dart": {},
+  "r20_twin_astra_more_dart_typed_join.dart": {},
+  "r20_twin_astra_more_prelude_for.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r20_twin_astra_more_prelude_nested.dart": {
+    "await-in-loop-dart": [
+      8
+    ]
+  },
+  "r20_twin_astra_more_prelude_while.dart": {
+    "await-in-loop-dart": [
+      8
+    ]
+  },
+  "r20_twin_astra_more_swift_method.swift": {},
+  "r20_twin_astra_more_swift_nonisolated.swift": {},
+  "r20_twin_astra_more_swift_plain.swift": {},
+  "r20_twin_astra_more_swift_static.swift": {},
+  "r20_twin_astra_more_swift_typed_error.swift": {},
+  "r20_twin_astra_new_contexts.py": {
+    "await-in-loop-python": [
+      9,
+      12
+    ]
+  },
+  "r20_twin_astra_new_extra_arrow.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_twin_astra_new_extra_arrow.ts": {
+    "await-in-loop-javascript": [
+      7,
+      8
+    ]
+  },
+  "r20_twin_astra_new_extra_default.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_twin_astra_new_extra_default.ts": {
+    "await-in-loop-javascript": [
+      7,
+      8
+    ]
+  },
+  "r20_twin_astra_new_extra_expression.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_twin_astra_new_extra_expression.ts": {
+    "await-in-loop-javascript": [
+      7,
+      8
+    ]
+  },
+  "r20_twin_astra_new_extra_field.js": {
+    "await-in-loop-javascript": [
+      4,
+      5
+    ]
+  },
+  "r20_twin_astra_new_extra_field.ts": {
+    "await-in-loop-javascript": [
+      8,
+      9
+    ]
+  },
+  "r20_twin_astra_new_extra_function.js": {
+    "await-in-loop-javascript": [
+      3,
+      4
+    ]
+  },
+  "r20_twin_astra_new_extra_function.ts": {
+    "await-in-loop-javascript": [
+      7,
+      8
+    ]
+  },
+  "r20_twin_astra_new_extra_method.js": {
+    "await-in-loop-javascript": [
+      4,
+      5
+    ]
+  },
+  "r20_twin_astra_new_extra_method.ts": {
+    "await-in-loop-javascript": [
+      8,
+      9
+    ]
+  },
+  "r20_twin_astra_new_extra_object.js": {
+    "await-in-loop-javascript": [
+      4,
+      5
+    ]
+  },
+  "r20_twin_astra_new_extra_object.ts": {
+    "await-in-loop-javascript": [
+      8,
+      9
+    ]
+  },
+  "r20_twin_astra_new_extra_static.js": {
+    "await-in-loop-javascript": [
+      4,
+      5
+    ]
+  },
+  "r20_twin_astra_new_extra_static.ts": {
+    "await-in-loop-javascript": [
+      8,
+      9
+    ]
+  },
+  "r20_twin_astra_new_generic_contexts.py": {
+    "await-in-loop-python": [
+      13
+    ]
+  },
+  "r20_twin_astra_new_header_callbacks.js": {},
+  "r20_twin_astra_new_header_callbacks.ts": {},
+  "r20_twin_astra_new_header_readonly.js": {
+    "await-in-loop-javascript": [
+      8,
+      8,
+      10
+    ]
+  },
+  "r20_twin_astra_new_header_readonly.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8,
+      10
+    ]
+  },
+  "r20_twin_astra_new_helper_arrow.js": {},
+  "r20_twin_astra_new_helper_arrow.ts": {},
+  "r20_twin_astra_new_helper_default.js": {},
+  "r20_twin_astra_new_helper_default.ts": {},
+  "r20_twin_astra_new_helper_expression.js": {},
+  "r20_twin_astra_new_helper_expression.ts": {},
+  "r20_twin_astra_new_helper_field.js": {},
+  "r20_twin_astra_new_helper_field.ts": {},
+  "r20_twin_astra_new_helper_function.js": {},
+  "r20_twin_astra_new_helper_function.ts": {},
+  "r20_twin_astra_new_helper_method.js": {},
+  "r20_twin_astra_new_helper_method.ts": {},
+  "r20_twin_astra_new_helper_object.js": {},
+  "r20_twin_astra_new_helper_object.ts": {},
+  "r20_twin_astra_new_helper_static.js": {},
+  "r20_twin_astra_new_helper_static.ts": {},
+  "r20_twin_astra_new_literal_lists.py": {
+    "await-in-loop-python": [
+      7,
+      15,
+      17
+    ]
+  },
+  "r20_twin_astra_new_order_arrow.js": {},
+  "r20_twin_astra_new_order_arrow.ts": {},
+  "r20_twin_astra_new_order_default.js": {},
+  "r20_twin_astra_new_order_default.ts": {},
+  "r20_twin_astra_new_order_expression.js": {},
+  "r20_twin_astra_new_order_expression.ts": {},
+  "r20_twin_astra_new_order_field.js": {},
+  "r20_twin_astra_new_order_field.ts": {},
+  "r20_twin_astra_new_order_function.js": {},
+  "r20_twin_astra_new_order_function.ts": {},
+  "r20_twin_astra_new_order_method.js": {},
+  "r20_twin_astra_new_order_method.ts": {},
+  "r20_twin_astra_new_order_object.js": {},
+  "r20_twin_astra_new_order_object.ts": {},
+  "r20_twin_astra_new_order_static.js": {},
+  "r20_twin_astra_new_order_static.ts": {},
+  "r20_twin_astra_new_reasons.js": {},
+  "r20_twin_astra_new_reasons.ts": {},
+  "r20_twin_astra_range-probe_nested.py": {
+    "await-in-loop-python": [
+      4
+    ]
+  },
+  "r20_twin_astra_workers_comment.dart": {},
+  "r20_twin_astra_workers_comment.ts": {},
+  "r20_twin_astra_workers_control.dart": {},
+  "r20_twin_astra_workers_control.ts": {},
+  "r20_twin_astra_workers_non_null.ts": {},
+  "r20_twin_history_r8_astra_new_chunk_extra_before.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r20_twin_opus_p19_comp.py": {
+    "await-in-loop-python": [
+      3,
+      5,
+      14,
+      18,
+      20,
+      22,
+      30,
+      32,
+      34,
+      36,
+      38,
+      40,
+      42,
+      48
+    ]
+  },
+  "r20_twin_opus_p19_headers.js": {
+    "await-in-loop-javascript": [
+      16,
+      23,
+      29,
+      53,
+      57,
+      63,
+      70,
+      76
+    ]
+  },
+  "r20_twin_opus_p19_headers_ts.ts": {
+    "await-in-loop-javascript": [
+      16,
+      23,
+      29,
+      53,
+      57,
+      63,
+      70,
+      76
+    ]
+  },
+  "r20_twin_opus_p19_helpers.dart": {
+    "await-in-loop-dart": [
+      137,
+      138
+    ]
+  },
+  "r20_twin_opus_p19_helpers_js.mjs": {
+    "await-in-loop-javascript": [
+      20,
+      50,
+      51,
+      59,
+      61
+    ]
+  },
+  "r20_twin_opus_p19_helpers_pep.py": {
+    "await-in-loop-python": [
+      35,
+      54,
+      55,
+      61,
+      69,
+      75,
+      88
+    ]
+  },
+  "r20_twin_opus_p19_helpers_plain.py": {
+    "await-in-loop-python": [
+      38,
+      57,
+      58,
+      64,
+      72,
+      78,
+      84,
+      91
+    ]
+  },
+  "r20_twin_opus_p19_helpers_ts.ts": {
+    "await-in-loop-javascript": [
+      31,
+      85,
+      109,
+      110,
+      121,
+      132,
+      144
+    ]
+  },
+  "r20_twin_opus_p19_real.mjs": {
+    "await-in-loop-javascript": [
+      5,
+      13,
+      19,
+      26,
+      32,
+      39,
+      47,
+      56,
+      65,
+      75,
+      75,
+      144
+    ]
+  },
+  "r20_twin_opus_p19_real.py": {
+    "await-in-loop-python": [
+      7,
+      14,
+      15,
+      51,
+      57,
+      71
+    ]
+  },
+  "r20_twin_opus_p19_real.ts": {
+    "await-in-loop-javascript": [
+      5,
+      13,
+      19,
+      26,
+      32,
+      39,
+      47,
+      56,
+      65,
+      75,
+      75,
+      144
+    ]
+  },
+  "r20_twin_opus_p19_real_match.py": {
+    "await-in-loop-python": [
+      15,
+      23,
+      59,
+      65,
+      79
+    ]
+  },
+  "r20_twin_opus_p19_tasks.swift": {
+    "await-in-loop-swift": [
+      18,
+      30,
+      44,
+      52,
+      60,
+      72,
+      73
+    ]
+  },
+  "r20_twin_opus_p19b_bodies.js": {
+    "await-in-loop-javascript": [
+      4,
+      10
+    ]
+  },
+  "r20_twin_opus_p19b_names.mjs": {},
+  "r20_twin_opus_p19b_names.py": {
+    "await-in-loop-python": [
+      15
+    ]
+  },
+  "r20_twin_opus_p19b_names.ts": {},
+  "r20_twin_opus_p19b_prelude_loop.dart": {
+    "await-in-loop-dart": [
+      8,
+      26,
+      43,
+      74
+    ]
+  },
+  "r20_twin_opus_p19c_nested.mjs": {
+    "await-in-loop-javascript": [
+      4,
+      7,
+      17,
+      29
+    ]
+  },
+  "r20_twin_opus_p19c_nested.py": {
+    "await-in-loop-python": [
+      4,
+      7,
+      15,
+      23,
+      28
+    ]
+  },
+  "r20_twin_opus_p19d_first_iter.py": {
+    "await-in-loop-python": [
+      5,
+      11
+    ]
+  },
+  "r20_twin_opus_p19d_worker_prelude.dart": {
+    "await-in-loop-dart": [
+      8
+    ]
+  },
+  "r20_twin_opus_vacuity_mid_comment.dart": {},
+  "r20_twin_opus_vacuity_prelude_loop.dart": {
+    "await-in-loop-dart": [
+      8,
+      26,
+      43,
+      74
+    ]
+  },
+  "r20_twin_opus_vacuity_t.dart": {
+    "await-in-loop-dart": [
+      18
+    ]
+  },
+  "r21_astra_audit_comment.ts": {},
+  "r21_astra_confirm_runtime.mjs": {},
+  "r21_astra_confirm_worker_control.js": {},
+  "r21_astra_confirm_worker_explicit.js": {
+    "await-in-loop-javascript": [
+      6,
+      7
+    ]
+  },
+  "r21_astra_confirm_worker_receiver.dart": {
+    "await-in-loop-dart": [
+      10,
+      10
+    ]
+  },
+  "r21_astra_confirm_worker_receiver.js": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r21_astra_confirm_worker_receiver.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r21_astra_formatted_worker_receiver.dart": {
+    "await-in-loop-dart": [
+      16,
+      16
+    ]
+  },
+  "r21_astra_formatted_worker_receiver.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r21_astra_formatted_worker_receiver.ts": {
+    "await-in-loop-javascript": [
+      12,
+      12
+    ]
+  },
+  "r21_astra_new_chunk_int_index.dart": {},
+  "r21_astra_new_chunk_trailing.dart": {
+    "await-in-loop-dart": [
+      12
+    ]
+  },
+  "r21_astra_new_chunk_typed_group.dart": {},
+  "r21_astra_new_chunk_typed_offset.dart": {},
+  "r21_astra_new_chunk_wrapped.dart": {},
+  "r21_astra_new_ordinary.py": {
+    "await-in-loop-python": [
+      5,
+      9,
+      12
+    ]
+  },
+  "r21_astra_new_ordinary.swift": {
+    "await-in-loop-swift": [
+      2,
+      3
+    ]
+  },
+  "r21_astra_new_ordinary.ts": {
+    "await-in-loop-javascript": [
+      2,
+      3,
+      5,
+      7
+    ]
+  },
+  "r21_astra_new_worker_callee.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_astra_new_worker_callee.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_astra_new_worker_cascade.dart": {},
+  "r21_astra_new_worker_extra.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_astra_new_worker_extra.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_astra_new_worker_generic_join.dart": {},
+  "r21_astra_new_worker_generic_list.dart": {},
+  "r21_astra_new_worker_index.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_astra_new_worker_index.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_astra_new_worker_method.ts": {},
+  "r21_astra_new_worker_nested.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_astra_new_worker_nested.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_astra_new_worker_one.dart": {
+    "await-in-loop-dart": [
+      12
+    ]
+  },
+  "r21_astra_new_worker_one.ts": {
+    "await-in-loop-javascript": [
+      11
+    ]
+  },
+  "r21_astra_new_worker_optional.ts": {},
+  "r21_astra_new_worker_receiver.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_astra_new_worker_receiver.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_astra_new_worker_target.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_astra_new_worker_target.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_opus_p20i_callee.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7,
+      18,
+      18,
+      30,
+      30,
+      43,
+      43,
+      55,
+      66
+    ]
+  },
+  "r21_opus_p20i_two_awaits.dart": {
+    "await-in-loop-dart": [
+      8,
+      8,
+      21,
+      21,
+      34,
+      34
+    ]
+  },
+  "r21_opus_p20i_two_awaits.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8,
+      21,
+      21,
+      34,
+      34,
+      47,
+      47,
+      59,
+      59
+    ]
+  },
+  "r21_opus_p20i_two_awaits_js.mjs": {
+    "await-in-loop-javascript": [
+      8,
+      8,
+      20,
+      20,
+      31,
+      31
+    ]
+  },
+  "r21_opus_p20o_ordered.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_opus_p20o_ordered.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_opus_p20o_ordered_named.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r21_opus_p20o_ordered_obj.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r21_opus_p20p_inorder.swift": {
+    "await-in-loop-swift": [
+      4,
+      4
+    ]
+  },
+  "r21_opus_p20p_inorder_a.py": {},
+  "r21_opus_p20p_inorder_b.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_opus_p20p_inorder_c.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_opus_p20p_inorder_d.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_opus_p20p_inorder_e.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_opus_p20p_inorder_f.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_opus_p20p_mwc_a.py": {
+    "await-in-loop-python": [
+      5,
+      5
+    ]
+  },
+  "r21_opus_p20w_scoped.py": {
+    "await-in-loop-python": [
+      9,
+      20,
+      29,
+      46,
+      54,
+      75,
+      86
+    ]
+  },
+  "r21_opus_p20w_workers.dart": {
+    "await-in-loop-dart": [
+      34,
+      34,
+      47,
+      47,
+      59,
+      71,
+      93
+    ]
+  },
+  "r21_opus_p20w_workers.ts": {
+    "await-in-loop-javascript": [
+      42,
+      42,
+      53,
+      53,
+      64,
+      65,
+      76,
+      87,
+      87,
+      98,
+      98,
+      117
+    ]
+  },
+  "r21_twin_astra_audit_comment.ts": {},
+  "r21_twin_astra_confirm_runtime.mjs": {},
+  "r21_twin_astra_confirm_worker_control.js": {},
+  "r21_twin_astra_confirm_worker_explicit.js": {
+    "await-in-loop-javascript": [
+      7,
+      8
+    ]
+  },
+  "r21_twin_astra_confirm_worker_receiver.dart": {
+    "await-in-loop-dart": [
+      16,
+      16
+    ]
+  },
+  "r21_twin_astra_confirm_worker_receiver.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r21_twin_astra_confirm_worker_receiver.ts": {
+    "await-in-loop-javascript": [
+      12,
+      12
+    ]
+  },
+  "r21_twin_astra_new_chunk_int_index.dart": {},
+  "r21_twin_astra_new_chunk_trailing.dart": {
+    "await-in-loop-dart": [
+      13
+    ]
+  },
+  "r21_twin_astra_new_chunk_typed_group.dart": {},
+  "r21_twin_astra_new_chunk_typed_offset.dart": {},
+  "r21_twin_astra_new_chunk_wrapped.dart": {},
+  "r21_twin_astra_new_ordinary.py": {
+    "await-in-loop-python": [
+      7,
+      11,
+      15
+    ]
+  },
+  "r21_twin_astra_new_ordinary.swift": {
+    "await-in-loop-swift": [
+      2,
+      5
+    ]
+  },
+  "r21_twin_astra_new_ordinary.ts": {
+    "await-in-loop-javascript": [
+      4,
+      12,
+      24,
+      29
+    ]
+  },
+  "r21_twin_astra_new_worker_callee.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_twin_astra_new_worker_callee.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_twin_astra_new_worker_cascade.dart": {},
+  "r21_twin_astra_new_worker_extra.dart": {
+    "await-in-loop-dart": [
+      12,
+      13
+    ]
+  },
+  "r21_twin_astra_new_worker_extra.ts": {
+    "await-in-loop-javascript": [
+      11,
+      12
+    ]
+  },
+  "r21_twin_astra_new_worker_generic_join.dart": {},
+  "r21_twin_astra_new_worker_generic_list.dart": {},
+  "r21_twin_astra_new_worker_index.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_twin_astra_new_worker_index.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_twin_astra_new_worker_method.ts": {},
+  "r21_twin_astra_new_worker_nested.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_twin_astra_new_worker_nested.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_twin_astra_new_worker_one.dart": {
+    "await-in-loop-dart": [
+      12
+    ]
+  },
+  "r21_twin_astra_new_worker_one.ts": {
+    "await-in-loop-javascript": [
+      11
+    ]
+  },
+  "r21_twin_astra_new_worker_optional.ts": {},
+  "r21_twin_astra_new_worker_receiver.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_twin_astra_new_worker_receiver.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_twin_astra_new_worker_target.dart": {
+    "await-in-loop-dart": [
+      12,
+      12
+    ]
+  },
+  "r21_twin_astra_new_worker_target.ts": {
+    "await-in-loop-javascript": [
+      11,
+      11
+    ]
+  },
+  "r21_twin_opus_p20i_callee.ts": {
+    "await-in-loop-javascript": [
+      12,
+      12,
+      29,
+      29,
+      47,
+      47,
+      68,
+      68,
+      86,
+      99
+    ]
+  },
+  "r21_twin_opus_p20i_two_awaits.dart": {
+    "await-in-loop-dart": [
+      14,
+      14,
+      29,
+      29,
+      45,
+      46
+    ]
+  },
+  "r21_twin_opus_p20i_two_awaits.ts": {
+    "await-in-loop-javascript": [
+      13,
+      14,
+      34,
+      35,
+      51,
+      51,
+      67,
+      68,
+      83,
+      83
+    ]
+  },
+  "r21_twin_opus_p20i_two_awaits_js.mjs": {
+    "await-in-loop-javascript": [
+      10,
+      11,
+      26,
+      26,
+      39,
+      39
+    ]
+  },
+  "r21_twin_opus_p20o_ordered.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_twin_opus_p20o_ordered.ts": {
+    "await-in-loop-javascript": [
+      19,
+      19
+    ]
+  },
+  "r21_twin_opus_p20o_ordered_named.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r21_twin_opus_p20o_ordered_obj.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r21_twin_opus_p20p_inorder.swift": {
+    "await-in-loop-swift": [
+      4,
+      4
+    ]
+  },
+  "r21_twin_opus_p20p_inorder_a.py": {},
+  "r21_twin_opus_p20p_inorder_b.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_twin_opus_p20p_inorder_c.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_twin_opus_p20p_inorder_d.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_twin_opus_p20p_inorder_e.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_twin_opus_p20p_inorder_f.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r21_twin_opus_p20p_mwc_a.py": {
+    "await-in-loop-python": [
+      8,
+      11
+    ]
+  },
+  "r21_twin_opus_p20w_scoped.py": {
+    "await-in-loop-python": [
+      9,
+      20,
+      29,
+      46,
+      54,
+      75,
+      86
+    ]
+  },
+  "r21_twin_opus_p20w_workers.dart": {
+    "await-in-loop-dart": [
+      51,
+      51,
+      70,
+      70,
+      88,
+      105,
+      134
+    ]
+  },
+  "r21_twin_opus_p20w_workers.ts": {
+    "await-in-loop-javascript": [
+      65,
+      65,
+      82,
+      82,
+      99,
+      100,
+      116,
+      133,
+      133,
+      150,
+      150,
+      179
+    ]
+  },
+  "r22_astra_confirm_audit_audit_comment.ts": {},
+  "r22_astra_confirm_audit_confirm_worker_control.js": {},
+  "r22_astra_confirm_audit_new_worker_method.ts": {},
+  "r22_astra_confirm_audit_new_worker_optional.ts": {},
+  "r22_astra_confirm_property_result.js": {},
+  "r22_astra_confirm_regex_before.js": {
+    "regex-built-in-function-javascript": [
+      6
+    ]
+  },
+  "r22_astra_confirm_template_both.js": {},
+  "r22_astra_confirm_template_indirect.js": {},
+  "r22_astra_confirm_worker_computed_await.js": {},
+  "r22_astra_confirm_worker_plain.js": {},
+  "r22_astra_confirm_worker_property_await.js": {},
+  "r22_astra_confirm_worker_template_repeat.js": {},
+  "r22_astra_label-audit_r15_astra_formatted_new_register_method.js": {},
+  "r22_astra_label-audit_r15_astra_formatted_new_register_method.ts": {},
+  "r22_astra_label-audit_r15_astra_new_register_method.js": {},
+  "r22_astra_label-audit_r15_astra_new_register_method.ts": {},
+  "r22_astra_label-audit_r16_astra_formatted_new_condition_callback.js": {},
+  "r22_astra_label-audit_r16_astra_formatted_new_condition_callback.ts": {},
+  "r22_astra_label-audit_r16_astra_formatted_new_update_callback.js": {},
+  "r22_astra_label-audit_r16_astra_formatted_new_update_callback.ts": {},
+  "r22_astra_label-audit_r16_astra_new_condition_callback.js": {},
+  "r22_astra_label-audit_r16_astra_new_condition_callback.ts": {},
+  "r22_astra_label-audit_r16_astra_new_update_callback.js": {},
+  "r22_astra_label-audit_r16_astra_new_update_callback.ts": {},
+  "r22_astra_label-audit_r17_opus_cb_cb.js": {},
+  "r22_astra_label-audit_r18_opus_m-hide_hide.js": {
+    "await-in-loop-javascript": [
+      6,
+      18,
+      25,
+      32,
+      39,
+      46,
+      53,
+      61,
+      76,
+      84,
+      94,
+      102,
+      110
+    ]
+  },
+  "r22_astra_label-audit_r18_opus_m-hide_hide.py": {
+    "await-in-loop-python": [
+      17,
+      23,
+      32,
+      38,
+      44,
+      50,
+      56
+    ]
+  },
+  "r22_astra_label-audit_r18_opus_m-hide_hide_ts.ts": {
+    "await-in-loop-javascript": [
+      6,
+      18,
+      25,
+      32,
+      39,
+      46,
+      53,
+      61,
+      76,
+      84,
+      94,
+      102,
+      110
+    ]
+  },
+  "r22_astra_label-audit_r18_opus_m-pep_with_generic.py": {
+    "await-in-loop-python": [
+      16,
+      46
+    ]
+  },
+  "r22_astra_label-audit_r18_opus_m-pep_without_generic.py": {
+    "await-in-loop-python": [
+      30,
+      44
+    ]
+  },
+  "r22_astra_label-audit_r1_astra_probes_py_callback_called.py": {
+    "await-in-loop-python": [
+      5
+    ]
+  },
+  "r22_astra_label-audit_r1_opus_p1_probe_js.ts": {
+    "await-in-loop-javascript": [
+      4,
+      37,
+      45,
+      51,
+      53,
+      63,
+      96,
+      116,
+      124,
+      128,
+      135,
+      139,
+      154
+    ],
+    "hidden-sequential-loop-javascript": [
+      17,
+      25,
+      30
+    ],
+    "in-order-needs-reason-javascript": [
+      69,
+      71,
+      73,
+      75
+    ],
+    "sequential-awaits-javascript": [
+      146
+    ]
+  },
+  "r22_astra_label-audit_r1_opus_p1_probe_py.py": {
+    "await-in-loop-python": [
+      11,
+      14,
+      19,
+      22,
+      37,
+      42,
+      44,
+      50,
+      59,
+      65
+    ],
+    "in-order-needs-reason-python": [
+      27,
+      29
+    ]
+  },
+  "r22_astra_label-audit_r20_astra_audit_comment.ts": {},
+  "r22_astra_label-audit_r20_astra_confirm_worker_control.js": {},
+  "r22_astra_label-audit_r20_astra_new_worker_method.ts": {},
+  "r22_astra_label-audit_r20_astra_new_worker_optional.ts": {},
+  "r22_astra_label-audit_r20_opus_p20i_two_awaits.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8,
+      21,
+      21,
+      34,
+      34,
+      47,
+      47,
+      59,
+      59
+    ]
+  },
+  "r22_astra_label-audit_r20_opus_p20i_two_awaits_js.mjs": {
+    "await-in-loop-javascript": [
+      8,
+      8,
+      20,
+      20,
+      31,
+      31
+    ]
+  },
+  "r22_astra_label-audit_r20_opus_p20w_workers.ts": {
+    "await-in-loop-javascript": [
+      42,
+      42,
+      53,
+      53,
+      64,
+      65,
+      76,
+      87,
+      87,
+      98,
+      98,
+      117
+    ]
+  },
+  "r22_astra_label-audit_r5_opus_q12_py_body.py": {
+    "await-in-loop-python": [
+      9,
+      12
+    ]
+  },
+  "r22_astra_new_chunk_block.dart": {},
+  "r22_astra_new_chunk_cast.dart": {},
+  "r22_astra_new_chunk_comment.dart": {},
+  "r22_astra_new_chunk_control.dart": {},
+  "r22_astra_new_chunk_nested_comment.dart": {},
+  "r22_astra_new_python_callback.py": {},
+  "r22_astra_new_python_control.py": {},
+  "r22_astra_new_python_default.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_astra_new_python_fstring.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_astra_new_python_repeat.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_astra_new_swift_comment.swift": {},
+  "r22_astra_new_swift_control.swift": {},
+  "r22_astra_new_swift_nested_comment.swift": {},
+  "r22_astra_new_swift_repeat.swift": {},
+  "r22_astra_new_worker_callback.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r22_astra_new_worker_callback.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r22_astra_new_worker_comment.js": {},
+  "r22_astra_new_worker_comment.ts": {},
+  "r22_astra_new_worker_computed_await.js": {},
+  "r22_astra_new_worker_computed_await.ts": {},
+  "r22_astra_new_worker_default.js": {},
+  "r22_astra_new_worker_default.ts": {},
+  "r22_astra_new_worker_duplicate.js": {},
+  "r22_astra_new_worker_duplicate.ts": {},
+  "r22_astra_new_worker_literal.js": {},
+  "r22_astra_new_worker_literal.ts": {},
+  "r22_astra_new_worker_plain.js": {},
+  "r22_astra_new_worker_plain.ts": {},
+  "r22_astra_new_worker_property_await.js": {},
+  "r22_astra_new_worker_property_await.ts": {},
+  "r22_astra_new_worker_regex.js": {
+    "regex-built-in-function-javascript": [
+      6
+    ]
+  },
+  "r22_astra_new_worker_regex.ts": {
+    "regex-built-in-function-javascript": [
+      6
+    ]
+  },
+  "r22_astra_new_worker_spread.js": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r22_astra_new_worker_spread.ts": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r22_astra_new_worker_template.js": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r22_astra_new_worker_template.ts": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r22_astra_new_worker_template_repeat.js": {},
+  "r22_astra_new_worker_template_repeat.ts": {},
+  "r22_astra_new_worker_ternary.js": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r22_astra_new_worker_ternary.ts": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r22_opus_p21_dart_inorder_ok.dart": {},
+  "r22_opus_p21_js_chunk.ts": {},
+  "r22_opus_p21_js_chunk_async_cb.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r22_opus_p21_js_chunk_extra_cb.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r22_opus_p21_js_chunk_plain_cb.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r22_opus_p21_js_chunk_template.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21_js_inorder.ts": {
+    "await-in-loop-javascript": [
+      5,
+      5
+    ]
+  },
+  "r22_opus_p21_js_inorder_dup.ts": {},
+  "r22_opus_p21_js_inorder_ok.ts": {},
+  "r22_opus_p21_js_worker.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7,
+      17,
+      17,
+      27,
+      27,
+      37,
+      37,
+      47,
+      47,
+      57,
+      136
+    ]
+  },
+  "r22_opus_p21_py_inorder_dup_comment.py": {},
+  "r22_opus_p21_py_inorder_fstring.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21_py_inorder_fstring_sibling.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21_py_inorder_lambda_default.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21_py_inorder_ok_comment.py": {},
+  "r22_opus_p21_py_inorder_ok_typed.py": {},
+  "r22_opus_p21_py_inorder_ternary.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21_py_mwc_fstring.py": {
+    "await-in-loop-python": [
+      7,
+      7
+    ]
+  },
+  "r22_opus_p21_py_mwc_ok_black.py": {},
+  "r22_opus_p21_py_mwc_ok_taskgroup.py": {},
+  "r22_opus_p21_swift_inorder_dup.swift": {},
+  "r22_opus_p21_swift_inorder_interp.swift": {
+    "await-in-loop-swift": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21_swift_inorder_ok.swift": {},
+  "r22_opus_p21_swift_mwc_interp.swift": {
+    "await-in-loop-swift": [
+      4,
+      8,
+      9
+    ]
+  },
+  "r22_opus_p21_swift_mwc_ok.swift": {},
+  "r22_opus_p21_swift_mwc_wrap_plain.swift": {
+    "await-in-loop-swift": [
+      4,
+      8,
+      9
+    ]
+  },
+  "r22_opus_p21b_dup.dart": {},
+  "r22_opus_p21b_dup.py": {},
+  "r22_opus_p21b_dup.swift": {},
+  "r22_opus_p21b_dup.ts": {
+    "await-in-loop-javascript": [
+      57,
+      57
+    ]
+  },
+  "r22_opus_p21b_dup_swift_bounded.swift": {},
+  "r22_opus_p21c_inorder_16.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21c_inorder_24.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21c_inorder_40.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21c_worker_16.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r22_opus_p21c_worker_24.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r22_opus_p21c_worker_40.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r22_opus_p21d_dup_0.py": {},
+  "r22_opus_p21d_dup_0.ts": {},
+  "r22_opus_p21d_dup_16.py": {},
+  "r22_opus_p21d_dup_16.ts": {},
+  "r22_opus_p21d_dup_24.py": {},
+  "r22_opus_p21d_dup_24.ts": {},
+  "r22_opus_p21d_dup_40.py": {},
+  "r22_opus_p21d_dup_40.ts": {},
+  "r22_opus_p21e_nested_iter.dart": {
+    "await-in-loop-dart": [
+      5,
+      15
+    ]
+  },
+  "r22_opus_p21e_nested_iter.py": {
+    "await-in-loop-python": [
+      5
+    ]
+  },
+  "r22_opus_p21e_nested_iter.swift": {},
+  "r22_opus_p21e_nested_iter.ts": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r22_opus_p21f_aiohttp.py": {
+    "await-in-loop-python": [
+      4,
+      5,
+      23,
+      24
+    ]
+  },
+  "r22_opus_p21f_search.dart": {},
+  "r22_opus_p21f_search.ts": {},
+  "r22_opus_p21g_t.dart": {},
+  "r22_opus_p21g_t.py": {},
+  "r22_opus_p21g_t.swift": {},
+  "r22_opus_p21g_t.ts": {},
+  "r22_twin_astra_confirm_audit_audit_comment.ts": {},
+  "r22_twin_astra_confirm_audit_confirm_worker_control.js": {},
+  "r22_twin_astra_confirm_audit_new_worker_method.ts": {},
+  "r22_twin_astra_confirm_audit_new_worker_optional.ts": {},
+  "r22_twin_astra_confirm_property_result.js": {},
+  "r22_twin_astra_confirm_regex_before.js": {
+    "regex-built-in-function-javascript": [
+      7
+    ]
+  },
+  "r22_twin_astra_confirm_template_both.js": {},
+  "r22_twin_astra_confirm_template_indirect.js": {},
+  "r22_twin_astra_confirm_worker_computed_await.js": {},
+  "r22_twin_astra_confirm_worker_plain.js": {},
+  "r22_twin_astra_confirm_worker_property_await.js": {},
+  "r22_twin_astra_confirm_worker_template_repeat.js": {},
+  "r22_twin_astra_label-audit_r15_astra_new_register_method.js": {},
+  "r22_twin_astra_label-audit_r15_astra_new_register_method.ts": {},
+  "r22_twin_astra_label-audit_r16_astra_new_condition_callback.js": {},
+  "r22_twin_astra_label-audit_r16_astra_new_condition_callback.ts": {},
+  "r22_twin_astra_label-audit_r16_astra_new_update_callback.js": {},
+  "r22_twin_astra_label-audit_r16_astra_new_update_callback.ts": {},
+  "r22_twin_astra_label-audit_r17_opus_cb_cb.js": {},
+  "r22_twin_astra_label-audit_r18_opus_m-hide_hide.js": {
+    "await-in-loop-javascript": [
+      8,
+      20,
+      27,
+      34,
+      41,
+      48,
+      55,
+      63,
+      78,
+      86,
+      96,
+      104,
+      112
+    ]
+  },
+  "r22_twin_astra_label-audit_r18_opus_m-hide_hide.py": {
+    "await-in-loop-python": [
+      19,
+      25,
+      34,
+      40,
+      46,
+      52,
+      58
+    ]
+  },
+  "r22_twin_astra_label-audit_r18_opus_m-hide_hide_ts.ts": {
+    "await-in-loop-javascript": [
+      8,
+      20,
+      27,
+      34,
+      41,
+      48,
+      55,
+      63,
+      78,
+      86,
+      96,
+      104,
+      112
+    ]
+  },
+  "r22_twin_astra_label-audit_r18_opus_m-pep_with_generic.py": {
+    "await-in-loop-python": [
+      16,
+      48
+    ]
+  },
+  "r22_twin_astra_label-audit_r18_opus_m-pep_without_generic.py": {
+    "await-in-loop-python": [
+      30,
+      44
+    ]
+  },
+  "r22_twin_astra_label-audit_r1_astra_probes_py_callback_called.py": {
+    "await-in-loop-python": [
+      7
+    ]
+  },
+  "r22_twin_astra_label-audit_r1_opus_p1_probe_js.ts": {
+    "await-in-loop-javascript": [
+      3,
+      43,
+      54,
+      63,
+      65,
+      75,
+      109,
+      137,
+      149,
+      153,
+      163,
+      167,
+      186
+    ],
+    "hidden-sequential-loop-javascript": [
+      16,
+      24,
+      33
+    ],
+    "in-order-needs-reason-javascript": [
+      81,
+      83,
+      85,
+      87
+    ],
+    "sequential-awaits-javascript": [
+      176
+    ]
+  },
+  "r22_twin_astra_label-audit_r1_opus_p1_probe_py.py": {
+    "await-in-loop-python": [
+      11,
+      14,
+      19,
+      22,
+      39,
+      44,
+      46,
+      52,
+      63,
+      69
+    ],
+    "in-order-needs-reason-python": [
+      27,
+      29
+    ]
+  },
+  "r22_twin_astra_label-audit_r20_astra_audit_comment.ts": {},
+  "r22_twin_astra_label-audit_r20_astra_confirm_worker_control.js": {},
+  "r22_twin_astra_label-audit_r20_astra_new_worker_method.ts": {},
+  "r22_twin_astra_label-audit_r20_astra_new_worker_optional.ts": {},
+  "r22_twin_astra_label-audit_r20_opus_p20i_two_awaits.ts": {
+    "await-in-loop-javascript": [
+      13,
+      14,
+      34,
+      35,
+      51,
+      51,
+      67,
+      68,
+      83,
+      83
+    ]
+  },
+  "r22_twin_astra_label-audit_r20_opus_p20i_two_awaits_js.mjs": {
+    "await-in-loop-javascript": [
+      10,
+      11,
+      26,
+      26,
+      39,
+      39
+    ]
+  },
+  "r22_twin_astra_label-audit_r20_opus_p20w_workers.ts": {
+    "await-in-loop-javascript": [
+      65,
+      65,
+      82,
+      82,
+      99,
+      100,
+      116,
+      133,
+      133,
+      150,
+      150,
+      179
+    ]
+  },
+  "r22_twin_astra_label-audit_r5_opus_q12_py_body.py": {
+    "await-in-loop-python": [
+      11,
+      14
+    ]
+  },
+  "r22_twin_astra_new_chunk_block.dart": {},
+  "r22_twin_astra_new_chunk_cast.dart": {},
+  "r22_twin_astra_new_chunk_comment.dart": {},
+  "r22_twin_astra_new_chunk_control.dart": {},
+  "r22_twin_astra_new_chunk_nested_comment.dart": {},
+  "r22_twin_astra_new_python_callback.py": {},
+  "r22_twin_astra_new_python_control.py": {},
+  "r22_twin_astra_new_python_default.py": {
+    "await-in-loop-python": [
+      7,
+      10
+    ]
+  },
+  "r22_twin_astra_new_python_fstring.py": {
+    "await-in-loop-python": [
+      7,
+      10
+    ]
+  },
+  "r22_twin_astra_new_python_repeat.py": {
+    "await-in-loop-python": [
+      7,
+      10
+    ]
+  },
+  "r22_twin_astra_new_swift_comment.swift": {},
+  "r22_twin_astra_new_swift_control.swift": {},
+  "r22_twin_astra_new_swift_nested_comment.swift": {},
+  "r22_twin_astra_new_swift_repeat.swift": {},
+  "r22_twin_astra_new_worker_callback.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r22_twin_astra_new_worker_callback.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r22_twin_astra_new_worker_comment.js": {},
+  "r22_twin_astra_new_worker_comment.ts": {},
+  "r22_twin_astra_new_worker_computed_await.js": {},
+  "r22_twin_astra_new_worker_computed_await.ts": {},
+  "r22_twin_astra_new_worker_default.js": {},
+  "r22_twin_astra_new_worker_default.ts": {},
+  "r22_twin_astra_new_worker_duplicate.js": {},
+  "r22_twin_astra_new_worker_duplicate.ts": {},
+  "r22_twin_astra_new_worker_literal.js": {},
+  "r22_twin_astra_new_worker_literal.ts": {},
+  "r22_twin_astra_new_worker_plain.js": {},
+  "r22_twin_astra_new_worker_plain.ts": {},
+  "r22_twin_astra_new_worker_property_await.js": {},
+  "r22_twin_astra_new_worker_property_await.ts": {},
+  "r22_twin_astra_new_worker_regex.js": {
+    "regex-built-in-function-javascript": [
+      7
+    ]
+  },
+  "r22_twin_astra_new_worker_regex.ts": {
+    "regex-built-in-function-javascript": [
+      7
+    ]
+  },
+  "r22_twin_astra_new_worker_spread.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r22_twin_astra_new_worker_spread.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r22_twin_astra_new_worker_template.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r22_twin_astra_new_worker_template.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r22_twin_astra_new_worker_template_repeat.js": {},
+  "r22_twin_astra_new_worker_template_repeat.ts": {},
+  "r22_twin_astra_new_worker_ternary.js": {
+    "await-in-loop-javascript": [
+      8,
+      9
+    ]
+  },
+  "r22_twin_astra_new_worker_ternary.ts": {
+    "await-in-loop-javascript": [
+      8,
+      9
+    ]
+  },
+  "r22_twin_opus_p21_dart_inorder_ok.dart": {},
+  "r22_twin_opus_p21_js_chunk.ts": {},
+  "r22_twin_opus_p21_js_chunk_async_cb.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r22_twin_opus_p21_js_chunk_extra_cb.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r22_twin_opus_p21_js_chunk_plain_cb.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r22_twin_opus_p21_js_chunk_template.ts": {
+    "await-in-loop-javascript": [
+      5,
+      6
+    ]
+  },
+  "r22_twin_opus_p21_js_inorder.ts": {
+    "await-in-loop-javascript": [
+      9,
+      9
+    ]
+  },
+  "r22_twin_opus_p21_js_inorder_dup.ts": {},
+  "r22_twin_opus_p21_js_inorder_ok.ts": {},
+  "r22_twin_opus_p21_py_inorder_dup_comment.py": {},
+  "r22_twin_opus_p21_py_inorder_fstring.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_twin_opus_p21_py_inorder_fstring_sibling.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_twin_opus_p21_py_inorder_lambda_default.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_twin_opus_p21_py_inorder_ok_comment.py": {},
+  "r22_twin_opus_p21_py_inorder_ok_typed.py": {},
+  "r22_twin_opus_p21_py_inorder_ternary.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r22_twin_opus_p21_py_mwc_fstring.py": {
+    "await-in-loop-python": [
+      8,
+      11
+    ]
+  },
+  "r22_twin_opus_p21_py_mwc_ok_black.py": {},
+  "r22_twin_opus_p21_py_mwc_ok_taskgroup.py": {},
+  "r22_twin_opus_p21_swift_inorder_dup.swift": {},
+  "r22_twin_opus_p21_swift_inorder_interp.swift": {
+    "await-in-loop-swift": [
+      4,
+      4
+    ]
+  },
+  "r22_twin_opus_p21_swift_inorder_ok.swift": {},
+  "r22_twin_opus_p21_swift_mwc_interp.swift": {
+    "await-in-loop-swift": [
+      7,
+      11,
+      12
+    ]
+  },
+  "r22_twin_opus_p21_swift_mwc_ok.swift": {},
+  "r22_twin_opus_p21_swift_mwc_wrap_plain.swift": {
+    "await-in-loop-swift": [
+      7,
+      11,
+      12
+    ]
+  },
+  "r22_twin_opus_p21b_dup.dart": {},
+  "r22_twin_opus_p21b_dup.py": {},
+  "r22_twin_opus_p21b_dup.swift": {},
+  "r22_twin_opus_p21b_dup.ts": {
+    "await-in-loop-javascript": [
+      110,
+      112
+    ]
+  },
+  "r22_twin_opus_p21b_dup_swift_bounded.swift": {},
+  "r22_twin_opus_p21c_inorder_16.py": {
+    "await-in-loop-python": [
+      21,
+      22
+    ]
+  },
+  "r22_twin_opus_p21c_inorder_24.py": {
+    "await-in-loop-python": [
+      29,
+      30
+    ]
+  },
+  "r22_twin_opus_p21c_inorder_40.py": {
+    "await-in-loop-python": [
+      45,
+      46
+    ]
+  },
+  "r22_twin_opus_p21c_worker_16.ts": {
+    "await-in-loop-javascript": [
+      30,
+      31
+    ]
+  },
+  "r22_twin_opus_p21c_worker_24.ts": {
+    "await-in-loop-javascript": [
+      38,
+      39
+    ]
+  },
+  "r22_twin_opus_p21c_worker_40.ts": {
+    "await-in-loop-javascript": [
+      54,
+      55
+    ]
+  },
+  "r22_twin_opus_p21d_dup_0.py": {},
+  "r22_twin_opus_p21d_dup_0.ts": {},
+  "r22_twin_opus_p21d_dup_16.py": {},
+  "r22_twin_opus_p21d_dup_16.ts": {},
+  "r22_twin_opus_p21d_dup_24.py": {},
+  "r22_twin_opus_p21d_dup_24.ts": {},
+  "r22_twin_opus_p21d_dup_40.py": {},
+  "r22_twin_opus_p21d_dup_40.ts": {},
+  "r22_twin_opus_p21e_nested_iter.dart": {
+    "await-in-loop-dart": [
+      5,
+      16
+    ]
+  },
+  "r22_twin_opus_p21e_nested_iter.py": {
+    "await-in-loop-python": [
+      5
+    ]
+  },
+  "r22_twin_opus_p21e_nested_iter.swift": {},
+  "r22_twin_opus_p21e_nested_iter.ts": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r22_twin_opus_p21f_aiohttp.py": {
+    "await-in-loop-python": [
+      4,
+      5,
+      29,
+      30
+    ]
+  },
+  "r22_twin_opus_p21f_search.dart": {},
+  "r22_twin_opus_p21f_search.ts": {},
+  "r22_twin_opus_p21g_t.dart": {},
+  "r22_twin_opus_p21g_t.py": {},
+  "r22_twin_opus_p21g_t.swift": {},
+  "r22_twin_opus_p21g_t.ts": {},
+  "r23_astra_new_callback_regex.js": {},
+  "r23_astra_new_callback_regex.ts": {},
+  "r23_astra_new_different_template.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r23_astra_new_different_template.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r23_astra_new_nested_template.js": {},
+  "r23_astra_new_nested_template.ts": {},
+  "r23_astra_new_object_property.js": {},
+  "r23_astra_new_object_property.ts": {},
+  "r23_astra_new_parentheses.dart": {},
+  "r23_astra_new_parentheses.py": {},
+  "r23_astra_new_parentheses.swift": {},
+  "r23_astra_new_plain.js": {},
+  "r23_astra_new_plain.ts": {},
+  "r23_astra_new_property_comment.js": {},
+  "r23_astra_new_property_comment.ts": {},
+  "r23_astra_new_regex_assert.js": {
+    "regex-built-in-function-javascript": [
+      7
+    ]
+  },
+  "r23_astra_new_regex_assert.ts": {
+    "regex-built-in-function-javascript": [
+      7
+    ]
+  },
+  "r23_astra_new_regex_await.js": {},
+  "r23_astra_new_regex_await.ts": {},
+  "r23_astra_new_regex_bracket.js": {},
+  "r23_astra_new_regex_bracket.ts": {},
+  "r23_astra_new_regex_control.js": {},
+  "r23_astra_new_regex_control.ts": {},
+  "r23_astra_new_regex_quote.js": {},
+  "r23_astra_new_regex_quote.ts": {},
+  "r23_astra_new_regex_then_extra.js": {
+    "regex-built-in-function-javascript": [
+      7,
+      7
+    ]
+  },
+  "r23_astra_new_regex_then_extra.ts": {
+    "regex-built-in-function-javascript": [
+      7,
+      7
+    ]
+  },
+  "r23_astra_new_type_literal.ts": {},
+  "r23_astra_new_type_property.ts": {},
+  "r23_astra_strict_cast_generic.ts": {},
+  "r23_astra_strict_cast_generic_control.ts": {},
+  "r23_astra_strict_cast_member.ts": {},
+  "r23_astra_strict_cast_member_control.ts": {},
+  "r23_astra_strict_dispatch.js": {},
+  "r23_astra_strict_dispatch.ts": {},
+  "r23_opus_p22_dart_worker.dart": {
+    "await-in-loop-dart": [
+      35,
+      47,
+      59,
+      59
+    ]
+  },
+  "r23_opus_p22_js_spread.mjs": {},
+  "r23_opus_p22_js_worker_pass.ts": {},
+  "r23_opus_p22_js_worker_spread.ts": {},
+  "r23_opus_p22_py_py.py": {},
+  "r23_opus_p22_swift_swift.swift": {},
+  "r23_opus_p22r_regex_lit.mjs": {
+    "regex-built-in-function-javascript": [
+      5,
+      23
+    ]
+  },
+  "r23_opus_p22r_regex_lit.ts": {
+    "regex-built-in-function-javascript": [
+      15
+    ]
+  },
+  "r23_opus_p22s_js_chunk.mjs": {
+    "await-in-loop-javascript": [
+      11,
+      19
+    ]
+  },
+  "r23_opus_p22s_js_chunk.ts": {
+    "await-in-loop-javascript": [
+      17
+    ]
+  },
+  "r23_opus_p22s_js_inorder.mjs": {},
+  "r23_opus_p22s_js_inorder.ts": {},
+  "r23_opus_p22w_after.swift": {},
+  "r23_opus_p22x_dart_inorder_block_120000.dart": {},
+  "r23_opus_p22x_dart_inorder_block_3000.dart": {},
+  "r23_opus_p22x_dart_inorder_block_30000.dart": {},
+  "r23_opus_p22x_py_inorder_line_120000.py": {},
+  "r23_opus_p22x_py_inorder_line_3000.py": {},
+  "r23_opus_p22x_py_inorder_line_30000.py": {},
+  "r23_opus_p22x_swift_inorder_block_120000.swift": {},
+  "r23_opus_p22x_swift_inorder_block_3000.swift": {},
+  "r23_opus_p22x_swift_inorder_block_30000.swift": {},
+  "r23_opus_p22x_ts_inorder_block_120000.ts": {},
+  "r23_opus_p22x_ts_inorder_block_3000.ts": {},
+  "r23_opus_p22x_ts_inorder_block_30000.ts": {},
+  "r23_opus_p22x_ts_worker_line_120000.ts": {},
+  "r23_opus_p22x_ts_worker_line_3000.ts": {},
+  "r23_opus_p22x_ts_worker_line_30000.ts": {},
+  "r23_twin_astra_new_callback_regex.js": {},
+  "r23_twin_astra_new_callback_regex.ts": {},
+  "r23_twin_astra_new_different_template.js": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r23_twin_astra_new_different_template.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r23_twin_astra_new_nested_template.js": {},
+  "r23_twin_astra_new_nested_template.ts": {},
+  "r23_twin_astra_new_object_property.js": {},
+  "r23_twin_astra_new_object_property.ts": {},
+  "r23_twin_astra_new_parentheses.dart": {},
+  "r23_twin_astra_new_parentheses.py": {},
+  "r23_twin_astra_new_parentheses.swift": {},
+  "r23_twin_astra_new_plain.js": {},
+  "r23_twin_astra_new_plain.ts": {},
+  "r23_twin_astra_new_property_comment.js": {},
+  "r23_twin_astra_new_property_comment.ts": {},
+  "r23_twin_astra_new_regex_assert.js": {
+    "regex-built-in-function-javascript": [
+      8
+    ]
+  },
+  "r23_twin_astra_new_regex_assert.ts": {
+    "regex-built-in-function-javascript": [
+      8
+    ]
+  },
+  "r23_twin_astra_new_regex_await.js": {},
+  "r23_twin_astra_new_regex_await.ts": {},
+  "r23_twin_astra_new_regex_bracket.js": {},
+  "r23_twin_astra_new_regex_bracket.ts": {},
+  "r23_twin_astra_new_regex_control.js": {},
+  "r23_twin_astra_new_regex_control.ts": {},
+  "r23_twin_astra_new_regex_quote.js": {},
+  "r23_twin_astra_new_regex_quote.ts": {},
+  "r23_twin_astra_new_regex_then_extra.js": {
+    "regex-built-in-function-javascript": [
+      10,
+      12
+    ]
+  },
+  "r23_twin_astra_new_regex_then_extra.ts": {
+    "regex-built-in-function-javascript": [
+      10,
+      12
+    ]
+  },
+  "r23_twin_astra_new_type_literal.ts": {},
+  "r23_twin_astra_new_type_property.ts": {},
+  "r23_twin_astra_strict_cast_generic.ts": {},
+  "r23_twin_astra_strict_cast_generic_control.ts": {},
+  "r23_twin_astra_strict_cast_member.ts": {},
+  "r23_twin_astra_strict_cast_member_control.ts": {},
+  "r23_twin_astra_strict_dispatch.js": {},
+  "r23_twin_astra_strict_dispatch.ts": {},
+  "r23_twin_opus_p22_dart_worker.dart": {
+    "await-in-loop-dart": [
+      56,
+      75,
+      95,
+      96
+    ]
+  },
+  "r23_twin_opus_p22_js_spread.mjs": {},
+  "r23_twin_opus_p22_js_worker_pass.ts": {},
+  "r23_twin_opus_p22_js_worker_spread.ts": {},
+  "r23_twin_opus_p22_py_py.py": {},
+  "r23_twin_opus_p22_swift_swift.swift": {},
+  "r23_twin_opus_p22r_regex_lit.mjs": {
+    "regex-built-in-function-javascript": [
+      5,
+      34
+    ]
+  },
+  "r23_twin_opus_p22r_regex_lit.ts": {
+    "regex-built-in-function-javascript": [
+      29
+    ]
+  },
+  "r23_twin_opus_p22s_js_chunk.mjs": {
+    "await-in-loop-javascript": [
+      12,
+      24
+    ]
+  },
+  "r23_twin_opus_p22s_js_chunk.ts": {
+    "await-in-loop-javascript": [
+      34
+    ]
+  },
+  "r23_twin_opus_p22s_js_inorder.mjs": {},
+  "r23_twin_opus_p22s_js_inorder.ts": {},
+  "r23_twin_opus_p22w_after.swift": {},
+  "r23_twin_opus_p22x_dart_inorder_block_120000.dart": {},
+  "r23_twin_opus_p22x_dart_inorder_block_3000.dart": {},
+  "r23_twin_opus_p22x_dart_inorder_block_30000.dart": {},
+  "r23_twin_opus_p22x_py_inorder_line_120000.py": {},
+  "r23_twin_opus_p22x_py_inorder_line_3000.py": {},
+  "r23_twin_opus_p22x_py_inorder_line_30000.py": {},
+  "r23_twin_opus_p22x_swift_inorder_block_120000.swift": {},
+  "r23_twin_opus_p22x_swift_inorder_block_3000.swift": {},
+  "r23_twin_opus_p22x_swift_inorder_block_30000.swift": {},
+  "r23_twin_opus_p22x_ts_inorder_block_120000.ts": {},
+  "r23_twin_opus_p22x_ts_inorder_block_3000.ts": {},
+  "r23_twin_opus_p22x_ts_inorder_block_30000.ts": {},
+  "r23_twin_opus_p22x_ts_worker_line_120000.ts": {},
+  "r23_twin_opus_p22x_ts_worker_line_3000.ts": {},
+  "r23_twin_opus_p22x_ts_worker_line_30000.ts": {},
+  "r24_astra_collecting_chunk.mjs": {
+    "await-in-loop-javascript": [
+      11,
+      19
+    ]
+  },
+  "r24_astra_collecting_chunk.ts": {
+    "await-in-loop-javascript": [
+      17
+    ]
+  },
+  "r24_astra_confirm_order_attr.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_confirm_order_control.py": {},
+  "r24_astra_confirm_order_subscript.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_confirm_order_target.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_confirm_order_target_sync.py": {
+    "await-in-loop-python": [
+      3
+    ]
+  },
+  "r24_astra_confirm_raw_attr.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_confirm_raw_control.py": {
+    "await-in-loop-python": [
+      3
+    ]
+  },
+  "r24_astra_confirm_raw_subscript.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_confirm_raw_target.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_confirm_raw_target_sync.py": {
+    "await-in-loop-python": [
+      3
+    ]
+  },
+  "r24_astra_confirm_target_runtime.py": {
+    "await-in-loop-python": [
+      12,
+      12
+    ]
+  },
+  "r24_astra_new_async_iife.js": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r24_astra_new_async_iife.ts": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r24_astra_new_c1_options.js": {
+    "serial-bounded-helper-javascript": [
+      5
+    ],
+    "serial-bounded-helper-javascript-options": [
+      4
+    ]
+  },
+  "r24_astra_new_callee.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_callee.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_comma.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_comma.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_computed_target.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_computed_target.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_conditional.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_conditional.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_distinct_arg.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_distinct_arg.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_distinct_item.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_distinct_item.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_distinct_op.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_distinct_op.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_distinct_optional.js": {},
+  "r24_astra_new_distinct_optional.ts": {},
+  "r24_astra_new_honest_arrow.js": {},
+  "r24_astra_new_honest_arrow.ts": {},
+  "r24_astra_new_honest_default.js": {},
+  "r24_astra_new_honest_default.ts": {},
+  "r24_astra_new_honest_method.js": {},
+  "r24_astra_new_honest_method.ts": {},
+  "r24_astra_new_honest_namedexpr.js": {},
+  "r24_astra_new_honest_namedexpr.ts": {},
+  "r24_astra_new_interpolation.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_interpolation.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_logical.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_logical.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_nested_await.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_nested_await.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_nested_loop.js": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r24_astra_new_nested_loop.ts": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r24_astra_new_nested_template.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_nested_template.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_ordered_comp.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_new_ordered_distinct.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_new_ordered_distinct.swift": {
+    "await-in-loop-swift": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_new_ordered_fstring.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_new_ordered_nested.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_new_ordered_nested.swift": {
+    "await-in-loop-swift": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_new_ordered_plain.dart": {},
+  "r24_astra_new_ordered_plain.py": {},
+  "r24_astra_new_ordered_plain.swift": {},
+  "r24_astra_new_ordered_target.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_new_plain.js": {},
+  "r24_astra_new_plain.ts": {},
+  "r24_astra_new_property.js": {},
+  "r24_astra_new_property.ts": {},
+  "r24_astra_new_pychunk_generic_extra.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r24_astra_new_pychunk_generic_honest.py": {},
+  "r24_astra_new_pychunk_normal_extra.py": {
+    "await-in-loop-python": [
+      4,
+      4
+    ]
+  },
+  "r24_astra_new_pychunk_normal_honest.py": {},
+  "r24_astra_new_receiver.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_receiver.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_separate.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_separate.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_spread.js": {},
+  "r24_astra_new_spread.ts": {},
+  "r24_astra_new_spread_extra.js": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_astra_new_spread_extra.ts": {
+    "await-in-loop-javascript": [
+      7,
+      7
+    ]
+  },
+  "r24_opus_p23_js_chunk.mjs": {
+    "await-in-loop-javascript": [
+      10,
+      10,
+      16,
+      16,
+      22,
+      22
+    ]
+  },
+  "r24_opus_p23_js_inorder.mjs": {
+    "await-in-loop-javascript": [
+      10,
+      10,
+      16,
+      16,
+      22,
+      22,
+      28,
+      28,
+      34,
+      34,
+      40,
+      40,
+      46,
+      46,
+      52,
+      52,
+      58,
+      58,
+      64,
+      64,
+      70,
+      70,
+      76,
+      76,
+      82,
+      82,
+      88,
+      88
+    ],
+    "regex-built-in-function-javascript": [
+      70,
+      70
+    ]
+  },
+  "r24_opus_p23_js_inorder.ts": {
+    "await-in-loop-javascript": [
+      10,
+      10,
+      16,
+      16,
+      22,
+      22,
+      28,
+      28,
+      34,
+      34
+    ]
+  },
+  "r24_opus_p23_js_jsx.tsx": {
+    "await-in-loop-javascript": [
+      10,
+      10,
+      16,
+      16
+    ]
+  },
+  "r24_opus_p23_js_worker.mjs": {
+    "await-in-loop-javascript": [
+      32,
+      32,
+      44,
+      44,
+      56,
+      56,
+      68
+    ]
+  },
+  "r24_opus_p23_py_inorder.py": {
+    "await-in-loop-python": [
+      8,
+      8,
+      12,
+      12,
+      16,
+      16,
+      20,
+      20,
+      24,
+      24,
+      28,
+      28,
+      32,
+      32,
+      36,
+      36,
+      40,
+      40,
+      48,
+      48,
+      52,
+      52,
+      56,
+      56
+    ]
+  },
+  "r24_opus_p23_py_mwc.py": {
+    "await-in-loop-python": [
+      9,
+      9,
+      13,
+      13,
+      23,
+      25,
+      29,
+      31
+    ]
+  },
+  "r24_opus_p23_swift_inorder.swift": {
+    "await-in-loop-swift": [
+      10,
+      10,
+      16,
+      16,
+      22,
+      23,
+      30,
+      30,
+      36,
+      36,
+      42,
+      42,
+      48,
+      48,
+      48,
+      53,
+      53
+    ]
+  },
+  "r24_opus_p23_swift_mwc.swift": {
+    "await-in-loop-swift": [
+      15,
+      19,
+      19,
+      26,
+      30,
+      30,
+      30,
+      37,
+      41,
+      48,
+      52
+    ]
+  },
+  "r24_opus_p23b_dart_more.dart": {
+    "await-in-loop-dart": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      16,
+      22,
+      22,
+      28,
+      28,
+      34,
+      34,
+      40,
+      40
+    ]
+  },
+  "r24_opus_p23b_js_more.mjs": {
+    "await-in-loop-javascript": [
+      3,
+      3,
+      8,
+      8,
+      14,
+      14,
+      20,
+      20,
+      26,
+      26,
+      32,
+      32,
+      38,
+      38,
+      44,
+      44,
+      54,
+      54,
+      66,
+      66
+    ]
+  },
+  "r24_opus_p23b_py_more.py": {
+    "await-in-loop-python": [
+      4,
+      4,
+      8,
+      8,
+      12,
+      12,
+      16,
+      16,
+      20,
+      20,
+      28,
+      28,
+      32,
+      32
+    ]
+  },
+  "r24_opus_p23b_swift_more.swift": {
+    "await-in-loop-swift": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      16,
+      22,
+      22,
+      28,
+      28,
+      34,
+      34,
+      40,
+      40,
+      46,
+      46,
+      52,
+      52
+    ]
+  },
+  "r24_opus_p23c_acomp.py": {},
+  "r24_opus_p23c_forawait.mjs": {},
+  "r24_opus_p23d_impostor.dart": {
+    "await-in-loop-dart": [
+      36
+    ]
+  },
+  "r24_opus_p23d_impostor.mjs": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r24_opus_p23d_impostor.py": {
+    "await-in-loop-python": [
+      5
+    ]
+  },
+  "r24_opus_p23d_impostor.swift": {
+    "await-in-loop-swift": [
+      4,
+      8
+    ]
+  },
+  "r24_opus_p23e_honest.dart": {},
+  "r24_opus_p23e_honest.py": {},
+  "r24_opus_p23e_honest.swift": {},
+  "r24_opus_p23e_honest.ts": {},
+  "r24_opus_p23f_c1.dart": {},
+  "r24_opus_p23f_c1.py": {},
+  "r24_opus_p23f_c1.swift": {},
+  "r24_opus_p23f_c1.ts": {},
+  "r24_twin_astra_collecting_chunk.mjs": {
+    "await-in-loop-javascript": [
+      12,
+      24
+    ]
+  },
+  "r24_twin_astra_collecting_chunk.ts": {
+    "await-in-loop-javascript": [
+      34
+    ]
+  },
+  "r24_twin_astra_confirm_order_attr.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_confirm_order_control.py": {},
+  "r24_twin_astra_confirm_order_subscript.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_confirm_order_target.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_confirm_order_target_sync.py": {
+    "await-in-loop-python": [
+      3
+    ]
+  },
+  "r24_twin_astra_confirm_raw_attr.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_confirm_raw_control.py": {
+    "await-in-loop-python": [
+      3
+    ]
+  },
+  "r24_twin_astra_confirm_raw_subscript.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_confirm_raw_target.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_confirm_raw_target_sync.py": {
+    "await-in-loop-python": [
+      3
+    ]
+  },
+  "r24_twin_astra_confirm_target_runtime.py": {
+    "await-in-loop-python": [
+      19,
+      19
+    ]
+  },
+  "r24_twin_astra_new_async_iife.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r24_twin_astra_new_async_iife.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r24_twin_astra_new_c1_options.js": {
+    "serial-bounded-helper-javascript": [
+      5
+    ],
+    "serial-bounded-helper-javascript-options": [
+      4
+    ]
+  },
+  "r24_twin_astra_new_callee.js": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r24_twin_astra_new_callee.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r24_twin_astra_new_comma.js": {
+    "await-in-loop-javascript": [
+      9,
+      9
+    ]
+  },
+  "r24_twin_astra_new_comma.ts": {
+    "await-in-loop-javascript": [
+      9,
+      9
+    ]
+  },
+  "r24_twin_astra_new_computed_target.js": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r24_twin_astra_new_computed_target.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r24_twin_astra_new_conditional.js": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_astra_new_conditional.ts": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_astra_new_distinct_arg.js": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_astra_new_distinct_arg.ts": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_astra_new_distinct_item.js": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_astra_new_distinct_item.ts": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_astra_new_distinct_op.js": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_astra_new_distinct_op.ts": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_astra_new_distinct_optional.js": {},
+  "r24_twin_astra_new_distinct_optional.ts": {},
+  "r24_twin_astra_new_honest_arrow.js": {},
+  "r24_twin_astra_new_honest_arrow.ts": {},
+  "r24_twin_astra_new_honest_default.js": {},
+  "r24_twin_astra_new_honest_default.ts": {},
+  "r24_twin_astra_new_honest_method.js": {},
+  "r24_twin_astra_new_honest_method.ts": {},
+  "r24_twin_astra_new_honest_namedexpr.js": {},
+  "r24_twin_astra_new_honest_namedexpr.ts": {},
+  "r24_twin_astra_new_interpolation.js": {
+    "await-in-loop-javascript": [
+      9,
+      9
+    ]
+  },
+  "r24_twin_astra_new_interpolation.ts": {
+    "await-in-loop-javascript": [
+      9,
+      9
+    ]
+  },
+  "r24_twin_astra_new_logical.js": {
+    "await-in-loop-javascript": [
+      9,
+      9
+    ]
+  },
+  "r24_twin_astra_new_logical.ts": {
+    "await-in-loop-javascript": [
+      9,
+      9
+    ]
+  },
+  "r24_twin_astra_new_nested_await.js": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r24_twin_astra_new_nested_await.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r24_twin_astra_new_nested_loop.js": {
+    "await-in-loop-javascript": [
+      9
+    ]
+  },
+  "r24_twin_astra_new_nested_loop.ts": {
+    "await-in-loop-javascript": [
+      9
+    ]
+  },
+  "r24_twin_astra_new_nested_template.js": {
+    "await-in-loop-javascript": [
+      9,
+      9
+    ]
+  },
+  "r24_twin_astra_new_nested_template.ts": {
+    "await-in-loop-javascript": [
+      9,
+      9
+    ]
+  },
+  "r24_twin_astra_new_ordered_comp.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_new_ordered_distinct.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_new_ordered_distinct.swift": {
+    "await-in-loop-swift": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_new_ordered_fstring.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_new_ordered_nested.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_new_ordered_nested.swift": {
+    "await-in-loop-swift": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_new_ordered_plain.dart": {},
+  "r24_twin_astra_new_ordered_plain.py": {},
+  "r24_twin_astra_new_ordered_plain.swift": {},
+  "r24_twin_astra_new_ordered_target.py": {
+    "await-in-loop-python": [
+      3,
+      3
+    ]
+  },
+  "r24_twin_astra_new_plain.js": {},
+  "r24_twin_astra_new_plain.ts": {},
+  "r24_twin_astra_new_property.js": {},
+  "r24_twin_astra_new_property.ts": {},
+  "r24_twin_astra_new_pychunk_generic_extra.py": {
+    "await-in-loop-python": [
+      7,
+      10
+    ]
+  },
+  "r24_twin_astra_new_pychunk_generic_honest.py": {},
+  "r24_twin_astra_new_pychunk_normal_extra.py": {
+    "await-in-loop-python": [
+      7,
+      10
+    ]
+  },
+  "r24_twin_astra_new_pychunk_normal_honest.py": {},
+  "r24_twin_astra_new_receiver.js": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r24_twin_astra_new_receiver.ts": {
+    "await-in-loop-javascript": [
+      8,
+      8
+    ]
+  },
+  "r24_twin_astra_new_separate.js": {
+    "await-in-loop-javascript": [
+      8,
+      9
+    ]
+  },
+  "r24_twin_astra_new_separate.ts": {
+    "await-in-loop-javascript": [
+      8,
+      9
+    ]
+  },
+  "r24_twin_astra_new_spread.js": {},
+  "r24_twin_astra_new_spread.ts": {},
+  "r24_twin_astra_new_spread_extra.js": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_astra_new_spread_extra.ts": {
+    "await-in-loop-javascript": [
+      9,
+      10
+    ]
+  },
+  "r24_twin_opus_p23_js_chunk.mjs": {
+    "await-in-loop-javascript": [
+      11,
+      12,
+      20,
+      21,
+      29,
+      30
+    ]
+  },
+  "r24_twin_opus_p23_js_inorder.mjs": {
+    "await-in-loop-javascript": [
+      10,
+      10,
+      16,
+      16,
+      22,
+      22,
+      28,
+      28,
+      34,
+      34,
+      40,
+      40,
+      46,
+      46,
+      52,
+      52,
+      58,
+      58,
+      64,
+      64,
+      70,
+      70,
+      76,
+      76,
+      82,
+      82,
+      88,
+      88
+    ],
+    "regex-built-in-function-javascript": [
+      70,
+      70
+    ]
+  },
+  "r24_twin_opus_p23_js_inorder.ts": {
+    "await-in-loop-javascript": [
+      18,
+      18,
+      28,
+      28,
+      38,
+      38,
+      48,
+      48,
+      58,
+      58
+    ]
+  },
+  "r24_twin_opus_p23_js_jsx.tsx": {
+    "await-in-loop-javascript": [
+      18,
+      18,
+      28,
+      28
+    ]
+  },
+  "r24_twin_opus_p23_js_worker.mjs": {
+    "await-in-loop-javascript": [
+      38,
+      38,
+      53,
+      54,
+      69,
+      69,
+      83
+    ]
+  },
+  "r24_twin_opus_p23_py_inorder.py": {
+    "await-in-loop-python": [
+      10,
+      10,
+      16,
+      16,
+      22,
+      22,
+      28,
+      28,
+      34,
+      34,
+      40,
+      40,
+      46,
+      46,
+      52,
+      52,
+      58,
+      58,
+      70,
+      70,
+      76,
+      76,
+      82,
+      82
+    ]
+  },
+  "r24_twin_opus_p23_py_mwc.py": {
+    "await-in-loop-python": [
+      16,
+      19,
+      27,
+      30,
+      45,
+      47,
+      53,
+      55
+    ]
+  },
+  "r24_twin_opus_p23_swift_inorder.swift": {
+    "await-in-loop-swift": [
+      10,
+      10,
+      16,
+      16,
+      23,
+      25,
+      32,
+      32,
+      38,
+      38,
+      44,
+      44,
+      50,
+      50,
+      50,
+      55,
+      55
+    ]
+  },
+  "r24_twin_opus_p23_swift_mwc.swift": {
+    "await-in-loop-swift": [
+      19,
+      23,
+      23,
+      32,
+      37,
+      38,
+      38,
+      47,
+      51,
+      60,
+      68
+    ]
+  },
+  "r24_twin_opus_p23b_dart_more.dart": {
+    "await-in-loop-dart": [
+      8,
+      9,
+      21,
+      21,
+      32,
+      32,
+      43,
+      43,
+      54,
+      54,
+      65,
+      65,
+      76,
+      76
+    ]
+  },
+  "r24_twin_opus_p23b_js_more.mjs": {
+    "await-in-loop-javascript": [
+      3,
+      3,
+      8,
+      8,
+      14,
+      14,
+      20,
+      20,
+      26,
+      26,
+      32,
+      32,
+      38,
+      38,
+      44,
+      44,
+      55,
+      55,
+      69,
+      69
+    ]
+  },
+  "r24_twin_opus_p23b_py_more.py": {
+    "await-in-loop-python": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      16,
+      22,
+      22,
+      28,
+      28,
+      40,
+      40,
+      46,
+      46
+    ]
+  },
+  "r24_twin_opus_p23b_swift_more.swift": {
+    "await-in-loop-swift": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      16,
+      22,
+      22,
+      28,
+      28,
+      34,
+      34,
+      40,
+      40,
+      46,
+      46,
+      52,
+      52
+    ]
+  },
+  "r24_twin_opus_p23c_acomp.py": {},
+  "r24_twin_opus_p23c_forawait.mjs": {},
+  "r24_twin_opus_p23d_impostor.dart": {
+    "await-in-loop-dart": [
+      55
+    ]
+  },
+  "r24_twin_opus_p23d_impostor.mjs": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r24_twin_opus_p23d_impostor.py": {
+    "await-in-loop-python": [
+      7
+    ]
+  },
+  "r24_twin_opus_p23d_impostor.swift": {
+    "await-in-loop-swift": [
+      6,
+      10
+    ]
+  },
+  "r24_twin_opus_p23e_honest.dart": {},
+  "r24_twin_opus_p23e_honest.py": {},
+  "r24_twin_opus_p23e_honest.swift": {},
+  "r24_twin_opus_p23e_honest.ts": {},
+  "r24_twin_opus_p23f_c1.dart": {},
+  "r24_twin_opus_p23f_c1.py": {},
+  "r24_twin_opus_p23f_c1.swift": {},
+  "r24_twin_opus_p23f_c1.ts": {},
+  "r25_astra_confirm_lazy_member_tuple.py": {
+    "await-in-loop-python": [
+      7
+    ]
+  },
+  "r25_astra_confirm_lazy_member_tuple_runtime.py": {},
+  "r25_astra_reasons_comment.js": {},
+  "r25_astra_reasons_comment.ts": {},
+  "r25_astra_reasons_normalizer.js": {},
+  "r25_astra_reasons_normalizer.ts": {},
+  "r25_astra_reasons_options.js": {
+    "regex-built-in-function-javascript": [
+      2,
+      3,
+      6
+    ]
+  },
+  "r25_opus_p24_reset_keeps.py": {
+    "await-in-loop-python": [
+      16,
+      25
+    ]
+  },
+  "r25_opus_p24b_widen.py": {
+    "await-in-loop-python": [
+      6,
+      15,
+      24,
+      33,
+      42
+    ]
+  },
+  "r25_opus_p24g_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      22,
+      22,
+      30,
+      30,
+      38,
+      46
+    ]
+  },
+  "r25_opus_p24g_recv.swift": {
+    "await-in-loop-swift": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      16,
+      24,
+      24
+    ]
+  },
+  "r25_opus_p24g_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      22,
+      22,
+      30,
+      30,
+      38,
+      46
+    ]
+  },
+  "r25_opus_p24h_js_await_member_chain.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24h_js_destructure_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24h_js_destructure_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24h_js_lazy_plus_recv.js": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r25_opus_p24h_js_lazy_plus_recv.ts": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r25_opus_p24h_js_lazy_reset_destructure.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24h_js_lazy_reset_destructure.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24h_js_lazy_reset_object_destructure.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24h_js_lazy_reset_object_destructure.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24h_js_member_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24h_js_member_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24h_js_paren_member_target.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24h_js_plain_destructure_reset_only.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24h_js_subscript_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24h_js_subscript_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24h_js_sync_rhs.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24h_js_sync_rhs.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24i_cast.swift": {
+    "await-in-loop-swift": [
+      5
+    ]
+  },
+  "r25_opus_p24i_cast_any.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24i_cast_member.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24i_cast_sync_target.ts": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r25_opus_p24i_nullish_assign_target.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24i_paren.py": {
+    "await-in-loop-python": [
+      4
+    ]
+  },
+  "r25_opus_p24i_paren_destructure.js": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r25_opus_p24j_far_cast.ts": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r25_opus_p24j_h_js_await_member_chain.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24j_h_js_destructure_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24j_h_js_destructure_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24j_h_js_lazy_plus_recv.js": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r25_opus_p24j_h_js_lazy_plus_recv.ts": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r25_opus_p24j_h_js_lazy_reset_destructure.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24j_h_js_lazy_reset_destructure.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24j_h_js_lazy_reset_object_destructure.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24j_h_js_lazy_reset_object_destructure.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24j_h_js_member_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24j_h_js_member_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24j_h_js_paren_member_target.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24j_h_js_plain_destructure_reset_only.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_opus_p24j_h_js_subscript_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24j_h_js_subscript_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_opus_p24j_h_js_sync_rhs.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24j_h_js_sync_rhs.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24j_i_cast_any.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24j_i_cast_member.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24j_i_cast_sync_target.ts": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r25_opus_p24j_i_nullish_assign_target.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24j_i_paren_destructure.js": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r25_opus_p24j_sync_cast.ts": {
+    "await-in-loop-javascript": [
+      9
+    ]
+  },
+  "r25_opus_p24k_hide.ts": {
+    "await-in-loop-javascript": [
+      9
+    ]
+  },
+  "r25_opus_p24l_for_in_copy.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_opus_p24l_form_reset.tsx": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r25_opus_p24l_worker_cast.ts": {
+    "await-in-loop-javascript": [
+      23
+    ]
+  },
+  "r25_sweep_js.js": {
+    "await-in-loop-javascript": [
+      8,
+      9,
+      25,
+      26,
+      36
+    ]
+  },
+  "r25_sweep_py.py": {
+    "await-in-loop-python": [
+      6,
+      7,
+      23,
+      42
+    ]
+  },
+  "r25_sweep_swift.swift": {
+    "await-in-loop-swift": [
+      8,
+      9,
+      31,
+      35
+    ]
+  },
+  "r25_sweep_ts.tsx": {
+    "await-in-loop-javascript": [
+      8,
+      9,
+      25,
+      26,
+      36
+    ]
+  },
+  "r25_twin_astra_confirm_lazy_member_tuple.py": {
+    "await-in-loop-python": [
+      7
+    ]
+  },
+  "r25_twin_astra_confirm_lazy_member_tuple_runtime.py": {},
+  "r25_twin_astra_reasons_comment.js": {},
+  "r25_twin_astra_reasons_comment.ts": {},
+  "r25_twin_astra_reasons_normalizer.js": {},
+  "r25_twin_astra_reasons_normalizer.ts": {},
+  "r25_twin_astra_reasons_options.js": {
+    "regex-built-in-function-javascript": [
+      4,
+      7,
+      20
+    ]
+  },
+  "r25_twin_opus_p24_reset_keeps.py": {
+    "await-in-loop-python": [
+      16,
+      25
+    ]
+  },
+  "r25_twin_opus_p24b_widen.py": {
+    "await-in-loop-python": [
+      6,
+      15,
+      24,
+      33,
+      42
+    ]
+  },
+  "r25_twin_opus_p24g_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      22,
+      22,
+      30,
+      30,
+      38,
+      46
+    ]
+  },
+  "r25_twin_opus_p24g_recv.swift": {
+    "await-in-loop-swift": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      16,
+      26,
+      26
+    ]
+  },
+  "r25_twin_opus_p24g_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4,
+      10,
+      10,
+      16,
+      22,
+      22,
+      30,
+      30,
+      38,
+      46
+    ]
+  },
+  "r25_twin_opus_p24h_js_await_member_chain.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24h_js_destructure_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24h_js_destructure_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24h_js_lazy_plus_recv.js": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r25_twin_opus_p24h_js_lazy_plus_recv.ts": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r25_twin_opus_p24h_js_lazy_reset_destructure.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24h_js_lazy_reset_destructure.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24h_js_lazy_reset_object_destructure.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24h_js_lazy_reset_object_destructure.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24h_js_member_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24h_js_member_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24h_js_paren_member_target.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_twin_opus_p24h_js_plain_destructure_reset_only.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24h_js_subscript_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24h_js_subscript_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24h_js_sync_rhs.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_twin_opus_p24h_js_sync_rhs.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_twin_opus_p24i_cast.swift": {
+    "await-in-loop-swift": [
+      5
+    ]
+  },
+  "r25_twin_opus_p24i_cast_any.ts": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r25_twin_opus_p24i_cast_member.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r25_twin_opus_p24i_cast_sync_target.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r25_twin_opus_p24i_nullish_assign_target.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_twin_opus_p24i_paren.py": {
+    "await-in-loop-python": [
+      4
+    ]
+  },
+  "r25_twin_opus_p24i_paren_destructure.js": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r25_twin_opus_p24j_far_cast.ts": {
+    "await-in-loop-javascript": [
+      9
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_await_member_chain.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_destructure_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_destructure_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_lazy_plus_recv.js": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_lazy_plus_recv.ts": {
+    "await-in-loop-javascript": [
+      6,
+      6
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_lazy_reset_destructure.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_lazy_reset_destructure.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_lazy_reset_object_destructure.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_lazy_reset_object_destructure.ts": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_member_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_member_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_paren_member_target.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_plain_destructure_reset_only.js": {
+    "await-in-loop-javascript": [
+      6
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_subscript_recv.js": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_subscript_recv.ts": {
+    "await-in-loop-javascript": [
+      4,
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_sync_rhs.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_h_js_sync_rhs.ts": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_i_cast_any.ts": {
+    "await-in-loop-javascript": [
+      7
+    ]
+  },
+  "r25_twin_opus_p24j_i_cast_member.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r25_twin_opus_p24j_i_cast_sync_target.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r25_twin_opus_p24j_i_nullish_assign_target.js": {
+    "await-in-loop-javascript": [
+      4
+    ]
+  },
+  "r25_twin_opus_p24j_i_paren_destructure.js": {
+    "await-in-loop-javascript": [
+      5
+    ]
+  },
+  "r25_twin_opus_p24j_sync_cast.ts": {
+    "await-in-loop-javascript": [
+      12
+    ]
+  },
+  "r25_twin_opus_p24k_hide.ts": {
+    "await-in-loop-javascript": [
+      12
+    ]
+  },
+  "r25_twin_opus_p24l_for_in_copy.ts": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r25_twin_opus_p24l_form_reset.tsx": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r25_twin_opus_p24l_worker_cast.ts": {
+    "await-in-loop-javascript": [
+      32
+    ]
+  },
+  "r26_library_adjustValue.js": {},
+  "r26_library_reorderEntries.js": {},
+  "r26_opus_p25j_c1.js": {},
+  "r26_opus_p25j_c2.js": {},
+  "r26_opus_p25j_c3.js": {},
+  "r26_opus_p25j_c4.js": {},
+  "r26_opus_p25j_c5.js": {},
+  "r26_opus_p25j_c6.js": {},
+  "r26_opus_p25j_c7.ts": {},
+  "r26_opus_p25j_d1.dart": {},
+  "r26_opus_p25j_d2.dart": {},
+  "r26_opus_p25j_j8.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r26_opus_p25j_j9.js": {},
+  "r26_opus_p25j_p1.py": {},
+  "r26_opus_p25j_s1.swift": {},
+  "r26_opus_p25k_classic_outer_return.js": {},
+  "r26_opus_p25k_for_of_outer.ts": {},
+  "r26_opus_p25k_inner_while_block.js": {},
+  "r26_opus_p25k_inner_while_empty.js": {},
+  "r26_opus_p25k_tail_walk.js": {},
+  "r26_sweep_js.js": {
+    "await-in-loop-javascript": [
+      8,
+      9,
+      25,
+      26,
+      36
+    ]
+  },
+  "r26_sweep_py.py": {
+    "await-in-loop-python": [
+      6,
+      7,
+      23,
+      42
+    ]
+  },
+  "r26_sweep_swift.swift": {
+    "await-in-loop-swift": [
+      8,
+      9,
+      31,
+      35
+    ]
+  },
+  "r26_sweep_ts.tsx": {
+    "await-in-loop-javascript": [
+      8,
+      9,
+      25,
+      26,
+      36
+    ]
+  },
+  "r26_twin_opus_p25j_c1.js": {},
+  "r26_twin_opus_p25j_c2.js": {},
+  "r26_twin_opus_p25j_c3.js": {},
+  "r26_twin_opus_p25j_c4.js": {},
+  "r26_twin_opus_p25j_c5.js": {},
+  "r26_twin_opus_p25j_c6.js": {},
+  "r26_twin_opus_p25j_c7.ts": {},
+  "r26_twin_opus_p25j_d1.dart": {},
+  "r26_twin_opus_p25j_d2.dart": {},
+  "r26_twin_opus_p25j_j8.js": {
+    "await-in-loop-javascript": [
+      8
+    ]
+  },
+  "r26_twin_opus_p25j_j9.js": {},
+  "r26_twin_opus_p25j_p1.py": {},
+  "r26_twin_opus_p25j_s1.swift": {},
+  "r26_twin_opus_p25k_classic_outer_return.js": {},
+  "r26_twin_opus_p25k_for_of_outer.ts": {},
+  "r26_twin_opus_p25k_inner_while_block.js": {},
+  "r26_twin_opus_p25k_inner_while_empty.js": {},
+  "r26_twin_opus_p25k_tail_walk.js": {}
+}

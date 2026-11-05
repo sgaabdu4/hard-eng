@@ -1,0 +1,10 @@
+import asyncio
+
+
+# CASE py_comment_in_body expect=pass
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        # Await one chunk at a time.
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )

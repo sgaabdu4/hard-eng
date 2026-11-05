@@ -1,0 +1,2 @@
+// ruleid: hidden-sequential-loop-javascript
+items.reduce<Promise<void>>((previous, item, index) => previous.then(() => write(item)), Promise.resolve());

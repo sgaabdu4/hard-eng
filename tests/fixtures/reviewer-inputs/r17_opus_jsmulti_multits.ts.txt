@@ -1,0 +1,75 @@
+// CASE multi_len_body_await expect=fire
+async function m1(rows) {
+  for (let i = 0, n = rows.length; i < n; i++) {
+    await save(rows[i]);
+  }
+}
+
+// CASE multi_len_body_push expect=fire
+async function m2(ids) {
+  const out = [];
+  for (let i = 0, len = ids.length; i < len; i++) {
+    out.push(await load(ids[i]));
+  }
+  return out;
+}
+
+// CASE multi_var_body expect=fire
+async function m3(ids) {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    await save(ids[i]);
+  }
+}
+
+// CASE multi_two_counters expect=fire
+async function m4(a, b) {
+  for (let i = 0, j = b.length - 1; i < j; i++, j--) {
+    await swap(a[i], b[j]);
+  }
+}
+
+// CASE multi_init_await_body_await expect=fire
+async function m5() {
+  for (let rows = await loadRows(), i = 0; i < rows.length; i++) {
+    await save(rows[i]);
+  }
+}
+
+// CASE single_decl_control expect=fire
+async function m6(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    await save(rows[i]);
+  }
+}
+
+// CASE multi_const_body expect=fire
+async function m7(ids) {
+  for (let i = 0, last = ids.length - 1; i <= last; i += 1) {
+    const value = await load(ids[i]);
+    use(value);
+  }
+}
+
+// CASE empty_update_body expect=fire
+async function m8(ids) {
+  for (let i = 0; i < ids.length; ) {
+    await save(ids[i]);
+    i += 1;
+  }
+}
+
+// CASE empty_init_body expect=fire
+async function m9(ids) {
+  let i = 0;
+  for (; i < ids.length; i++) {
+    await save(ids[i]);
+  }
+}
+
+// CASE multi_assign_init_body expect=fire
+async function m10(ids) {
+  let i, n;
+  for (i = 0, n = ids.length; i < n; i++) {
+    await save(ids[i]);
+  }
+}

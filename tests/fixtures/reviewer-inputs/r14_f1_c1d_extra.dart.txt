@@ -1,0 +1,8 @@
+import 'concurrency.dart';
+
+// CASE dart_fourth_arg_literal_one expect=pass
+Future<void> x1(List<String> items, Future<void> Function(String) op, int width) async {
+  await mapWithConcurrency(items, width, op, 1);
+}
+
+// CASE dart_end expect=pass

@@ -1,0 +1,176 @@
+// CASE plain_weak_self expect=pass
+final class A {
+  func run(_ items: [Int]) {
+    for item in items {
+      tasks.append(
+        Task { [weak self] in
+          await self?.work(item)
+        })
+    }
+  }
+}
+
+// CASE prio_weak_self expect=pass
+final class A2 {
+  func run(_ items: [Int]) {
+    for item in items {
+      tasks.append(
+        Task(priority: .utility) { [weak self] in
+          await self?.work(item)
+        })
+    }
+  }
+}
+
+// CASE prio_weak_self_bare_stmt expect=pass
+final class A3 {
+  func run(_ items: [Int]) {
+    for item in items {
+      Task(priority: .utility) { [weak self] in
+        await self?.work(item)
+      }
+    }
+  }
+}
+
+// CASE prio_capture_value expect=pass
+func f1(_ items: [Int], store: Store) {
+  for item in items {
+    tasks.append(
+      Task(priority: .utility) { [store] in
+        await store.save(item)
+      })
+  }
+}
+
+// CASE plain_capture_value expect=pass
+func f1b(_ items: [Int], store: Store) {
+  for item in items {
+    tasks.append(
+      Task { [store] in
+        await store.save(item)
+      })
+  }
+}
+
+// CASE prio_mainactor_in expect=pass
+func f2(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task(priority: .utility) { @MainActor in
+        await ui.update(item)
+      })
+  }
+}
+
+// CASE generic_prio expect=pass
+func f3(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task<Void, Never>(priority: .utility) {
+        await work(item)
+      })
+  }
+}
+
+// CASE generic_plain expect=pass
+func f3b(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task<Void, Never> {
+        await work(item)
+      })
+  }
+}
+
+// CASE let_prio expect=pass
+func f4(_ items: [Int]) {
+  for item in items {
+    let task = Task(priority: .utility) {
+      await work(item)
+    }
+    tasks.append(task)
+  }
+}
+
+// CASE let_plain expect=pass
+func f4b(_ items: [Int]) {
+  for item in items {
+    let task = Task {
+      await work(item)
+    }
+    tasks.append(task)
+  }
+}
+
+// CASE var_prio expect=pass
+func f4c(_ items: [Int]) {
+  for item in items {
+    var task = Task(priority: .utility) {
+      await work(item)
+    }
+    tasks.append(task)
+    task = Task {}
+  }
+}
+
+// CASE let_detached_prio expect=pass
+func f4d(_ items: [Int]) {
+  for item in items {
+    let task = Task.detached(priority: .utility) {
+      await work(item)
+    }
+    tasks.append(task)
+  }
+}
+
+// CASE let_prio_typed expect=pass
+func f4e(_ items: [Int]) {
+  for item in items {
+    let task: Task<Void, Never> = Task(priority: .utility) {
+      await work(item)
+    }
+    tasks.append(task)
+  }
+}
+
+// CASE assign_prio expect=pass
+func f4f(_ items: [Int]) {
+  var task: Task<Void, Never>?
+  for item in items {
+    task = Task(priority: .utility) {
+      await work(item)
+    }
+  }
+  _ = task
+}
+
+// CASE return_in_map expect=pass
+func f5(_ items: [Int]) -> [Task<Void, Never>] {
+  var out: [Task<Void, Never>] = []
+  for item in items {
+    out += [Task(priority: .utility) { await work(item) }]
+  }
+  return out
+}
+
+// CASE prio_two_statements expect=pass
+func f6(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task(priority: .utility) {
+        await work(item)
+        await log(item)
+      })
+  }
+}
+
+// CASE prio_closure_param expect=pass
+func f7(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task(priority: .utility) { () async -> Void in
+        await work(item)
+      })
+  }
+}

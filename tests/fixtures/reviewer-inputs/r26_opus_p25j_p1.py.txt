@@ -1,0 +1,6 @@
+def scan(rows):
+    for row in rows:
+        for _ in row:
+            pass
+        if row:
+            break

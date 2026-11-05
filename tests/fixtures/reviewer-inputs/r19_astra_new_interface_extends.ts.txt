@@ -1,0 +1,4 @@
+interface BaseOptions { reason: string }; interface Options extends BaseOptions { verbose: boolean };
+export async function inOrder<T>(items: T[], step: (item: T) => Promise<void>, options: Options) {
+ for (const item of items) { await step(item); }
+}

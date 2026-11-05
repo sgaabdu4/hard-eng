@@ -1,0 +1,11 @@
+async def use(items, operation, width):
+    serial = 1
+    # ruleid: serial-bounded-helper-python
+    map_with_concurrency(items, 1, operation)
+    # ruleid: serial-bounded-helper-python
+    map_with_concurrency(items, width=1, operation=operation)
+    # ok: serial-bounded-helper-python
+    map_with_concurrency(items, serial, operation)
+    map_with_concurrency(items, 4, operation)
+    map_with_concurrency(items, width=4, operation=operation)
+    map_with_concurrency(items, width, operation)

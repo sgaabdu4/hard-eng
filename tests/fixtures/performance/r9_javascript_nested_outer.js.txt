@@ -1,0 +1,71 @@
+async function outer_break(pages, rows, save, load, cursor, nextCursor, last) {
+	for (const page of pages) {
+		await load();
+		for (const row of rows) {
+			// ruleid: await-in-loop-javascript
+			await save(row);
+		}
+		if (last) break;
+	}
+}
+
+async function outer_return(pages, rows, save, load, cursor, nextCursor, last) {
+	for (const page of pages) {
+		await load();
+		for (const row of rows) {
+			// ruleid: await-in-loop-javascript
+			await save(row);
+		}
+		if (last) return;
+	}
+}
+
+async function outer_sleep(pages, rows, save, load, cursor, nextCursor, last) {
+	for (const page of pages) {
+		await load();
+		for (const row of rows) {
+			// ruleid: await-in-loop-javascript
+			await save(row);
+		}
+		await sleep(1);
+	}
+}
+
+async function outer_condition(
+	pages,
+	rows,
+	save,
+	load,
+	cursor,
+	nextCursor,
+	last,
+) {
+	while (cursor != null) {
+		await load();
+		for (const row of rows) {
+			// ruleid: await-in-loop-javascript
+			await save(row);
+		}
+		cursor = nextCursor;
+	}
+}
+
+async function outer_true(pages, rows, save, load, cursor, nextCursor, last) {
+	while (true) {
+		await load();
+		for (const row of rows) {
+			// ruleid: await-in-loop-javascript
+			await save(row);
+		}
+	}
+}
+
+async function outer_stream(pages, rows, save, load, cursor, nextCursor, last) {
+	for await (const page of pages) {
+		await load();
+		for (const row of rows) {
+			// ruleid: await-in-loop-javascript
+			await save(row);
+		}
+	}
+}

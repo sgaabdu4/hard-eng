@@ -1,0 +1,29 @@
+// CASE js_started_promises_collect expect=pass
+export async function a(ids, load) {
+  const pending = ids.map((id) => load(id));
+  const out = [];
+  for (const promise of pending) {
+    out.push(await promise);
+  }
+  return out;
+}
+// CASE js_started_promises_try_each expect=pass
+export async function b(ids, load, log) {
+  const pending = ids.map(load);
+  for (const promise of pending) {
+    try {
+      await promise;
+    } catch (error) {
+      log(error);
+    }
+  }
+}
+// CASE js_control_serial expect=fire
+export async function c(ids, load) {
+  const out = [];
+  for (const id of ids) {
+    out.push(await load(id));
+  }
+  return out;
+}
+// CASE end expect=pass

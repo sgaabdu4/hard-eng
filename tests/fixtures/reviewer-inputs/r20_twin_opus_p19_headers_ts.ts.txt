@@ -1,0 +1,77 @@
+async function h1(n) {
+	// CASE four_declarators_update expect=fire
+	for (let i = 0, j = 0, k = 0, l = 0; i < n; i++, await tick(i)) {
+		use(i, j, k, l);
+	}
+}
+async function h2(n) {
+	// CASE var_three_update expect=fire
+	for (var i = 0, j = 0, k = 0; i < n; await save(i), i++) {
+		use(i, j, k);
+	}
+}
+async function h3(n) {
+	let i, j;
+	// CASE expression_init_two_condition expect=fire
+	for (i = 0, j = 0; await more(i); i++) {
+		use(i, j);
+	}
+}
+async function h4(n) {
+	let i;
+	// CASE expression_init_one_condition expect=fire
+	for (i = 0; await more(i); i++) {
+		use(i);
+	}
+}
+async function h5() {
+	// CASE cursor_paging_update expect=fire
+	for (let page = await first(); page; page = await next(page)) {
+		use(page);
+	}
+}
+async function h6() {
+	// CASE init_only_two expect=pass
+	for (let i = 0, n = await count(); i < n; i++) {
+		use(i);
+	}
+}
+async function h7() {
+	// CASE init_only_var_two expect=pass
+	for (var it = await first(), k = 0; it; it = it.next, k++) {
+		use(it, k);
+	}
+}
+async function h8(n) {
+	// CASE nested_callback_update expect=pass
+	for (let i = 0, j = 0; i < n; i++, j = later(async () => await tick())) {
+		use(i, j);
+	}
+}
+async function h9(n) {
+	// CASE two_declarators_body_braceless expect=fire
+	for (let i = 0, j = n; i < j; i++, j--) await swap(i, j);
+}
+async function h10(n) {
+	// CASE one_declarator_update_add expect=fire
+	for (let i = 0; i < n; i += await stepSize()) {
+		use(i);
+	}
+}
+async function h11(n) {
+	// CASE two_declarators_condition_call expect=fire
+	for (let i = 0, j = 0; i < (await limit()); i++) {
+		use(i, j);
+	}
+}
+async function h12(n) {
+	let i;
+	// CASE expression_init_update expect=fire
+	for (i = 0; i < n; i = await advance(i)) {
+		use(i);
+	}
+}
+async function h13(rows) {
+	// CASE two_declarators_condition_braceless expect=fire
+	for (let i = 0, j = 0; await more(i); i++) use(i, j);
+}

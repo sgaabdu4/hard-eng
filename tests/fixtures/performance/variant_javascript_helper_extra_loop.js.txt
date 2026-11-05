@@ -1,0 +1,10 @@
+async function inOrder(items, step, {reason}) {
+for (const item of items) {
+ // ruleid: await-in-loop-javascript
+ await step(item);
+}
+for (const item of items) {
+ // ruleid: await-in-loop-javascript
+ await client.get(item);
+}
+}

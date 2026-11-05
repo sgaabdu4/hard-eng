@@ -1,0 +1,6 @@
+# CASE py_inorder_comment_apostrophe expect=pass
+async def in_order(items, step, *, reason):
+    for item in items:
+        await step(
+            item,  # don't "await" anything else
+        )

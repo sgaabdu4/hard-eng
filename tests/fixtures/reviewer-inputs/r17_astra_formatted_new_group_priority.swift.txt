@@ -1,0 +1,5 @@
+func work(_ items: [Int]) async {
+  for item in items {
+    group.addTask(priority: .utility) { await save(item) }
+  }
+}

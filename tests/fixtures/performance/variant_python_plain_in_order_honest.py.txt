@@ -1,0 +1,7 @@
+async def in_order(items, step, *, reason):
+    for item in items:
+        await step(item)
+
+
+async def use():
+    await in_order([], step, reason="Each update reads the previous write")

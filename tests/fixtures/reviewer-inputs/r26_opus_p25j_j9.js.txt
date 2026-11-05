@@ -1,0 +1,8 @@
+export function trimAll(lines) {
+  for (let k = 0; k < lines.length; k++) {
+    let end = lines[k].length;
+    while (end > 0 && lines[k][end - 1] === ' ') end--;
+    for (let i = 0; i < end; i++) {}
+    if (end === 0) break;
+  }
+}

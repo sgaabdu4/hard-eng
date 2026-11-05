@@ -1,0 +1,12 @@
+function use(items, operation, width) {
+	const serial = 1;
+	// ruleid: serial-bounded-helper-javascript
+	mapLimit(items, 1, operation);
+	// ruleid: serial-bounded-helper-javascript-options
+	mapLimit(items, { width: 1 }, operation);
+	// ok: serial-bounded-helper-javascript
+	mapLimit(items, serial, operation);
+	mapLimit(items, 4, operation);
+	mapLimit(items, { width: 4 }, operation);
+	mapLimit(items, width, operation);
+}

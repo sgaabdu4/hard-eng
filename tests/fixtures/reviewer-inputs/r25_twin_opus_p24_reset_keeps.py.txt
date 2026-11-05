@@ -1,0 +1,98 @@
+async def k01(items, rows, read):
+    # CASE unrelated_tuple expect=pass
+    saved = None
+    for item in items:
+        other, tail = rows[item]
+        if saved is None:
+            saved = await read(item)
+        use(saved, other, tail)
+
+
+async def k02(items, rows, out, read):
+    # CASE tuple_index_uses_lazy expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        out[saved], count = rows[item]
+
+
+async def k03(items, rows, read):
+    # CASE tuple_attr_of_lazy expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        saved.value, count = rows[item]
+
+
+async def k04(items, rows, out, read):
+    # CASE subscript_assign_uses_lazy expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        out[saved] = rows[item]
+
+
+async def k05(items, read):
+    # CASE augmented_other expect=pass
+    saved = None
+    count = 0
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        count += 1
+
+
+async def k06(items, read):
+    # CASE plain_lazy expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        use(saved, item)
+
+
+async def k07(items, read):
+    # CASE closure_assign expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+
+        def later():
+            saved = None
+            return saved
+
+        use(later, item)
+
+
+async def k08(items, read):
+    # CASE comprehension_names expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        pairs = [(saved, x) for x in item.children]
+        use(pairs)
+
+
+async def k09(items, rows, read):
+    # CASE tuple_rhs_has_lazy expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        left, right = saved, rows[item]
+        use(left, right)
+
+
+async def k10(items, read):
+    # CASE swap_unrelated expect=pass
+    saved = None
+    a, b = 1, 2
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        a, b = b, a

@@ -1,0 +1,16 @@
+Future<void> run(items, client, orders) async {
+ var cursor = 0;
+ Object? value;
+ for (final item in items) {
+  cursor = await advance(cursor, item);
+  cursor = await advance(cursor,
+    // ruleid: await-in-loop-dart
+    await client.get(item));
+  value ??= await client.load();
+  if (value == null) value = await client.load();
+  // ruleid: await-in-loop-dart
+  values[item] ??= await client.load();
+  // ruleid: await-in-loop-dart
+  await orders.put(item);
+ }
+}
