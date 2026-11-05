@@ -12,7 +12,7 @@ from .config import OPTIONAL_LISTS, REQUIRED_LISTS, Config, load_config, resolve
 from .secrets import NAMES, Place, load_secrets, locate, save_secret
 from .shapes import Json, Obj, obj, objs, parse_time, stamp, text
 
-WRITE_COMMANDS = ("comment", "move", "label", "upload", "update", "detach")
+WRITE_COMMANDS = ("comment", "move", "label", "upload", "update", "detach", "new")
 PROOF_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 
 
@@ -146,30 +146,65 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     return {"comment": action_id, "attachments": images}
 
 
-def move(session: Session, args: argparse.Namespace) -> Obj:
-    client, config = session.client, session.config
-    list_name = config.lists.get(args.role)
+def list_id(session: Session, role: str) -> str:
+    list_name = session.config.lists.get(role)
     if not list_name:
-        raise TrelloError(f"No list is configured for {args.role}")
+        raise TrelloError(f"No list is configured for {role}")
+    names = board.fetch_names(session.client, session.config.board, "lists", "name")
+    lists = {name: ident for ident, name in names.items()}
+    if list_name not in lists:
+        raise TrelloError(f"The list {list_name} is missing on the board")
+    return lists[list_name]
+
+
+def new(session: Session, args: argparse.Namespace) -> Obj:
+    client, config = session.client, session.config
+    title = report.NUMBER.sub("", args.title).strip()
+    try:
+        details = (
+            Path(args.description_file).read_text() if args.description_file else ""
+        )
+    except OSError as error:
+        raise TrelloError("The description file could not be read") from error
+    for piece in (title, details):
+        config.refuse_private(piece)
+    target = list_id(session, args.role)
+    cards = objs(
+        client.request("GET", f"/boards/{config.board}/cards/all", {"fields": "name"})
+    )
+    numbers = [
+        int(found.group(1))
+        for card in cards
+        if (found := report.NUMBER.match(text(card.get("name"))))
+    ]
+    number = max(numbers, default=0) + 1
+    made = obj(
+        client.request(
+            "POST",
+            "/cards",
+            {
+                "idList": target,
+                "name": f"#{number} {title}",
+                "pos": "top",
+                "desc": details,
+            },
+        )
+    )
+    return {"card": number, "url": text(made.get("shortUrl"))}
+
+
+def move(session: Session, args: argparse.Namespace) -> Obj:
+    client = session.client
     if args.role == "testing" and not args.proof:
         raise TrelloError("A move to testing needs at least one --proof image")
     not_images = [n for n in args.proof if Path(n).suffix.lower() not in PROOF_SUFFIXES]
     if not_images:
         raise TrelloError(f"Proof must be {', '.join(PROOF_SUFFIXES)}: {not_images}")
     card = resolve_card(session, args.card)
-    lists = {
-        name: ident
-        for ident, name in board.fetch_names(
-            client, config.board, "lists", "name"
-        ).items()
-    }
-    if list_name not in lists:
-        raise TrelloError(f"The list {list_name} is missing on the board")
+    target = list_id(session, args.role)
     card_id = text(card.get("id"))
     proofs = attach(session, card_id, args.proof)
-    client.request(
-        "PUT", f"/cards/{card_id}", {"idList": lists[list_name], "pos": "top"}
-    )
+    client.request("PUT", f"/cards/{card_id}", {"idList": target, "pos": "top"})
     removed = clear_needs(session, card) if args.role == "done" else list[Json]()
     return {"moved": args.role, "attachments": proofs, "removedLabels": removed}
 
@@ -315,6 +350,7 @@ def download(session: Session, args: argparse.Namespace) -> Obj:
 
 HANDLERS: dict[str, Callable[[Session, argparse.Namespace], Obj]] = {
     "probe": probe,
+    "new": new,
     "check": check,
     "comment": comment,
     "move": move,
@@ -359,6 +395,9 @@ def build_parser() -> tuple[
     subs["comment"].add_argument("text_file")
     subs["comment"].add_argument("--image", nargs="+", action="extend", default=[])
     subs["move"].add_argument("role", choices=[*REQUIRED_LISTS, *OPTIONAL_LISTS])
+    subs["new"].add_argument("role", choices=[*REQUIRED_LISTS, *OPTIONAL_LISTS])
+    subs["new"].add_argument("title")
+    subs["new"].add_argument("--description-file")
     subs["move"].add_argument("--proof", nargs="+", action="extend", default=[])
     subs["label"].add_argument("action", choices=["add", "remove"])
     subs["label"].add_argument("label")
