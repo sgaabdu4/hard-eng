@@ -10,27 +10,25 @@ from pathlib import Path
 
 import agent_checks
 import pytest
+from agent_actions import Action, claude_actions, codex_actions, loaded_skills
 from agent_checks import (
     CASES,
-    Action,
     Agent,
     Client,
     Ready,
     Run,
     Ungraded,
-    claude_actions,
-    codex_actions,
     codex_run,
     fixture,
     judge_continue,
     judge_escaped_bug,
     judge_failed_baseline,
     judge_grade,
+    judge_hosted_plan,
     judge_outside_service,
     judge_plan_only,
     judge_repeat_failure,
     judge_review,
-    loaded_skills,
     loads_skill,
     main,
 )
@@ -104,6 +102,45 @@ def test_planning_only_needs_a_usable_plan_for_the_request(
     (root / "features/empty-average").mkdir(parents=True)
     (root / "features/empty-average/PLAN.md").write_text(plan)
     failures = judge_plan_only(Run(root, base, "", [], actions))
+    if problem is None:
+        assert failures == []
+    else:
+        assert any(problem in failure for failure in failures), failures
+
+
+HOSTED = (
+    DRAFT_PLAN.replace(
+        "## Repository context",
+        "Staging and production on Cloudflare Workers.\n\n## Repository context",
+    )
+    + "\nDelivery target: Deploy\n"
+)
+SKETCH = "# Online\n\nStaging and production on Cloudflare Workers.\n\nDelivery target: Deploy\n"
+
+
+@pytest.mark.parametrize(
+    ("plan", "problem"),
+    [
+        (None, "wrote no PLAN.md"),
+        (SKETCH, "fails the Draft stage check"),
+        (HOSTED.replace("Staging and ", ""), "never names staging"),
+        (
+            HOSTED.replace("Cloudflare Workers", "a server"),
+            "never names cloudflare workers",
+        ),
+        (HOSTED.replace("Deploy\n", "Merge\n"), "Delivery target: Deploy"),
+        (HOSTED, None),
+        (HOSTED.replace("Deploy\n", "Deploy; Delivery: Pending\n"), None),
+    ],
+)
+def test_hosted_plan_needs_both_environments_on_workers(
+    tmp_path: Path, plan: str | None, problem: str | None
+) -> None:
+    root, base = case_fixture(tmp_path, "hosted-greenfield")
+    if plan is not None:
+        (root / "features/online").mkdir(parents=True)
+        (root / "features/online/PLAN.md").write_text(plan)
+    failures = judge_hosted_plan(Run(root, base, "", [], []))
     if problem is None:
         assert failures == []
     else:

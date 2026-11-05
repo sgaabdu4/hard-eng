@@ -682,7 +682,17 @@ def _plan_target(root: Path, plan: Path) -> tuple[Path, str]:
     return resolved_plan, targets[0]
 
 
-def _delivery_scope(root: Path, plan: Path | None) -> tuple[Path | None, str]:
+def target_problem(target: str, delivery: list[Delivery]) -> str | None:
+    if target.lower() == "deploy" and not delivery:
+        return "Deploy target requires configured delivery checks"
+    if target.lower() == "merge" and delivery:
+        return "configured delivery checks need Delivery target: Deploy"
+    return None
+
+
+def _delivery_scope(
+    root: Path, plan: Path | None, delivery: list[Delivery]
+) -> tuple[Path | None, str]:
     if plan is not None:
         return _plan_target(root, plan)
     from change_size import size_verdict
@@ -690,7 +700,7 @@ def _delivery_scope(root: Path, plan: Path | None) -> tuple[Path | None, str]:
     small, reason = size_verdict(root)
     if not small:
         raise ShippingError(f"a big change needs a plan: {reason}")
-    return None, "Merge"
+    return None, "Deploy" if delivery else "Merge"
 
 
 def _remote_sha(root: Path, base: str, remote_url: str) -> str:
@@ -832,9 +842,9 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     url = f"https://github.com/{owner}/{name}/pull/{number}"
     if repository != f"{owner}/{name}".lower():
         raise ShippingError("PR URL repository does not match origin")
-    resolved_plan, target = _delivery_scope(resolved_root, plan)
-    if target == "Deploy" and not policy["delivery"]:
-        raise ShippingError("Deploy target requires configured delivery checks")
+    resolved_plan, target = _delivery_scope(resolved_root, plan, policy["delivery"])
+    if problem := target_problem(target, policy["delivery"]):
+        raise ShippingError(problem)
     pull = _pull(resolved_root, owner, name, number)
     reject_attribution(resolved_root, "pr", pull.body, "PR body", ShippingError)
     if pull.base_ref != policy["base"]:
