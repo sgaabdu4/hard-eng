@@ -168,10 +168,14 @@ class FakeTrello:
             f"{board}/lists": self.lists,
             f"{board}/labels": self.labels,
             f"{board}/cards/open": self.cards,
+            f"{board}/cards/all": self.cards,
             f"{board}/actions": self.page(self.actions, query),
         }
         if path in lookup:
             return lookup[path]
+        if method == "POST" and path == "/cards":
+            ident = self.new_id("card")
+            return {"id": ident, "shortUrl": f"https://trello.com/c/{ident}"}
         if method == "POST" and path.endswith("/attachments"):
             ident = self.new_id("att")
             return {"id": ident, "url": f"https://files.example.test/{ident}.png"}
