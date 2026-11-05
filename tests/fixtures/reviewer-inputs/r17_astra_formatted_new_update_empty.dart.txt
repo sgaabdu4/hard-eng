@@ -1,0 +1,3 @@
+Future<void> work(List<int> ids) async {
+  for (var i = 0; i < 4; await save(i), i++) ;
+}

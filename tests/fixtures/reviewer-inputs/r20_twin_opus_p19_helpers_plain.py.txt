@@ -1,0 +1,108 @@
+import asyncio
+from collections.abc import Awaitable, Callable, Iterable, Sequence
+from typing import TypeVar
+
+T = TypeVar("T")
+
+
+# CASE py_inorder_pep expect=pass
+async def in_order(
+    items: Iterable[T], step: Callable[[T], Awaitable[None]], *, reason: str
+) -> None:
+    for item in items:
+        await step(item)
+
+
+# CASE py_inorder_pep_doc expect=pass
+async def in_order_steps(
+    steps: Sequence[Callable[[], Awaitable[None]]], *, reason: str
+) -> None:
+    """Run each step after the previous one finishes."""
+    for step in steps:
+        await step()
+
+
+# CASE py_bounded_pep expect=pass
+async def map_with_concurrency(
+    items: Sequence[T], width: int, op: Callable[[T], Awaitable[None]]
+) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(op(item) for item in items[offset : offset + width]))
+
+
+# CASE py_bounded_pep_taskgroup expect=pass
+async def map_with_concurrency_tg(
+    items: Sequence[T], width: int, op: Callable[[T], Awaitable[None]]
+) -> None:
+    for offset in range(0, len(items), width):
+        async with asyncio.TaskGroup() as group:
+            for item in items[offset : offset + width]:
+                group.create_task(op(item))
+
+
+# CASE py_inorder_method_pep expect=pass
+class Runner:
+    async def in_order(
+        self, items: Iterable[T], step: Callable[[T], Awaitable[None]], *, reason: str
+    ) -> None:
+        for item in items:
+            await step(item)
+
+
+# CASE py_inorder_impostor_extra expect=fire
+async def in_order(
+    items: Iterable[T], step: Callable[[T], Awaitable[None]], *, reason: str
+) -> None:
+    for item in items:
+        await step(item)
+        await audit(item)
+
+
+# CASE py_inorder_impostor_no_reason expect=fire
+async def in_order(items: Iterable[T], step: Callable[[T], Awaitable[None]]) -> None:
+    for item in items:
+        await step(item)
+
+
+# CASE py_inorder_impostor_business expect=fire
+async def in_order(
+    items: Iterable[T], step: Callable[[T], Awaitable[None]], *, reason: str
+) -> None:
+    for item in items:
+        await save(item)
+
+
+# CASE py_plain_loop_pep expect=fire
+async def sync_rows(rows: Sequence[T]) -> None:
+    for row in rows:
+        await save(row)
+
+
+# CASE py_async_with_pep expect=fire
+async def locks(rows):
+    for row in rows:
+        async with lock_for(row):
+            touch(row)
+
+
+# CASE py_taskgroup_pep expect=fire
+async def groups(batches):
+    for batch in batches:
+        async with asyncio.TaskGroup() as group:
+            for row in batch:
+                group.create_task(save(row))
+
+
+REASON = "Each row update reads the previous balance"
+
+
+# CASE py_calls expect=pass
+async def run(rows):
+    await in_order(rows, save, reason="Each row update reads the previous balance")
+    await in_order(rows, save, reason=REASON)
+    await in_order_steps([a, b], reason="Stage two needs the tables from stage one")
+    await in_order(
+        rows,
+        save,
+        reason=("Each row update reads the balance written by the previous row"),
+    )

@@ -1,0 +1,16 @@
+export class Runner {
+ async run(items, step) {
+  await inOrder(items, step, {reason: ORDER_REASON});
+  await inOrderSteps([step], {reason: ORDER_REASON});
+ }
+ async short(items, step) {
+  // ruleid: in-order-needs-reason-javascript
+  await inOrder(items, step, {reason: SHORT_REASON});
+ }
+ async shadow(items, step, ORDER_REASON) {
+  // ruleid: in-order-needs-reason-javascript
+  await inOrder(items, step, {reason: ORDER_REASON});
+ }
+}
+const ORDER_REASON = 'Each update reads the previous write';
+const SHORT_REASON = 'too short';

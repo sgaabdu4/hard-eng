@@ -1,0 +1,16 @@
+let cursor = 0;
+const saved = [];
+const reader = {
+	async read() {
+		return cursor < 3 ? ++cursor : null;
+	},
+};
+async function main() {
+	let item;
+	while ((item = await reader.read()) !== null) {
+		saved.push(item);
+	}
+	if (saved.join(",") !== "1,2,3") throw Error(String(saved));
+	console.log(JSON.stringify({ saved }));
+}
+main();

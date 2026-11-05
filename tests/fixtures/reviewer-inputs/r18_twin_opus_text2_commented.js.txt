@@ -1,0 +1,26 @@
+async function process(x) {}
+async function processAll(xs) {}
+
+// CASE js_commented_out_loop expect=pass
+async function d1(items) {
+	// for (let i = 0; i < items.length; i++) {
+	//   await process(items[i]);
+	// }
+	await processAll(items);
+}
+
+// CASE js_block_commented_loop expect=pass
+async function d2(items) {
+	/*
+  for (let i = 0; i < items.length; i++) {
+    await process(items[i]);
+  }
+  */
+	await processAll(items);
+}
+
+// CASE js_line_comment_no_brace expect=pass
+async function d4(items) {
+	// Used to be: for (let i = 0; i < items.length; i++) await process(items[i]);
+	await processAll(items);
+}

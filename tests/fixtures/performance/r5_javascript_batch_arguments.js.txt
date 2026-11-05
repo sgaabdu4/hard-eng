@@ -1,0 +1,31 @@
+async function run(groups, read) {
+ for (const batch of groups) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(batch.map(async item => { const row = await read(item); return await save(row); }));
+ }
+ // ruleid: await-in-loop-javascript
+ for (const batch of groups) await Promise.any(batch.map(async item => save(await read(item))));
+ // ruleid: await-in-loop-javascript
+ for (const batch of groups) { await Promise.race(batch.map(read)); }
+ // ruleid: await-in-loop-javascript
+ for (const batch of groups) { await Promise.allSettled(batch.map(async item => await read(item))); }
+ // ruleid: await-in-loop-javascript
+ for (let i = 0; i < groups.length; i += 4) await Promise.all(groups.slice(i, i + 4).map(read));
+ for (let i = 0; i < groups.length; i++)
+  // ruleid: await-in-loop-javascript
+  await Promise.all(groups.slice(i, i + 1).map(read));
+ for (const batch of groups) {
+  // ruleid: await-in-loop-javascript
+  await prepare(batch);
+  // ruleid: await-in-loop-javascript
+  await Promise.all(batch.map(async item => await read(item)));
+ }
+ for (const batch of groups) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(other.map(async item => await read(item)));
+ }
+ for (const item of items) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([read(item), notify(item)]);
+ }
+}

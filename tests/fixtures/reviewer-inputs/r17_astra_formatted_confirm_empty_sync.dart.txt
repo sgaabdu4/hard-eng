@@ -1,0 +1,7 @@
+void main() {
+  final iterator = [1, 2, 3, 4].iterator;
+  var count = 0;
+  for (; iterator.moveNext(); count++) {}
+  if (count != 4) throw StateError('$count');
+  print('count=$count');
+}

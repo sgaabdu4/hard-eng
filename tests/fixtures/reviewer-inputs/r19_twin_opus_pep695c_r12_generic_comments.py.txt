@@ -1,0 +1,21 @@
+import asyncio
+
+
+async def map_with_concurrency[T](items, width, operation):
+    # Each chunk owns one barrier.
+    for offset in range(0, len(items), width):  # One chunk per pass.
+        async with asyncio.TaskGroup() as group:  # Join this group.
+            for item in items[offset : offset + width]:  # Fill this group.
+                # The group owns each operation.
+                group.create_task(operation(item))  # Register each operation.
+
+
+async def map_with_concurrency[T](items, width, operation):
+    for offset in range(0, len(items), width):
+        # A comment cannot hide extra work.
+
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+        await operation(items[offset])

@@ -1,0 +1,86 @@
+import asyncio
+
+
+# CASE while_true_nested_for_in_try expect=fire
+async def drain_try(queue, items):
+    while True:
+        try:
+            for item in items:
+                await save(item)
+        except ValueError:
+            pass
+        await asyncio.sleep(1)
+
+
+# CASE while_true_nested_for_in_if expect=fire
+async def drain_if(queue, items, ready):
+    while True:
+        if ready:
+            for item in items:
+                await save(item)
+        await asyncio.sleep(1)
+
+
+# CASE while_true_nested_for_in_async_with expect=fire
+async def drain_with(lock, items):
+    while True:
+        async with lock:
+            for item in items:
+                await save(item)
+        await asyncio.sleep(1)
+
+
+# CASE while_true_sync_inner_then_await expect=pass
+async def poll(queue):
+    while True:
+        batch = []
+        for item in queue.pending():
+            batch.append(item)
+        await asyncio.sleep(1)
+
+
+# CASE while_true_nested_for_direct expect=fire
+async def drain_direct(items):
+    while True:
+        for item in items:
+            await save(item)
+        await asyncio.sleep(1)
+
+
+# CASE for_nested_while_await expect=fire
+async def nested_while(groups):
+    for group in groups:
+        while group.more():
+            await group.fetch()
+
+
+# CASE with_nested_async_for expect=pass
+async def stream(conn):
+    with conn:
+        async for row in conn.rows():
+            await handle(row)
+
+
+# CASE sync_inner_for_then_sync expect=pass
+async def build(groups):
+    for group in groups:
+        for item in group:
+            print(item)
+
+
+# CASE while_true_inner_for_awaited_else expect=fire
+async def drain_else(items):
+    while True:
+        for item in items:
+            await save(item)
+        else:
+            pass
+        await asyncio.sleep(1)
+
+
+# CASE for_nested_for_comment_then_await expect=fire
+async def nested_comment(groups):
+    for group in groups:
+        # each item is saved
+        for item in group:
+            await save(item)

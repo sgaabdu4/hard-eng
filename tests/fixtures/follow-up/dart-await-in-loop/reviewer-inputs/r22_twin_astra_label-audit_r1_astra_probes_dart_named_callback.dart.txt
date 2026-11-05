@@ -1,0 +1,10 @@
+Future<void> run(List<int> items, Future<void> Function(int) read) async {
+  final callbacks = <Future<void> Function()>[];
+  for (final item in items) {
+    Future<void> callback() async {
+      await read(item);
+    }
+
+    callbacks.add(callback);
+  }
+}

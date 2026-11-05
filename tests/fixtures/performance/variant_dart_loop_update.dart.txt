@@ -1,0 +1,6 @@
+Future<void> work() async {
+  // ruleid: await-in-loop-dart
+  for (var index = 0; index < 3; await read(index++)) {
+    print(index);
+  }
+}

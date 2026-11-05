@@ -1,0 +1,27 @@
+func schedule(_ items: [Int], _ group: inout TaskGroup<Void>) {
+  for item in items {
+    Task { [item] in await work(item) }
+    Task<Void, Never>(priority: .utility) { [item] in await work(item) }
+    _Concurrency.Task(priority: .utility) { await work(item) }
+    let task = Task(priority: .utility) { [item] in await work(item) }
+    group.addTask(priority: .utility) { [item] in await work(item) }
+    group.addTaskUnlessCancelled { [item] in await work(item) }
+    handles.append(task)
+  }
+}
+
+func repeated(_ items: [Int]) async {
+  for item in items {
+    let task = Task { [item] in await work(item) }
+    // ruleid: await-in-loop-swift
+    await task.value
+    Task(priority: .utility) { [item] in
+      for child in children(item) {
+        // ruleid: await-in-loop-swift
+        await work(child)
+      }
+    }
+    // ruleid: await-in-loop-swift
+    Task(priority: await choosePriority(item)) { [item] in await work(item) }
+  }
+}

@@ -1,0 +1,26 @@
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await operation(items[index]);
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+class WrongBody {
+  Future<void> mapWithConcurrency(items, operation) async {
+    for (final item in items) {
+      // ruleid: await-in-loop-dart
+      await operation(item);
+    }
+  }
+}

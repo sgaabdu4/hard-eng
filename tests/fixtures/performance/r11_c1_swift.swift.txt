@@ -1,0 +1,21 @@
+func use(items: [Int], operation: (Int) async -> Void, n: Int) async {
+  let cap = min(1, n)
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items: items, concurrency: 1, operation: operation)
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items: items, maxConcurrency: 1, operation: operation)
+  // ruleid: serial-bounded-helper-swift
+  await mapWithConcurrency(items: items, max_concurrency: 1, operation: operation)
+  // ok: serial-bounded-helper-swift
+  await mapWithConcurrency(items, min(1, n), operation)
+  // ok: serial-bounded-helper-swift
+  await mapWithConcurrency(items, min(n, 1), operation)
+  // ok: serial-bounded-helper-swift
+  await mapWithConcurrency(items, cap, operation)
+  await mapWithConcurrency(items: items, maxConcurrency: 4, operation: operation)
+  await mapWithConcurrency(items: items, concurrency: n, operation: operation)
+  await mapWithConcurrency(items, min(4, n), operation)
+  await mapWithConcurrency(items, max(1, n), operation)
+  await mapWithConcurrency(items, n + 1, operation)
+  await mapWithConcurrency(items, min(4, n + 1), operation)
+}

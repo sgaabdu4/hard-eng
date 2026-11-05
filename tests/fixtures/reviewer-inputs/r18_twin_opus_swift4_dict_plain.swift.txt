@@ -1,0 +1,16 @@
+func work(_ item: Int) async {}
+
+final class Runner {
+  var items: [Int] = []
+  var tasks: [Int: Task<Void, Never>] = [:]
+
+  // CASE dict_plain expect=pass
+  func start() {
+    for item in items {
+      tasks[item] = Task<Void, Never> {
+        // Runs off the main actor.
+        await work(item)
+      }
+    }
+  }
+}

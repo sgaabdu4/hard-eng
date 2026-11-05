@@ -1,0 +1,20 @@
+import 'dart:async';
+
+Future<void> inOrder<E>(Iterable<E> values, Future<void> Function(E) apply, {required String reason}) async {
+  for (final value in values) {
+    await apply(value);
+  }
+}
+
+Future<void> use() async {
+  await inOrder<Object>([], (value) async {}, reason: 'Each update reads the previous write');
+  await Runner().inOrder<Object>(values: [], apply: (value) async {}, reason: 'Each update reads the previous write');
+}
+
+class Runner {
+  Future<void> inOrder<E>({required String reason, required Iterable<E> values, required FutureOr<void> Function(E) apply}) async {
+    for (final value in values) {
+      await apply(value);
+    }
+  }
+}

@@ -1,0 +1,20 @@
+final saved = <int>[];
+Future<void> save(int item) async {
+  saved.add(item);
+}
+
+Future<void> main() async {
+  final groups = [
+    [1, 2],
+    [3, 4],
+  ];
+  for (var i = 0; i < groups.length;) {
+    for (final item in groups[i]) {
+      await save(item);
+    }
+    i++;
+    if (saved.length > 10) break;
+  }
+  if (saved.join(',') != '1,2,3,4') throw StateError('$saved');
+  print('saved=$saved');
+}

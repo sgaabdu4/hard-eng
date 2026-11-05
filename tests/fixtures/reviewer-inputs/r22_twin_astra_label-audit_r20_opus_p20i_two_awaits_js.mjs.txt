@@ -1,0 +1,56 @@
+// CASE js_object_two_awaits expect=fire
+export async function loadProfiles(ids, width) {
+	const results = new Array(ids.length);
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < ids.length) {
+				const index = next++;
+				results[index] = {
+					user: await loadUser(ids[index]),
+					orders: await loadOrders(ids[index]),
+				};
+			}
+		}),
+	);
+	return results;
+}
+
+// CASE js_call_wrapping_two_awaits expect=fire
+export async function syncAll(ids, width) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < ids.length) {
+				const index = next++;
+				report(await push(ids[index]), await verify(ids[index]));
+			}
+		}),
+	);
+}
+
+// CASE js_awaited_receiver expect=fire
+export async function sendAll(ids, width, pool) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < ids.length) {
+				const index = next++;
+				await (await pool()).send(ids[index]);
+			}
+		}),
+	);
+}
+
+// CASE js_canonical_control expect=pass
+export async function mapLimit(items, width, operation) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(items[index]);
+			}
+		}),
+	);
+}

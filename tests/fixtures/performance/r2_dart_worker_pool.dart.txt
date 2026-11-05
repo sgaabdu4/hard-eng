@@ -1,0 +1,23 @@
+Future<List<R>> mapPool<T, R>(List<T> items, int limit, Future<R> Function(T item) read) async {
+ final results = List<R?>.filled(items.length, null);
+ var next = 0;
+ await Future.wait(List.generate(limit, (_) async {
+  while (next < items.length) {
+   final index = next++;
+   results[index] = await read(items[index]);
+  }
+ }));
+ return results.cast<R>();
+}
+Future<void> escape(items, int width) async {
+ var next = 0;
+ await Future.wait(List.generate(width, (_) async {
+  while (next < items.length) {
+   final index = next++;
+   // ruleid: await-in-loop-dart
+   results[index] = await read(items[index]);
+   // ruleid: await-in-loop-dart
+   await audit(index);
+  }
+ }));
+}

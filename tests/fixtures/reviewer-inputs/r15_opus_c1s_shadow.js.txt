@@ -1,0 +1,82 @@
+// CASE js_module_const_param_shadow expect=pass
+const width = 1;
+export async function runParam(items, width) {
+  await mapLimit(items, width, save);
+}
+// CASE js_inner_let_shadow expect=pass
+async function innerLet(items, config) {
+  const width = 1;
+  await probe(width);
+  {
+    let width = config.width;
+    await mapLimit(items, width, save);
+  }
+}
+// CASE js_for_of_shadow expect=pass
+async function forOfShadow(plans) {
+  const width = 1;
+  await probe(width);
+  await Promise.all(plans.map(async (plan) => {
+    for (const width of plan.widths) {
+      void width;
+    }
+  }));
+  for (const { items, width } of plans) {
+    await mapLimit(items, width, save);
+  }
+}
+// CASE js_destructured_param_shadow expect=pass
+async function destructuredParam(groups) {
+  const limit = 1;
+  const first = await db.find({ limit });
+  await Promise.all(groups.map(({ items, limit }) => mapLimit(items, limit, save)));
+  return first;
+}
+// CASE js_catch_shadow expect=pass
+async function catchShadow(items) {
+  const width = 1;
+  await probe(width);
+  try {
+    await risky();
+  } catch (width) {
+    await mapLimit(items, width, save);
+  }
+}
+// CASE js_function_decl_param_shadow expect=pass
+async function outerDecl(items) {
+  const width = 1;
+  await probe(width);
+  async function inner(width) {
+    return mapLimit(items, width, save);
+  }
+  await inner(4);
+}
+// CASE js_var_hoist_shadow expect=pass
+const concurrency = 1;
+async function hoisted(items) {
+  var concurrency = 4;
+  return mapLimit(items, concurrency, save);
+}
+// CASE js_class_method_param_shadow expect=pass
+const limit2 = 1;
+class Importer {
+  async run(items, limit2) {
+    return mapLimit(items, limit2, save);
+  }
+}
+// CASE js_options_shorthand_param_shadow expect=pass
+const concurrency3 = 1;
+async function optionsParam(items, concurrency3) {
+  await mapLimit(items, save, { concurrency: concurrency3 });
+}
+// CASE js_options_destructured_default_shadow expect=pass
+const concurrency4 = 1;
+export async function importAll(items, { concurrency4 = 4 } = {}) {
+  await mapLimit(items, save, { concurrency: concurrency4 });
+}
+// CASE js_control_const_fire expect=fire
+async function control(items) {
+  const width = 1;
+  await mapLimit(items, width, save);
+}
+// CASE end expect=pass

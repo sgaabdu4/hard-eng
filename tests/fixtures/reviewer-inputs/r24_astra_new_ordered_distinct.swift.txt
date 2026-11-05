@@ -1,0 +1,5 @@
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+ for item in items {
+  consume(try await step(item), try await audit(item))
+ }
+}

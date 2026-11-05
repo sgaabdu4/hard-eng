@@ -1,0 +1,40 @@
+func work(_ item: Int) async {}
+
+final class Runner {
+  var items: [Int] = []
+  var tasks: [Task<Void, Never>] = []
+
+  // CASE task_priority_operation_plain expect=pass
+  func a() {
+    for item in items {
+      tasks.append(Task(priority: .high, operation: { await work(item) }))
+    }
+  }
+
+  // CASE detached_operation_capture expect=pass
+  func b() {
+    for item in items {
+      tasks.append(Task.detached(priority: .high, operation: { [weak self] in
+        await self?.go(item)
+      }))
+    }
+  }
+
+  // CASE task_operation_plain_bare expect=pass
+  func c() {
+    for item in items {
+      Task(operation: { await work(item) })
+    }
+  }
+
+  // CASE task_trailing_after_label expect=pass
+  func d() {
+    for item in items {
+      Task(priority: .low) { @MainActor [weak self] in
+        await self?.go(item)
+      }
+    }
+  }
+
+  func go(_ item: Int) async {}
+}

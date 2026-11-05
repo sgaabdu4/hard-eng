@@ -1,0 +1,28 @@
+# CASE abort_cleanup_nested_loop expect=fire
+async def a1(batches):
+    for batch in batches:
+        results = await asyncio.gather(*(read(x) for x in batch))
+        if failed(results):
+            for r in results:
+                await rollback(r)
+            raise RuntimeError("failed")
+
+
+# CASE early_exit_nested_loop expect=fire
+async def a2(groups):
+    for group in groups:
+        for item in group.items:
+            await save(item)
+        if await done(group):
+            return group
+    return None
+
+
+# CASE list_comp_nested_list_literal expect=fire
+async def a3(items):
+    return [[await read(x), x] for x in items]
+
+
+# CASE list_comp_nested_list_literal_filter expect=fire
+async def a4(items):
+    return [[await read(x)] for x in items if x]

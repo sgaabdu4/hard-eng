@@ -1,0 +1,6 @@
+export function drain(queues) {
+	for (const q of queues) {
+		while (q.pop() !== undefined);
+		if (q.closed) break;
+	}
+}

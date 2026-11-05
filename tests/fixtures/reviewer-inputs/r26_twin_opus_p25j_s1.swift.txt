@@ -1,0 +1,9 @@
+func scan(_ s: [Character]) -> Int {
+  for i in 0..<s.count {
+    var j = i
+    while j < s.count && s[j] == " " { j += 1 }
+    for _ in 0..<0 {}
+    if j > i { break }
+  }
+  return 0
+}

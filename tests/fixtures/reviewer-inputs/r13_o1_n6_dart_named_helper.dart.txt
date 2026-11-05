@@ -1,0 +1,18 @@
+// CASE dart_helper_other_name expect=pass
+Future<List<R>> runBounded<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T item) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE dart_other_name_width_one expect=fire
+Future<void> otherNameOne(List<int> items, Future<void> Function(int) save) async {
+  await runBounded(items, 1, save);
+}

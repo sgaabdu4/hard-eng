@@ -1,0 +1,6 @@
+function reorderEntries(rows) {
+  for (const row of rows) {
+    for (let i = 0; i < row.length; i++) {}
+    if (row.length) break;
+  }
+}

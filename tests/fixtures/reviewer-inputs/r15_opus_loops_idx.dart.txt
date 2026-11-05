@@ -1,0 +1,48 @@
+// CASE dart_while_index expect=fire
+Future<void> a(List<int> items) async {
+  var i = 0;
+  while (i < items.length) {
+    await save(items[i]);
+    i++;
+  }
+}
+// CASE dart_do_while expect=fire
+Future<void> b(List<int> items) async {
+  var i = 0;
+  do {
+    await save(items[i]);
+  } while (++i < items.length);
+}
+// CASE dart_braceless_for expect=fire
+Future<void> c(List<int> items) async {
+  for (var i = 0; i < items.length; i++) await save(items[i]);
+}
+// CASE dart_map_entries expect=fire
+Future<void> d(Map<String, int> map) async {
+  for (final MapEntry(:key, :value) in map.entries) {
+    await save(key, value);
+  }
+}
+// CASE dart_then_chain expect=fire
+Future<void> e(List<int> items) {
+  Future<void> chain = Future.value();
+  for (final item in items) {
+    chain = chain.then((_) => save(item));
+  }
+  return chain;
+}
+// CASE dart_await_variable expect=fire
+Future<void> f(List<int> items) async {
+  for (final item in items) {
+    final pending = save(item);
+    await pending;
+  }
+}
+// CASE dart_while_remove_last expect=fire
+Future<void> g(List<int> items) async {
+  final queue = [...items];
+  while (queue.isNotEmpty) {
+    await save(queue.removeLast());
+  }
+}
+// CASE end expect=pass

@@ -1,0 +1,10 @@
+async function run(items, read) {
+ const groups = items.slices(1);
+ for (const batch of groups) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(batch.map(read));
+ }
+ const wide = items.slices(4);
+ // ruleid: await-in-loop-javascript
+ for (const batch of wide) await Promise.all(batch.map(read));
+}

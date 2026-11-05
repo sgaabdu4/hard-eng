@@ -1,0 +1,8 @@
+// CASE js_plain_destructure_no_await_target expect=fire
+export async function f(items, rows, step) {
+  let saved = null;
+  for (const item of items) {
+    [saved] = rows[item];
+    await step(saved);
+  }
+}

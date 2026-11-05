@@ -1,0 +1,30 @@
+from typing import TypeVar, Iterable, Callable, Awaitable
+
+T = TypeVar("T")
+
+
+async def in_order[T](
+    items: Iterable[T], step: Callable[[T], Awaitable[None]], *, reason: str
+):
+    for item in items:
+        await step(item)
+
+
+async def in_order_steps(
+    steps: Iterable[Callable[[], Awaitable[None]]], *, reason: str
+):
+    del reason
+    for step in steps:
+        await step()
+
+
+async def in_order_steps[T](
+    steps: Iterable[Callable[[], Awaitable[T]]], *, reason: str
+):
+    for step in steps:
+        await step()
+
+
+async def in_order[T](items, step, *, reason):
+    for item in items:
+        await unrelated(item)

@@ -1,0 +1,21 @@
+async function a(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit<string>(items, op, { concurrency: 1 });
+}
+async function b(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit<string>(items, { concurrency: 1 }, op);
+}
+async function c(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit<string>({ concurrency: 1 }, items, op);
+}
+async function d(items: string[], op: (item: string) => Promise<void>) {
+	mapLimit<string>(items, op, { concurrency: 1 });
+}
+async function e(items: string[], op: (item: string) => Promise<void>) {
+	await lib.mapLimit<string>(items, op, { limit: 1 });
+}
+async function f(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit<string>(items, 1, op);
+}
+async function g(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit<string, void>(items, op, { width: 1 });
+}

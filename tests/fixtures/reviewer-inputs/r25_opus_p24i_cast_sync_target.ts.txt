@@ -1,0 +1,7 @@
+// CASE ts_cast_target_sync_body_await expect=fire
+export async function tag(rows: unknown[], save: (row: unknown) => Promise<void>) {
+  for (const row of rows) {
+    (row as { seen: boolean }).seen = true;
+    await save(row);
+  }
+}

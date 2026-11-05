@@ -1,0 +1,18 @@
+async def callbacks(items, register, session, statuses):
+    for item in items:
+
+        async def callback():
+            async with session.get(item) as response:
+                statuses.append(response.status)
+
+        register(callback)
+    while True:
+        async with session():
+            for item in items:
+
+                async def callback():
+                    async with session.lock():
+                        statuses.append(item)
+
+                register(callback)
+        break

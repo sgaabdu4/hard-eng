@@ -1,0 +1,21 @@
+async def run(items, save, width):
+    await map_with_concurrency(items, 4, save, 1)
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, 1, save, 4)
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, 1, save, "4")
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, 1, save, 4.5)
+    # ok: serial-bounded-helper-python
+    await map_with_concurrency(items, save, 1, retries=5)
+    await map_with_concurrency(items, 1, save, width=4)
+    await map_with_concurrency(items, 1, save, width=width)
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, 4, save, width=1)
+    # ok: serial-bounded-helper-python
+    await pool.map_with_concurrency(1, items, save, retries=5)
+    local = 1
+    # ok: serial-bounded-helper-python
+    await map_with_concurrency(items, save, local)
+    await map_with_concurrency(items, save, min(1, width))
+    await map_with_concurrency(items, save, min(4, width))

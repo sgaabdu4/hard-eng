@@ -1,0 +1,16 @@
+func work(_ item: Int) async {}
+
+final class Runner {
+  var items: [Int] = []
+  var tasks: [Task<Void, Never>] = []
+
+  // CASE append_apos expect=pass
+  func start() {
+    for item in items {
+      tasks.append(Task<Void, Never> {
+        // Don't block the caller.
+        await work(item)
+      })
+    }
+  }
+}

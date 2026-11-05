@@ -1,0 +1,8 @@
+Future<void> work(items) async {
+ for (var i=0; i<items.length; i+=4) {
+  for (final item in items) {
+   // ruleid: await-in-loop-dart
+   await Future.wait([read(item), other(item)]);
+  }
+ }
+}

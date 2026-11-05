@@ -1,0 +1,30 @@
+async def run(items, groups, read):
+    a = [
+        # ruleid: await-in-loop-python
+        await read(item) for item in items if item > 0
+    ]
+    b = [
+        # ruleid: await-in-loop-python
+        await read(item) for group in groups for item in group
+    ]
+    c = [item for group in groups for item in
+        # ruleid: await-in-loop-python
+        await load(group)]
+    once = [item for item in await load() if item > 0]
+    d = {item:
+        # ruleid: await-in-loop-python
+        await read(item) for item in items if item > 0
+    }
+    e = {
+        # ruleid: await-in-loop-python
+        await read(item) for group in groups if group for item in group if item
+    }
+    f = [item for group in groups if group for item in
+        # ruleid: await-in-loop-python
+        await load(group) if item]
+    g = [item for group in groups for item in group if
+        # ruleid: await-in-loop-python
+        await allowed(item)]
+    h = {item: leaf for group in groups if group for item in group for leaf in
+        # ruleid: await-in-loop-python
+        await load(item) if leaf}

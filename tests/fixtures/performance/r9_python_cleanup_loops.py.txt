@@ -1,0 +1,12 @@
+async def cleanup_loops(items, rows, cleanup):
+    for item in items:
+        if failed(item):
+            for row in rows:
+                # ruleid: await-in-loop-python
+                await cleanup(row)
+            raise ValueError("failed")
+    for item in items:
+        if failed(item):
+            # ruleid: await-in-loop-python
+            [await cleanup(row) for row in rows]
+            raise ValueError("failed")

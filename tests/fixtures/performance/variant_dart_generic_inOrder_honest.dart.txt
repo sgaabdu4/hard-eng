@@ -1,0 +1,7 @@
+Future<void> inOrder<E>(Iterable<E> items, Future<void> Function(E item) step, {required String reason}) async { for (final item in items) {
+  await step(item);
+} }
+
+Future<void> use() async {
+  await inOrder([], (value) async {}, reason: "Each update reads the previous write");
+}

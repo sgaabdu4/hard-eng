@@ -1,0 +1,44 @@
+var reads = 0;
+
+Future<bool> isFree(int id) async {
+  reads += 1;
+  await Future<void>.delayed(const Duration(milliseconds: 5));
+  return id == 3;
+}
+
+// CASE multi_decl_return expect=pass
+Future<int> firstFree(List<int> ids) async {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return -1;
+}
+
+// CASE reverse_return expect=pass
+Future<int> lastFree(List<int> ids) async {
+  for (var i = ids.length; i-- > 0;) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return -1;
+}
+
+// CASE single_return_control expect=pass
+Future<int> firstFreeSingle(List<int> ids) async {
+  for (var i = 0; i < ids.length; i++) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return -1;
+}
+
+// CASE harness expect=pass
+Future<void> main() async {
+  final ids = [1, 2, 3, 4, 5, 6];
+  final a = await firstFree(ids);
+  final readsA = reads;
+  reads = 0;
+  final b = await lastFree(ids);
+  final readsB = reads;
+  print('firstFree=$a reads=$readsA lastFree=$b reads=$readsB');
+  if (a != 3 || readsA != 3 || b != 3 || readsB != 4)
+    throw StateError('unexpected');
+}

@@ -1,0 +1,11 @@
+const reason = 'Each update reads the previous write';
+inOrder(items, step, {reason});
+inOrderSteps([step], {reason});
+inOrder(items, step, {
+ // Order uses the previous result.
+ reason: 'Each update reads the previous write'
+});
+async function run(items, step, reason) {
+ // ruleid: in-order-needs-reason-javascript
+ await inOrder(items, step, {reason});
+}

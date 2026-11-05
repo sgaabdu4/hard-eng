@@ -1,0 +1,21 @@
+export async function mapPool(values, limit, operation) {
+ let next = 0;
+ await Promise.all(Array.from({length: limit}, async () => {
+  while (next < values.length) {
+   const index = next++;
+   await operation(values[index]);
+  }
+ }));
+}
+async function escape(values, limit, operation) {
+ let next = 0;
+ await Promise.all(Array.from({length: limit}, async () => {
+  while (next < values.length) {
+   const index = next++;
+   // ruleid: await-in-loop-javascript
+   await operation(values[index]);
+   // ruleid: await-in-loop-javascript
+   await audit(index);
+  }
+ }));
+}

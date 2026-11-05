@@ -1,0 +1,20 @@
+async function run(items, read) {
+ let value = null;
+ for (const item of items) {
+  ({value} = item);
+  // ruleid: await-in-loop-javascript
+  value ??= await read(item);
+ }
+ for (const item of items) {
+  [key, value] = item;
+  // ruleid: await-in-loop-javascript
+  if (value == null) value = await read(key);
+ }
+}
+async function once(items, read) {
+ let value = null;
+ for (const item of items) {
+  ({key} = item);
+  value ??= await read();
+ }
+}

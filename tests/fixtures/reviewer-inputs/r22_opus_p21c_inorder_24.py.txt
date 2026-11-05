@@ -1,0 +1,4 @@
+# CASE py_inorder_quotes_24 expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        log('k0', 'k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8', 'k9', 'k10', 'k11', 'k12', 'k13', 'k14', 'k15', 'k16', 'k17', 'k18', 'k19', 'k20', 'k21', 'k22', 'k23', await step(item), await audit(item))

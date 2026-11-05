@@ -1,0 +1,29 @@
+async function save(x) {}
+
+// CASE regex_semicolon_in_header expect=fire
+async function h1(items) {
+  for (let i = 0, re = /;/g; i < items.length; i++) {
+    await save(items[i].replace(re, ""));
+  }
+}
+
+// CASE comment_in_header expect=fire
+async function h2(items) {
+  for (let i = 0 /* start */, n = items.length; i < n; i++) {
+    await save(items[i]);
+  }
+}
+
+// CASE string_semicolon_header expect=fire
+async function h3(items) {
+  for (let i = 0, sep = ";"; i < items.length; i++) {
+    await save(items[i] + sep);
+  }
+}
+
+// CASE template_in_header expect=fire
+async function h4(items) {
+  for (let i = 0, tag = `a;${items.length}`; i < items.length; i++) {
+    await save(tag);
+  }
+}

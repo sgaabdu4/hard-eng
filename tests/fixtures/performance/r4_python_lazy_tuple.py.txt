@@ -1,0 +1,19 @@
+async def run(items, read):
+    value = None
+    for item in items:
+        value, key = item
+        if value is None:
+            # ruleid: await-in-loop-python
+            value = await read(key)
+    for item in items:
+        key, value, other = item
+        if value is None:
+            # ruleid: await-in-loop-python
+            value = await read(key)
+
+async def once(items, read):
+    value = None
+    for item in items:
+        key, other = item
+        if value is None:
+            value = await read()

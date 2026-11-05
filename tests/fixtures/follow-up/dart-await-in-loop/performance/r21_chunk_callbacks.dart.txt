@@ -1,0 +1,28 @@
+Future<List<R>> mapWithConcurrency<T, R>(List<T> items, int width, Future<R> Function(T) operation) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map((item) async => await operation(item))));
+  }
+  return results;
+}
+Future<List<R>> extra<T, R>(List<T> items, int width, Future<R> Function(T) operation) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    // ruleid: await-in-loop-dart
+    results.addAll(await Future.wait(group.map((item) async {
+      await prep(item);
+      return await operation(item);
+    })));
+  }
+  return results;
+}
+Future<List<R>> plainCallback<T, R>(List<T> items, int width, Future<R> Function(T) operation) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map((item) => operation(item))));
+  }
+  return results;
+}

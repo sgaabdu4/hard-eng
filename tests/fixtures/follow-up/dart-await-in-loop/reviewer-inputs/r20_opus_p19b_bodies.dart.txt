@@ -1,0 +1,12 @@
+Future<void> b1(int n) async {
+  // CASE int_three_body expect=fire
+  for (int i = 0, j = 0, k = 0; i < n; i++) {
+    await save(i);
+  }
+}
+Future<void> b2(int n) async {
+  // CASE four_body expect=fire
+  for (var i = 0, j = 0, k = 0, l = 0; i < n; i++) {
+    await save(i);
+  }
+}

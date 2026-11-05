@@ -1,0 +1,65 @@
+import asyncio
+import itertools
+
+
+async def p01_helper_extra_loop():
+    pass
+
+
+async def in_order(items, step, *, reason):
+    for item in items:
+        await step(item)
+    for item in items:
+        # want: await-in-loop-python
+        await audit(item)
+
+
+async def in_order_steps(steps, *, reason):
+    for step in steps:
+        await step()
+    while steps:
+        # want: await-in-loop-python
+        await audit(steps.pop())
+
+
+async def p03_member_no_reason(runner, items, db):
+    # want: in-order-needs-reason-python
+    await runner.in_order(items, db.put)
+    # want: in-order-needs-reason-python
+    await in_order(items, db.put, reason="")
+
+
+async def p04_callback_awaited_directly(items, db):
+    for item in items:
+        async def run(value=item):
+            await db.put(value)
+        # want: await-in-loop-python
+        await run()
+
+
+async def p05_batch_sibling(items, db):
+    for start in range(0, len(items), 10):
+        await asyncio.gather(*(db.get(i) for i in items[start:start + 10]))
+        # want: await-in-loop-python
+        await db.audit(start)
+
+
+async def p06_batch_assign(items, db):
+    out = []
+    for start in range(0, len(items), 10):
+        rows = await asyncio.gather(*(db.get(i) for i in items[start:start + 10]))
+        out.extend(rows)
+
+
+async def p07_return_in_nested(items, db):
+    for item in items:
+        def keep(other):
+            return other != item
+        # want: await-in-loop-python
+        await db.put(list(filter(keep, items))[0])
+
+
+async def p08_batched_one(items, db):
+    for batch in itertools.batched(items, 1):
+        # want: await-in-loop-python
+        await asyncio.gather(*(db.get(i) for i in batch))

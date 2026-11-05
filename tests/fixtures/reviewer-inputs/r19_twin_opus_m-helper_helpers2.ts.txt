@@ -1,0 +1,11 @@
+// CASE inorder_alias_nested_brace expect=pass
+type InOrderOptions = { signal?: { aborted: boolean }; reason: string };
+export async function inOrder<T>(
+	items: Iterable<T>,
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> {
+	for (const item of items) {
+		await step(item);
+	}
+}

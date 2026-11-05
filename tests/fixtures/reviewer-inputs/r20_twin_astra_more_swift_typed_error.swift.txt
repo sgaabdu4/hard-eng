@@ -1,0 +1,9 @@
+enum Failure: Error { case failed }
+func inOrder<T, E: Error>(_ items: [T], step: (T) async throws(E) -> Void, reason: String)
+  async throws(E)
+{
+  for item in items { try await step(item) }
+}
+func inOrderSteps<E: Error>(_ steps: [() async throws(E) -> Void], reason: String) async throws(E) {
+  for step in steps { try await step() }
+}

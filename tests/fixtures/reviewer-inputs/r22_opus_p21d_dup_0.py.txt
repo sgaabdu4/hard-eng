@@ -1,0 +1,4 @@
+# CASE py_dup_quotes_before_0 expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        log(await step(item), await step(item))

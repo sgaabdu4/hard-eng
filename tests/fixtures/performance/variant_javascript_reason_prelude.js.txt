@@ -1,0 +1,13 @@
+export async function inOrder(items, step, {reason}) {
+  void reason;
+  for (const item of items) {
+    await step(item);
+  }
+}
+
+export async function inOrderSteps(steps, {reason}) {
+  void reason;
+  for (const step of steps) {
+    await step();
+  }
+}

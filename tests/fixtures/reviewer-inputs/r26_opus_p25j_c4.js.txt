@@ -1,0 +1,7 @@
+export function scan(s) {
+  for (let i = 0; i < s.length; i++) {
+    let j = i;
+    for (; j < s.length && s[j] === ' '; j++);
+    i = j;
+  }
+}

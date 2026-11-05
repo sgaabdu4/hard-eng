@@ -1,0 +1,3 @@
+func run(_ items: [Int], _ op: @escaping @Sendable (Int) async -> Void) async {
+  for item in items { Task.detached(priority: .utility) { await op(item) } }
+}

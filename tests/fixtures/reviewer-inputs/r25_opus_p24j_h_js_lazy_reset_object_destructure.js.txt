@@ -1,0 +1,8 @@
+// CASE js_lazy_reset_object_destructure expect=fire
+export async function g(items, rows, read) {
+  let saved = null;
+  for (const item of items) {
+    ({ saved } = rows[item]);
+    if (saved == null) saved = await read(item);
+  }
+}

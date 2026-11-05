@@ -1,0 +1,17 @@
+async def map_with_concurrency(items, width, operation, *, limit=None):
+    pass
+
+
+# CASE result_limit_named expect=pass
+async def c1(items, op):
+    await map_with_concurrency(items, 8, op, limit=1)
+
+
+# CASE literal_one expect=fire
+async def c2(items, op):
+    await map_with_concurrency(items, 1, op)
+
+
+# CASE width_name_expression expect=pass
+async def c3(items, op, n):
+    await map_with_concurrency(items, width=n or 1, operation=op)

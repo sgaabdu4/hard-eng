@@ -1,0 +1,4 @@
+func a(items: [Int], op: @escaping @Sendable (Int) async throws -> Void) async throws {
+  try await mapWithConcurrency(items: items, width: 4, operation: op, retries: 1)
+  try await mapWithConcurrency(items: Array(items.prefix(1)), width: 4, operation: op)
+}

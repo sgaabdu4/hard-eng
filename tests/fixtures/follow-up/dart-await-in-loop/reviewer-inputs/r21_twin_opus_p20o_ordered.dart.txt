@@ -1,0 +1,10 @@
+// CASE dart_inorder_two_awaits expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T item) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    log(await step(item), await audit(item));
+  }
+}

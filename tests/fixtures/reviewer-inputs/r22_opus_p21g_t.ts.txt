@@ -1,0 +1,17 @@
+// CASE ts_inorder_trailing_comment_await expect=pass
+export async function inOrder<T>(items: T[], step: (item: T) => Promise<void>, { reason }: { reason: string }) {
+  void reason;
+  for (const item of items) {
+    await step(item); // don't await anything else; it's "serial"
+  }
+}
+// CASE ts_worker_trailing_comment_await expect=pass
+export async function mapLimit<T>(items: T[], width: number, operation: (item: T) => Promise<void>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await operation(items[index]); // don't await anything else; it's "serial"
+    }
+  }));
+}

@@ -1,0 +1,4 @@
+import {inOrder as ordered} from './order';
+ordered(items, step, {reason: "Each update reads the previous write"});
+// ruleid: in-order-needs-reason-javascript
+ordered(items, step);

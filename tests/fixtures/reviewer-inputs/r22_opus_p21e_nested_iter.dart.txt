@@ -1,0 +1,27 @@
+// CASE dart_outer_loop_inner_awaited_iterable expect=fire
+Future<int> total(List<String> companies, Store store) async {
+  var sum = 0;
+  for (final company in companies) {
+    for (final row in await store.listRows(company)) {
+      sum += row.amount;
+    }
+  }
+  return sum;
+}
+// CASE dart_outer_while_inner_awaited_iterable expect=fire
+Future<void> drain(Queue<String> pending, Store store) async {
+  while (pending.isNotEmpty) {
+    final id = pending.removeFirst();
+    for (final row in await store.listRows(id)) {
+      print(row);
+    }
+  }
+}
+// CASE dart_single_loop_awaited_iterable expect=pass
+Future<int> single(Store store) async {
+  var sum = 0;
+  for (final row in await store.listRows('a')) {
+    sum += row.amount;
+  }
+  return sum;
+}

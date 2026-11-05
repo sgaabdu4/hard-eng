@@ -1,0 +1,14 @@
+final saved = <int>[];
+final paths = <String>[];
+Future<void> save(int item) async { saved.add(item); }
+Future<void> main() async {
+  final items = [1, 2, 3];
+  for (var i = 0, n = items.length; i < n; i++) {
+    final message = '''That's an item.
+Please save it.''';
+    await save(items[i]);
+    paths.add(message);
+  }
+  if (saved.join(',') != '1,2,3') throw StateError('$saved');
+  print('saved=$saved');
+}

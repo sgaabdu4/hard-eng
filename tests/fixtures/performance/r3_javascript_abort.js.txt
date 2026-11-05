@@ -1,0 +1,9 @@
+async function run(items) {
+ for (const item of items) { if (failed(item)) { await cleanup(item); throw Error('failed'); } }
+ for (const item of items) {
+  try { if (failed(item)) {
+   // ruleid: await-in-loop-javascript
+   await cleanup(item); throw Error('failed');
+  } } catch (error) {}
+ }
+}

@@ -1,0 +1,13 @@
+struct Worker {
+static func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { try await operation(item) }
+      }
+      try await group.waitForAll()
+    }
+  }
+}}

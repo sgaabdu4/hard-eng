@@ -1,0 +1,55 @@
+import asyncio
+
+
+# CASE pymwc_honest expect=pass
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE pymwc_distinct_fstring expect=fire
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        log(
+            await asyncio.gather(
+                *(operation(item) for item in items[offset : offset + width])
+            ),
+            f"{await audit(offset)}",
+        )
+
+
+# CASE pymwc_distinct_plain expect=fire
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        log(
+            await asyncio.gather(
+                *(operation(item) for item in items[offset : offset + width])
+            ),
+            await audit(offset),
+        )
+
+
+# CASE pymwc_tg_honest expect=pass
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        async with asyncio.TaskGroup() as group:
+            for item in items[offset : offset + width]:
+                group.create_task(operation(item))
+
+
+# CASE pymwc_tg_distinct_fstring expect=fire
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        async with asyncio.TaskGroup() as group:
+            for item in items[offset : offset + width]:
+                group.create_task(operation(item), name=f"{await label(item)}")
+
+
+# CASE pymwc_tg_distinct_inline expect=fire
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        async with asyncio.TaskGroup() as group:
+            for item in items[offset : offset + width]:
+                log(group.create_task(operation(item)), f"{await label(item)}")

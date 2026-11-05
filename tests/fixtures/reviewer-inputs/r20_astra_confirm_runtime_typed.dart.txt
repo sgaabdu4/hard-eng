@@ -1,0 +1,14 @@
+import 'typed_join.dart';
+Future<void> main() async {
+  var active = 0;
+  var maximum = 0;
+  final result = await mapWithConcurrency<int, int>([1, 2, 3, 4], 2, (item) async {
+    active++;
+    if (active > maximum) maximum = active;
+    await Future<void>.delayed(Duration.zero);
+    active--;
+    return item * 2;
+  });
+  if (maximum != 2 || result.join(',') != '2,4,6,8') throw StateError('$maximum $result');
+  print('maximum=$maximum results=$result');
+}

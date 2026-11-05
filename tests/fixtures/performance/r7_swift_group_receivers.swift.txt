@@ -1,0 +1,54 @@
+func run(groups: [[Int]], pager: Pager, metrics: Metrics, uploads: Uploads) async throws {
+  for batch in groups {
+    // ruleid: await-in-loop-swift
+    try await withThrowingTaskGroup(of: Int.self) { tasks in
+      for item in batch { tasks.addTask { try await read(item) } }
+      for try await row in pager { consume(row) }
+    }
+  }
+  for batch in groups {
+    // ruleid: await-in-loop-swift
+    try await withThrowingTaskGroup(of: Int.self) { tasks in
+      for item in batch { tasks.addTask { try await read(item) } }
+      for try await row in tasks { consume(row) }
+    }
+  }
+  for batch in groups {
+    // ruleid: await-in-loop-swift
+    try await withThrowingTaskGroup(of: Int.self) { tasks in
+      for item in batch { tasks.addTask { try await read(item) } }
+      // ruleid: await-in-loop-swift
+      let page = try await pager.next()
+      // ruleid: await-in-loop-swift
+      try await tasks.waitForAll()
+    }
+  }
+  for batch in groups {
+    // ruleid: await-in-loop-swift
+    try await withThrowingTaskGroup(of: Int.self) { tasks in
+      for item in batch { tasks.addTask { try await read(item) } }
+      // ruleid: await-in-loop-swift
+      let total = try await tasks.reduce(0, +)
+      // ruleid: await-in-loop-swift
+      _ = try await metrics.reduce(total)
+    }
+  }
+  for batch in groups {
+    // ruleid: await-in-loop-swift
+    try await withThrowingTaskGroup(of: Int.self) { tasks in
+      for item in batch { tasks.addTask { try await read(item) } }
+      // ruleid: await-in-loop-swift
+      try await uploads.waitForAll()
+    }
+  }
+  for batch in groups {
+    // ruleid: await-in-loop-swift
+    let rows = try await withThrowingTaskGroup(of: Int.self) { tasks in
+      for item in batch { tasks.addTask { try await read(item) } }
+      // ruleid: await-in-loop-swift
+      let first = try await tasks.next()
+      return first
+    }
+    consume(rows)
+  }
+}

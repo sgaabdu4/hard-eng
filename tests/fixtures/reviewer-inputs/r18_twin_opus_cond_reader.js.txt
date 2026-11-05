@@ -1,0 +1,56 @@
+function use(x) {}
+
+// CASE while_reader expect=pass
+async function r1(it) {
+	let item;
+	while ((item = await it.read()) !== null) {
+		use(item);
+	}
+}
+
+// CASE for_reader_empty_update expect=pass
+async function r2(it) {
+	for (let item; (item = await it.read()) !== null; ) {
+		use(item);
+	}
+}
+
+// CASE for_reader_counter expect=pass
+async function r3(it) {
+	let count = 0;
+	for (let item; (item = await it.read()) !== null; count++) {
+		use(item);
+	}
+	return count;
+}
+
+// CASE for_cursor_update expect=pass
+async function r4(api) {
+	for (let c = api.start; c; c = (await api.page(c))?.next) {
+		use(c);
+	}
+}
+
+// CASE for_cursor_multi expect=pass
+async function r5(api) {
+	for (let c = api.start, n = 0; c; c = (await api.page(c))?.next, n++) {
+		use(c);
+	}
+}
+
+// CASE for_page_body_update expect=pass
+async function r6(api) {
+	for (let page = await api.first(), i = 0; page; i++) {
+		use(page);
+		page = await api.next(page);
+	}
+}
+
+// CASE while_page_body_update expect=pass
+async function r7(api) {
+	let page = await api.first();
+	while (page) {
+		use(page);
+		page = await api.next(page);
+	}
+}

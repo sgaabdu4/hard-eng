@@ -1,0 +1,10 @@
+export async function saveUntil(rows, save) {
+  for (const row of rows) {
+    let j = 0;
+    for (; j < row.name.length && row.name[j] === ' '; j++);
+    if (j > 0) break;
+  }
+  for (const row of rows) {
+    await save(row);
+  }
+}

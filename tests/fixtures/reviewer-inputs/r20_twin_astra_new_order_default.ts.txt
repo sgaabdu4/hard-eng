@@ -1,0 +1,9 @@
+export default async function inOrder<T>(
+	items: T[],
+	step: (item: T) => Promise<void>,
+	options: { reason: string },
+) {
+	for (const item of items) {
+		await step(item);
+	}
+}

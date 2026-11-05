@@ -1,0 +1,10 @@
+// CASE ts_dup_quotes_before_0 expect=fire
+export async function run<T>(items: T[], width: number, operation: (item: T) => Promise<void>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge(await operation(items[index]), await operation(items[index]));
+    }
+  }));
+}

@@ -1,0 +1,57 @@
+// CASE dart_chunk_canonical expect=pass
+Future<void> mapWithConcurrency<T>(
+  List<T> items,
+  int width,
+  Future<void> Function(T) operation,
+) async {
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    await Future.wait(group.map(operation));
+  }
+}
+
+// CASE dart_chunk_spread expect=pass
+Future<void> mapWithConcurrency<T>(
+  List<T> items,
+  int width,
+  Future<void> Function(T) operation,
+) async {
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    sink.addAll([...await Future.wait(group.map(operation))]);
+  }
+}
+
+// CASE dart_chunk_wrapped expect=pass
+Future<void> mapWithConcurrency<T>(
+  List<T> items,
+  int width,
+  Future<void> Function(T) operation,
+) async {
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    sink.addAll(await Future.wait(group.map(operation)));
+  }
+}
+
+// CASE dart_inorder_spread expect=pass
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T item) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    log([...await step(item)]);
+  }
+}
+
+// CASE dart_inorder_wrapped expect=pass
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T item) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    log(await step(item));
+  }
+}

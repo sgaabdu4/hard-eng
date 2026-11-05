@@ -1,0 +1,7 @@
+async function run(items, step) {
+ await inOrder(items, step, { reason: "Each write depends on the prior transaction" });
+ await inOrder(items, step, { reason: `Each write depends on the prior transaction` });
+ const reason = "Each write depends on the prior transaction";
+ await inOrder(items, step, { reason });
+ await inOrderSteps([step, step], { reason });
+}

@@ -1,0 +1,300 @@
+async function save(x) {}
+async function isFree(x) {
+	return x > 2;
+}
+async function more(i) {
+	return i < 3;
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// CASE one_decl_plain expect=fire
+async function a1(items) {
+	for (let i = 0; i < items.length; i++) {
+		await save(items[i]);
+	}
+}
+
+// CASE two_decl_plain expect=fire
+async function a2(items) {
+	for (let i = 0, n = items.length; i < n; i++) {
+		await save(items[i]);
+	}
+}
+
+// CASE three_decl_plain expect=fire
+async function a3(items) {
+	for (let i = 0, n = items.length, step = 1; i < n; i += step) {
+		await save(items[i]);
+	}
+}
+
+// CASE empty_init_plain expect=fire
+async function a4(items) {
+	let i = 0;
+	for (; i < items.length; i++) {
+		await save(items[i]);
+	}
+}
+
+// CASE empty_update_plain expect=fire
+async function a5(items) {
+	for (let i = 0; i < items.length; ) {
+		await save(items[i]);
+		i++;
+	}
+}
+
+// CASE var_two_decl_plain expect=fire
+async function a6(items) {
+	for (var i = 0, n = items.length; i < n; i++) {
+		await save(items[i]);
+	}
+}
+
+// CASE two_decl_braceless expect=fire
+async function a7(items) {
+	for (let i = 0, n = items.length; i < n; i++) await save(items[i]);
+}
+
+// CASE two_decl_asi_braceless expect=fire
+async function a8(items) {
+	for (let i = 0, n = items.length; i < n; i++) await save(items[i]);
+}
+
+// CASE two_decl_regex_literal expect=fire
+async function a9(names) {
+	for (let i = 0, n = names.length; i < n; i++) {
+		await save(names[i].replace(/'/g, ""));
+	}
+}
+
+// CASE two_decl_template_brace expect=fire
+async function a10(names) {
+	for (let i = 0, n = names.length; i < n; i++) {
+		await save(`{${names[i]}`);
+	}
+}
+
+// CASE two_decl_early_return expect=pass
+async function b1(ids) {
+	for (let i = 0, n = ids.length; i < n; i++) {
+		if (await isFree(ids[i])) return ids[i];
+	}
+	return -1;
+}
+
+// CASE two_decl_braced_break expect=pass
+async function b2(ids) {
+	let found = -1;
+	for (let i = 0, n = ids.length; i < n; i++) {
+		if (await isFree(ids[i])) {
+			found = ids[i];
+			break;
+		}
+	}
+	return found;
+}
+
+// CASE empty_update_reverse_return expect=pass
+async function b3(ids) {
+	for (let i = ids.length; i-- > 0; ) {
+		if (await isFree(ids[i])) return ids[i];
+	}
+	return -1;
+}
+
+// CASE two_decl_retry_sleep expect=pass
+async function b4(call) {
+	for (let attempt = 0, delay = 200; attempt < 5; attempt++, delay *= 2) {
+		try {
+			return await call();
+		} catch (e) {
+			await sleep(delay);
+		}
+	}
+	throw new Error("failed");
+}
+
+// CASE two_decl_braceless_switch expect=fire
+async function c1(events) {
+	for (let i = 0, n = events.length; i < n; i++)
+		switch (events[i].type) {
+			case "save":
+				await save(events[i]);
+				break;
+			default:
+				await save(events[i]);
+		}
+}
+
+// CASE for_of_inner_break_outer_await expect=fire
+async function c2(orders) {
+	for (const order of orders) {
+		for (const line of order.lines) {
+			if (line.void) break;
+		}
+		await save(order);
+	}
+}
+
+// CASE two_decl_inner_break_outer_await expect=fire
+async function c3(orders) {
+	for (let i = 0, n = orders.length; i < n; i++) {
+		for (const line of orders[i].lines) {
+			if (line.void) break;
+		}
+		await save(orders[i]);
+	}
+}
+
+// CASE for_of_callback_return_outer_await expect=fire
+async function c4(orders) {
+	for (const order of orders) {
+		const lines = order.lines.filter((line) => {
+			if (!line) return false;
+			return line.qty > 0;
+		});
+		await save({ order, lines });
+	}
+}
+
+// CASE two_decl_callback_return_outer_await expect=fire
+async function c5(orders) {
+	for (let i = 0, n = orders.length; i < n; i++) {
+		const lines = orders[i].lines.filter(function (line) {
+			return line.qty > 0;
+		});
+		await save(lines);
+	}
+}
+
+// CASE for_of_switch_return_is_exit expect=pass
+async function c6(events) {
+	for (const evt of events) {
+		switch (evt.type) {
+			case "stop":
+				return evt;
+			default:
+				await save(evt);
+		}
+	}
+	return null;
+}
+
+// CASE infinite_for_worker expect=pass
+async function d1(queue) {
+	for (;;) {
+		const job = await queue.next();
+		if (!job) break;
+		await save(job);
+	}
+}
+
+// CASE infinite_for_nested_per_item expect=fire
+async function d2(queue) {
+	for (;;) {
+		const batch = await queue.next();
+		for (const item of batch) {
+			await save(item);
+		}
+	}
+}
+
+// CASE while_true_nested_per_item expect=fire
+async function d3(queue) {
+	while (true) {
+		const batch = await queue.next();
+		for (const item of batch) {
+			await save(item);
+		}
+	}
+}
+
+// CASE comment_header_no_loop expect=pass
+async function e1(items) {
+	// for (let i = 0, n = items.length; i < n; i++) {
+	//   await save(items[i]);
+	// }
+	await save(items);
+}
+
+// CASE string_header_no_loop expect=pass
+async function e2(items) {
+	const doc = "for (let i = 0; i < n; i++) {";
+	await save(doc);
+}
+
+// CASE two_decl_cond_empty_body expect=fire
+async function f1() {
+	for (let i = 0, j = 1; await more(i + j); i++);
+}
+
+// CASE one_decl_update_empty_body expect=fire
+async function f2() {
+	for (let i = 0; i < 4; await save(i), i++);
+}
+
+// CASE one_decl_update_braced_body expect=fire
+async function f3() {
+	for (let i = 0; i < 4; await save(i), i++) {}
+}
+
+// CASE two_decl_nested_inner_per_item expect=fire
+async function g1(groups) {
+	for (let g = 0, n = groups.length; g < n; g++) {
+		for (const item of groups[g]) {
+			await save(item);
+		}
+	}
+}
+
+// CASE labeled_continue expect=fire
+async function g2(groups) {
+	outer: for (const group of groups) {
+		for (const item of group) {
+			if (!item) continue outer;
+			await save(item);
+		}
+	}
+}
+
+// CASE for_await_stream expect=pass
+async function h1(stream) {
+	for await (const chunk of stream) {
+		await save(chunk);
+	}
+}
+
+// CASE for_await_nested_per_item expect=fire
+async function h3(stream) {
+	for await (const chunk of stream) {
+		for (const row of chunk) {
+			await save(row);
+		}
+	}
+}
+
+// CASE nullish_assign_in_loop expect=fire
+async function i1(items, opts) {
+	for (const item of items) {
+		opts.retries ??= 3;
+		await save(item);
+	}
+}
+
+// CASE nullish_string_in_loop expect=fire
+async function i2(items) {
+	for (const item of items) {
+		await save(`${item} ??= default`);
+	}
+}
+
+// CASE lazy_cache_once expect=pass
+async function i3(items, cache) {
+	for (const item of items) {
+		cache.client ??= await connect();
+		use(cache.client, item);
+	}
+}
+async function connect() {}
+function use() {}

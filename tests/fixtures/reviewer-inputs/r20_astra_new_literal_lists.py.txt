@@ -1,0 +1,9 @@
+async def run(items):
+    a = [await load()]
+    b = [*(await load())]
+    c = [item for item in await load() if item.active]
+    d = [item for item in await load() if item.active if item.valid if item.ready if item.enabled if item.visible]
+    e = [item async for item in source()]
+    f = [await save(item) async for item in source()]
+    g = [await save(item) for item in items if item.active if item.valid if item.ready if item.enabled if item.visible]
+    return a,b,c,d,e,f,g

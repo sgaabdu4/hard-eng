@@ -1,0 +1,10 @@
+Future<void> run(items, read) async {
+ final List<List<int>> groups = items.slices(1).toList();
+ for (final batch in groups) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(batch.map(read));
+ }
+ final List<List<int>> wide = items.slices(4).toList();
+ // ruleid: await-in-loop-dart
+ for (final batch in wide) { await Future.wait(batch.map(read)); }
+}

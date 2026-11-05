@@ -1,0 +1,13 @@
+import asyncio
+
+
+async def map_with_concurrency[T](
+    items,  # source rows, operation, not a parameter
+    width,
+):
+    for offset in range(0, len(items), width):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(
+            # one barrier
+            *(operation(item) for item in items[offset : offset + width])
+        )

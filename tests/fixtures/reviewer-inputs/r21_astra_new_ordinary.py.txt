@@ -1,0 +1,15 @@
+import asyncio
+async def run(items, op):
+    for item in items:
+        try:
+            await op(item)
+        finally:
+            log(item)
+    while more():
+        match await read():
+            case value: use(value)
+    for item in items:
+        result = (await op(item), item)
+    for item in items:
+        async with lock(item):
+            use(item)

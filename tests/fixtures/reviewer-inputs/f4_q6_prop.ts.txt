@@ -1,0 +1,29 @@
+// CASE slow_start_ts expect=pass
+export async function slowStartTs(batches: string[][], op: (s: string) => Promise<void>) {
+	let width = 1;
+	for (const batch of batches) {
+		await mapLimit(batch, width, op);
+		width = Math.min(width * 2, 8);
+	}
+}
+
+// CASE ternary_debug_ts expect=pass
+export async function ternaryDebugTs(items: string[], op: (s: string) => Promise<void>, debug: boolean) {
+	const width = debug ? 1 : 4;
+	await mapLimit(items, width, op);
+}
+
+// CASE env_fallback_ts expect=pass
+export async function envFallbackTs(items: string[], op: (s: string) => Promise<void>) {
+	const width = Number(process.env.WIDTH) || 1;
+	await mapLimit(items, width, op);
+}
+
+// CASE options_reassigned_ts expect=pass
+export async function optionsReassignedTs(items: string[], op: (s: string) => Promise<void>, fast: boolean) {
+	const options = { concurrency: 1 };
+	if (fast) options.concurrency = 8;
+	await mapLimit(items, op, options);
+}
+
+declare function mapLimit(...args: unknown[]): Promise<void>;

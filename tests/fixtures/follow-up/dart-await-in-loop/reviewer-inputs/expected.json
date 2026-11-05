@@ -1,0 +1,929 @@
+{
+  "r16_opus_retained_imp.dart": {
+    "await-in-loop-dart": [
+      39,
+      40
+    ]
+  },
+  "r17_astra_formatted_new_collection_body.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_formatted_new_update_callback.dart": {},
+  "r17_astra_formatted_new_update_nested.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_new_collection_body.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_astra_new_update_callback.dart": {},
+  "r17_astra_new_update_nested.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r17_opus_dart_hdr.dart": {
+    "await-in-loop-dart": [
+      10,
+      17,
+      24,
+      31,
+      37,
+      44,
+      51,
+      58,
+      67,
+      74,
+      82,
+      88,
+      95,
+      102,
+      110,
+      121
+    ]
+  },
+  "r17_opus_formatted_dart_hdr.dart": {
+    "await-in-loop-dart": [
+      10,
+      17,
+      27,
+      35,
+      41,
+      48,
+      55,
+      62,
+      71,
+      78,
+      86,
+      92,
+      99,
+      106,
+      114,
+      125
+    ]
+  },
+  "r18_astra_confirm_multiline.dart": {
+    "await-in-loop-dart": [
+      9
+    ]
+  },
+  "r18_astra_confirm_raw_string.dart": {
+    "await-in-loop-dart": [
+      8
+    ]
+  },
+  "r18_astra_formatted_confirm_multiline.dart": {
+    "await-in-loop-dart": [
+      12
+    ]
+  },
+  "r18_astra_formatted_confirm_raw_string.dart": {
+    "await-in-loop-dart": [
+      11
+    ]
+  },
+  "r18_astra_nested_outer_single.dart": {
+    "await-in-loop-dart": [
+      7
+    ]
+  },
+  "r18_astra_new_multi_body.dart": {
+    "await-in-loop-dart": [
+      2
+    ]
+  },
+  "r18_astra_new_multiline.dart": {
+    "await-in-loop-dart": [
+      5
+    ]
+  },
+  "r18_astra_new_raw_apostrophe.dart": {
+    "await-in-loop-dart": [
+      4
+    ]
+  },
+  "r18_astra_new_raw_quote.dart": {
+    "await-in-loop-dart": [
+      4
+    ]
+  },
+  "r18_opus_cb2_named.dart": {},
+  "r18_opus_cond2_page.dart": {
+    "await-in-loop-dart": [
+      13
+    ]
+  },
+  "r18_opus_cond_reader.dart": {
+    "await-in-loop-dart": [
+      15,
+      31,
+      48
+    ]
+  },
+  "r18_opus_dart_loops.dart": {
+    "await-in-loop-dart": [
+      17,
+      24,
+      31,
+      38,
+      45,
+      51,
+      60,
+      67,
+      87,
+      92,
+      100,
+      103,
+      112,
+      115,
+      134,
+      151
+    ]
+  },
+  "r18_opus_empty_me2.dart": {
+    "await-in-loop-dart": [
+      5,
+      6
+    ]
+  },
+  "r18_opus_fmt_me.dart": {
+    "await-in-loop-dart": [
+      3,
+      4
+    ]
+  },
+  "r18_opus_helper_h.dart": {
+    "await-in-loop-dart": [
+      49
+    ]
+  },
+  "r18_twin_astra_confirm_multiline.dart": {
+    "await-in-loop-dart": [
+      12
+    ]
+  },
+  "r18_twin_astra_confirm_raw_string.dart": {
+    "await-in-loop-dart": [
+      11
+    ]
+  },
+  "r18_twin_astra_nested_outer_single.dart": {
+    "await-in-loop-dart": [
+      13
+    ]
+  },
+  "r18_twin_astra_new_multi_body.dart": {
+    "await-in-loop-dart": [
+      3
+    ]
+  },
+  "r18_twin_astra_new_multiline.dart": {
+    "await-in-loop-dart": [
+      5
+    ]
+  },
+  "r18_twin_astra_new_raw_apostrophe.dart": {
+    "await-in-loop-dart": [
+      4
+    ]
+  },
+  "r18_twin_astra_new_raw_quote.dart": {
+    "await-in-loop-dart": [
+      4
+    ]
+  },
+  "r18_twin_opus_cb2_named.dart": {},
+  "r18_twin_opus_cond2_page.dart": {
+    "await-in-loop-dart": [
+      13
+    ]
+  },
+  "r18_twin_opus_cond_reader.dart": {
+    "await-in-loop-dart": [
+      15,
+      31,
+      48
+    ]
+  },
+  "r18_twin_opus_dart_loops.dart": {
+    "await-in-loop-dart": [
+      17,
+      24,
+      31,
+      38,
+      45,
+      51,
+      60,
+      67,
+      88,
+      93,
+      101,
+      104,
+      113,
+      116,
+      138,
+      158
+    ]
+  },
+  "r18_twin_opus_empty_me2.dart": {
+    "await-in-loop-dart": [
+      4,
+      5
+    ]
+  },
+  "r18_twin_opus_helper_h.dart": {
+    "await-in-loop-dart": [
+      49
+    ]
+  },
+  "r19_opus_hdr-native_m.dart": {
+    "await-in-loop-dart": [
+      5,
+      8,
+      11,
+      14,
+      17,
+      20,
+      23,
+      26,
+      29,
+      32,
+      35,
+      38,
+      41,
+      44,
+      47,
+      50,
+      53,
+      56,
+      59,
+      62,
+      65,
+      68,
+      71,
+      74,
+      78,
+      82,
+      86,
+      90,
+      94,
+      98,
+      101,
+      104,
+      107,
+      110,
+      113,
+      116,
+      120,
+      124,
+      128,
+      132,
+      136,
+      140
+    ]
+  },
+  "r19_opus_hdrmx_m.dart": {
+    "await-in-loop-dart": [
+      5,
+      8,
+      11,
+      14,
+      17,
+      20,
+      23,
+      26,
+      29,
+      32,
+      35,
+      38,
+      41,
+      44,
+      47,
+      50,
+      53,
+      56,
+      59,
+      62,
+      65,
+      68,
+      71,
+      74,
+      78,
+      82,
+      86,
+      90,
+      94,
+      98,
+      101,
+      104,
+      107,
+      110,
+      113,
+      116,
+      120,
+      124,
+      128,
+      132,
+      136,
+      140
+    ]
+  },
+  "r19_opus_m-dart_shapes.dart": {
+    "await-in-loop-dart": [
+      8,
+      15,
+      22,
+      29,
+      37,
+      44,
+      51,
+      57,
+      64,
+      125,
+      128,
+      137,
+      140,
+      151,
+      161,
+      172,
+      190,
+      211,
+      216,
+      221,
+      228,
+      239,
+      255,
+      274
+    ]
+  },
+  "r19_opus_m-hdr_hdr.dart": {
+    "await-in-loop-dart": [
+      6,
+      13,
+      20,
+      27
+    ]
+  },
+  "r19_opus_m-hide_hide.dart": {
+    "await-in-loop-dart": [
+      7,
+      19,
+      26,
+      33,
+      43,
+      52,
+      66,
+      73
+    ]
+  },
+  "r19_opus_upd-cand_t4.dart": {
+    "await-in-loop-dart": [
+      6,
+      9,
+      12,
+      17
+    ]
+  },
+  "r19_twin_opus_hdr-native_m.dart": {
+    "await-in-loop-dart": [
+      5,
+      9,
+      13,
+      19,
+      23,
+      27,
+      33,
+      37,
+      41,
+      47,
+      51,
+      55,
+      61,
+      65,
+      69,
+      75,
+      79,
+      83,
+      89,
+      93,
+      97,
+      103,
+      107,
+      111,
+      118,
+      123,
+      128,
+      135,
+      140,
+      145,
+      151,
+      155,
+      159,
+      165,
+      169,
+      173,
+      180,
+      185,
+      190,
+      197,
+      202,
+      207
+    ]
+  },
+  "r19_twin_opus_hdrmx_m.dart": {
+    "await-in-loop-dart": [
+      5,
+      9,
+      13,
+      19,
+      23,
+      27,
+      33,
+      37,
+      41,
+      47,
+      51,
+      55,
+      61,
+      65,
+      69,
+      75,
+      79,
+      83,
+      89,
+      93,
+      97,
+      103,
+      107,
+      111,
+      118,
+      123,
+      128,
+      135,
+      140,
+      145,
+      151,
+      155,
+      159,
+      165,
+      169,
+      173,
+      180,
+      185,
+      190,
+      197,
+      202,
+      207
+    ]
+  },
+  "r19_twin_opus_m-dart_shapes.dart": {
+    "await-in-loop-dart": [
+      8,
+      15,
+      22,
+      29,
+      37,
+      44,
+      51,
+      57,
+      64,
+      126,
+      129,
+      138,
+      141,
+      152,
+      162,
+      173,
+      191,
+      212,
+      217,
+      222,
+      229,
+      240,
+      256,
+      276
+    ]
+  },
+  "r19_twin_opus_m-hdr_hdr.dart": {
+    "await-in-loop-dart": [
+      6,
+      13,
+      20,
+      27
+    ]
+  },
+  "r19_twin_opus_m-hide_hide.dart": {
+    "await-in-loop-dart": [
+      7,
+      20,
+      27,
+      34,
+      44,
+      53,
+      67,
+      74
+    ]
+  },
+  "r19_twin_opus_upd-cand_t4.dart": {
+    "await-in-loop-dart": [
+      6,
+      10,
+      17,
+      24
+    ]
+  },
+  "r20_astra_confirm_carried.dart": {
+    "await-in-loop-dart": [
+      16
+    ]
+  },
+  "r20_astra_more_prelude_list.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r20_opus_p19_headers.dart": {
+    "await-in-loop-dart": [
+      16,
+      28,
+      34,
+      38,
+      42
+    ]
+  },
+  "r20_opus_p19b_bodies.dart": {
+    "await-in-loop-dart": [
+      4
+    ]
+  },
+  "r20_opus_p19c_nested.dart": {
+    "await-in-loop-dart": [
+      4,
+      7,
+      17,
+      29
+    ]
+  },
+  "r20_twin_astra_confirm_carried.dart": {
+    "await-in-loop-dart": [
+      25
+    ]
+  },
+  "r20_twin_astra_more_prelude_list.dart": {
+    "await-in-loop-dart": [
+      6
+    ]
+  },
+  "r20_twin_opus_p19_headers.dart": {
+    "await-in-loop-dart": [
+      18,
+      32,
+      39,
+      44,
+      49
+    ]
+  },
+  "r20_twin_opus_p19b_bodies.dart": {
+    "await-in-loop-dart": [
+      4
+    ]
+  },
+  "r20_twin_opus_p19c_nested.dart": {
+    "await-in-loop-dart": [
+      4,
+      7,
+      18,
+      31
+    ]
+  },
+  "r21_opus_p20_chunk_scope.dart": {
+    "await-in-loop-dart": [
+      26,
+      43,
+      62,
+      76,
+      77,
+      108,
+      134,
+      147,
+      169
+    ]
+  },
+  "r21_opus_p20d_forms.dart": {
+    "await-in-loop-dart": [
+      47
+    ]
+  },
+  "r21_opus_p20i_callee.dart": {
+    "await-in-loop-dart": [
+      8,
+      8,
+      21,
+      21,
+      34,
+      50
+    ]
+  },
+  "r21_opus_p20o_ordered.dart": {
+    "await-in-loop-dart": [
+      4,
+      4
+    ]
+  },
+  "r21_twin_opus_p20_chunk_scope.dart": {
+    "await-in-loop-dart": [
+      26,
+      43,
+      62,
+      76,
+      77,
+      108,
+      137,
+      150,
+      173
+    ]
+  },
+  "r21_twin_opus_p20d_forms.dart": {
+    "await-in-loop-dart": [
+      56
+    ]
+  },
+  "r21_twin_opus_p20i_callee.dart": {
+    "await-in-loop-dart": [
+      13,
+      13,
+      32,
+      32,
+      51,
+      73
+    ]
+  },
+  "r21_twin_opus_p20o_ordered.dart": {
+    "await-in-loop-dart": [
+      8,
+      8
+    ]
+  },
+  "r22_astra_label-audit_r16_astra_formatted_new_update_callback.dart": {},
+  "r22_astra_label-audit_r16_astra_new_update_callback.dart": {},
+  "r22_astra_label-audit_r17_opus_cb2_named.dart": {},
+  "r22_astra_label-audit_r18_opus_m-hide_hide.dart": {
+    "await-in-loop-dart": [
+      7,
+      19,
+      26,
+      33,
+      43,
+      52,
+      66,
+      73
+    ]
+  },
+  "r22_astra_label-audit_r1_astra_probes_dart_named_callback.dart": {},
+  "r22_astra_label-audit_r20_opus_p20d_forms.dart": {
+    "await-in-loop-dart": [
+      47
+    ]
+  },
+  "r22_astra_label-audit_r2_astra_probes_dart_callback_arrow.dart": {},
+  "r22_astra_label-audit_r5_opus_q12_dart_body.dart": {
+    "await-in-loop-dart": [
+      7,
+      11,
+      17
+    ]
+  },
+  "r22_astra_new_chunk_double.dart": {
+    "await-in-loop-dart": [
+      5
+    ]
+  },
+  "r22_astra_new_chunk_template.dart": {
+    "await-in-loop-dart": [
+      5
+    ]
+  },
+  "r22_opus_p21_dart_chunk.dart": {
+    "await-in-loop-dart": [
+      15,
+      15
+    ]
+  },
+  "r22_opus_p21_dart_inorder.dart": {
+    "await-in-loop-dart": [
+      4,
+      4
+    ]
+  },
+  "r22_opus_p21_dart_worker.dart": {
+    "await-in-loop-dart": [
+      8,
+      8,
+      20,
+      20,
+      32,
+      32,
+      44,
+      56,
+      56
+    ]
+  },
+  "r22_twin_astra_label-audit_r16_astra_new_update_callback.dart": {},
+  "r22_twin_astra_label-audit_r17_opus_cb2_named.dart": {},
+  "r22_twin_astra_label-audit_r18_opus_m-hide_hide.dart": {
+    "await-in-loop-dart": [
+      7,
+      20,
+      27,
+      34,
+      44,
+      53,
+      67,
+      74
+    ]
+  },
+  "r22_twin_astra_label-audit_r1_astra_probes_dart_named_callback.dart": {},
+  "r22_twin_astra_label-audit_r20_opus_p20d_forms.dart": {
+    "await-in-loop-dart": [
+      56
+    ]
+  },
+  "r22_twin_astra_label-audit_r2_astra_probes_dart_callback_arrow.dart": {},
+  "r22_twin_astra_label-audit_r5_opus_q12_dart_body.dart": {
+    "await-in-loop-dart": [
+      8,
+      12,
+      18
+    ]
+  },
+  "r22_twin_astra_new_chunk_double.dart": {
+    "await-in-loop-dart": [
+      10
+    ]
+  },
+  "r22_twin_astra_new_chunk_template.dart": {
+    "await-in-loop-dart": [
+      10
+    ]
+  },
+  "r22_twin_opus_p21_dart_chunk.dart": {
+    "await-in-loop-dart": [
+      27,
+      27
+    ]
+  },
+  "r22_twin_opus_p21_dart_inorder.dart": {
+    "await-in-loop-dart": [
+      8,
+      8
+    ]
+  },
+  "r22_twin_opus_p21_dart_worker.dart": {
+    "await-in-loop-dart": [
+      14,
+      16,
+      38,
+      39,
+      62,
+      63,
+      83,
+      105,
+      106
+    ]
+  },
+  "r23_opus_p22s_dart_dart.dart": {
+    "await-in-loop-dart": [
+      5,
+      12,
+      19
+    ]
+  },
+  "r23_twin_opus_p22s_dart_dart.dart": {
+    "await-in-loop-dart": [
+      9,
+      21,
+      33
+    ]
+  },
+  "r24_astra_collecting_dart.dart": {
+    "await-in-loop-dart": [
+      5,
+      12,
+      19
+    ]
+  },
+  "r24_astra_new_ordered_distinct.dart": {
+    "await-in-loop-dart": [
+      3,
+      3
+    ]
+  },
+  "r24_astra_new_ordered_nested.dart": {
+    "await-in-loop-dart": [
+      3,
+      3
+    ]
+  },
+  "r24_opus_p23_dart_inorder.dart": {
+    "await-in-loop-dart": [
+      10,
+      10,
+      16,
+      16,
+      22,
+      22,
+      28,
+      28,
+      34,
+      34,
+      40,
+      40,
+      46,
+      46,
+      51,
+      51
+    ]
+  },
+  "r24_opus_p23_dart_mwc.dart": {
+    "await-in-loop-dart": [
+      15,
+      15,
+      41,
+      41
+    ]
+  },
+  "r24_twin_astra_collecting_dart.dart": {
+    "await-in-loop-dart": [
+      9,
+      21,
+      33
+    ]
+  },
+  "r24_twin_astra_new_ordered_distinct.dart": {
+    "await-in-loop-dart": [
+      7,
+      7
+    ]
+  },
+  "r24_twin_astra_new_ordered_nested.dart": {
+    "await-in-loop-dart": [
+      7,
+      7
+    ]
+  },
+  "r24_twin_opus_p23_dart_inorder.dart": {
+    "await-in-loop-dart": [
+      19,
+      19,
+      30,
+      30,
+      41,
+      41,
+      53,
+      55,
+      67,
+      67,
+      79,
+      80,
+      91,
+      91,
+      101,
+      101
+    ]
+  },
+  "r24_twin_opus_p23_dart_mwc.dart": {
+    "await-in-loop-dart": [
+      25,
+      26,
+      64,
+      64
+    ]
+  },
+  "r25_sweep_dart.dart": {
+    "await-in-loop-dart": [
+      9,
+      10,
+      23,
+      37
+    ],
+    "regex-built-in-function-dart": [
+      21
+    ]
+  },
+  "r26_sweep_dart.dart": {
+    "await-in-loop-dart": [
+      9,
+      10,
+      23,
+      37
+    ],
+    "regex-built-in-function-dart": [
+      21
+    ]
+  }
+}

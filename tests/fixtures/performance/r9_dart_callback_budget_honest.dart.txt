@@ -1,0 +1,24 @@
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  final budget = currentBudget();
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(
+      await Future.wait(
+        group.map(
+          (item) => budget == null
+              ? operation(item)
+              : withBudget(
+                  (budget ~/ width).clamp(1, budget),
+                  () => operation(item),
+                ),
+        ),
+      ),
+    );
+  }
+  return results;
+}

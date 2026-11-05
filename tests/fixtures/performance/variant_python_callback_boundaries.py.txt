@@ -1,0 +1,12 @@
+async def work(items):
+    for item in items:
+        async def callback(value=item):
+            await read(value)
+        callbacks.append(callback)
+        # ruleid: await-in-loop-python
+        await read(item)
+        async def nested(value=item):
+            for child in value.children:
+                # ruleid: await-in-loop-python
+                await read(child)
+        callbacks.append(nested)

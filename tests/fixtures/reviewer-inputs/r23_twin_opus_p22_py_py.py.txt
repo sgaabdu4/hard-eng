@@ -1,0 +1,29 @@
+# CASE py_inorder_comment_triple_quote expect=pass
+async def in_order(items, step, *, reason):
+    for item in items:
+        await step(
+            item,  # don't use """ or f"{await x}" here
+        )
+
+
+# CASE py_mwc_gather_comment_brace expect=pass
+import asyncio
+
+
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])  # it's {fine}
+        )
+
+
+# CASE py_inorder_tstring_dup expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        log(await step(item), t"{await step(item)}")
+
+
+# CASE py_inorder_fstring_dup_control expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        log(await step(item), f"{await step(item)}")

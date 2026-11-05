@@ -1,0 +1,6 @@
+function empty(items, pending) {
+	for (const item of items) {
+	}
+	while (pending) {}
+	do {} while (pending);
+}

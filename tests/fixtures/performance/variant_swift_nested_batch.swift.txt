@@ -1,0 +1,10 @@
+func work(items: [Item]) async throws {
+ for i in stride(from: 0, to: items.count, by: 4) {
+  for item in items {
+   // ruleid: await-in-loop-swift
+   try await withThrowingTaskGroup(of: Void.self) { group in
+     group.addTask { try await read(item) }
+   }
+  }
+ }
+}

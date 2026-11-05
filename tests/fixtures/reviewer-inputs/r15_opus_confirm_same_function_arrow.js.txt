@@ -1,0 +1,30 @@
+async function mapLimit(items, width, operation) {
+  for (let offset = 0; offset < items.length; offset += width) {
+    await Promise.all(items.slice(offset, offset + width).map(operation));
+  }
+}
+
+async function syncGroups(groups, operation) {
+  const width = 1;
+  const header = await mapLimit(groups.map((group) => group.name), width, operation);
+  await Promise.all(groups.map(({ items, width }) => mapLimit(items, width, operation)));
+  return header;
+}
+
+async function main() {
+  let active = 0;
+  let peak = 0;
+  let completed = 0;
+  const operation = async () => {
+    active++;
+    peak = Math.max(peak, active);
+    await Promise.resolve();
+    active--;
+    completed++;
+  };
+  const items = Array.from({ length: 8 }, (_, index) => index);
+  await Promise.all([{ items, width: 4 }].map(({ items, width }) => mapLimit(items, width, operation)));
+  console.log(JSON.stringify({ peak, completed }));
+  void syncGroups;
+}
+main();

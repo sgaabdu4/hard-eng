@@ -1,0 +1,35 @@
+async function save(x) {}
+
+// CASE js_callback_comment_for expect=pass
+async function c2(ids, register) {
+	for (const id of ids) {
+		register(async () => {
+			// Replaces for (let i = 0; i < n; i++) in the old code
+			await save(id);
+		});
+	}
+}
+
+// CASE js_toplevel_comment_for expect=pass
+async function c5() {
+	// Old code: for (let i = 0; i < n; i++)
+	await save(1);
+}
+
+// CASE js_toplevel_string_for expect=pass
+async function c6() {
+	const code = "for (let i = 0; i < n; i++) {";
+	await save(code);
+}
+
+// CASE js_word_for expect=pass
+async function c7() {
+	// Wait for (at most) one second; then retry once; if it fails, stop
+	await save(1);
+}
+
+// CASE js_word_for_text expect=pass
+async function c8(x) {
+	const msg = `Looking for (${x}); found; done`;
+	await save(msg);
+}

@@ -1,0 +1,12 @@
+import asyncio
+from collections.abc import Awaitable, Callable
+
+
+async def map_with_concurrency[T, R](
+    items: list[T], *, operation: Callable[[T], Awaitable[R]], width: int
+):
+    for offset in range(0, len(items), width):
+
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )

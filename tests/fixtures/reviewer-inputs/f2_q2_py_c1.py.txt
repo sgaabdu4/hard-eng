@@ -1,0 +1,73 @@
+import asyncio
+
+WIDTH = 1
+
+
+# CASE helper_items_op_width expect=pass
+async def map_with_concurrency(items, operation, width):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE call_items_op_one expect=fire
+async def call_items_op_one(items, save):
+    await map_with_concurrency(items, save, 1)
+
+
+# CASE call_items_op_min_one expect=fire
+async def call_items_op_min_one(items, save, n):
+    await map_with_concurrency(items, save, min(1, n))
+
+
+# CASE call_items_op_local_one expect=fire
+async def call_items_op_local_one(items, save):
+    width = 1
+    await map_with_concurrency(items, save, width)
+
+
+# CASE call_items_op_four expect=pass
+async def call_items_op_four(items, save):
+    await map_with_concurrency(items, save, 4)
+
+
+# CASE call_reassigned expect=pass
+async def call_reassigned(items, save, n):
+    width = 1
+    width = n
+    await map_with_concurrency(items, width, save)
+
+
+# CASE call_branch_one expect=pass
+async def call_branch_one(items, save, debug):
+    width = 4
+    if debug:
+        width = 1
+    await map_with_concurrency(items, width, save)
+
+
+# CASE call_param_shadows_module expect=pass
+async def call_param_shadows_module(items, save, WIDTH=4):
+    await map_with_concurrency(items, WIDTH, save)
+
+
+# CASE call_loop_var expect=pass
+async def call_loop_var(items, save):
+    for width in (2, 4, 8):
+        await map_with_concurrency(items, width, save)
+
+
+# CASE call_keyword_op_first expect=fire
+async def call_keyword_op_first(items, save):
+    await map_with_concurrency(operation=save, items=items, width=1)
+
+
+# CASE call_min_len_items expect=pass
+async def call_min_len_items(items, save):
+    await map_with_concurrency(items, min(8, len(items)), save)
+
+
+# CASE call_min_one_len expect=fire
+async def call_min_one_len(items, save):
+    await map_with_concurrency(items, min(1, len(items)), save)

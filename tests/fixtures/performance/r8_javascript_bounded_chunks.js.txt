@@ -1,0 +1,13 @@
+async function mapLimit(items, width, operation) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		await Promise.all(items.slice(offset, offset + width).map(operation));
+	}
+}
+class WrongBody {
+	async mapLimit(items, operation) {
+		for (const item of items) {
+			// ruleid: await-in-loop-javascript
+			await operation(item);
+		}
+	}
+}

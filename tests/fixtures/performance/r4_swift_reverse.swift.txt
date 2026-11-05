@@ -1,0 +1,18 @@
+func run(items: [Int]) async throws {
+ for index in stride(from: items.count-1, through: 0, by: -1) {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   group.addTask { try await save(items[index]) }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+ for index in stride(from: items.count-1, to: -1, by: -4) {
+  // ruleid: await-in-loop-swift
+  try await withThrowingTaskGroup(of: Void.self) { group in
+   group.addTask { try await save(items[index]) }
+   // ruleid: await-in-loop-swift
+   try await group.waitForAll()
+  }
+ }
+}

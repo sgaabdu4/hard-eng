@@ -1,0 +1,16 @@
+import asyncio
+
+
+async def run(groups):
+    for batch in groups:
+
+        async def save_one(item):
+            await save(item)
+            await audit(item)
+
+        await asyncio.gather(*(save_one(item) for item in batch))
+    for batch in groups:
+        try:
+            await asyncio.gather(*(save(item) for item in batch))
+        except Exception as error:
+            log(error)

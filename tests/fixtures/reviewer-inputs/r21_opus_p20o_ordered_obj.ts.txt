@@ -1,0 +1,6 @@
+// CASE ts_inorder_named_object expect=fire
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    record({ done: await step(item), audited: await audit(item) });
+  }
+}

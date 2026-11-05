@@ -1,0 +1,15 @@
+async def process(items, lock):
+    for item in items:
+        async with lock:
+            print(item)
+
+async def process_second(items, first, second):
+    for item in items:
+        async with first, second:
+            print(item)
+
+async def process_continued(items, lock):
+    for item in items:
+        async \
+            with lock:
+                print(item)

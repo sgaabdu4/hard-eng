@@ -1,0 +1,3 @@
+const worker = {async inOrder(items, step, { reason }) {
+  for (const item of items) { await step(item); }
+}};

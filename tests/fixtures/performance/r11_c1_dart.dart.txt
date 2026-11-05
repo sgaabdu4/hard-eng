@@ -1,0 +1,21 @@
+import 'dart:math' as math;
+
+void use(List<int> items, Future<void> Function(int) operation, int n) {
+  final cap = math.min(1, n);
+  // ruleid: serial-bounded-helper-dart
+  mapWithConcurrency(items, operation, maxConcurrency: 1);
+  // ruleid: serial-bounded-helper-dart
+  mapWithConcurrency(items, operation, max_concurrency: 1);
+  // ok: serial-bounded-helper-dart
+  mapWithConcurrency(items, math.min(1, n), operation);
+  // ok: serial-bounded-helper-dart
+  mapWithConcurrency(items, math.min(n, 1), operation);
+  // ok: serial-bounded-helper-dart
+  mapWithConcurrency(items, cap, operation);
+  mapWithConcurrency(items, operation, maxConcurrency: 4);
+  mapWithConcurrency(items, operation, maxConcurrency: n);
+  mapWithConcurrency(items, math.min(4, n), operation);
+  mapWithConcurrency(items, math.max(1, n), operation);
+  mapWithConcurrency(items, n + 1, operation);
+  mapWithConcurrency(items, math.min(4, n + 1), operation);
+}

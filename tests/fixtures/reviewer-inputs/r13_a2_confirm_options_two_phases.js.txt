@@ -1,0 +1,6 @@
+async function run(firstItems, secondItems, operation) {
+	const options = { concurrency: 1 };
+	await mapLimit(firstItems, operation, options);
+	options.concurrency = 4;
+	await mapLimit(secondItems, operation, options);
+}

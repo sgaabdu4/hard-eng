@@ -1,0 +1,11 @@
+typedef Step<T> = Future<void> Function(T);
+Future<void> inOrder<E>(Iterable<E> items, Step<E> step, {required String reason}) async { for (final item in items) {
+  // ruleid: await-in-loop-dart
+  await client.put(item);
+  // ruleid: await-in-loop-dart
+  await audit.save(item);
+} }
+
+Future<void> use() async {
+  await inOrder([], (value) async {}, reason: "Each update reads the previous write");
+}

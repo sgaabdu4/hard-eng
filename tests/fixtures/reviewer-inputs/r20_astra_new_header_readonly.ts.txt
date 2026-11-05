@@ -1,0 +1,5 @@
+async function load(items) {
+ for (let i=await first(), n=items.length; i<n; i++) { consume(i); }
+ for (let i=0,n=items.length; i<n; i=await advance(i), n=await size()) {}
+ for (let i=0,n=items.length; await more(i,n); i++) {}
+}

@@ -1,0 +1,43 @@
+async def sweep(items, node, cache, rows, values, defaults, sink, save):
+    for index, item in enumerate(items):
+        node.hidden = True
+        (node).value = item
+        cache[item] = item
+        (await get_cache())[item] = item
+        (await get_box()).value = item
+        first, second = rows[item]
+        [first, second] = rows[item]
+        (first, (second, third)) = rows[item]
+        first, *rest = rows[item]
+        value: int = index
+        node.count += 1
+        values[index:index + 1] = [item]
+        del cache[item]
+        options = {**defaults, "value": item}
+        copy = [*values, item]
+        sink(*values, key=item)
+        text = f"item {item!r}"
+        padded = f"{index:04d}"
+        pattern = r"[a-z]+"
+        # Don't reorder these writes.
+        await in_order([item], save, reason='Each write depends on the prior saved state')
+        @trace
+        def local(value):
+            return value
+        keys = [str(value) for value in values]
+        lookup = {value: str(value) for value in values}
+        unique = {str(value) for value in values}
+        total = sum(value for value in values)
+        if (label := cache.get(item)) is not None:
+            sink(label)
+        with open_file(item) as stream:
+            sink(stream)
+        try:
+            sink(item)
+        finally:
+            node.done = True
+        sink(**options)
+        transform = lambda value: value + 1
+        selected = item if node.ready else None
+        await save(item)
+

@@ -1,0 +1,5 @@
+const inOrderSteps = async function ordered(items, {reason}) { for (const item of items) {
+  await item();
+} };
+
+inOrderSteps([], {reason: "Each update reads the previous write"});

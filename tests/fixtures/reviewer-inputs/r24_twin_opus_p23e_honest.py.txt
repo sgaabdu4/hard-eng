@@ -1,0 +1,22 @@
+import asyncio
+
+
+# CASE py_inorder_typed expect=pass
+async def in_order[T](items: list[T], step, *, reason: str) -> None:
+    for item in items:
+        await step(item)
+
+
+# CASE py_mwc_typed expect=pass
+async def map_with_concurrency[T](items: list[T], width: int, operation) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )
+
+
+# CASE py_call_reason expect=pass
+async def migrate(rows, save):
+    await in_order(
+        rows, save, reason="Each update reads the row the previous step wrote"
+    )

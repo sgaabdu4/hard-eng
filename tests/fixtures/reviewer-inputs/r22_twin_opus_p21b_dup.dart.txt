@@ -1,0 +1,21 @@
+// CASE dart_dup_plain expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T item) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    pair(await step(item), await step(item));
+  }
+}
+
+// CASE dart_dup_two_strings expect=fire
+Future<void> inOrder<T>(
+  Iterable<T> items,
+  Future<void> Function(T item) step, {
+  required String reason,
+}) async {
+  for (final item in items) {
+    pair(await step(item), 'a', await step(item), 'b');
+  }
+}

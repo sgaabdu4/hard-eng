@@ -1,0 +1,56 @@
+// CASE a_fn_destructured_param expect=pass
+const width = 1;
+export async function runA({ items, width }) {
+  await mapLimit(items, width, save);
+}
+// CASE b_body_object_destructure expect=pass
+const width2 = 1;
+export async function runB(items, config) {
+  const { width2 } = config;
+  await mapLimit(items, width2, save);
+}
+// CASE c_body_array_destructure expect=pass
+const width3 = 1;
+export async function runC(load) {
+  const [items, width3] = await load();
+  await mapLimit(items, width3, save);
+}
+// CASE d_arrow_destructured_param expect=pass
+export async function runD(groups) {
+  const limit = 1;
+  const first = await db.find({ limit });
+  await Promise.all(groups.map(({ items, limit }) => mapLimit(items, limit, save)));
+  return first;
+}
+// CASE e_default_destructured_param expect=pass
+const width5 = 1;
+export async function runE(items, { width5 = 4 } = {}) {
+  await mapLimit(items, width5, save);
+}
+// CASE f_options_fn_destructured_param expect=pass
+const concurrency = 1;
+export async function runF({ items, concurrency }) {
+  await mapLimit(items, save, { concurrency });
+}
+// CASE g_renamed_destructure expect=pass
+const width7 = 1;
+export async function runG(items, config) {
+  const { parallel: width7 } = config;
+  await mapLimit(items, width7, save);
+}
+// CASE h_local_then_inner_fn_destructure expect=pass
+export async function runH(items, configs) {
+  const width = 1;
+  await warmup(items, width);
+  for (const config of configs) {
+    void config;
+  }
+  const process = async ({ width }) => mapLimit(items, width, save);
+  await process({ width: 4 });
+}
+// CASE control_fire expect=fire
+export async function control(items) {
+  const width = 1;
+  await mapLimit(items, width, save);
+}
+// CASE end expect=pass

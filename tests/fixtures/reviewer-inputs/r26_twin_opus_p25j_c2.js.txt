@@ -1,0 +1,7 @@
+export function firstGap(rows) {
+	for (const row of rows) {
+		let j = 0;
+		for (; j < row.length && row[j] === " "; j++);
+		if (j > 0) break;
+	}
+}

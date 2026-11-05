@@ -1,0 +1,11 @@
+import { sendItems } from './worker_receiver.js';
+const events = [];
+let connected = 0;
+await sendItems([1,2,3,4], 2, async () => {
+ const id = ++connected;
+ events.push(`connect${id}`);
+ await new Promise(resolve => setTimeout(resolve, 2));
+ return { async send(value) { events.push(`send${value}`); } };
+});
+if (connected !== 4) throw Error('Expected an extra connection await for every item');
+console.log(JSON.stringify({ connected, events }));

@@ -1,0 +1,5 @@
+export const inOrder = async (items, step, {reason}) => { for (const item of items) {
+  await step(item);
+} };
+
+inOrder([], async (value) => {}, {reason: "Each update reads the previous write"});

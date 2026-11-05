@@ -1,0 +1,10 @@
+const mapLimit = async function <T>(
+	items: T[],
+	width: number,
+	operation: (item: T) => Promise<void>,
+) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		await audit(offset);
+		await Promise.all(items.slice(offset, offset + width).map(operation));
+	}
+};

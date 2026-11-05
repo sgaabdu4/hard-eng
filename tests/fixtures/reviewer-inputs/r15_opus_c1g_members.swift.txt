@@ -1,0 +1,33 @@
+// CASE swift_top_let_vs_stored_property expect=pass
+let width = 1
+struct Importer {
+  let width: Int
+  func run(_ items: [Int]) async throws {
+    try await mapWithConcurrency(items, width, save)
+  }
+}
+// CASE swift_top_let_vs_var_property expect=pass
+let limit = 1
+final class Exporter {
+  var limit = 4
+  func run(_ items: [Int]) async throws {
+    try await mapWithConcurrency(items, limit, save)
+  }
+}
+// CASE swift_top_let_vs_computed_property expect=pass
+let concurrency = 1
+struct Pool {
+  var concurrency: Int { 4 }
+  func run(_ items: [Int]) async throws {
+    try await mapWithConcurrency(items, concurrency, save)
+  }
+}
+// CASE swift_top_let_vs_labeled_property expect=pass
+let width2 = 1
+struct Labeled {
+  let width2: Int
+  func run(_ items: [Int]) async throws {
+    try await mapWithConcurrency(items: items, width: width2, operation: save)
+  }
+}
+// CASE end expect=pass

@@ -1,0 +1,37 @@
+async function isFree(i) { return true; }
+async function sleep(ms) {}
+
+// CASE js_multi_break expect=pass
+async function b1(ids) {
+  let found = -1;
+  for (let i = 0, n = ids.length; i < n; i++) {
+    if (await isFree(ids[i])) {
+      found = ids[i];
+      break;
+    }
+  }
+  return found;
+}
+
+// CASE js_multi_sleep_tail expect=pass
+async function b2(ids) {
+  for (let i = 0, n = ids.length; i < n; i++) {
+    if (await isFree(ids[i])) return;
+    await sleep(100);
+  }
+}
+
+// CASE js_empty_update_return expect=pass
+async function b5(ids) {
+  for (let i = ids.length; i--; ) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return -1;
+}
+
+// CASE js_multi_throw expect=pass
+async function b7(ids) {
+  for (let i = 0, n = ids.length; i < n; i++) {
+    if (!(await isFree(ids[i]))) throw new Error("busy");
+  }
+}

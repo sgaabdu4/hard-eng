@@ -1,0 +1,4 @@
+# CASE py_inorder_lambda_default expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        log(await step(item), lambda v=await prep(item): v)

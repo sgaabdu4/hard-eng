@@ -1,0 +1,23 @@
+import asyncio
+
+
+async def callbacks(users, register, save):
+    for user in users:
+
+        async def callback():
+            async with asyncio.TaskGroup() as group:
+                group.create_task(save(user))
+
+        register(callback)
+
+
+async def nested(users, rows, register, save):
+    for user in users:
+
+        async def callback():
+            for row in rows:
+                # ruleid: await-in-loop-python
+                async with asyncio.TaskGroup() as group:
+                    group.create_task(save(row))
+
+        register(callback)

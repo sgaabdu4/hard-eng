@@ -1,0 +1,75 @@
+func t1(items: [Int]) async {
+  // CASE qualified_generic_unbound expect=pass
+  for item in items {
+    _Concurrency.Task<Void, Never> { await save(item) }
+  }
+}
+func t2(items: [Int]) async {
+  // CASE qualified_generic_bound_capture expect=pass
+  for item in items {
+    let task = _Concurrency.Task<Void, Never> { [item] in await save(item) }
+    tasks.append(task)
+  }
+}
+func t3(items: [Int]) async {
+  // CASE qualified_generic_handle_awaited expect=fire
+  for item in items {
+    let task = _Concurrency.Task<Void, Never> { await save(item) }
+    await task.value
+  }
+}
+func t4(items: [Int]) async {
+  // CASE qualified_generic_priority expect=pass
+  for item in items {
+    _Concurrency.Task<Void, Never>(priority: .background) { await save(item) }
+  }
+}
+func t5(items: [Int]) async throws {
+  // CASE qualified_generic_throwing_value expect=fire
+  for item in items {
+    let value = try await _Concurrency.Task<Int, Error> { try await load(item) }.value
+    use(value)
+  }
+}
+func t6(items: [Int]) async {
+  // CASE unqualified_generic_priority expect=pass
+  for item in items {
+    Task<Void, Never>(priority: .utility) { await save(item) }
+  }
+}
+func t7(items: [Int]) async {
+  // CASE qualified_generic_await_after expect=fire
+  for item in items {
+    _Concurrency.Task<Void, Never> { await save(item) }
+    await log(item)
+  }
+}
+func t8(items: [Int]) async {
+  // CASE qualified_generic_nested_loop expect=fire
+  for item in items {
+    _Concurrency.Task<Void, Never> {
+      for part in item.parts {
+        await save(part)
+      }
+    }
+  }
+}
+func t9(items: [Int]) async {
+  // CASE plain_loop expect=fire
+  for item in items {
+    await save(item)
+  }
+}
+// CASE swift_inorder expect=pass
+func inOrder<T>(_ items: [T], reason: String, _ step: (T) async throws -> Void) async rethrows {
+  for item in items {
+    try await step(item)
+  }
+}
+// CASE swift_inorder_impostor expect=fire
+func inOrder<T>(_ items: [T], reason: String, _ step: (T) async throws -> Void) async rethrows {
+  for item in items {
+    try await step(item)
+    await log(item)
+  }
+}

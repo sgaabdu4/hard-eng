@@ -1,0 +1,44 @@
+func schedule(_ items: [Int]) {
+  for item in items {
+    Task(priority: .utility) { await work(item) }
+    Task.detached(priority: .utility) { await work(item) }
+    Task(name: "background", priority: .utility, executorPreference: executor) { await work(item) }
+    Task.detached(name: "background", priority: .utility, executorPreference: executor) {
+      await work(item)
+    }
+    Task(priority: .utility, operation: { await work(item) })
+    Task.detached(priority: .utility, operation: { await work(item) })
+  }
+}
+
+func repeated(_ items: [Int], _ groups: [[Int]]) async {
+  for item in items {
+    // ruleid: await-in-loop-swift
+    await Task(priority: .utility) { await work(item) }.value
+  }
+  for group in groups {
+    Task(priority: .utility) {
+      for item in group {
+        // ruleid: await-in-loop-swift
+        await work(item)
+      }
+    }
+    Task.detached(
+      priority: .utility,
+      operation: {
+        for item in group {
+          // ruleid: await-in-loop-swift
+          await work(item)
+        }
+      })
+  }
+  for item in items {
+    Task(priority: .utility) { await work(item) }
+    // ruleid: await-in-loop-swift
+    await save(item)
+  }
+  for item in items {
+    // ruleid: await-in-loop-swift
+    Task(priority: await choosePriority(item)) { await work(item) }
+  }
+}

@@ -1,0 +1,35 @@
+Future<void> save(Object? x) async {}
+
+// CASE dart_single_named_fn expect=pass
+void a1(List<int> ids, List<Future<void> Function()> handlers) {
+  for (var i = 0; i < ids.length; i++) {
+    Future<void> job() async {
+      await save(ids[i]);
+    }
+
+    handlers.add(job);
+  }
+}
+
+// CASE dart_forin_named_fn expect=pass
+void a2(List<int> ids, List<Future<void> Function()> handlers) {
+  for (final id in ids) {
+    Future<void> job() async {
+      await save(id);
+    }
+
+    handlers.add(job);
+  }
+}
+
+// CASE dart_empty_update_named_fn expect=pass
+void a3(List<int> ids, List<Future<void> Function()> handlers) {
+  for (var i = 0; i < ids.length;) {
+    Future<void> job() async {
+      await save(ids[i]);
+    }
+
+    handlers.add(job);
+    i++;
+  }
+}

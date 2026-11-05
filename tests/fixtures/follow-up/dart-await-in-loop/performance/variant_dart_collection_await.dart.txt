@@ -1,0 +1,8 @@
+Future<void> work(items) async {
+  final list = [for (final item in items)
+    // ruleid: await-in-loop-dart
+    await read(item)];
+  final map = {for (final item in items) item:
+    // ruleid: await-in-loop-dart
+    await read(item)};
+}

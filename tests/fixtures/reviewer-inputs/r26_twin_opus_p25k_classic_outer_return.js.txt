@@ -1,0 +1,8 @@
+export function firstIndent(lines) {
+	for (let k = 0; k < lines.length; k++) {
+		let w = 0;
+		for (; w < lines[k].length && lines[k][w] === " "; w++);
+		if (w > 0) return w;
+	}
+	return 0;
+}

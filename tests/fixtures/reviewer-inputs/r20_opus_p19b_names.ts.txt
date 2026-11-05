@@ -1,0 +1,26 @@
+// CASE ts_fn_formatted expect=pass
+export async function inOrder<T>(
+  items: readonly T[],
+  step: (item: T) => Promise<void>,
+  options: { readonly reason: string },
+): Promise<void> {
+  for (const item of items) {
+    await step(item);
+  }
+}
+// CASE ts_steps_formatted expect=pass
+export async function inOrderSteps(
+  steps: ReadonlyArray<() => Promise<void>>,
+  options: { readonly reason: string },
+): Promise<void> {
+  for (const step of steps) {
+    await step();
+  }
+}
+// CASE ts_overloads expect=pass
+export async function inOrder<T>(items: T[], step: (item: T) => Promise<void>, options: Opts): Promise<void>;
+export async function inOrder<T>(items: T[], step: (item: T) => Promise<void>, options: Opts): Promise<void> {
+  for (const item of items) {
+    await step(item);
+  }
+}

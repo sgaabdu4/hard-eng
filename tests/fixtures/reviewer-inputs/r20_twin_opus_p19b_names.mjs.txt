@@ -1,0 +1,7 @@
+// CASE js_arrow_destructured expect=pass
+export const inOrder = async (items, step, { reason }) => {
+	void reason;
+	for (const item of items) {
+		await step(item);
+	}
+};

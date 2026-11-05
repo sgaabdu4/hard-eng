@@ -1,0 +1,156 @@
+// CASE prio_weak_self expect=pass
+final class A {
+  func run(_ items: [Int]) {
+    for item in items {
+      tasks.append(
+        Task(priority: .utility) { [weak self] in
+          await self?.work(item)
+        })
+    }
+  }
+}
+
+// CASE prio_mainactor expect=pass
+func f2(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task(priority: .userInitiated) { @MainActor in
+        await ui.update(item)
+      })
+  }
+}
+
+// CASE prio_mainactor_weak expect=pass
+final class B {
+  func run(_ items: [Int]) {
+    for item in items {
+      Task(priority: .utility) { @MainActor [weak self] in
+        guard let self else { return }
+        await self.work(item)
+      }
+    }
+  }
+}
+
+// CASE generic_task expect=pass
+func f4(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task<Void, Never>(priority: .utility) {
+        await work(item)
+      })
+  }
+}
+
+// CASE operation_label expect=pass
+func f5(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task(
+        priority: .utility,
+        operation: {
+          await work(item)
+        }))
+  }
+}
+
+// CASE detached_capture expect=pass
+func f6(_ items: [Int], store: Store) {
+  for item in items {
+    tasks.append(
+      Task.detached(priority: .background) { [store] in
+        await store.save(item)
+      })
+  }
+}
+
+// CASE dict_assign expect=pass
+final class C {
+  var running: [Int: Task<Void, Never>] = [:]
+  func run(_ items: [Int]) {
+    for item in items {
+      running[item] = Task(priority: .low) {
+        await work(item)
+      }
+    }
+  }
+}
+
+// CASE let_then_append expect=pass
+func f8(_ items: [Int]) {
+  for item in items {
+    let task = Task(priority: .utility) {
+      await work(item)
+    }
+    tasks.append(task)
+  }
+}
+
+// CASE group_add_priority expect=pass
+func f9(_ items: [Int]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask(priority: .utility) {
+        await work(item)
+      }
+    }
+  }
+}
+
+// CASE group_add_plain_control expect=pass
+func f9b(_ items: [Int]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask {
+        await work(item)
+      }
+    }
+  }
+}
+
+// CASE group_add_unless_cancelled_priority expect=pass
+func f10(_ items: [Int]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      _ = group.addTaskUnlessCancelled(priority: .utility) {
+        await work(item)
+      }
+    }
+  }
+}
+
+// CASE throwing_group_add_priority expect=pass
+func f11(_ items: [Int]) async throws {
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask(priority: .background) {
+        try await save(item)
+      }
+    }
+    try await group.waitForAll()
+  }
+}
+
+// CASE task_name expect=pass
+func f12(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task(name: "item-\(item)", priority: .utility) {
+        await work(item)
+      })
+  }
+}
+
+// CASE task_try_body expect=pass
+func f13(_ items: [Int]) {
+  for item in items {
+    tasks.append(
+      Task(priority: .utility) {
+        do {
+          try await save(item)
+        } catch {
+          await report(error)
+        }
+      })
+  }
+}

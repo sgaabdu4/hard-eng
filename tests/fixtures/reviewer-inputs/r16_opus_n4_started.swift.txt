@@ -1,0 +1,43 @@
+// CASE swift_task_handles_collect expect=pass
+func a(ids: [String], load: @escaping @Sendable (String) async -> Int) async -> [Int] {
+    let handles = ids.map { id in Task { await load(id) } }
+    var out: [Int] = []
+    for handle in handles {
+        out.append(await handle.value)
+    }
+    return out
+}
+
+// CASE swift_task_group_add expect=pass
+func b(ids: [String], save: @escaping @Sendable (String) async -> Void) async {
+    await withTaskGroup(of: Void.self) { group in
+        for id in ids {
+            group.addTask { await save(id) }
+        }
+    }
+}
+
+// CASE swift_task_group_collect expect=pass
+func c(ids: [String], load: @escaping @Sendable (String) async -> Int) async -> [Int] {
+    await withTaskGroup(of: Int.self) { group in
+        for id in ids {
+            group.addTask { await load(id) }
+        }
+        var out: [Int] = []
+        for await value in group {
+            out.append(value)
+        }
+        return out
+    }
+}
+
+// CASE swift_control_serial expect=fire
+func d(ids: [String], load: (String) async -> Int) async -> [Int] {
+    var out: [Int] = []
+    for id in ids {
+        out.append(await load(id))
+    }
+    return out
+}
+
+// CASE end expect=pass

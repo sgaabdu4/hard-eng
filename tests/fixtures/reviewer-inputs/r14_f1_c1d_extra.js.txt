@@ -1,0 +1,15 @@
+import { mapLimit } from "./concurrency.js";
+// CASE js_fourth_arg_const_one expect=pass
+export async function x1(items, op) {
+  const retries = 1;
+  await mapLimit(items, 4, op, retries);
+}
+// CASE js_fourth_arg_literal_one_var_width expect=pass
+export async function x2(items, op, width) {
+  await mapLimit(items, width, op, 1);
+}
+// CASE js_positional_four_named_limit_one_design expect=fire
+export async function x3(items, op) {
+  await mapLimit(items, 4, op, { limit: 1 });
+}
+// CASE js_end expect=pass

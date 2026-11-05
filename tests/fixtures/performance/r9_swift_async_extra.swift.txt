@@ -1,0 +1,16 @@
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async -> Void
+) async {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    // ruleid: await-in-loop-swift
+    await audit()
+    // ruleid: await-in-loop-swift
+    await withTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { await operation(item) }
+      }
+      // ruleid: await-in-loop-swift
+      await group.waitForAll()
+    }
+  }
+}

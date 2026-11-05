@@ -1,0 +1,5 @@
+Future<void> inOrder<T>(Iterable<T> items, Future<void> Function(T item) step, {required String reason}) async {
+ for (final item in items) {
+  consume(await step(item), await audit(item));
+ }
+}

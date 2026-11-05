@@ -1,0 +1,73 @@
+import Foundation
+
+actor Tracker {
+  var active = 0
+  var peak = 0
+  var completed = 0
+  func work(_ item: Int) async {
+    active += 1
+    peak = max(peak, active)
+    try? await Task.sleep(for: .milliseconds(40))
+    active -= 1
+    completed += 1
+  }
+  func snapshot() -> (Int, Int) { (peak, completed) }
+}
+
+final class Launcher {
+  let tracker: Tracker
+  init(tracker: Tracker) { self.tracker = tracker }
+
+  func captureList(_ items: [Int]) -> [Task<Void, Never>] {
+    var tasks: [Task<Void, Never>] = []
+    for item in items {
+      tasks.append(Task(priority: .utility) { [weak self] in
+        await self?.tracker.work(item)
+      })
+    }
+    return tasks
+  }
+}
+
+func letBinding(_ items: [Int], tracker: Tracker) -> [Task<Void, Never>] {
+  var tasks: [Task<Void, Never>] = []
+  for item in items {
+    let task = Task(priority: .utility) {
+      await tracker.work(item)
+    }
+    tasks.append(task)
+  }
+  return tasks
+}
+
+func explicitType(_ items: [Int], tracker: Tracker) -> [Task<Void, Never>] {
+  var tasks: [Task<Void, Never>] = []
+  for item in items {
+    tasks.append(Task<Void, Never>(priority: .utility) {
+      await tracker.work(item)
+    })
+  }
+  return tasks
+}
+
+func drain(_ tasks: [Task<Void, Never>]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for task in tasks {
+      group.addTask { await task.value }
+    }
+  }
+}
+
+for (name, make) in [
+  ("captureList", { (t: Tracker) in Launcher(tracker: t).captureList([1, 2, 3, 4]) }),
+  ("letBinding", { (t: Tracker) in letBinding([1, 2, 3, 4], tracker: t) }),
+  ("explicitType", { (t: Tracker) in explicitType([1, 2, 3, 4], tracker: t) }),
+] as [(String, (Tracker) -> [Task<Void, Never>])] {
+  let tracker = Tracker()
+  let launcher = Launcher(tracker: tracker)
+  let tasks = name == "captureList" ? launcher.captureList([1, 2, 3, 4]) : make(tracker)
+  await drain(tasks)
+  let (peak, completed) = await tracker.snapshot()
+  precondition(peak == 4 && completed == 4, "\(name) peak=\(peak) completed=\(completed)")
+  print("\(name) peak=\(peak), completed=\(completed)")
+}

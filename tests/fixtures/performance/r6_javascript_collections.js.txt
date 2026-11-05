@@ -1,0 +1,29 @@
+async function run(groups, read) {
+ const reason = 'Each update reads the previous write';
+ await inOrder(items, read, {reason});
+ const options = {reason};
+ // ruleid: in-order-needs-reason-javascript
+ await inOrder(items, read, options);
+ // ruleid: await-in-loop-javascript
+ for (const batch of groups) { await Promise.all(batch.filter(valid).map(read)); }
+ // ruleid: await-in-loop-javascript
+ for (const batch of groups) await Promise.all([...batch.map(read)]);
+ // ruleid: await-in-loop-javascript
+ for (const batch of groups) { await Promise.all(batch.flatMap(item => [read(item)])); }
+ // ruleid: await-in-loop-javascript
+ for (const batch of groups) { await Promise.all(Array.from(batch, read)); }
+ for (const batch of groups) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all(other.filter(valid).map(read));
+ }
+ for (const item of items) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([read(item), notify(item)]);
+ }
+ for (const batch of groups) {
+  // ruleid: await-in-loop-javascript
+  await inspect(batch);
+  // ruleid: await-in-loop-javascript
+  await Promise.all(batch.filter(valid).map(read));
+ }
+}

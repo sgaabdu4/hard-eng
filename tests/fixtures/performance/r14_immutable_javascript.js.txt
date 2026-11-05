@@ -1,0 +1,19 @@
+async function run(items, operation, config) {
+	const width = 1;
+	// ok: serial-bounded-helper-javascript
+	await mapLimit(items, width, operation);
+	// ok: serial-bounded-helper-javascript
+	const execute = () => mapLimit(items, width, operation);
+	await execute();
+	const concurrency = 1;
+	// ok: serial-bounded-helper-javascript-options
+	await mapLimit(items, operation, { concurrency });
+	let mutable = 1;
+	const deferred = () => mapLimit(items, mutable, operation);
+	mutable = 4;
+	await deferred();
+	let limit = 1;
+	({ limit } = config);
+	await mapLimit(items, operation, { limit });
+	await Promise.all(items.map((width) => mapLimit(items, width, operation)));
+}

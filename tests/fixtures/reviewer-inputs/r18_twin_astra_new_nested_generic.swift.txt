@@ -1,0 +1,7 @@
+func run(_ items: [Int]) async {
+  for item in items {
+    let task = Task<Void, Never> {
+      for row in items { await save(row) }
+    }
+  }
+}

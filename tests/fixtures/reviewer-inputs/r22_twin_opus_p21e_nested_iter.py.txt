@@ -1,0 +1,15 @@
+# CASE py_outer_loop_inner_awaited_iterable expect=fire
+async def total(companies, store):
+    total = 0
+    for company in companies:
+        for row in await store.list_rows(company):
+            total += row.amount
+    return total
+
+
+# CASE py_single_loop_awaited_iterable expect=pass
+async def single(store):
+    total = 0
+    for row in await store.list_rows("a"):
+        total += row.amount
+    return total

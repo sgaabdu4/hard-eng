@@ -1,0 +1,12 @@
+async function b1(n) {
+	// CASE var_three_body expect=fire
+	for (var i = 0, j = 0, k = 0; i < n; i++) {
+		await save(i);
+	}
+}
+async function b2(n) {
+	// CASE four_body expect=fire
+	for (let i = 0, j = 0, k = 0, l = 0; i < n; i++) {
+		await save(i);
+	}
+}

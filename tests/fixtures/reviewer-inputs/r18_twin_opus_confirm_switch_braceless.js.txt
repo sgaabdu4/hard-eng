@@ -1,0 +1,46 @@
+let active = 0;
+let peak = 0;
+const done = [];
+async function handle(evt) {
+	active += 1;
+	peak = Math.max(peak, active);
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	active -= 1;
+	done.push(evt.id);
+}
+
+// CASE braceless_switch_forof expect=fire
+async function dispatchAll(events) {
+	for (const evt of events)
+		switch (evt.type) {
+			case "save":
+				await handle(evt);
+				break;
+			default:
+				await handle(evt);
+		}
+}
+
+// CASE braceless_switch_classic expect=fire
+async function dispatchIndexed(events) {
+	for (let i = 0; i < events.length; i++)
+		switch (events[i].type) {
+			case "save":
+				await handle(events[i]);
+				break;
+			default:
+				await handle(events[i]);
+		}
+}
+
+// CASE harness expect=pass
+const events = [1, 2, 3, 4].map((id) => ({
+	id,
+	type: id % 2 ? "save" : "other",
+}));
+dispatchAll(events)
+	.then(() => dispatchIndexed(events))
+	.then(() => {
+		console.log(JSON.stringify({ peak, serial: peak === 1, done }));
+		if (peak !== 1 || done.length !== 8) process.exit(1);
+	});

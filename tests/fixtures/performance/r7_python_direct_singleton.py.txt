@@ -1,0 +1,14 @@
+import asyncio
+from itertools import batched
+
+
+async def run(items, read):
+    for batch in tuple(batched(items, 1)):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in batch))
+    for batch in list(batched(items, n=1)):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in batch))
+    for batch in tuple(batched(items, 4)):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in batch))

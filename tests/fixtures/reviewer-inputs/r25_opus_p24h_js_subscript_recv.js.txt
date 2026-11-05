@@ -1,0 +1,6 @@
+// CASE js_subscript_recv expect=fire
+export async function a(items, step, getCache) {
+  for (const item of items) {
+    (await getCache())[item] = await step(item);
+  }
+}

@@ -1,0 +1,20 @@
+async def run(items):
+    for item in await load():
+        print(item)
+    for group in items:
+        # ruleid: await-in-loop-python
+        for item in await load(group):
+            print(item)
+    for item in items:
+        def label():
+            return item.id
+        # ruleid: await-in-loop-python
+        await read(label())
+    a = {
+        # ruleid: await-in-loop-python
+        await read(item) for item in items
+    }
+    b = {item:
+        # ruleid: await-in-loop-python
+        await read(item) for item in items
+    }

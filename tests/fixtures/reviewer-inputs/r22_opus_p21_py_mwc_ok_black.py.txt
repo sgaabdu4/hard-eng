@@ -1,0 +1,10 @@
+# CASE py_mwc_black_comment expect=pass
+import asyncio
+
+
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            # don't "await" each one
+            *(operation(item) for item in items[offset : offset + width])
+        )

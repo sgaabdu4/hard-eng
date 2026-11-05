@@ -1,0 +1,172 @@
+Future<void> save(Object? x) async {}
+Future<bool> busy(int i) async => false;
+Future<bool> isFree(int i) async => true;
+Future<void> handleA(Object? e) async {}
+Future<void> handleB(Object? e) async {}
+Future<List<int>> loadRows() async => [];
+Future<int> load(int i) async => i;
+
+class Event {
+  final String type;
+  Event(this.type);
+}
+
+// CASE multi_body expect=fire
+Future<void> a1(List<int> rows) async {
+  for (var i = 0, n = rows.length; i < n; i++) {
+    await save(rows[i]);
+  }
+}
+
+// CASE reverse_empty_update expect=fire
+Future<void> a2(List<int> rows) async {
+  for (var i = rows.length - 1; i >= 0;) {
+    await save(rows[i]);
+    i--;
+  }
+}
+
+// CASE empty_body_comment_block expect=fire
+Future<void> a3() async {
+  for (var i = 0; await busy(i); i++) {
+    /* spin */
+  }
+}
+
+// CASE empty_body_line_comment expect=fire
+Future<void> a4() async {
+  for (var i = 0; await busy(i); i++) {
+    // spin
+  }
+}
+
+// CASE empty_body_semicolon_multi expect=fire
+Future<void> a5() async {
+  for (var i = 0, j = 1; await busy(i + j); i++) ;
+}
+
+// CASE multi_triple_quote expect=fire
+Future<void> a6(List<int> rows) async {
+  for (var i = 0, n = rows.length; i < n; i++) {
+    await save('''
+      Don't skip ${rows[i]}
+    ''');
+  }
+}
+
+// CASE multi_nested_interp expect=fire
+Future<void> a7(List<Map<String, String>> rows) async {
+  for (var i = 0, n = rows.length; i < n; i++) {
+    await save('${rows[i]['name']} {');
+  }
+}
+
+// CASE multi_raw_backslash expect=fire
+Future<void> a8(List<String> rows) async {
+  for (var i = 0, n = rows.length; i < n; i++) {
+    await save(rows[i].split(r'\'));
+  }
+}
+
+// CASE multi_braced_return expect=pass
+Future<int> a9(List<int> ids) async {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return -1;
+}
+
+// CASE multi_braceless_return expect=pass
+Future<int> a10(List<int> ids) async {
+  for (var i = 0, n = ids.length; i < n; i++)
+    if (await isFree(ids[i])) return ids[i];
+  return -1;
+}
+
+// CASE multi_collection_body expect=fire
+Future<List<int>> a11(List<int> ids) async {
+  return [for (var i = 0, n = ids.length; i < n; i++) await load(ids[i])];
+}
+
+// CASE single_collection_body expect=fire
+Future<List<int>> a12(List<int> ids) async {
+  return [for (var i = 0; i < ids.length; i++) await load(ids[i])];
+}
+
+// CASE switch_braceless_forin expect=fire
+Future<void> a13(List<Event> events) async {
+  for (final e in events)
+    switch (e.type) {
+      case 'a':
+        await handleA(e);
+        break;
+      default:
+        await handleB(e);
+    }
+}
+
+// CASE switch_braced_forin expect=fire
+Future<void> a14(List<Event> events) async {
+  for (final e in events) {
+    switch (e.type) {
+      case 'a':
+        await handleA(e);
+        break;
+      default:
+        await handleB(e);
+    }
+  }
+}
+
+// CASE multi_init_once expect=pass
+Future<int> a15() async {
+  var total = 0;
+  for (var rows = await loadRows(), i = 0; i < rows.length; i++) {
+    total += rows[i];
+  }
+  return total;
+}
+
+// CASE callback_nested_classic expect=fire
+Future<void> a16(
+  List<int> ids,
+  void Function(Future<void> Function()) register,
+) async {
+  for (final id in ids) {
+    register(() async {
+      for (var i = 0, n = 3; i < n; i++) {
+        await save(id + i);
+      }
+    });
+  }
+}
+
+// CASE callback_only expect=pass
+Future<void> a17(
+  List<int> ids,
+  void Function(Future<void> Function()) register,
+) async {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    register(() async {
+      await save(ids[i]);
+    });
+  }
+}
+
+// CASE multi_braceless_body expect=fire
+Future<void> a18(List<int> rows) async {
+  for (var i = 0, n = rows.length; i < n; i++) await save(rows[i]);
+}
+
+// CASE callback_comment_for expect=pass
+Future<void> a19(
+  List<int> ids,
+  void Function(Future<void> Function()) register,
+) async {
+  for (final id in ids) {
+    register(() async {
+      // Replaces for (var i = 0; i < n; i++) in the old code
+      await save(id);
+    });
+  }
+}

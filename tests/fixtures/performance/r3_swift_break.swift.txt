@@ -1,0 +1,18 @@
+func run(items: [Item]) async {
+ for item in items {
+  switch item.kind { default: break }
+  // ruleid: await-in-loop-swift
+  await save(item)
+ }
+ for item in items {
+  for child in item.children { if child.done { break } }
+  // ruleid: await-in-loop-swift
+  await save(item)
+ }
+ for item in items { await save(item); if item.done { break } }
+ for item in items {
+  switch item.kind { case .ready: break; default: print(item) }
+  // ruleid: await-in-loop-swift
+  await save(item)
+ }
+}

@@ -1,0 +1,39 @@
+// CASE swift_canonical expect=pass
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { try await operation(item) }
+      }
+      try await group.waitForAll()
+    }
+  }
+}
+
+// CASE swift_generic_comment expect=pass
+func mapWithConcurrency2<T: Sendable>(
+  items: [T], width: Int, operation: @escaping @Sendable (T) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    // One group per chunk.
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { try await operation(item) }
+      }
+      try await group.waitForAll()
+    }
+  }
+}
+
+// CASE swift_impostor_serial expect=fire
+func mapWithConcurrency3(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    for item in items[offset..<min(offset + width, items.count)] {
+      try await operation(item)
+    }
+  }
+}

@@ -1,0 +1,18 @@
+async function run(items, width) {
+ for (let start = 0; start < items.length; start += width) {
+  // ruleid: await-in-loop-javascript
+  await mapLimit(items.slice(start, start + width), 2, async item => {
+   for (const child of item.children) {
+    // ruleid: await-in-loop-javascript
+    await read(child);
+   }
+  });
+  // ruleid: await-in-loop-javascript
+  await Promise.all(items.slice(start, start + width).map(async item => {
+   for (const child of item.children) {
+    // ruleid: await-in-loop-javascript
+    await read(child);
+   }
+  }));
+ }
+}

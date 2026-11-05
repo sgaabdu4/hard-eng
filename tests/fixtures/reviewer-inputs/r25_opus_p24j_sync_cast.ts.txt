@@ -1,0 +1,11 @@
+// CASE ts_sync_loop_cast_then_async_elsewhere expect=fire
+export function mark(rows: unknown[]) {
+  for (const row of rows) {
+    (row as { seen: boolean }).seen = true;
+  }
+}
+export async function save(items: string[], put: (item: string) => Promise<void>) {
+  for (const item of items) {
+    await put(item);
+  }
+}

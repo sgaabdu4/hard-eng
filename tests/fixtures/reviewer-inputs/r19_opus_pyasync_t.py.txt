@@ -1,0 +1,22 @@
+async def f(items, s):
+    for item in items:
+        async with s.get(item):
+            pass
+    for item in items:
+        async with s.get(item) as r:
+            pass
+    for item in items:
+        with s.get(item):
+            pass
+    for item in items:
+        with s.get(item) as r:
+            pass
+    for item in items:
+        async with s.a(item) as a, s.b(item) as b:
+            pass
+    for item in items:
+        async with (
+            s.a(item) as a,
+            s.b(item) as b,
+        ):
+            pass

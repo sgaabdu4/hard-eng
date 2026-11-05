@@ -1,0 +1,6 @@
+// CASE js_member_recv expect=fire
+export async function b(items, step, getCache) {
+	for (const item of items) {
+		(await getCache()).value = await step(item);
+	}
+}

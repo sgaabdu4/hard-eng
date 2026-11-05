@@ -1,0 +1,50 @@
+// CASE ts_worker_results_typed expect=pass
+export async function mapLimit<T, R>(items: readonly T[], width: number, operation: (item: T) => Promise<R>): Promise<R[]> {
+  let next = 0;
+  const results: R[] = new Array(items.length);
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await operation(items[index]);
+      }
+    }),
+  );
+  return results;
+}
+// CASE ts_worker_void_typed expect=pass
+export async function mapLimit<T>(items: T[], width: number, operation: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        await operation(items[index]);
+      }
+    }),
+  );
+}
+// CASE ts_chunk_void_typed expect=pass
+export async function mapLimit<T>(items: T[], width: number, operation: (item: T) => Promise<void>): Promise<void> {
+  for (let offset = 0; offset < items.length; offset += width) {
+    await Promise.all(items.slice(offset, offset + width).map(operation));
+  }
+}
+// CASE ts_inorder_typed_void_reason expect=pass
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  void reason;
+  for (const item of items) {
+    await step(item);
+  }
+}
+// CASE ts_steps_typed expect=pass
+export async function inOrderSteps(steps: ReadonlyArray<() => Promise<void>>, { reason }: { reason: string }): Promise<void> {
+  void reason;
+  for (const step of steps) {
+    await step();
+  }
+}
+// CASE ts_inorder_call_with_reason expect=pass
+export async function migrate(rows: string[], save: (row: string) => Promise<void>) {
+  await inOrder(rows, save, { reason: "Each update reads the row the previous step wrote" });
+}

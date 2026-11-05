@@ -1,0 +1,8 @@
+in_order_steps([], reason="1234567890 " + "123456789")
+# ruleid: in-order-needs-reason-python
+in_order_steps([], reason="123456789 " + "123456789")
+# ruleid: in-order-needs-reason-python
+in_order_steps([], reason="abcdefghijklmnop" + "qrstuvwxyz")
+in_order_steps([], reason="Each update reads the previous write")
+# ruleid: in-order-needs-reason-python
+in_order_steps([])

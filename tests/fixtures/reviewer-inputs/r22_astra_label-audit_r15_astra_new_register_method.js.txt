@@ -1,0 +1,3 @@
+async function run(items, op, settings) {
+  for (const item of items) { register({ async run() { await op(item); } }); }
+}

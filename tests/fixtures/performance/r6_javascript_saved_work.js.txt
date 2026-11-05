@@ -1,0 +1,19 @@
+async function run(groups, read) {
+ for (const batch of groups) {
+  const tasks = batch.filter(valid).map(read);
+  // ruleid: await-in-loop-javascript
+  await Promise.all(tasks);
+ }
+ for (const batch of groups) {
+  const tasks = other.map(read);
+  // ruleid: await-in-loop-javascript
+  await Promise.all(tasks);
+ }
+ for (const batch of groups) {
+  const tasks = batch.map(read);
+  // ruleid: await-in-loop-javascript
+  await inspect(batch);
+  // ruleid: await-in-loop-javascript
+  await Promise.all(tasks);
+ }
+}

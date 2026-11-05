@@ -1,0 +1,18 @@
+async def use(items, operation, n):
+    cap = min(1, n)
+    # ruleid: serial-bounded-helper-python
+    map_with_concurrency(items, operation=operation, maxConcurrency=1)
+    # ruleid: serial-bounded-helper-python
+    map_with_concurrency(items, operation=operation, max_concurrency=1)
+    # ok: serial-bounded-helper-python
+    map_with_concurrency(items, min(1, n), operation)
+    # ok: serial-bounded-helper-python
+    map_with_concurrency(items, min(n, 1), operation)
+    # ok: serial-bounded-helper-python
+    map_with_concurrency(items, cap, operation)
+    map_with_concurrency(items, operation=operation, max_concurrency=4)
+    map_with_concurrency(items, operation=operation, max_concurrency=n)
+    map_with_concurrency(items, min(4, n), operation)
+    map_with_concurrency(items, max(1, n), operation)
+    map_with_concurrency(items, n + 1, operation)
+    map_with_concurrency(items, min(4, n + 1), operation)

@@ -1,0 +1,23 @@
+// CASE inorder_destructured_released_form expect=pass
+export async function inOrder<T>(
+	items: Iterable<T>,
+	step: (item: T) => Promise<void>,
+	{ reason }: { reason: string },
+): Promise<void> {
+	for (const item of items) {
+		await step(item);
+	}
+}
+
+// CASE inorder_interface_alias expect=pass
+interface StepsOptions {
+	reason: string;
+}
+export async function inOrderSteps(
+	steps: Array<() => Promise<void>>,
+	options: StepsOptions,
+): Promise<void> {
+	for (const step of steps) {
+		await step();
+	}
+}

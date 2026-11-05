@@ -1,0 +1,12 @@
+from collections.abc import Iterable, Callable, Awaitable
+
+
+async def other[T](items: list[T]) -> None:
+    return None
+
+
+async def in_order_steps(
+    steps: Iterable[Callable[[], Awaitable[None]]], *, reason: str
+):
+    for step in steps:
+        await step()

@@ -1,0 +1,11 @@
+List<Future<int> Function()> prepare(
+  List<int> items,
+  Future<int> Function(int) read,
+) {
+  final callbacks = <Future<int> Function()>[];
+  for (final item in items) {
+    Future<int> callback() async => await read(item);
+    callbacks.add(callback);
+  }
+  return callbacks;
+}

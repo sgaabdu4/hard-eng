@@ -1,0 +1,164 @@
+// CASE ts_canonical expect=pass
+export async function mapLimit<T>(
+  items: T[],
+  width: number,
+  operation: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        await operation(items[index]);
+      }
+    }),
+  );
+}
+
+// CASE ts_canonical_comment_in_worker expect=pass
+export async function mapLimit2<T>(
+  items: T[],
+  width: number,
+  operation: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (next < items.length) {
+        // Each worker takes the next free index.
+        const index = next++;
+        await operation(items[index]);
+      }
+    }),
+  );
+}
+
+// CASE ts_canonical_min_width expect=pass
+export async function mapLimit3<T>(
+  items: T[],
+  width: number,
+  operation: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(width, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        await operation(items[index]);
+      }
+    }),
+  );
+}
+
+// CASE ts_canonical_arrow_const expect=pass
+export const mapLimit4 = async <T,>(
+  items: T[],
+  width: number,
+  operation: (item: T) => Promise<void>,
+): Promise<void> => {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        await operation(items[index]);
+      }
+    }),
+  );
+};
+
+// CASE ts_canonical_results expect=pass
+export async function mapLimit5<T, R>(
+  items: T[],
+  width: number,
+  operation: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await operation(items[index]);
+      }
+    }),
+  );
+  return results;
+}
+
+// CASE ts_canonical_method expect=pass
+export class Pool {
+  async mapLimit<T>(items: T[], width: number, operation: (item: T) => Promise<void>): Promise<void> {
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: width }, async () => {
+        while (next < items.length) {
+          const index = next++;
+          await operation(items[index]);
+        }
+      }),
+    );
+  }
+}
+
+// CASE ts_impostor_extra_await expect=fire
+export async function mapLimit6<T>(
+  items: T[],
+  width: number,
+  operation: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        await operation(items[index]);
+        await audit(index);
+      }
+    }),
+  );
+}
+async function audit(i: number) {}
+
+// CASE ts_impostor_width_one expect=fire
+export async function serialAll<T>(items: T[], operation: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: 1 }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        await operation(items[index]);
+      }
+    }),
+  );
+}
+
+// CASE ts_impostor_serial_join expect=fire
+export async function mapLimit7<T>(
+  items: T[],
+  width: number,
+  operation: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const workers = Array.from({ length: width }, () => async () => {
+    while (next < items.length) {
+      const index = next++;
+      await operation(items[index]);
+    }
+  });
+  for (const worker of workers) {
+    await worker();
+  }
+}
+
+// CASE inorder_typed_alias expect=pass
+type InOrderOptions = { reason: string };
+export async function inOrder<T>(
+  items: Iterable<T>,
+  step: (item: T) => Promise<void>,
+  options: InOrderOptions,
+): Promise<void> {
+  for (const item of items) {
+    await step(item);
+  }
+}

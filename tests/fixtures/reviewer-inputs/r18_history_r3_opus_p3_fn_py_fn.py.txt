@@ -1,0 +1,143 @@
+import asyncio
+
+
+async def lazy_nested_outer_decl(assignments, clients):
+    blocking = None
+    for a in assignments:
+        blocking = None
+        for c in clients:
+            if blocking is None:
+                # want: await-in-loop-python
+                blocking = await active_change(c)
+        use(a, blocking)
+
+
+async def guard_condition(items):
+    for item in items:
+        # want: await-in-loop-python
+        if await is_blocked(item.id):
+            continue
+        process(item)
+
+
+async def compound_assign(items):
+    total = 0
+    for item in items:
+        # want: await-in-loop-python
+        total += await count(item.id)
+    return total
+
+
+async def append_dict(items):
+    out = []
+    for item in items:
+        # want: await-in-loop-python
+        out.append({"id": item.id, "name": await name(item.id)})
+    return out
+
+
+async def nested_header_await(groups):
+    for group in groups:
+        # want: await-in-loop-python
+        for member in await list_members(group.id):
+            sync(member)
+
+
+async def rollback_inner_loop(items):
+    created = []
+    for item in items:
+        if not check(item):
+            for done in created:
+                # want: await-in-loop-python
+                await remove(done)
+            raise ValueError("failed")
+        created.append(item.id)
+
+
+async def enumerate_loop(items):
+    for i, item in enumerate(items):
+        # want: await-in-loop-python
+        await save(i, item)
+
+
+async def per_item_reverse(items):
+    for i in reversed(range(len(items))):
+        # want: await-in-loop-python
+        await asyncio.gather(save(items[i]), audit(items[i]))
+
+
+async def per_item_minus_one(items):
+    for i in range(len(items) - 1, -1, -1):
+        # want: await-in-loop-python
+        await asyncio.gather(save(items[i]), audit(items[i]))
+
+
+async def async_with_in_loop(items, lock):
+    for item in items:
+        async with lock:
+            # want: await-in-loop-python
+            await save(item)
+
+
+async def try_finally(items):
+    for item in items:
+        try:
+            use(item)
+        finally:
+            # want: await-in-loop-python
+            await release(item)
+
+
+async def ternary(items):
+    for item in items:
+        # want: await-in-loop-python
+        v = item.value if item.cached else await load(item.id)
+        use(v)
+
+
+async def while_queue(queue):
+    while queue:
+        item = queue.pop()
+        # want: await-in-loop-python
+        await process(item)
+
+
+async def comp_four_clauses(a, b, c, d):
+    # want: await-in-loop-python
+    return [await f(w, x, y, z) for w in a for x in b for y in c for z in d]
+
+
+async def comp_filter_two(items, groups):
+    # want: await-in-loop-python
+    return [await f(x) for g in groups if g for x in g if x]
+
+
+async def gen_expr(items):
+    # want: await-in-loop-python
+    return sum([await f(x) for x in items])
+
+
+async def dict_filter(keys):
+    # want: await-in-loop-python
+    return {k: await f(k) for k in keys if k}
+
+
+async def lazy_keyed(items, cache):
+    for item in items:
+        if item.id not in cache:
+            # want: await-in-loop-python
+            cache[item.id] = await load(item.id)
+
+
+async def lazy_local_or(items):
+    for item in items:
+        row = cache.get(item.id)
+        # want: await-in-loop-python
+        row = row or await load(item.id)
+        use(row)
+
+
+async def chunk_of_one(items):
+    for batch in chunks(items, 1):
+        # want: await-in-loop-python
+        await asyncio.gather(*(save(x) for x in batch))

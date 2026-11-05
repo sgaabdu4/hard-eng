@@ -1,0 +1,95 @@
+// CASE dart_assign_control expect=pass
+Future<List<R?>> mapWithConcurrency<T, R>(List<T> items, int width, Future<R> Function(T) operation) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(List.generate(width, (_) async {
+    while (next < items.length) {
+      final index = next++;
+      results[index] = await operation(items[index]);
+    }
+  }));
+  return results;
+}
+
+// CASE dart_assign_trailing_comment expect=pass
+Future<List<R?>> mapWithConcurrency2<T, R>(List<T> items, int width, Future<R> Function(T) operation) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(List.generate(width, (_) async {
+    while (next < items.length) {
+      final index = next++;
+      results[index] = await operation(items[index]); // slot
+    }
+  }));
+  return results;
+}
+
+// CASE dart_extra_awaited_arg expect=fire
+Future<List<R?>> mapWithConcurrency3<T, R>(List<T> items, int width, Future<R> Function(T, String) operation) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(List.generate(width, (_) async {
+    while (next < items.length) {
+      final index = next++;
+      results[index] = await operation(items[index], await token());
+    }
+  }));
+  return results;
+}
+
+// CASE dart_awaited_inner_arg expect=fire
+Future<List<R?>> mapWithConcurrency4<T, R>(List<T> items, int width, Future<R> Function(T) operation) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(List.generate(width, (_) async {
+    while (next < items.length) {
+      final index = next++;
+      results[index] = await operation(await prepare(items[index]));
+    }
+  }));
+  return results;
+}
+
+// CASE dart_void_worker expect=pass
+Future<void> forEachWithConcurrency<T>(List<T> items, int width, Future<void> Function(T) operation) async {
+  var next = 0;
+  await Future.wait(List.generate(width, (_) async {
+    while (next < items.length) {
+      final index = next++;
+      await operation(items[index]);
+    }
+  }));
+}
+
+// CASE dart_width_one expect=fire
+Future<List<R?>> serialWorker<T, R>(List<T> items, Future<R> Function(T) operation) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(List.generate(1, (_) async {
+    while (next < items.length) {
+      final index = next++;
+      results[index] = await operation(items[index]);
+    }
+  }));
+  return results;
+}
+
+// CASE dart_member_op expect=pass
+Future<List<R?>> mapWithClient<T, R>(List<T> items, int width, Client<T, R> client) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(List.generate(width, (_) async {
+    while (next < items.length) {
+      final index = next++;
+      results[index] = await client.send(items[index]);
+    }
+  }));
+  return results;
+}
+
+// CASE dart_plain_loop_control expect=fire
+Future<void> plain(List<int> items) async {
+  for (final item in items) {
+    await send(item);
+  }
+}

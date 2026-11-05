@@ -1,0 +1,72 @@
+Future<bool> isFree(int i) async => true;
+Future<void> save(int i) async {}
+
+// CASE multi_break expect=pass
+Future<int> b1(List<int> ids) async {
+  var found = -1;
+  for (var i = 0, n = ids.length; i < n; i++) {
+    if (await isFree(ids[i])) {
+      found = ids[i];
+      break;
+    }
+  }
+  return found;
+}
+
+// CASE multi_delay_tail expect=pass
+Future<void> b2(List<int> ids) async {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    if (await isFree(ids[i])) return;
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+}
+
+// CASE single_return expect=pass
+Future<int> b3(List<int> ids) async {
+  for (var i = 0; i < ids.length; i++) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return -1;
+}
+
+// CASE single_break expect=pass
+Future<int> b4(List<int> ids) async {
+  var found = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (await isFree(ids[i])) {
+      found = ids[i];
+      break;
+    }
+  }
+  return found;
+}
+
+// CASE empty_update_return expect=pass
+Future<int> b5(List<int> ids) async {
+  for (var i = ids.length; i-- > 0;) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return -1;
+}
+
+// CASE multi_return_value_only expect=pass
+Future<int> b6(List<int> ids) async {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    return await isFree(ids[i]) ? ids[i] : -1;
+  }
+  return -1;
+}
+
+// CASE multi_throw expect=pass
+Future<void> b7(List<int> ids) async {
+  for (var i = 0, n = ids.length; i < n; i++) {
+    if (!await isFree(ids[i])) throw StateError('busy');
+  }
+}
+
+// CASE single_throw expect=pass
+Future<void> b8(List<int> ids) async {
+  for (var i = 0; i < ids.length; i++) {
+    if (!await isFree(ids[i])) throw StateError('busy');
+  }
+}

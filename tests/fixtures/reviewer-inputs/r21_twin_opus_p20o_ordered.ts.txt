@@ -1,0 +1,21 @@
+// CASE ts_inorder_canonical expect=pass
+export async function inOrder<T>(
+	items: Iterable<T>,
+	step: (item: T) => Promise<void>,
+	{ reason }: { reason: string },
+): Promise<void> {
+	for (const item of items) {
+		await step(item);
+	}
+}
+
+// CASE ts_inorder_two_awaits_in_call expect=fire
+export async function inOrder2<T>(
+	items: Iterable<T>,
+	step: (item: T) => Promise<void>,
+	{ reason }: { reason: string },
+): Promise<void> {
+	for (const item of items) {
+		log(await step(item), await audit(item));
+	}
+}

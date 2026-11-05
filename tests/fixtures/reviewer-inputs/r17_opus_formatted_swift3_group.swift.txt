@@ -1,0 +1,64 @@
+// CASE group_plain_await expect=pass
+func g1(_ items: [Int]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask { await work(item) }
+    }
+  }
+}
+
+// CASE group_plain_try_await expect=pass
+func g2(_ items: [Int]) async throws {
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask { try await save(item) }
+    }
+    try await group.waitForAll()
+  }
+}
+
+// CASE group_priority_await expect=pass
+func g3(_ items: [Int]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask(priority: .utility) { await work(item) }
+    }
+  }
+}
+
+// CASE group_priority_try_await expect=pass
+func g4(_ items: [Int]) async throws {
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask(priority: .utility) { try await save(item) }
+    }
+    try await group.waitForAll()
+  }
+}
+
+// CASE group_unless_cancelled_plain expect=pass
+func g5(_ items: [Int]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      _ = group.addTaskUnlessCancelled { await work(item) }
+    }
+  }
+}
+
+// CASE discarding_group_priority expect=pass
+func g6(_ items: [Int]) async {
+  await withDiscardingTaskGroup { group in
+    for item in items {
+      group.addTask(priority: .background) { await work(item) }
+    }
+  }
+}
+
+// CASE group_plain_capture expect=pass
+func g7(_ items: [Int], store: Store) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask { [store] in await store.save(item) }
+    }
+  }
+}

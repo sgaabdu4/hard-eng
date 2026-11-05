@@ -1,0 +1,8 @@
+import asyncio
+
+
+async def map_with_concurrency[T](items: list[T], width: int, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )

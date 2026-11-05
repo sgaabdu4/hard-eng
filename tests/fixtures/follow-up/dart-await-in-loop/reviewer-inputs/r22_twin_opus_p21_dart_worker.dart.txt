@@ -1,0 +1,175 @@
+// CASE dart_worker_interp_extra expect=fire
+Future<List<R>> a<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T, String) operation,
+  Future<String> Function(T) label,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await operation(
+          items[index],
+          '${await label(items[index])}',
+        );
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_worker_interp_sibling expect=fire
+Future<List<R>> b<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+  Future<String> Function(T) label,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = pick(
+          await operation(items[index]),
+          '${await label(items[index])}',
+        );
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_worker_ternary_extra expect=fire
+Future<List<R>> c<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+  Future<R> Function(T) fallback,
+  bool ok,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = ok
+            ? await operation(items[index])
+            : await fallback(items[index]);
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_worker_nested_closure_await expect=fire
+Future<List<R>> d<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T, Future<void> Function()) operation,
+  Future<void> Function(T) audit,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await operation(items[index], () async {
+          await audit(items[index]);
+        });
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_worker_dup_comment_quote expect=fire
+Future<List<R>> e<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = pick(
+          await operation(items[index]) /* it's */,
+          await operation(items[index]),
+          'x',
+        );
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_worker_honest_comment_apostrophe expect=pass
+Future<List<R>> f<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await operation(
+          /* don't "await" twice */ items[index],
+        );
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_worker_honest_formatted expect=pass
+Future<List<R>> g<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await operation(
+          // it's the only await here
+          items[index],
+        );
+      }
+    }),
+  );
+  return results.cast<R>();
+}
+
+// CASE dart_worker_cast expect=pass
+Future<List<R>> h<T, R>(
+  List<Object?> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = List<R?>.filled(items.length, null);
+  var next = 0;
+  await Future.wait(
+    List.generate(width, (_) async {
+      while (next < items.length) {
+        final index = next++;
+        results[index] = await operation(items[index] as T);
+      }
+    }),
+  );
+  return results.cast<R>();
+}

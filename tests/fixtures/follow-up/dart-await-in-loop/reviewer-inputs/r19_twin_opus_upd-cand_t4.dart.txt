@@ -1,0 +1,27 @@
+Future<void> save(Object? x) async {}
+Future<Object?> next(Object? c) async => null;
+void use(Object? a, Object? b) {}
+Future<void> u2(int n) async {
+  var i = 0;
+  for (; i < n; await save(i), i++) {}
+}
+
+Future<void> u4(int n) async {
+  for (var i = 0, j = 0, k = 0; i < n; await save(i + j + k), i++) {}
+}
+
+Future<void> u5(Object? first) async {
+  for (
+    var cursor = first, seen = 0;
+    cursor != null;
+    cursor = await next(cursor), seen++
+  ) {
+    use(cursor, seen);
+  }
+}
+
+Future<void> u6(List<int> items) async {
+  for (var i = 0, n = items.length; i < n; i++, await save(i)) {
+    use(items[i], 0);
+  }
+}

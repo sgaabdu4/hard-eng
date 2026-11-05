@@ -1,0 +1,20 @@
+Future<void> run(rows, client) async {
+ for (var row in rows) {
+  // ruleid: await-in-loop-dart
+  row = await enrich(row);
+ }
+ for (final raw in rows) {
+  var row = raw;
+  // ruleid: await-in-loop-dart
+  row = await normalize(row);
+ }
+ String? cursor;
+ for (final item in rows) {
+  cursor = await client.next(item, cursor);
+ }
+ for (final item in rows) {
+  cursor = null;
+  // ruleid: await-in-loop-dart
+  cursor = await client.next(item, cursor);
+ }
+}

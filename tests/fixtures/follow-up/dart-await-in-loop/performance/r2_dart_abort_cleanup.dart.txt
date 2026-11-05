@@ -1,0 +1,32 @@
+Future<void> run(items, int width) async {
+ for (var start = 0; start < items.length; start += width) {
+  // ruleid: await-in-loop-dart
+  final results = await Future.wait(items.skip(start).take(width).map(read));
+  if (failed(results)) {
+   await cleanup(results);
+   throw Denied();
+  }
+ }
+}
+Future<void> caught(items) async {
+ for (final item in items) {
+  try {
+   if (failed(item)) {
+    // ruleid: await-in-loop-dart
+    await cleanup(item);
+    throw Denied();
+   }
+  } catch (_) {}
+ }
+}
+Future<void> inner(items) async {
+ for (final item in items) {
+  if (failed(item)) {
+   for (final child in children) {
+    // ruleid: await-in-loop-dart
+    await cleanup(child);
+   }
+   throw Denied();
+  }
+ }
+}

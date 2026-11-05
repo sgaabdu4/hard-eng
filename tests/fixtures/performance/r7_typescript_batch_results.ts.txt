@@ -1,0 +1,25 @@
+async function run(
+	groups: Row[][],
+	other: Row[],
+	read: (item: Row) => Promise<Row>,
+) {
+	for (const batch of groups) {
+		report(batch.length);
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all<Row>(
+			batch.filter((item) => item.enabled).map(read),
+		);
+	}
+	for (const batch of groups) {
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.allSettled<Row>(
+			batch
+				.filter((item) => item.enabled && item.readyForAnotherAttempt)
+				.map(read),
+		);
+	}
+	for (const item of other) {
+		// ruleid: await-in-loop-javascript
+		const rows = await Promise.all<Row>([read(item)]);
+	}
+}

@@ -1,0 +1,17 @@
+Future<void> run(groups, read) async {
+ for (final batch in groups) {
+  final futures = batch.map(read).toList();
+  // ruleid: await-in-loop-dart
+  await Future.wait(futures, eagerError: true);
+ }
+ for (final batch in groups) {
+  final futures = batch.where(valid).map(read).toList();
+  // ruleid: await-in-loop-dart
+  await futures.wait;
+ }
+ for (final batch in groups) {
+  final futures = other.map(read).toList();
+  // ruleid: await-in-loop-dart
+  await Future.wait(futures);
+ }
+}

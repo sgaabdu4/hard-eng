@@ -1,0 +1,115 @@
+async function save(x) { return x; }
+
+// CASE awaited_iife expect=fire
+async function h1(items) {
+  for (const item of items) {
+    await (async () => {
+      await save(item);
+    })();
+  }
+}
+
+// CASE awaited_local_function expect=fire
+async function h2(items) {
+  for (const item of items) {
+    async function step() {
+      await save(item);
+    }
+    await step();
+  }
+}
+
+// CASE then_chain_awaited expect=fire
+async function h3(items) {
+  for (const item of items) {
+    await save(item).then((r) => r);
+  }
+}
+
+// CASE entries_destructure expect=fire
+async function h4(map) {
+  for (const [key, value] of Object.entries(map)) {
+    await save(key + value);
+  }
+}
+
+// CASE join_per_pass expect=fire
+async function h5(groups) {
+  for (const group of groups) {
+    await Promise.all(group.map((x) => save(x)));
+  }
+}
+
+// CASE await_inside_array_arg expect=fire
+async function h6(items) {
+  for (const item of items) {
+    use([await save(item)]);
+  }
+}
+
+// CASE ternary_await expect=fire
+async function h7(items) {
+  for (const item of items) {
+    const v = item ? await save(item) : null;
+    use(v);
+  }
+}
+
+// CASE logical_await expect=fire
+async function h8(items) {
+  for (const item of items) {
+    item && (await save(item));
+  }
+}
+
+// CASE for_each_async_not_awaited expect=pass
+function h9(items) {
+  items.forEach(async (item) => {
+    await save(item);
+  });
+}
+
+// CASE while_index expect=fire
+async function h10(items) {
+  let i = 0;
+  while (i < items.length) {
+    await save(items[i++]);
+  }
+}
+
+// CASE do_while expect=fire
+async function h11(items) {
+  let i = 0;
+  do {
+    await save(items[i]);
+  } while (++i < items.length);
+}
+
+// CASE try_finally_await expect=fire
+async function h12(items) {
+  for (const item of items) {
+    try {
+      use(item);
+    } finally {
+      await save(item);
+    }
+  }
+}
+
+// CASE await_in_template expect=fire
+async function h13(items) {
+  for (const item of items) {
+    use(`${await save(item)}`);
+  }
+}
+
+// CASE class_method_loop expect=fire
+class Repo {
+  async saveAll(items) {
+    for (const item of items) {
+      await this.save(item);
+    }
+  }
+  async save(x) {}
+}
+function use() {}

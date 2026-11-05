@@ -1,0 +1,73 @@
+// CASE braceless_if_return expect=pass
+async function e1(n) {
+	for (let i = 0; i < n; i++) if (await isFree(i)) return i;
+	return -1;
+}
+
+// CASE braceless_if_break expect=pass
+async function e2(n) {
+	let found = -1;
+	for (let i = 0; i < n; i++)
+		if (await isFree(i)) {
+			found = i;
+			break;
+		}
+	return found;
+}
+
+// CASE braced_if_return_control expect=pass
+async function e3(n) {
+	for (let i = 0; i < n; i++) {
+		if (await isFree(i)) return i;
+	}
+	return -1;
+}
+
+// CASE braceless_for_of_if_return expect=pass
+async function e4(ids) {
+	for (const id of ids) if (await isFree(id)) return id;
+	return null;
+}
+
+// CASE braceless_if_throw expect=pass
+async function e5(n) {
+	for (let i = 0; i < n; i++) if (await isBad(i)) throw new Error("bad");
+}
+
+// CASE braceless_sleep expect=pass
+async function e6(n) {
+	for (let i = 0; i < n; i++) await sleep(100);
+}
+
+// CASE braced_sleep_poll_control expect=pass
+async function e7(n) {
+	for (let i = 0; i < n; i++) {
+		if (await ready()) return true;
+		await sleep(100);
+	}
+	return false;
+}
+
+// CASE braceless_try_return expect=pass
+async function e8(urls) {
+	for (let i = 0; i < urls.length; i++)
+		try {
+			return await fetchOne(urls[i]);
+		} catch (e) {
+			last = e;
+		}
+	throw last;
+}
+
+// CASE braced_try_return_control expect=pass
+async function e9(urls) {
+	let last;
+	for (let i = 0; i < urls.length; i++) {
+		try {
+			return await fetchOne(urls[i]);
+		} catch (e) {
+			last = e;
+		}
+	}
+	throw last;
+}

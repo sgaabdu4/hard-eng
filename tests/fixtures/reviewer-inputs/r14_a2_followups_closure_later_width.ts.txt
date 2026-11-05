@@ -1,0 +1,6 @@
+async function run(items, op) {
+  let width = 1;
+  const execute = () => mapLimit(items, width, op);
+  width = 4;
+  await execute();
+}

@@ -1,0 +1,6 @@
+Future<void> run(items, step) async {
+ final serial = order.inOrder;
+ // ruleid: in-order-needs-reason-dart
+ await serial(items, step, reason: '');
+ await serial(items, step, reason: 'Each update reads the previous write');
+}
