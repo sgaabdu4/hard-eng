@@ -446,7 +446,7 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
         options = {s for a in actions for s in a.option_strings if s.startswith("--")}
         assert options - {"--help", "--dry-run"} == flags, name
         assert ("--dry-run" in options) == (
-            name in ("comment", "move", "label", "upload", "update", "detach")
+            name in ("comment", "move", "label", "upload", "update", "detach", "new")
         )
     assert set(first_cells(parts["`trello.json`"])) == set(mods.config.FIELDS)
     assert tuple(first_cells(parts["`check` report"])) == mods.report.FIELDS
