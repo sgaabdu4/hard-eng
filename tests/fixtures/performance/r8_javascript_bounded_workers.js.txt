@@ -1,0 +1,19 @@
+async function mapLimit(items, width, operation) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				await operation(items[index]);
+			}
+		}),
+	);
+}
+class WrongBody {
+	async mapLimit(items, operation) {
+		for (const item of items) {
+			// ruleid: await-in-loop-javascript
+			await operation(item);
+		}
+	}
+}

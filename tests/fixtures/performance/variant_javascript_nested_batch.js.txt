@@ -1,0 +1,8 @@
+async function work(items) {
+ for (let i=0; i<items.length; i+=4) {
+  for (const item of items) {
+   // ruleid: await-in-loop-javascript
+   await Promise.all([read(item), other(item)]);
+  }
+ }
+}

@@ -1,0 +1,10 @@
+export function skipAll(s) {
+	let i = 0;
+	while (i < s.length) {
+		let j = i;
+		for (; j < s.length && s[j] !== ","; j++);
+		i = j + 1;
+		if (i > 100) break;
+	}
+	return i;
+}

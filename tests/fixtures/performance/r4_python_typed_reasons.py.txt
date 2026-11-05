@@ -1,0 +1,11 @@
+from typing import Final
+REASON_A: Final = 'Each update reads the previous write'
+REASON_B: str = 'Each update reads the previous write'
+REASON_C: Final[str] = 'Each update reads the previous write'
+SHORT: Final[str] = 'too short'
+async def run(items, step):
+    await in_order(items, step, reason=REASON_A)
+    await in_order(items, step, reason=REASON_B)
+    await in_order_steps([step], reason=REASON_C)
+    # ruleid: in-order-needs-reason-python
+    await in_order(items, step, reason=SHORT)

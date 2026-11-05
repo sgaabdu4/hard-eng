@@ -1,0 +1,19 @@
+async function run(items, write) {
+ const ready = Promise.resolve([]);
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce(async (previous, item) => { await previous; return write(item); }, ready);
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce(async function (previous, item, index) { await previous; return write(item, index); }, seed());
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce(async (previous, item) => [...await previous, await write(item)], Promise.resolve([]));
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce((previous, item, index) => previous.then(() => write(item, index)).finally(() => {}), ready);
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce((previous, item) => { return previous.then(() => write(item)); }, seed());
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce(function (previous, item, index) { return previous.then(() => write(item, index)); }, ready);
+ // ruleid: hidden-sequential-loop-javascript
+ await items.reduce(async (previous, item, index) => { await previous; await write(item, index); }, Promise.resolve());
+ await items.reduce(async (previous, item) => { const work = write(item); await previous; return work; }, ready);
+ items.reduce((previous, item) => previous + item, 0);
+}

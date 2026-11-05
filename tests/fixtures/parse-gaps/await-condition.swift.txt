@@ -1,0 +1,5 @@
+func work(items: [String]) async throws {
+  for item in items {
+    if try await blocked(item) { throw Denied() }
+  }
+}

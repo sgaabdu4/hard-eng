@@ -1,0 +1,10 @@
+async function run(groups: number[][], read: (x: number) => Promise<number[]>) {
+ // ruleid: await-in-loop-javascript
+ for (const batch of groups) { await Promise.all<number[]>(batch.map(read)); }
+ // ruleid: await-in-loop-javascript
+ for (const batch of groups) await Promise.allSettled<number[]>(batch.filter(valid).map(read));
+ for (const item of items) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all<number[]>([read(item)]);
+ }
+}

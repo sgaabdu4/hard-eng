@@ -1,0 +1,23 @@
+async function run(users, width) {
+ for (const user of uniqBy(users, 'email')) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([save(user), notify(user)]);
+ }
+ const batches = partition(users, width);
+ // ruleid: await-in-loop-javascript
+ for (const batch of batches) { await Promise.allSettled(batch.map(save)); }
+ // ruleid: await-in-loop-javascript
+ for (const batch of makeCHUNKS(users, width)) { await Promise.all(batch.map(save)); }
+ for (const batch of batches) {
+  for (const user of batch) {
+   // ruleid: await-in-loop-javascript
+   await Promise.allSettled([save(user), notify(user)]);
+  }
+ }
+ // ruleid: await-in-loop-javascript
+ for (let i = users.length; i > 0; i -= width) { await Promise.all(users.slice(Math.max(0,i-width),i).map(save)); }
+ for (let i = users.length; i > 0; i -= 1) {
+  // ruleid: await-in-loop-javascript
+  await Promise.all([save(users[i-1])]);
+ }
+}

@@ -1,0 +1,14 @@
+async def run(items):
+    keys = {
+        # ruleid: await-in-loop-python
+        await key(item): item for item in items
+    }
+    selected = [item for item in items if
+        # ruleid: await-in-loop-python
+        await keep(item)]
+    values = {item for item in items if
+        # ruleid: await-in-loop-python
+        await keep(item)}
+    indexed = {item: item for item in items if
+        # ruleid: await-in-loop-python
+        await keep(item)}

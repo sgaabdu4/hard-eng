@@ -1,0 +1,35 @@
+async function run(items, save, base, width) {
+	await mapLimit(items, 4, save, 1);
+	// ruleid: serial-bounded-helper-javascript
+	await mapLimit(items, 1, save, 4);
+	// ruleid: serial-bounded-helper-javascript
+	await mapLimit(items, 1, save, "4");
+	// ruleid: serial-bounded-helper-javascript
+	await mapLimit(items, 1, save, 4.5);
+	// ok: serial-bounded-helper-javascript
+	await pool.mapLimit(items, save, 1);
+	const local = 1;
+	// ok: serial-bounded-helper-javascript
+	await mapLimit(items, save, local);
+	// ruleid: serial-bounded-helper-javascript-options
+	await mapLimit(items, save, { concurrency: 1, label: "Syncing..." });
+	// ruleid: serial-bounded-helper-javascript-options
+	await mapLimit(items, save, { concurrency: 1, metadata: { ...base } });
+	// ruleid: serial-bounded-helper-javascript-options
+	await mapLimit(items, save, { concurrency: 1, metadata: { concurrency: 4 } });
+	// ruleid: serial-bounded-helper-javascript-options
+	await mapLimit({ ...base }, save, { concurrency: 1 });
+	await mapLimit(items, save, { concurrency: 1, ...base });
+	await mapLimit(items, save, { ...base, concurrency: 1 });
+	await mapLimit(items, save, { concurrency: 1, concurrency: 4 });
+	await mapLimit(items, save, { concurrency: 4, concurrency: 1 });
+	const options = { concurrency: 1 };
+	await mapLimit(items, save, options);
+	Object.assign(options, { concurrency: 4 });
+	await mapLimit(items, save, options);
+	await mapLimit(items, 1, save, { width: 4 });
+	// ruleid: serial-bounded-helper-javascript-options
+	await mapLimit(items, 4, save, { width: 1 });
+	await mapLimit(items, Math.min(1, width), save);
+	await mapLimit(items, Math.min(4, width), save);
+}

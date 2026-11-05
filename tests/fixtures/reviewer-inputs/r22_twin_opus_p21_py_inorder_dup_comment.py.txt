@@ -1,0 +1,8 @@
+# CASE py_inorder_duplicate_comment_quote expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        pair(
+            await step(item),  # it's
+            await step(item),
+            "x",
+        )

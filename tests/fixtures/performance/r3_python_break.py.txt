@@ -1,0 +1,11 @@
+async def run(items):
+    for item in items:
+        for child in item.children:
+            if child.done:
+                break
+        # ruleid: await-in-loop-python
+        await save(item)
+    for item in items:
+        await save(item)
+        if item.done:
+            break

@@ -1,0 +1,12 @@
+func run(items: [Int], width: Int) async throws {
+ for outer in stride(from: 0, to: items.count, by: width) {
+  for start in stride(from: outer, to: min(outer+width, items.count), by: 2) {
+   // ruleid: await-in-loop-swift
+   try await withThrowingTaskGroup(of: Void.self) { group in
+    group.addTask { try await read(items[start]) }
+    // ruleid: await-in-loop-swift
+    try await group.waitForAll()
+   }
+  }
+ }
+}

@@ -1,0 +1,62 @@
+from app.concurrency import map_with_concurrency
+
+
+# CASE py_tuple_unpack expect=pass
+async def w1(items, save, parse, config):
+    width = 1
+    width, retries = parse(config)
+    await map_with_concurrency(items, save, width, retries=retries)
+
+
+# CASE py_augmented expect=pass
+async def w2(items, save, extra):
+    width = 1
+    width += extra
+    await map_with_concurrency(items, save, width)
+
+
+# CASE py_nonlocal_write expect=pass
+async def w3(items, save, settings):
+    width = 1
+
+    def apply():
+        nonlocal width
+        width = settings.width
+
+    apply()
+    await map_with_concurrency(items, save, width)
+
+
+# CASE py_for_target expect=pass
+async def w4(items, save, widths):
+    width = 1
+    for width in widths:
+        if width > 4:
+            break
+    await map_with_concurrency(items, save, width)
+
+
+# CASE py_walrus expect=pass
+async def w5(items, save, config):
+    width = 1
+    if (configured := config.get("width")) is not None:
+        width = configured
+    await map_with_concurrency(items, save, width)
+
+
+# CASE py_with_as expect=pass
+async def w6(items, save, open_settings):
+    width = 1
+    with open_settings() as width:
+        pass
+    await map_with_concurrency(items, save, width)
+
+
+# CASE py_star_unpack expect=pass
+async def w7(items, save, values):
+    width = 1
+    width, *rest = values
+    await map_with_concurrency(items, save, width)
+
+
+# CASE py_end expect=pass

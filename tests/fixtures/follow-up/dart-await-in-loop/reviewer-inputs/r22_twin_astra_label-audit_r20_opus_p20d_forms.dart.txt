@@ -1,0 +1,110 @@
+// CASE top_level_generic expect=pass
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+class Pool {
+  // CASE static_method expect=pass
+  static Future<List<R>> mapWithConcurrency<T, R>(
+    List<T> items,
+    int width,
+    Future<R> Function(T) operation,
+  ) async {
+    final results = <R>[];
+    for (var offset = 0; offset < items.length; offset += width) {
+      final group = items.skip(offset).take(width);
+      results.addAll(await Future.wait(group.map((item) => operation(item))));
+    }
+    return results;
+  }
+
+  // CASE instance_method_typed_list expect=pass
+  Future<List<R>> mapWithConcurrency2<T, R>(
+    List<T> items,
+    int width,
+    Future<R> Function(T) operation,
+  ) async {
+    final List<R> results = [];
+    for (int offset = 0; offset < items.length; offset += width) {
+      final group = items.skip(offset).take(width);
+      results.addAll(
+        await Future.wait<R>(group.map((item) async => await operation(item))),
+      );
+    }
+    return results;
+  }
+}
+
+extension ConcurrentMap<T> on List<T> {
+  // CASE extension_method expect=pass
+  Future<List<R>> mapWithConcurrency<R>(
+    int width,
+    Future<R> Function(T) operation,
+  ) async {
+    final results = <R>[];
+    for (var offset = 0; offset < length; offset += width) {
+      final group = skip(offset).take(width);
+      results.addAll(await Future.wait(group.map(operation)));
+    }
+    return results;
+  }
+}
+
+// CASE non_generic_dynamic expect=pass
+Future<List<dynamic>> mapWithConcurrency3(
+  List<dynamic> items,
+  int width,
+  Future<dynamic> Function(dynamic) operation,
+) async {
+  final results = <dynamic>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE doc_comment_and_assert expect=pass
+/// Runs [operation] over [items], [width] at a time.
+Future<List<R>> mapWithConcurrency4<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  assert(width > 0, 'width must be positive');
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE block_body_return_await expect=pass
+Future<List<R>> mapWithConcurrency5<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(
+      await Future.wait(
+        group.map((item) async {
+          return await operation(item);
+        }),
+      ),
+    );
+  }
+  return results;
+}

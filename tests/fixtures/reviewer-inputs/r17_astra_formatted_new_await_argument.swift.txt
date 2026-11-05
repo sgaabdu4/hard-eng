@@ -1,0 +1,5 @@
+func work(_ items: [Int]) async {
+  for item in items {
+    tasks.append(Task(priority: await priority(item)) { await save(item) })
+  }
+}

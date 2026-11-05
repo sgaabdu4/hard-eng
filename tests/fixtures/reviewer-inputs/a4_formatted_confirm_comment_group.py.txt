@@ -1,0 +1,9 @@
+import asyncio
+
+
+async def map_with_concurrency[T](items, width, operation):
+    for offset in range(0, len(items), width):
+        async with asyncio.TaskGroup() as group:
+            for item in items[offset : offset + width]:
+                # The group owns each operation.
+                group.create_task(operation(item))

@@ -1,0 +1,12 @@
+Future<void> work(items, client) async {
+  var total = 0;
+  for (final item in items) {
+    total = await client.add(total,
+      // ruleid: await-in-loop-dart
+      await client.get(item),
+    );
+  }
+  for (final item in items) {
+    total = await writeAndEcho(item, total);
+  }
+}

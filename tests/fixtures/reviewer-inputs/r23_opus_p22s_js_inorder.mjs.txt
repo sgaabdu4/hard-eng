@@ -1,0 +1,35 @@
+// CASE js_inorder_canonical expect=pass
+export async function inOrder(items, step, { reason }) {
+  void reason;
+  for (const item of items) {
+    await step(item);
+  }
+}
+// CASE js_inorder_wrapped expect=pass
+export async function inOrder(items, step, { reason }) {
+  void reason;
+  for (const item of items) {
+    log(await step(item));
+  }
+}
+// CASE js_inorder_spread expect=pass
+export async function inOrder(items, step, { reason }) {
+  void reason;
+  for (const item of items) {
+    log(...await step(item));
+  }
+}
+// CASE js_inorder_spread_space expect=pass
+export async function inOrder(items, step, { reason }) {
+  void reason;
+  for (const item of items) {
+    log(... await step(item));
+  }
+}
+// CASE js_steps_spread expect=pass
+export async function inOrderSteps(steps, { reason }) {
+  void reason;
+  for (const step of steps) {
+    log(...await step());
+  }
+}

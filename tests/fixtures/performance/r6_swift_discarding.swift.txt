@@ -1,0 +1,14 @@
+func run(groups: [[Int]]) async throws {
+ for batch in groups {
+  // ruleid: await-in-loop-swift
+  await withDiscardingTaskGroup { group in
+   for item in batch { group.addTask { await save(item) } }
+  }
+ }
+ for batch in groups {
+  // ruleid: await-in-loop-swift
+  try await withThrowingDiscardingTaskGroup { group in
+   for item in batch { group.addTask { try await save(item) } }
+  }
+ }
+}

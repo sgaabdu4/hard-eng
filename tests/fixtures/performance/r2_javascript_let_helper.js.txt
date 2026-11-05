@@ -1,0 +1,16 @@
+let inOrder = async (items, step, {reason}) => {
+ for (const item of items) { await step(item); }
+};
+inOrder(items, step, {reason: "Each update reads the previous write"});
+async function inOrderSteps(steps) {
+ for (const step of steps) {
+
+  await step();
+ }
+}
+// ruleid: in-order-needs-reason-javascript
+inOrderSteps(steps);
+var inOrderSteps = async (steps, {reason}) => {
+ for (const step of steps) { await step(); }
+};
+inOrderSteps([step], {reason: "Each stage reads the previous stage output"});

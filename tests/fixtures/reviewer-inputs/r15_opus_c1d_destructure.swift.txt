@@ -1,0 +1,30 @@
+// CASE swift_for_tuple_shadow expect=pass
+func forTuple(_ plans: [(items: [Int], width: Int)]) async throws {
+  let width = 1
+  try await probe(width)
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    for (items, width) in plans {
+      group.addTask { try await mapWithConcurrency(items, width, save) }
+    }
+    try await group.waitForAll()
+  }
+}
+// CASE swift_closure_shorthand_params expect=pass
+func closureParams(_ plans: [Plan]) async throws {
+  let width = 1
+  try await probe(width)
+  try await run(plans) { items, width in
+    try await mapWithConcurrency(items, width, save)
+  }
+}
+// CASE swift_tuple_let_inner expect=pass
+func tupleLet(_ items: [Int], _ config: Config) async throws {
+  let width = 1
+  try await probe(width)
+  do {
+    let (width, retries) = config.parsed()
+    _ = retries
+    try await mapWithConcurrency(items, width, save)
+  }
+}
+// CASE end expect=pass

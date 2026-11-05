@@ -1,0 +1,23 @@
+let active = 0;
+let peak = 0;
+async function work(id) {
+  active += 1;
+  peak = Math.max(peak, active);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  active -= 1;
+  return id * 2;
+}
+
+async function saveAll(ids) {
+  const out = [];
+  for (let i = 0, n = ids.length; i < n; i++) {
+    out.push(await work(ids[i]));
+  }
+  return out;
+}
+
+const started = Date.now();
+const result = await saveAll([1, 2, 3, 4]);
+const elapsed = Date.now() - started;
+if (peak !== 1 || elapsed < 110) throw new Error(`peak=${peak} elapsed=${elapsed}`);
+console.log(JSON.stringify({ peak, serial: elapsed >= 110, result }));

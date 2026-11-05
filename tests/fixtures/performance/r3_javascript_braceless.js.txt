@@ -1,0 +1,10 @@
+async function run(items, read) {
+ // ruleid: await-in-loop-javascript
+ for (const item of items) await read(item);
+ for (const item of items)
+  // ruleid: await-in-loop-javascript
+  await read(item);
+ // ruleid: await-in-loop-javascript
+ for (let i = 0; i < items.length; i++) await read(items[i]);
+ for (const item of await load()) print(item);
+}

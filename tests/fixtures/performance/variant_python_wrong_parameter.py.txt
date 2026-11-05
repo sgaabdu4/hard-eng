@@ -1,0 +1,4 @@
+async def in_order(items, stepper, *, reason):
+    for item in items:
+        # ruleid: await-in-loop-python
+        await step(item)

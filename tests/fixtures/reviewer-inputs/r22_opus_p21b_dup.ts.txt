@@ -1,0 +1,60 @@
+// CASE dup_plain expect=fire
+export async function dup_plain<T>(items: T[], width: number, operation: (item: T) => Promise<number>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge(await operation(items[index]), await operation(items[index]));
+    }
+  }));
+}
+// CASE dup_comment_only expect=fire
+export async function dup_comment_only<T>(items: T[], width: number, operation: (item: T) => Promise<number>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge(await operation(items[index]) /* it's */, await operation(items[index]));
+    }
+  }));
+}
+// CASE dup_comment_and_string expect=fire
+export async function dup_comment_and_string<T>(items: T[], width: number, operation: (item: T) => Promise<number>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge(await operation(items[index]) /* it's */, await operation(items[index]), 'x');
+    }
+  }));
+}
+// CASE dup_two_strings expect=fire
+export async function dup_two_strings<T>(items: T[], width: number, operation: (item: T) => Promise<number>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge(await operation(items[index]), 'a', await operation(items[index]), 'b');
+    }
+  }));
+}
+// CASE dup_dq_strings expect=fire
+export async function dup_dq_strings<T>(items: T[], width: number, operation: (item: T) => Promise<number>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge(await operation(items[index]), "it's", await operation(items[index]), "x");
+    }
+  }));
+}
+// CASE extra_two_strings expect=fire
+export async function extra_two_strings<T>(items: T[], width: number, operation: (item: T) => Promise<number>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      merge(await operation(items[index]), 'a', await audit(items[index]), 'b');
+    }
+  }));
+}

@@ -1,0 +1,13 @@
+import asyncio
+from lazy_member_tuple import visit
+
+loads = []
+
+async def load_settings(item):
+    loads.append(item)
+    return {"current": item}
+
+result = asyncio.run(visit([1, 2, 3], load_settings))
+assert loads == [1]
+assert result == {"current": 3}
+print("Three items, exactly one settings load")

@@ -1,0 +1,22 @@
+// CASE swift_top_let_vs_property_implicit_self expect=pass
+let width = 1
+struct Importer {
+  let width: Int
+  func run(_ items: [Int]) async throws {
+    try await mapWithConcurrency(items, width, save)
+  }
+}
+// CASE swift_top_let_vs_local_var expect=pass
+let limit = 1
+func localVar(_ items: [Int], _ config: Config) async throws {
+  var limit = config.limit
+  limit += 1
+  try await mapWithConcurrency(items, limit, save)
+}
+// CASE swift_top_let_vs_guard_let expect=pass
+let concurrency = 1
+func guardLet(_ items: [Int], _ config: Config) async throws {
+  guard let concurrency = config.concurrency else { return }
+  try await mapWithConcurrency(items, concurrency, save)
+}
+// CASE end expect=pass

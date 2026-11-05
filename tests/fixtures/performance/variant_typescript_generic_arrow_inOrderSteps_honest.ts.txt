@@ -1,0 +1,5 @@
+export const inOrderSteps = async <E,>(items: (() => Promise<void>)[], {reason}: Options): Promise<void> => { for (const item of items) {
+  await item();
+} };
+
+inOrderSteps([], {reason: "Each update reads the previous write"});

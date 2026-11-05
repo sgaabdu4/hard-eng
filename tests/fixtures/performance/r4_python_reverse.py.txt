@@ -1,0 +1,7 @@
+async def run(items):
+    for index in range(len(items)-1, -1, -1):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(save(items[index]), notify(items[index]))
+    for index in range(len(items), 0, -4):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(save(item) for item in items[index-4:index]))

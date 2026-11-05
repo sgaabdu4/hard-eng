@@ -1,0 +1,11 @@
+// CASE ts_inorder_template_extra expect=fire
+export async function inOrder<T>(
+	items: T[],
+	step: (item: T, tag: string) => Promise<void>,
+	{ reason }: { reason: string },
+) {
+	void reason;
+	for (const item of items) {
+		log(await step(item), `${await label(item)}`);
+	}
+}

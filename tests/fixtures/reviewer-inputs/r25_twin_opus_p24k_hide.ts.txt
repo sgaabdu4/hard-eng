@@ -1,0 +1,14 @@
+export function hideAll(nodes: NodeListOf<Element>) {
+	for (const node of nodes) {
+		(node as HTMLElement).style.display = "none";
+	}
+}
+
+export async function saveAll(
+	items: string[],
+	put: (item: string) => Promise<void>,
+) {
+	for (const item of items) {
+		await put(item);
+	}
+}

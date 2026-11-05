@@ -1,0 +1,64 @@
+// CASE js_fn expect=pass
+export async function inOrder(items, step, options) {
+	for (const item of items) {
+		await step(item);
+	}
+}
+
+// CASE js_fn_destructured expect=pass
+export async function inOrderSteps(steps, { reason }) {
+	void reason;
+	for (const step of steps) {
+		await step();
+	}
+}
+
+// CASE js_arrow expect=pass
+export const inOrder2 = async (items, step, { reason }) => {
+	void reason;
+	for (const item of items) {
+		await step(item);
+	}
+};
+
+// CASE js_arrow_named expect=pass
+const inOrder = async (items, step, _options) => {
+	for (const item of items) {
+		await step(item);
+	}
+};
+
+// CASE js_default expect=pass
+export default async function inOrder(items, step, options) {
+	for (const item of items) {
+		await step(item);
+	}
+}
+
+// CASE js_object_method expect=pass
+export const sequence = {
+	async inOrder(items, step, options) {
+		for (const item of items) {
+			await step(item);
+		}
+	},
+};
+
+// CASE js_impostor_extra expect=fire
+export async function inOrder(items, step, options) {
+	for (const item of items) {
+		await step(item);
+		await notify(item);
+	}
+}
+
+// CASE js_impostor_try expect=fire
+export async function inOrder(items, step, options) {
+	for (const item of items) {
+		try {
+			await step(item);
+		} catch (error) {
+			await report(error);
+		}
+	}
+}

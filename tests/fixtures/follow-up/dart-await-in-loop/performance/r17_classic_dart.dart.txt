@@ -1,0 +1,21 @@
+Future<void> repeated(dynamic items) async {
+  // ruleid: await-in-loop-dart
+  for (var i = 0; i < 4; await save(i), i++) {}
+  // ruleid: await-in-loop-dart
+  for (var i = 0; await more(i); i++) ;
+  for (var i = 0, n = items.length, last = n - 1; i < n; i++) {
+    // ruleid: await-in-loop-dart
+    await save(items[i]);
+  }
+  var i = 0;
+  for (; i < items.length; i++) {
+    // ruleid: await-in-loop-dart
+    await save(items[i]);
+  }
+  for (var i = items.length; i-- > 0;) {
+    // ruleid: await-in-loop-dart
+    await save(items[i]);
+  }
+  for (var i = 0; i < 4; handlers.add(() async => await save(i)), i++) {}
+  for (var i = 0; i < 4; i++) {}
+}

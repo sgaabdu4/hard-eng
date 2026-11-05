@@ -1,0 +1,76 @@
+// CASE prelude_serial_loop expect=fire
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  for (final item in items) {
+    await validate(item);
+  }
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE prelude_serial_loop_any_name expect=fire
+Future<List<Row>> syncRows(
+  List<Row> rows,
+  int width,
+  Future<Row> Function(Row) upload,
+) async {
+  final results = <Row>[];
+  for (final row in rows) {
+    await db.lock(row.id);
+  }
+  for (var offset = 0; offset < rows.length; offset += width) {
+    final group = rows.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(upload)));
+  }
+  return results;
+}
+
+// CASE prelude_while_loop expect=fire
+Future<List<R>> mapInChunks<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  var page = 0;
+  while (page < 3) {
+    await warm(page);
+    page++;
+  }
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE prelude_sync_loop expect=pass
+Future<List<R>> mapInChunks2<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  for (final item in items) {
+    check(item);
+  }
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE plain_loop_control expect=fire
+Future<void> control(List<int> items) async {
+  for (final item in items) {
+    await validate(item);
+  }
+}

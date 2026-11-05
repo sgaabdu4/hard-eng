@@ -1,0 +1,8 @@
+async function inOrderSteps(items, {reason}) { for (const item of items) {
+  // ruleid: await-in-loop-javascript
+  await client.put(item);
+  // ruleid: await-in-loop-javascript
+  await audit.save(item);
+} }
+
+inOrderSteps([], {reason: "Each update reads the previous write"});

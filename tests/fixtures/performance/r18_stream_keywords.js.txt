@@ -1,0 +1,20 @@
+async function stream(source, items) {
+  for await (const item of source) {
+    await save(item);
+    for (const child of items) {
+      // ruleid: await-in-loop-javascript
+      await save(child);
+    }
+  }
+  for (const item of items) {
+    // ruleid: await-in-loop-javascript
+    await save(item);
+  }
+  await ready(); for (const item of items) {
+    // ruleid: await-in-loop-javascript
+    await save(item);
+  }
+  for /* stream */ await (const item of source) {
+    await save(item);
+  }
+}

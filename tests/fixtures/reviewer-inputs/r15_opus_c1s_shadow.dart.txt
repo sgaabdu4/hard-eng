@@ -1,0 +1,54 @@
+// CASE dart_top_const_param_shadow expect=pass
+const width = 1;
+Future<void> runParam(List<int> items, int width) async {
+  await mapWithConcurrency(items, width, save);
+}
+// CASE dart_top_const_named_default_shadow expect=pass
+const concurrency = 1;
+Future<void> runNamed(List<int> items, {int concurrency = 4}) async {
+  await mapWithConcurrency(items, concurrency, save);
+}
+// CASE dart_local_final_closure_param_shadow expect=pass
+Future<void> closureParam(List<Plan> plans) async {
+  final limit = 1;
+  await probe(limit);
+  await Future.wait(plans.map((plan) async {
+    final limit = plan.limit;
+    await mapWithConcurrency(plan.items, limit, save);
+  }));
+}
+// CASE dart_inner_block_shadow expect=pass
+Future<void> innerBlock(List<int> items, Config config) async {
+  final width = 1;
+  await probe(width);
+  if (config.parallel) {
+    final width = config.width;
+    await mapWithConcurrency(items, width, save);
+  }
+}
+// CASE dart_for_in_shadow expect=pass
+Future<void> forIn(List<int> items, List<int> widths) async {
+  final width = 1;
+  await probe(width);
+  await Future.wait([
+    for (final width in widths) mapWithConcurrency(items, width, save),
+  ]);
+}
+// CASE dart_method_param_shadow expect=pass
+final limit2 = 1;
+class Importer {
+  Future<void> run(List<int> items, int limit2) async {
+    await mapWithConcurrency(items, limit2, save);
+  }
+}
+// CASE dart_named_arg_param_shadow expect=pass
+const width3 = 1;
+Future<void> namedShadow(List<int> items, int width3) async {
+  await mapWithConcurrency(items, save, width: width3);
+}
+// CASE dart_control_fire expect=fire
+Future<void> control(List<int> items) async {
+  final width = 1;
+  await mapWithConcurrency(items, width, save);
+}
+// CASE end expect=pass

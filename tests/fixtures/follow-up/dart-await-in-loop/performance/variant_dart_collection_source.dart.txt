@@ -1,0 +1,24 @@
+Future<void> work() async {
+  final list = [for (final item in await items()) item.id];
+  final map = {for (final item in await items()) item.id: item};
+  for (final item in await items()) {
+    // ruleid: await-in-loop-dart
+    await read(item);
+  }
+}
+
+class Batches {
+  static const width = 4;
+  static const one = 1;
+
+  Future<void> work(items) async {
+    for (var i = 0; i < items.length; i += width) {
+      // ruleid: await-in-loop-dart
+      await Future.wait([read(items[i]), other(items[i])]);
+    }
+    for (var i = 0; i < items.length; i += one) {
+      // ruleid: await-in-loop-dart
+      await Future.wait([read(items[i]), other(items[i])]);
+    }
+  }
+}

@@ -1,0 +1,7 @@
+// CASE local_object_ellipsis_label expect=fire
+export async function localDots(items: string[], op: (s: string) => Promise<void>) {
+	const options = { concurrency: 1, label: "Syncing..." };
+	await mapLimit(items, op, options);
+}
+
+declare function mapLimit<T>(...args: unknown[]): Promise<void>;

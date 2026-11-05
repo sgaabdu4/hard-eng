@@ -1,0 +1,13 @@
+final saved = <int>[];
+Future<void> save(int index) async {
+  saved.add(index);
+}
+
+Future<void> main() async {
+  final rows = [
+    for (var index = 0; index < 4; await save(index), index++) index,
+  ];
+  if (saved.join(',') != '0,1,2,3' || rows.length != 4)
+    throw StateError('$saved');
+  print('saved=$saved, rows=$rows');
+}

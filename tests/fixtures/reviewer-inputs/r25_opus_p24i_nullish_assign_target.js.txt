@@ -1,0 +1,6 @@
+// CASE js_nullish_receiver expect=fire
+export async function fill(owner, items, step) {
+  for (const item of items) {
+    (owner.cache ??= {})[item] = await step(item);
+  }
+}

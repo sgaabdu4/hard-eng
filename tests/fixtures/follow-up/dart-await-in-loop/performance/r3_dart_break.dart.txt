@@ -1,0 +1,19 @@
+Future<void> run(items) async {
+ for (final item in items) {
+  switch (item.kind) { case 'a':
+   // ruleid: await-in-loop-dart
+   await save(item); break;
+  }
+ }
+ for (final item in items) {
+  for (final child in item.children) { if (child.done) break; }
+  // ruleid: await-in-loop-dart
+  await save(item);
+ }
+ for (final item in items) { await save(item); if (item.done) break; }
+ for (final item in items) {
+  switch (item.kind) { default: break; }
+  // ruleid: await-in-loop-dart
+  await save(item);
+ }
+}

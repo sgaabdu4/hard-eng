@@ -1,0 +1,120 @@
+import asyncio
+
+import helpers
+
+SERIAL = 1
+
+
+# CASE helper_items_op_width_kwonly expect=pass
+async def map_with_concurrency(items, operation, width, *, retries=3):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE third_one_with_keyword expect=fire
+async def third_one_with_keyword(items, save):
+    await map_with_concurrency(items, save, 1, retries=5)
+
+
+# CASE first_one_with_keyword expect=fire
+async def first_one_with_keyword(items, save):
+    await map_with_concurrency(1, items, save, retries=5)
+
+
+# CASE third_local_min_one expect=fire
+async def third_local_min_one(items, save, n):
+    width = min(1, n)
+    await map_with_concurrency(items, save, width)
+
+
+# CASE third_module_const expect=fire
+async def third_module_const(items, save):
+    await map_with_concurrency(items, save, SERIAL)
+
+
+# CASE third_annotated_local expect=fire
+async def third_annotated_local(items, save):
+    width: int = 1
+    await map_with_concurrency(items, save, width)
+
+
+# CASE second_annotated_local expect=fire
+async def second_annotated_local(items, save):
+    width: int = 1
+    await map_with_concurrency(items, width, save)
+
+
+# CASE four_positional_retries expect=pass
+async def four_positional_retries(items, save):
+    await map_with_concurrency(items, 4, save, 1)
+
+
+# CASE module_third_one expect=fire
+async def module_third_one(items, save):
+    await helpers.map_with_concurrency(items, save, 1)
+
+
+# CASE module_third_min expect=fire
+async def module_third_min(items, save, n):
+    await helpers.map_with_concurrency(items, save, min(n, 1, len(items)))
+
+
+# CASE third_four expect=pass
+async def third_four(items, save):
+    await map_with_concurrency(items, save, 4)
+
+
+# CASE third_param expect=pass
+async def third_param(items, save, width):
+    await map_with_concurrency(items, save, width)
+
+
+# CASE kw_width_min_three expect=fire
+async def kw_width_min_three(items, save, n):
+    await map_with_concurrency(items, save, width=min(n, len(items), 1))
+
+
+# CASE kw_first_then_positional_none expect=fire
+async def kw_all(items, save):
+    await map_with_concurrency(operation=save, width=1, items=items)
+
+
+# CASE third_one_lambda_op expect=fire
+async def third_one_lambda(items, save):
+    await map_with_concurrency(items, lambda item: save(item), 1)
+
+
+# CASE third_one_formatted expect=fire
+async def third_one_formatted(items, save):
+    await map_with_concurrency(
+        items,
+        save,
+        1,
+    )
+
+
+# CASE kw_local_one expect=fire
+async def kw_local_one(items, save):
+    width = 1
+    await map_with_concurrency(items, save, width=width)
+
+
+# CASE kw_module_const expect=fire
+async def kw_module_const(items, save):
+    await map_with_concurrency(items, save, limit=SERIAL)
+
+
+# CASE kw_local_reassigned expect=pass
+async def kw_local_reassigned(items, save, fast):
+    width = 1
+    if fast:
+        width = 8
+    await map_with_concurrency(items, save, width=width)
+
+
+# CASE third_local_reassigned expect=pass
+async def third_local_reassigned(items, save, fast):
+    width = 1
+    if fast:
+        width = 8
+    await map_with_concurrency(items, save, width)

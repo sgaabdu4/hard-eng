@@ -1,0 +1,87 @@
+// CASE js_while_index_increment expect=fire
+export async function a(items) {
+  let i = 0;
+  while (i < items.length) {
+    await save(items[i]);
+    i++;
+  }
+}
+// CASE js_while_index_inline expect=fire
+export async function b(items) {
+  let i = 0;
+  while (i < items.length) await save(items[i++]);
+}
+// CASE js_do_while_index expect=fire
+export async function c(items) {
+  let i = 0;
+  do {
+    await save(items[i]);
+  } while (++i < items.length);
+}
+// CASE js_labeled_for_of expect=fire
+export async function d(items) {
+  outer: for (const item of items) {
+    await save(item);
+    if (item.last) break outer;
+  }
+}
+// CASE js_await_variable expect=fire
+export async function e(items) {
+  for (const item of items) {
+    const pending = save(item);
+    await pending;
+  }
+}
+// CASE js_iife expect=fire
+export async function f(items) {
+  for (const item of items) {
+    await (async () => save(item))();
+  }
+}
+// CASE js_then_chain_in_loop expect=fire
+export function g(items) {
+  let chain = Promise.resolve();
+  for (const item of items) {
+    chain = chain.then(() => save(item));
+  }
+  return chain;
+}
+// CASE js_while_shift_queue expect=fire
+export async function h(items) {
+  const queue = [...items];
+  while (queue.length > 0) {
+    const item = queue.shift();
+    await save(item);
+  }
+}
+// CASE js_for_index_classic expect=fire
+export async function k(items) {
+  for (let i = 0; i < items.length; i++) {
+    await save(items[i]);
+  }
+}
+// CASE js_entries_destructure expect=fire
+export async function m(items) {
+  for (const [index, item] of items.entries()) {
+    await save(item, index);
+  }
+}
+// CASE js_object_entries expect=fire
+export async function n(map) {
+  for (const [key, value] of Object.entries(map)) {
+    await save(key, value);
+  }
+}
+// CASE js_switch_case expect=fire
+export async function o(items) {
+  for (const item of items) {
+    switch (item.kind) {
+      case "a":
+        await save(item);
+        break;
+      default:
+        break;
+    }
+  }
+}
+// CASE end expect=pass

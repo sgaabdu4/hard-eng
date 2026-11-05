@@ -1,0 +1,7 @@
+// CASE swift_cast_member expect=fire
+final class Box { var value = 0 }
+func fill(items: [Int], holder: AnyObject, step: (Int) async -> Int) async {
+  for item in items {
+    (holder as! Box).value = await step(item)
+  }
+}

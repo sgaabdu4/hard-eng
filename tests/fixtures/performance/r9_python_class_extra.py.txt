@@ -1,0 +1,14 @@
+import asyncio
+
+
+class Pool:
+    @classmethod
+    async def map_with_concurrency(cls, items, width, operation):
+        """Run bounded operations."""
+        for offset in range(0, len(items), width):
+            # ruleid: await-in-loop-python
+            await audit()
+            # ruleid: await-in-loop-python
+            await asyncio.gather(
+                *(operation(item) for item in items[offset : offset + width])
+            )

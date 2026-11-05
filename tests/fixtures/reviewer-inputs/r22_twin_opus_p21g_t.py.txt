@@ -1,0 +1,4 @@
+# CASE py_inorder_trailing_comment_await expect=pass
+async def in_order(items, step, *, reason):
+    for item in items:
+        await step(item)  # don't await anything else; it's "serial"

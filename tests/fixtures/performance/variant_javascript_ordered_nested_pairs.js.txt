@@ -1,0 +1,10 @@
+async function work() {
+await inOrder(items, async (item) => {
+ callbacks.push(async () => {
+ // ruleid: sequential-awaits-javascript
+ const first = await users.get(item);
+ const second = await orders.get(item);
+ print(first, second);
+ });
+ }, {reason: "Each update reads the previous write"});
+}

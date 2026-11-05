@@ -1,0 +1,10 @@
+type Client = { send(value: number): Promise<void> };
+export async function sendItems(items: number[], width: number, connect: () => Promise<Client>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await (await connect()).send(items[index]!);
+    }
+  }));
+}

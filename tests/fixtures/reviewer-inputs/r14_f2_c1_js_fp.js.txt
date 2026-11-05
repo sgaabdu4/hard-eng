@@ -1,0 +1,115 @@
+import { mapLimit } from "./concurrency.js";
+// CASE js_let_branch_braceless expect=pass
+export async function a1(items, op, fast) {
+  let width = 1;
+  if (fast) width = 8;
+  await mapLimit(items, width, op);
+}
+// CASE js_let_branch_braced expect=pass
+export async function a2(items, op, fast) {
+  let width = 1;
+  if (fast) {
+    width = 8;
+  }
+  await mapLimit(items, width, op);
+}
+// CASE js_let_try_read expect=pass
+export async function a3(items, op, readWidth) {
+  let width = 1;
+  try {
+    width = await readWidth();
+  } catch {
+    // keep default
+  }
+  await mapLimit(items, width, op);
+}
+// CASE js_let_loop_max expect=pass
+export async function a4(items, op, configs) {
+  let width = 1;
+  for (const config of configs) {
+    width = Math.max(width, config.width);
+  }
+  await mapLimit(items, width, op);
+}
+// CASE js_let_while_double expect=pass
+export async function a5(items, op, target) {
+  let width = 1;
+  while (width < target) width *= 2;
+  await mapLimit(items, width, op);
+}
+// CASE js_let_switch expect=pass
+export async function a6(items, op, mode) {
+  let width = 1;
+  switch (mode) {
+    case "fast":
+      width = 8;
+      break;
+    default:
+      break;
+  }
+  await mapLimit(items, width, op);
+}
+// CASE js_let_destructure_write expect=pass
+export async function a7(items, op, config) {
+  let width = 1;
+  if (config) ({ width } = config);
+  await mapLimit(items, width, op);
+}
+// CASE js_let_plus_equals expect=pass
+export async function a8(items, op, extra) {
+  let width = 1;
+  width += extra;
+  await mapLimit(items, width, op);
+}
+// CASE js_default_param expect=pass
+export async function a9(items, op, width = 1) {
+  await mapLimit(items, width, op);
+}
+// CASE js_default_destructured_param expect=pass
+export async function a10(items, op, { concurrency = 1 } = {}) {
+  await mapLimit(items, op, { concurrency });
+}
+// CASE js_nested_retry_limit expect=pass
+export async function a12(items, op) {
+  await mapLimit(items, op, { concurrency: 4, retry: { limit: 1 } });
+}
+// CASE js_positional_width_nested_retry expect=pass
+export async function a13(items, op) {
+  await mapLimit(items, 4, op, { retry: { limit: 1 } });
+}
+// CASE js_positional_one_quoted_override expect=pass
+export async function a14(items, op) {
+  await mapLimit(items, 1, op, { "concurrency": 4 });
+}
+// CASE js_positional_one_shorthand_override expect=pass
+export async function a15(items, op) {
+  const concurrency = 4;
+  await mapLimit(items, 1, op, { concurrency });
+}
+// CASE js_positional_one_spread_then_override expect=pass
+export async function a16(items, op, base) {
+  await mapLimit(items, 1, op, { ...base, concurrency: 4 });
+}
+// CASE js_two_int_literals expect=pass
+export async function a17(items, op) {
+  await mapLimit(items, 4, op, 1);
+}
+// CASE js_options_let_branch expect=pass
+export async function a18(items, op, fast) {
+  let concurrency = 1;
+  if (fast) concurrency = 8;
+  await mapLimit(items, op, { concurrency });
+}
+// CASE js_options_spread_after expect=pass
+export async function a19(items, op, overrides) {
+  await mapLimit(items, op, { concurrency: 1, ...overrides });
+}
+// CASE js_callback_literal_one expect=pass
+export async function a20(items, save) {
+  await mapLimit(items, 4, (item) => save(item, 1));
+}
+// CASE js_slice_one expect=pass
+export async function a21(items, op) {
+  await mapLimit(items.slice(1), 4, op);
+}
+// CASE js_end expect=pass

@@ -1,0 +1,9 @@
+func run(items: [Int]) async throws {
+ for item in items { if failed(item) { try await cleanup(item); throw Denied() } }
+ for item in items {
+  do { if failed(item) {
+   // ruleid: await-in-loop-swift
+   try await cleanup(item); throw Denied()
+  } } catch {}
+ }
+}

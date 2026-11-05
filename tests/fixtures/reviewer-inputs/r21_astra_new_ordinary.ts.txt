@@ -1,0 +1,8 @@
+async function run(items, op) {
+ for(const item of items) { try { await op(item); } finally { log(item); } }
+ for(const item of items) switch(item.kind) { case 'a': await op(item); break; default: break; }
+ for(const item of items) { const callback = async () => { await op(item); }; use(callback); }
+ for(const item of items) { const result = await (async () => op(item))(); }
+ for(let i = await start(); i < items.length; i++) { use(i); }
+ for(let i = 0; await more(i); i++) { use(i); }
+}

@@ -1,0 +1,7 @@
+import asyncio
+
+
+# CASE py_chunk_literal_one expect=fire
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), 1):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + 1]))

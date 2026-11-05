@@ -1,0 +1,17 @@
+import asyncio
+
+
+# CASE width_first_helper expect=pass
+async def map_with_concurrency(width, items, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE width_first_call_one expect=fire
+async def width_first_call_one(items, save):
+    await map_with_concurrency(1, items, save)
+
+
+# CASE op_first_call_one expect=fire
+async def op_first_call_one(items, save):
+    await map_with_concurrency(save, items, 1)

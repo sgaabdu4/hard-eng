@@ -1,0 +1,17 @@
+// CASE js_worker_spread_push_single expect=pass
+export async function a(items, width, operation, out) {
+  let next = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      out.push(...await operation(items[index]));
+    }
+  }));
+}
+// CASE js_inorder_spread_single expect=pass
+export async function inOrder(items, step, { reason }) {
+  void reason;
+  for (const item of items) {
+    log(...await step(item));
+  }
+}

@@ -1,0 +1,13 @@
+// CASE swift_bounded_dup_two_strings expect=fire
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { consume(try await operation(item), "a", try await operation(item), "b") }
+      }
+      try await group.waitForAll()
+    }
+  }
+}

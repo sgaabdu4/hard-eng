@@ -1,0 +1,192 @@
+// CASE canonical_control expect=pass
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE outer_page_loop_wraps_chunk expect=fire
+Future<List<Receipt>> sendAllPages(
+  List<Page> pages,
+  int width,
+  Future<Receipt> Function(Order) send,
+) async {
+  final results = <Receipt>[];
+  for (final page in pages) {
+    final orders = page.orders;
+    for (var offset = 0; offset < orders.length; offset += width) {
+      final group = orders.skip(offset).take(width);
+      results.addAll(await Future.wait(group.map(send)));
+    }
+  }
+  return results;
+}
+
+// CASE outer_while_retry_wraps_chunk expect=fire
+Future<List<R>> mapRetrying<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  var round = 0;
+  while (round < 3) {
+    for (var offset = 0; offset < items.length; offset += width) {
+      final group = items.skip(offset).take(width);
+      results.addAll(await Future.wait(group.map(operation)));
+    }
+    round++;
+  }
+  return results;
+}
+
+// CASE serial_loop_after_chunk expect=fire
+Future<List<R>> mapThenAudit<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  for (final result in results) {
+    await audit(result);
+  }
+  return results;
+}
+
+// CASE extra_await_in_chunk_body expect=fire
+Future<List<R>> mapWithAudit<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    await audit(group);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE chunk_in_if expect=pass
+Future<List<R>> mapMaybe<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  if (items.isNotEmpty) {
+    for (var offset = 0; offset < items.length; offset += width) {
+      final group = items.skip(offset).take(width);
+      results.addAll(await Future.wait(group.map(operation)));
+    }
+  }
+  return results;
+}
+
+// CASE two_chunk_loops_in_outer_for expect=fire
+Future<List<R>> mapGroups<T, R>(
+  List<List<T>> groups,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (final items in groups) {
+    for (var offset = 0; offset < items.length; offset += width) {
+      final group = items.skip(offset).take(width);
+      results.addAll(await Future.wait(group.map(operation)));
+    }
+  }
+  return results;
+}
+
+// CASE prelude_await_no_loop expect=pass
+Future<List<R>> mapAfterWarm<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  await warmUp();
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE void_business_chunk_no_return expect=fire
+Future<void> sendInChunks(List<Order> orders, Future<void> Function(Order) send) async {
+  final results = <void>[];
+  for (var offset = 0; offset < orders.length; offset += 10) {
+    final group = orders.skip(offset).take(10);
+    results.addAll(await Future.wait(group.map(send)));
+  }
+}
+
+// CASE nested_closure_serial_in_helper expect=fire
+Future<List<R>> mapWithHook<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  Future<void> warmAll() async {
+    for (final item in items) {
+      await warm(item);
+    }
+  }
+  await warmAll();
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE do_while_wraps_chunk expect=fire
+Future<List<R>> mapUntilDone<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  var pass = 0;
+  do {
+    for (var offset = 0; offset < items.length; offset += width) {
+      final group = items.skip(offset).take(width);
+      results.addAll(await Future.wait(group.map(operation)));
+    }
+    pass++;
+  } while (pass < 2);
+  return results;
+}
+
+// CASE try_wraps_chunk expect=pass
+Future<List<R>> mapGuarded<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  try {
+    for (var offset = 0; offset < items.length; offset += width) {
+      final group = items.skip(offset).take(width);
+      results.addAll(await Future.wait(group.map(operation)));
+    }
+  } finally {
+    log('done');
+  }
+  return results;
+}

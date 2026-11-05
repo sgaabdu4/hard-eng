@@ -1,0 +1,50 @@
+func worker(items: [Int], save: (Int) async -> Void) async {
+  while true {
+    for item in items {
+      // ruleid: await-in-loop-swift
+      await save(item)
+    }
+    break
+  }
+  while true {
+    do {
+      for item in items {
+        // ruleid: await-in-loop-swift
+        await save(item)
+      }
+    }
+    break
+  }
+}
+
+func controls(items: [Int], stop: (Int) async -> Bool) async {
+  while true {
+    for item in items {
+      if await stop(item) { break }
+    }
+    break
+  }
+}
+
+func optionalOuter(next: () -> [Int]?, save: (Int) async -> Void) async {
+  while let batch = next() {
+    for item in batch {
+      // ruleid: await-in-loop-swift
+      await save(item)
+    }
+  }
+}
+
+func optionalControl(next: () -> [Int]?, stop: (Int) async -> Bool) async {
+  while let batch = next() {
+    for item in batch {
+      if await stop(item) { break }
+    }
+    break
+  }
+}
+
+func empty() async {
+  while true {}
+  for item in [Int]() {}
+}

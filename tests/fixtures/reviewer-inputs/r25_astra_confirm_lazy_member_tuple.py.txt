@@ -1,0 +1,8 @@
+async def visit(items, load_settings):
+    settings = None
+    for item in items:
+        if settings is not None:
+            settings["current"], previous = item, settings["current"]
+        if settings is None:
+            settings = await load_settings(item)
+    return settings

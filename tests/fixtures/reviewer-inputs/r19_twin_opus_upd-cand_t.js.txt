@@ -1,0 +1,13 @@
+async function save(x) {}
+async function e3() {
+	for (let i = 0, j = 1; i < 4; await save(i + j), i++);
+}
+async function e3b() {
+	for (let i = 0, j = 1; i < 4; await save(i + j), i++) {}
+}
+async function e3c() {
+	for (let i = 0, j = 1; i < 4; i++, await save(i + j));
+}
+async function e3d() {
+	for (let i = 0, j = 1; i < 4; await save(i + j));
+}

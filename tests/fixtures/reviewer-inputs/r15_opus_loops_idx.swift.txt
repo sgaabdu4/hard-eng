@@ -1,0 +1,43 @@
+// CASE swift_while_index expect=fire
+func a(_ items: [Int]) async throws {
+  var i = 0
+  while i < items.count {
+    try await save(items[i])
+    i += 1
+  }
+}
+// CASE swift_repeat_while expect=fire
+func b(_ items: [Int]) async throws {
+  var i = 0
+  repeat {
+    try await save(items[i])
+    i += 1
+  } while i < items.count
+}
+// CASE swift_async_let_in_loop expect=fire
+func c(_ items: [Int]) async throws {
+  for item in items {
+    async let result = save(item)
+    try await result
+  }
+}
+// CASE swift_enumerated expect=fire
+func d(_ items: [Int]) async throws {
+  for (index, item) in items.enumerated() {
+    try await save(index, item)
+  }
+}
+// CASE swift_while_pop expect=fire
+func e(_ items: [Int]) async throws {
+  var queue = items
+  while let item = queue.popLast() {
+    try await save(item)
+  }
+}
+// CASE swift_for_where expect=fire
+func f(_ items: [Int]) async throws {
+  for item in items where item > 0 {
+    try await save(item)
+  }
+}
+// CASE end expect=pass

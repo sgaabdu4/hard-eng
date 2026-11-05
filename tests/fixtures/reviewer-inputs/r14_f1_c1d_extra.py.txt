@@ -1,0 +1,15 @@
+from app.concurrency import map_with_concurrency
+
+
+# CASE py_fourth_arg_local_one expect=pass
+async def x1(items, save, width):
+    retries = 1
+    await map_with_concurrency(items, save, width, retries)
+
+
+# CASE py_fourth_arg_literal_one expect=pass
+async def x2(items, save, width):
+    await map_with_concurrency(items, save, width, 1)
+
+
+# CASE py_end expect=pass

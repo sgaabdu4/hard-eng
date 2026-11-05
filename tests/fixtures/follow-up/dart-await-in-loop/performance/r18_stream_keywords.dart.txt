@@ -1,0 +1,21 @@
+Future<void> stream(dynamic stream, dynamic items) async {
+  await for (final item in stream) {
+    await save(item);
+    for (final child in items) {
+      // ruleid: await-in-loop-dart
+      await save(child);
+    }
+  }
+  for (final item in items) {
+    // ruleid: await-in-loop-dart
+    await save(item);
+  }
+  await ready(); for (final item in items) {
+    // ruleid: await-in-loop-dart
+    await save(item);
+  }
+  await /* stream */ for (final item in stream) {
+    // ruleid: await-in-loop-dart
+    await save(item);
+  }
+}

@@ -1,0 +1,10 @@
+Future<List<R>> mapBounded<T, R>(List<T> items, int limit, Future<R> Function(T item) read) async {
+ final results = <R>[];
+ final budget = currentBudget();
+ final width = budget == null || limit < budget ? limit : budget;
+ for (var start = 0; start < items.length; start += width) {
+  final group = items.skip(start).take(width);
+  results.addAll(await Future.wait(group.map((item) => budget == null ? read(item) : withBudget(budget, () => read(item)))));
+ }
+ return results;
+}

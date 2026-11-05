@@ -1,0 +1,42 @@
+import 'dart:math' as math;
+
+// CASE dart_helper_items_op_width expect=pass
+Future<List<R>> mapWithConcurrency<T, R>(
+  List<T> items,
+  Future<R> Function(T item) operation,
+  int width,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+
+// CASE dart_third_one expect=fire
+Future<void> thirdOne(List<int> items, Future<void> Function(int) save) async {
+  await mapWithConcurrency(items, save, 1);
+}
+
+// CASE dart_third_min_one expect=fire
+Future<void> thirdMinOne(List<int> items, Future<void> Function(int) save) async {
+  await mapWithConcurrency(items, save, math.min(1, items.length));
+}
+
+// CASE dart_third_local_one expect=fire
+Future<void> thirdLocalOne(List<int> items, Future<void> Function(int) save) async {
+  const width = 1;
+  await mapWithConcurrency(items, save, width);
+}
+
+// CASE dart_third_four expect=pass
+Future<void> thirdFour(List<int> items, Future<void> Function(int) save) async {
+  await mapWithConcurrency(items, save, 4);
+}
+
+// CASE dart_second_local_min expect=fire
+Future<void> secondLocalMin(List<int> items, Future<void> Function(int) save, int n) async {
+  final width = math.min(1, n);
+  await mapWithConcurrency(items, width, save);
+}

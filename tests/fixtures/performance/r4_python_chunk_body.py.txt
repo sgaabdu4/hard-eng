@@ -1,0 +1,41 @@
+async def run(items, read):
+    for user in batch:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(read(user), notify(user))
+    for piece in parts:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in piece))
+    for piece in grouped.parts:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*piece)
+    for index, piece in enumerate(parts):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in piece))
+    for piece in parts:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in other))
+    one = 1
+    for piece in split(items, one):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*piece)
+    individual = [items[i:i+1] for i in range(0, len(items), 1)]
+    for piece in individual:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*piece)
+    singles = split(items, 1)
+    for piece in singles:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in piece))
+    for piece in split(items, 1):
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*piece)
+    for piece in parts:
+        # ruleid: await-in-loop-python
+        await inspect(piece)
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*(read(item) for item in piece))
+    for piece in parts:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*piece)
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*piece)

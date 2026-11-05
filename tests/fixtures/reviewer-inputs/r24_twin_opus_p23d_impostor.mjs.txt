@@ -1,0 +1,6 @@
+// CASE js_chunk_literal_one expect=fire
+async function mapLimit(items, width, operation) {
+	for (let offset = 0; offset < items.length; offset += 1) {
+		await Promise.all(items.slice(offset, offset + 1).map(operation));
+	}
+}

@@ -1,0 +1,17 @@
+void use(List<int> items, Future<void> Function(int) operation, int width) {
+  const serial = 1;
+  final one = 1;
+  // ruleid: serial-bounded-helper-dart
+  mapWithConcurrency(items, 1, operation);
+  // ruleid: serial-bounded-helper-dart
+  mapWithConcurrency(items, operation, width: 1);
+  // ruleid: serial-bounded-helper-dart
+  mapWithConcurrency(items, operation, limit: 1);
+  // ok: serial-bounded-helper-dart
+  mapWithConcurrency(items, serial, operation);
+  // ok: serial-bounded-helper-dart
+  mapWithConcurrency(items, operation, limit: one);
+  mapWithConcurrency(items, 4, operation);
+  mapWithConcurrency(items, operation, width: 4);
+  mapWithConcurrency(items, width, operation);
+}

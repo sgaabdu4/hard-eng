@@ -1,0 +1,11 @@
+export async function inOrder(items, step, {reason}) {
+ for (const item of items) await step(item);
+}
+export const inOrderSteps = async (steps, {reason}) => {
+ for (const step of steps)
+  await step();
+};
+async function unrelated(items, step) {
+ // ruleid: await-in-loop-javascript
+ for (const item of items) await step(item);
+}

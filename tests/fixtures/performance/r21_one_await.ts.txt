@@ -1,0 +1,13 @@
+async function inOrder<T>(items: T[], step: (item: T) => Promise<void>, options: ImportedOptions) {
+  for (const item of items) {
+    consume(
+
+      await step(item),
+
+      await step(item),
+    );
+  }
+}
+async function inOrderSteps(steps: Array<() => Promise<void>>, options: ImportedOptions) {
+  for (const step of steps) { await step(/* await is only comment text */); }
+}

@@ -1,0 +1,206 @@
+func work(_ i: Int) async {}
+func isFree(_ i: Int) async -> Bool { i > 2 }
+func log(_ s: String) {}
+
+// CASE task_guard_return_only expect=pass
+func s1(items: [Int]) {
+  for item in items {
+    Task {
+      guard item > 0 else { return }
+      await work(item)
+    }
+  }
+}
+
+// CASE task_guard_return_sibling expect=fire
+func s2(items: [Int]) async {
+  for item in items {
+    Task {
+      guard item > 0 else { return }
+      await work(item)
+    }
+    await work(item)
+  }
+}
+
+// CASE task_return_value_handle expect=fire
+func s3(items: [Int]) async {
+  for item in items {
+    let task = Task { () -> Int in
+      if item < 0 { return 0 }
+      await work(item)
+      return item
+    }
+    _ = await task.value
+  }
+}
+
+// CASE task_weak_self_guard expect=pass
+final class Runner {
+  func s4(items: [Int]) {
+    for item in items {
+      Task { [weak self] in
+        guard let self else { return }
+        await self.run(item)
+      }
+    }
+  }
+  func run(_ i: Int) async {}
+}
+
+// CASE detached_return_sibling expect=fire
+func s5(items: [Int]) async {
+  for item in items {
+    Task.detached(priority: .background) {
+      if item < 0 { return }
+      await work(item)
+    }
+    await work(item)
+  }
+}
+
+// CASE generic_task_return_sibling expect=fire
+func s6(items: [Int]) async {
+  for item in items {
+    Task<Void, Never> {
+      if item < 0 { return }
+      await work(item)
+    }
+    await work(item)
+  }
+}
+
+// CASE generic_task_return_only expect=pass
+func s6b(items: [Int]) {
+  for item in items {
+    Task<Void, Never> {
+      if item < 0 { return }
+      await work(item)
+    }
+  }
+}
+
+// CASE add_task_return expect=pass
+func s7(items: [Int]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask {
+        if item < 0 { return }
+        await work(item)
+      }
+    }
+  }
+}
+
+// CASE add_task_operation_capture_return expect=pass
+func s8(items: [Int]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for item in items {
+      group.addTask(operation: { [item] in
+        guard item > 0 else { return }
+        await work(item)
+      })
+    }
+  }
+}
+
+// CASE map_return_then_await expect=fire
+func s9(groups: [[Int]]) async {
+  for group in groups {
+    let doubled = group.map { x -> Int in return x * 2 }
+    await work(doubled.count)
+  }
+}
+
+// CASE guard_continue_then_await expect=fire
+func s10(items: [Int]) async {
+  for item in items {
+    guard item > 0 else { continue }
+    await work(item)
+  }
+}
+
+// CASE defer_then_await expect=fire
+func s11(items: [Int]) async {
+  for item in items {
+    defer { log("done") }
+    await work(item)
+  }
+}
+
+// CASE repeat_while_await expect=fire
+func s12(items: [Int]) async {
+  var i = 0
+  repeat {
+    await work(items[i])
+    i += 1
+  } while i < items.count
+}
+
+// CASE loop_early_return expect=pass
+func s13(items: [Int]) async -> Int? {
+  for item in items {
+    if await isFree(item) { return item }
+  }
+  return nil
+}
+
+// CASE generic_task_apostrophe_brace_comment expect=pass
+func s14(items: [Int]) {
+  var tasks: [Task<Void, Never>] = []
+  for item in items {
+    tasks.append(
+      Task<Void, Never> {
+        // Don't wait here; the caller joins later. }
+        await work(item)
+      })
+  }
+  _ = tasks
+}
+
+// CASE task_return_in_nested_closure_sibling expect=fire
+func s15(items: [[Int]]) async {
+  for group in items {
+    Task {
+      let ok = group.contains { x in return x > 0 }
+      if !ok { return }
+      await work(group.count)
+    }
+    await work(group.count)
+  }
+}
+
+// CASE task_handles_join_in_loop expect=fire
+func s16(items: [Int]) async {
+  var handles: [Task<Void, Never>] = []
+  for item in items {
+    handles.append(Task { await work(item) })
+  }
+  for handle in handles {
+    await handle.value
+  }
+}
+
+// CASE while_iterator_next expect=pass
+func s17(stream: AsyncStream<Int>) async {
+  var it = stream.makeAsyncIterator()
+  while let next = await it.next() {
+    log("\(next)")
+  }
+}
+
+// CASE for_await_stream expect=pass
+func s18(stream: AsyncStream<Int>) async {
+  for await next in stream {
+    await work(next)
+  }
+}
+
+// CASE for_await_nested_per_item expect=fire
+func s19(stream: AsyncStream<[Int]>) async {
+  for await batch in stream {
+    for item in batch {
+      await work(item)
+    }
+  }
+}

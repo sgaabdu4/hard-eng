@@ -1,0 +1,84 @@
+import asyncio
+from collections.abc import Awaitable, Callable, Sequence
+
+
+# CASE g_comment_line_before_for expect=pass
+async def map_with_concurrency[T](items, width, operation):
+    # Run one chunk at a time; each chunk runs in parallel.
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE g_trailing_comment_on_for expect=pass
+async def map_with_concurrency[T](items, width, operation):
+    for offset in range(0, len(items), width):  # one chunk per pass
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE g_trailing_comment_on_gather expect=pass
+async def map_with_concurrency[T](items, width, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))  # noqa: E501
+
+
+# CASE g_method_self expect=pass
+class Runner:
+    async def map_with_concurrency[T](self, items, width, operation):
+        for offset in range(0, len(items), width):
+            await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE g_staticmethod expect=pass
+class Jobs:
+    @staticmethod
+    async def map_with_concurrency[T](items, width, operation):
+        for offset in range(0, len(items), width):
+            await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE g_return_none expect=pass
+async def map_with_concurrency[T](items: Sequence[T], width: int, operation: Callable[[T], Awaitable[None]]) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE g_default_width_four expect=pass
+async def map_with_concurrency[T](items: Sequence[T], operation: Callable[[T], Awaitable[None]], width: int = 4) -> None:
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE g_type_default_313 expect=pass
+async def map_with_concurrency[T = int](items, width, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE g_single_line_doc expect=pass
+async def map_with_concurrency[T](items, width, operation):
+    """Run operation over items, width at a time."""
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE g_return_results_impostor expect=fire
+async def map_with_concurrency[T](items, width, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+    for item in items:
+        await operation(item)
+
+
+# CASE g_comment_then_extra expect=fire
+async def map_with_concurrency[T](items, width, operation):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+        # audit each chunk
+        await operation(items[offset])
+
+
+# CASE g_extra_before_loop expect=fire
+async def map_with_concurrency[T](items, width, operation):
+    await operation(items[0])
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))

@@ -1,0 +1,166 @@
+type Opts = { concurrency: number; retries?: number; label?: string };
+const SERIAL_OPTIONS = { concurrency: 1 };
+
+// CASE object_assign_override expect=pass
+export async function objectAssign(items: string[], op: (s: string) => Promise<void>, overrides: Partial<Opts>) {
+	const options = { concurrency: 1 };
+	Object.assign(options, overrides);
+	await mapLimit(items, op, options);
+}
+
+// CASE object_assign_fast expect=pass
+export async function objectAssignFast(items: string[], op: (s: string) => Promise<void>, fast: boolean) {
+	const options = { concurrency: 1 };
+	if (fast) Object.assign(options, { concurrency: 8 });
+	await mapLimit(items, op, options);
+}
+
+// CASE write_after_first_call expect=fire
+export async function writeAfterCall(first: string[], rest: string[], op: (s: string) => Promise<void>) {
+	const options = { concurrency: 1 };
+	await mapLimit(first, op, options);
+	options.concurrency = 8;
+	await mapLimit(rest, op, options);
+}
+
+// CASE write_in_nested_fn expect=pass
+export async function writeInNested(items: string[], op: (s: string) => Promise<void>, fast: boolean) {
+	const options = { concurrency: 1 };
+	const speedUp = () => {
+		options.concurrency = 8;
+	};
+	if (fast) speedUp();
+	await mapLimit(items, op, options);
+}
+
+// CASE module_options expect=fire
+export async function moduleOptions(items: string[], op: (s: string) => Promise<void>) {
+	await mapLimit(items, op, SERIAL_OPTIONS);
+}
+
+// CASE let_options expect=fire
+export async function letOptions(items: string[], op: (s: string) => Promise<void>) {
+	let options = { concurrency: 1 };
+	await mapLimit(items, op, options);
+}
+
+// CASE typed_options expect=fire
+export async function typedOptions(items: string[], op: (s: string) => Promise<void>) {
+	const options: Opts = { concurrency: 1 };
+	await mapLimit(items, op, options);
+}
+
+// CASE as_const_inline expect=fire
+export async function asConstInline(items: string[], op: (s: string) => Promise<void>) {
+	await mapLimit(items, op, { concurrency: 1 } as const);
+}
+
+// CASE as_const_local expect=fire
+export async function asConstLocal(items: string[], op: (s: string) => Promise<void>) {
+	const options = { concurrency: 1 } as const;
+	await mapLimit(items, op, options);
+}
+
+// CASE ellipsis_label expect=fire
+export async function ellipsisLabel(items: string[], op: (s: string) => Promise<void>) {
+	await mapLimit(items, op, { concurrency: 1, label: "Syncing..." });
+}
+
+// CASE rest_callback expect=fire
+export async function restCallback(items: string[], op: (s: string) => Promise<void>) {
+	await mapLimit(items, op, { concurrency: 1, onError: (...args: unknown[]) => console.error(...args) });
+}
+
+// CASE spread_in_other_key expect=fire
+export async function spreadOtherKey(items: string[], op: (s: string) => Promise<void>, base: Record<string, string>) {
+	await mapLimit(items, op, { concurrency: 1, headers: { ...base } });
+}
+
+// CASE comment_with_dots expect=fire
+export async function commentDots(items: string[], op: (s: string) => Promise<void>) {
+	await mapLimit(items, op, {
+		concurrency: 1, // the API rejects parallel writes...
+	});
+}
+
+// CASE aug_assign expect=pass
+export async function augAssign(items: string[], op: (s: string) => Promise<void>, big: boolean) {
+	const options = { concurrency: 1 };
+	if (big) options.concurrency += 3;
+	await mapLimit(items, op, options);
+}
+
+// CASE other_key_write expect=fire
+export async function otherKeyWrite(items: string[], op: (s: string) => Promise<void>, flaky: boolean) {
+	const options = { concurrency: 1, retries: 2 };
+	if (flaky) options.retries = 5;
+	await mapLimit(items, op, options);
+}
+
+// CASE let_reassigned expect=pass
+export async function letReassigned(items: string[], op: (s: string) => Promise<void>, fast: boolean) {
+	let options = { concurrency: 1 };
+	if (fast) options = { concurrency: 8 };
+	await mapLimit(items, op, options);
+}
+
+// CASE local_spread_then_one expect=fire
+export async function localSpreadThenOne(items: string[], op: (s: string) => Promise<void>, defaults: Partial<Opts>) {
+	const options = { ...defaults, concurrency: 1 };
+	await mapLimit(items, op, options);
+}
+
+// CASE local_one_then_spread expect=pass
+export async function localOneThenSpread(items: string[], op: (s: string) => Promise<void>, overrides: Partial<Opts>) {
+	const options = { concurrency: 1, ...overrides };
+	await mapLimit(items, op, options);
+}
+
+// CASE passed_to_mutator expect=pass
+export async function passedToMutator(items: string[], op: (s: string) => Promise<void>) {
+	const options = { concurrency: 1 };
+	tune(options);
+	await mapLimit(items, op, options);
+}
+
+// CASE generic_local_options expect=fire
+export async function genericLocalOptions(items: string[], op: (s: string) => Promise<void>) {
+	const options = { concurrency: 1 };
+	await mapLimit<string>(items, op, options);
+}
+
+// CASE generic_local_options_write expect=pass
+export async function genericLocalOptionsWrite(items: string[], op: (s: string) => Promise<void>, fast: boolean) {
+	const options = { concurrency: 1 };
+	if (fast) options.concurrency = 8;
+	await mapLimit<string>(items, op, options);
+}
+
+// CASE bracket_write expect=pass
+export async function bracketWrite(items: string[], op: (s: string) => Promise<void>, fast: boolean) {
+	const options: Opts = { concurrency: 1 };
+	if (fast) options["concurrency"] = 8;
+	await mapLimit(items, op, options);
+}
+
+// CASE options_nested_block expect=fire
+export async function optionsNestedBlock(items: string[], op: (s: string) => Promise<void>, ok: boolean) {
+	const options = { concurrency: 1 };
+	if (ok) {
+		await mapLimit(items, op, options);
+	}
+}
+
+// CASE write_in_other_function expect=fire
+export async function writeInOther(items: string[], op: (s: string) => Promise<void>) {
+	const options = { concurrency: 1 };
+	await mapLimit(items, op, options);
+}
+export function unrelated() {
+	const options = { concurrency: 4 };
+	options.concurrency = 8;
+	return options;
+}
+
+declare function tune(o: Opts): void;
+declare function mapLimit<T>(...args: unknown[]): Promise<void>;

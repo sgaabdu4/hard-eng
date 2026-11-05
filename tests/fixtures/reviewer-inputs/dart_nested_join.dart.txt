@@ -1,0 +1,5 @@
+Future<void> run(List<int> items, Future<int> Function(int) read) async {
+ for (var i=0; i<items.length; i+=4) {
+  await Future.wait([Future.value(await read(items[i]))]);
+ }
+}

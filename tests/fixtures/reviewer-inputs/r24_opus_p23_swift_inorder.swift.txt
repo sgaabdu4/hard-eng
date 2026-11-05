@@ -1,0 +1,54 @@
+// CASE swift_honest expect=pass
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    try await step(item)
+  }
+}
+// CASE swift_distinct_plain expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), try await save(item))
+  }
+}
+// CASE swift_distinct_interp expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), "\(try await save(item))")
+  }
+}
+// CASE swift_distinct_multiline_interp expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), """
+      \(try await save(item))
+      """)
+  }
+}
+// CASE swift_distinct_raw_interp expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), #"\#(try await save(item))"#)
+  }
+}
+// CASE swift_distinct_try_optional expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), try? await save(item))
+  }
+}
+// CASE swift_distinct_member expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), await store.value)
+  }
+}
+// CASE swift_distinct_task_group expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async throws {
+  for item in items {
+    consume(try await step(item), await withTaskGroup(of: Void.self) { group in await audit(item) })
+  }
+}
+// CASE swift_steps_distinct_interp expect=fire
+func inOrderSteps(_ steps: [() async -> Void], reason: String) async {
+  for step in steps { consume(await step(), "\(await audit())") }
+}

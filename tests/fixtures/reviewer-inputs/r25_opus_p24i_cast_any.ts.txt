@@ -1,0 +1,6 @@
+// CASE ts_cast_any_property expect=fire
+export async function warm(names: string[], load: (name: string) => Promise<unknown>) {
+  for (const name of names) {
+    (globalThis as any).cache = await load(name);
+  }
+}

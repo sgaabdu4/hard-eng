@@ -1,0 +1,10 @@
+// CASE ts_cast_member expect=fire
+export async function copyFields(
+	target: object,
+	keys: string[],
+	load: (key: string) => Promise<unknown>,
+) {
+	for (const key of keys) {
+		(target as Record<string, unknown>)[key] = await load(key);
+	}
+}

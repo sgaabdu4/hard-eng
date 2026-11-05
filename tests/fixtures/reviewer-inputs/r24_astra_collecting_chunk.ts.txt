@@ -1,0 +1,20 @@
+// CASE ts_chunk_canonical_typed expect=pass
+export async function mapLimit<T, R>(items: T[], width: number, operation: (item: T) => Promise<R>): Promise<void> {
+  for (let offset = 0; offset < items.length; offset += width) {
+    await Promise.all(items.slice(offset, offset + width).map(operation));
+  }
+}
+// CASE ts_chunk_void_spread_typed expect=pass
+export async function mapLimit<T, R>(items: T[], width: number, operation: (item: T) => Promise<R>): Promise<void> {
+  for (let offset = 0; offset < items.length; offset += width) {
+    sink.push(...await Promise.all(items.slice(offset, offset + width).map(operation)));
+  }
+}
+// CASE ts_chunk_collect_spread_typed expect=pass
+export async function mapLimit<T, R>(items: T[], width: number, operation: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  for (let offset = 0; offset < items.length; offset += width) {
+    results.push(...await Promise.all(items.slice(offset, offset + width).map(operation)));
+  }
+  return results;
+}

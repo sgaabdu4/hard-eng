@@ -1,0 +1,5 @@
+async def run(items, operation, requested):
+    if requested < 1 or not items:
+        return
+    width = min(1, requested, len(items))
+    await map_with_concurrency(items, width, operation)

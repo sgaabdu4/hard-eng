@@ -1,0 +1,15 @@
+async function run(items, op, width, options, count) {
+	// ruleid: serial-bounded-helper-javascript
+	await lib.mapLimit<string>(items, 1, op);
+	// ruleid: serial-bounded-helper-javascript
+	await mapLimit<string, void>(items, 1, op);
+	// ok: serial-bounded-helper-javascript
+	await mapLimit<string>(items, op, { ...options, concurrency: 1 });
+	await mapLimit<string>(items, op, { concurrency: 1, ...options });
+	await mapLimit<string>(items, 4, op);
+	await mapLimit<string>(items, width, op);
+	await mapLimit<string>(items, Math.min(4, count, items.length), op);
+	const capped = Math.min(count, 1, items.length);
+	// ok: serial-bounded-helper-javascript
+	await mapLimit<string>(items, capped, op);
+}

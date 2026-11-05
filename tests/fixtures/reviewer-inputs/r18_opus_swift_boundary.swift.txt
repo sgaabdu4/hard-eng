@@ -1,0 +1,98 @@
+import Foundation
+
+func work(_ item: Int) async {}
+func save(_ item: Int) async {}
+func refresh(_ item: Int) async {}
+
+final class Store {
+  var items: [Int] = []
+  var tasks: [Task<Void, Never>] = []
+
+  // CASE ret_task_loop expect=fire
+  @discardableResult
+  func refreshAll() -> Task<Void, Never> {
+    Task {
+      for item in items {
+        await refresh(item)
+      }
+    }
+  }
+
+  // CASE ret_task_loop_if expect=fire
+  func refreshSome() -> Task<Void, Never> {
+    Task {
+      for item in items {
+        if item > 0 {
+          await refresh(item)
+        }
+      }
+    }
+  }
+
+  // CASE computed_task_loop expect=fire
+  var refresher: Task<Void, Never> {
+    Task {
+      for item in items {
+        await refresh(item)
+      }
+    }
+  }
+
+  // CASE generic_noargs_comment expect=pass
+  func start() {
+    for item in items {
+      tasks.append(Task<Void, Never> {
+        // don't block the caller here
+        await work(item)
+      })
+    }
+  }
+
+  // CASE generic_noargs_plain expect=pass
+  func startPlain() {
+    for item in items {
+      tasks.append(Task<Void, Never> {
+        await work(item)
+      })
+    }
+  }
+
+  // CASE generic_noargs_string expect=pass
+  func startString() {
+    for item in items {
+      tasks.append(Task<Void, Never> {
+        print("it's \(item)")
+        await work(item)
+      })
+    }
+  }
+
+  // CASE capture_comment expect=pass
+  func startCapture() {
+    for item in items {
+      Task { [weak self] in
+        // don't wait here
+        await self?.work2(item)
+      }
+    }
+  }
+
+  // CASE ret_generic_args_loop expect=fire
+  func refreshArgs() -> Task<Void, Never> {
+    Task(priority: .utility) {
+      for item in items {
+        await refresh(item)
+      }
+    }
+  }
+
+  // CASE async_ret_task expect=fire
+  func syncThenStart() async -> Task<Void, Never> {
+    for item in items {
+      await save(item)
+    }
+    return Task { await work(0) }
+  }
+
+  func work2(_ item: Int) async {}
+}

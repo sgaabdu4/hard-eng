@@ -1,0 +1,5 @@
+async function run(items, operation, requested) {
+	if (requested < 1 || items.length < 1) return;
+	const width = Math.min(1, requested, items.length);
+	await mapLimit(items, width, operation);
+}

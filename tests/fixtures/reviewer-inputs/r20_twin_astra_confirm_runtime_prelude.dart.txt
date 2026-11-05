@@ -1,0 +1,15 @@
+import 'chunk_extra_before.dart';
+
+Future<void> main() async {
+  final events = <String>[];
+  final result = await mapWithConcurrency<int, int>([1, 2, 3], 2, (item) async {
+    events.add('start$item');
+    await Future<void>.delayed(Duration.zero);
+    events.add('end$item');
+    return item;
+  });
+  final first = events.take(6).join(',');
+  if (first != 'start1,end1,start2,end2,start3,end3') throw StateError(first);
+  if (result.join(',') != '1,2,3') throw StateError('$result');
+  print(events.join(','));
+}

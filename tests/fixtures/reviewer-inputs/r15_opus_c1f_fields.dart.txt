@@ -1,0 +1,20 @@
+// CASE dart_top_const_vs_field_implicit_this expect=pass
+const width = 1;
+class Importer {
+  Importer(this.width);
+  final int width;
+  Future<void> run(List<int> items) => mapWithConcurrency(items, width, save);
+}
+// CASE dart_top_final_vs_local_var expect=pass
+final limit = 1;
+Future<void> localVar(List<int> items, Config config) async {
+  var limit = config.limit;
+  await mapWithConcurrency(items, limit, save);
+}
+// CASE dart_top_final_vs_getter expect=pass
+final concurrency = 1;
+class Pool {
+  int get concurrency => 4;
+  Future<void> run(List<int> items) => mapWithConcurrency(items, concurrency, save);
+}
+// CASE end expect=pass

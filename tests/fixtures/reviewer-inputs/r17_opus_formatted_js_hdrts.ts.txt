@@ -1,0 +1,196 @@
+// CASE init_decl_once expect=pass
+async function a1(n) {
+	const seen = [];
+	for (let i = await loadStart(); i < n; i++) {
+		seen.push(i);
+	}
+	return seen;
+}
+
+// CASE cond_await_call expect=fire
+async function a2() {
+	const rows = [];
+	for (let page = 0; await hasMore(page); page++) {
+		rows.push(page);
+	}
+	return rows;
+}
+
+// CASE cond_await_compare expect=fire
+async function a3(queue) {
+	for (let i = 0; i < (await queue.size()); i++) {
+		use(i);
+	}
+}
+
+// CASE cond_await_compare_noparen expect=fire
+async function a3b(queue) {
+	for (let i = 0; i < (await queue.size()); i++) {
+		use(i);
+	}
+}
+
+// CASE update_cursor expect=fire
+async function a4(api) {
+	const out = [];
+	for (let page = await api.first(); page; page = await api.next(page.cursor)) {
+		out.push(...page.items);
+	}
+	return out;
+}
+
+// CASE update_comma expect=fire
+async function a5(n) {
+	for (let i = 0; i < n; i++, await tick()) {
+		use(i);
+	}
+}
+
+// CASE body_braceless_await expect=fire
+async function a6(ids) {
+	for (let i = 0; i < ids.length; i++) await save(ids[i]);
+}
+
+// CASE body_braceless_push expect=fire
+async function a7(ids) {
+	const out = [];
+	for (let i = 0; i < ids.length; i++) out.push(await load(ids[i]));
+	return out;
+}
+
+// CASE body_braceless_assign expect=fire
+async function a7b(ids) {
+	let last;
+	for (let i = 0; i < ids.length; i++) last = await load(ids[i]);
+	return last;
+}
+
+// CASE body_braceless_if expect=fire
+async function a7c(ids) {
+	for (let i = 0; i < ids.length; i++) if (ids[i]) await save(ids[i]);
+}
+
+// CASE labeled_body expect=fire
+async function a8(ids) {
+	outer: for (let i = 0; i < ids.length; i++) {
+		await save(ids[i]);
+	}
+}
+
+// CASE nested_inner_init_in_for_of expect=fire
+async function a9(groups) {
+	for (const g of groups) {
+		for (let i = await firstIndex(g); i < 3; i++) {
+			use(g, i);
+		}
+	}
+}
+
+// CASE nested_inner_init_in_classic expect=fire
+async function a10(groups) {
+	for (let k = 0; k < groups.length; k++) {
+		for (let i = await firstIndex(groups[k]); i < 3; i++) {
+			use(k, i);
+		}
+	}
+}
+
+// CASE nested_inner_init_in_while expect=fire
+async function a11(stack) {
+	while (stack.length) {
+		const g = stack.pop();
+		for (let i = await firstIndex(g); i < 3; i++) use(g, i);
+	}
+}
+
+// CASE init_body_same_line expect=fire
+async function a12(n) {
+	for (let i = await loadStart(); i < n; i++) await save(i);
+}
+
+// CASE init_multi_body_next expect=fire
+async function a13() {
+	for (let rows = await loadRows(), i = 0; i < rows.length; i++) {
+		await save(rows[i]);
+	}
+}
+
+// CASE init_assign_once expect=pass
+async function a14(n) {
+	let i;
+	for (i = await loadStart(); i < n; i++) {
+		use(i);
+	}
+}
+
+// CASE init_expr_once expect=pass
+async function a15(n) {
+	let i = 0;
+	for (await prepare(); i < n; i++) {
+		use(i);
+	}
+}
+
+// CASE update_optional expect=fire
+async function a16(api) {
+	for (let c = api.start; c; c = (await api.page(c))?.next) {
+		use(c);
+	}
+}
+
+// CASE cond_and_body_none expect=fire
+async function a17(it) {
+	for (let item; (item = await it.read()) !== null; ) {
+		use(item);
+	}
+}
+
+// CASE empty_header_body expect=fire
+async function a18(it) {
+	for (;;) {
+		await it.step();
+	}
+}
+
+// CASE body_try_catch expect=fire
+async function a19(ids) {
+	for (let i = 0; i < ids.length; i++) {
+		try {
+			await save(ids[i]);
+		} catch (e) {
+			log(e);
+		}
+	}
+}
+
+// CASE body_nested_block expect=fire
+async function a20(ids) {
+	for (let i = 0; i < ids.length; i++) {
+		{
+			const v = await load(ids[i]);
+			use(v);
+		}
+	}
+}
+
+// CASE body_await_inside_await expect=fire
+async function a21(ids) {
+	for (let i = 0; i < ids.length; i++) {
+		await save(await load(ids[i]));
+	}
+}
+
+// CASE init_closure_called_in_body expect=fire
+async function a22(n) {
+	for (let i = 0, get = async (k) => load(k); i < n; i++) {
+		use(await get(i));
+	}
+}
+
+// CASE body_else_branch expect=fire
+async function a23(ids) {
+	for (let i = 0; i < ids.length; i++) {
+		if (ids[i] === 0) continue;
+		else await save(ids[i]);
+	}
+}

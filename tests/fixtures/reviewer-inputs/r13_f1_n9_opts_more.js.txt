@@ -1,0 +1,24 @@
+// CASE key_from_const_one expect=fire
+export async function keyFromConstOne(items, op) {
+  const width = 1;
+  await mapLimit(items, op, { concurrency: width });
+}
+
+// CASE module_prefix_const_min expect=fire
+export async function modulePrefixConstMin(items, op, n) {
+  const width = Math.min(1, n);
+  await lib.mapLimit(items, width, op);
+}
+
+// CASE module_prefix_let_min expect=fire
+export async function modulePrefixLetMin(items, op, n) {
+  let width = Math.min(1, n);
+  await lib.mapLimit(items, width, op);
+}
+
+// CASE local_options_from_const_one expect=fire
+export async function localOptionsFromConstOne(items, op) {
+  const width = 1;
+  const options = { concurrency: width };
+  await mapLimit(items, op, options);
+}

@@ -1,0 +1,95 @@
+async def save(x):
+    return x
+
+
+async def ok(x):
+    return True
+
+
+async def load(x):
+    return [x]
+
+
+# CASE await_in_filter expect=fire
+async def c1(items):
+    return [x for x in items if await ok(x)]
+
+
+# CASE await_in_second_iterable expect=fire
+async def c2(items):
+    return [y for x in items for y in await load(x)]
+
+
+# CASE nested_comprehension expect=fire
+async def c3(groups):
+    return [[await save(y) for y in g] for g in groups]
+
+
+# CASE async_comprehension_stream expect=pass
+async def c4(stream):
+    return [x async for x in stream]
+
+
+# CASE async_comprehension_await_body expect=fire
+async def c5(stream):
+    return [await save(x) async for x in stream]
+
+
+# CASE two_gen_three_filters expect=fire
+async def c6(a, b):
+    return [await save(x + y) for x in a for y in b if x if y if x != y]
+
+
+# CASE set_comprehension expect=fire
+async def c7(items):
+    return {await save(x) for x in items}
+
+
+# CASE conditional_element expect=fire
+async def c8(items):
+    return [await save(x) if x else None for x in items]
+
+
+# CASE walrus_filter expect=fire
+async def c9(items):
+    return [y for x in items if (y := await save(x))]
+
+
+# CASE dict_two_filters expect=fire
+async def c10(items):
+    return {x: await save(x) for x in items if x if x > 1}
+
+
+# CASE three_filters expect=fire
+async def c11(items):
+    return [await save(x) for x in items if x if x > 1 if x > 2]
+
+
+# CASE four_filters expect=fire
+async def c12(items):
+    return [await save(x) for x in items if x if x > 1 if x > 2 if x > 3]
+
+
+# CASE five_filters expect=fire
+async def c13(items):
+    return [await save(x) for x in items if x if x > 1 if x > 2 if x > 3 if x > 4]
+
+
+# CASE generator_expression_await expect=fire
+async def c14(items):
+    return sum([await save(x) for x in items])
+
+
+# CASE three_generators expect=fire
+async def c15(a, b, c):
+    return [await save(x) for x in a for y in b for z in c]
+
+
+# CASE three_generators_filter_each expect=fire
+async def c16(a, b, c):
+    return [await save(x) for x in a if x for y in b if y for z in c if z]
+
+
+# CASE gen_filter_then_second_await_iter expect=fire
+async def c17(a):
+    return [y for x in a if x for y in await load(x) if y]

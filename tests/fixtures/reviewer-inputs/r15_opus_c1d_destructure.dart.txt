@@ -1,0 +1,18 @@
+// CASE dart_closure_param_shadow expect=pass
+Future<void> closureParam(List<int> items) async {
+  final width = 1;
+  await probe(width);
+  await run(items, (List<int> items, int width) async {
+    await mapWithConcurrency(items, width, save);
+  });
+}
+// CASE dart_record_destructure expect=pass
+Future<void> recordDestructure(List<int> items, Config config) async {
+  final width = 1;
+  await probe(width);
+  if (config.parallel) {
+    final (w, retries) = config.parsed();
+    await mapWithConcurrency(items, w, save);
+  }
+}
+// CASE end expect=pass

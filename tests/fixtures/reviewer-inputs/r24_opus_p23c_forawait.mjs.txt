@@ -1,0 +1,6 @@
+// CASE js_raw_for_await_inner expect=fire
+async function collect(items) {
+  for (const item of items) {
+    for await (const row of stream(item)) consume(row);
+  }
+}

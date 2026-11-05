@@ -1,0 +1,8 @@
+class Runner:
+    async def in_order_steps(self, items: list[Step], *, reason: str):
+        for item in items:
+            await item()
+
+
+async def use():
+    await Runner().in_order_steps([], reason="Each update reads the previous write")

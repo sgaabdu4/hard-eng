@@ -1,0 +1,53 @@
+import asyncio
+
+
+async def break_outer(pages, items, session, save, cursor):
+    for page in pages:
+        async with session() as client:
+            for item in items:
+                # ruleid: await-in-loop-python
+                await save(item)
+        break
+
+
+async def return_outer(pages, items, session, save, cursor):
+    for page in pages:
+        async with session() as client:
+            for item in items:
+                # ruleid: await-in-loop-python
+                await save(item)
+        return
+
+
+async def sleep_outer(pages, items, session, save, cursor):
+    for page in pages:
+        async with session() as client:
+            for item in items:
+                # ruleid: await-in-loop-python
+                await save(item)
+        await asyncio.sleep(0)
+
+
+async def condition_outer(pages, items, session, save, cursor):
+    while cursor:
+        async with session() as client:
+            for item in items:
+                # ruleid: await-in-loop-python
+                await save(item)
+        cursor = page.next
+
+
+async def true_outer(pages, items, session, save, cursor):
+    while True:
+        async with session() as client:
+            for item in items:
+                # ruleid: await-in-loop-python
+                await save(item)
+
+
+async def stream_outer(pages, items, session, save, cursor):
+    async for page in pages:
+        async with session() as client:
+            for item in items:
+                # ruleid: await-in-loop-python
+                await save(item)

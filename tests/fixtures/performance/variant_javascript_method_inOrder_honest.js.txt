@@ -1,0 +1,5 @@
+class Runner { async inOrder(items, step, {reason}) { for (const item of items) {
+  await step(item);
+} } }
+
+new Runner().inOrder([], async (value) => {}, {reason: "Each update reads the previous write"});

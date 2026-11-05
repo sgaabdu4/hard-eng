@@ -1,0 +1,26 @@
+async function save(x) {}
+async function next(c) { return null; }
+async function u1(n) {
+  for (let i = 0; i < n; i++, await save(i)) {}
+}
+async function u2(n) {
+  let i = 0;
+  for (; i < n; await save(i), i++) {}
+}
+async function u3(n) {
+  for (var i = 0, j = 0; i < n; await save(i + j), i++) {}
+}
+async function u4(n) {
+  for (let i = 0, j = 0, k = 0; i < n; await save(i + j + k), i++) {}
+}
+async function u5(first) {
+  for (let cursor = first, seen = 0; cursor; cursor = await next(cursor), seen++) {
+    use(cursor, seen);
+  }
+}
+async function u6(items) {
+  for (let i = 0, n = items.length; i < n; i++, await save(i)) {
+    use(items[i]);
+  }
+}
+function use() {}

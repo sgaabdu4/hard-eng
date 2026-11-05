@@ -1,0 +1,15 @@
+// CASE ts_top_const_vs_param_property expect=pass
+const width = 1;
+class Importer {
+  constructor(private readonly width: number) {}
+  async run(items: string[]) {
+    await mapLimit(items, this.width, save);
+  }
+}
+// CASE ts_top_const_vs_inner_type_annot_destructure expect=pass
+const limit = 1;
+export async function run(items: string[], options: { limit: number }) {
+  const { limit }: { limit: number } = options;
+  await mapLimit(items, limit, save);
+}
+// CASE end expect=pass

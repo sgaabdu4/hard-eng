@@ -1,0 +1,214 @@
+async function save(x) {}
+async function isFree(x) { return true; }
+async function handleA(x) {}
+async function handleB(x) {}
+async function sleep(ms) {}
+async function loadRows() { return []; }
+
+// CASE switch_braceless_forof expect=fire
+async function s1(events) {
+  for (const evt of events)
+    switch (evt.type) {
+      case "a":
+        await handleA(evt);
+        break;
+      default:
+        await handleB(evt);
+        break;
+    }
+}
+
+// CASE switch_braced_forof expect=fire
+async function s2(events) {
+  for (const evt of events) {
+    switch (evt.type) {
+      case "a":
+        await handleA(evt);
+        break;
+      default:
+        await handleB(evt);
+        break;
+    }
+  }
+}
+
+// CASE switch_braceless_classic expect=fire
+async function s3(events) {
+  for (let i = 0; i < events.length; i++)
+    switch (events[i].type) {
+      case "a":
+        await handleA(events[i]);
+        break;
+      default:
+        await handleB(events[i]);
+    }
+}
+
+// CASE switch_braceless_multi expect=fire
+async function s4(events) {
+  for (let i = 0, n = events.length; i < n; i++)
+    switch (events[i].type) {
+      case "a":
+        await handleA(events[i]);
+        break;
+    }
+}
+
+// CASE switch_braceless_return_only expect=pass
+async function s5(events) {
+  for (const evt of events)
+    switch (evt.type) {
+      case "stop":
+        return await handleA(evt);
+    }
+}
+
+// CASE multi_braced_return expect=pass
+async function e1(ids) {
+  for (let i = 0, n = ids.length; i < n; i++) {
+    if (await isFree(ids[i])) return ids[i];
+  }
+  return null;
+}
+
+// CASE multi_braceless_return expect=pass
+async function e2(ids) {
+  for (let i = 0, n = ids.length; i < n; i++) if (await isFree(ids[i])) return ids[i];
+  return null;
+}
+
+// CASE reverse_braceless_return expect=pass
+async function e3(ids) {
+  for (let i = ids.length; i--; ) if (await isFree(ids[i])) return ids[i];
+  return null;
+}
+
+// CASE multi_init_once expect=pass
+async function e4() {
+  let total = 0;
+  for (let rows = await loadRows(), i = 0; i < rows.length; i++) {
+    total += rows[i];
+  }
+  return total;
+}
+
+// CASE multi_init_object expect=pass
+async function e5() {
+  let total = 0;
+  for (let i = 0, rows = await loadRows({ limit: 5, sort: "a;b" }); i < rows.length; i++) {
+    total += rows[i];
+  }
+  return total;
+}
+
+// CASE multi_body_after_object_init expect=fire
+async function e6() {
+  for (let i = 0, rows = await loadRows({ limit: 5, sort: "a;b" }); i < rows.length; i++) {
+    await save(rows[i]);
+  }
+}
+
+// CASE multi_regex_in_body expect=fire
+async function e7(names) {
+  for (let i = 0, n = names.length; i < n; i++) {
+    const clean = names[i].replace(/'/g, "");
+    await save(clean);
+  }
+}
+
+// CASE multi_template_body expect=fire
+async function e8(names) {
+  for (let i = 0, n = names.length; i < n; i++) {
+    await save(`name: ${names[i]} {`);
+  }
+}
+
+// CASE multi_braceless_no_semicolon expect=fire
+async function e9(ids) {
+  for (let i = 0, n = ids.length; i < n; i++) await save(ids[i])
+}
+
+// CASE comment_for_text expect=pass
+async function e10() {
+  // Same as for (let i = 0; i < n; i++) we call the API
+  const rows = await loadRows();
+  return rows;
+}
+
+// CASE string_for_text expect=pass
+async function e11() {
+  const code = "for (let i = 0; i < n; i++) {";
+  const rows = await loadRows();
+  return [code, rows, "}"];
+}
+
+// CASE braceless_else_break expect=fire
+async function e12(ids) {
+  for (const id of ids)
+    if (id) await save(id);
+    else break;
+}
+
+// CASE braced_guard_break expect=fire
+async function e13(ids) {
+  for (const id of ids) {
+    if (!id) break;
+    await save(id);
+  }
+}
+
+// CASE braceless_try_catch_return expect=pass
+async function e14(urls) {
+  for (const url of urls)
+    try {
+      return await save(url);
+    } catch (e) {
+      continue;
+    }
+  return null;
+}
+
+// CASE braceless_sleep_sibling expect=fire
+async function e15(ids) {
+  for (const id of ids)
+    if (id) {
+      await save(id);
+      await sleep(10);
+    }
+}
+
+// CASE braced_sleep_sibling expect=fire
+async function e16(ids) {
+  for (const id of ids) {
+    if (id) {
+      await save(id);
+      await sleep(10);
+    }
+  }
+}
+
+// CASE multi_helper_outer expect=fire
+async function e17(chunks, mapLimit) {
+  for (let i = 0, n = chunks.length; i < n; i++) {
+    await mapLimit(chunks[i], 4, save);
+  }
+}
+
+// CASE multi_callback_only expect=pass
+async function e18(ids) {
+  const work = [];
+  for (let i = 0, n = ids.length; i < n; i++) {
+    work.push(async () => {
+      await save(ids[i]);
+    });
+  }
+  return work;
+}
+
+// CASE empty_cond_multi expect=pass
+async function e19(read) {
+  for (let i = 0, page; ; i++) {
+    page = await read(i);
+    if (!page) break;
+  }
+}

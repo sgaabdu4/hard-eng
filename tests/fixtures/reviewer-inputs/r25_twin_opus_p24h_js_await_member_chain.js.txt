@@ -1,0 +1,6 @@
+// CASE js_await_member_chain expect=fire
+export async function f(items, store, step) {
+	for (const item of items) {
+		(await store.open()).rows[item] = await step(item);
+	}
+}

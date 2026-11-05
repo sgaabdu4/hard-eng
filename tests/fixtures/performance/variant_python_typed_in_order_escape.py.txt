@@ -1,0 +1,10 @@
+async def in_order(items: list[object], step: Step, *, reason: str):
+    for item in items:
+        # ruleid: await-in-loop-python
+        await client.put(item)
+        # ruleid: await-in-loop-python
+        await audit.save(item)
+
+
+async def use():
+    await in_order([], step, reason="Each update reads the previous write")

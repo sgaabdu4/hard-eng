@@ -1,0 +1,49 @@
+// CASE js_block_const_then_param_call expect=pass
+export async function a(items, width) {
+  if (items.length === 0) {
+    const width = 1;
+    log(width);
+  }
+  await mapLimit(items, width, save);
+}
+// CASE js_for_of_simple_shadow expect=pass
+export async function b(groups, widths) {
+  const width = 1;
+  await probe(width);
+  await Promise.all(widths.map(async () => {
+    for (const width of widths) {
+      await mapLimit(groups, width, save);
+      break;
+    }
+  }));
+}
+// CASE js_for_let_header_shadow expect=pass
+export async function c(items) {
+  const width = 1;
+  await probe(width);
+  for (let width = 2; width <= 8; width *= 2) {
+    await mapLimit(items, width, save);
+    break;
+  }
+}
+// CASE js_destructure_with_default_body expect=pass
+const width4 = 1;
+export async function d(items, config) {
+  const { width4 = 8 } = config;
+  await mapLimit(items, width4, save);
+}
+// CASE js_object_method_destructured_param expect=pass
+const limit = 1;
+export const importer = {
+  async run({ items, limit }) {
+    await mapLimit(items, limit, save);
+  },
+};
+// CASE js_class_method_destructured_param expect=pass
+const concurrency = 1;
+export class Exporter {
+  async run({ items, concurrency }) {
+    await mapLimit(items, save, { concurrency });
+  }
+}
+// CASE end expect=pass

@@ -1,0 +1,5 @@
+async function run(items) {
+  for (let i=0;;i++) {
+    await save(items[i]);
+  }
+}

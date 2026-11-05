@@ -1,0 +1,18 @@
+async function cached(items, load) {
+	let value = null;
+	while (true) {
+		for (const item of items) {
+			value ??= await load(item);
+		}
+	}
+}
+async function reset(items, load) {
+	let value = null;
+	while (true) {
+		for (const item of items) {
+			value = null;
+			// ruleid: await-in-loop-javascript
+			value ??= await load(item);
+		}
+	}
+}

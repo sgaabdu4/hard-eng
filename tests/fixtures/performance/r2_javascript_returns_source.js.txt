@@ -1,0 +1,16 @@
+async function run(items) {
+ for (const item of await load()) { print(item); }
+ for (const group of items) {
+  // ruleid: await-in-loop-javascript
+  for (const item of await load(group)) { print(item); }
+ }
+ for (const item of items) {
+  const label = (() => { return item.id; })();
+  // ruleid: await-in-loop-javascript
+  await read(label);
+ }
+ for (const item of items) {
+  // ruleid: await-in-loop-javascript
+  await read(item);
+ }
+}

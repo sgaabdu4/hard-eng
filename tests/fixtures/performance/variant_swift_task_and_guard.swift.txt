@@ -1,0 +1,18 @@
+func work(items: [Item]) async throws {
+  for item in items {
+    Task { try await read(item) }
+    guard try await allowed(item) else { throw Denied() }
+  }
+}
+
+func nonthrowingChecks(items: [Item]) async throws {
+  for item in items {
+    if await blocked(item) { throw Denied() }
+  }
+  for item in items {
+    if (await blocked(item)) { throw Denied() }
+  }
+  for item in items {
+    guard await allowed(item) else { throw Denied() }
+  }
+}

@@ -1,0 +1,50 @@
+import asyncio
+
+
+# CASE p_comment_line_before_for expect=pass
+async def map_with_concurrency(items, width, operation):
+    # Run one chunk at a time; each chunk runs in parallel.
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE p_trailing_comment_on_for expect=pass
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):  # one chunk per pass
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE p_extra_loop_after expect=fire
+async def map_with_concurrency(items, operation, width):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+    for item in items:
+        await operation(item)
+
+
+# CASE p_extra_before_loop expect=fire
+async def map_with_concurrency(operation, items, width):
+    await operation(items[0])
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE p_width_is_items_impostor expect=fire
+async def map_with_concurrency(items, operation, width):
+    for offset in range(0, len(items), 1):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + 1]))
+
+
+# CASE p_kwargs_only expect=pass
+async def map_with_concurrency(*, items, operation, width):
+    for offset in range(0, len(items), width):
+        await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+
+# CASE p_nested_helper_in_function expect=pass
+async def run(rows, save):
+    async def map_with_concurrency(items, width, operation):
+        for offset in range(0, len(items), width):
+            await asyncio.gather(*(operation(item) for item in items[offset : offset + width]))
+
+    await map_with_concurrency(rows, 4, save)

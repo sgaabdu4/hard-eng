@@ -1,0 +1,11 @@
+// CASE ts_cast_outside_loop expect=fire
+export async function run(
+	items: string[],
+	put: (item: string) => Promise<void>,
+	target: object,
+) {
+	(target as { ready: boolean }).ready = true;
+	for (const item of items) {
+		await put(item);
+	}
+}

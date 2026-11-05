@@ -1,0 +1,99 @@
+const SERIAL = 1;
+const MODULE_WIDTH = Math.min(1, CPU_COUNT);
+
+// CASE let_min_one expect=fire
+export async function letMinOne(items: string[], op: (s: string) => Promise<void>, n: number) {
+	let width = Math.min(1, n);
+	await mapLimit(items, width, op);
+}
+
+// CASE var_min_one expect=fire
+export async function varMinOne(items: string[], op: (s: string) => Promise<void>, n: number) {
+	var width = Math.min(1, n);
+	await mapLimit(items, width, op);
+}
+
+// CASE typed_const_min_one expect=fire
+export async function typedConstMinOne(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const width: number = Math.min(1, n);
+	await mapLimit(items, width, op);
+}
+
+// CASE const_min_three expect=fire
+export async function constMinThree(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const width = Math.min(n, items.length, 1);
+	await mapLimit(items, width, op);
+}
+
+// CASE module_min_one expect=fire
+export async function moduleMinOne(items: string[], op: (s: string) => Promise<void>) {
+	await mapLimit(items, MODULE_WIDTH, op);
+}
+
+// CASE local_const_one expect=fire
+export async function localConstOne(items: string[], op: (s: string) => Promise<void>) {
+	const width = 1;
+	await mapLimit(items, width, op);
+}
+
+// CASE local_let_one_unchanged expect=fire
+export async function localLetOne(items: string[], op: (s: string) => Promise<void>) {
+	let width = 1;
+	await mapLimit(items, width, op);
+}
+
+// CASE typed_const_one expect=fire
+export async function typedConstOne(items: string[], op: (s: string) => Promise<void>) {
+	const width: number = 1;
+	await mapLimit(items, width, op);
+}
+
+// CASE module_const_one expect=fire
+export async function moduleConstOne(items: string[], op: (s: string) => Promise<void>) {
+	await mapLimit(items, SERIAL, op);
+}
+
+// CASE min_cap_nested_closure expect=fire
+export async function minCapNested(groups: string[][], op: (s: string) => Promise<void>, n: number) {
+	const width = Math.min(1, n);
+	await Promise.all(groups.map((group) => mapLimit(group, width, op)));
+}
+
+// CASE let_min_one_reassigned expect=pass
+export async function letMinReassigned(items: string[], op: (s: string) => Promise<void>, n: number, fast: boolean) {
+	let width = Math.min(1, n);
+	if (fast) width = 8;
+	await mapLimit(items, width, op);
+}
+
+// CASE const_min_four expect=pass
+export async function constMinFour(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const width = Math.min(4, n);
+	await mapLimit(items, width, op);
+}
+
+// CASE generic_local_min_one expect=fire
+export async function genericLocalMin(items: string[], op: (s: string) => Promise<void>, n: number) {
+	const width = Math.min(1, n);
+	await mapLimit<string>(items, width, op);
+}
+
+// CASE generic_local_const_one expect=fire
+export async function genericLocalOne(items: string[], op: (s: string) => Promise<void>) {
+	const width = 1;
+	await mapLimit<string>(items, width, op);
+}
+
+// CASE generic_module_const_one expect=fire
+export async function genericModuleOne(items: string[], op: (s: string) => Promise<void>) {
+	await mapLimit<string>(items, SERIAL, op);
+}
+
+// CASE generic_let_min_one expect=fire
+export async function genericLetMin(items: string[], op: (s: string) => Promise<void>, n: number) {
+	let width = Math.min(1, n);
+	await mapLimit<string>(items, width, op);
+}
+
+declare const CPU_COUNT: number;
+declare function mapLimit<T>(...args: unknown[]): Promise<void>;

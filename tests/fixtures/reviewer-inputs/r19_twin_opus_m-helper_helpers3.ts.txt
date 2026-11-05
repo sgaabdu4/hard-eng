@@ -1,0 +1,12 @@
+import type { InOrderOptions } from "./types";
+
+// CASE inorder_imported_alias expect=pass
+export async function inOrder<T>(
+	items: Iterable<T>,
+	step: (item: T) => Promise<void>,
+	options: InOrderOptions,
+): Promise<void> {
+	for (const item of items) {
+		await step(item);
+	}
+}

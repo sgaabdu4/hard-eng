@@ -1,0 +1,13 @@
+async function run(items: Item[], step: Step) {
+ // ruleid: in-order-needs-reason-javascript
+ await inOrder<Item>(items, step);
+ // ruleid: in-order-needs-reason-javascript
+ await inOrder<Item>(items, step, {reason: "short"});
+ // ruleid: in-order-needs-reason-javascript
+ await order.inOrder<Item>(items, step, {reason: "short"});
+ await inOrder<Item>(items, step, {reason: "Each update reads the previous write"});
+ const serial = inOrder;
+ // ruleid: in-order-needs-reason-javascript
+ await serial<Item>(items, step);
+ await serial<Item>(items, step, {reason: "Each update reads the previous write"});
+}

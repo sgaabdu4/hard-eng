@@ -1,0 +1,5 @@
+const reason = 'Each update reads the previous write';
+Future<void> run(items, step) async {
+ await inOrder(items, step, reason: reason);
+ await inOrderSteps([step], reason: reason);
+}

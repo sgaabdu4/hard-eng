@@ -1,0 +1,66 @@
+Future<void> d1(int n) async {
+  // CASE four_declarators_update expect=fire
+  for (var i = 0, j = 0, k = 0, l = 0; i < n; i++, await tick(i)) {
+    use(i);
+  }
+}
+
+Future<void> d2(int n) async {
+  // CASE int_three_condition expect=fire
+  for (int i = 0, j = 0, k = 0; await more(i); i++) {
+    use(i);
+  }
+}
+
+Future<void> d3(int n) async {
+  var i = 0;
+  // CASE expression_init_condition expect=fire
+  for (i = 0; await more(i); i++) {
+    use(i);
+  }
+}
+
+Future<void> d4() async {
+  // CASE init_only_two expect=pass
+  for (var i = 0, n = await count(); i < n; i++) {
+    use(i);
+  }
+}
+
+Future<void> d5() async {
+  // CASE cursor_paging_update expect=fire
+  for (var page = await first(); page != null; page = await next(page)) {
+    use(page);
+  }
+}
+
+Future<void> d6(int n) async {
+  // CASE int_two_update_braceless expect=fire
+  for (int i = 0, j = 0; i < n; i++, j = await next(j)) use(i);
+}
+
+Future<void> d7() async {
+  // CASE empty_braceless_condition expect=fire
+  for (; await more(0);) use(0);
+}
+
+Future<void> d8(int n) async {
+  // CASE typed_nullable_cursor expect=fire
+  for (Page? page = await first(); page != null; page = await page.next()) {
+    use(page);
+  }
+}
+
+Future<void> d9(int n) async {
+  // CASE four_int_condition expect=fire
+  for (int i = 0, j = 0, k = 0, l = 0; await more(i); i++) {
+    use(i);
+  }
+}
+
+Future<void> d10(int n) async {
+  // CASE nested_callback_condition expect=pass
+  for (var i = 0, j = 0; check(() async => await tick()); i++) {
+    use(i);
+  }
+}

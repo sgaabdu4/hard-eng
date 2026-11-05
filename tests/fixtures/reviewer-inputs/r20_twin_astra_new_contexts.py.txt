@@ -1,0 +1,13 @@
+import asyncio
+
+
+async def run(items, session, lock):
+    for item in items:
+        with lock:
+            consume(item)
+    for item in items:
+        async with session.get(item) as response:
+            consume(response)
+    for item in items:
+        async with asyncio.TaskGroup() as group:
+            group.create_task(save(item))

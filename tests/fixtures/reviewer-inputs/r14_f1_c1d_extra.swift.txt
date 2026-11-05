@@ -1,0 +1,8 @@
+import Foundation
+
+// CASE swift_fourth_arg_literal_one expect=pass
+func x1(_ items: [String], _ op: @escaping (String) async throws -> Void, width: Int) async throws {
+    try await mapWithConcurrency(items, width, op, 1)
+}
+
+// CASE swift_end expect=pass

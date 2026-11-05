@@ -1,0 +1,12 @@
+// CASE swift_dup_plain expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async rethrows {
+  for item in items {
+    pair(try await step(item), try await step(item))
+  }
+}
+// CASE swift_dup_two_strings expect=fire
+func inOrder<T>(_ items: [T], _ step: (T) async throws -> Void, reason: String) async rethrows {
+  for item in items {
+    pair(try await step(item), "a", try await step(item), "b")
+  }
+}

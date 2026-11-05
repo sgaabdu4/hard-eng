@@ -1,0 +1,5 @@
+export let mapLimit = async function (items, width, operation) {
+	for (let offset = 0; offset < items.length; offset += width) {
+		await Promise.all(items.slice(offset, offset + width).map(operation));
+	}
+};

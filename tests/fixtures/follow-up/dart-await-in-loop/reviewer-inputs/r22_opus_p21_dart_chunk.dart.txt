@@ -1,0 +1,53 @@
+// CASE dart_chunk_canonical_comment expect=pass
+Future<List<R>> mapWithConcurrency<T, R>(List<T> items, int width, Future<R> Function(T) operation) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(/* don't "await" each */ operation)));
+  }
+  return results;
+}
+// CASE dart_chunk_interp_extra expect=fire
+Future<List<R>> b<T, R>(List<T> items, int width, Future<R> Function(T) operation) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(log(await Future.wait(group.map(operation)), '${await flush(offset)}'));
+  }
+  return results;
+}
+// CASE dart_chunk_awaited_items_header expect=fire
+Future<List<R>> c<T, R>(Future<List<T>> Function() source, int width, Future<R> Function(T) operation) async {
+  final results = <R>[];
+  for (var offset = 0; offset < (await source()).length; offset += width) {
+    final group = (await source()).skip(offset).take(width);
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+// CASE dart_chunk_awaited_width expect=fire
+Future<List<R>> d<T, R>(List<T> items, Future<int> Function() width, Future<R> Function(T) operation) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += await width()) {
+    final group = items.skip(offset).take(await width());
+    results.addAll(await Future.wait(group.map(operation)));
+  }
+  return results;
+}
+// CASE dart_chunk_formatted expect=pass
+Future<List<R>> e<T, R>(
+  List<T> items,
+  int width,
+  Future<R> Function(T) operation,
+) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(
+      await Future.wait(
+        group.map(operation),
+      ),
+    );
+  }
+  return results;
+}

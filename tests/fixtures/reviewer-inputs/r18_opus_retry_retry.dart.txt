@@ -1,0 +1,27 @@
+Future<String> call() async => 'ok';
+
+// CASE dart_retry_backoff_multi expect=pass
+Future<String> withRetry() async {
+  for (var attempt = 0, delay = 200; attempt < 5; attempt++, delay *= 2) {
+    try {
+      return await call();
+    } catch (_) {
+      await Future<void>.delayed(Duration(milliseconds: delay));
+    }
+  }
+  throw StateError('gave up');
+}
+
+// CASE dart_retry_backoff_single expect=pass
+Future<String> withRetrySingle() async {
+  var delay = 200;
+  for (var attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await call();
+    } catch (_) {
+      await Future<void>.delayed(Duration(milliseconds: delay));
+      delay *= 2;
+    }
+  }
+  throw StateError('gave up');
+}

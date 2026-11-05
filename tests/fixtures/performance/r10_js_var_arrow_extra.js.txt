@@ -1,0 +1,8 @@
+export const mapLimit = async (items, width, operation) => {
+	for (var offset = 0; offset < items.length; offset += width) {
+		// ruleid: await-in-loop-javascript
+		await Promise.all(items.slice(offset, offset + width).map(operation));
+		// ruleid: await-in-loop-javascript
+		await audit(items[offset]);
+	}
+};

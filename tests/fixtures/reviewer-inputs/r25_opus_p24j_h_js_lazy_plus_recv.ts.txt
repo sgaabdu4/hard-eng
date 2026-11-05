@@ -1,0 +1,8 @@
+// CASE js_lazy_plus_recv expect=fire
+export async function e(items, step, read, getCache) {
+  let saved;
+  for (const item of items) {
+    saved ??= await read(item);
+    (await getCache())[item] = await step(item);
+  }
+}

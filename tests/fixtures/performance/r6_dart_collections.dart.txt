@@ -1,0 +1,18 @@
+Future<void> run(groups, read) async {
+ // ruleid: await-in-loop-dart
+ for (final batch in groups) { await Future.wait(batch.where(valid).map(read).toList()); }
+ // ruleid: await-in-loop-dart
+ for (final batch in groups) { await Future.wait([...batch.map(read)], eagerError: true, cleanUp: clean); }
+ // ruleid: await-in-loop-dart
+ for (final batch in groups) { await batch.where(valid).map(read).toList().wait; }
+ // ruleid: await-in-loop-dart
+ for (final batch in groups) { await Future.wait(batch.expand((item) => [read(item)]).toSet()); }
+ for (final batch in groups) {
+  // ruleid: await-in-loop-dart
+  await Future.wait(other.where(valid).map(read), eagerError: true);
+ }
+ for (final item in items) {
+  // ruleid: await-in-loop-dart
+  await Future.wait([read(item), notify(item)], eagerError: true);
+ }
+}

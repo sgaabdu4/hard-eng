@@ -1,0 +1,12 @@
+// CASE inorder_alias_without_reason_but_comment expect=fire
+// type InOrderOptions = { reason: string };
+type InOrderOptions = { label: string };
+export async function inOrder<T>(
+  items: Iterable<T>,
+  step: (item: T) => Promise<void>,
+  options: InOrderOptions,
+): Promise<void> {
+  for (const item of items) {
+    await step(item);
+  }
+}

@@ -1,0 +1,7 @@
+type Options = {reason: string};
+export async function inOrder<T>(items: T[], step: (item: T) => Promise<void>, options: Readonly<Options>) {
+ for (const item of items) { await step(item); }
+}
+export async function inOrderSteps(steps: (() => Promise<void>)[], options: Partial<{reason: string}>) {
+ for (const step of steps) { await step(); }
+}

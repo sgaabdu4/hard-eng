@@ -1,0 +1,74 @@
+const width = 1;
+
+// CASE local_options_object expect=fire
+export async function localOptionsObject(items: string[], op: (item: string) => Promise<void>) {
+	const options = { concurrency: 1 };
+	await mapLimit(items, op, options);
+}
+
+// CASE reassigned_let expect=pass
+export async function reassignedLet(items: string[], op: (item: string) => Promise<void>, fast: boolean) {
+	let limit = 1;
+	if (fast) limit = 4;
+	await mapLimit(items, limit, op);
+}
+
+// CASE param_shadows_module expect=pass
+export async function paramShadowsModule(items: string[], op: (item: string) => Promise<void>, width: number) {
+	await mapLimit(items, width, op);
+}
+
+// CASE module_const_one expect=fire
+export async function moduleConstOne(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit(items, width, op);
+}
+
+// CASE this_method_one expect=fire
+export class Runner {
+	async run(items: string[], op: (item: string) => Promise<void>) {
+		await this.mapLimit(items, 1, op);
+	}
+	async mapLimit(items: string[], w: number, op: (item: string) => Promise<void>) {
+		return [items, w, op];
+	}
+}
+
+// CASE generic_options expect=fire
+export async function genericOptions(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit<string>(items, op, { concurrency: 1 });
+}
+
+// CASE ternary_one_one expect=fire
+export async function ternaryOneOne(items: string[], op: (item: string) => Promise<void>, a: boolean) {
+	await mapLimit(items, a ? 1 : 1, op);
+}
+
+// CASE nullish_param expect=pass
+export async function nullishParam(items: string[], op: (item: string) => Promise<void>, n?: number) {
+	await mapLimit(items, n ?? 1, op);
+}
+
+// CASE options_shorthand expect=fire
+export async function optionsShorthand(items: string[], op: (item: string) => Promise<void>) {
+	const concurrency = 1;
+	await mapLimit(items, op, { concurrency });
+}
+
+// CASE options_spread_one expect=fire
+export async function optionsSpreadOne(items: string[], op: (item: string) => Promise<void>, base: object) {
+	await mapLimit(items, op, { ...base, concurrency: 1 });
+}
+
+// CASE await_then_chain expect=fire
+export async function awaitThenChain(items: string[], op: (item: string) => Promise<void>) {
+	return mapLimit(items, 1, op).then(() => items.length);
+}
+
+// CASE min_len_one expect=fire
+export async function minLenOne(items: string[], op: (item: string) => Promise<void>) {
+	await mapLimit(items, Math.min(items.length, 1), op);
+}
+
+async function mapLimit<T>(...args: unknown[]): Promise<T[]> {
+	return args as T[];
+}

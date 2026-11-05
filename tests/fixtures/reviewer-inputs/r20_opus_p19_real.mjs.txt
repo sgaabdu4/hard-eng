@@ -1,0 +1,157 @@
+// CASE find_per_id expect=fire
+export async function a1(ids) {
+  const out = [];
+  for (const id of ids) {
+    const user = await db.users.find(id);
+    out.push(user);
+  }
+  return out;
+}
+// CASE entries expect=fire
+export async function a2(map) {
+  for (const [key, value] of Object.entries(map)) {
+    await cache.set(key, value);
+  }
+}
+// CASE for_in expect=fire
+export async function a3(obj) {
+  for (const id in obj) {
+    await save(obj[id]);
+  }
+}
+// CASE continue_guard expect=fire
+export async function a4(items) {
+  for (const item of items) {
+    if (!item.active) continue;
+    await process(item);
+  }
+}
+// CASE ui_clicks expect=fire
+export async function a5(page) {
+  for (const selector of selectors) {
+    await page.click(selector);
+  }
+}
+// CASE join_per_item expect=fire
+export async function a6(xs) {
+  const results = [];
+  for (const x of xs) {
+    results.push(await Promise.all([left(x), right(x)]));
+  }
+  return results;
+}
+// CASE class_method_loop expect=fire
+export class Syncer {
+  async syncAll(users) {
+    for (const user of users) {
+      await this.sync(user);
+    }
+  }
+}
+// CASE labeled_continue expect=fire
+export async function a8(groups) {
+  outer: for (const group of groups) {
+    for (const item of group) {
+      if (item.skip) continue outer;
+      await save(item);
+    }
+  }
+}
+// CASE switch_case expect=fire
+export async function a9(events) {
+  for (const event of events) {
+    switch (event.kind) {
+      case "a":
+        await handleA(event);
+        break;
+      default:
+        log(event);
+    }
+  }
+}
+// CASE ternary expect=fire
+export async function a10(xs) {
+  for (const x of xs) {
+    x.ok ? await accept(x) : await reject(x);
+  }
+}
+// CASE collect_then_all expect=pass
+export async function b1(xs) {
+  const tasks = [];
+  for (const x of xs) {
+    tasks.push(save(x));
+  }
+  await Promise.all(tasks);
+}
+// CASE map_all expect=pass
+export async function b2(xs) {
+  return Promise.all(xs.map(async (x) => {
+    const y = await load(x);
+    return transform(y);
+  }));
+}
+// CASE timer_callback expect=pass
+export function b3(xs) {
+  for (const x of xs) {
+    setTimeout(async () => {
+      await save(x);
+    }, 0);
+  }
+}
+// CASE one_time_iterable expect=pass
+export async function b4() {
+  for (const x of await list()) {
+    use(x);
+  }
+}
+// CASE early_exit expect=pass
+export async function b5(xs) {
+  for (const x of xs) {
+    if (x.done) {
+      await flush();
+      break;
+    }
+    buffer(x);
+  }
+}
+// CASE listener expect=pass
+export function b6(xs) {
+  for (const x of xs) {
+    emitter.on("e", async () => {
+      await save(x);
+    });
+  }
+}
+// CASE header_init_await_only expect=pass
+export async function b7() {
+  for (let i = 0, total = await count(); i < total; i++) {
+    use(i);
+  }
+}
+// CASE lazy_local expect=pass
+export async function b8(xs) {
+  let client;
+  for (const x of xs) {
+    client ??= await connect();
+    client.send(x);
+  }
+}
+// CASE inorder_call_in_loop_body expect=fire
+export async function b9(batches) {
+  for (const batch of batches) {
+    await inOrder(batch, save, { reason: "Each row update reads the previous balance" });
+  }
+}
+// CASE inorder_step_callback expect=pass
+export async function b10(rows) {
+  await inOrder(rows, async (row) => {
+    const before = await read(row);
+    await write(row, before);
+  }, { reason: "Each row update reads the previous balance" });
+}
+// CASE map_limit_call expect=pass
+export async function b11(rows) {
+  await mapLimit(rows, 8, async (row) => {
+    await save(row);
+  });
+}

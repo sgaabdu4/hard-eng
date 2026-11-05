@@ -1,0 +1,7 @@
+async function run(items, step) {
+ await inOrder(items, step, { reason: "Each update reads the previous saved state", pattern: /"/ });
+ await inOrder(items, step, { pattern: /"/, reason: "Each update reads the previous saved state" });
+ await inOrder(items, step, { reason: "Each update reads the previous saved state", normalize: value => value.replace(/"/g, '') });
+ await inOrder(items, step, { reason: "Each update reads the previous saved state", onError: error => console.log(error.message.replace(/["']/g, '')) });
+ await inOrder(items, step, { reason: "Each update reads the previous saved state", metadata: { format: /"/ } });
+}

@@ -1,0 +1,13 @@
+async def run(items, step):
+    await in_order(items, step, reason=ORDER_REASON)
+class Runner:
+    async def run(self, items, step):
+        await in_order_steps([step], reason=ORDER_REASON)
+    async def shadow(self, items, step, ORDER_REASON):
+        # ruleid: in-order-needs-reason-python
+        await in_order(items, step, reason=ORDER_REASON)
+ORDER_REASON: str = 'Each update reads the previous write'
+async def short(items, step):
+    # ruleid: in-order-needs-reason-python
+    await in_order(items, step, reason=SHORT_REASON)
+SHORT_REASON = 'too short'

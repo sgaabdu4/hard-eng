@@ -1,0 +1,7 @@
+
+// CASE dart_multi_update_empty_fmt expect=fire
+Future<void> save(int i) async {}
+Future<void> w() async {
+  for (var i = 0, j = 1; i < 4; await save(i + j), i++) ;
+  for (var i = 0; i < 4; await save(i), i++) {}
+}

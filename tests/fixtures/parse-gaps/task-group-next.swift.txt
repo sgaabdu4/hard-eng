@@ -1,0 +1,6 @@
+func run(group: Group) async throws {
+ var found: [Row] = []
+ while let row = try await group.next() {
+  found.append(row)
+ }
+}

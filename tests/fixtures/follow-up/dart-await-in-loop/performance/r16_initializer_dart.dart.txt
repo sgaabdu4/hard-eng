@@ -1,0 +1,47 @@
+Future<void> once() async {
+  for (var index = await loadStart(); index < 6; index++) {
+    consume(index);
+  }
+  var index = 0;
+  for (index = await loadStart(); index < 6; index++) consume(index);
+  for ((await prepare()); index < 6; index++) consume(index);
+  for (
+    var rows = await loadRows(), cursor = 0;
+    cursor < rows.length;
+    cursor++
+  ) {
+    // ruleid: await-in-loop-dart
+    await save(rows[cursor]);
+  }
+  for (
+    var left = await loadStart(), right = await loadEnd();
+    left < right;
+    left++
+  ) {
+    // ruleid: await-in-loop-dart
+    await save(left);
+  }
+}
+
+Future<void> repeated(dynamic groups) async {
+  // ruleid: await-in-loop-dart
+  for (var index = 0; await hasNext(); index++) consume(index);
+  // ruleid: await-in-loop-dart
+  for (var index = 0; index < 6; await advance()) consume(index);
+  for (var index = await loadStart(); index < 6; index++) {
+    // ruleid: await-in-loop-dart
+    await save(index);
+  }
+  for (final group in groups) {
+    // ruleid: await-in-loop-dart
+    for (var index = await loadStart(group); index < 6; index++) consume(index);
+  }
+  for (var outer = 0; outer < 4; outer++) {
+    // ruleid: await-in-loop-dart
+    for (var index = await loadStart(outer); index < 6; index++) consume(index);
+  }
+  // ruleid: await-in-loop-dart
+  for (var index = 0; await hasNext(); index++, tick()) consume(index);
+  // ruleid: await-in-loop-dart
+  for (var index = 0; index < 6; index++, await advance()) consume(index);
+}

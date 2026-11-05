@@ -1,0 +1,9 @@
+import asyncio
+
+
+async def map_with_concurrency(items, width, operation):
+    """Run bounded operations."""
+    for offset in range(0, len(items), width):
+        await asyncio.gather(
+            *(operation(item) for item in items[offset : offset + width])
+        )

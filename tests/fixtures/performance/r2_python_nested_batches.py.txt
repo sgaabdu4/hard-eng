@@ -1,0 +1,5 @@
+async def run(items, width):
+    for batch in itertools.batched(items, width):
+        for start in range(0, len(batch), 2):
+            # ruleid: await-in-loop-python
+            await asyncio.gather(*(read(item) for item in batch[start:start+2]))

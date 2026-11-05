@@ -1,0 +1,29 @@
+async function mapLimit(items, width, operation) {
+	const results = new Array(items.length);
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				results[index] = await operation(items[index]);
+			}
+		}),
+	);
+	return results;
+}
+async function extra(items, width, operation) {
+	const results = new Array(items.length);
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: width }, async () => {
+			while (next < items.length) {
+				const index = next++;
+				// ruleid: await-in-loop-javascript
+				results[index] = await operation(items[index]);
+				// ruleid: await-in-loop-javascript
+				await audit(index);
+			}
+		}),
+	);
+	return results;
+}

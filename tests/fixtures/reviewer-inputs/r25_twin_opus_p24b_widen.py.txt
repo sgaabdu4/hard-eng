@@ -1,0 +1,43 @@
+async def w01(items, rows, out, read):
+    # CASE bare_tuple_index_uses_lazy expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        out[saved], count = rows[item]
+
+
+async def w02(items, rows, out, read):
+    # CASE paren_tuple_index_uses_lazy expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        (out[saved], count) = rows[item]
+
+
+async def w03(items, rows, read):
+    # CASE bare_tuple_attr_of_lazy expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        saved.value, count = rows[item]
+
+
+async def w04(items, rows, read):
+    # CASE list_attr_of_lazy expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        [saved.value, count] = rows[item]
+
+
+async def w05(items, rows, read):
+    # CASE name_first_tuple_attr expect=pass
+    saved = None
+    for item in items:
+        if saved is None:
+            saved = await read(item)
+        count, saved.value = rows[item]

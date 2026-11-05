@@ -1,0 +1,24 @@
+import asyncio
+from collections.abc import Awaitable
+
+
+async def run(groups, other, read, output):
+    for batch in groups:
+        tasks = [asyncio.create_task(read(item)) for item in batch]
+        # ruleid: await-in-loop-python
+        rows = await asyncio.gather(*tasks)
+    for batch in groups:
+        report(len(batch))
+        tasks: list[Awaitable[Row]] = [read(item) for item in batch if item.enabled]
+        # ruleid: await-in-loop-python
+        rows = await asyncio.gather(*tasks)
+        output.extend(rows)
+    for batch in groups:
+        tasks: list[Awaitable[Row]] = [read(item) for item in other if item.enabled]
+        # ruleid: await-in-loop-python
+        rows = await asyncio.gather(*tasks)
+    for batch in groups:
+        # ruleid: await-in-loop-python
+        tasks = [await read(item) for item in batch]
+        # ruleid: await-in-loop-python
+        rows = await asyncio.gather(*tasks)

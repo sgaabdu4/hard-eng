@@ -1,0 +1,12 @@
+async def run(items, operation, configured):
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, 1, operation)
+    # ruleid: serial-bounded-helper-python
+    await pool.map_with_concurrency(items, operation, width=1)
+    width = 1
+    await map_with_concurrency(items, width, operation)
+    await map_with_concurrency(items, operation, width=width)
+    await map_with_concurrency(items, configured, operation, 1)
+    await map_with_concurrency(items, operation, 1)
+    # ruleid: serial-bounded-helper-python
+    await map_with_concurrency(items, 1, operation, 4)

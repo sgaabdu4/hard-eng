@@ -1,0 +1,4 @@
+async function run(items, op, settings) {
+  const width = 1;
+  async function execute({ width }) { return mapLimit(items, width, op); }
+}

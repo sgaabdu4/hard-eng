@@ -1,0 +1,18 @@
+// CASE tsx_honest expect=pass
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    await step(item);
+  }
+}
+// CASE tsx_distinct_attr expect=fire
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    render(await step(item), <Row value={await save(item)} />);
+  }
+}
+// CASE tsx_distinct_child expect=fire
+export async function inOrder<T>(items: Iterable<T>, step: (item: T) => Promise<void>, { reason }: { reason: string }): Promise<void> {
+  for (const item of items) {
+    render(await step(item), <Row>{await save(item)}</Row>);
+  }
+}

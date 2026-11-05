@@ -1,0 +1,8 @@
+import 'dart:async';
+Future<void> inOrderSteps(Iterable<FutureOr<void> Function()> items, {required String reason}) async { for (final item in items) {
+  await item();
+} }
+
+Future<void> use() async {
+  await inOrderSteps([], reason: "Each update reads the previous write");
+}

@@ -1,0 +1,26 @@
+function use(items, operation, n) {
+	const cap = Math.min(1, n);
+	// ruleid: serial-bounded-helper-javascript-options
+	mapLimit(items, operation, { concurrency: 1 });
+	// ruleid: serial-bounded-helper-javascript-options
+	mapLimit({ maxConcurrency: 1 }, items, operation);
+	// ruleid: serial-bounded-helper-javascript-options
+	mapLimit(items, { max_concurrency: 1 }, operation);
+	// ruleid: serial-bounded-helper-javascript-options
+	mapLimit(items, operation, { width: 1 });
+	// ruleid: serial-bounded-helper-javascript-options
+	mapLimit(items, operation, { limit: 1 });
+	// ok: serial-bounded-helper-javascript
+	mapLimit(items, Math.min(1, n), operation);
+	// ok: serial-bounded-helper-javascript
+	mapLimit(items, Math.min(n, 1), operation);
+	// ok: serial-bounded-helper-javascript
+	mapLimit(items, cap, operation);
+	mapLimit(items, operation, { maxConcurrency: 4 });
+	mapLimit(items, operation, { concurrency: n });
+	mapLimit(items, Math.min(4, n), operation);
+	mapLimit(items, n, operation);
+	mapLimit(items, Math.max(1, n), operation);
+	mapLimit(items, n + 1, operation);
+	mapLimit(items, Math.min(4, n + 1), operation);
+}

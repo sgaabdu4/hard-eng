@@ -1,0 +1,27 @@
+# CASE py_raw_loop_async_comprehension expect=fire
+async def collect(items):
+    for item in items:
+        consume([row async for row in stream(item)])
+
+
+# CASE py_inorder_async_comprehension expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), [row async for row in stream(item)])
+
+
+# CASE py_inorder_async_genexp expect=fire
+async def in_order(items, step, *, reason):
+    for item in items:
+        consume(await step(item), sum([x async for x in stream(item)]))
+
+
+# CASE py_mwc_async_comprehension expect=fire
+async def map_with_concurrency(items, width, operation):
+    for offset in range(0, len(items), width):
+        log(
+            await asyncio.gather(
+                *(operation(item) for item in items[offset : offset + width])
+            ),
+            [r async for r in stream(offset)],
+        )

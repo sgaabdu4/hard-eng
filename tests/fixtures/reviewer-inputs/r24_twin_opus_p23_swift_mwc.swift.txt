@@ -1,0 +1,71 @@
+// CASE swiftmwc_honest expect=pass
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { try await operation(item) }
+      }
+      try await group.waitForAll()
+    }
+  }
+}
+// CASE swiftmwc_distinct_after_wait expect=fire
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { try await operation(item) }
+      }
+      consume(try await group.waitForAll(), try await audit(offset))
+    }
+  }
+}
+// CASE swiftmwc_distinct_nested_group_after_wait expect=fire
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { try await operation(item) }
+      }
+      consume(
+        try await group.waitForAll(),
+        await withTaskGroup(of: Void.self) { inner in await audit(offset) })
+    }
+  }
+}
+// CASE swiftmwc_distinct_in_task expect=fire
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask { consume(try await operation(item), try await audit(item)) }
+      }
+      try await group.waitForAll()
+    }
+  }
+}
+// CASE swiftmwc_nested_group_in_task expect=fire
+func mapWithConcurrency(
+  items: [Int], width: Int, operation: @escaping @Sendable (Int) async throws -> Void
+) async throws {
+  for offset in stride(from: 0, to: items.count, by: width) {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for item in items[offset..<min(offset + width, items.count)] {
+        group.addTask {
+          consume(
+            try await operation(item),
+            await withTaskGroup(of: Void.self) { inner in await audit(item) })
+        }
+      }
+      try await group.waitForAll()
+    }
+  }
+}
