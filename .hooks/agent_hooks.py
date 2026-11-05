@@ -609,7 +609,7 @@ def integrated_services(root: Path) -> list[str]:
         "Appwrite": r"(?:from\s+['\"](?:node-)?appwrite['\"]|require\(['\"](?:node-)?appwrite['\"]|from\s+appwrite\b|import\s+appwrite\b|package:(?:dart_)?appwrite/)",
         "Dart": r"\b(?:import|export)\s+['\"](?:dart:|package:)",
     }
-    found = set()
+    found = {"Trello"} if (root / "trello.json").is_file() else set()
     for path in repository_files(root):
         relative = path.relative_to(root)
         if nonproduction_source(relative) or {".agents", ".claude", ".hooks"} & set(
