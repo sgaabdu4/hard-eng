@@ -591,7 +591,11 @@ def configure_deployment(root: Path, config: GateConfig) -> None:
             return
 
 
-STACK_SKILLS = {"appwrite-backend": "Appwrite", "building-flutter-apps": "Dart"}
+STACK_SKILLS = {
+    "appwrite-backend": "Appwrite",
+    "building-flutter-apps": "Dart",
+    "trello-coordinator": "Trello",
+}
 
 
 def unused_skills(root: Path) -> set[str]:

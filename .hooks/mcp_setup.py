@@ -348,7 +348,7 @@ def detected_servers(root: Path) -> dict[str, JsonObject]:
     return {
         service.lower(): settings
         for service in services
-        if (settings := optional[service]) is not None
+        if (settings := optional.get(service)) is not None
     }
 
 
