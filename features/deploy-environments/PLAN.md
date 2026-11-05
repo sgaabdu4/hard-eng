@@ -21,7 +21,7 @@ Authority: Abid on 2026-11-05: Workers is the default host unless the user picks
 
 - [ ] A Ready or Complete plan with `Delivery target: Merge` fails when the project configures delivery checks; `PR` and `Deploy` still pass → `tests/test_shipping_plan.py::test_configured_delivery_checks_need_deploy_target`.
 - [ ] Shipping refuses a Merge target when delivery checks are configured, before any GitHub call → `tests/test_shipping.py::test_configured_delivery_checks_refuse_merge_target`.
-- [ ] A small change without a plan in such a project ships with the Deploy target, so its delivery checks run → `tests/test_shipping_plan.py::test_small_change_runs_configured_delivery_checks`.
+- [ ] A small change without a plan in such a project ships with the Deploy target, so its delivery checks run → `tests/test_shipping_plan.py::test_ready_without_a_plan_only_for_a_small_change`.
 - [ ] Integration setup states the hosting defaults: staging and production, Workers by default, deploys from Actions only, staging journeys, a read-only production check that proves the revision, additive schema pushes, the origin move risk → `tests/test_skill_links.py::test_distributed_skill_links_resolve` (links) and the agent case below.
 - [ ] A planning-only request to put the fixture app online yields a plan with staging, production, Cloudflare Workers and `Delivery target: Deploy` → `tests/agent_checks.py::judge_hosted_plan` (case `hosted-greenfield`), run on Claude and Codex.
 

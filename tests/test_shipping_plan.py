@@ -21,10 +21,12 @@ from test_shipping import (
 )
 
 
+@pytest.mark.parametrize(("delivery", "target"), [(False, "Merge"), (True, "Deploy")])
 def test_ready_without_a_plan_only_for_a_small_change(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, delivery: bool, target: str
 ) -> None:
-    fixture = _fixture(tmp_path)
+    check = {"name": "live", "command": [sys.executable, "-c", "pass"]}
+    fixture = _fixture(tmp_path, delivery=[check] if delivery else [])
     (fixture.root / "source.txt").write_text("fixture\nsmall fix\n")
     _native(fixture.root, "commit", "-qam", "small fix")
     fixture = Fixture(
@@ -33,7 +35,7 @@ def test_ready_without_a_plan_only_for_a_small_change(
     _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [_check(fixture.head)]))
     shipment = shipping.verify(fixture.root, None, _PR_URL, "ready")
     assert shipment.plan is None
-    assert shipment.delivery_target == "Merge"
+    assert shipment.delivery_target == target
     (fixture.root / "added.txt").write_text("new file\n")
     _native(fixture.root, "add", "added.txt")
     _native(fixture.root, "commit", "-qm", "big change")
@@ -43,23 +45,6 @@ def test_ready_without_a_plan_only_for_a_small_change(
     _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [_check(fixture.head)]))
     with pytest.raises(shipping.ShippingError, match="big change needs a plan"):
         shipping.verify(fixture.root, None, _PR_URL, "ready")
-
-
-def test_small_change_runs_configured_delivery_checks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    fixture = _fixture(
-        tmp_path,
-        delivery=[{"name": "live", "command": [sys.executable, "-c", "pass"]}],
-    )
-    (fixture.root / "source.txt").write_text("fixture\nsmall fix\n")
-    _native(fixture.root, "commit", "-qam", "small fix")
-    fixture = Fixture(
-        fixture.root, fixture.plan, _native(fixture.root, "rev-parse", "HEAD")
-    )
-    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture), [_check(fixture.head)]))
-    shipment = shipping.verify(fixture.root, None, _PR_URL, "ready")
-    assert shipment.delivery_target == "Deploy"
 
 
 @pytest.mark.parametrize("stage", ["Ready", "Complete"])
