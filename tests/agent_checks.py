@@ -276,6 +276,25 @@ def judge_plan_only(fixture: Run) -> list[str]:
     return failures
 
 
+def judge_hosted_plan(fixture: Run) -> list[str]:
+    failures = [
+        f"changed non-plan file {name}"
+        for name in sorted(changed(fixture))
+        if not name.endswith("PLAN.md")
+    ]
+    text = "\n".join(path.read_text() for path in changed_plans(fixture)).lower()
+    if not text:
+        return [*failures, "wrote no PLAN.md"]
+    failures += [
+        f"the plan never names {word}"
+        for word in ("staging", "production", "cloudflare workers")
+        if word not in text
+    ]
+    if not re.search(r"(?m)^\s*(?:[-*+]\s+)?delivery target:\s*deploy\s*$", text):
+        failures.append("the plan does not use Delivery target: Deploy")
+    return failures
+
+
 def plan_title_and_outcome(text: str) -> str:
     outcome = text.partition("## Outcome + scope")[2].partition("\n## ")[0]
     return (text.partition("\n")[0] + outcome).lower()
@@ -509,6 +528,12 @@ CASES = [
         "Plan a change so average([]) returns 0.0 instead of raising. This is a planning-only request: produce the plan and stop; do not implement it.",
         prepare_nothing,
         judge_plan_only,
+    ),
+    Case(
+        "hosted-greenfield",
+        "Plan putting this calculator online as a small public website people can use. This is a planning-only request: produce the plan and stop; do not build it.",
+        prepare_nothing,
+        judge_hosted_plan,
     ),
     Case(
         "continue-approved",
