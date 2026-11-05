@@ -1,7 +1,7 @@
 import json
 import re
-from collections.abc import Iterator
-from dataclasses import dataclass
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass, replace
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -20,6 +20,15 @@ FIELDS = (
 )
 REQUIRED_LISTS = ("todo", "doing", "testing", "done")
 OPTIONAL_LISTS = ("urgent", "discuss")
+LIST_NAMES = {
+    "todo": ("to do", "todo", "to-do", "backlog"),
+    "doing": ("doing", "in progress"),
+    "testing": ("testing", "review", "in review", "qa"),
+    "done": ("done", "complete", "completed"),
+    "urgent": ("urgent",),
+    "discuss": ("discuss", "discussion", "questions"),
+}
+BOARD_LINK = re.compile(r"trello\.com/b/([A-Za-z0-9]+)")
 REQUIRED_ROLES = ("coordinator", "builder", "planner", "reviewer", "lookup")
 OPTIONAL_ROLES = ("computerUse",)
 ROLE_FIELDS = ("model", "why", "provider")
@@ -40,7 +49,7 @@ PHONE = re.compile(r"(?<![\w#])\+?\d(?:[\s().-]?\d){8,}(?![\d:])")
 class Config:
     board: str
     account: str
-    allowed: frozenset[str]
+    allowed: frozenset[str] | None
     lists: dict[str, str]
     needs: dict[str, str]
     every_minutes: float
@@ -94,7 +103,33 @@ def check_lists(lists: dict[str, str]) -> None:
         raise TrelloError(f"trello.json: lists is missing {', '.join(missing)}")
 
 
+def resolve_lists(config: "Config", names: Iterable[str]) -> "Config":
+    if config.lists:
+        return config
+    board = {name.strip().lower(): name for name in names}
+    found = {
+        role: next(board[n] for n in options if n in board)
+        for role, options in LIST_NAMES.items()
+        if any(n in board for n in options)
+    }
+    missing = [role for role in REQUIRED_LISTS if role not in found]
+    if missing:
+        raise TrelloError(
+            f"The board has no list for {', '.join(missing)}; "
+            "name them To do, Doing, Testing and Done, or set lists in trello.json"
+        )
+    return replace(config, lists=found)
+
+
+def board_id(data: Obj) -> str:
+    value = name_field(data, "board")
+    link = BOARD_LINK.search(value)
+    return link.group(1) if link else value.strip()
+
+
 def check_roles(value: Json) -> None:
+    if value is None:
+        return
     roles = obj(value)
     missing = [role for role in REQUIRED_ROLES if role not in roles]
     unknown = sorted(set(roles) - {*REQUIRED_ROLES, *OPTIONAL_ROLES})
@@ -169,17 +204,23 @@ def load_config(root: Path) -> Config:
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
         raise TrelloError(f"trello.json: unknown field: {', '.join(unknown)}")
-    lists = string_map(data.get("lists"), "lists", (*REQUIRED_LISTS, *OPTIONAL_LISTS))
-    check_lists(lists)
+    lists: dict[str, str] = {}
+    if data.get("lists") is not None:
+        lists = string_map(data["lists"], "lists", (*REQUIRED_LISTS, *OPTIONAL_LISTS))
+        check_lists(lists)
     check_roles(data.get("roles"))
     hours = check_timing(data.get("timing"))
     allowed = data.get("allowed")
-    if not isinstance(allowed, list) or not all(isinstance(n, str) for n in allowed):
+    if allowed is not None and (
+        not isinstance(allowed, list) or not all(isinstance(n, str) for n in allowed)
+    ):
         raise TrelloError("trello.json: allowed must be a list of usernames")
     return Config(
-        board=name_field(data, "board"),
-        account=name_field(data, "account"),
-        allowed=frozenset(n.lower() for n in allowed if isinstance(n, str)),
+        board=board_id(data),
+        account=name_field(data, "account") if "account" in data else "",
+        allowed=None
+        if allowed is None
+        else frozenset(n.lower() for n in allowed if isinstance(n, str)),
         lists=lists,
         needs=string_map(data.get("needsLabels", {}), "needsLabels"),
         every_minutes=hours["everyMinutes"],

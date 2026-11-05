@@ -1,4 +1,5 @@
 import io
+import json
 import threading
 import urllib.request
 from datetime import UTC, datetime, timedelta
@@ -6,8 +7,11 @@ from http.client import HTTPMessage
 from pathlib import Path
 
 import pytest
+from conftest import git
 from trello_fakes import (
     BOARD,
+    CONFIG,
+    KEY,
     TOKEN,
     Mods,
     Project,
@@ -364,3 +368,106 @@ def test_repeated_image_flags_attach_every_image(
     assert result.code == 0, result.text
     uploads = [c for c in project.fake.writes if c.path.endswith("/attachments")]
     assert len(uploads) == 2
+
+
+def paste(folder: Path, name: str, value: str) -> str:
+    pasted = folder / name
+    pasted.write_text(value + "\n")
+    return str(pasted)
+
+
+def test_save_secret_fills_the_main_checkout_from_a_worktree(
+    project: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = project.main / ".env.trello.local"
+    env.write_text("# kept\nTRELLO_KEY=old\n")
+    worktree = tmp_path / "worktree"
+    git(project.main, "worktree", "add", "-q", str(worktree))
+    monkeypatch.chdir(worktree)
+    for name, value in (("TRELLO_KEY", KEY), ("TRELLO_TOKEN", TOKEN)):
+        saved = project.run("save-secret", name, paste(tmp_path, name, value))
+        assert saved.code == 0, saved.text
+        assert saved.payload == {"saved": name}
+        assert value not in saved.text
+    assert env.read_text() == f"# kept\nTRELLO_KEY={KEY}\nTRELLO_TOKEN={TOKEN}\n"
+    assert env.stat().st_mode & 0o777 == 0o600
+    assert not (worktree / ".env.trello.local").exists()
+    assert project.run("probe").code == 0
+
+
+@pytest.mark.parametrize("value", ["", "two words"])
+def test_save_secret_refuses_a_bad_paste(
+    project: Project, tmp_path: Path, value: str
+) -> None:
+    env = project.main / ".env.trello.local"
+    before = env.read_text()
+    refused = project.run("save-secret", "TRELLO_TOKEN", paste(tmp_path, "t", value))
+    assert refused.code == 1
+    assert "TRELLO_TOKEN" in str(refused.payload["error"])
+    assert env.read_text() == before
+
+
+def test_save_secret_ignores_the_file_without_a_tracked_change(
+    project: Project, tmp_path: Path
+) -> None:
+    (project.main / ".gitignore").write_text("")
+    git(project.main, "add", ".gitignore")
+    git(project.main, "commit", "-qm", "no ignore")
+    (project.main / ".env.trello.local").unlink()
+    saved = project.run("save-secret", "TRELLO_KEY", paste(tmp_path, "k", KEY))
+    assert saved.code == 0, saved.text
+    assert KEY not in saved.text
+    exclude = project.main / ".git/info/exclude"
+    assert ".env.trello.local" in exclude.read_text().splitlines()
+    status = git(project.main, "status", "--porcelain")
+    assert ".env.trello.local" not in status
+
+
+def test_save_secret_refuses_a_tracked_file(project: Project, tmp_path: Path) -> None:
+    git(project.main, "add", "-f", ".env.trello.local")
+    git(project.main, "commit", "-qm", "tracked by mistake")
+    before = (project.main / ".env.trello.local").read_text()
+    refused = project.run("save-secret", "TRELLO_KEY", paste(tmp_path, "k", "new"))
+    assert refused.code == 1
+    assert (project.main / ".env.trello.local").read_text() == before
+
+
+def test_without_allowed_every_board_member_makes_requests(project: Project) -> None:
+    config = {name: value for name, value in CONFIG.items() if name != "allowed"}
+    (project.main / "trello.json").write_text(json.dumps(config))
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2)]
+    project.fake.actions = [
+        comment("a1", 1, "m-pat", "From a board member", 5),
+        comment("a2", 2, "m-gone", "From someone no longer on the board", 5),
+    ]
+    report = project.report()
+    assert refs(report["requests"]) == {"1"}
+    assert refs(report["information"]) == {"2"}
+
+
+def test_a_board_link_alone_is_enough(project: Project) -> None:
+    link = f"https://trello.com/b/{BOARD}/my-board"
+    (project.main / "trello.json").write_text(json.dumps({"board": link}))
+    probe = project.run("probe")
+    assert probe.code == 0, probe.text
+    assert probe.payload["account"] == "owner"
+    rows = probe.payload["lists"]
+    assert isinstance(rows, list)
+    roles = {str(row["role"]): str(row["name"]) for row in rows}
+    assert roles == {
+        "todo": "To do",
+        "doing": "Doing",
+        "testing": "Testing",
+        "done": "Done",
+    }
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    project.fake.actions = [comment("a1", 1, "m-pat", "Please add it", 5)]
+    assert refs(project.report()["requests"]) == {"1"}
+
+
+def test_a_board_without_a_needed_list_names_it(project: Project) -> None:
+    (project.main / "trello.json").write_text(json.dumps({"board": BOARD}))
+    project.fake.lists = [{"id": "l-todo", "name": "Backlog"}]
+    refused = project.run("probe")
+    assert refused.code == 1
+    assert "doing" in str(refused.payload["error"])
