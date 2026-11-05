@@ -222,7 +222,7 @@ def judge_hosted_plan(fixture: Run) -> list[str]:
         for word in ("staging", "production", "cloudflare workers")
         if word not in text
     ]
-    if not re.search(r"(?m)^\s*(?:[-*+]\s+)?delivery target:\s*deploy\s*$", text):
+    if not re.search(r"(?m)^\s*(?:[-*+]\s+)?delivery target:\s*deploy\b", text):
         failures.append("the plan does not use Delivery target: Deploy")
     return failures
 

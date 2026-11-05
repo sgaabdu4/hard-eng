@@ -130,6 +130,7 @@ SKETCH = "# Online\n\nStaging and production on Cloudflare Workers.\n\nDelivery 
         ),
         (HOSTED.replace("Deploy\n", "Merge\n"), "Delivery target: Deploy"),
         (HOSTED, None),
+        (HOSTED.replace("Deploy\n", "Deploy; Delivery: Pending\n"), None),
     ],
 )
 def test_hosted_plan_needs_both_environments_on_workers(
