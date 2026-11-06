@@ -8,7 +8,14 @@ from pathlib import Path
 
 from . import board, report, state
 from .api import Client, Secrets, TrelloError, redact
-from .config import OPTIONAL_LISTS, REQUIRED_LISTS, Config, load_config, resolve_lists
+from .config import (
+    OPTIONAL_LISTS,
+    REQUIRED_LISTS,
+    Config,
+    load_config,
+    refuse_wall,
+    resolve_lists,
+)
 from .secrets import NAMES, Place, load_secrets, locate, save_secret
 from .shapes import Json, Obj, obj, objs, parse_time, stamp, text
 
@@ -131,6 +138,7 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
         raise TrelloError(f"Cannot read {args.text_file}") from error
     for piece in (body, *(Path(name).name for name in args.image)):
         session.config.refuse_private(piece)
+    refuse_wall(body)
     card = text(resolve_card(session, args.card).get("id"))
     images = attach(session, card, args.image)
     lines = "\n".join(text(obj(row).get("markdown")) for row in images)
@@ -168,6 +176,7 @@ def new(session: Session, args: argparse.Namespace) -> Obj:
         raise TrelloError("The description file could not be read") from error
     for piece in (title, details):
         config.refuse_private(piece)
+    refuse_wall(details)
     target = list_id(session, args.role)
     cards = objs(
         client.request("GET", f"/boards/{config.board}/cards/all", {"fields": "name"})
