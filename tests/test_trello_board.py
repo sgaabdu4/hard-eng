@@ -499,3 +499,34 @@ def test_new_card_gets_the_next_number_at_the_top(
     planned = project.run("new", "todo", "Other", "--dry-run")
     assert isinstance(planned.payload["dryRun"], list)
     assert len(project.fake.writes) == 1
+
+
+def test_card_text_must_be_short_and_laid_out(project: Project, tmp_path: Path) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    note = tmp_path / "note.txt"
+    long_sentence = " ".join(["word"] * 26) + "."
+    wall = "One. Two. Three. Four."
+    unled = "The fix is live.\n- It shows the total.\n- It saves offline."
+    for refused, reason in (
+        (long_sentence, "26 words"),
+        (wall, "4 sentences"),
+        (unled, "bold"),
+        ("The PR is merged.", "PR"),
+        ("It is deployed to staging.", "deployed"),
+        ("Open `settings` now.", "code"),
+    ):
+        note.write_text(refused)
+        result = project.run("comment", "1", str(note))
+        assert result.code == 1, refused
+        assert reason in str(result.payload["error"])
+        made = project.run("new", "todo", "Card", "--description-file", str(note))
+        assert made.code == 1, refused
+    assert project.fake.writes == []
+    note.write_text(
+        "**The fix is live.**\n\n"
+        "- It shows the total.\n"
+        "- It saves offline.\n\n"
+        "![shot.png](https://files.example.test/" + "a" * 200 + ".png)\n\n"
+        "Reply yes, or say what to change."
+    )
+    assert project.run("comment", "1", str(note)).code == 0
