@@ -4,6 +4,7 @@ Load to start or change the schedule, or to start a worker. Use the section for 
 
 ## T3 Code
 
+- Start = a new thread on the project's main checkout (Local), never a new worktree; run the skill once.
 - Schedule = on every run, `list_scheduled_tasks`; none for this thread → `schedule_task` bound to it, interval `timing.everyMinutes`, prompt "Run the trello-coordinator skill." The first manual run sets it up; tell the owner once.
 - Workers = `delegate_task` with `target.providerInstanceId` = the role's `provider` (none set → the coordinator's own provider) and `target.model` = its `model`, `isolation: "worktree"`, `clientRequestId` `card<N>-r<round>`. Follow-ups = `t3_thread_send` to the worker's thread. Mixed Claude + GPT roles work here.
 - Builder after a planner on the same card = `delegate_task` without `isolation`; the brief names the planner's worktree path from `handover.md` and says to work only there. Start it only after the planner has ended.
