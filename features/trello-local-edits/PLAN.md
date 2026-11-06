@@ -7,6 +7,8 @@ Status: Complete
 A project can commit its own changes to the `trello-coordinator` skill: extra rules, extra script commands, changed text. A Hard Eng update then adds the release's new lines into those files and keeps the project's lines. A change that edits the same lines both sides stops the update and names the file. Non-goals: other skills, `.hooks/`, `hard-eng.gates.json`, workflows and `AGENTS.md` (these stay forced, because they are the checks); uncommitted edits (the update still asks for a commit first); `--replace-scaffold` (still overwrites).
 Also: the coordinator runs Hard Eng's `update-pr` itself during project health, so a waiting update does not show up in every run's report.
 
+Also: CI repair — `shipping.ci_seconds` 420 → 600 and the `hard-eng` job limit 7 → 10 minutes; the full suite now runs 6 to 7.5 minutes on GitHub and two runs today were cancelled at 7 minutes after their checks ran. Same fix as the 28 October raise; no check changes.
+
 ## Repository context
 
 Owners: `setup.py` `scaffold_changes` (plans each shipped file), new `.hooks/local_edits.py` (the merge; `setup.py` is at its line limit), `.hooks/update.py` `update_plan` and `release_installed` (apply the plan and prove the update PR), `.agents/skills/trello-coordinator/SKILL.md` (own-edits line, `update-pr` exception), `references/run.md` (project health).
