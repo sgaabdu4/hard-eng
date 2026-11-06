@@ -43,6 +43,12 @@ QUIET = re.compile(r"^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$")
 SECRET = re.compile(r"\b(?:[0-9a-f]{32,}|ATTA[0-9A-Za-z]{20,})\b", re.IGNORECASE)
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 PHONE = re.compile(r"(?<![\w#])\+?\d(?:[\s().-]?\d){8,}(?![\d:])")
+SKIP_LINE = re.compile(r"^(?:!\[|```|https?://)")
+BOLD_LEAD = re.compile(r"^(?:#+\s+)?\*\*.+\*\*")
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+JARGON = re.compile(
+    r"\b(?:PR|PRs|CI|API|repo|(?i:pull request|repository|worktree|merged?|deploy(?:ed|s)?|staging|backend|frontend|endpoint|refactor(?:ed)?))\b"
+)
 
 
 @dataclass(frozen=True)
@@ -65,6 +71,38 @@ class Config:
             raise TrelloError("The comment holds a phone number")
         if any(pattern.search(body) for pattern in self.privacy):
             raise TrelloError("The comment matches a privacy pattern in trello.json")
+
+
+def refuse_wall(body: str) -> None:
+    lines = [line.strip() for line in body.splitlines()]
+    prose = [line for line in lines if line and not SKIP_LINE.match(line)]
+    plain = "\n".join(prose)
+    if "`" in plain:
+        raise TrelloError("Card text has code formatting; say it in plain words")
+    if word := JARGON.search(plain):
+        raise TrelloError(
+            f"Card text uses the technical word {word[0]}; "
+            "say what the person sees and does"
+        )
+    if len(prose) > 2 and not BOLD_LEAD.match(prose[0]):
+        raise TrelloError("Start a comment of more than two lines with a bold line")
+    for block in re.split(r"\n\s*\n", body):
+        kept = [
+            line for line in block.splitlines() if not SKIP_LINE.match(line.strip())
+        ]
+        items = re.split(r"\n\s*(?:[-*]|\d+\.)\s+", "\n" + "\n".join(kept))
+        for item in items:
+            sentences = [s for s in SENTENCE_END.split(" ".join(item.split())) if s]
+            if len(sentences) > 3:
+                raise TrelloError(
+                    f"A paragraph has {len(sentences)} sentences; use bullets"
+                )
+            for sentence in sentences:
+                if (words := len(sentence.replace("**", "").split())) > 25:
+                    raise TrelloError(
+                        f"A sentence has {words} words; keep each to 25 or fewer: "
+                        + " ".join(sentence.split()[:6])
+                    )
 
 
 def strings_in(value: Json) -> Iterator[str]:
