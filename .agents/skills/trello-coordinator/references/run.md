@@ -69,4 +69,5 @@ Every new or changed screen, before any build:
 ## Report
 
 - To the owner only when something needs them or changed: one line per item, decisions numbered with the recommendation first. Nothing → no message.
+- Quiet run (nothing changed since the last report) = one line, "No change."; never repeat a standing wait or a not-checked item already reported. A worker still working = no message.
 - Say what was not checked this run and why. Separate "worker reported" from "I checked".

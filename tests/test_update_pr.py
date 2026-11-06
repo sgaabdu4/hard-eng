@@ -1,8 +1,10 @@
 """A Hard Eng update travels on its own branch and PR, never on the checkout's branch."""
 
+import fcntl
 import json
 import subprocess
 import tempfile
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import Mock
@@ -392,6 +394,18 @@ def test_update_pr_publishes_nothing_after_a_merged_fix_without_a_newer_release(
     retire_fix(target)
     assert publish(target, monkeypatch) == 0
     assert gh.calls == []
+
+
+def test_update_pr_waits_for_the_background_update_instead_of_failing(
+    feature: tuple[Path, Path, Path], gh: FakeGh, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    newer_release(source, monkeypatch, "first update")
+    with update_runner.lock_file(target).open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        threading.Timer(0.5, handle.close).start()
+        assert publish(target, monkeypatch) == 0
+    assert gh.verbs().count("pr create") == 1
 
 
 def test_update_pr_pushes_opens_one_pr_and_turns_on_auto_merge(
