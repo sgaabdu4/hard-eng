@@ -472,5 +472,6 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     first_step = next(line for line in run.splitlines() if line.startswith("1. "))
     assert "schedule" in first_step
     assert "(hosts.md)" in first_step
+    assert "--git-common-dir" in first_step and "main checkout" in first_step
     assert "`python3 .hooks/hard-eng.py update-pr` yourself" in run
     assert "Only exception: Hard Eng `update-pr`" in (SKILL / "SKILL.md").read_text()
