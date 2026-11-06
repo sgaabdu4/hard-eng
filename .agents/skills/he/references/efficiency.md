@@ -38,6 +38,7 @@ Ordered work: use `inOrder` or `inOrderSteps` with a reason; Python uses `in_ord
 ## Optimisation
 
 Only when the requested outcome is a measured improvement (time, memory, size, cost):
+
 1. Reproduce the real workload. The plan names the metric, target, measurement command and correctness constraints.
 2. Show the measurement detects a known change, then freeze the workload, command and configuration for the comparison.
 3. Record revision, configuration and repeated samples on both sides, enough that the difference exceeds run-to-run spread. Never run competing measurements on the same constrained CPU, disk or network.
