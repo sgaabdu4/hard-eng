@@ -107,6 +107,8 @@
         "scan",
         "--config",
         ".agents/skills/he/security",
+        "--exclude=.agents",
+        "--exclude=.hooks",
         "--jobs",
         "2",
         "--error",
