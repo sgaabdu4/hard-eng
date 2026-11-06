@@ -17,6 +17,7 @@ Blockers: None.
 Handoff: Approval
 Authority: Abid on 2026-11-06: "do a full analysis and then see what makes it better and then let's do it"; merge after green checks for the coordinator work.
 Decision: `trello.json` `timing.everyMinutes` is the one place for the interval; a different live interval is reset and the owner is told once.
+Decision: the default coordinator model is the strongest one; Abid chose to keep it after a model comparison on 2026-11-06.
 Decision: `update-pr` waits on the shared update lock without a time limit; the background update has its own limits.
 
 ## Acceptance + steps

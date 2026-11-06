@@ -480,4 +480,5 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     assert "still working = no message" in report
     t3 = hosts.split("## T3 Code", 1)[1].split("\n## ", 1)[0]
     assert "`coordinator` role's model" in t3
+    assert "coordinator = strongest model" in hosts
     assert "`everyMs` differs" in t3 and "`scheduledTaskId`" in t3
