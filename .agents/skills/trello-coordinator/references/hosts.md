@@ -4,8 +4,8 @@ Load to start or change the schedule, or to start a worker. Use the section for 
 
 ## T3 Code
 
-- Start = a new thread on the project's main checkout (Local), never a new worktree; run the skill once.
-- Schedule = on every run, `list_scheduled_tasks`; none for this thread → `schedule_task` bound to it, interval `timing.everyMinutes`, prompt "Run the trello-coordinator skill." The first manual run sets it up; tell the owner once.
+- Start = a new thread on the project's main checkout (Local), never a new worktree, on the `coordinator` role's model; run the skill once.
+- Schedule = on every run, `list_scheduled_tasks`; none for this thread → `schedule_task` bound to it, interval `timing.everyMinutes`, prompt "Run the trello-coordinator skill." The first manual run sets it up; tell the owner once. `everyMs` differs from `timing.everyMinutes` → `schedule_task` with its `scheduledTaskId` and the right `everyMs`; tell the owner once that a change belongs in `trello.json`.
 - Workers = `delegate_task` with `target.providerInstanceId` = the role's `provider` (none set → the coordinator's own provider) and `target.model` = its `model`, `isolation: "worktree"`, `clientRequestId` `card<N>-r<round>`. Follow-ups = `t3_thread_send` to the worker's thread. Mixed Claude + GPT roles work here.
 - Builder after a planner on the same card = `delegate_task` without `isolation`; the brief names the planner's worktree path from `handover.md` and says to work only there. Start it only after the planner has ended.
 - Stalls = read worker threads; follow each task's own wake-up instead of polling. Cancel = `task_cancel`.
@@ -43,7 +43,7 @@ Ask with `request_secret`, `delivery: "file"`, one value at a time, key first. T
 
 ## Roles + models
 
-- `trello.json` `roles` = the coordinator's model per role, each with a `why`, written for the host that runs the coordinator; they override the project's general model-role rule for coordinator workers. No `roles` → use the default split with this host's own models. Default split: coordinator = cheaper model, routing only; planner + reviewer = strongest model, judgment; builder = mid model, carries out a clear plan; lookup = fastest model, reads and reports; computerUse = the host's computer-use model, needed to check signed-in screens.
+- `trello.json` `roles` = the coordinator's model per role, each with a `why`, written for the host that runs the coordinator; they override the project's general model-role rule for coordinator workers. No `roles` → use the default split with this host's own models. Default split: coordinator = strongest model, open-ended routing and judgment on every card; planner + reviewer = strongest model, judgment; builder = mid model, carries out a clear plan; lookup = fastest model, reads and reports; computerUse = the host's computer-use model, needed to check signed-in screens.
 - A role's model unavailable on this host → say so and stop that role's work; never substitute another model. Moving the coordinator to another host = edit `roles` for that host first.
 - Model change = edit `trello.json`; running workers finish on their old model.
 - Timing, chase hours and quiet hours come from `trello.json` `timing`; no message to people inside `quietHours` unless urgent.

@@ -1,6 +1,7 @@
 # Repository-grounded UX reference
 
 Apply to visible changes; preview only the flow and states needed for the decision.
+
 - Grounding = inspect the actual website/screen, affected flow and token/theme/component owners in `DESIGN.md` + production code. A dashboard shell alone cannot support decisions about unseen workflows. Missing relevant context → expose the gap; never invent a baseline.
 - Usability = judge every proposal, mockup and review against these; send back a design that fails one:
   - Mistake-proof: risky choices blocked, right answer prefilled; ask "how could a rushed person get this wrong?".
