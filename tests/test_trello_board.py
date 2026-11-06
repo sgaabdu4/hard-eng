@@ -471,3 +471,31 @@ def test_a_board_without_a_needed_list_names_it(project: Project) -> None:
     refused = project.run("probe")
     assert refused.code == 1
     assert "doing" in str(refused.payload["error"])
+
+
+def test_new_card_gets_the_next_number_at_the_top(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [
+        make_card(4, "#4 Open", "l-doing"),
+        make_card(9, "#9 Archived", "l-done", closed=True),
+    ]
+    details = tmp_path / "details.txt"
+    details.write_text("Steps to reproduce")
+    made = project.run(
+        "new", "todo", "Export shops", "--description-file", str(details)
+    )
+    assert made.code == 0, made.text
+    assert made.payload == {"card": 10, "url": "https://trello.com/c/card-1"}
+    (post,) = project.fake.writes
+    assert (post.method, post.path) == ("POST", "/cards")
+    assert post.form == {
+        "idList": "l-todo",
+        "name": "#10 Export shops",
+        "pos": "top",
+        "desc": "Steps to reproduce",
+    }
+    assert project.run("new", "todo", "Call 07700 900123").code == 1
+    planned = project.run("new", "todo", "Other", "--dry-run")
+    assert isinstance(planned.payload["dryRun"], list)
+    assert len(project.fake.writes) == 1
