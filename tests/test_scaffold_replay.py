@@ -53,3 +53,110 @@ def test_update_still_refuses_an_edited_skill_file(
     monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
     with pytest.raises(ValueError, match="already differs"):
         update.update(target)
+
+
+COORDINATOR = ".agents/skills/trello-coordinator/"
+RUN = COORDINATOR + "references/run.md"
+SCRIPT = COORDINATOR + "scripts/trello_board/commands.py"
+LOCAL_RULE = "- Project rule: reply in the card's language.\n"
+LOCAL_CODE = "\n\ndef project_command() -> str:\n    return 'project'\n"
+
+
+def release_now(source: Path, monkeypatch: pytest.MonkeyPatch, message: str) -> str:
+    git(source, "add", ".")
+    git(source, "commit", "-q", "--allow-empty", "-m", message)
+    revision = git(source, "rev-parse", "HEAD")
+    monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
+    return revision
+
+
+def edited_coordinator(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path]:
+    """A project with the coordinator installed and its own committed lines in it."""
+    source, target, _ = release
+    (target / "trello.json").write_text('{"board": "https://trello.com/b/abc"}')
+    commit(target, "connect the board")
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    with (target / RUN).open("a") as rules:
+        rules.write(LOCAL_RULE)
+    with (target / SCRIPT).open("a") as script:
+        script.write(LOCAL_CODE)
+    commit(target, "project coordinator edits")
+    return source, target
+
+
+def change_first_line(path: Path, line: str) -> None:
+    lines = path.read_text().splitlines(keepends=True)
+    path.write_text(line + "".join(lines[1:]))
+
+
+def test_update_merges_local_coordinator_edits(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = edited_coordinator(release, monkeypatch)
+    base = git(target, "rev-parse", "HEAD")
+    change_first_line(source / RUN, "# One coordinator run, release two\n")
+    change_first_line(source / SCRIPT, 'import argparse\nRELEASE = "release two"\n')
+    release_now(source, monkeypatch, "release two")
+    update.update(target)
+    for name, local, new in (
+        (RUN, LOCAL_RULE, "release two"),
+        (SCRIPT, LOCAL_CODE, "release two"),
+    ):
+        text = (target / name).read_text()
+        assert local in text and new in text
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert update.check_scaffold_update(target, base)
+
+
+def test_local_coordinator_edits_survive_two_releases(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = edited_coordinator(release, monkeypatch)
+    for number in ("two", "three"):
+        change_first_line(source / RUN, f"# One coordinator run, release {number}\n")
+        release_now(source, monkeypatch, f"release {number}")
+        update.update(target)
+        text = (target / RUN).read_text()
+        assert text.startswith(f"# One coordinator run, release {number}\n")
+        assert text.endswith(LOCAL_RULE)
+
+
+def test_untouched_coordinator_file_keeps_local_edits(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = edited_coordinator(release, monkeypatch)
+    before = git(target, "rev-parse", "HEAD")
+    release_now(source, monkeypatch, "release without coordinator changes")
+    update.update(target)
+    assert (target / RUN).read_text().endswith(LOCAL_RULE)
+    assert RUN not in git(target, "diff", "--name-only", before, "HEAD").splitlines()
+
+
+def test_overlapping_coordinator_edit_is_refused(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = edited_coordinator(release, monkeypatch)
+    change_first_line(target / RUN, "# Our coordinator run\n")
+    commit(target, "project heading")
+    head = git(target, "rev-parse", "HEAD")
+    change_first_line(source / RUN, "# One coordinator run, release two\n")
+    release_now(source, monkeypatch, "release two")
+    with pytest.raises(ValueError, match=f"{RUN} has local edits on the same lines"):
+        update.update(target)
+    assert git(target, "rev-parse", "HEAD") == head
+    assert git(target, "status", "--porcelain") == ""
+
+
+def test_merged_coordinator_script_must_compile(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = edited_coordinator(release, monkeypatch)
+    head = git(target, "rev-parse", "HEAD")
+    change_first_line(source / SCRIPT, "def broken(:\n")
+    release_now(source, monkeypatch, "release two")
+    with pytest.raises(ValueError, match=f"{SCRIPT} does not compile"):
+        update.update(target)
+    assert git(target, "rev-parse", "HEAD") == head
