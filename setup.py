@@ -608,24 +608,26 @@ def unused_skills(root: Path) -> set[str]:
 def scaffold_changes(
     root: Path, previous: Path | None, unused: set[str], replace: bool = False
 ) -> dict[str, str]:
+    from local_edits import MERGED_SKILL, merge_local_edits
     from update import retired_parent, scaffold_files, without_skills
 
     changes = {
         name: (SOURCE / name).read_text()
         for name in sorted(without_skills(scaffold_files(SOURCE), unused))
     }
-    for name, content in changes.items():
+    for name, content in list(changes.items()):
         target = root / name
         if retired_parent(root, name) or not target.exists():
             continue
         if not replace and target.read_text() != content:
             old = previous / name if previous is not None else None
-            if (
-                old is None
-                or not old.is_file()
-                or target.read_bytes() != old.read_bytes()
-            ):
+            if old is None or not old.is_file():
                 raise ValueError(f"{name} already differs; ask before replacing it")
+            if target.read_bytes() == old.read_bytes():
+                continue
+            if not name.startswith(MERGED_SKILL):
+                raise ValueError(f"{name} already differs; ask before replacing it")
+            changes[name] = merge_local_edits(name, target, old, content)
     return changes
 
 

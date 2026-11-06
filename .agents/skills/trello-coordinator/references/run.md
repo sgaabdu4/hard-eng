@@ -29,6 +29,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 - Error tracker: the project's Sentry MCP server or launcher; none configured → say "no error tracker" in the report. Triage each new or returning issue per Hard Eng's Sentry integration guide; real bug → worker fix; security → also a security review.
 - CI: failed run → read the first failure → worker fix.
 - Release: finished branches not yet released → one release worker, which also runs the plans' one-time steps. Then move cards to testing per the Core rules.
+- Hard Eng update ready → run `python3 .hooks/hard-eng.py update-pr` yourself; it merges on green. Report only a failure.
 - Background jobs: a job that stopped, paused or fell behind → tell the affected people at once, plus a card.
 
 ## Workers
