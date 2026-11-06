@@ -475,3 +475,9 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     assert "--git-common-dir" in first_step and "main checkout" in first_step
     assert "`python3 .hooks/hard-eng.py update-pr` yourself" in run
     assert "Only exception: Hard Eng `update-pr`" in (SKILL / "SKILL.md").read_text()
+    report = run.split("\n## Report\n", 1)[1]
+    assert "Quiet run" in report and "one line" in report
+    assert "still working = no message" in report
+    t3 = hosts.split("## T3 Code", 1)[1].split("\n## ", 1)[0]
+    assert "`coordinator` role's model" in t3
+    assert "`everyMs` differs" in t3 and "`scheduledTaskId`" in t3
