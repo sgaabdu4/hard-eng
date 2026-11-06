@@ -177,3 +177,25 @@ def test_repository_without_project_files_still_asks_for_a_project_type(
         (root / name).write_text(content)
     with pytest.raises(ValueError, match="ask the user which type to create"):
         installer.gate_config(root)
+
+
+def test_whole_project_security_scans_skip_installed_hard_eng() -> None:
+    templates = sorted((SOURCE / ".agents/skills/he/templates").glob("hard-eng.*.json"))
+    configs = [json.loads(template.read_text()) for template in templates]
+    gates = [
+        gate
+        for config in configs
+        for group in (
+            config.get("shared", []),
+            *(p["checks"] for p in config["packages"]),
+        )
+        for gate in group
+    ]
+    scans = [
+        gate["command"]
+        for gate in gates
+        if gate["role"] == "security" and gate["command"][-1] == "."
+    ]
+    assert scans
+    for command in scans:
+        assert {"--exclude=.agents", "--exclude=.hooks"} <= set(command), command
