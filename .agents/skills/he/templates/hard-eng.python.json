@@ -185,6 +185,8 @@
         "scan",
         "--config",
         "p/python",
+        "--exclude=.agents",
+        "--exclude=.hooks",
         "--jobs",
         "2",
         "--error",
