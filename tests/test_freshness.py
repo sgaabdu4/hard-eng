@@ -12,7 +12,12 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from freshness import pub_waiting, stale_dependencies, validate_freshness, validate_holds
+from freshness import (
+    pub_waiting,
+    stale_dependencies,
+    validate_freshness,
+    validate_holds,
+)
 from gate_config import Gate, Group, JsonObject, validate_gate, validate_required_checks
 from gitleaks_scan import run_gate_command
 from project_setup import add_freshness
@@ -171,7 +176,9 @@ def test_flutter_waits_while_only_a_young_release_unblocks_the_upgrade(
     if message == "waits":
         validate_freshness(path, gate, registry, moment(now), waiting)
         out = capsys.readouterr().out
-        assert "build_runner 2.17.1 needs a dependency that is not 2 days old yet" in out
+        assert (
+            "build_runner 2.17.1 needs a dependency that is not 2 days old yet" in out
+        )
     else:
         with pytest.raises(ValueError, match=r"build_runner 2\.16\.2 → 2\.17\.1"):
             validate_freshness(path, gate, registry, moment(now), waiting)

@@ -14,7 +14,9 @@ from gate_config import Gate, JsonObject
 VERSION_LINE = re.compile(r"\S+ v\S+")
 DIGIT_RUN = re.compile(r"\d+")
 RELEASE_VERSION = re.compile(r"(\d+(?:\.\d+)*)(?:\.post(\d+))?")
-PUB_PIN = re.compile(r"\b([a-z][a-z0-9_]*) (\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.]*[0-9A-Za-z])?)")
+PUB_PIN = re.compile(
+    r"\b([a-z][a-z0-9_]*) (\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.]*[0-9A-Za-z])?)"
+)
 
 WAIT = timedelta(days=2)
 MAX_HOLD_DAYS = 14
@@ -61,10 +63,10 @@ def pub_versions(name: str, fetch: Fetch) -> list[JsonObject]:
 def pub_eligible(name: str, fetch: Fetch, cutoff: datetime, ceiling: str) -> str | None:
     return newest(
         [
-            item["version"]
+            str(item["version"])
             for item in pub_versions(name, fetch)
             if released_before(item["published"], cutoff)
-            and not newer(item["version"], ceiling)
+            and not newer(str(item["version"]), ceiling)
         ]
     )
 
@@ -237,7 +239,9 @@ def pub_waiting(
         if done.returncode == 0 or "version solving failed" not in message:
             return False
         pins = {
-            found[1]: found[2] for found in PUB_PIN.finditer(message) if found[1] != name
+            found[1]: found[2]
+            for found in PUB_PIN.finditer(message)
+            if found[1] != name
         }
         return bool(pins) and all(fixed_only_later(*pin) for pin in pins.items())
 
