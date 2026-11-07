@@ -174,7 +174,10 @@ def test_check_reports_every_missed_item(project: Project) -> None:
         make_card(8, "Unnumbered", todo),
         make_card(9, "#9 Overdue", doing, due=ago(48)),
         make_card(10, "#10 Label", todo, idLabels=["lb-sam"]),
+        make_card(11, "#11 Real case", testing, idLabels=["lb-real"]),
+        make_card(12, "#12 Real case done", "l-done", idLabels=["lb-real"]),
     ]
+    fake.labels.append({"id": "lb-real", "name": "Waiting for real case"})
     fake.actions = [
         comment("a1", 1, "m-sam", "Please add the export", 48),
         comment("a2", 2, "m-pat", "Looks odd to me", 24),
@@ -203,6 +206,7 @@ def test_check_reports_every_missed_item(project: Project) -> None:
         "waitsOnUs": {"7"},
         "unnumbered": {"sl8"},
         "overdue": {"9"},
+        "realCases": {"11"},
     }
     assert {name: refs(items) for name, items in report.items()} == expected
     owner = report["owner"][0]
@@ -326,7 +330,22 @@ def test_testing_move_needs_proof(project: Project, tmp_path: Path) -> None:
     assert refused.code == 1
     assert "proof" in str(refused.payload["error"])
     assert project.fake.writes == []
-    moved = project.run("move", "5", "testing", "--proof", str(proof))
+    unnamed = project.run("move", "5", "testing", "--proof", str(proof))
+    assert unnamed.code == 1
+    assert "--shows" in str(unnamed.payload["error"])
+    private = project.run(
+        "move", "5", "testing", "--proof", str(proof), "--shows", "Call +44 7700 900123"
+    )
+    assert private.code == 1
+    assert project.fake.writes == []
+    shows = "The saved total now shows on the list"
+    planned = project.run(
+        "move", "5", "testing", "--proof", str(proof), "--shows", shows, "--dry-run"
+    )
+    writes = planned.payload["dryRun"]
+    assert isinstance(writes, list)
+    assert writes[0]["params"] == {"name": shows}
+    moved = project.run("move", "5", "testing", "--proof", str(proof), "--shows", shows)
     assert moved.code == 0, moved.text
     attach, put = project.fake.writes
     assert (attach.method, attach.path) == ("POST", "/cards/card5/attachments")
@@ -356,6 +375,15 @@ def test_label_upload_and_download_use_the_card_endpoints(
     assert project.run("label", "1", "add", "Needs Sam").payload == {"unchanged": True}
     assert project.run("label", "1", "remove", "Needs Sam").code == 0
     assert project.fake.writes[-1].method == "DELETE"
+    assert project.run("label", "1", "add", "Needs Nobody").code == 1
+    real = project.run("label", "1", "add", "Waiting for real case")
+    assert real.code == 0, real.text
+    create, add = project.fake.writes[-2:]
+    assert (create.path, create.form["name"]) == (
+        f"/boards/{BOARD}/labels",
+        "Waiting for real case",
+    )
+    assert (add.path, add.form) == ("/cards/card1/idLabels", {"value": "lb-new-1"})
     shot = tmp_path / "shot.png"
     shot.write_bytes(b"fake image")
     uploaded = project.run("upload", "1", str(shot))
@@ -482,3 +510,9 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     assert "`coordinator` role's model" in t3
     assert "coordinator = strongest model" in hosts
     assert "`everyMs` differs" in t3 and "`scheduledTaskId`" in t3
+    lists = run.split("\n## Report lists\n", 1)[1].split("\n## ", 1)[0]
+    assert "| `realCases`" in lists and "last checked" in lists
+    workers = run.split("\n## Workers\n", 1)[1].split("\n## ", 1)[0]
+    assert "real save" in workers and "read back" in workers
+    assert "never skip or narrow a Hard Eng check" in workers
+    assert "never hold one for a bigger batch" in run
