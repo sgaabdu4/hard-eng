@@ -5,6 +5,7 @@
     "lint:boundaries": "fallow architecture --boundaries --fail-on-issues"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "fallow": "latest"
   }
 }
