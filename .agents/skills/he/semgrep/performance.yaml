@@ -128,7 +128,7 @@ rules:
       - pattern: '"$SQL"'
       - metavariable-regex: &select-all
           metavariable: $SQL
-          regex: (?is)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b).)*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
+          regex: (?is)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b).)*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*(?:pg_catalog\.)?(?:unnest|generate_series|json_to_record|json_to_recordset|jsonb_to_record|jsonb_to_recordset|json_each|jsonb_each|json_each_text|jsonb_each_text|json_array_elements|jsonb_array_elements|string_to_table|regexp_split_to_table)\s*\())
   - id: whole-row-sql
     languages: [javascript, typescript]
     options:
@@ -155,7 +155,7 @@ rules:
     message: Select only the columns this code reads instead of the whole row.
     paths: *paths
     patterns:
-      - pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b)[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
+      - pattern-regex: (?im)^(?:(?!//)[^\n'"])*(?:(?:'[^'\n]*'|"[^"\n]*")(?:(?!//)[^\n'"])*)*['"](?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b)[^'"\n])*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*(?:pg_catalog\.)?(?:unnest|generate_series|json_to_record|json_to_recordset|jsonb_to_record|jsonb_to_recordset|json_each|jsonb_each|json_each_text|jsonb_each_text|json_array_elements|jsonb_array_elements|string_to_table|regexp_split_to_table)\s*\())
       - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-row-sql-file
     languages: [generic]
@@ -165,8 +165,8 @@ rules:
       include: ["*.sql"]
       exclude: *excluded
     patterns:
-      - pattern-regex: (?im)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b)(?:[^'\n-]|'[^'\n]*'|-(?!-)))*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
-      - pattern-not-regex: (?is)(?:exists\s*\(|insert\s+into\b[^;]*?|create\s+(?:temp(?:orary)?\s+)?table\b[^;]*?\bas\b[^;]*?)\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*[\w.]+\s*\())
+      - pattern-regex: (?im)^(?:(?!exists\s*\(|insert\s+into\b|create\s+(?:temp(?:orary)?\s+)?table\b)(?:[^'\n-]|'[^'\n]*'|-(?!-)))*?\bselect\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*(?:pg_catalog\.)?(?:unnest|generate_series|json_to_record|json_to_recordset|jsonb_to_record|jsonb_to_recordset|json_each|jsonb_each|json_each_text|jsonb_each_text|json_array_elements|jsonb_array_elements|string_to_table|regexp_split_to_table)\s*\())
+      - pattern-not-regex: (?is)(?:exists\s*\(|insert\s+into\b[^;]*?|create\s+(?:temp(?:orary)?\s+)?table\b[^;]*?\bas\b[^;]*?)\s*select\s+(?:distinct\s+)?(?:[a-z_]\w*\.)?\*\s*(?:,|from\b(?!\s*(?:pg_catalog\.)?(?:unnest|generate_series|json_to_record|json_to_recordset|jsonb_to_record|jsonb_to_recordset|json_each|jsonb_each|json_each_text|jsonb_each_text|json_array_elements|jsonb_array_elements|string_to_table|regexp_split_to_table)\s*\())
       - pattern-not-regex: (?s)/\*.*?\*/
   - id: whole-row-query-javascript
     languages: [javascript, typescript]
