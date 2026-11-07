@@ -30,6 +30,9 @@ def words(text, pattern):
     count = "SELECT COUNT(*) FROM users"
     exists = "SELECT 1 WHERE EXISTS (SELECT * FROM users)"
     copy = "INSERT INTO archive SELECT * FROM users"
+    rows = "SELECT * FROM unnest(%s)"
+    # ruleid: whole-row-sql-python
+    orders = "SELECT * FROM get_orders(%s)"
     return found, dynamic, joined, formatted, seen, query, columns, count, exists, copy, TOKEN
 
 

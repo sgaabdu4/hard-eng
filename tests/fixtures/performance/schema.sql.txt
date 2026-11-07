@@ -25,5 +25,12 @@ WITH recent AS (
 -- ruleid: whole-row-sql-file
 SELECT * FROM recent;
 SELECT * FROM generate_series(1, 10);
+SELECT * FROM unnest(ARRAY[1, 2]);
+SELECT * FROM pg_catalog.jsonb_array_elements('[]');
+SELECT * FROM REGEXP_SPLIT_TO_TABLE('a b', ' ');
+-- ruleid: whole-row-sql-file
+SELECT * FROM get_orders($1);
+-- ruleid: whole-row-sql-file
+SELECT * FROM unnest_orders(1);
 ALTER TABLE files ADD COLUMN content_type text NOT NULL DEFAULT 'application/json';
 SELECT net.http_post(url := 'https://x.test', headers := '{"Content-Type": "application/json"}'::jsonb);

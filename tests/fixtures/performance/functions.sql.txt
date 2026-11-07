@@ -1,1 +1,2 @@
+-- ruleid: whole-row-sql-file
 SELECT * FROM finish();

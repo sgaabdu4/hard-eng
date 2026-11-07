@@ -179,7 +179,7 @@ def test_repository_without_project_files_still_asks_for_a_project_type(
         installer.gate_config(root)
 
 
-def test_whole_project_security_scans_skip_installed_hard_eng() -> None:
+def test_whole_project_security_scans_carry_no_unanchored_excludes() -> None:
     templates = sorted((SOURCE / ".agents/skills/he/templates").glob("hard-eng.*.json"))
     configs = [json.loads(template.read_text()) for template in templates]
     gates = [
@@ -198,4 +198,4 @@ def test_whole_project_security_scans_skip_installed_hard_eng() -> None:
     ]
     assert scans
     for command in scans:
-        assert {"--exclude=.agents", "--exclude=.hooks"} <= set(command), command
+        assert not {"--exclude=.agents", "--exclude=.hooks"} & set(command), command

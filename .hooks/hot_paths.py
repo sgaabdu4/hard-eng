@@ -1,9 +1,11 @@
 """HE-HOT-PATH: Hard Eng's Semgrep rules join every security gate; `hot-paths` lists findings."""
 
+import hashlib
 import json
 import os
 import re
 import subprocess
+import tempfile
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
@@ -15,6 +17,8 @@ RULES = (
 )
 PYTHON_RULES = RULES.with_name("python.yaml")
 GLOB_SPECIAL = re.compile(r"[][*?]")
+EXCLUDED_LIST = "&excluded [\n"
+EXCLUDED_ITEMS = re.compile(r"^( +)exclude:\n( +)(?=- )", re.MULTILINE)
 
 
 def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, object]]:
@@ -99,6 +103,56 @@ def git_prefix(directory: Path) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def rules_skipping(skipped: list[str], directory: Path) -> str:
+    """Hard Eng's rules with generated paths excluded, so registry packs still scan them."""
+    if not skipped:
+        return os.path.relpath(RULES, directory)
+    entries = [json.dumps(name) for name in skipped]
+    text = RULES.read_text().replace(
+        EXCLUDED_LIST,
+        EXCLUDED_LIST + "".join(f"          {entry},\n" for entry in entries),
+        1,
+    )
+    text = EXCLUDED_ITEMS.sub(
+        lambda found: (
+            found[1]
+            + "exclude:\n"
+            + "".join(f"{found[2]}- {entry}\n" for entry in entries)
+            + found[2]
+        ),
+        text,
+    )
+    target = Path(tempfile.gettempdir()) / "hard-eng-rules"
+    target.mkdir(exist_ok=True)
+    target /= hashlib.sha256(text.encode()).hexdigest()[:16] + ".yaml"
+    if not target.exists():
+        partial = target.with_suffix(f".{os.getpid()}")
+        partial.write_text(text)
+        os.replace(partial, target)
+    return str(target)
+
+
+def installed_paths(root: Path) -> list[str]:
+    """Folders Hard Eng installed at the repository root, as its install record lists them; an older record lists no skills."""
+    marker = root / ".hooks/hard-eng-source.json"
+    if not marker.is_file():
+        return []
+    try:
+        record: object = json.loads(marker.read_text())
+    except (OSError, ValueError):
+        record = None
+    skills = record.get("skills") if isinstance(record, dict) else None
+    names: list[object] = skills if isinstance(skills, list) else []
+    return [
+        ".hooks/",
+        *(
+            f".agents/skills/{name}/"
+            for name in names
+            if isinstance(name, str) and "/" not in name
+        ),
+    ]
+
+
 def semgrep_options(
     root: Path, group: Group, gate: Gate, command: list[str]
 ) -> list[str]:
@@ -125,10 +179,10 @@ def semgrep_options(
         unowned = unowned_paths(names, generated_sources(directory, names))
         prefix = git_prefix(directory)
         skipped = [
-            "--exclude=/" + GLOB_SPECIAL.sub(r"\\\g<0>", prefix + name)
-            for name in unowned
+            "/" + GLOB_SPECIAL.sub(r"\\\g<0>", prefix + name) for name in unowned
         ]
-        rules = ["--config", os.path.relpath(RULES, directory), *skipped]
+        installed = [f"--exclude=/{name}" for name in installed_paths(root)]
+        rules = ["--config", rules_skipping(skipped, directory), *installed]
         # --strict fails valid code Semgrep parses only in part; the report check prints those gaps.
         rest = [part for part in command[index + 1 :] if part != "--strict"]
         command = [*command[: index + 1], *rules, *rest]

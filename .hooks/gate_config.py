@@ -621,9 +621,16 @@ def without_freshness_for_update(
     ):
         return groups
     point = default_branch_point(root)
-    if not installed_update_paths(root, base) and (
-        point is None or point == base or not installed_update_paths(root, point)
-    ):
+    judged = base
+    installed = installed_update_paths(root, base)
+    if not installed and point is not None and point != base:
+        judged = point
+        installed = installed_update_paths(root, point)
+    if not installed:
+        return groups
+    names = changed_files(root, judged)
+    manifests = set(LANGUAGES) | {name for v in LOCKFILES.values() for name in v}
+    if names is None or any(Path(name).name in manifests for name in names - installed):
         return groups
     print("Hard Eng update matches its verified release; skipping freshness.")
     return [
