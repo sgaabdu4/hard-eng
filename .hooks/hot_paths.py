@@ -138,9 +138,11 @@ def installed_paths(root: Path) -> list[str]:
     if not marker.is_file():
         return []
     try:
-        names = json.loads(marker.read_text()).get("skills", [])
-    except (OSError, ValueError, AttributeError):
-        names = []
+        record: object = json.loads(marker.read_text())
+    except (OSError, ValueError):
+        record = None
+    skills = record.get("skills") if isinstance(record, dict) else None
+    names: list[object] = skills if isinstance(skills, list) else []
     return [
         ".hooks/",
         *(
