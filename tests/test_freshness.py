@@ -12,7 +12,12 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from freshness import stale_dependencies, validate_freshness, validate_holds
+from freshness import (
+    pub_waiting,
+    stale_dependencies,
+    validate_freshness,
+    validate_holds,
+)
 from gate_config import Gate, Group, JsonObject, validate_gate, validate_required_checks
 from gitleaks_scan import run_gate_command
 from project_setup import add_freshness
@@ -127,6 +132,56 @@ def test_dart_stops_at_the_version_pub_can_resolve(tmp_path: Path) -> None:
         )
     assert "build_runner" not in str(failure.value)
     assert PUB + "build_runner" not in registry.requests
+
+
+@pytest.mark.parametrize(
+    ("dry_run", "now", "message"),
+    [
+        ("blocked", "2026-11-07T21:00:00+00:00", "waits"),
+        ("blocked", "2026-11-08T13:00:00+00:00", "fails"),
+        ("resolves", "2026-11-07T21:00:00+00:00", "fails"),
+    ],
+    ids=["pin-has-only-a-young-fix", "pin-fix-is-due", "upgrade-resolves"],
+)
+def test_flutter_waits_while_only_a_young_release_unblocks_the_upgrade(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    dry_run: str,
+    now: str,
+    message: str,
+) -> None:
+    tool = tmp_path / "bin/flutter"
+    tool.parent.mkdir()
+    blocked = FIXTURES / "flutter-upgrade-blocked.txt"
+    body = f"cat '{blocked}'; exit 1" if dry_run == "blocked" else "exit 0"
+    tool.write_text(
+        '#!/bin/sh\n[ "$*" = "pub upgrade --major-versions build_runner --dry-run" ]'
+        f" || exit 2\n{body}\n"
+    )
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool.parent}:{os.environ['PATH']}")
+    stale = {"package": "build_runner", "kind": "dev"}
+    stale |= {"current": {"version": "2.16.2"}, "resolvable": {"version": "2.17.1"}}
+    path = tmp_path / "freshness.report"
+    path.write_text(json.dumps({"packages": [stale]}))
+    registry = Registry(
+        {
+            PUB + "build_runner": fixture("pub-build_runner.json"),
+            PUB + "riverpod_generator": fixture("pub-riverpod_generator.json"),
+        }
+    )
+    waiting = pub_waiting("flutter", tmp_path, registry, moment(now))
+    gate = freshness_gate("flutter")
+    if message == "waits":
+        validate_freshness(path, gate, registry, moment(now), waiting)
+        out = capsys.readouterr().out
+        assert (
+            "build_runner 2.17.1 needs a dependency that is not 2 days old yet" in out
+        )
+    else:
+        with pytest.raises(ValueError, match=r"build_runner 2\.16\.2 → 2\.17\.1"):
+            validate_freshness(path, gate, registry, moment(now), waiting)
 
 
 def test_uv_uses_pypi_upload_dates(tmp_path: Path) -> None:

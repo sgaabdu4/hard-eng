@@ -1,0 +1,20 @@
+{
+  "name": "build_runner",
+  "latest": {
+    "version": "2.17.1"
+  },
+  "versions": [
+    {
+      "version": "2.16.2",
+      "published": "2026-10-07T07:43:28.303273Z"
+    },
+    {
+      "version": "2.17.0",
+      "published": "2026-10-14T10:01:08.942124Z"
+    },
+    {
+      "version": "2.17.1",
+      "published": "2026-10-14T13:08:54.691481Z"
+    }
+  ]
+}

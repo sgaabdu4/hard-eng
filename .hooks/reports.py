@@ -809,9 +809,9 @@ def validate_scanner_report(
     elif scanner == "jscpd":
         validate_jscpd(path, lambda: jscpd_below_minimum(command, directory, timeout))
     elif scanner == "freshness":
-        from freshness import bun_waiting, validate_freshness
+        from freshness import freshness_waiting, validate_freshness
 
-        validate_freshness(path, gate, waiting=bun_waiting(directory))
+        validate_freshness(path, gate, waiting=freshness_waiting(gate, directory))
     else:
         SCANNERS[scanner](path)
 
