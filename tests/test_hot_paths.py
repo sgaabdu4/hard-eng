@@ -334,8 +334,11 @@ def test_security_scans_skip_only_the_installed_hard_eng_files(
     ):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_text("x = 1\n")
+    marker = root / ".hooks/hard-eng-source.json"
+    marker.write_text('{"revision": "abc", "skills": ["he"]}\n')
     (root / ".claude/skills").mkdir(parents=True)
-    (root / ".claude/skills/he").symlink_to("../../.agents/skills/he")
+    for skill in ("he", "own"):
+        (root / ".claude/skills" / skill).symlink_to(f"../../.agents/skills/{skill}")
     git(root, "add", ".")
     group: Group = {"path": ".", "checks": []}
     gate: Gate = {
@@ -348,6 +351,11 @@ def test_security_scans_skip_only_the_installed_hard_eng_files(
 
     excludes = [part for part in command if part.startswith("--exclude")]
     assert excludes == ["--exclude=/.hooks/", "--exclude=/.agents/skills/he/"]
-    (root / ".hooks/hard-eng-source.json").unlink()
+    marker.write_text('{"revision": "abc"}\n')
+    older = runner.prepare_command(group, gate, 5)
+    assert [part for part in older if part.startswith("--exclude")] == [
+        "--exclude=/.hooks/"
+    ]
+    marker.unlink()
     source = runner.prepare_command(group, gate, 5)
     assert not [part for part in source if part.startswith("--exclude")]

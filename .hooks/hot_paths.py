@@ -133,17 +133,20 @@ def rules_skipping(skipped: list[str], directory: Path) -> str:
 
 
 def installed_paths(root: Path) -> list[str]:
-    """Folders Hard Eng installs at the repository root; a project's own skills are not among them."""
-    if not (root / ".hooks/hard-eng-source.json").is_file():
+    """Folders Hard Eng installed at the repository root, as its install record lists them; an older record lists no skills."""
+    marker = root / ".hooks/hard-eng-source.json"
+    if not marker.is_file():
         return []
-    skills = root / ".agents/skills"
-    links = sorted((root / ".claude/skills").glob("*")) if skills.is_dir() else []
+    try:
+        names = json.loads(marker.read_text()).get("skills", [])
+    except (OSError, ValueError, AttributeError):
+        names = []
     return [
         ".hooks/",
         *(
-            f".agents/skills/{link.name}/"
-            for link in links
-            if link.is_symlink() and link.resolve() == (skills / link.name).resolve()
+            f".agents/skills/{name}/"
+            for name in names
+            if isinstance(name, str) and "/" not in name
         ),
     ]
 
