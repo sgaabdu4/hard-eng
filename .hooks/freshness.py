@@ -14,6 +14,7 @@ from gate_config import Gate, JsonObject
 VERSION_LINE = re.compile(r"\S+ v\S+")
 DIGIT_RUN = re.compile(r"\d+")
 RELEASE_VERSION = re.compile(r"(\d+(?:\.\d+)*)(?:\.post(\d+))?")
+PUB_PIN = re.compile(r"\b([a-z][a-z0-9_]*) (\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.]*[0-9A-Za-z])?)")
 
 WAIT = timedelta(days=2)
 MAX_HOLD_DAYS = 14
@@ -50,16 +51,19 @@ def newest(candidates: list[str]) -> str | None:
     return max(((k, v) for k, v in keyed if k is not None), default=(None, None))[1]
 
 
-def pub_eligible(name: str, fetch: Fetch, cutoff: datetime, ceiling: str) -> str | None:
+def pub_versions(name: str, fetch: Fetch) -> list[JsonObject]:
     package = fetch(f"https://pub.dev/api/packages/{urllib.parse.quote(name)}")
     if not isinstance(package, dict) or not isinstance(package.get("versions"), list):
         raise TypeError(f"pub.dev returned an unreadable record for {name}")
+    return [item for item in package["versions"] if not item.get("retracted")]
+
+
+def pub_eligible(name: str, fetch: Fetch, cutoff: datetime, ceiling: str) -> str | None:
     return newest(
         [
             item["version"]
-            for item in package["versions"]
-            if not item.get("retracted")
-            and released_before(item["published"], cutoff)
+            for item in pub_versions(name, fetch)
+            if released_before(item["published"], cutoff)
             and not newer(item["version"], ceiling)
         ]
     )
@@ -204,6 +208,51 @@ def bun_waiting(directory: Path) -> Callable[[str], bool]:
     return waiting
 
 
+def pub_waiting(
+    tool: str, directory: Path, fetch: Fetch, now: datetime
+) -> Callable[[str], bool]:
+    """A release pub cannot resolve yet, because each pin that blocks it has only younger fixes."""
+    cutoff = now - WAIT
+
+    def fixed_only_later(name: str, pinned: str) -> bool:
+        fixes = [
+            item
+            for item in pub_versions(name, fetch)
+            if newer(str(item["version"]), pinned)
+        ]
+        return bool(fixes) and not any(
+            released_before(item["published"], cutoff) for item in fixes
+        )
+
+    def waiting(name: str) -> bool:
+        done = subprocess.run(
+            [tool, "pub", "upgrade", "--major-versions", name, "--dry-run"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=600,
+        )
+        message = done.stdout + done.stderr
+        if done.returncode == 0 or "version solving failed" not in message:
+            return False
+        pins = {
+            found[1]: found[2] for found in PUB_PIN.finditer(message) if found[1] != name
+        }
+        return bool(pins) and all(fixed_only_later(*pin) for pin in pins.items())
+
+    return waiting
+
+
+def freshness_waiting(gate: Gate, directory: Path) -> Callable[[str], bool] | None:
+    tool = Path(gate["command"][0]).name
+    if tool == "bun":
+        return bun_waiting(directory)
+    if tool in {"dart", "flutter"}:
+        return pub_waiting(tool, directory, fetch_json, datetime.now(UTC))
+    return None
+
+
 def held(stale: Stale, holds: list[JsonObject], today: date) -> bool:
     name, _, target = stale
     return any(
@@ -256,7 +305,7 @@ def validate_freshness(
         raise ValueError(f"{tool} output is unreadable: {error!r}") from error
     holds: list[JsonObject] = gate.get("holds", [])
     stale = [item for item in stale if not held(item, holds, now.date())]
-    if tool == "bun" and waiting is not None:
+    if waiting is not None:
         early = [item for item in stale if waiting(item[0])]
         for name, _, target in early:
             print(f"{name} {target} needs a dependency that is not 2 days old yet")
