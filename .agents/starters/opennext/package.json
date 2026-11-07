@@ -15,7 +15,8 @@
     "eslint-config-next": null,
     "@cloudflare/workers-types": "latest",
     "@opennextjs/cloudflare": "latest",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "fallow": "latest"
   },
   "overrides": {
     "glob": ">=10.5.0",

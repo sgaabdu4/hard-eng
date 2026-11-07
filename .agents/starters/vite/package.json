@@ -8,6 +8,7 @@
 	"devDependencies": {
 		"oxlint": null,
 		"@happy-dom/global-registrator": "latest",
-		"@types/bun": "latest"
+		"@types/bun": "latest",
+		"fallow": "latest"
 	}
 }

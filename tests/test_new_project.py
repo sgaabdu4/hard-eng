@@ -62,6 +62,7 @@ def test_vite_starter_replaces_oxlint_and_pins_after_the_scaffold(
     )
     assert "oxlint" not in manifest["devDependencies"]
     assert manifest["devDependencies"]["@types/bun"] == "latest"
+    assert manifest["devDependencies"]["fallow"] == "latest"
     assert not (tmp_path / ".oxlintrc.json").exists()
     assert (tmp_path / "tests/app.test.tsx").is_file()
     assert ran[1] == UPGRADE
