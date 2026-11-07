@@ -22,7 +22,7 @@ Handoff: Approval
 Authority: Abid on 2026-11-06 asked that a project can edit and add to the coordinator script and that an update adds the new parts without removing theirs, then answered "yes" to this plan with the `update-pr` rule, merge after green checks.
 Decision: three-way merge in place with `git merge-file` (project file, previous release, new release). Clean merge, the merged text is installed. Overlap, the update stops and names the file.
 Decision: scope = files under `.agents/skills/trello-coordinator/` only. One path check; widening later is one line.
-Decision: a merged `.py` file must still compile; else the update stops and names the file. Kada-style gates do not type-check the skill's Python, so a clean text merge could install broken code.
+Decision: a merged `.py` file must still compile; else the update stops and names the file. Some project gates do not type-check the skill's Python, so a clean text merge could install broken code.
 Rejected: a separate project file beside the skill (like `AGENTS.override.md`). Abid asked to edit the script itself.
 
 ## Acceptance + steps
@@ -55,6 +55,6 @@ N/A — no app screens change; only updater messages.
 
 Result: Passed
 Evidence: `python3 .hooks/hard-eng.py check --plan-stage Complete` exit 0; 2272 tests passed, including 7 scaffold replay tests and the coordinator skill test.
-E2E: N/A — no user journey; the update tests run the real updater on real git repositories. A Kada update after release is a delivery check, not a test.
+E2E: N/A — no user journey; the update tests run the real updater on real git repositories. A real project's update after release is a delivery check, not a test.
 Delivery target: PR
 Delivery: Pending — PR into develop.
