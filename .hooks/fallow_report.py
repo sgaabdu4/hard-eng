@@ -262,9 +262,70 @@ def empty_audit(report: JsonObject) -> bool:
     return True
 
 
-def validate_fallow(path: Path) -> None:
+def sdk_binaries(directory: Path) -> set[str]:
+    """Commands from SDKs this repository's own packages already require."""
+    listed = subprocess.run(
+        ["git", "ls-files", "--", ":(top,glob)**/pubspec.yaml"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    ).stdout
+    return {"dart", "flutter"} if listed.strip() else set()
+
+
+def lower(counts: object, names: tuple[str, ...], dropped: int) -> None:
+    if not isinstance(counts, dict):
+        raise TypeError("Fallow summary must be an object")
+    for name in names:
+        value = counts.get(name)
+        if type(value) is not int:
+            raise TypeError(f"Fallow {name} must be a count")
+        counts[name] = value - dropped
+
+
+def drop_sdk_binaries(report: JsonObject, provided: set[str]) -> None:
+    """Unlisted commands from required SDKs leave the report; the rest is judged as before."""
+    key = "dead_code" if report.get("kind") == "audit" else "check"
+    section = report.get(key)
+    found = section.get("unlisted_binaries") if isinstance(section, dict) else None
+    if not provided or not isinstance(section, dict) or not isinstance(found, list):
+        return
+    names = [
+        item.get("binary_name") if isinstance(item, dict) else None for item in found
+    ]
+    sdk = [isinstance(name, str) and name in provided for name in names]
+    dropped = sum(sdk)
+    if not dropped:
+        return
+    for name in sorted(
+        {str(name) for name, skip in zip(names, sdk, strict=True) if skip}
+    ):
+        print(f"Fallow: {name} comes from an SDK this repository requires")
+    section["unlisted_binaries"] = [
+        item for item, skip in zip(found, sdk, strict=True) if not skip
+    ]
+    lower(section, ("total_issues",), dropped)
+    lower(section.get("summary"), ("total_issues", "unlisted_binaries"), dropped)
+    if key != "dead_code":
+        return
+    totals = report.get("summary")
+    lower(totals, ("dead_code_issues",), dropped)
+    counts = ("dead_code_issues", "complexity_findings", "duplication_clone_groups")
+    if (
+        isinstance(totals, dict)
+        and report.get("verdict") == "warn"
+        and totals.get("dead_code_has_errors") is False
+        and not any(totals.get(name) for name in counts)
+    ):
+        report["verdict"] = "pass"
+
+
+def validate_fallow(path: Path, provided: set[str] | None = None) -> None:
     try:
         report = json.loads(path.read_text())
+        drop_sdk_binaries(report, provided or set())
         audit = report["kind"] == "audit"
         if audit and empty_audit(report):
             return
