@@ -370,6 +370,8 @@ def test_repeated_image_flags_attach_every_image(
     assert result.code == 0, result.text
     uploads = [c for c in project.fake.writes if c.path.endswith("/attachments")]
     assert len(uploads) == 2
+    posted = next(c for c in project.fake.writes if c.path.endswith("/comments"))
+    assert ")\n\n![after.png]" in posted.form["text"]
 
 
 def paste(folder: Path, name: str, value: str) -> str:
