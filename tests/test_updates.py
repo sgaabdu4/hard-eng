@@ -755,6 +755,42 @@ def test_follow_up_push_on_update_branch_skips_freshness_like_ci(
     )
 
 
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        "pyproject.toml",
+        "uv.lock",
+        "package.json",
+        "bun.lock",
+        "pubspec.lock",
+        "apps/web/package.json",
+        "services/api/uv.lock",
+    ],
+)
+@pytest.mark.parametrize("on_update_branch", [False, True])
+def test_update_with_dependency_change_keeps_freshness(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    manifest: str,
+    on_update_branch: bool,
+) -> None:
+    source, target, _ = release
+    base = git(target, "rev-parse", "HEAD")
+    if on_update_branch:
+        git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
+        git(target, "switch", "-qc", "hard-eng/update")
+    pushed = _committed_update(source, target, monkeypatch, "verified-update")
+    changed = target / manifest
+    changed.parent.mkdir(parents=True, exist_ok=True)
+    changed.write_text("outdated\n")
+    commit(target, "dependency change")
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert _checks_left(target, pushed if on_update_branch else base) == [
+        "freshness",
+        "tests",
+    ]
+
+
 @pytest.mark.parametrize("extra", [None, "project.txt", "hard-eng.gates.json", "local"])
 def test_committed_scaffold_exemption_preserves_application_boundary(
     release: tuple[Path, Path, str],
