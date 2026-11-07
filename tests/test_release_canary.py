@@ -538,6 +538,41 @@ def test_the_workflow_job_names_are_the_ones_the_mac_canary_reads() -> None:
         assert found and found[1] == "scaffold-vite"
 
 
+def release_gate(monkeypatch: pytest.MonkeyPatch, changed: str, rows: list[str]) -> int:
+    def output(command: list[str]) -> str:
+        return changed if command[0] == "git" else "\n".join(rows)
+
+    monkeypatch.setattr(release_canary, "output", output)
+    return release_canary.release_pr_gate("b" * 40, "a" * 40)
+
+
+def test_a_release_pr_waits_for_develops_push_run_to_pass(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    passed = [
+        f"new project ({release_canary.folder(' '.join(target))}, {os_name})\tsuccess"
+        for target in release_canary.NEW_TARGETS
+        for os_name in ("ubuntu-latest", "macos-latest")
+    ]
+    assert release_gate(monkeypatch, "setup.py", passed) == 0
+    assert release_gate(monkeypatch, "setup.py", passed[1:] + [passed[0][:-7]]) == 1
+    assert "Rerun this job" in capsys.readouterr().out
+    assert release_gate(monkeypatch, "setup.py", []) == 1
+    assert release_gate(monkeypatch, "README.md", []) == 0
+
+
+def test_the_canary_job_runs_the_release_gate_on_a_release_pr() -> None:
+    workflow = yaml.safe_load(
+        (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
+    )
+    job = workflow["jobs"]["canary"]
+    assert job["permissions"] == {"contents": "read", "checks": "read"}
+    gate = [s for s in job["steps"] if "release_pr_gate" in s.get("run", "")]
+    assert len(gate) == 1
+    assert "'develop'" in gate[0]["if"] and "'main'" in gate[0]["if"]
+    assert gate[0]["env"]["HEAD"] == "${{ github.event.pull_request.head.sha }}"
+
+
 def test_a_new_project_gets_its_full_check_only_in_ci(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
