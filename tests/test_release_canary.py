@@ -561,6 +561,26 @@ def test_a_release_pr_waits_for_develops_push_run_to_pass(
     assert release_gate(monkeypatch, "README.md", []) == 0
 
 
+def test_a_release_pr_waits_while_develops_push_run_is_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    passed = [
+        f"new project ({release_canary.folder(' '.join(target))}, {os_name})\tsuccess"
+        for target in release_canary.NEW_TARGETS
+        for os_name in ("ubuntu-latest", "macos-latest")
+    ]
+    replies = [passed[1:] + [passed[0][:-7] + "null"], passed, passed]
+    waits: list[float] = []
+
+    def output(command: list[str]) -> str:
+        return "setup.py" if command[0] == "git" else "\n".join(replies.pop(0))
+
+    monkeypatch.setattr(release_canary, "output", output)
+    monkeypatch.setattr(release_canary.time, "sleep", waits.append)
+    assert release_canary.release_pr_gate("b" * 40, "a" * 40) == 0
+    assert waits == [30]
+
+
 def test_the_canary_job_runs_the_release_gate_on_a_release_pr() -> None:
     workflow = yaml.safe_load(
         (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
