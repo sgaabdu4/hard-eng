@@ -318,3 +318,36 @@ def test_async_helpers_keep_honest_and_escape_controls_in_each_language(
                 source = fixture.read_text()
                 assert source.count(name) >= 2
                 assert bool(ANNOTATION.search(source)) == (control == "escape")
+
+
+def test_security_scans_skip_only_the_installed_hard_eng_files(
+    runner: ModuleType,
+) -> None:
+    """A project's own files under .agents and any nested .hooks stay scanned."""
+    root = runner.ROOT
+    for name in (
+        ".hooks/hard-eng-source.json",
+        ".hooks/x.py",
+        ".agents/skills/he/x.py",
+        ".agents/skills/own/x.py",
+        "src/.hooks/y.py",
+    ):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text("x = 1\n")
+    (root / ".claude/skills").mkdir(parents=True)
+    (root / ".claude/skills/he").symlink_to("../../.agents/skills/he")
+    git(root, "add", ".")
+    group: Group = {"path": ".", "checks": []}
+    gate: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep", "scan", "--error", "--metrics=off", "--json", "."],
+    }
+
+    command = runner.prepare_command(group, gate, 5)
+
+    excludes = [part for part in command if part.startswith("--exclude")]
+    assert excludes == ["--exclude=/.hooks/", "--exclude=/.agents/skills/he/"]
+    (root / ".hooks/hard-eng-source.json").unlink()
+    source = runner.prepare_command(group, gate, 5)
+    assert not [part for part in source if part.startswith("--exclude")]
