@@ -1,6 +1,6 @@
 # Failing checks are rules to follow
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
