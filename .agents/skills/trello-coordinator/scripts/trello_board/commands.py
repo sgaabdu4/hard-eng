@@ -144,7 +144,7 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     found = resolve_card(session, args.card)
     card = text(found.get("id"))
     images = attach(session, card, args.image)
-    lines = "\n".join(text(obj(row).get("markdown")) for row in images)
+    lines = "\n\n".join(text(obj(row).get("markdown")) for row in images)
     full = body.rstrip() + ("\n\n" + lines if lines else "")
     reply = obj(
         session.client.request(
