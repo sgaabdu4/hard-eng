@@ -736,6 +736,17 @@ def strict_scanner_flags(package: Group) -> None:
             gate["command"] = [*gate["command"], *required]
 
 
+def drop_unanchored_excludes(config: GateConfig) -> None:
+    """Remove the folder-name excludes older templates gave security scans; the gate now skips only installed files."""
+    stale = {"--exclude=.agents", "--exclude=.hooks"}
+    for gate in [
+        *config["shared"],
+        *(g for p in config["packages"] for g in p["checks"]),
+    ]:
+        if gate.get("role") == "security" and stale & set(gate["command"]):
+            gate["command"] = [part for part in gate["command"] if part not in stale]
+
+
 FLUTTER_TESTS = [
     "flutter",
     "test",

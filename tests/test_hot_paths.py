@@ -116,7 +116,7 @@ def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
         command, cwd=package, capture_output=True, text=True, check=False
     )
 
-    assert "--exclude=/ios/client.py" in command
+    assert not any(part.startswith("--exclude") for part in command)
     assert not any("performance.yaml" in part for part in other)
     assert result.returncode == 1
     (found,) = json.loads(result.stdout)["results"]
@@ -125,6 +125,52 @@ def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
     report.write_text(result.stdout)
     with pytest.raises(ValueError, match=r"app\.py:5 Compile this constant regex"):
         validate_semgrep(report)
+
+
+def test_generated_files_skip_only_hard_eng_rules(runner: ModuleType) -> None:
+    """HE-HOT-PATH: a generated file leaves Hard Eng's rules but registry packs still scan it."""
+    old = "import re\n\n\ndef old(text):\n    return re.findall(r'a+', text)\n"
+    package = runner.ROOT / "ios"
+    package.mkdir()
+    for name in ("app.py", "client.py"):
+        (package / name).write_text(old)
+    (runner.ROOT / ".gitattributes").write_text("ios/client.py linguist-generated\n")
+    (package / "pack.yaml").write_text(
+        "rules:\n  - id: pack-rule\n    languages: [python]\n    severity: ERROR\n"
+        "    message: pack\n    pattern: re.findall(...)\n"
+    )
+    git(runner.ROOT, "add", ".")
+    git(runner.ROOT, "commit", "-qm", "base")
+    gate: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": [
+            "semgrep",
+            "scan",
+            "--metrics=off",
+            "--json",
+            "--config",
+            "pack.yaml",
+            ".",
+        ],
+    }
+    command = runner.prepare_command({"path": "ios", "checks": []}, gate, 5)
+
+    result = subprocess.run(
+        command, cwd=package, capture_output=True, text=True, check=False
+    )
+
+    found = sorted(
+        (item["path"], item["check_id"].rsplit(".", 1)[-1])
+        for item in json.loads(result.stdout)["results"]
+    )
+    assert found == [
+        ("app.py", "pack-rule"),
+        ("app.py", "regex-built-in-function-python"),
+        ("client.py", "pack-rule"),
+    ]
+    rules = yaml.safe_load(Path(command[command.index("--config") + 1]).read_text())
+    assert all("/ios/client.py" in rule["paths"]["exclude"] for rule in rules["rules"])
 
 
 def test_generated_folders_become_one_exclude_each() -> None:
@@ -272,3 +318,44 @@ def test_async_helpers_keep_honest_and_escape_controls_in_each_language(
                 source = fixture.read_text()
                 assert source.count(name) >= 2
                 assert bool(ANNOTATION.search(source)) == (control == "escape")
+
+
+def test_security_scans_skip_only_the_installed_hard_eng_files(
+    runner: ModuleType,
+) -> None:
+    """A project's own files under .agents and any nested .hooks stay scanned."""
+    root = runner.ROOT
+    for name in (
+        ".hooks/hard-eng-source.json",
+        ".hooks/x.py",
+        ".agents/skills/he/x.py",
+        ".agents/skills/own/x.py",
+        "src/.hooks/y.py",
+    ):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text("x = 1\n")
+    marker = root / ".hooks/hard-eng-source.json"
+    marker.write_text('{"revision": "abc", "skills": ["he"]}\n')
+    (root / ".claude/skills").mkdir(parents=True)
+    for skill in ("he", "own"):
+        (root / ".claude/skills" / skill).symlink_to(f"../../.agents/skills/{skill}")
+    git(root, "add", ".")
+    group: Group = {"path": ".", "checks": []}
+    gate: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep", "scan", "--error", "--metrics=off", "--json", "."],
+    }
+
+    command = runner.prepare_command(group, gate, 5)
+
+    excludes = [part for part in command if part.startswith("--exclude")]
+    assert excludes == ["--exclude=/.hooks/", "--exclude=/.agents/skills/he/"]
+    marker.write_text('{"revision": "abc"}\n')
+    older = runner.prepare_command(group, gate, 5)
+    assert [part for part in older if part.startswith("--exclude")] == [
+        "--exclude=/.hooks/"
+    ]
+    marker.unlink()
+    source = runner.prepare_command(group, gate, 5)
+    assert not [part for part in source if part.startswith("--exclude")]

@@ -93,7 +93,10 @@ jobs:
     needs: [targets, new-project]
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 65
+    permissions:
+      contents: read
+      checks: read # A release PR reads develop's push run for the same commit.
     steps:
       - name: Require every listed new project to pass
         env:
@@ -104,3 +107,16 @@ jobs:
           [ "$TARGETS" = success ] || { echo "Listing the new projects failed: $TARGETS"; exit 1; }
           if [ "$LISTED" = '[]' ]; then echo "No installed file changed; no new project to check."; exit 0; fi
           [ "$PROJECTS" = success ] || { echo "A new project failed its checks: $PROJECTS"; exit 1; }
+      - name: Check out the release PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'develop'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require develop's push run to have passed on a release PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'develop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 -I -c 'import sys; sys.path.insert(0, "."); import release_canary as c; sys.exit(c.release_pr_gate(sys.argv[1], sys.argv[2]))' "$BASE" "$HEAD"

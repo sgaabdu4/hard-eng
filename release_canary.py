@@ -479,8 +479,7 @@ def time_summary(times: list[tuple[str, str, float]], wall: float) -> list[str]:
     return lines
 
 
-def ci_failures(revision: str) -> list[str]:
-    """New projects without a passing public CI job for this revision; the newest try counts."""
+def new_project_runs(revision: str) -> list[tuple[str, str]]:
     rows = output(
         [
             *("gh", "api", "--paginate", "-q"),
@@ -488,13 +487,40 @@ def ci_failures(revision: str) -> list[str]:
             f"repos/{UPSTREAM}/commits/{revision}/check-runs?per_page=100",
         ]
     ).splitlines()
+    runs = [
+        (name, conclusion) for name, _, conclusion in (r.partition("\t") for r in rows)
+    ]
+    return [(name, conclusion) for name, conclusion in runs if CI_JOB.fullmatch(name)]
+
+
+def ci_failures(revision: str) -> list[str]:
+    """New projects without a passing public CI job for this revision; the newest try counts."""
     passed: dict[str, bool] = {}
-    for name, _, conclusion in (row.partition("\t") for row in rows):
+    for name, conclusion in new_project_runs(revision):
         if found := CI_JOB.fullmatch(name):
             label = found[1]
             passed[label] = passed.get(label, True) and conclusion == "success"
     labels = [folder(" ".join(target)) for target in NEW_TARGETS]
     return [label for label in labels if not passed.get(label)]
+
+
+def release_pr_gate(base: str, revision: str) -> int:
+    names = output(["git", "diff", "--name-only", f"{base}...{revision}"]).split()
+    if not needs_canary(names):
+        print("No installed file changed; no new project to check.")
+        return 0
+    deadline = time.monotonic() + 3600
+    while time.monotonic() < deadline and any(
+        conclusion == "null" for _, conclusion in new_project_runs(revision)
+    ):
+        print("Waiting for develop's push run to finish.", flush=True)
+        time.sleep(30)
+    if missing := ci_failures(revision):
+        print(f"New projects without a passing develop push run: {', '.join(missing)}")
+        print("Rerun this job once the Canary run for develop's push has finished.")
+        return 1
+    print("Every new project passed in develop's push run for this commit.")
+    return 0
 
 
 def post_status(revision: str, state: str, description: str) -> None:

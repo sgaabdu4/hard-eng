@@ -768,6 +768,19 @@ def configure_semgrep_ignore(
         )
 
 
+def install_record(unused: set[str]) -> dict[str, object]:
+    revision = None
+    if not subprocess.check_output(
+        ["git", "status", "--porcelain"], cwd=SOURCE, text=True
+    ):
+        revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=SOURCE, text=True
+        ).strip()
+    skills = (SOURCE / ".agents/skills").iterdir()
+    names = sorted(s.name for s in skills if s.is_dir() and s.name not in unused)
+    return {"revision": revision, "skills": names}
+
+
 def plan_install(
     root: Path, previous: Path | None = None, replace: bool = False
 ) -> tuple[dict[str, str], dict[str, str], Path, str, list[str]]:
@@ -795,13 +808,6 @@ def plan_install(
     retired += old_generation(root, changes)
     retired += configure_mcp(root, changes)
     configure_ignores(root, changes)
-    revision = None
-    if not subprocess.check_output(
-        ["git", "status", "--porcelain"], cwd=SOURCE, text=True
-    ):
-        revision = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=SOURCE, text=True
-        ).strip()
     from gate_config import (
         json_file,
         parse_config,
@@ -809,7 +815,7 @@ def plan_install(
         typescript_packages,
     )
 
-    changes[".hooks/hard-eng-source.json"] = json_file(root, {"revision": revision})
+    changes[".hooks/hard-eng-source.json"] = json_file(root, install_record(unused))
     generated = (
         retired_config(root)
         if (root / "hard-eng.gates.json").exists()
@@ -829,9 +835,11 @@ def plan_install(
         adapt_boundaries,
         add_freshness,
         browser_test_coverage,
+        drop_unanchored_excludes,
         strict_scanner_flags,
     )
 
+    drop_unanchored_excludes(config)
     typescript = typescript_packages(root, repository_files(root))
     from python_setup import configure_python
 

@@ -23,6 +23,7 @@ from project_setup import (
     adapt_performance,
     browser_test_coverage,
     dependency_command,
+    drop_unanchored_excludes,
     javascript_files,
     javascript_manager,
     strict_scanner_flags,
@@ -811,6 +812,35 @@ def test_update_gives_an_older_scanner_gate_its_required_strict_flags(
     assert package["checks"][0]["command"] == upgraded
     assert package["checks"][1]["command"] == ["bun", "run", "audit"]
     assert package["checks"][2]["command"] == ["fallow", "audit", "--gate", "new"]
+
+
+def test_update_drops_the_folder_name_excludes_from_security_scans() -> None:
+    """An installed project's older security scan skipped every .agents and .hooks folder."""
+    old = [
+        "semgrep",
+        "scan",
+        "--exclude=.agents",
+        "--exclude=.hooks",
+        "--exclude=build",
+    ]
+    config: GateConfig = {
+        "shared": [{"name": "security", "role": "security", "command": list(old)}],
+        "packages": [
+            {
+                "name": "app",
+                "path": ".",
+                "checks": [
+                    {"name": "security", "role": "security", "command": list(old)},
+                    {"name": "lint", "role": "lint", "command": list(old)},
+                ],
+            }
+        ],
+    }
+    drop_unanchored_excludes(config)
+    kept = ["semgrep", "scan", "--exclude=build"]
+    assert config["shared"][0]["command"] == kept
+    assert config["packages"][0]["checks"][0]["command"] == kept
+    assert config["packages"][0]["checks"][1]["command"] == old
 
 
 def test_flutter_browser_library_coverage_comes_from_browser_tests(

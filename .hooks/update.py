@@ -704,7 +704,14 @@ def repair_installation(root: Path, previous: str) -> str:
             not (root / name).exists()
             or retired_parent(root, name)
             or name
-            in {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md", "hard-eng.gates.json"}
+            in {
+                "AGENTS.md",
+                "CLAUDE.md",
+                "AGENTS.override.md",
+                "hard-eng.gates.json",
+            }
+            or name == SOURCE_FILE
+            and '"skills"' in (root / name).read_text(errors="replace")
             or any(old in (root / name).read_text(errors="replace") for old in retired)
             or OLD_GENERATION_SCRIPT.search((root / name).read_text(errors="replace"))
         )
