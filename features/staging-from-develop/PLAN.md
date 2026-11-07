@@ -26,6 +26,7 @@ Decision: `main` takes only the `develop` release PR, merged with a merge commit
 Decision: a card that fails testing is fixed or reverted on `develop` before the next release, so it never holds approved cards back.
 Decision (Abid, 2026-11-07): each same-repository PR deploys its own preview on the staging backend and runs the E2E journeys there before merge; the shared staging site changes only on a `develop` push.
 Decision (Abid, 2026-11-07): the coordinator starts the release as soon as every card on staging is approved by its tester; no owner step.
+Decision (Abid, 2026-11-07): "yes pl" to a UI card's Testing proof using the mockup rule: before and after, red boxes around each change; written rule, since a script cannot see the boxes.
 Uncertainty: a Cloudflare Workers PR preview needs `wrangler versions upload --preview-alias pr-<N>` and a preview URL the journeys can reach. Cheapest check: one preview upload from a real project's PR workflow, reached by its journeys. If it fails, PRs run checks only and the journeys first run on staging after merge; ask before switching.
 
 ## Acceptance + steps
@@ -35,6 +36,7 @@ Uncertainty: a Cloudflare Workers PR preview needs `wrangler versions upload --p
 - [ ] Ship and update-pr target `develop` when `shipping.base` is `develop`, and the release PR from `develop` to `main` uses a merge commit → tests to name in build.
 - [ ] The coordinator releases once every card on staging is approved, and reverts or fixes a failed card first → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
 - [ ] Testing = live on staging with images; Done = release live on production → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
+- [ ] A UI card's Testing proof shows before and after of the same screen, state and width, with red boxes around each change → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
 - [ ] A real project moves over: `develop` branch and default branch, deploy workflow, `shipping.base`, release-source check; staging shows `develop`, production shows `main` → that project's deploy runs on both pushes.
 
 ## Baseline + execution
