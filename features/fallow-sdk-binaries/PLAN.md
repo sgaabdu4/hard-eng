@@ -20,8 +20,8 @@ Decision: detect the SDK from a tracked `pubspec.yaml`, the same file Hard Eng u
 
 ## Acceptance + steps
 
-- [x] An audit whose only finding is an unlisted `dart` passes in a repository with a `pubspec.yaml`, and fails without one → `tests/test_reports.py::test_fallow_takes_the_dart_sdk_as_provided_only_in_a_dart_repository`.
-- [x] Another unlisted binary beside it still fails → `tests/test_reports.py::test_fallow_takes_the_dart_sdk_as_provided_only_in_a_dart_repository`.
+- [x] An audit whose only finding is an unlisted `dart` passes in a repository with a `pubspec.yaml`, and fails without one → `tests/test_fallow_sdk.py::test_fallow_takes_the_dart_sdk_as_provided_only_in_a_dart_repository`.
+- [x] Another unlisted binary beside it still fails → `tests/test_fallow_sdk.py::test_fallow_takes_the_dart_sdk_as_provided_only_in_a_dart_repository`.
 
 ## Baseline + execution
 
