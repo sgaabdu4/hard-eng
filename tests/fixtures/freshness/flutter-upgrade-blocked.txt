@@ -1,0 +1,9 @@
+Would change 1 constraint in pubspec.yaml:
+  build_runner: 2.16.2 -> ^2.17.1
+Resolving dependencies...
+Because riverpod_generator 4.0.9 depends on build >=3.0.0 <5.0.0 and build_runner >=2.17.1 depends on build >=5.0.0 <5.1.0, riverpod_generator 4.0.9 is incompatible with build_runner >=2.17.1.
+So, because app depends on both build_runner ^2.17.1 and riverpod_generator 4.0.9, version solving failed.
+
+
+You can try the following suggestion to make the pubspec resolve:
+* Consider downgrading your constraint on build_runner: flutter pub add dev:build_runner:^2.16.2
