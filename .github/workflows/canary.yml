@@ -93,7 +93,7 @@ jobs:
     needs: [targets, new-project]
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 65
     permissions:
       contents: read
       checks: read # A release PR reads develop's push run for the same commit.
