@@ -809,7 +809,14 @@ def plan_install(
         typescript_packages,
     )
 
-    changes[".hooks/hard-eng-source.json"] = json_file(root, {"revision": revision})
+    installed_skills = sorted(
+        skill.name
+        for skill in (SOURCE / ".agents/skills").iterdir()
+        if skill.is_dir() and skill.name not in unused
+    )
+    changes[".hooks/hard-eng-source.json"] = json_file(
+        root, {"revision": revision, "skills": installed_skills}
+    )
     generated = (
         retired_config(root)
         if (root / "hard-eng.gates.json").exists()
