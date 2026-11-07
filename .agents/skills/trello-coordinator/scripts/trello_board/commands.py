@@ -51,18 +51,20 @@ def resolve_card(session: Session, ref: str) -> Obj:
     raise TrelloError(f"Card {ref} is not on the board")
 
 
-def attach(session: Session, card_id: str, names: list[str]) -> list[Json]:
+def attach(
+    session: Session, card_id: str, names: list[str], captions: list[str] | None = None
+) -> list[Json]:
     paths = [Path(name) for name in names]
     missing = [str(path) for path in paths if not path.is_file()]
     if missing:
         raise TrelloError(f"File not found: {', '.join(missing)}")
     rows: list[Json] = []
-    for path in paths:
+    for path, caption in zip(paths, captions or [p.name for p in paths], strict=True):
         reply = obj(
             session.client.request(
                 "POST",
                 f"/cards/{card_id}/attachments",
-                {"name": path.name},
+                {"name": caption},
                 [("file", path)],
             )
         )
@@ -139,7 +141,8 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     for piece in (body, *(Path(name).name for name in args.image)):
         session.config.refuse_private(piece)
     refuse_wall(body)
-    card = text(resolve_card(session, args.card).get("id"))
+    found = resolve_card(session, args.card)
+    card = text(found.get("id"))
     images = attach(session, card, args.image)
     lines = "\n".join(text(obj(row).get("markdown")) for row in images)
     full = body.rstrip() + ("\n\n" + lines if lines else "")
@@ -151,7 +154,33 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     action_id = text(reply.get("id"))
     if action_id:
         state.log_posted(session.place.state, action_id)
-    return {"comment": action_id, "attachments": images}
+    added = add_needs(session, found, body)
+    return {"comment": action_id, "attachments": images, "addedLabels": added}
+
+
+def add_needs(session: Session, card: Obj, body: str) -> list[Json]:
+    if not report.QUESTION.search(body):
+        return []
+    asked = {name.lower() for name in report.TAG.findall(body)}
+    wanted = [
+        label
+        for person, label in session.config.needs.items()
+        if person.lower() in asked
+    ]
+    if not wanted:
+        return []
+    labels = board.fetch_names(session.client, session.config.board, "labels", "name")
+    on_card = card.get("idLabels")
+    has = set(on_card) if isinstance(on_card, list) else set[object]()
+    added: list[Json] = []
+    for name in wanted:
+        ident = next((i for i, n in labels.items() if n == name), "")
+        if ident and ident not in has:
+            session.client.request(
+                "POST", f"/cards/{text(card.get('id'))}/idLabels", {"value": ident}
+            )
+            added.append(name)
+    return added
 
 
 def list_id(session: Session, role: str) -> str:
@@ -206,13 +235,17 @@ def move(session: Session, args: argparse.Namespace) -> Obj:
     client = session.client
     if args.role == "testing" and not args.proof:
         raise TrelloError("A move to testing needs at least one --proof image")
+    if (args.role == "testing" or args.shows) and len(args.shows) != len(args.proof):
+        raise TrelloError("Give one --shows per --proof: the change each image shows")
     not_images = [n for n in args.proof if Path(n).suffix.lower() not in PROOF_SUFFIXES]
     if not_images:
         raise TrelloError(f"Proof must be {', '.join(PROOF_SUFFIXES)}: {not_images}")
+    for caption in args.shows:
+        session.config.refuse_private(caption)
     card = resolve_card(session, args.card)
     target = list_id(session, args.role)
     card_id = text(card.get("id"))
-    proofs = attach(session, card_id, args.proof)
+    proofs = attach(session, card_id, args.proof, args.shows or None)
     client.request("PUT", f"/cards/{card_id}", {"idList": target, "pos": "top"})
     removed = clear_needs(session, card) if args.role == "done" else list[Json]()
     return {"moved": args.role, "attachments": proofs, "removedLabels": removed}
@@ -236,6 +269,13 @@ def label(session: Session, args: argparse.Namespace) -> Obj:
     card = resolve_card(session, args.card)
     labels = board.fetch_names(session.client, session.config.board, "labels", "name")
     ident = next((i for i, name in labels.items() if name == args.label), "")
+    if not ident and args.label == report.REAL_CASE and args.action == "add":
+        made = session.client.request(
+            "POST",
+            f"/boards/{session.config.board}/labels",
+            {"name": args.label, "color": "green"},
+        )
+        ident = text(obj(made).get("id")) or "new-label"
     if not ident:
         raise TrelloError(f"The board has no label named {args.label}")
     on_card = card.get("idLabels")
@@ -408,6 +448,7 @@ def build_parser() -> tuple[
     subs["new"].add_argument("title")
     subs["new"].add_argument("--description-file")
     subs["move"].add_argument("--proof", nargs="+", action="extend", default=[])
+    subs["move"].add_argument("--shows", action="append", default=[])
     subs["label"].add_argument("action", choices=["add", "remove"])
     subs["label"].add_argument("label")
     subs["upload"].add_argument("paths", nargs="+")

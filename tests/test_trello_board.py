@@ -300,7 +300,9 @@ def test_testing_proof_must_be_an_image(
     project.fake.cards = [make_card(5, "#5 Move", "l-doing")]
     proof = tmp_path / name
     proof.write_bytes(b"fake image")
-    result = project.run("move", "5", "testing", "--proof", str(proof))
+    result = project.run(
+        "move", "5", "testing", "--proof", str(proof), "--shows", "The new total"
+    )
     assert (result.code == 0) == accepted
     assert bool(project.fake.writes) == accepted
 
@@ -530,3 +532,31 @@ def test_card_text_must_be_short_and_laid_out(project: Project, tmp_path: Path) 
         "Reply yes, or say what to change."
     )
     assert project.run("comment", "1", str(note)).code == 0
+
+
+def test_comment_adds_the_needs_label_of_each_person_asked(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(2, "#2 Labelled", "l-doing", idLabels=["lb-sam"]),
+    ]
+    note = tmp_path / "note.txt"
+    note.write_text("@sam @pat can you check the total?")
+    asked = project.run("comment", "1", str(note))
+    assert asked.code == 0, asked.text
+    assert asked.payload["addedLabels"] == ["Needs Sam"]
+    post, label = project.fake.writes
+    assert post.path == "/cards/card1/actions/comments"
+    assert (label.method, label.path, label.form) == (
+        "POST",
+        "/cards/card1/idLabels",
+        {"value": "lb-sam"},
+    )
+    assert project.run("comment", "2", str(note)).code == 0
+    note.write_text("@sam the total is live.")
+    assert project.run("comment", "1", str(note)).code == 0
+    assert [c.path for c in project.fake.writes[2:]] == [
+        "/cards/card2/actions/comments",
+        "/cards/card1/actions/comments",
+    ]
