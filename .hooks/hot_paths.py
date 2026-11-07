@@ -132,6 +132,22 @@ def rules_skipping(skipped: list[str], directory: Path) -> str:
     return str(target)
 
 
+def installed_paths(root: Path) -> list[str]:
+    """Folders Hard Eng installs at the repository root; a project's own skills are not among them."""
+    if not (root / ".hooks/hard-eng-source.json").is_file():
+        return []
+    skills = root / ".agents/skills"
+    links = sorted((root / ".claude/skills").glob("*")) if skills.is_dir() else []
+    return [
+        ".hooks/",
+        *(
+            f".agents/skills/{link.name}/"
+            for link in links
+            if link.is_symlink() and link.resolve() == (skills / link.name).resolve()
+        ),
+    ]
+
+
 def semgrep_options(
     root: Path, group: Group, gate: Gate, command: list[str]
 ) -> list[str]:
@@ -160,7 +176,8 @@ def semgrep_options(
         skipped = [
             "/" + GLOB_SPECIAL.sub(r"\\\g<0>", prefix + name) for name in unowned
         ]
-        rules = ["--config", rules_skipping(skipped, directory)]
+        installed = [f"--exclude=/{name}" for name in installed_paths(root)]
+        rules = ["--config", rules_skipping(skipped, directory), *installed]
         # --strict fails valid code Semgrep parses only in part; the report check prints those gaps.
         rest = [part for part in command[index + 1 :] if part != "--strict"]
         command = [*command[: index + 1], *rules, *rest]

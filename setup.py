@@ -829,9 +829,11 @@ def plan_install(
         adapt_boundaries,
         add_freshness,
         browser_test_coverage,
+        drop_unanchored_excludes,
         strict_scanner_flags,
     )
 
+    drop_unanchored_excludes(config)
     typescript = typescript_packages(root, repository_files(root))
     from python_setup import configure_python
 
