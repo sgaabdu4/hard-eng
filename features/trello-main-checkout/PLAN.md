@@ -39,6 +39,6 @@ N/A — no app screens change.
 
 Result: Passed
 Evidence: `python3 .hooks/hard-eng.py check --plan-stage Complete` exit 0; 25 coordinator tests passed.
-E2E: N/A — no user journey; the Kada coordinator now runs from the main checkout and set its own schedule.
+E2E: N/A — no user journey; a real project's coordinator now runs from the main checkout and set its own schedule.
 Delivery target: PR
 Delivery: Pending — PR into develop.
