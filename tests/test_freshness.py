@@ -281,8 +281,34 @@ def test_failure_names_upgrade_route(
         ),
         ("cat bun-outdated.txt", True, "is-odd 2.0.0 → 3.0.1"),
         ("cat bun-up-to-date.txt", False, "Every direct dependency"),
+        (
+            (
+                'case "$1 $3" in "outdated "*) cat bun-outdated.txt;; "update is-odd")'
+                ' echo \'error: No version matching "odd-core" found for specifier'
+                ' "3.0.1" (blocked by minimum-release-age: 172800 seconds)\' >&2; exit 1;;'
+                " esac"
+            ),
+            True,
+            "is-odd 3.0.1 needs a dependency that is not 2 days old yet",
+        ),
+        (
+            (
+                'case "$1" in outdated) cat bun-outdated.txt;; update)'
+                " echo '(blocked by minimum-release-age: 172800 seconds)' >&2; exit 1;; esac"
+            ),
+            False,
+            "left-pad 1.3.0 needs a dependency that is not 2 days old yet",
+        ),
+        (
+            (
+                'case "$1" in outdated) cat bun-outdated.txt;; update)'
+                " echo 'error: ConnectionRefused' >&2; exit 1;; esac"
+            ),
+            True,
+            "left-pad 1.2.0 → 1.3.0",
+        ),
     ],
-    ids=["registry-down", "stale", "current"],
+    ids=["registry-down", "stale", "current", "one-waits", "all-wait", "dry-run-down"],
 )
 def test_gate_run_shows_the_tool_message_and_the_stale_package(
     runner: ModuleType,
