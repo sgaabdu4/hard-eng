@@ -161,6 +161,8 @@ class FakeTrello:
         self, method: str, path: str, query: dict[str, str], form: dict[str, str]
     ) -> object:
         board = f"/boards/{BOARD}"
+        if method == "POST" and path == f"{board}/labels":
+            return {"id": self.new_id("lb-new")}
         lookup: dict[str, object] = {
             "/members/me": {"username": self.account},
             board: {"name": "Fixture board", "shortLink": BOARD},

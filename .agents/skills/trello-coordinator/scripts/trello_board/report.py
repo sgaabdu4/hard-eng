@@ -18,7 +18,9 @@ FIELDS = (
     "waitsOnUs",
     "unnumbered",
     "overdue",
+    "realCases",
 )
+REAL_CASE = "Waiting for real case"
 PROMISE = re.compile(r"\bI will\b|\bI['’]ll\b|\bNext:", re.IGNORECASE)
 CONDITION = re.compile(
     r"\b(?:when|once|after|until|before|if)\b[^.!?,;\n]*", re.IGNORECASE
@@ -244,6 +246,12 @@ def overdue(ctx: Context, view: View) -> list[Item]:
     return [item(view, due, "", "")] if parse_time(due) < ctx.now else []
 
 
+def real_cases(ctx: Context, view: View) -> list[Item]:
+    if view.role == "done" or REAL_CASE not in view.labels:
+        return []
+    return [item(view, text(view.card.get("dateLastActivity")), "", "")]
+
+
 CHECKS: dict[str, Callable[[Context, View], list[Item]]] = {
     "requests": requests,
     "information": information,
@@ -255,6 +263,7 @@ CHECKS: dict[str, Callable[[Context, View], list[Item]]] = {
     "waitsOnUs": waits_on_us,
     "unnumbered": unnumbered,
     "overdue": overdue,
+    "realCases": real_cases,
 }
 
 

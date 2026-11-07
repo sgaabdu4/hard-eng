@@ -9,7 +9,7 @@ Apply to visible changes; preview only the flow and states needed for the decisi
   - One-tap Undo instead of "Are you sure?"; delete, cancel, refund, access removal and reversing money always ask twice.
   - Calm screens: one focus, clear hierarchy, few elements and colours, labels with one meaning, no unneeded subtitles.
   - Messages say what happened and what to do next, in plain words, without blame, in the `PRODUCT.md` tone. A confused user means the screen changes, not the user.
-  - States: empty and first-use screens say what to do next; loading never shows 0 or stale numbers; a slow or failed connection keeps typed input and says so; one press saves once; an automatic job that stops or pauses tells a person at once, with what to do.
+  - States: empty and first-use screens say what to do next; loading never shows 0 or stale numbers; a slow or failed connection keeps typed input and says so; one press saves once; an automatic job that stops, pauses or falls behind tells a person at once, with what to do.
   - Times show in the user's local time; time logic gets time-zone and clock-change tests. In an app with staff or admin roles, each of their actions writes an audit row (who, when, what).
   - Accessibility: targets at least 24 × 24 px (WCAG 2.5.8), larger for main controls and the platform's own size on native apps; strong contrast; screen-reader labels.
   - Check each width the app supports.
