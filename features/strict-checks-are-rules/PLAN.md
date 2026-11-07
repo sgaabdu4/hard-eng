@@ -1,6 +1,6 @@
 # Failing checks are rules to follow
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -22,14 +22,14 @@ Decision: each skip keeps its reason; only its reach narrows.
 
 ## Acceptance + steps
 
-- [ ] The shared rules stay within the installed size cap → `tests/test_agent_hooks.py::test_shared_agent_rules_stay_within_the_released_size`.
-- [ ] The shared rules say a failing check means fix the project and never offer to weaken it → N/A — rule wording; a text match would only mirror the line.
-- [ ] `SELECT *` from a user-defined table function is flagged again; built-in set functions stay allowed → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
-- [ ] Generated and vendored files skip only Hard Eng's rules; registry security packs still scan them → `tests/test_hot_paths.py::test_generated_files_skip_only_hard_eng_rules`.
-- [ ] Security scans skip only installed Hard Eng files, anchored at the root; a project's own skills are scanned → `tests/test_hot_paths.py::test_security_scans_skip_only_the_installed_hard_eng_files`.
-- [ ] Templates and existing gate files carry no folder-name excludes → `tests/test_basic_mode.py::test_whole_project_security_scans_carry_no_unanchored_excludes`, `tests/test_setup.py::test_update_drops_the_folder_name_excludes_from_security_scans`.
-- [ ] An update that also changes a dependency file keeps the freshness check → `tests/test_updates.py::test_update_with_dependency_change_keeps_freshness`.
-- [ ] A release PR's canary fails unless develop's push run passed, and waits while it runs → `tests/test_release_canary.py::test_a_release_pr_waits_for_develops_push_run_to_pass`, `tests/test_release_canary.py::test_a_release_pr_waits_while_develops_push_run_is_running`.
+- [x] The shared rules stay within the installed size cap → `tests/test_agent_hooks.py::test_shared_agent_rules_stay_within_the_released_size`.
+- [x] The shared rules say a failing check means fix the project and never offer to weaken it → N/A — rule wording; a text match would only mirror the line.
+- [x] `SELECT *` from a user-defined table function is flagged again; built-in set functions stay allowed → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
+- [x] Generated and vendored files skip only Hard Eng's rules; registry security packs still scan them → `tests/test_hot_paths.py::test_generated_files_skip_only_hard_eng_rules`.
+- [x] Security scans skip only installed Hard Eng files, anchored at the root; a project's own skills are scanned → `tests/test_hot_paths.py::test_security_scans_skip_only_the_installed_hard_eng_files`.
+- [x] Templates and existing gate files carry no folder-name excludes → `tests/test_basic_mode.py::test_whole_project_security_scans_carry_no_unanchored_excludes`, `tests/test_setup.py::test_update_drops_the_folder_name_excludes_from_security_scans`.
+- [x] An update that also changes a dependency file keeps the freshness check → `tests/test_updates.py::test_update_with_dependency_change_keeps_freshness`.
+- [x] A release PR's canary fails unless develop's push run passed, and waits while it runs → `tests/test_release_canary.py::test_a_release_pr_waits_for_develops_push_run_to_pass`, `tests/test_release_canary.py::test_a_release_pr_waits_while_develops_push_run_is_running`.
 
 ## Baseline + execution
 
@@ -47,8 +47,8 @@ N/A — no app screens change.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Complete --base origin/develop` result recorded in the pull request; each new test failed before its fix; agent cases `failed-baseline` and `repeat-failure` passed on Haiku with the new shared rules.
 E2E: N/A — no user journey; the change is agent instruction text.
 Delivery target: PR
 Delivery: Pending — PR into develop.
