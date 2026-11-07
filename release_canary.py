@@ -497,6 +497,19 @@ def ci_failures(revision: str) -> list[str]:
     return [label for label in labels if not passed.get(label)]
 
 
+def release_pr_gate(base: str, revision: str) -> int:
+    names = output(["git", "diff", "--name-only", f"{base}...{revision}"]).split()
+    if not needs_canary(names):
+        print("No installed file changed; no new project to check.")
+        return 0
+    if missing := ci_failures(revision):
+        print(f"New projects without a passing develop push run: {', '.join(missing)}")
+        print("Rerun this job once the Canary run for develop's push has finished.")
+        return 1
+    print("Every new project passed in develop's push run for this commit.")
+    return 0
+
+
 def post_status(revision: str, state: str, description: str) -> None:
     output(
         [
