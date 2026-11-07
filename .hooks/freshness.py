@@ -2,6 +2,7 @@
 
 import json
 import re
+import subprocess
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
@@ -184,6 +185,25 @@ def stale_dependencies(
     return behind(uv_rows(text), lambda name: pypi_eligible(name, fetch, cutoff))
 
 
+def bun_waiting(directory: Path) -> Callable[[str], bool]:
+    """A release Bun cannot install yet, because a dependency it pins is younger than the wait."""
+
+    def waiting(name: str) -> bool:
+        age = f"--minimum-release-age={int(WAIT.total_seconds())}"
+        done = subprocess.run(
+            ["bun", "update", "--latest", name, "--dry-run", age],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=600,
+        )
+        blocked = "blocked by minimum-release-age"
+        return done.returncode != 0 and blocked in done.stdout + done.stderr
+
+    return waiting
+
+
 def held(stale: Stale, holds: list[JsonObject], today: date) -> bool:
     name, _, target = stale
     return any(
@@ -224,6 +244,7 @@ def validate_freshness(
     gate: Gate,
     fetch: Fetch = fetch_json,
     now: datetime | None = None,
+    waiting: Callable[[str], bool] | None = None,
 ) -> None:
     now = now or datetime.now(UTC)
     tool = Path(gate["command"][0]).name
@@ -235,6 +256,11 @@ def validate_freshness(
         raise ValueError(f"{tool} output is unreadable: {error!r}") from error
     holds: list[JsonObject] = gate.get("holds", [])
     stale = [item for item in stale if not held(item, holds, now.date())]
+    if tool == "bun" and waiting is not None:
+        early = [item for item in stale if waiting(item[0])]
+        for name, _, target in early:
+            print(f"{name} {target} needs a dependency that is not 2 days old yet")
+        stale = [item for item in stale if item not in early]
     if stale:
         names = " ".join(name for name, _, _ in stale)
         latest = " ".join(f"{name}@latest" for name, _, _ in stale)
