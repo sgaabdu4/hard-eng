@@ -262,9 +262,66 @@ def empty_audit(report: JsonObject) -> bool:
     return True
 
 
-def validate_fallow(path: Path) -> None:
+def sdk_binaries(directory: Path) -> set[str]:
+    """Commands from SDKs this repository's own packages already require."""
+    listed = subprocess.run(
+        ["git", "ls-files", "--", ":(top,glob)**/pubspec.yaml"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    ).stdout
+    return {"dart", "flutter"} if listed.strip() else set()
+
+
+def without_sdk_binaries(report: JsonObject, provided: set[str]) -> JsonObject:
+    key = "dead_code" if report.get("kind") == "audit" else "check"
+    section = report.get(key)
+    if not provided or not isinstance(section, dict):
+        return report
+    found = section.get("unlisted_binaries")
+    if not isinstance(found, list):
+        return report
+    kept = [
+        item
+        for item in found
+        if not (isinstance(item, dict) and item.get("binary_name") in provided)
+    ]
+    dropped = len(found) - len(kept)
+    if not dropped:
+        return report
+    for name in sorted({item["binary_name"] for item in found if item not in kept}):
+        print(f"Fallow: {name} comes from an SDK this repository requires")
+    summary = section["summary"]
+    section = {
+        **section,
+        "unlisted_binaries": kept,
+        "total_issues": section["total_issues"] - dropped,
+        "summary": {
+            **summary,
+            "total_issues": summary["total_issues"] - dropped,
+            "unlisted_binaries": summary["unlisted_binaries"] - dropped,
+        },
+    }
+    report = {**report, key: section}
+    if key == "dead_code":
+        totals = {
+            **report["summary"],
+            "dead_code_issues": report["summary"]["dead_code_issues"] - dropped,
+        }
+        counts = ("dead_code_issues", "complexity_findings", "duplication_clone_groups")
+        clean = not totals["dead_code_has_errors"] and not any(
+            totals[name] for name in counts
+        )
+        verdict = "pass" if report["verdict"] == "warn" and clean else report["verdict"]
+        report = {**report, "summary": totals, "verdict": verdict}
+    return report
+
+
+def validate_fallow(path: Path, provided: set[str] | None = None) -> None:
     try:
-        report = json.loads(path.read_text())
+        report = without_sdk_binaries(json.loads(path.read_text()), provided or set())
         audit = report["kind"] == "audit"
         if audit and empty_audit(report):
             return
