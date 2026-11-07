@@ -156,8 +156,6 @@
         "p/javascript",
         "--config",
         "p/typescript",
-        "--exclude=.agents",
-        "--exclude=.hooks",
         "--jobs",
         "2",
         "--error",
