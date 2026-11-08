@@ -36,6 +36,10 @@ Uncertainty: a Cloudflare Workers PR preview needs `wrangler versions upload --p
 - [x] Ship refuses a PR whose base is not `shipping.base`, so feature PRs go to `develop` and the release PR is merged by hand; no code change → `tests/test_shipping.py::test_ready_rejects_pr_identity_and_mergeability`.
 - [x] The coordinator releases once every testing card is approved, merges the release PR with `gh pr merge --merge`, and fixes or reverts a failed card first → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
 - [x] Done = release live on production → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
+- [x] On a `develop` base the delivery check reads staging, and the production check runs after the release merge, so ship's after-merge check can pass → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
+- [x] The release needs merge commits allowed and no linear-history rule on `main`; the release-source check stays out of `shipping.checks` → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
+- [x] The release waits for every card merged to `develop` since the last production release; a card moved back to doing is fixed or reverted first → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
+- [x] The Testing move gives the test site link, and click steps for a testing card come from the test site → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
 - [x] A UI card's Testing proof shows before and after of the same screen, state and width, with red boxes around each change → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
 - [x] N/A — not in this plan: the real project's switch (`develop` branch, default branch, deploy workflow, `shipping.base`, release-source check). It ships in that project's own PR with its own plan, after this release.
 
@@ -56,7 +60,7 @@ N/A — no app screens change; card text keeps everyday words ("test site", "rea
 ## Verification
 
 Result: Passed
-Evidence: On 2026-11-08 `uv run pytest -q tests/test_trello_coordinator.py`: 37 passed; the new assertions failed before the rule text changed.
+Evidence: On 2026-11-08 `uv run pytest -q tests/test_trello_coordinator.py`: 37 passed; the new assertions failed before the rule text changed. A fresh reviewer found 4 gaps (delivery check target, merge commits, cards sent back, test site link); each got a failing assertion first, then the rule fix.
 E2E: N/A — rule text only; the real project's switch proves it with its staging journeys on a `develop` push and its production check on a `main` push.
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with `hard-eng` and `canary` green, then release.
