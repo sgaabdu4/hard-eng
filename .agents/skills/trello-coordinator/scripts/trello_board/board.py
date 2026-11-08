@@ -88,6 +88,22 @@ def board_actions(client: Client, board: str, since: str) -> list[Obj]:
     return paged(client, f"/boards/{board}/actions", params)
 
 
+def edited_comments(client: Client, cards: list[Obj], since: str) -> list[Obj]:
+    if not since:
+        return []
+    found: list[Obj] = []
+    for card in cards:
+        active = text(card.get("dateLastActivity"))
+        if not active or parse_time(active) <= parse_time(since):
+            continue
+        path = f"/cards/{text(card.get('id'))}/actions"
+        for action in paged(client, path, {"filter": "commentCard"}):
+            edited = text(obj(action.get("data")).get("dateLastEdited"))
+            if edited and parse_time(edited) > parse_time(since):
+                found.append(action)
+    return found
+
+
 def updated(data: Obj) -> tuple[str, str]:
     if "desc" in obj(data.get("old")):
         return "desc", ""
@@ -206,7 +222,10 @@ def fetch(
     since = text(saved.get("checkedAt"))
     fresh = [
         replace(e, text=redact(e.text, client.secrets))
-        for a in board_actions(client, board, since)
+        for a in [
+            *board_actions(client, board, since),
+            *edited_comments(client, cards, since),
+        ]
         if (e := to_event(a, members))
     ]
     open_ids = {text(card.get("id")) for card in cards}

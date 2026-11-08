@@ -19,6 +19,7 @@ from trello_fakes import (
     checklist,
     comment,
     create_action,
+    edit_comment,
     lease_owner,
     make_action,
     make_card,
@@ -672,27 +673,30 @@ def test_owner_moves_and_cards_not_made_by_the_tool_are_owner_items(
 
 def test_edited_comment_counts_at_its_edit_time(project: Project) -> None:
     project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2)]
-    edited = comment("e1", 1, "m-sam", "Please add the export too", 10)
-    data = edited["data"]
-    assert isinstance(data, dict)
-    data["dateLastEdited"] = ago(1)
-    early = comment("e2", 2, "m-sam", "Please add the export too", 10)
-    data = early["data"]
-    assert isinstance(data, dict)
-    data["dateLastEdited"] = ago(7)
-    project.fake.actions = [
-        edited,
-        early,
-        comment("ours-1", 1, "m-owner", "Added", 5),
-        comment("ours-2", 2, "m-owner", "Added", 5),
-    ]
-    for ident in ("ours-1", "ours-2"):
-        project.mods.state.log_posted(project.state, ident)
+    said = "Please add the export too"
+    edited = edit_comment(comment("e1", 1, "m-sam", said, 10), 1)
+    early = edit_comment(comment("e2", 2, "m-sam", said, 10), 7)
+    project.fake.actions = [edited, early]
+    ours(project, ("ours-1", 1, "Added", 5), ("ours-2", 2, "Added", 5))
     report = project.report()
     assert refs(report["requests"]) == {"1"}
     (found,) = report["requests"]
-    assert found["excerpt"] == "Please add the export too"
+    assert found["excerpt"] == said
     assert found["at"] == data_edit(edited)
+    project.finish()
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2, 3)]
+    again = comment("e3", 3, "m-sam", "Please add the export", 40)
+    project.fake.actions.append(again)
+    ours(project, ("ours-3", 3, "Added", 30))
+    assert project.run("check").code == 0
+    project.finish()
+    new = "Please add the export and the import"
+    edit_comment(again, -0.02, new)
+    project.fake.cards[2]["dateLastActivity"] = ago(-0.02)
+    late = project.report()
+    assert refs(late["requests"]) == {"1", "3"}
+    third = next(item for item in late["requests"] if item["card"] == "3")
+    assert (third["excerpt"], third["at"]) == (new, data_edit(again))
 
 
 def data_edit(action: dict[str, object]) -> str:

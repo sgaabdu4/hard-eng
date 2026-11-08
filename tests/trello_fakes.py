@@ -77,6 +77,15 @@ def checklist(*items: tuple[str, str, str]) -> list[Data]:
     return [{"id": "cl1", "name": "Steps", "checkItems": rows}]
 
 
+def edit_comment(action: Data, hours: float, text: str = "") -> Data:
+    data = action["data"]
+    assert isinstance(data, dict)
+    data["dateLastEdited"] = ago(hours)
+    if text:
+        data["text"] = text
+    return action
+
+
 def move_action(
     ident: str,
     card: int,
