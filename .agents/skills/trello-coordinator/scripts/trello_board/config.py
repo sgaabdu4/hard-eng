@@ -3,7 +3,6 @@ import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .api import TrelloError
 from .shapes import Json, Obj, obj
@@ -38,13 +37,13 @@ TIMING_HOURS = {
     "promiseHours": 6,
     "doneGraceHours": 72,
 }
-TIMING_FIELDS = (*TIMING_HOURS, "quietHours", "timeZone")
-QUIET = re.compile(r"^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$")
+TIMING_FIELDS = tuple(TIMING_HOURS)
+GONE_TIMING = ("quietHours", "timeZone")
 SECRET = re.compile(r"\b(?:[0-9a-f]{32,}|ATTA[0-9A-Za-z]{20,})\b", re.IGNORECASE)
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 PHONE = re.compile(r"(?<![\w#])\+?\d(?:[\s().-]?\d){8,}(?![\d:])")
 SKIP_LINE = re.compile(r"^(?:!\[|```|https?://)")
-BOLD_LEAD = re.compile(r"^(?:#+\s+)?\*\*.+\*\*")
+BOLD_LEAD = re.compile(r"^(?:#+\s+)?(?:@\w+\s+)*\*\*.+\*\*")
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 JARGON = re.compile(
     r"\b(?:PR|PRs|CI|API|repo|(?i:pull request|repository|worktree|merged?|deploy(?:ed|s)?|staging|backend|frontend|endpoint|refactor(?:ed)?))\b"
@@ -199,16 +198,14 @@ def timing_value(timing: Obj, name: str) -> float:
 
 def check_timing(value: Json) -> dict[str, float]:
     timing = obj(value)
+    for gone in GONE_TIMING:
+        if gone in timing:
+            raise TrelloError(
+                f"trello.json: timing.{gone} is no longer used; delete {gone}"
+            )
     unknown = sorted(set(timing) - set(TIMING_FIELDS))
     if not isinstance(value, (dict, type(None))) or unknown:
         raise TrelloError(f"trello.json: timing takes only {', '.join(TIMING_FIELDS)}")
-    quiet = timing.get("quietHours")
-    if quiet is not None and not (isinstance(quiet, str) and QUIET.match(quiet)):
-        raise TrelloError('trello.json: timing.quietHours must look like "22:00-07:00"')
-    try:
-        ZoneInfo(str(timing.get("timeZone", "UTC")))
-    except (ZoneInfoNotFoundError, ValueError) as error:
-        raise TrelloError("trello.json: timing.timeZone is not an IANA name") from error
     return {name: timing_value(timing, name) for name in TIMING_HOURS}
 
 

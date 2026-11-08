@@ -15,6 +15,7 @@ from trello_fakes import (
     TOKEN,
     Mods,
     Project,
+    Result,
     ago,
     checklist,
     comment,
@@ -81,7 +82,7 @@ def test_key_and_token_never_printed(project: Project) -> None:
     project.fake.actions = [comment("a1", 1, "m-sam", pasted, 2)]
     outputs = [project.run("probe").text, project.run("check").text]
     project.finish()
-    project.fake.rejections = [(401, {}, f"invalid token {TOKEN}")]
+    project.fake.rejections = [(500, {}, f"broken {TOKEN}")]
     failed = project.run("probe")
     outputs.append(failed.text)
     assert failed.code == 1
@@ -117,21 +118,15 @@ def test_config_defaults_and_role_provider(project: Project) -> None:
     assert (config.promise_hours, config.done_grace_hours) == (6, 72)
     roles = {role: {"model": "m", "why": "w"} for role in ROLES}
     roles["builder"] = {"model": "m", "why": "w", "provider": "codex"}
-    timing = {
-        "chaseHours": 12,
-        "quietHours": "22:00-07:00",
-        "timeZone": "Europe/London",
-    }
-    project.configure(roles=roles, timing=timing)
+    project.configure(roles=roles, timing={"chaseHours": 12})
     assert project.mods.config.load_config(project.main).chase_hours == 12
-    for bad in (
-        {"quietHours": "late"},
-        {"timeZone": "Nowhere/Land"},
-        {"chaseHours": 0},
-    ):
-        project.configure(timing=bad)
-        with pytest.raises(project.mods.api.TrelloError):
+    for gone in ("quietHours", "timeZone"):
+        project.configure(timing={gone: "22:00-07:00"})
+        with pytest.raises(project.mods.api.TrelloError, match=f"delete {gone}"):
             project.mods.config.load_config(project.main)
+    project.configure(timing={"chaseHours": 0})
+    with pytest.raises(project.mods.api.TrelloError):
+        project.mods.config.load_config(project.main)
 
 
 @pytest.mark.parametrize(
@@ -574,11 +569,15 @@ def test_label_upload_and_download_use_the_card_endpoints(
     shot = tmp_path / "shot.png"
     shot.write_bytes(b"fake image")
     uploaded = project.run("upload", "1", str(shot))
-    assert (
-        json.dumps(uploaded.payload).count(
-            "![shot.png](https://files.example.test/att-1.png)"
-        )
-        == 1
+    assert uploaded.payload["markdown"] == (
+        "![shot.png](https://files.example.test/att-1.png)"
+    )
+    other = tmp_path / "other.png"
+    other.write_bytes(b"fake image")
+    both = project.run("upload", "1", str(shot), str(other))
+    assert both.payload["markdown"] == (
+        "![shot.png](https://files.example.test/att-2.png)\n\n"
+        "![other.png](https://files.example.test/att-3.png)"
     )
     folder = tmp_path / "saved"
     downloaded = project.run("download", "1", "--since", ago(10), "--dir", str(folder))
@@ -664,7 +663,7 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
             name
             in (
                 *("comment", "move", "label", "upload", "update", "detach", "new"),
-                *("member", "tick"),
+                *("member", "tick", "archive"),
             )
         )
     assert set(first_cells(parts["`trello.json`"])) == set(mods.config.FIELDS)
@@ -707,3 +706,54 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     assert "real save" in workers and "read back" in workers
     assert "never skip or narrow a Hard Eng check" in workers
     assert "never hold one for a bigger batch" in run
+    assert "tokenRefused" in hosts and "firstReport" in hosts
+    core = (SKILL / "SKILL.md").read_text()
+    assert "vary the wording" in core and "`--check`" in core
+    assert "quietHours" not in core + hosts + run
+
+
+def test_refused_token_is_reported_once(project: Project) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+
+    def refused() -> Result:
+        project.fake.rejections = [(401, {}, f"invalid token {TOKEN}")]
+        return project.run("check")
+
+    first = refused()
+    assert first.code == 1
+    assert first.payload == {
+        "error": "Trello refused the token: it is revoked or expired",
+        "tokenRefused": True,
+        "firstReport": True,
+    }
+    assert TOKEN not in first.text
+    assert not (project.state / "state.json").exists()
+    assert refused().payload["firstReport"] is False
+    assert project.run("check").code == 0
+    project.finish()
+    assert refused().payload["firstReport"] is True
+
+
+def test_archive_links_the_original_and_closes_the_copy(project: Project) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(2, "#1 Card copy", "l-doing", idLabels=["lb-sam"]),
+    ]
+    assert project.run("archive", "1", "--into", "sl1").code == 1
+    assert project.run("archive", "sl2", "--into", "sl2").code == 1
+    assert project.fake.writes == []
+    done = project.run("archive", "sl2", "--into", "sl1")
+    assert done.code == 0, done.text
+    post, delete, close = project.fake.writes
+    assert post.path == "/cards/card2/actions/comments"
+    assert "https://trello.com/c/sl1" in post.form["text"]
+    assert (delete.method, delete.path) == ("DELETE", "/cards/card2/idLabels/lb-sam")
+    assert (close.method, close.path, close.form) == (
+        "PUT",
+        "/cards/card2",
+        {"closed": "true"},
+    )
+    assert (project.state / "posted.log").read_text().split() == ["act-1"]
+    planned = project.run("archive", "sl2", "--into", "sl1", "--dry-run")
+    assert isinstance(planned.payload["dryRun"], list)
+    assert len(project.fake.writes) == 3

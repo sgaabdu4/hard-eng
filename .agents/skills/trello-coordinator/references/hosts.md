@@ -26,6 +26,7 @@ Ask with `request_secret`, `delivery: "file"`, one value at a time, key first. T
   > 2. Click the word Token to the right of the API key.
   > 3. Check that the page shows <account>, then click Allow.
   > 4. Copy the long code on the next page and paste it here.
+- `check` or `probe` prints `tokenRefused`: the token is revoked or expired. `firstReport: true` → ask for a new token only, with the Token steps above, then `save-secret TRELLO_TOKEN` and `probe`. `firstReport: false` → the owner already knows; say nothing.
 - `save-secret` refuses the paste → ask again with the same text and one line saying what was wrong. `probe` names another account → stop and say which account the token belongs to.
 
 ## Claude Code
@@ -46,4 +47,4 @@ Ask with `request_secret`, `delivery: "file"`, one value at a time, key first. T
 - `trello.json` `roles` = the coordinator's model per role, each with a `why`, written for the host that runs the coordinator; they override the project's general model-role rule for coordinator workers. No `roles` → use the default split with this host's own models. Default split: coordinator = strongest model, open-ended routing and judgment on every card; planner + reviewer = strongest model, judgment; builder = mid model, carries out a clear plan; lookup = fastest model, reads and reports; computerUse = the host's computer-use model, needed to check signed-in screens.
 - A role's model unavailable on this host → say so and stop that role's work; never substitute another model. Moving the coordinator to another host = edit `roles` for that host first.
 - Model change = edit `trello.json`; running workers finish on their old model.
-- Timing, chase hours and quiet hours come from `trello.json` `timing`; no message to people inside `quietHours` unless urgent.
+- Timing and chase hours come from `trello.json` `timing`.
