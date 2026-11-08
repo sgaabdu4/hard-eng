@@ -705,21 +705,27 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     core = (SKILL / "SKILL.md").read_text()
     assert "vary the wording" in core and "`--check`" in core
     assert "quietHours" not in core + hosts + run
-    release = next(line for line in run.splitlines() if line.startswith("- Release:"))
+    release = run.split("\n- Release:", 1)[1].split("\n- ", 1)[0]
     assert "red boxes around each change" in release
     assert "`develop`" in release and "gh pr merge --merge" in release
     assert "fix or revert" in release and "done once production" in release
     assert "since the last production release" in release
     assert "moved back to doing" in release and "test site link" in release
-    assert "testing card on a `develop` base → the test site" in core
+    assert (
+        "card in testing on a `develop` base, take the click steps from the test site"
+        in core
+    )
     hosting = (SKILL.parent / "he/references/integrations.md").read_text()
     hosting = hosting.split("- **Hosting**", 1)[1].split("\n- **", 1)[0]
     assert "base branch → production" in hosting
     assert "`trello.json`" in hosting and "`shipping.base` = `develop`" in hosting
     assert "own preview on the staging backend" in hosting
-    assert "only the `develop` release PR" in hosting
-    assert "which the delivery check reads" in hosting
-    assert "allow merge commits" in hosting and "out of `shipping.checks`" in hosting
+    assert "head branch is not `develop`" in hosting
+    assert "its staging run is the delivery check" in hosting
+    assert (
+        "allow merge commits" in hosting
+        and "not list that check in `shipping.checks`" in hosting
+    )
 
 
 def test_refused_token_is_reported_once(project: Project) -> None:
