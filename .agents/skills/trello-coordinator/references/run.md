@@ -44,6 +44,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 - Follow-up comments on that card go to the same worker ([hosts](hosts.md) names the tool); a worker that cannot be reached → fresh worker in the same worktree from its handover note. Never two workers on one worktree.
 - A worker reports; you check its result against the plan's acceptance and its images before any card move. Weak work → back to the same worker with exact findings.
 - Briefs never skip or narrow a Hard Eng check; a builder reports only after its plan's Complete check passes.
+- Before starting a builder, compare the files its plan touches with each open card PR; shared files → start it after that PR merges. After each merge to the base branch, an open card PR that now conflicts is its builder's next job: rebase, rerun its check, push.
 - New or changed save → one real save on a deployed test environment, read back and removed, before the testing move; tests and fakes are not proof.
 - Only a real user event can prove the card → `label <card> add "Waiting for real case"` + its check in `handover.md`.
 - Ended while its own check runs = not stalled; it resumes when the check ends. Stalled (no writes for 20 minutes) → cancel its task, then a fresh worker in the same worktree from its handover note.

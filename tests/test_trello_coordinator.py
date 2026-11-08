@@ -699,6 +699,7 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     workers = run.split("\n## Workers\n", 1)[1].split("\n## ", 1)[0]
     assert "real save" in workers and "read back" in workers
     assert "never skip or narrow a Hard Eng check" in workers
+    assert "files its plan touches" in workers and "now conflicts" in workers
     assert "never hold one for a bigger batch" in run
     assert "tokenRefused" in hosts and "firstReport" in hosts
     core = (SKILL / "SKILL.md").read_text()
