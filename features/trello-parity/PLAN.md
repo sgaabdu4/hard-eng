@@ -28,13 +28,13 @@ Decision: the "Unsupported image" half of the picture rule gets no check after p
 
 Slice 1: the report sees every human action
 
-- [ ] A card move or a new card by a board member is a request; by anyone else it is information → `tests/test_trello_board.py::test_people_moves_and_new_cards_are_requests` (`board.py` keeps `move` and new `created` events from others; `report.py` excerpts "[moved to <list>]" and "[made the card]").
-- [ ] A move or new card by the token's account that our `move` or `new` did not make is an `owner` item; after each write, `move` and `new` read the card's newest move or create action once and append its id to the posted log (`commands.py`, `report.py`) → `tests/test_trello_board.py::test_owner_moves_and_cards_not_made_by_the_tool_are_owner_items`.
-- [ ] An edited comment replaces the old text and counts at its edit time, so an edit after our reply is a request → `tests/test_trello_board.py::test_edited_comment_counts_at_its_edit_time` (`board.py` reads `data.dateLastEdited` on `commentCard` actions; Trello logs no separate edit action, checked on a real board on 2026-11-08).
-- [ ] A short reply such as "ok", "thanks", "works" or "done" (tags allowed) on a card in `done` is not a request; on an open card it still is (`report.py`) → extend `tests/test_trello_coordinator.py::test_done_card_requests_expire_after_the_grace_hours`.
-- [ ] The newer of two open cards with the same `#N` (higher card id) is listed in `unnumbered` as a duplicate (`report.py`) → `tests/test_trello_board.py::test_duplicate_numbers_are_listed_and_refused_as_a_card_reference`.
-- [ ] A card reference `#N` that matches two cards is refused with both shortLinks, so no write reaches the wrong card (`commands.py`) → `tests/test_trello_board.py::test_duplicate_numbers_are_listed_and_refused_as_a_card_reference`.
-- [ ] `update <card> --renumber` names the card `#<next free number> <title>` (`commands.py`) → extend `tests/test_trello_board.py::test_update_renames_and_sets_the_due_date`.
+- [x] A card move or a new card by a board member is a request; by anyone else it is information → `tests/test_trello_board.py::test_people_moves_and_new_cards_are_requests` (`board.py` keeps `move` and new `created` events from others; `report.py` excerpts "[moved to <list>]" and "[made the card]").
+- [x] A move or new card by the token's account that our `move` or `new` did not make is an `owner` item; after each write, `move` and `new` read the card's newest move or create action once and append its id to the posted log (`commands.py`, `report.py`) → `tests/test_trello_board.py::test_owner_moves_and_cards_not_made_by_the_tool_are_owner_items`.
+- [x] An edited comment replaces the old text and counts at its edit time, so an edit after our reply is a request → `tests/test_trello_board.py::test_edited_comment_counts_at_its_edit_time` (`board.py` reads `data.dateLastEdited` on `commentCard` actions; Trello logs no separate edit action, checked on a real board on 2026-11-08).
+- [x] A short reply such as "ok", "thanks", "works" or "done" (tags allowed) on a card in `done` is not a request; on an open card it still is (`report.py`) → extend `tests/test_trello_coordinator.py::test_done_card_requests_expire_after_the_grace_hours`.
+- [x] The newer of two open cards with the same `#N` (higher card id) is listed in `unnumbered` as a duplicate (`report.py`) → `tests/test_trello_board.py::test_duplicate_numbers_are_listed_and_refused_as_a_card_reference`.
+- [x] A card reference `#N` that matches two cards is refused with both shortLinks, so no write reaches the wrong card (`commands.py`) → `tests/test_trello_board.py::test_duplicate_numbers_are_listed_and_refused_as_a_card_reference`.
+- [x] `update <card> --renumber` names the card `#<next free number> <title>` (`commands.py`) → extend `tests/test_trello_board.py::test_update_renames_and_sets_the_due_date`.
 
 Slice 2: open questions and chasing
 

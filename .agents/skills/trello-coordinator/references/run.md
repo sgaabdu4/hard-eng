@@ -22,7 +22,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 | `badTags`               | Post again with a tag that reaches the person.                                                                                                       |
 | `labels`                | Label only open questions; add or remove to match.                                                                                                   |
 | `waitsOnUs`             | `move <card> doing` + one comment: what it waits for, and that it returns to testing when live.                                                      |
-| `unnumbered`, `overdue` | Number it with `update`; overdue → act, or post the blocker and set a new date with `update`.                                                        |
+| `unnumbered`, `overdue` | Number it with `update --renumber`; overdue → act, or post the blocker and set a new date with `update`.                                             |
 | `realCases`             | Run its `handover.md` check since its last checked time. Worked → post the example, remove the label, testing. Failed → `doing`.                     |
 
 ## Project health

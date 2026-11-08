@@ -72,9 +72,33 @@ def comment(ident: str, card: int, who: str, text: str, hours: float) -> Data:
     return make_action(ident, "commentCard", card, who, hours, text=text)
 
 
-def move_action(ident: str, card: int, list_id: str, hours: float) -> Data:
-    after = {"id": list_id, "name": "Done"}
-    return make_action(ident, "updateCard", card, "m-owner", hours, listAfter=after)
+def move_action(
+    ident: str,
+    card: int,
+    list_id: str,
+    hours: float,
+    who: str = "m-owner",
+    name: str = "Done",
+) -> Data:
+    before = {"id": "l-before", "name": "Before"}
+    after = {"id": list_id, "name": name}
+    return make_action(
+        ident, "updateCard", card, who, hours, listBefore=before, listAfter=after
+    )
+
+
+def create_action(ident: str, card: int, who: str, hours: float) -> Data:
+    action = make_action(ident, "createCard", card, who, hours)
+    data = action["data"]
+    assert isinstance(data, dict)
+    data["card"] = {
+        "id": f"card{card}",
+        "name": "x",
+        "idShort": card,
+        "shortLink": f"sl{card}",
+    }
+    data["list"] = {"id": "l-todo", "name": "To do"}
+    return action
 
 
 @dataclass(frozen=True)
@@ -176,8 +200,7 @@ class FakeTrello:
         if path in lookup:
             return lookup[path]
         if method == "POST" and path == "/cards":
-            ident = self.new_id("card")
-            return {"id": ident, "shortUrl": f"https://trello.com/c/{ident}"}
+            return self.create(form)
         if method == "POST" and path.endswith("/attachments"):
             ident = self.new_id("att")
             return {"id": ident, "url": f"https://files.example.test/{ident}.png"}
@@ -185,22 +208,61 @@ class FakeTrello:
             return self.reply(path, form["text"])
         if method == "GET" and path.endswith("/attachments"):
             return self.attachments
-        return self.card_answer(method, path, query)
+        return self.card_answer(method, path, query, form)
 
-    def card_answer(self, method: str, path: str, query: dict[str, str]) -> object:
-        detail = re.fullmatch(r"/cards/(card\d+)", path)
+    def card_answer(
+        self, method: str, path: str, query: dict[str, str], form: dict[str, str]
+    ) -> object:
+        detail = re.fullmatch(r"/cards/([\w-]+)", path)
         if method == "GET" and detail:
             card = next(c for c in self.cards if c["id"] == detail.group(1))
             return card | {"desc": self.descriptions.get(detail.group(1), "")}
-        thread = re.fullmatch(r"/cards/(card\d+)/actions", path)
+        if method == "PUT" and detail and "idList" in form:
+            self.moved(detail.group(1), form["idList"])
+        thread = re.fullmatch(r"/cards/([\w-]+)/actions", path)
         if method == "GET" and thread:
+            kinds = query.get("filter", "commentCard").split(",")
             own = [
                 a
                 for a in self.actions
-                if a["type"] == "commentCard" and card_id(a) == thread[1]
+                if card_id(a) == thread[1]
+                and any(str(a["type"]) == k.split(":")[0] for k in kinds)
             ]
             return self.page(own, query)
         return dict[str, object]()
+
+    def create(self, form: dict[str, str]) -> Data:
+        ident = self.new_id("card")
+        self.cards.append(
+            make_card(0, form["name"], form["idList"], id=ident, shortLink=ident)
+        )
+        number = len(self.cards)
+        action = make_action(
+            self.new_id("act"), "createCard", 0, "m-owner", -0.03, list=form["idList"]
+        )
+        data = action["data"]
+        assert isinstance(data, dict)
+        data["card"] = {"id": ident, "name": form["name"], "idShort": number}
+        self.actions.append(action)
+        return {"id": ident, "shortUrl": f"https://trello.com/c/{ident}"}
+
+    def moved(self, ident: str, list_id: str) -> None:
+        card = next(c for c in self.cards if c["id"] == ident)
+        before = {"id": card["idList"], "name": "Before"}
+        card["idList"] = list_id
+        action = make_action(
+            self.new_id("act"),
+            "updateCard",
+            0,
+            "m-owner",
+            -0.03,
+            listBefore=before,
+            listAfter={"id": list_id, "name": "After"},
+        )
+        data = action["data"]
+        assert isinstance(data, dict)
+        data["card"] = {"id": ident, "name": str(card["name"])}
+        self.actions.append(action)
 
     def reply(self, path: str, text: str) -> Data:
         ident = self.new_id("act")

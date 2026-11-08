@@ -15,9 +15,13 @@ from trello_fakes import (
     TOKEN,
     Mods,
     Project,
+    ago,
     comment,
+    create_action,
     lease_owner,
+    make_action,
     make_card,
+    move_action,
     refs,
     write_lease,
 )
@@ -192,6 +196,13 @@ def test_update_renames_and_sets_the_due_date(project: Project) -> None:
     planned = project.run("update", "1", "--name", "Other", "--dry-run")
     assert isinstance(planned.payload["dryRun"], list)
     assert len(project.fake.writes) == 1
+    project.fake.cards += [
+        make_card(2, "Copy", "l-doing"),
+        make_card(9, "#9 Old", "l-done", closed=True),
+    ]
+    renumbered = project.run("update", "sl2", "--renumber")
+    assert renumbered.code == 0, renumbered.text
+    assert project.fake.writes[-1].form == {"name": "#10 Copy"}
 
 
 def test_redirects_leave_the_trello_host_without_credentials(mods: Mods) -> None:
@@ -562,3 +573,97 @@ def test_comment_adds_the_needs_label_of_each_person_asked(
         "/cards/card2/actions/comments",
         "/cards/card1/actions/comments",
     ]
+
+
+def test_people_moves_and_new_cards_are_requests(project: Project) -> None:
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2, 3, 4)]
+    project.fake.actions = [
+        move_action("a1", 1, "l-testing", 3, who="m-sam", name="Testing"),
+        create_action("a2", 2, "m-sam", 2),
+        move_action("a3", 3, "l-done", 1, who="m-pat", name="Done"),
+        make_action("a4", "updateCard", 4, "m-sam", 1, old={"pos": 1}),
+    ]
+    report = project.report()
+    assert refs(report["requests"]) == {"1", "2"}
+    excerpts = {item["card"]: item["excerpt"] for item in report["requests"]}
+    assert excerpts == {"1": "[moved to Testing]", "2": "[made the card]"}
+    assert refs(report["information"]) == {"3"}
+
+
+def test_owner_moves_and_cards_not_made_by_the_tool_are_owner_items(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2, 3)]
+    assert project.report()["owner"] == []
+    project.finish()
+    project.fake.actions = [
+        move_action("h1", 1, "l-testing", -0.02, name="Testing"),
+        create_action("h2", 3, "m-owner", -0.02),
+    ]
+    assert project.run("move", "2", "doing").code == 0
+    details = tmp_path / "details.txt"
+    details.write_text("Steps")
+    made = project.run(
+        "new", "todo", "Made by the tool", "--description-file", str(details)
+    )
+    assert made.code == 0, made.text
+    report = project.report()
+    assert refs(report["owner"]) == {"1", "3"}
+    excerpts = {item["card"]: item["excerpt"] for item in report["owner"]}
+    assert excerpts == {"1": "[moved to Testing]", "3": "[made the card]"}
+    assert report["requests"] == []
+    posted = (project.state / "posted.log").read_text().split()
+    assert len(posted) == 2
+    assert not {"h1", "h2"} & set(posted)
+
+
+def test_edited_comment_counts_at_its_edit_time(project: Project) -> None:
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2)]
+    edited = comment("e1", 1, "m-sam", "Please add the export too", 10)
+    data = edited["data"]
+    assert isinstance(data, dict)
+    data["dateLastEdited"] = ago(1)
+    early = comment("e2", 2, "m-sam", "Please add the export too", 10)
+    data = early["data"]
+    assert isinstance(data, dict)
+    data["dateLastEdited"] = ago(7)
+    project.fake.actions = [
+        edited,
+        early,
+        comment("ours-1", 1, "m-owner", "Added", 5),
+        comment("ours-2", 2, "m-owner", "Added", 5),
+    ]
+    for ident in ("ours-1", "ours-2"):
+        project.mods.state.log_posted(project.state, ident)
+    report = project.report()
+    assert refs(report["requests"]) == {"1"}
+    (found,) = report["requests"]
+    assert found["excerpt"] == "Please add the export too"
+    assert found["at"] == data_edit(edited)
+
+
+def data_edit(action: dict[str, object]) -> str:
+    data = action["data"]
+    assert isinstance(data, dict)
+    return str(data["dateLastEdited"])
+
+
+def test_duplicate_numbers_are_listed_and_refused_as_a_card_reference(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(2, "#1 Card copy", "l-doing"),
+        make_card(3, "#3 Other", "l-doing"),
+    ]
+    found = project.report()["unnumbered"]
+    assert [item["url"] for item in found] == ["https://trello.com/c/sl2"]
+    note = tmp_path / "note.txt"
+    note.write_text("All good")
+    refused = project.run("comment", "1", str(note))
+    assert refused.code == 1
+    assert "sl1" in str(refused.payload["error"])
+    assert "sl2" in str(refused.payload["error"])
+    assert project.fake.writes == []
+    assert project.run("comment", "sl1", str(note)).code == 0
+    assert project.run("comment", "3", str(note)).code == 0
