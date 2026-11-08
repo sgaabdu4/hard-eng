@@ -145,6 +145,32 @@ def waits(earlier: Check, later: Check, reach: dict[str, set[str]]) -> bool:
     )
 
 
+def blocked_by(ordered: list[Check], index: int, failed: set[int]) -> str | None:
+    """A Fallow gate cannot read coverage that a failed test gate never wrote."""
+    if not reads_coverage(ordered[index][1]):
+        return None
+    for earlier in sorted(failed):
+        group, gate = ordered[earlier]
+        if gate.get("role") == "tests":
+            return f"{group['path']}/{gate['name']}"
+    return None
+
+
+def start(
+    run: Callable[[Group, Gate], bool], source: str | None
+) -> Callable[[Group, Gate], bool]:
+    if source is None:
+        return run
+
+    def blocked(_group: Group, gate: Gate) -> bool:
+        print(
+            f"BLOCKED {gate['name']}: it reads the coverage of {source}, which failed"
+        )
+        return True
+
+    return blocked
+
+
 def run_checks(
     checks: list[Check], run: Callable[[Group, Gate], bool], packages: list[Group]
 ) -> bool | None:
@@ -161,6 +187,7 @@ def run_checks(
     waiting = list(range(len(ordered)))
     running: dict[Future[bool], int] = {}
     finished: set[int] = set()
+    broken: set[int] = set()
     failed = False
     try:
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -180,13 +207,15 @@ def run_checks(
                         if heavy:
                             serial += 1
                         waiting.remove(index)
-                        running[pool.submit(run, group, gate)] = index
+                        source = blocked_by(ordered, index, needs[index] & broken)
+                        running[pool.submit(start(run, source), group, gate)] = index
                     done, _ = wait(running, return_when=FIRST_COMPLETED)
                     for future in done:
                         index = running.pop(future)
                         finished.add(index)
                         if future.result():
                             failed = True
+                            broken.add(index)
                             if ordered[index][1].get("role") == "lockfiles":
                                 print(
                                     "Dependency setup failed; remaining checks were not run."

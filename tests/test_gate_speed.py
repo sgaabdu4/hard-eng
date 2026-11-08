@@ -291,6 +291,44 @@ def test_every_failure_is_reported_when_one_package_fails_first(
     assert set(runner.FAILED_GATES) == {"app/first", "app/second", "ios/slow"}
 
 
+def test_a_coverage_reader_is_blocked_not_failed_when_its_tests_fail(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ran = tmp_path / "fallow-ran"
+    tests = gate(
+        "tests",
+        "raise SystemExit(1)",
+        role="tests",
+        report={
+            "type": "python-tests",
+            "tests": "coverage/junit.xml",
+            "coverage": "coverage/coverage.json",
+        },
+    )
+    fallow = gate(
+        "fallow",
+        f"from pathlib import Path;Path({str(ran)!r}).touch()",
+        role="dead-code-duplicates",
+        report={"type": "fallow", "path": "coverage/fallow.json"},
+    )
+    lint = gate("lint", "pass", role="lint")
+    packages(
+        tmp_path,
+        monkeypatch,
+        {"path": "web", "depends_on": [], "checks": [tests, fallow, lint]},
+    )
+    assert runner.check() == 1
+    output = capsys.readouterr().out
+    assert "FAIL tests" in output
+    assert "BLOCKED fallow: it reads the coverage of web/tests, which failed" in output
+    assert "FAIL fallow" not in output and "PASS lint" in output
+    assert not ran.exists()
+    assert set(runner.FAILED_GATES) == {"web/tests"}
+
+
 def test_performance_suites_run_alone_beside_other_packages(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
