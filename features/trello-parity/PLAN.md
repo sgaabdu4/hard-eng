@@ -59,6 +59,7 @@ Slice 3: the testing flow writes
 
 Slice 4: sign-in, duplicates, text and links
 
+- [x] A builder starts only when no open card PR touches the same files, and a card PR that conflicts after a merge is its builder's next job (`references/run.md`; parallel card builders left PRs in conflict) → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
 - [x] `trello.json` `timing` no longer takes `quietHours` or `timeZone`: a file that sets either is refused with a line saying to delete it; `SKILL.md`, `references/hosts.md` and `references/commands.md` drop every quiet-hours rule (`config.py`) → extend `tests/test_trello_coordinator.py::test_config_defaults_and_role_provider`.
 - [x] A 401 from Trello gives one error, "Trello refused the token: it is revoked or expired", with `tokenRefused: true`. `firstReport` is true only on the first refused run since the last good read, so the owner is told once → `tests/test_trello_coordinator.py::test_refused_token_is_reported_once` (`api.py`, `state.py`).
 - [x] `references/hosts.md`: `tokenRefused` with `firstReport` → ask for a new token only, with the existing token steps → extend `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
