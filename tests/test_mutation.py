@@ -1,6 +1,5 @@
 import fnmatch
 import json
-import os
 import shutil
 import signal
 import subprocess
@@ -340,11 +339,9 @@ ship_actions.mutate(Path({str(root)!r}), "HEAD~1", None, True, production)
     deadline = time.monotonic() + 30
     while not marker.exists() and time.monotonic() < deadline:
         time.sleep(0.1)
-    tool = int(marker.read_text())
     runner.send_signal(signal.SIGTERM)
     assert runner.wait(timeout=30) != 0
-    with pytest.raises(ProcessLookupError):
-        os.kill(tool, 0)
+    assert gone(marker)
 
 
 def test_mutmut_settings_keep_the_rest_of_setup_cfg(tmp_path: Path) -> None:
