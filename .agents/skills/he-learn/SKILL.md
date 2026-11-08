@@ -41,6 +41,18 @@ flowchart TD
 - Attribution = give each tried fix one verdict against the original failure: helped, hurt, no effect or confounded. Confounded = several changes in one run, or one run alone behind the difference. Keep a lesson only from helped fixes; narrow a confounded one to what the evidence shows, or record nothing. Write the trigger as the shape of the situation, not one task's facts.
 - Behavioral proof = exercise the original request + nearby valid/non-trigger case. Material trigger, authority, action-order or completion changes need actual agent execution; a wording/metadata check alone is insufficient. Verify the future consumer reaches the rule when relevant. Failed/unknown proof stays unfinished; never promise universal non-recurrence.
 
+## Retro
+
+- When = every task end, before its plan is Complete; the result goes on the plan's `Retro:` line. No failed check and no correction → `None — no check failed`.
+- Items = each failed check (Stop, local, pre-push, CI) and each user or review correction in the task, including ones fixed at once.
+- Sort each item:
+  - Mechanical (pattern, banned API, file place, size, shape) → a deterministic check at its owner: an existing lint or check rule first, else the smallest new one; never one checker per incident.
+  - Judgement → the review rules in [Code Review](../code-review/SKILL.md).
+  - Ran too late (the check existed but first ran at push or CI) → run it earlier at its owner, such as the build step or a worker brief; never in a hook.
+  - Hard Eng fault (a Hard Eng check, hook, skill or setup was wrong or missing) → a Hard Eng issue through the AGENTS.md filing rule and its publication privacy; the project fix still lands here.
+  - Outside cause (outage, upstream release) → none with the reason, or a freshness hold.
+- Second owner found → merge it into the one owner, per the plan's `Single source:` line.
+
 ## Apply + continue
 
 - Decisions/steering = [terse ADR capture](references/decisions.md). Matching accepted ADRs are shown by the Stop hook; still read applicable ones before applying a past lesson; current user instructions + verified applicability govern. A code/decision conflict may be a product regression, not stale documentation.
