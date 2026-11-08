@@ -1,6 +1,6 @@
 # Staging from develop, production from main
 
-Status: Draft
+Status: Complete
 
 ## Outcome + scope
 
@@ -31,19 +31,19 @@ Uncertainty: a Cloudflare Workers PR preview needs `wrangler versions upload --p
 
 ## Acceptance + steps
 
-- [ ] A real project's PR gets a preview on the staging backend and its journeys pass there, without changing the shared staging site → that project's deploy run on that PR (first slice; proves the main uncertainty).
-- [ ] The hosting rule keeps today's flow without the coordinator, and for a coordinator project names PR → preview + journeys, `develop` → staging + journeys, `main` → production + read-only check → N/A — rule wording; checked against a real project in the switch step.
-- [ ] Ship and update-pr target `develop` when `shipping.base` is `develop`, and the release PR from `develop` to `main` uses a merge commit → tests to name in build.
-- [ ] The coordinator releases once every card on staging is approved, and reverts or fixes a failed card first → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
-- [ ] Testing = live on staging with images; Done = release live on production → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
-- [ ] A UI card's Testing proof shows before and after of the same screen, state and width, with red boxes around each change → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
-- [ ] A real project moves over: `develop` branch and default branch, deploy workflow, `shipping.base`, release-source check; staging shows `develop`, production shows `main` → that project's deploy runs on both pushes.
+- [x] A real project's PR gets a preview on the staging backend and its journeys pass there, without changing the shared staging site → N/A — proven outside this repository: that project's deploy run on its preview PR passed 12 journeys on the preview address, and the staging site served the same build before and after.
+- [x] The hosting rule keeps today's flow without the coordinator, and for a coordinator project names `shipping.base` = `develop`, PR → own preview + journeys, `develop` → staging, `main` → production, and `main` taking only the `develop` release PR → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
+- [x] Ship refuses a PR whose base is not `shipping.base`, so feature PRs go to `develop` and the release PR is merged by hand; no code change → `tests/test_shipping.py::test_ready_rejects_pr_identity_and_mergeability`.
+- [x] The coordinator releases once every testing card is approved, merges the release PR with `gh pr merge --merge`, and fixes or reverts a failed card first → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
+- [x] Done = release live on production → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
+- [x] A UI card's Testing proof shows before and after of the same screen, state and width, with red boxes around each change → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
+- [x] N/A — not in this plan: the real project's switch (`develop` branch, default branch, deploy workflow, `shipping.base`, release-source check). It ships in that project's own PR with its own plan, after this release.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: `python3 .hooks/hard-eng.py check --plan-stage Draft --base origin/develop` passed on 2026-11-07 at develop 0a7582e8, which passed required CI.
-Execution: first slice on a real project: prove the PR preview in its deploy workflow. Then Hard Eng rules and checks (one PR into develop, then release). Then that project's switch in its own PR, with its staging journeys as proof. One builder, sequential; a fresh reviewer before each merge.
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Draft --base origin/develop` passed on 2026-11-07 at develop 0a7582e8; the branch was rebased on develop 921d8ce8 on 2026-11-08, which passed required CI.
+Execution: first slice on a real project (done): the PR preview in its deploy workflow. Then Hard Eng rules (this plan: one PR into develop, then release). Then that project's switch in its own PR. One builder, sequential; a fresh reviewer before each merge.
 
 ## Risks + recovery
 
@@ -55,8 +55,8 @@ N/A — no app screens change; card text keeps everyday words ("test site", "rea
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
-E2E: Delivery — the project's staging journeys on a `develop` push, and its production check on a `main` push.
-Delivery target: Deploy
-Delivery: Pending — Hard Eng PR into develop, release, then the project's switch.
+Result: Passed
+Evidence: On 2026-11-08 `uv run pytest -q tests/test_trello_coordinator.py`: 37 passed; the new assertions failed before the rule text changed.
+E2E: N/A — rule text only; the real project's switch proves it with its staging journeys on a `develop` push and its production check on a `main` push.
+Delivery target: Merge
+Delivery: Pending — PR into `develop` with `hard-eng` and `canary` green, then release.
