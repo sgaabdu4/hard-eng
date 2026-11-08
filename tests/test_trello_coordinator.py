@@ -16,6 +16,7 @@ from trello_fakes import (
     Mods,
     Project,
     ago,
+    checklist,
     comment,
     lease_owner,
     make_action,
@@ -134,7 +135,8 @@ def test_config_defaults_and_role_provider(project: Project) -> None:
 
 
 @pytest.mark.parametrize(
-    "command", ["comment", "move", "label", "upload", "update", "check"]
+    "command",
+    ["comment", "move", "label", "upload", "update", "member", "tick", "check"],
 )
 def test_wrong_account_is_refused(
     project: Project, tmp_path: Path, command: str
@@ -147,6 +149,8 @@ def test_wrong_account_is_refused(
         "label": ["1", "add", "Needs Sam"],
         "upload": ["1", str(note)],
         "update": ["1", "--name", "New"],
+        "member": ["1", "add", "sam"],
+        "tick": ["1", "anything"],
         "check": [],
     }
     project.fake.account = "intruder"
@@ -329,35 +333,211 @@ def test_comment_dry_run_sends_no_write(project: Project, tmp_path: Path) -> Non
     assert not (project.state / "posted.log").exists()
 
 
+def write_note(tmp_path: Path, body: str = "") -> Path:
+    note = tmp_path / ("other.txt" if body else "testing.txt")
+    note.write_text(
+        body or "**Ready to try.**\n\n@sam please open the list and check the total."
+    )
+    return note
+
+
 def test_testing_move_needs_proof(project: Project, tmp_path: Path) -> None:
     project.fake.cards = [make_card(5, "#5 Move", "l-doing")]
     proof = tmp_path / "proof.png"
     proof.write_bytes(b"fake image")
-    refused = project.run("move", "5", "testing")
+    note = write_note(tmp_path)
+    shows = "The saved total now shows on the list"
+    refused = project.run("move", "5", "testing", "--comment", str(note))
     assert refused.code == 1
     assert "proof" in str(refused.payload["error"])
-    assert project.fake.writes == []
-    unnamed = project.run("move", "5", "testing", "--proof", str(proof))
+    unnamed = project.run(
+        "move", "5", "testing", "--proof", str(proof), "--comment", str(note)
+    )
     assert unnamed.code == 1
     assert "--shows" in str(unnamed.payload["error"])
+    uncommented = project.run(
+        "move", "5", "testing", "--proof", str(proof), "--shows", shows
+    )
+    assert uncommented.code == 1
+    assert "--comment" in str(uncommented.payload["error"])
+    for body in ("Ready to try.", "@ghost please check the total."):
+        untagged = project.run(
+            "move",
+            *("5", "testing", "--proof", str(proof), "--shows", shows),
+            *("--comment", str(write_note(tmp_path, body))),
+        )
+        assert untagged.code == 1, body
+        assert "board member" in str(untagged.payload["error"])
     private = project.run(
-        "move", "5", "testing", "--proof", str(proof), "--shows", "Call +44 7700 900123"
+        "move",
+        *("5", "testing", "--proof", str(proof), "--shows", "Call +44 7700 900123"),
+        *("--comment", str(note)),
     )
     assert private.code == 1
     assert project.fake.writes == []
-    shows = "The saved total now shows on the list"
-    planned = project.run(
-        "move", "5", "testing", "--proof", str(proof), "--shows", shows, "--dry-run"
-    )
+    args = ("move", "5", "testing", "--proof", str(proof), "--shows", shows)
+    planned = project.run(*args, "--comment", str(note), "--dry-run")
+    assert planned.code == 0, planned.text
     writes = planned.payload["dryRun"]
     assert isinstance(writes, list)
     assert writes[0]["params"] == {"name": shows}
-    moved = project.run("move", "5", "testing", "--proof", str(proof), "--shows", shows)
+    moved = project.run(*args, "--comment", str(note))
     assert moved.code == 0, moved.text
-    attach, put = project.fake.writes
-    assert (attach.method, attach.path) == ("POST", "/cards/card5/attachments")
-    assert (put.method, put.path) == ("PUT", "/cards/card5")
+    steps = [(c.method, c.path) for c in project.fake.writes]
+    assert steps == [
+        ("POST", "/cards/card5/attachments"),
+        ("POST", "/cards/card5/actions/comments"),
+        ("PUT", "/cards/card5"),
+        ("POST", "/cards/card5/idLabels"),
+        ("POST", "/cards/card5/idMembers"),
+    ]
+    post, put, label, member = project.fake.writes[1:]
+    picture = "![proof.png](https://files.example.test/att-1.png)"
+    assert post.form["text"] == note.read_text() + "\n\n" + picture
     assert put.form == {"idList": "l-testing", "pos": "top"}
+    assert (label.form, member.form) == ({"value": "lb-sam"}, {"value": "m-sam"})
+    assert (project.state / "posted.log").read_text().split() == ["act-1", "act-2"]
+
+
+def test_testing_move_takes_a_written_check_for_work_with_no_screen(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [make_card(5, "#5 Job", "l-doing")]
+    note = write_note(tmp_path)
+    check = "Open Orders and tap Export. A file downloads."
+    assert project.run("move", "5", "testing", "--check", check).code == 1
+    private = project.run(
+        "move",
+        "5",
+        "testing",
+        "--check",
+        "Call +44 7700 900123",
+        "--comment",
+        str(note),
+    )
+    assert private.code == 1
+    assert project.fake.writes == []
+    moved = project.run(
+        "move", "5", "testing", "--check", check, "--comment", str(note)
+    )
+    assert moved.code == 0, moved.text
+    assert [c.path for c in project.fake.writes][:2] == [
+        "/cards/card5/actions/comments",
+        "/cards/card5",
+    ]
+    assert (
+        project.fake.writes[0].form["text"] == f"{note.read_text()}\n\nTo try: {check}"
+    )
+    other = project.run("move", "5", "doing", "--check", check)
+    assert other.code == 1
+
+
+def test_move_refuses_open_checklist_items(project: Project, tmp_path: Path) -> None:
+    project.fake.cards = [make_card(5, "#5 Move", "l-doing")]
+    project.fake.checklists = {
+        "card5": checklist(
+            ("ci1", "Check total", "complete"),
+            ("ci2", "Check export", "incomplete"),
+        )
+    }
+    note = write_note(tmp_path)
+    for argv in (
+        ["move", "5", "done"],
+        ["move", "5", "testing", "--check", "Tap Export.", "--comment", str(note)],
+    ):
+        refused = project.run(*argv)
+        assert refused.code == 1
+        assert "Check export" in str(refused.payload["error"])
+        assert "Check total" not in str(refused.payload["error"])
+    assert project.fake.writes == []
+    assert project.run("move", "5", "doing").code == 0
+    project.fake.checklists = {
+        "card5": checklist(
+            ("ci1", "Check total", "complete"), ("ci2", "Check export", "complete")
+        )
+    }
+    assert project.run("move", "5", "done").code == 0
+
+
+def test_tick_marks_one_checklist_item(project: Project) -> None:
+    project.fake.cards = [make_card(5, "#5 Move", "l-doing")]
+    project.fake.checklists = {
+        "card5": checklist(
+            ("ci1", "Check total", "complete"),
+            ("ci2", "Check export", "incomplete"),
+            ("ci3", "Check export file", "incomplete"),
+        )
+    }
+    for argv in (["tick", "5", "check"], ["tick", "5", "nothing like it"]):
+        assert project.run(*argv).code == 1
+    assert project.fake.writes == []
+    done = project.run("tick", "5", "check total", "--undo")
+    assert done.code == 0, done.text
+    exact = project.run("tick", "5", "check export")
+    assert exact.code == 0, exact.text
+    first, second = project.fake.writes
+    assert (first.method, first.path) == ("PUT", "/cards/card5/checkItem/ci1")
+    assert first.form == {"state": "incomplete"}
+    assert (second.path, second.form) == (
+        "/cards/card5/checkItem/ci2",
+        {"state": "complete"},
+    )
+    planned = project.run("tick", "5", "check total", "--dry-run")
+    assert isinstance(planned.payload["dryRun"], list)
+    assert len(project.fake.writes) == 2
+
+
+def test_member_adds_and_removes_a_person(project: Project) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(2, "#2 Card", "l-doing", idMembers=["m-sam"]),
+    ]
+    added = project.run("member", "1", "add", "Sam")
+    assert added.code == 0, added.text
+    (post,) = project.fake.writes
+    assert (post.method, post.path, post.form) == (
+        "POST",
+        "/cards/card1/idMembers",
+        {"value": "m-sam"},
+    )
+    assert project.run("member", "2", "add", "sam").payload == {"unchanged": True}
+    assert project.run("member", "1", "remove", "sam").payload == {"unchanged": True}
+    assert project.run("member", "2", "remove", "sam").code == 0
+    delete = project.fake.writes[-1]
+    assert (delete.method, delete.path) == ("DELETE", "/cards/card2/idMembers/m-sam")
+    writes = len(project.fake.writes)
+    ghost = project.run("member", "1", "add", "ghost")
+    assert ghost.code == 1
+    assert "ghost" in str(ghost.payload["error"])
+    assert len(project.fake.writes) == writes
+
+
+def test_a_promise_on_a_testing_card_moves_it_to_doing(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-testing"),
+        make_card(2, "#2 Card", "l-testing"),
+        make_card(3, "#3 Card", "l-doing"),
+        make_card(4, "#4 Card", "l-testing"),
+    ]
+    note = tmp_path / "note.txt"
+    note.write_text(
+        "**Not built yet.**\n\nI am fixing the total. I will tell you when it is live."
+    )
+    moved = project.run("comment", "1", str(note))
+    assert moved.code == 0, moved.text
+    assert moved.payload["movedTo"] == "doing"
+    put = next(c for c in project.fake.writes if c.method == "PUT")
+    assert (put.path, put.form) == ("/cards/card1", {"idList": "l-doing", "pos": "top"})
+    writes = len(project.fake.writes)
+    note.write_text("I am fixing the total.")
+    assert "movedTo" not in project.run("comment", "3", str(note)).payload
+    note.write_text("The fix is now live.")
+    assert "movedTo" not in project.run("comment", "2", str(note)).payload
+    note.write_text("Thanks, noted.")
+    assert "movedTo" not in project.run("comment", "4", str(note)).payload
+    assert not [c for c in project.fake.writes[writes:] if c.method == "PUT"]
 
 
 def test_done_move_clears_needs_labels(project: Project) -> None:
@@ -481,7 +661,11 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
         options = {s for a in actions for s in a.option_strings if s.startswith("--")}
         assert options - {"--help", "--dry-run"} == flags, name
         assert ("--dry-run" in options) == (
-            name in ("comment", "move", "label", "upload", "update", "detach", "new")
+            name
+            in (
+                *("comment", "move", "label", "upload", "update", "detach", "new"),
+                *("member", "tick"),
+            )
         )
     assert set(first_cells(parts["`trello.json`"])) == set(mods.config.FIELDS)
     assert tuple(first_cells(parts["`check` report"])) == mods.report.FIELDS

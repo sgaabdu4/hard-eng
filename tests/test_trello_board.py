@@ -16,6 +16,7 @@ from trello_fakes import (
     Mods,
     Project,
     ago,
+    checklist,
     comment,
     create_action,
     lease_owner,
@@ -154,8 +155,16 @@ def test_a_reply_clears_the_request_across_two_checks(
 def test_card_prints_the_whole_card_and_hides_secrets(project: Project) -> None:
     due = "2026-12-01T10:00:00.000Z"
     project.fake.cards = [
-        make_card(1, "#1 Card", "l-doing", idLabels=["lb-sam"], due=due)
+        make_card(
+            1, "#1 Card", "l-doing", idLabels=["lb-sam"], idMembers=["m-sam"], due=due
+        )
     ]
+    project.fake.checklists = {
+        "card1": checklist(
+            ("ci1", "Check total", "complete"),
+            ("ci2", "Check export", "incomplete"),
+        )
+    }
     project.fake.descriptions = {"card1": f"Spec with {TOKEN}"}
     shot: dict[str, object] = {
         "id": "att9",
@@ -177,6 +186,16 @@ def test_card_prints_the_whole_card_and_hides_secrets(project: Project) -> None:
         "name": "#1 Card",
         "list": "Doing",
         "labels": ["Needs Sam"],
+        "members": ["sam"],
+        "checklists": [
+            {
+                "name": "Steps",
+                "items": [
+                    {"name": "Check total", "state": "complete"},
+                    {"name": "Check export", "state": "incomplete"},
+                ],
+            }
+        ],
         "due": due,
         "description": "Spec with ***",
         "comments": [
@@ -324,8 +343,12 @@ def test_testing_proof_must_be_an_image(
     project.fake.cards = [make_card(5, "#5 Move", "l-doing")]
     proof = tmp_path / name
     proof.write_bytes(b"fake image")
+    note = tmp_path / "testing.txt"
+    note.write_text("**Ready to try.**\n\n@sam please check the total.")
     result = project.run(
-        "move", "5", "testing", "--proof", str(proof), "--shows", "The new total"
+        "move",
+        *("5", "testing", "--proof", str(proof), "--shows", "The new total"),
+        *("--comment", str(note)),
     )
     assert (result.code == 0) == accepted
     assert bool(project.fake.writes) == accepted
@@ -570,26 +593,38 @@ def test_comment_adds_the_needs_label_of_each_person_asked(
 ) -> None:
     project.fake.cards = [
         make_card(1, "#1 Card", "l-doing"),
-        make_card(2, "#2 Labelled", "l-doing", idLabels=["lb-sam"]),
+        make_card(
+            2, "#2 Labelled", "l-doing", idLabels=["lb-sam"], idMembers=["m-sam"]
+        ),
     ]
     note = tmp_path / "note.txt"
     note.write_text("@sam @pat can you check the total?")
     asked = project.run("comment", "1", str(note))
     assert asked.code == 0, asked.text
     assert asked.payload["addedLabels"] == ["Needs Sam"]
-    post, label = project.fake.writes
+    assert asked.payload["addedMembers"] == ["sam", "pat"]
+    post, label, *people = project.fake.writes
     assert post.path == "/cards/card1/actions/comments"
     assert (label.method, label.path, label.form) == (
         "POST",
         "/cards/card1/idLabels",
         {"value": "lb-sam"},
     )
+    assert [(c.path, c.form) for c in people] == [
+        ("/cards/card1/idMembers", {"value": "m-sam"}),
+        ("/cards/card1/idMembers", {"value": "m-pat"}),
+    ]
     assert project.run("comment", "2", str(note)).code == 0
+    two = [c for c in project.fake.writes[4:] if c.path.startswith("/cards/card2")]
+    assert [(c.path, c.form) for c in two] == [
+        ("/cards/card2/actions/comments", {"text": note.read_text()}),
+        ("/cards/card2/idMembers", {"value": "m-pat"}),
+    ]
     note.write_text("@sam the total is live.")
+    before = len(project.fake.writes)
     assert project.run("comment", "1", str(note)).code == 0
-    assert [c.path for c in project.fake.writes[2:]] == [
-        "/cards/card2/actions/comments",
-        "/cards/card1/actions/comments",
+    assert [c.path for c in project.fake.writes[before:]] == [
+        "/cards/card1/actions/comments"
     ]
 
 

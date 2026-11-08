@@ -22,7 +22,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 | `buried`                | Ask it again in a new comment that tags the person, with one line of context.                                                                        |
 | `badTags`               | Post again with a tag that reaches the person.                                                                                                       |
 | `labels`                | Label only open questions; add or remove to match.                                                                                                   |
-| `waitsOnUs`             | `move <card> doing` + one comment: what it waits for, and that it returns to testing when live.                                                      |
+| `waitsOnUs`             | One `comment`: what it waits for, and that it returns to testing when live. The script moves the card to `doing`.                                    |
 | `testQueue`             | Tell the owner each tester's count and oldest card. Never chase on the cards.                                                                        |
 | `unnumbered`, `overdue` | Number it with `update --renumber`; overdue → act, or post the blocker and set a new date with `update`.                                             |
 | `realCases`             | Run its `handover.md` check since its last checked time. Worked → post the example, remove the label, testing. Failed → `doing`.                     |
@@ -31,7 +31,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 
 - Error tracker: the project's Sentry MCP server or launcher; none configured → say "no error tracker" in the report. Triage each new or returning issue per Hard Eng's Sentry integration guide; real bug → worker fix; security → also a security review.
 - CI: failed run → read the first failure → worker fix.
-- Release: finished branches not yet released → one release worker, which also runs the plans' one-time steps. Release each card once it is ready; never hold one for a bigger batch. Then move cards to testing per the Core rules.
+- Release: finished branches not yet released → one release worker, which also runs the plans' one-time steps. Release each card once it is ready; never hold one for a bigger batch. Then move cards to testing per the Core rules. Testing move = one `move <card> testing --comment FILE` (tag the tester, say what to try): `--proof` pictures for any screen change, `--check TEXT` only for work with no screen. Open checklist items block it; `tick` each one once proven.
 - Hard Eng update ready → run `python3 .hooks/hard-eng.py update-pr` yourself; it merges on green. Report only a failure.
 - Background jobs: a job that stopped, paused or fell behind → tell the affected people at once, plus a card.
 

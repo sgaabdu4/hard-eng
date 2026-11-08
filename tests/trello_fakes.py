@@ -72,6 +72,11 @@ def comment(ident: str, card: int, who: str, text: str, hours: float) -> Data:
     return make_action(ident, "commentCard", card, who, hours, text=text)
 
 
+def checklist(*items: tuple[str, str, str]) -> list[Data]:
+    rows = [{"id": i, "name": n, "state": st} for i, n, st in items]
+    return [{"id": "cl1", "name": "Steps", "checkItems": rows}]
+
+
 def move_action(
     ident: str,
     card: int,
@@ -129,6 +134,7 @@ class FakeTrello:
     actions: list[Data] = field(default_factory=list)
     attachments: list[Data] = field(default_factory=list)
     descriptions: dict[str, str] = field(default_factory=dict)
+    checklists: dict[str, list[Data]] = field(default_factory=dict)
     rejections: list[tuple[int, dict[str, str], str]] = field(default_factory=list)
     calls: list[Call] = field(default_factory=list)
     counters: dict[str, int] = field(default_factory=dict)
@@ -219,6 +225,9 @@ class FakeTrello:
             return card | {"desc": self.descriptions.get(detail.group(1), "")}
         if method == "PUT" and detail and "idList" in form:
             self.moved(detail.group(1), form["idList"])
+        lists = re.fullmatch(r"/cards/([\w-]+)/checklists", path)
+        if method == "GET" and lists:
+            return self.checklists.get(lists.group(1), [])
         thread = re.fullmatch(r"/cards/([\w-]+)/actions", path)
         if method == "GET" and thread:
             kinds = query.get("filter", "commentCard").split(",")

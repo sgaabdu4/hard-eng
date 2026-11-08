@@ -19,7 +19,17 @@ from .config import (
 from .secrets import NAMES, Place, load_secrets, locate, save_secret
 from .shapes import Json, Obj, obj, objs, parse_time, stamp, text
 
-WRITE_COMMANDS = ("comment", "move", "label", "upload", "update", "detach", "new")
+WRITE_COMMANDS = (
+    "comment",
+    "move",
+    "label",
+    "upload",
+    "update",
+    "detach",
+    "new",
+    "member",
+    "tick",
+)
 PROOF_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 
 
@@ -164,6 +174,20 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     found = resolve_card(session, args.card)
     card = text(found.get("id"))
     images = attach(session, card, args.image)
+    action_id = post_comment(session, card, body, images)
+    labels, people = ask_people(session, found, body)
+    result: Obj = {
+        "comment": action_id,
+        "attachments": images,
+        "addedLabels": labels,
+        "addedMembers": people,
+    }
+    if back_to_doing(session, found, body):
+        result["movedTo"] = "doing"
+    return result
+
+
+def post_comment(session: Session, card: str, body: str, images: list[Json]) -> str:
     lines = "\n\n".join(text(obj(row).get("markdown")) for row in images)
     full = body.rstrip() + ("\n\n" + lines if lines else "")
     reply = obj(
@@ -174,14 +198,54 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     action_id = text(reply.get("id"))
     if action_id:
         state.log_posted(session.place.state, action_id)
-    added = add_needs(session, found, body)
-    return {"comment": action_id, "attachments": images, "addedLabels": added}
+    return action_id
 
 
-def add_needs(session: Session, card: Obj, body: str) -> list[Json]:
-    if not board.QUESTION.search(body):
-        return []
-    asked = {name.lower() for name in board.TAG.findall(body)}
+def back_to_doing(session: Session, card: Obj, body: str) -> bool:
+    waits = report.WAITS.search(body) and not report.says(report.LIVE, body)
+    names = board.fetch_names(session.client, session.config.board, "lists", "name")
+    here = names.get(text(card.get("idList")))
+    if not waits or here != session.config.lists.get("testing"):
+        return False
+    card_id = text(card.get("id"))
+    target = list_id(session, "doing")
+    session.client.request("PUT", f"/cards/{card_id}", {"idList": target, "pos": "top"})
+    log_newest_change(session, card_id)
+    return True
+
+
+def member_ids(session: Session) -> dict[str, str]:
+    names = board.fetch_names(
+        session.client, session.config.board, "members", "username"
+    )
+    return {name.lower(): ident for ident, name in names.items()}
+
+
+def ask_people(
+    session: Session, card: Obj, body: str, always: bool = False
+) -> tuple[list[Json], list[Json]]:
+    if not always and not board.QUESTION.search(body):
+        return [], []
+    asked = list(dict.fromkeys(name.lower() for name in board.TAG.findall(body)))
+    return add_needs(session, card, asked), add_members(session, card, asked)
+
+
+def add_members(session: Session, card: Obj, asked: list[str]) -> list[Json]:
+    ids = member_ids(session)
+    on_card = card.get("idMembers")
+    has = set(on_card) if isinstance(on_card, list) else set[object]()
+    added: list[Json] = []
+    for name in asked:
+        ident = ids.get(name, "")
+        if ident and ident not in has:
+            session.client.request(
+                "POST", f"/cards/{text(card.get('id'))}/idMembers", {"value": ident}
+            )
+            added.append(name)
+    return added
+
+
+def add_needs(session: Session, card: Obj, asked: list[str]) -> list[Json]:
     wanted = [
         label
         for person, label in session.config.needs.items()
@@ -258,25 +322,122 @@ def new(session: Session, args: argparse.Namespace) -> Obj:
     return {"card": number, "url": text(made.get("shortUrl"))}
 
 
-def move(session: Session, args: argparse.Namespace) -> Obj:
-    client = session.client
-    if args.role == "testing" and not args.proof:
-        raise TrelloError("A move to testing needs at least one --proof image")
-    if (args.role == "testing" or args.shows) and len(args.shows) != len(args.proof):
+def check_move_args(args: argparse.Namespace) -> None:
+    testing = args.role == "testing"
+    if not testing and (args.comment or args.check):
+        raise TrelloError("--comment and --check belong to a move to testing")
+    if testing and not (args.proof or args.check):
+        raise TrelloError("A move to testing needs a --proof image or a --check note")
+    if testing and not args.comment:
+        raise TrelloError("A move to testing needs --comment FILE that tags a member")
+    if (testing or args.shows) and len(args.shows) != len(args.proof):
         raise TrelloError("Give one --shows per --proof: the change each image shows")
     not_images = [n for n in args.proof if Path(n).suffix.lower() not in PROOF_SUFFIXES]
     if not_images:
         raise TrelloError(f"Proof must be {', '.join(PROOF_SUFFIXES)}: {not_images}")
+
+
+def testing_comment(session: Session, args: argparse.Namespace) -> str:
+    try:
+        body = Path(args.comment).read_text()
+    except OSError as error:
+        raise TrelloError(f"Cannot read {args.comment}") from error
+    if args.check:
+        body = body.rstrip() + "\n\nTo try: " + args.check.strip()
+    pieces = (body, *args.shows, *(Path(name).name for name in args.proof))
+    for piece in pieces:
+        session.config.refuse_private(piece)
+    refuse_wall(body)
+    tagged = {name.lower() for name in board.TAG.findall(body)}
+    if not tagged & set(member_ids(session)):
+        raise TrelloError("The testing comment must tag at least one board member")
+    return body
+
+
+def checklist_items(session: Session, card_id: str) -> list[tuple[str, str, str]]:
+    lists = objs(session.client.request("GET", f"/cards/{card_id}/checklists"))
+    return [
+        (text(item.get("id")), text(item.get("name")), text(item.get("state")))
+        for found in lists
+        for item in objs(found.get("checkItems"))
+    ]
+
+
+def refuse_open_items(session: Session, card_id: str) -> None:
+    open_items = [
+        name
+        for _, name, state in checklist_items(session, card_id)
+        if state != "complete"
+    ]
+    if open_items:
+        raise TrelloError(
+            f"Open checklist items: {'; '.join(open_items)}. "
+            "Tick each one once it is proven, or ask the owner."
+        )
+
+
+def move(session: Session, args: argparse.Namespace) -> Obj:
+    client = session.client
+    check_move_args(args)
     for caption in args.shows:
         session.config.refuse_private(caption)
+    body = testing_comment(session, args) if args.role == "testing" else ""
     card = resolve_card(session, args.card)
     target = list_id(session, args.role)
     card_id = text(card.get("id"))
+    if args.role in ("testing", "done"):
+        refuse_open_items(session, card_id)
     proofs = attach(session, card_id, args.proof, args.shows or None)
+    posted = post_comment(session, card_id, body, proofs) if body else ""
     client.request("PUT", f"/cards/{card_id}", {"idList": target, "pos": "top"})
     log_newest_change(session, card_id)
     removed = clear_needs(session, card) if args.role == "done" else list[Json]()
-    return {"moved": args.role, "attachments": proofs, "removedLabels": removed}
+    labels, people = ask_people(session, card, body, True) if body else ([], [])
+    return {
+        "moved": args.role,
+        "attachments": proofs,
+        "comment": posted,
+        "removedLabels": removed,
+        "addedLabels": labels,
+        "addedMembers": people,
+    }
+
+
+def tick(session: Session, args: argparse.Namespace) -> Obj:
+    card = text(resolve_card(session, args.card).get("id"))
+    items = [(ident, name) for ident, name, _ in checklist_items(session, card)]
+    wanted = args.item.casefold()
+    exact = [row for row in items if row[1].casefold() == wanted]
+    found = exact or [row for row in items if wanted in row[1].casefold()]
+    if len(found) != 1:
+        names = "; ".join(name for _, name in found)
+        raise TrelloError(
+            f"{len(found)} checklist items match {args.item!r}"
+            + (f": {names}" if found else "")
+        )
+    state_name = "incomplete" if args.undo else "complete"
+    session.client.request(
+        "PUT", f"/cards/{card}/checkItem/{found[0][0]}", {"state": state_name}
+    )
+    return {"item": found[0][1], "state": state_name}
+
+
+def member(session: Session, args: argparse.Namespace) -> Obj:
+    ident = member_ids(session).get(args.username.lower().removeprefix("@"), "")
+    if not ident:
+        raise TrelloError(f"{args.username} is not a member of the board")
+    card = resolve_card(session, args.card)
+    on_card = card.get("idMembers")
+    has = isinstance(on_card, list) and ident in on_card
+    adding = args.action == "add"
+    if has == adding:
+        return {"unchanged": True}
+    card_id = text(card.get("id"))
+    if adding:
+        session.client.request("POST", f"/cards/{card_id}/idMembers", {"value": ident})
+    else:
+        session.client.request("DELETE", f"/cards/{card_id}/idMembers/{ident}")
+    return {"member": args.username, "action": args.action}
 
 
 def clear_needs(session: Session, card: Obj) -> list[Json]:
@@ -373,7 +534,9 @@ def card(session: Session, args: argparse.Namespace) -> Obj:
     card_id = text(resolve_card(session, args.card).get("id"))
     detail = obj(
         client.request(
-            "GET", f"/cards/{card_id}", {"fields": "name,desc,due,idList,idLabels"}
+            "GET",
+            f"/cards/{card_id}",
+            {"fields": "name,desc,due,idList,idLabels,idMembers"},
         )
     )
     lists = board.fetch_names(client, board_id, "lists", "name")
@@ -388,12 +551,26 @@ def card(session: Session, args: argparse.Namespace) -> Obj:
         )
     )
     ids = detail.get("idLabels")
+    who = detail.get("idMembers")
     return {
         "name": text(detail.get("name")),
         "list": lists.get(text(detail.get("idList")), ""),
         "labels": [labels.get(text(i), "") for i in ids]
         if isinstance(ids, list)
         else [],
+        "members": [members.get(text(i), "") for i in who]
+        if isinstance(who, list)
+        else [],
+        "checklists": [
+            {
+                "name": text(found.get("name")),
+                "items": [
+                    {"name": text(item.get("name")), "state": text(item.get("state"))}
+                    for item in objs(found.get("checkItems"))
+                ],
+            }
+            for found in objs(client.request("GET", f"/cards/{card_id}/checklists"))
+        ],
         "due": detail.get("due"),
         "description": text(detail.get("desc")),
         "comments": comment_rows(actions, members),
@@ -440,6 +617,8 @@ HANDLERS: dict[str, Callable[[Session, argparse.Namespace], Obj]] = {
     "update": update,
     "upload": upload,
     "detach": detach,
+    "member": member,
+    "tick": tick,
     "download": download,
 }
 
@@ -471,6 +650,8 @@ def build_parser() -> tuple[
         "card",
         "update",
         "detach",
+        "member",
+        "tick",
     ):
         subs[name].add_argument("card")
     subs["comment"].add_argument("text_file")
@@ -481,6 +662,12 @@ def build_parser() -> tuple[
     subs["new"].add_argument("--description-file")
     subs["move"].add_argument("--proof", nargs="+", action="extend", default=[])
     subs["move"].add_argument("--shows", action="append", default=[])
+    subs["move"].add_argument("--check")
+    subs["move"].add_argument("--comment")
+    subs["member"].add_argument("action", choices=["add", "remove"])
+    subs["member"].add_argument("username")
+    subs["tick"].add_argument("item")
+    subs["tick"].add_argument("--undo", action="store_true")
     subs["label"].add_argument("action", choices=["add", "remove"])
     subs["label"].add_argument("label")
     subs["upload"].add_argument("paths", nargs="+")
