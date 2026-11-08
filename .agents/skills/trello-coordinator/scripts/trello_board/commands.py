@@ -42,13 +42,33 @@ def fetch_account(client: Client) -> str:
 
 def resolve_card(session: Session, ref: str) -> Obj:
     wanted = ref.removeprefix("#")
+    found: list[Obj] = []
     for card in board.fetch_cards(session.client, session.config.board):
         number = report.NUMBER.match(text(card.get("name")))
         if wanted == text(card.get("shortLink")) or (
             number and wanted == number.group(1)
         ):
-            return card
-    raise TrelloError(f"Card {ref} is not on the board")
+            found.append(card)
+    if len(found) > 1:
+        links = " and ".join(text(card.get("shortLink")) for card in found)
+        raise TrelloError(f"Card {ref} matches two cards: {links}; use a shortLink")
+    if not found:
+        raise TrelloError(f"Card {ref} is not on the board")
+    return found[0]
+
+
+def log_newest_change(session: Session, card_id: str) -> None:
+    if session.client.dry_run:
+        return
+    rows = objs(
+        session.client.request(
+            "GET",
+            f"/cards/{card_id}/actions",
+            {"filter": "createCard,updateCard:idList", "limit": "1"},
+        )
+    )
+    if rows:
+        state.log_posted(session.place.state, text(rows[0].get("id")))
 
 
 def attach(
@@ -194,6 +214,20 @@ def list_id(session: Session, role: str) -> str:
     return lists[list_name]
 
 
+def next_number(session: Session) -> int:
+    cards = objs(
+        session.client.request(
+            "GET", f"/boards/{session.config.board}/cards/all", {"fields": "name"}
+        )
+    )
+    numbers = [
+        int(found.group(1))
+        for card in cards
+        if (found := report.NUMBER.match(text(card.get("name"))))
+    ]
+    return max(numbers, default=0) + 1
+
+
 def new(session: Session, args: argparse.Namespace) -> Obj:
     client, config = session.client, session.config
     title = report.NUMBER.sub("", args.title).strip()
@@ -207,15 +241,7 @@ def new(session: Session, args: argparse.Namespace) -> Obj:
         config.refuse_private(piece)
     refuse_wall(details)
     target = list_id(session, args.role)
-    cards = objs(
-        client.request("GET", f"/boards/{config.board}/cards/all", {"fields": "name"})
-    )
-    numbers = [
-        int(found.group(1))
-        for card in cards
-        if (found := report.NUMBER.match(text(card.get("name"))))
-    ]
-    number = max(numbers, default=0) + 1
+    number = next_number(session)
     made = obj(
         client.request(
             "POST",
@@ -228,6 +254,7 @@ def new(session: Session, args: argparse.Namespace) -> Obj:
             },
         )
     )
+    log_newest_change(session, text(made.get("id")))
     return {"card": number, "url": text(made.get("shortUrl"))}
 
 
@@ -247,6 +274,7 @@ def move(session: Session, args: argparse.Namespace) -> Obj:
     card_id = text(card.get("id"))
     proofs = attach(session, card_id, args.proof, args.shows or None)
     client.request("PUT", f"/cards/{card_id}", {"idList": target, "pos": "top"})
+    log_newest_change(session, card_id)
     removed = clear_needs(session, card) if args.role == "done" else list[Json]()
     return {"moved": args.role, "attachments": proofs, "removedLabels": removed}
 
@@ -313,9 +341,13 @@ def update(session: Session, args: argparse.Namespace) -> Obj:
         except ValueError as error:
             raise TrelloError("--due must be an ISO date and time") from error
         changes["due"] = args.due
-    if not changes:
-        raise TrelloError("update needs --name or --due")
-    card = text(resolve_card(session, args.card).get("id"))
+    if not changes and not args.renumber:
+        raise TrelloError("update needs --name, --due or --renumber")
+    found = resolve_card(session, args.card)
+    if args.renumber:
+        title = report.NUMBER.sub("", args.name or text(found.get("name"))).strip()
+        changes["name"] = f"#{next_number(session)} {title}"
+    card = text(found.get("id"))
     session.client.request("PUT", f"/cards/{card}", changes)
     return {"updated": list[Json](sorted(changes))}
 
@@ -455,6 +487,7 @@ def build_parser() -> tuple[
     subs["detach"].add_argument("ids", nargs="+")
     subs["update"].add_argument("--name")
     subs["update"].add_argument("--due")
+    subs["update"].add_argument("--renumber", action="store_true")
     subs["download"].add_argument("--since")
     subs["download"].add_argument("--dir")
     return parser, subs

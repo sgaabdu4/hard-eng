@@ -33,6 +33,8 @@ QUESTION = re.compile(
     r"\?|\b(please|reply|can you|could you|let me know)\b", re.IGNORECASE
 )
 NUMBER = re.compile(r"^\s*#(\d+)")
+ACK_WORD = r"(?:ok(?:ay)?|thanks?(?: you)?|works?|done)"
+ACK = re.compile(rf"{ACK_WORD}(?:[\s,.!]+{ACK_WORD})*[\s,.!]*", re.IGNORECASE)
 SPECIAL_TAGS = frozenset({"card", "board"})
 EXCERPT = 120
 
@@ -78,9 +80,16 @@ def hours_since(now: datetime, date: str) -> float:
 
 
 def event_excerpt(event: Event) -> str:
-    if event.kind == "image":
-        return clean(f"[image] {event.text}")
-    return "[description edited]" if event.kind == "desc" else clean(event.text)
+    match event.kind:
+        case "image":
+            return clean(f"[image] {event.text}")
+        case "desc":
+            return "[description edited]"
+        case "move":
+            return clean(f"[moved to {event.text}]")
+        case "created":
+            return "[made the card]"
+    return clean(event.text)
 
 
 def item(view: View, at: str, author: str, excerpt: str) -> Item:
@@ -120,9 +129,18 @@ def may_request(ctx: Context, event: Event) -> bool:
     return event.author.lower() in allowed
 
 
+def thanks(event: Event) -> bool:
+    return ACK.fullmatch(TAG.sub("", event.text).strip()) is not None
+
+
 def requests(ctx: Context, view: View) -> list[Item]:
     event = newest(ctx, view)
-    if event and not is_own(ctx, event) and may_request(ctx, event):
+    if (
+        event
+        and not is_own(ctx, event)
+        and may_request(ctx, event)
+        and not (view.role == "done" and event.kind == "comment" and thanks(event))
+    ):
         return [from_event(view, event)]
     return []
 
@@ -136,12 +154,7 @@ def information(ctx: Context, view: View) -> list[Item]:
 
 def owner(ctx: Context, view: View) -> list[Item]:
     event = view.after[-1] if view.after else None
-    if (
-        event
-        and event.kind == "comment"
-        and is_own(ctx, event)
-        and parse_time(event.date) > ctx.first_check
-    ):
+    if event and is_own(ctx, event) and parse_time(event.date) > ctx.first_check:
         return [from_event(view, event)]
     return []
 
@@ -233,10 +246,26 @@ def waits_on_us(ctx: Context, view: View) -> list[Item]:
     return []
 
 
+def duplicate_ids(cards: list[Obj]) -> set[str]:
+    by_number: dict[str, list[Obj]] = {}
+    for card in cards:
+        if found := NUMBER.match(text(card.get("name"))):
+            by_number.setdefault(found.group(1), []).append(card)
+    ids = (text(card.get("id")) for same in by_number.values() for card in same)
+    older = {
+        min((text(card.get("id")) for card in same), key=lambda i: (len(i), i))
+        for same in by_number.values()
+    }
+    return set(ids) - older
+
+
 def unnumbered(ctx: Context, view: View) -> list[Item]:
-    if NUMBER.match(view.name):
-        return []
-    return [item(view, text(view.card.get("dateLastActivity")), "", "")]
+    at = text(view.card.get("dateLastActivity"))
+    if not NUMBER.match(view.name):
+        return [item(view, at, "", "")]
+    if text(view.card.get("id")) in duplicate_ids(ctx.snapshot.cards):
+        return [item(view, at, "", f"another card also has #{view.ref}")]
+    return []
 
 
 def overdue(ctx: Context, view: View) -> list[Item]:

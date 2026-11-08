@@ -241,8 +241,13 @@ def test_done_card_requests_expire_after_the_grace_hours(project: Project) -> No
         make_card(1, "#1 Old done", done),
         make_card(2, "#2 Fresh done", done),
         make_card(3, "#3 Old open", doing),
+        make_card(4, "#4 Thanked", done),
+        make_card(5, "#5 Ok on open", doing),
     ]
     project.fake.actions = [
+        move_action("m4", 4, done, 10),
+        comment("a4", 4, "m-sam", "Thanks @owner, works!", 1),
+        comment("a5", 5, "m-sam", "ok", 1),
         move_action("m1", 1, done, 100),
         comment("a1", 1, "m-sam", "One more thing", 1),
         move_action("m2", 2, done, 10),
@@ -250,7 +255,7 @@ def test_done_card_requests_expire_after_the_grace_hours(project: Project) -> No
         comment("a3", 3, "m-sam", "Forgotten for a month", 24 * 30),
     ]
     report = project.report()
-    assert refs(report["requests"]) == {"2", "3"}
+    assert refs(report["requests"]) == {"2", "3", "5"}
 
 
 def test_activity_query_and_rate_limit_retry(project: Project) -> None:

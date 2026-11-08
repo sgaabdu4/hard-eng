@@ -69,7 +69,7 @@ def updated(data: Obj) -> tuple[str, str]:
     if "desc" in obj(data.get("old")):
         return "desc", ""
     if "listAfter" in data:
-        return "move", text(obj(data["listAfter"]).get("id"))
+        return "move", text(obj(data["listAfter"]).get("name"))
     return "", ""
 
 
@@ -77,6 +77,8 @@ def describe(kind: str, data: Obj) -> tuple[str, str]:
     match kind:
         case "commentCard":
             return "comment", text(data.get("text"))
+        case "createCard":
+            return "created", ""
         case "addAttachmentToCard":
             return "image", text(obj(data.get("attachment")).get("name"))
         case "updateCard":
@@ -91,11 +93,12 @@ def to_event(action: Obj, members: dict[str, str]) -> Event | None:
     if not card or not kind:
         return None
     creator = text(action.get("idMemberCreator"))
+    edited = text(data.get("dateLastEdited")) if kind == "comment" else ""
     return Event(
         text(action.get("id")),
         card,
         kind,
-        text(action.get("date")),
+        edited or text(action.get("date")),
         members.get(creator, creator),
         body,
     )
@@ -136,10 +139,14 @@ def merge_threads(
             and event.id in posted
         )
 
+    def kept(event: Event) -> bool:
+        if event.kind == "comment" or event.author.lower() != own.lower():
+            return True
+        return event.kind in ("move", "created") and event.id not in posted
+
     by_card: dict[str, dict[str, Event]] = {}
     for event in [e for events in saved.values() for e in events] + fresh:
-        mine = event.author.lower() == own.lower()
-        if event.kind != "move" and (event.kind == "comment" or not mine):
+        if kept(event):
             by_card.setdefault(event.card, {})[event.id] = event
     merged: dict[str, list[Event]] = {}
     for card, found in by_card.items():
