@@ -5,7 +5,7 @@ from pathlib import Path
 
 import process_group
 import pytest
-from conftest import running, spawner
+from conftest import gone, running, spawner
 from process_group import Process, process_table, stop_idle_codex_brokers
 
 
@@ -143,3 +143,22 @@ def test_stop_groups_kills_every_group_while_others_finish(
     finally:
         process_group.STOPPED.clear()
     assert sorted(killed) == [101, 102]
+
+
+def test_an_interrupt_right_after_start_still_stops_the_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pid_file = tmp_path / "child.pid"
+
+    class Interrupted(set[int]):
+        def add(self, pid: int) -> None:
+            deadline = time.monotonic() + 30
+            while not pid_file.exists() or not pid_file.read_text():
+                assert time.monotonic() < deadline, "process did not start"
+                time.sleep(0.05)
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(process_group, "RUNNING", Interrupted())
+    with pytest.raises(KeyboardInterrupt):
+        process_group.run_in_group(spawner(pid_file), timeout=60)
+    assert gone(pid_file)

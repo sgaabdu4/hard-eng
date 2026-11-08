@@ -9,7 +9,7 @@ The board tool reports every human action and open question, and its writes keep
 ## Repository context
 
 Owners: `.agents/skills/trello-coordinator/scripts/trello_board/board.py` (reads actions into events), `report.py` (the `check` lists), `commands.py` (write commands), `config.py` (card text checks), `api.py` (Trello replies), `SKILL.md` and `references/run.md`, `references/commands.md`, `references/hosts.md`. Tests: `tests/test_trello_board.py`, `tests/test_trello_coordinator.py`, fakes in `tests/trello_fakes.py`.
-Same cause: rules a mature coordinator learned in production did not reach this tool. The earlier fix of this cause is `features/trello-picture-lines/PLAN.md` (helped: pictures in one comment now each show). This plan covers every other gap found by a rule-by-rule audit of that coordinator against this skill and its scripts.
+Same cause: rules a mature coordinator learned in production did not reach this tool. The earlier fix of this cause is `features/trello-picture-lines/PLAN.md` (helped: pictures in one comment now each show). This plan covers every other gap found by a rule-by-rule audit of that coordinator against this skill and its scripts. Process cleanup, same cause (a process started before its cleanup was ready): `process_group.run_in_group` and the Stop hook's `run_check` are fixed here; `ship_actions.run_hard_eng` assigns and enters its cleanup with no call between, so no signal can land there; `update_runner.start_update` detaches on purpose.
 
 ## Decisions + authorization
 
@@ -59,6 +59,7 @@ Slice 3: the testing flow writes
 
 Slice 4: sign-in, duplicates, text and links
 
+- [x] Found while shipping (escaped bug, failed this branch's pre-push twice): a stop signal right after a tool started, before its cleanup began, left the tool running. `.hooks/process_group.py` now starts the tool inside the cleanup block, and the Stop hook (`.hooks/agent_hooks.py`) sets its stop handler before it starts the check. The gate that should catch it is a unit test; the new case fails on the old code → `tests/test_process_group.py::test_an_interrupt_right_after_start_still_stops_the_group`. The Stop hook change has no separate case: the moment sits between two lines and no test can hit it; `tests/test_stop_checks.py` covers its normal stop path.
 - [x] A builder starts only when no open card PR touches the same files, and a card PR that conflicts after a merge is its builder's next job (`references/run.md`; parallel card builders left PRs in conflict) → `tests/test_trello_coordinator.py::test_skill_states_scheduling_roles_and_simplify_loop`.
 - [x] `trello.json` `timing` no longer takes `quietHours` or `timeZone`: a file that sets either is refused with a line saying to delete it; `SKILL.md`, `references/hosts.md` and `references/commands.md` drop every quiet-hours rule (`config.py`) → extend `tests/test_trello_coordinator.py::test_config_defaults_and_role_provider`.
 - [x] A 401 from Trello gives one error, "Trello refused the token: it is revoked or expired", with `tokenRefused: true`. `firstReport` is true only on the first refused run since the last good read, so the owner is told once → `tests/test_trello_coordinator.py::test_refused_token_is_reported_once` (`api.py`, `state.py`).
