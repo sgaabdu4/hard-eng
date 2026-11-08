@@ -8,7 +8,7 @@ from pathlib import Path
 import agent_hooks
 import failures
 import pytest
-from conftest import SOURCE, add_origin, commit, git
+from conftest import SOURCE, add_origin, commit, git, gone
 from gate_config import JsonObject
 
 
@@ -166,10 +166,7 @@ def test_interrupted_stop_hook_stops_every_check_process(
     hook.terminate()
     output, _ = hook.communicate(timeout=30)
     assert output.strip() != "0"
-    deadline = time.monotonic() + 10
-    while subprocess.run(["kill", "-0", tool.read_text()], check=False).returncode == 0:
-        assert time.monotonic() < deadline
-        time.sleep(0.05)
+    assert gone(tool)
 
 
 def test_stop_hook_runs_the_quick_check(repository: Path) -> None:
