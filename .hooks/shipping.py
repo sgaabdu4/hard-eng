@@ -590,10 +590,19 @@ def _check_attachment(root: Path, url: str) -> None:
         raise ShippingError("UI evidence URL is not an allowed GitHub attachment")
     # Signed attachment redirects can reject HEAD; keep binary data out of stdout.
     request = ("api", "--method", "GET", "--include", "--silent")
-    response = gh(root, *request, "-H", "Range: bytes=0-0", url)
+    try:
+        response = gh(root, *request, "-H", "Range: bytes=0-0", url)
+    except ShippingError:
+        # GitHub can time out ranged requests while a plain GET succeeds.
+        try:
+            response = gh(root, *request, url)
+        except ShippingError as error:
+            raise ShippingError(
+                f"UI evidence attachment is unavailable: {url} ({error})"
+            ) from error
     statuses = HTTP_STATUS_LINE.findall(response)
     if not statuses or not 200 <= int(statuses[-1]) < 300:
-        raise ShippingError("UI evidence attachment is unavailable")
+        raise ShippingError(f"UI evidence attachment is unavailable: {url}")
     content_types = CONTENT_TYPE_HEADER.findall(response)
     content_type = content_types[-1].lower() if content_types else ""
     if not content_type.startswith(("image/", "video/")):
