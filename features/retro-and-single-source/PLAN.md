@@ -23,9 +23,9 @@ Decision: retro content is free text checked for presence, like `Same cause`. Ma
 
 ## Acceptance + steps
 
-- [x] A changed Ready or Complete plan without `Single source:` fails; an unchanged one still passes → `tests/test_plans.py::test_changed_plans_need_single_source_and_retro`.
-- [x] A changed Complete plan without `Retro:` fails; a changed Ready plan without it passes → `tests/test_plans.py::test_changed_plans_need_single_source_and_retro`.
-- [x] The template carries both fields with their guidance, and HE Learn has the retro route → `tests/test_plans.py::test_changed_plans_need_single_source_and_retro`.
+- [x] A changed Ready or Complete plan without `Single source:` fails; an unchanged one still passes → `tests/test_planning_handoffs.py::test_changed_plans_need_single_source_and_retro`.
+- [x] A changed Complete plan without `Retro:` fails; a changed Ready plan without it passes → `tests/test_planning_handoffs.py::test_changed_plans_need_single_source_and_retro`.
+- [x] The template carries both fields with their guidance, and HE Learn has the retro route → `tests/test_planning_handoffs.py::test_changed_plans_need_single_source_and_retro`.
 
 ## Baseline + execution
 
@@ -53,6 +53,7 @@ Retro: This session's items, sorted by the new route:
 - `run_checks` over the complexity limit → caught at turn end by the existing lint; none new.
 - Fallow failing on coverage that failed tests never wrote → Hard Eng fault, fixed in `tests/test_gate_speed.py::test_a_coverage_reader_is_blocked_not_failed_when_its_tests_fail`.
 - This test unticked a Complete plan's boxes → test-writing error, fixed in this change; none new.
+- `tests/test_plans.py` over 1000 lines after this test was added, the second file-length failure today → caught at turn end by the existing check; same cause as `tests/test_shipping.py` earlier: appending to a test file near the limit. The test moved to `tests/test_planning_handoffs.py`; none new, because the check already blocks it.
 - GitHub 504 errors on downloads → outside cause; none.
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with `hard-eng` and `canary` green, then release.

@@ -1,6 +1,7 @@
-"""Require an explicit Draft pause before Stop exempts unfinished planning."""
+"""Plan stage rules: an explicit Draft pause before Stop exempts unfinished planning, and the fields an edited plan must carry."""
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -205,3 +206,30 @@ def test_unchanged_draft_session_gets_a_freshness_note_without_blocking(
     assert response.get("decision") != "block"
     assert "approval handoff prepared" in str(response["systemMessage"])
     assert "freshness unknown" in str(response["systemMessage"])
+
+
+def test_changed_plans_need_single_source_and_retro(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    """Only plans a change edits take the newer fields, so untouched plans still pass."""
+    path = tmp_path / "PLAN.md"
+    no_source = re.sub(r"(?m)^Single source:.*\n", "", completed_plan)
+    no_retro = re.sub(r"(?m)^Retro:.*\n", "", completed_plan)
+    ready = no_retro.replace("Status: Complete", "Status: Ready").replace(
+        "- [x]", "- [ ]"
+    )
+    unticked = no_source.replace("Status: Complete", "Status: Ready")
+    for text in (no_source, unticked.replace("- [x]", "- [ ]")):
+        path.write_text(text)
+        with pytest.raises(ValueError, match="Single source"):
+            validate_plan(path)
+        assert validate_plan(path, changed=False) in {"Ready", "Complete"}
+    path.write_text(no_retro)
+    with pytest.raises(ValueError, match="Retro"):
+        validate_plan(path)
+    path.write_text(ready)
+    assert validate_plan(path) == "Ready"
+    template = (SOURCE / ".agents/skills/he-plan/templates/PLAN.md").read_text()
+    assert "\nSingle source: " in template and "\nRetro: " in template
+    learn = (SOURCE / ".agents/skills/he-learn/SKILL.md").read_text()
+    assert "\n## Retro\n" in learn and "issue" in learn.split("\n## Retro\n", 1)[1]

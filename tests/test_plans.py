@@ -972,30 +972,3 @@ def test_unknown_branch_point_is_big(
     assert "the branch point with the default branch cannot be found" in (
         capsys.readouterr().out
     )
-
-
-def test_changed_plans_need_single_source_and_retro(
-    tmp_path: Path, completed_plan: str
-) -> None:
-    """Only plans a change edits take the newer fields, so untouched plans still pass."""
-    path = tmp_path / "PLAN.md"
-    no_source = re.sub(r"(?m)^Single source:.*\n", "", completed_plan)
-    no_retro = re.sub(r"(?m)^Retro:.*\n", "", completed_plan)
-    ready = no_retro.replace("Status: Complete", "Status: Ready").replace(
-        "- [x]", "- [ ]"
-    )
-    unticked = no_source.replace("Status: Complete", "Status: Ready")
-    for text in (no_source, unticked.replace("- [x]", "- [ ]")):
-        path.write_text(text)
-        with pytest.raises(ValueError, match="Single source"):
-            validate_plan(path)
-        assert validate_plan(path, changed=False) in {"Ready", "Complete"}
-    path.write_text(no_retro)
-    with pytest.raises(ValueError, match="Retro"):
-        validate_plan(path)
-    path.write_text(ready)
-    assert validate_plan(path) == "Ready"
-    template = (SOURCE / ".agents/skills/he-plan/templates/PLAN.md").read_text()
-    assert "\nSingle source: " in template and "\nRetro: " in template
-    learn = (SOURCE / ".agents/skills/he-learn/SKILL.md").read_text()
-    assert "\n## Retro\n" in learn and "issue" in learn.split("\n## Retro\n", 1)[1]
