@@ -710,7 +710,8 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     assert "`develop`" in release and "gh pr merge --merge" in release
     assert "fix or revert" in release and "done once production" in release
     assert "since the last production release" in release
-    assert "moved back to doing" in release and "test site link" in release
+    assert "moved it back to doing, do not merge" in release
+    assert "test site link" in release
     assert (
         "When `shipping.base` is `develop` and the card is in testing, take the click steps from the test site"
         in core
