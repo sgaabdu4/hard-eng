@@ -197,15 +197,12 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     images = attach(session, card, args.image)
     action_id = post_comment(session, card, body, images)
     labels, people = ask_people(session, found, body)
-    result: Obj = {
+    return {
         "comment": action_id,
         "attachments": images,
         "addedLabels": labels,
         "addedMembers": people,
     }
-    if back_to_doing(session, found, body):
-        result["movedTo"] = "doing"
-    return result
 
 
 def post_comment(session: Session, card: str, body: str, images: list[Json]) -> str:
@@ -220,19 +217,6 @@ def post_comment(session: Session, card: str, body: str, images: list[Json]) -> 
     if action_id:
         state.log_posted(session.place.state, action_id)
     return action_id
-
-
-def back_to_doing(session: Session, card: Obj, body: str) -> bool:
-    waits = report.WAITS.search(body) and not report.says(report.LIVE, body)
-    names = board.fetch_names(session.client, session.config.board, "lists", "name")
-    here = names.get(text(card.get("idList")))
-    if not waits or here != session.config.lists.get("testing"):
-        return False
-    card_id = text(card.get("id"))
-    target = list_id(session, "doing")
-    session.client.request("PUT", f"/cards/{card_id}", {"idList": target, "pos": "top"})
-    log_newest_change(session, card_id)
-    return True
 
 
 def member_ids(session: Session) -> dict[str, str]:

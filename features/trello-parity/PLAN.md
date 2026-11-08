@@ -17,10 +17,10 @@ Blockers: None.
 Handoff: Approval
 Authority: Abid on 2026-11-08 approved the audit's fix list and, with "ok", this plan's decisions: "yes pls but ignore the editing old comment one". Scope = audit items 1-10 and 12-19, plus the open half of the picture rule. Item 11 is out: the tool keeps "never edits".
 
-Decision (Abid, 2026-11-08: "why the fuck are you obsessed with quiet hours"): remove `quietHours` and `timeZone`, which only served it; the coordinator posts at any hour.
+Decision: remove `quietHours` and `timeZone`; the owner asked for posts at any hour.
 Decision: card numbers: a card without `#N`, and the newer card (higher card id, which carries its creation time) of two open cards with the same `#N` (Trello copies keep the name), get the next free number: the highest `#N` on any card, archived included, plus one. This is the rule `new` already uses. Trello's own short id is not used, because on a board numbered by hand it can equal a number another card already has.
 Decision: open checklist items block a move to `testing` or `done`. The command names the open items; `tick` closes one once it is proven.
-Decision (Abid, 2026-11-08, "ok" to the recommended option): work with no screen still goes to `testing`, so it reaches staging and a tester like any card. It needs `--check TEXT`, a written note of what to try, in place of `--proof`. A card that changes a screen still needs before and after pictures.
+Decision: work with no screen still goes to `testing`, so it reaches staging and a tester like any card. It needs `--check TEXT`, a written note of what to try, in place of `--proof`. A card that changes a screen still needs before and after pictures.
 Decision: links to other cards are checked by the script, not by a prose rule: `comment` and `new` refuse a card link that is not on the board.
 Decision: the "Unsupported image" half of the picture rule gets no check after posting. Trello's API can show the comment text and the attachment's file type, but not how the comment renders. The text is already right by construction, and the earlier fix found the file types already right. So `upload` only prints its image lines joined with blank lines.
 
@@ -50,7 +50,7 @@ Slice 3: the testing flow writes
 
 - [x] `move <card> testing` takes `--check TEXT` in place of `--proof`; the note goes into the testing comment, and `references/run.md` says pictures stay required for any screen change → `tests/test_trello_coordinator.py::test_testing_move_takes_a_written_check_for_work_with_no_screen`.
 - [x] `move <card> testing` needs `--comment FILE` that tags at least one board member. It posts one comment with the text and the proof pictures (blank lines between), and makes every tagged member a card member, adding the `needsLabels` label when one is configured (`commands.py`) → extend `tests/test_trello_coordinator.py::test_testing_move_needs_proof`.
-- [x] `comment` on a `testing` card whose text says it waits on us and not that it is live also moves the card to the top of `doing` and reports it, using slice 2's phrases (`commands.py`) → `tests/test_trello_coordinator.py::test_a_promise_on_a_testing_card_moves_it_to_doing`.
+- [x] `comment` never moves a card; the move to `doing` is explicit (`move <card> doing`, run by the coordinator, `references/run.md`), because loose wording moved released cards. `waitsOnUs` stays a report list and ignores conditional clauses and "should ...?" questions → `tests/test_trello_coordinator.py::test_a_comment_never_moves_a_card`.
 - [x] `member <card> add|remove <username>` adds or removes one board member; a username not on the board is refused (`commands.py`) → `tests/test_trello_coordinator.py::test_member_adds_and_removes_a_person`.
 - [x] `comment` that asks a tagged person also makes them a card member, next to the label it already adds (`commands.py`) → extend `tests/test_trello_board.py::test_comment_adds_the_needs_label_of_each_person_asked`.
 - [x] `card` prints members and every checklist with each item's state (`commands.py`) → extend `tests/test_trello_board.py::test_card_prints_the_whole_card_and_hides_secrets`.
@@ -91,7 +91,7 @@ N/A — no app screens change; the tool writes only Trello comment text, labels,
 ## Verification
 
 Result: Passed
-Evidence: every box ticked after its named test failed first and then passed; `python3 .hooks/hard-eng.py check --plan-stage Ready --base origin/develop` passed after each of the four slices and the edit-read fix (full suite 2333 tests); `python3 .hooks/hard-eng.py check --plan-stage Complete --base origin/develop` passed on the final code. A read-only call on a real board on 2026-11-08 showed that an edit moves the card's `dateLastActivity` and keeps the action date.
+Evidence: every box ticked after its named test failed first and then passed; `python3 .hooks/hard-eng.py check --plan-stage Ready --base origin/develop` passed after each of the four slices and the edit-read fix (full suite 2333 tests); review findings (explicit move to doing, chase clock, tester labels, conditional clauses, own edits) each got a failing test first; `python3 .hooks/hard-eng.py check --plan-stage Complete --base origin/develop` passed on the final code after them. A read-only call on a real board on 2026-11-08 showed that an edit moves the card's `dateLastActivity` and keeps the action date.
 E2E: N/A — the tool is a command line program; the tests drive its real `main` end to end against a Trello fake built from real replies, and runs may not call Trello.
 
 Delivery target: PR

@@ -26,7 +26,8 @@ REAL_CASE = "Waiting for real case"
 WORKING = r"\b(?:I am (?:fixing|building|changing)|I will fix|being built|waits for the #\d+ fix)\b"
 PROMISE = re.compile(rf"\bI will\b|\bI['’]ll\b|\bNext:|{WORKING}", re.IGNORECASE)
 CONDITION = re.compile(
-    r"\b(?:when|once|after|until|before|if)\b[^.!?,;\n]*", re.IGNORECASE
+    r"\b(?:when|once|after|until|before|if)\b[^.!?\n]*|[^.!?\n]*\bshould\b[^.!?\n]*\?",
+    re.IGNORECASE,
 )
 FINISHED = re.compile(
     r"\b(?:(?:is|are) (?:now |already )?(?:live|done)|went live)\b", re.IGNORECASE
@@ -63,20 +64,25 @@ class View:
     last_ours: Event | None
     after: tuple[Event, ...]
     questions: tuple[tuple[Event, str], ...]
+    owed: frozenset[str]
 
 
 def clean(value: str) -> str:
     return " ".join(value.split())[:EXCERPT]
 
 
+def plain(body: str) -> str:
+    return CONDITION.sub(lambda found: " " * len(found.group()), body)
+
+
 def says(pattern: re.Pattern[str], body: str) -> bool:
-    return pattern.search(CONDITION.sub(" ", body)) is not None
+    return pattern.search(plain(body)) is not None
 
 
 def after_finished(body: str) -> str:
-    hidden = CONDITION.sub(lambda found: " " * len(found.group()), body)
+    hidden = plain(body)
     ends = [found.end() for found in FINISHED.finditer(hidden)]
-    return body[ends[-1] :] if ends else body
+    return hidden[ends[-1] :] if ends else hidden
 
 
 def is_own(ctx: Context, event: Event) -> bool:
@@ -209,10 +215,16 @@ def silent(ctx: Context, view: View) -> list[Item]:
     if view.role == "done":
         return []
     testers = label_people(ctx, view) if view.role == "testing" else set()
-    waiting = [e for e, person in our_questions(ctx, view) if person not in testers]
-    if not waiting:
+    newest: dict[str, Event] = {}
+    for event, person in our_questions(ctx, view):
+        known = newest.get(person)
+        if person not in testers and (
+            known is None or parse_time(event.date) > parse_time(known.date)
+        ):
+            newest[person] = event
+    if not newest:
         return []
-    oldest = min(waiting, key=lambda e: parse_time(e.date))
+    oldest = min(newest.values(), key=lambda e: parse_time(e.date))
     if hours_since(ctx.now, oldest.date) < ctx.config.chase_hours:
         return []
     return [from_event(view, oldest)]
@@ -223,9 +235,10 @@ def buried(ctx: Context, view: View) -> list[Item]:
     if not ours or view.role == "done":
         return []
     tagged = {name.lower() for name in TAG.findall(ours.text)}
+    testers = label_people(ctx, view) if view.role == "testing" else set()
     hidden: dict[str, Event] = {}
     for event, person in our_questions(ctx, view):
-        if event.id != ours.id and person not in tagged:
+        if event.id != ours.id and person not in tagged | testers:
             hidden.setdefault(person, event)
     return [
         item(view, event.date, person, clean(event.text))
@@ -248,6 +261,7 @@ def bad_tags(ctx: Context, view: View) -> list[Item]:
 def label_gap(ctx: Context, view: View, person: str, label: str) -> str:
     has = label in view.labels
     asked = person.lower() in {name for _, name in view.questions}
+    asked = asked or (view.role == "testing" and person.lower() in view.owed)
     if has and not asked:
         return f"{label} is set with no open question to @{person}"
     if asked and not has:
@@ -272,7 +286,7 @@ def waits_on_us(ctx: Context, view: View) -> list[Item]:
     ours = view.last_ours
     if not ours or view.role != "testing":
         return []
-    if WAITS.search(ours.text) and not says(LIVE, ours.text):
+    if says(WAITS, ours.text) and not says(LIVE, ours.text):
         return [from_event(view, ours)]
     return []
 
@@ -362,6 +376,7 @@ def view_of(ctx: Context, card: Obj) -> View:
     number = NUMBER.match(name)
     label_ids = card.get("idLabels")
     people = frozenset(person.lower() for person in snapshot.members.values())
+    found = questions_in(events, people, ctx.posted)
     names = (
         {snapshot.labels.get(text(i), "") for i in label_ids}
         if isinstance(label_ids, list)
@@ -376,7 +391,8 @@ def view_of(ctx: Context, card: Obj) -> View:
         frozenset(names),
         events[last] if last >= 0 else None,
         tuple(events[last + 1 :]),
-        tuple((e, person) for _, e, person in questions_in(events, people)),
+        tuple((e, p) for _, e, p in found if QUESTION.search(e.text)),
+        frozenset(p for _, e, p in found if e.id in ctx.posted),
     )
 
 

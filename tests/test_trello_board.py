@@ -81,6 +81,9 @@ def test_a_stale_lease_is_taken_by_one_run_only(project: Project, mods: Mods) ->
         ("I am building the export", True),
         ("The export went live. Nothing more to do.", False),
         ("The new screens are live.", False),
+        ("The export is live. If anything looks wrong, I will look at it.", False),
+        ("Part one is live. I will add part two tomorrow.", True),
+        ("If it still fails, I will fix it today.", False),
     ],
 )
 def test_promises_ignore_conditional_live(
@@ -105,6 +108,9 @@ def test_promises_ignore_conditional_live(
         ("This waits for the #12 fix", True),
         ("I will fix it. The fix went live", False),
         ("Not built yet. The screens are live", False),
+        ("Try it again. If it still fails, I will fix it today.", False),
+        ("Should the menu change wait for the next release?", False),
+        ("I am fixing the button colour.", True),
     ],
 )
 def test_waits_on_us_ignores_conditional_live(

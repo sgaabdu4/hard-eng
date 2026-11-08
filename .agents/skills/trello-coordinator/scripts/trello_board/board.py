@@ -1,4 +1,5 @@
 import re
+from collections.abc import Collection
 from dataclasses import asdict, dataclass, replace
 
 from .api import Client, TrelloError, redact
@@ -36,11 +37,13 @@ class Snapshot:
 
 
 def questions_in(
-    events: list[Event], members: frozenset[str]
+    events: list[Event], members: frozenset[str], also: Collection[str] = ()
 ) -> list[tuple[int, Event, str]]:
     found: list[tuple[int, Event, str]] = []
     for index, event in enumerate(events):
-        if event.kind != "comment" or not QUESTION.search(event.text):
+        if event.kind != "comment":
+            continue
+        if not QUESTION.search(event.text) and event.id not in also:
             continue
         asked = {name.lower() for name in TAG.findall(event.text)} & members
         for person in sorted(asked - {event.author.lower()}):
@@ -125,14 +128,15 @@ def describe(kind: str, data: Obj) -> tuple[str, str]:
     return "", ""
 
 
-def to_event(action: Obj, members: dict[str, str]) -> Event | None:
+def to_event(action: Obj, members: dict[str, str], own: str) -> Event | None:
     data = obj(action.get("data"))
     card = text(obj(data.get("card")).get("id"))
     kind, body = describe(text(action.get("type")), data)
     if not card or not kind:
         return None
     creator = text(action.get("idMemberCreator"))
-    edited = text(data.get("dateLastEdited")) if kind == "comment" else ""
+    mine = members.get(creator, creator).lower() == own.lower()
+    edited = text(data.get("dateLastEdited")) if kind == "comment" and not mine else ""
     return Event(
         text(action.get("id")),
         card,
@@ -195,7 +199,8 @@ def merge_threads(
     for card, found in by_card.items():
         ordered = sorted(found.values(), key=lambda e: parse_time(e.date))
         last = max((i for i, e in enumerate(ordered) if ours(e)), default=0)
-        oldest = min((i for i, _, _ in questions_in(ordered, members)), default=last)
+        tagged = questions_in(ordered, members, posted)
+        oldest = min((i for i, _, _ in tagged), default=last)
         merged[card] = ordered[min(last, oldest) :]
     return merged
 
@@ -226,7 +231,7 @@ def fetch(
             *board_actions(client, board, since),
             *edited_comments(client, cards, since),
         ]
-        if (e := to_event(a, members))
+        if (e := to_event(a, members, own))
     ]
     open_ids = {text(card.get("id")) for card in cards}
     people = frozenset(name.lower() for name in members.values())
