@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import sys
 import urllib.parse
 from collections.abc import Callable
@@ -7,7 +8,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from . import board, report, state
-from .api import Client, Secrets, TrelloError, redact
+from .api import Client, Secrets, TokenRefused, TrelloError, redact
 from .config import (
     OPTIONAL_LISTS,
     REQUIRED_LISTS,
@@ -29,8 +30,10 @@ WRITE_COMMANDS = (
     "new",
     "member",
     "tick",
+    "archive",
 )
 PROOF_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+CARD_LINK = re.compile(r"https?://trello\.com/c/([A-Za-z0-9]+)")
 
 
 @dataclass(frozen=True)
@@ -65,6 +68,23 @@ def resolve_card(session: Session, ref: str) -> Obj:
     if not found:
         raise TrelloError(f"Card {ref} is not on the board")
     return found[0]
+
+
+def refuse_foreign_links(session: Session, *pieces: str) -> None:
+    linked = {name for piece in pieces for name in CARD_LINK.findall(piece)}
+    if not linked:
+        return
+    cards = objs(
+        session.client.request(
+            "GET",
+            f"/boards/{session.config.board}/cards/all",
+            {"fields": "shortLink"},
+        )
+    )
+    known = {text(card.get("shortLink")) for card in cards}
+    unknown = sorted(linked - known)
+    if unknown:
+        raise TrelloError(f"Not a card on this board: {', '.join(unknown)}")
 
 
 def log_newest_change(session: Session, card_id: str) -> None:
@@ -171,6 +191,7 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     for piece in (body, *(Path(name).name for name in args.image)):
         session.config.refuse_private(piece)
     refuse_wall(body)
+    refuse_foreign_links(session, body)
     found = resolve_card(session, args.card)
     card = text(found.get("id"))
     images = attach(session, card, args.image)
@@ -304,6 +325,7 @@ def new(session: Session, args: argparse.Namespace) -> Obj:
     for piece in (title, details):
         config.refuse_private(piece)
     refuse_wall(details)
+    refuse_foreign_links(session, title, details)
     target = list_id(session, args.role)
     number = next_number(session)
     made = obj(
@@ -422,6 +444,27 @@ def tick(session: Session, args: argparse.Namespace) -> Obj:
     return {"item": found[0][1], "state": state_name}
 
 
+def archive(session: Session, args: argparse.Namespace) -> Obj:
+    copy = resolve_card(session, args.card)
+    original = resolve_card(session, args.into)
+    if copy.get("id") == original.get("id"):
+        raise TrelloError("A card cannot be archived into itself")
+    card_id = text(copy.get("id"))
+    link = f"https://trello.com/c/{text(original.get('shortLink'))}"
+    name = report.NUMBER.match(text(original.get("name")))
+    said = f"#{name.group(1)}" if name else "another card"
+    body = f"**This card repeats {said}.**\n\nThe work goes on there:\n\n{link}"
+    posted = post_comment(session, card_id, body, [])
+    removed = clear_needs(session, copy)
+    session.client.request("PUT", f"/cards/{card_id}", {"closed": "true"})
+    return {
+        "archived": args.card,
+        "into": link,
+        "comment": posted,
+        "removedLabels": removed,
+    }
+
+
 def member(session: Session, args: argparse.Namespace) -> Obj:
     ident = member_ids(session).get(args.username.lower().removeprefix("@"), "")
     if not ident:
@@ -482,7 +525,9 @@ def label(session: Session, args: argparse.Namespace) -> Obj:
 
 def upload(session: Session, args: argparse.Namespace) -> Obj:
     card = text(resolve_card(session, args.card).get("id"))
-    return {"attachments": attach(session, card, args.paths)}
+    rows = attach(session, card, args.paths)
+    lines = "\n\n".join(text(obj(row).get("markdown")) for row in rows)
+    return {"attachments": rows, "markdown": lines}
 
 
 def detach(session: Session, args: argparse.Namespace) -> Obj:
@@ -619,6 +664,7 @@ HANDLERS: dict[str, Callable[[Session, argparse.Namespace], Obj]] = {
     "detach": detach,
     "member": member,
     "tick": tick,
+    "archive": archive,
     "download": download,
 }
 
@@ -652,6 +698,7 @@ def build_parser() -> tuple[
         "detach",
         "member",
         "tick",
+        "archive",
     ):
         subs[name].add_argument("card")
     subs["comment"].add_argument("text_file")
@@ -668,6 +715,7 @@ def build_parser() -> tuple[
     subs["member"].add_argument("username")
     subs["tick"].add_argument("item")
     subs["tick"].add_argument("--undo", action="store_true")
+    subs["archive"].add_argument("--into", required=True)
     subs["label"].add_argument("action", choices=["add", "remove"])
     subs["label"].add_argument("label")
     subs["upload"].add_argument("paths", nargs="+")
@@ -701,20 +749,42 @@ def run_command(
     return {"dryRun": client.planned} if dry_run else payload
 
 
+def refusal_aware(
+    args: argparse.Namespace,
+    place: Place,
+    secrets: Secrets,
+    config: Config,
+    run_id: str,
+) -> Obj:
+    try:
+        payload = run_command(args, place, secrets, config, run_id)
+    except TokenRefused as error:
+        return {
+            "error": str(error),
+            "tokenRefused": True,
+            "firstReport": state.note_refusal(place.state),
+        }
+    state.clear_refusal(place.state)
+    return payload
+
+
 def guarded(args: argparse.Namespace, place: Place, secrets: Secrets) -> Obj:
     config = load_config(place.root)
     if args.command == "finish":
         return {"finished": state.end_lease(place.state, args.run_id)}
     if args.command != "check":
-        return run_command(args, place, secrets, config, "")
+        return refusal_aware(args, place, secrets, config, "")
     run_id = state.take_lease(place.state, config.every_minutes)
     if run_id is None:
         return {"skipped": True}
     try:
-        return run_command(args, place, secrets, config, run_id)
+        payload = refusal_aware(args, place, secrets, config, run_id)
     except TrelloError:
         state.end_lease(place.state, run_id)
         raise
+    if "error" in payload:
+        state.end_lease(place.state, run_id)
+    return payload
 
 
 def main(argv: list[str] | None = None) -> int:

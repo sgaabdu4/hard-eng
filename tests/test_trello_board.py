@@ -587,6 +587,8 @@ def test_card_text_must_be_short_and_laid_out(project: Project, tmp_path: Path) 
         "Reply yes, or say what to change."
     )
     assert project.run("comment", "1", str(note)).code == 0
+    note.write_text("@sam @pat **The fix is live.**\n\n- It shows the total.\n- Yes.")
+    assert project.run("comment", "1", str(note)).code == 0
 
 
 def test_comment_adds_the_needs_label_of_each_person_asked(
@@ -818,3 +820,24 @@ def test_testing_cards_count_for_their_tester_and_are_not_chased(
     (queue,) = report["testQueue"]
     assert (queue["author"], queue["card"]) == ("sam", "2")
     assert queue["excerpt"] == "2 cards in testing, oldest is #2"
+
+
+def test_comment_refuses_links_to_cards_not_on_the_board(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(9, "#9 Old", "l-done", closed=True),
+    ]
+    note = tmp_path / "note.txt"
+    for good in ("https://trello.com/c/sl1/1-card", "https://trello.com/c/sl9"):
+        note.write_text(f"Same work as {good}")
+        assert project.run("comment", "1", str(note)).code == 0, good
+    writes = len(project.fake.writes)
+    note.write_text("See https://trello.com/c/zzz999/1-gone")
+    refused = project.run("comment", "1", str(note))
+    assert refused.code == 1
+    assert "zzz999" in str(refused.payload["error"])
+    made = project.run("new", "todo", "Card", "--description-file", str(note))
+    assert made.code == 1
+    assert len(project.fake.writes) == writes
