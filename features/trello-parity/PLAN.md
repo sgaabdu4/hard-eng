@@ -48,14 +48,14 @@ Slice 2: open questions and chasing
 
 Slice 3: the testing flow writes
 
-- [ ] `move <card> testing` takes `--check TEXT` in place of `--proof`; the note goes into the testing comment, and `references/run.md` says pictures stay required for any screen change → `tests/test_trello_coordinator.py::test_testing_move_takes_a_written_check_for_work_with_no_screen`.
-- [ ] `move <card> testing` needs `--comment FILE` that tags at least one board member. It posts one comment with the text and the proof pictures (blank lines between), and makes every tagged member a card member, adding the `needsLabels` label when one is configured (`commands.py`) → extend `tests/test_trello_coordinator.py::test_testing_move_needs_proof`.
-- [ ] `comment` on a `testing` card whose text says it waits on us and not that it is live also moves the card to the top of `doing` and reports it, using slice 2's phrases (`commands.py`) → `tests/test_trello_coordinator.py::test_a_promise_on_a_testing_card_moves_it_to_doing`.
-- [ ] `member <card> add|remove <username>` adds or removes one board member; a username not on the board is refused (`commands.py`) → `tests/test_trello_coordinator.py::test_member_adds_and_removes_a_person`.
-- [ ] `comment` that asks a tagged person also makes them a card member, next to the label it already adds (`commands.py`) → extend `tests/test_trello_board.py::test_comment_adds_the_needs_label_of_each_person_asked`.
-- [ ] `card` prints members and every checklist with each item's state (`commands.py`) → extend `tests/test_trello_board.py::test_card_prints_the_whole_card_and_hides_secrets`.
-- [ ] A move to `testing` or `done` with open checklist items is refused and names them; no write is sent (`commands.py`) → `tests/test_trello_coordinator.py::test_move_refuses_open_checklist_items`.
-- [ ] `tick <card> <item text> [--undo]` marks one checklist item done or open; no match or two matches is refused (`commands.py`) → `tests/test_trello_coordinator.py::test_tick_marks_one_checklist_item`.
+- [x] `move <card> testing` takes `--check TEXT` in place of `--proof`; the note goes into the testing comment, and `references/run.md` says pictures stay required for any screen change → `tests/test_trello_coordinator.py::test_testing_move_takes_a_written_check_for_work_with_no_screen`.
+- [x] `move <card> testing` needs `--comment FILE` that tags at least one board member. It posts one comment with the text and the proof pictures (blank lines between), and makes every tagged member a card member, adding the `needsLabels` label when one is configured (`commands.py`) → extend `tests/test_trello_coordinator.py::test_testing_move_needs_proof`.
+- [x] `comment` on a `testing` card whose text says it waits on us and not that it is live also moves the card to the top of `doing` and reports it, using slice 2's phrases (`commands.py`) → `tests/test_trello_coordinator.py::test_a_promise_on_a_testing_card_moves_it_to_doing`.
+- [x] `member <card> add|remove <username>` adds or removes one board member; a username not on the board is refused (`commands.py`) → `tests/test_trello_coordinator.py::test_member_adds_and_removes_a_person`.
+- [x] `comment` that asks a tagged person also makes them a card member, next to the label it already adds (`commands.py`) → extend `tests/test_trello_board.py::test_comment_adds_the_needs_label_of_each_person_asked`.
+- [x] `card` prints members and every checklist with each item's state (`commands.py`) → extend `tests/test_trello_board.py::test_card_prints_the_whole_card_and_hides_secrets`.
+- [x] A move to `testing` or `done` with open checklist items is refused and names them; no write is sent (`commands.py`) → `tests/test_trello_coordinator.py::test_move_refuses_open_checklist_items`.
+- [x] `tick <card> <item text> [--undo]` marks one checklist item done or open; no match or two matches is refused (`commands.py`) → `tests/test_trello_coordinator.py::test_tick_marks_one_checklist_item`.
 
 Slice 4: sign-in, duplicates, text and links
 
