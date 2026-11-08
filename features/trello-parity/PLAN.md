@@ -1,6 +1,6 @@
 # The Trello coordinator sees and does what a mature coordinator does
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -90,8 +90,8 @@ N/A — no app screens change; the tool writes only Trello comment text, labels,
 
 ## Verification
 
-Result: Pending
-Evidence: pending until the build ends.
+Result: Passed
+Evidence: every box ticked after its named test failed first and then passed; `python3 .hooks/hard-eng.py check --plan-stage Ready --base origin/develop` passed after each of the four slices and the edit-read fix (full suite 2333 tests); `python3 .hooks/hard-eng.py check --plan-stage Complete --base origin/develop` passed on the final code. A read-only call on a real board on 2026-11-08 showed that an edit moves the card's `dateLastActivity` and keeps the action date.
 E2E: N/A — the tool is a command line program; the tests drive its real `main` end to end against a Trello fake built from real replies, and runs may not call Trello.
 
 Delivery target: PR
