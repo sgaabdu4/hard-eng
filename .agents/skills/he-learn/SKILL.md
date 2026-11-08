@@ -1,6 +1,6 @@
 ---
 name: he-learn
-description: Prevent verified repeated failures, run the task-end retro and preserve lasting decisions in terse ADRs. Use at every task end to write the plan's Retro line before the plan is Complete, and when failures recur, a bug is found on the base branch, prevention needs strengthening, or accepted decisions and steering need durable capture; outside the retro, skip one-off fixes to unmerged work and routine task updates.
+description: Prevent verified repeated failures, run the task-end retro and preserve lasting decisions in terse ADRs. Use at every task end to run the retro, and when failures recur, a bug is found on the base branch, prevention needs strengthening, or accepted decisions and steering need durable capture; outside the retro, skip one-off fixes to unmerged work and routine task updates.
 ---
 
 # Hard Eng Learn
