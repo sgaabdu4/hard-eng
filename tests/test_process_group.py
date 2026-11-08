@@ -2,6 +2,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import override
 
 import process_group
 import pytest
@@ -151,6 +152,7 @@ def test_an_interrupt_right_after_start_still_stops_the_group(
     pid_file = tmp_path / "child.pid"
 
     class Interrupted(set[int]):
+        @override
         def add(self, pid: int) -> None:
             deadline = time.monotonic() + 30
             while not pid_file.exists() or not pid_file.read_text():
