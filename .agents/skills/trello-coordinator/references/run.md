@@ -19,9 +19,11 @@ Load at the start of every run. Commands = [commands](commands.md).
 | `owner`                 | The owner wrote as the shared account: do what it says.                                                                                              |
 | `promises`              | Done → post the proof. Late → do it now, or post a new time and keep it.                                                                             |
 | `silent`                | Have a worker check live data or logs first; else one new tagged comment with exact steps. Still silent after another `chaseHours` → tell the owner. |
+| `buried`                | Ask it again in a new comment that tags the person, with one line of context.                                                                        |
 | `badTags`               | Post again with a tag that reaches the person.                                                                                                       |
 | `labels`                | Label only open questions; add or remove to match.                                                                                                   |
 | `waitsOnUs`             | `move <card> doing` + one comment: what it waits for, and that it returns to testing when live.                                                      |
+| `testQueue`             | Tell the owner each tester's count and oldest card. Never chase on the cards.                                                                        |
 | `unnumbered`, `overdue` | Number it with `update --renumber`; overdue → act, or post the blocker and set a new date with `update`.                                             |
 | `realCases`             | Run its `handover.md` check since its last checked time. Worked → post the example, remove the label, testing. Failed → `doing`.                     |
 

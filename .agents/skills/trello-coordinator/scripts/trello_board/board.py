@@ -1,3 +1,4 @@
+import re
 from dataclasses import asdict, dataclass, replace
 
 from .api import Client, TrelloError, redact
@@ -8,6 +9,10 @@ CARD_FIELDS = (
     "idList,name,due,dueComplete,idLabels,idMembers,shortLink,dateLastActivity"
 )
 PAGE = 1000
+TAG = re.compile(r"(?<![\w@])@(\w+)")
+QUESTION = re.compile(
+    r"\?|\b(please|reply|can you|could you|let me know)\b", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -28,6 +33,24 @@ class Snapshot:
     members: dict[str, str]
     threads: dict[str, list[Event]]
     moves: dict[str, str]
+
+
+def questions_in(
+    events: list[Event], members: frozenset[str]
+) -> list[tuple[int, Event, str]]:
+    found: list[tuple[int, Event, str]] = []
+    for index, event in enumerate(events):
+        if event.kind != "comment" or not QUESTION.search(event.text):
+            continue
+        asked = {name.lower() for name in TAG.findall(event.text)} & members
+        for person in sorted(asked - {event.author.lower()}):
+            replied = any(
+                e.kind == "comment" and e.author.lower() == person
+                for e in events[index + 1 :]
+            )
+            if not replied:
+                found.append((index, event, person))
+    return found
 
 
 def fetch_cards(client: Client, board: str) -> list[Obj]:
@@ -130,7 +153,11 @@ def threads_to(threads: dict[str, list[Event]]) -> Obj:
 
 
 def merge_threads(
-    saved: dict[str, list[Event]], fresh: list[Event], own: str, posted: set[str]
+    saved: dict[str, list[Event]],
+    fresh: list[Event],
+    own: str,
+    posted: set[str],
+    members: frozenset[str],
 ) -> dict[str, list[Event]]:
     def ours(event: Event) -> bool:
         return (
@@ -152,7 +179,8 @@ def merge_threads(
     for card, found in by_card.items():
         ordered = sorted(found.values(), key=lambda e: parse_time(e.date))
         last = max((i for i, e in enumerate(ordered) if ours(e)), default=0)
-        merged[card] = ordered[last:]
+        oldest = min((i for i, _, _ in questions_in(ordered, members)), default=last)
+        merged[card] = ordered[min(last, oldest) :]
     return merged
 
 
@@ -182,7 +210,10 @@ def fetch(
         if (e := to_event(a, members))
     ]
     open_ids = {text(card.get("id")) for card in cards}
-    threads = merge_threads(threads_from(saved.get("threads")), fresh, own, posted)
+    people = frozenset(name.lower() for name in members.values())
+    threads = merge_threads(
+        threads_from(saved.get("threads")), fresh, own, posted, people
+    )
     return Snapshot(
         cards,
         lists,

@@ -73,6 +73,12 @@ def test_a_stale_lease_is_taken_by_one_run_only(project: Project, mods: Mods) ->
         ("I will wait until it is live", True),
         ("I will send the link. The fix is now live.", False),
         ("Next: nothing. It is done.", False),
+        ("The fix is now live. I will check the totals tomorrow.", True),
+        ("The fix went live. Next: I will ask Sam.", True),
+        ("I am changing the screen", True),
+        ("I am building the export", True),
+        ("The export went live. Nothing more to do.", False),
+        ("The new screens are live.", False),
     ],
 )
 def test_promises_ignore_conditional_live(
@@ -90,6 +96,13 @@ def test_promises_ignore_conditional_live(
         ("Not built yet. I will tell you when it is live", True),
         ("This waits for the next release, until it is live", True),
         ("Not built yet. The fix is now live", False),
+        ("I am building it", True),
+        ("I am changing the screen", True),
+        ("I will fix it", True),
+        ("The export is being built", True),
+        ("This waits for the #12 fix", True),
+        ("I will fix it. The fix went live", False),
+        ("Not built yet. The screens are live", False),
     ],
 )
 def test_waits_on_us_ignores_conditional_live(
@@ -346,20 +359,25 @@ def test_owner_reply_before_a_missing_first_check_is_kept(project: Project) -> N
 
 
 @pytest.mark.parametrize(
-    "text,labelled,listed",
+    "text,labelled,listed,later",
     [
-        ("Thanks @sam, it is live now.", False, False),
-        ("Thanks @sam, it is live now.", True, True),
-        ("@sam can you confirm?", False, True),
-        ("@sam please reply with the page name", True, False),
+        ("Thanks @sam, it is live now.", False, False, ""),
+        ("Thanks @sam, it is live now.", True, True, ""),
+        ("@sam can you confirm?", False, True, ""),
+        ("@sam please reply with the page name", True, False, ""),
+        ("@sam can you confirm?", False, True, "Still working on the fix"),
+        ("@sam can you confirm?", True, False, "Still working on the fix"),
     ],
 )
 def test_labels_follow_open_questions_not_any_tag(
-    project: Project, text: str, labelled: bool, listed: bool
+    project: Project, text: str, labelled: bool, listed: bool, later: str
 ) -> None:
     extra = {"idLabels": ["lb-sam"]} if labelled else {}
     project.fake.cards = [make_card(1, "#1 Card", "l-doing", **extra)]
     project.fake.actions = [comment("ours-1", 1, "m-owner", text, 30)]
+    if later:
+        project.fake.actions.append(comment("ours-2", 1, "m-owner", later, 2))
+        project.mods.state.log_posted(project.state, "ours-2")
     project.mods.state.log_posted(project.state, "ours-1")
     report = project.report()
     assert (refs(report["labels"]) == {"1"}) == listed
@@ -667,3 +685,97 @@ def test_duplicate_numbers_are_listed_and_refused_as_a_card_reference(
     assert project.fake.writes == []
     assert project.run("comment", "sl1", str(note)).code == 0
     assert project.run("comment", "3", str(note)).code == 0
+
+
+def ours(project: Project, *rows: tuple[str, int, str, float]) -> None:
+    for ident, card, text, hours in rows:
+        project.fake.actions.append(comment(ident, card, "m-owner", text, hours))
+        project.mods.state.log_posted(project.state, ident)
+
+
+def test_hidden_open_question_is_listed_as_buried(project: Project) -> None:
+    project.fake.cards = [
+        make_card(n, f"#{n} Card", "l-done" if n == 5 else "l-doing")
+        for n in range(1, 6)
+    ]
+    ask = "@sam can you confirm?"
+    ours(
+        project,
+        ("a1", 1, ask, 30),
+        ("b1", 1, "Still working on the fix", 2),
+        ("a2", 2, ask, 30),
+        ("b2", 2, "@sam still waiting, can you confirm?", 2),
+        ("a3", 3, ask, 30),
+        ("b3", 3, "Still working on the fix", 2),
+        ("a5", 5, ask, 30),
+        ("b5", 5, "Still working on the fix", 2),
+    )
+    project.fake.actions.append(comment("s3", 3, "m-sam", "Yes, it works", 1))
+    project.fake.actions.append(comment("a4", 4, "m-owner", ask, 3))
+    project.mods.state.log_posted(project.state, "a4")
+    buried = project.report()["buried"]
+    assert refs(buried) == {"1"}
+    assert buried[0]["author"] == "sam"
+    assert buried[0]["excerpt"] == ask
+
+
+def test_silent_uses_the_open_question_not_the_newest_comment(
+    project: Project,
+) -> None:
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2)]
+    ask = "@sam can you confirm?"
+    ours(
+        project,
+        ("a1", 1, ask, 30),
+        ("b1", 1, "Still working on the fix", 1),
+        ("a2", 2, ask, 10),
+        ("b2", 2, "Still working on the fix", 1),
+    )
+    asked_at = str(project.fake.actions[0]["date"])
+    silent = project.report()["silent"]
+    assert refs(silent) == {"1"}
+    assert (silent[0]["at"], silent[0]["excerpt"]) == (asked_at, ask)
+
+
+def test_a_member_asking_another_member_opens_a_question(project: Project) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(2, "#2 Card", "l-doing", idLabels=["lb-sam"]),
+        make_card(3, "#3 Card", "l-doing"),
+    ]
+    ask = "@sam can you check the total?"
+    project.fake.actions = [
+        comment("p1", 1, "m-pat", ask, 5),
+        comment("p2", 2, "m-pat", ask, 5),
+        comment("s2", 2, "m-sam", "Checked, it is right", 3),
+        comment("p3", 3, "m-pat", ask, 20),
+    ]
+    ours(project, ("b3", 3, "On it", 2))
+    report = project.report()
+    assert refs(report["labels"]) == {"1", "2", "3"}
+    gaps = {item["card"]: item["excerpt"] for item in report["labels"]}
+    assert gaps["1"].startswith("open question to @sam")
+    assert gaps["2"].startswith("Needs Sam is set")
+    assert report["silent"] == []
+
+
+def test_testing_cards_count_for_their_tester_and_are_not_chased(
+    project: Project,
+) -> None:
+    project.fake.cards = [
+        make_card(
+            1, "#1 Card", "l-testing", idLabels=["lb-sam"], dateLastActivity=ago(10)
+        ),
+        make_card(
+            2, "#2 Card", "l-testing", idLabels=["lb-sam"], dateLastActivity=ago(50)
+        ),
+        make_card(3, "#3 Card", "l-doing", idLabels=["lb-sam"]),
+        make_card(4, "#4 Card", "l-testing"),
+    ]
+    ask = "@sam please test it"
+    ours(project, ("a1", 1, ask, 30), ("a2", 2, ask, 30), ("a3", 3, ask, 30))
+    report = project.report()
+    assert refs(report["silent"]) == {"3"}
+    (queue,) = report["testQueue"]
+    assert (queue["author"], queue["card"]) == ("sam", "2")
+    assert queue["excerpt"] == "2 cards in testing, oldest is #2"
