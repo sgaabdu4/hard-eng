@@ -10,7 +10,7 @@ Status: Draft
 
 Owners: [TODO: Relevant paths + decisive evidence links]
 Same cause: [TODO: Fix → earlier fixes of this cause (plan/issue + helped, hurt, no effect or confounded) + every other place it can occur, searched + fixed; else N/A — reason]
-Single source: [TODO: The one owner of each rule, value or type this change touches + every other copy searched (paths) + merged in this change; a copy not merged → Blockers; else N/A — reason]
+Single source: [TODO: The one owner of each rule, value or type this change touches (constants, types, copy, config, validation, queries) + every other copy searched (paths) + merged in this change; a copy not merged → Blockers; else N/A — reason]
 
 ## Decisions + authorization
 

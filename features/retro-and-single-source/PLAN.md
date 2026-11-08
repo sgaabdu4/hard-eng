@@ -8,7 +8,7 @@ Every plan a change edits names the single owner of each rule, value or type it 
 
 ## Repository context
 
-Owners: `.hooks/plans.py` (`validate_plan`), `.agents/skills/he-plan/templates/PLAN.md`, `.agents/skills/he-learn/SKILL.md`, `.agents/skills/he-plan/SKILL.md`, `tests/test_plans.py`, plan fixtures in `tests/conftest.py` and `tests/agent_fixtures.py`.
+Owners: `.hooks/plans.py` (`validate_plan`), `.agents/skills/he-plan/templates/PLAN.md`, `.agents/skills/he-learn/SKILL.md`, `tests/test_plans.py`, plan fixtures in `tests/conftest.py` and `tests/agent_fixtures.py`.
 Evidence: a reviewer read a consumer's 34 failed CI runs and 187 push attempts since 2026-10-21. Most failed pushes came from checks first run in the push gate; fixes were made by hand and no prevention or Hard Eng issue followed. The consumer wrote about 50 separate single-source scripts, one per past bug, and one of them stopped a push gate at 600 seconds. Hard Eng has no single-source rule in any skill, requirement, plan field or check; jscpd and Fallow catch copied text only.
 Same cause: complexity repeats in `gate_schedule.py::run_checks` and `plans.py::validate_plan` share one cause, branches added to a function at its limit; both now call helpers. The last new plan field (`Same cause`, 2026-10-22) failed a consumer's CI on an untouched Ready plan, because the rule applied to every Ready plan. Both new fields apply only to plans the change edits.
 Single source: `.hooks/plans.py::validate_plan` owns plan field rules and the template owns field guidance; no other copy of these rules exists (searched `.hooks/` and `.agents/skills/` for `Same cause`).
@@ -54,6 +54,7 @@ Retro: This session's items, sorted by the new route:
 - Fallow failing on coverage that failed tests never wrote → Hard Eng fault, fixed in `tests/test_gate_speed.py::test_a_coverage_reader_is_blocked_not_failed_when_its_tests_fail`.
 - This test unticked a Complete plan's boxes → test-writing error, fixed in this change; none new.
 - `tests/test_plans.py` over 1000 lines after this test was added, the second file-length failure today → caught at turn end by the existing check; same cause as `tests/test_shipping.py` earlier: appending to a test file near the limit. The test moved to `tests/test_planning_handoffs.py`; none new, because the check already blocks it.
+- The first push failed: the HE Plan skill passed the Codex 8000-byte limit, and an agent-check plan fixture lacked the new line → ran too late: `tests/test_skill_links.py` and `tests/test_agent_checks.py` already check both, but I ran only the plan tests before pushing. The HE Plan line moved into the template field; none new.
 - GitHub 504 errors on downloads → outside cause; none.
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with `hard-eng` and `canary` green, then release.
