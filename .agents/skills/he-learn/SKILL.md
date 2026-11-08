@@ -1,6 +1,6 @@
 ---
 name: he-learn
-description: Prevent verified repeated failures and preserve lasting decisions in terse ADRs. Use when failures recur, a bug is found on the base branch, prevention needs strengthening, or accepted decisions and steering need durable capture; skip one-off fixes to unmerged work and routine task updates.
+description: Prevent verified repeated failures, run the task-end retro and preserve lasting decisions in terse ADRs. Use at every task end before a plan is Complete (its Retro line), when failures recur, a bug is found on the base branch, prevention needs strengthening, or accepted decisions and steering need durable capture; outside the retro, skip one-off fixes to unmerged work and routine task updates.
 ---
 
 # Hard Eng Learn
@@ -14,7 +14,9 @@ flowchart TD
   T -->|Repeated failure| R[Research: confirm common cause]
   T -->|Escaped bug| P
   T -->|Lasting decision or steering| A[Decision capture]
+  T -->|Task end| RT[Retro: sort each item; plan Retro line]
   T -->|No durable gap| N[Continue without new files]
+  RT --> P
   R --> P[Repair cause and existing deterministic prevention]
   P --> L{Adequate executable prevention?}
   L -->|Yes| V[Original failure + nearby valid case]
@@ -45,13 +47,17 @@ flowchart TD
 
 - When = every task end, before its plan is Complete; the result goes on the plan's `Retro:` line. No failed check and no correction → `None — no check failed`.
 - Items = each failed check (Stop, local, pre-push, CI) and each user or review correction in the task, including ones fixed at once.
-- Sort each item:
-  - Mechanical (pattern, banned API, file place, size, shape) → a deterministic check at its owner: an existing lint or check rule first, else the smallest new one; never one checker per incident.
-  - Judgement → the review rules in [Code Review](../code-review/SKILL.md).
-  - Ran too late (the check existed but first ran at push or CI) → run it earlier at its owner, such as the build step or a worker brief; never in a hook.
-  - Hard Eng fault (a Hard Eng check, hook, skill or setup was wrong or missing) → a Hard Eng issue through the AGENTS.md filing rule and its publication privacy; the project fix still lands here.
-  - Outside cause (outage, upstream release) → none with the reason, or a freshness hold.
-- Second owner found → merge it into the one owner, per the plan's `Single source:` line.
+- Sort each item into every row that fits:
+
+| Item | Prevention |
+| --- | --- |
+| Hard Eng fault: a Hard Eng check, hook, skill or setup was wrong or missing | Tell the user; if approved, file a Hard Eng issue per AGENTS.md's broken Hard Eng rule (duplicate check + publication privacy); still fix the project in this task |
+| Ran too late: an existing check first ran at push or CI | Add that check to the earlier step that should have run it (HE Build's focused checks or the worker brief) and name that step; never add it to the Stop hook |
+| Mechanical: pattern, banned API, file place, size, shape | Deterministic check at its owner: an existing lint or check rule first, else the smallest new one; never one checker per incident |
+| Judgement | Add or sharpen one rule in [Code Review's review method](../code-review/references/review.md) so review catches it next time; name that rule |
+| Outside cause: outage, upstream release | None + the reason, or a freshness hold |
+
+- A retro item caused by a second copy of a rule, value or type → merge that copy into its one owner in this change and list it on the plan's `Single source:` line; it cannot merge now → `Blockers`.
 
 ## Apply + continue
 
