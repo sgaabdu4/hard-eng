@@ -712,7 +712,7 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     assert "since the last production release" in release
     assert "moved back to doing" in release and "test site link" in release
     assert (
-        "card in testing on a `develop` base, take the click steps from the test site"
+        "When `shipping.base` is `develop` and the card is in testing, take the click steps from the test site"
         in core
     )
     hosting = (SKILL.parent / "he/references/integrations.md").read_text()
@@ -721,7 +721,7 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     assert "`trello.json`" in hosting and "`shipping.base` = `develop`" in hosting
     assert "own preview on the staging backend" in hosting
     assert "head branch is not `develop`" in hosting
-    assert "its staging run is the delivery check" in hosting
+    assert "staging URL after a `develop` push is the delivery check" in hosting
     assert (
         "allow merge commits" in hosting
         and "not list that check in `shipping.checks`" in hosting

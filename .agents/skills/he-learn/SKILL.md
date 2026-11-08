@@ -1,6 +1,6 @@
 ---
 name: he-learn
-description: Prevent verified repeated failures, run the task-end retro and preserve lasting decisions in terse ADRs. Use at every task end before a plan is Complete (its Retro line), when failures recur, a bug is found on the base branch, prevention needs strengthening, or accepted decisions and steering need durable capture; outside the retro, skip one-off fixes to unmerged work and routine task updates.
+description: Prevent verified repeated failures, run the task-end retro and preserve lasting decisions in terse ADRs. Use at every task end to write the plan's Retro line before the plan is Complete, and when failures recur, a bug is found on the base branch, prevention needs strengthening, or accepted decisions and steering need durable capture; outside the retro, skip one-off fixes to unmerged work and routine task updates.
 ---
 
 # Hard Eng Learn
@@ -16,7 +16,8 @@ flowchart TD
   T -->|Lasting decision or steering| A[Decision capture]
   T -->|Task end| RT[Retro: sort each item; plan Retro line]
   T -->|No durable gap| N[Continue without new files]
-  RT --> P
+  RT -->|Prevention needed| P
+  RT -->|None or outside cause| D
   R --> P[Repair cause and existing deterministic prevention]
   P --> L{Adequate executable prevention?}
   L -->|Yes| V[Original failure + nearby valid case]
@@ -45,19 +46,19 @@ flowchart TD
 
 ## Retro
 
-- When = every task end, before its plan is Complete; the result goes on the plan's `Retro:` line. No failed check and no correction → `None — no check failed`.
-- Items = each failed check (Stop, local, pre-push, CI) and each user or review correction in the task, including ones fixed at once.
-- Sort each item into every row that fits:
+- When = every task end, before its plan is Complete. Retro line = each item → its row's prevention, named as `path::test`, a rule ID, a step, an issue link, a freshness hold or `None — <reason>`. No item → `None — no failed check or correction`.
+- Items = each failed check (Stop hook, local run, pre-push, CI) and each user or review correction in the task, including ones fixed at once.
+- Sort each item into every row that fits. In a project that installed Hard Eng, a prevention that would edit a file Hard Eng installed (`.hooks/`, its skills except `trello-coordinator/`) goes to the Hard Eng fault row instead.
 
 | Item | Prevention |
 | --- | --- |
-| Hard Eng fault: a Hard Eng check, hook, skill or setup was wrong or missing | Tell the user; if approved, file a Hard Eng issue per AGENTS.md's broken Hard Eng rule (duplicate check + publication privacy); still fix the project in this task |
-| Ran too late: an existing check first ran at push or CI | Add that check to the earlier step that should have run it (HE Build's focused checks or the worker brief) and name that step; never add it to the Stop hook |
+| Hard Eng fault: a Hard Eng check, hook, skill or setup was wrong or missing | Tell the user; if approved, file a Hard Eng issue per AGENTS.md's broken Hard Eng rule; still fix the project in this task |
+| Ran too late: an existing check first ran at push or CI | The check is a test, analyzer or lint for the touched files (HE Build's focused checks) → fix the worker brief or plan step that skipped it, and name that step. Otherwise → Hard Eng fault row. Never add it to the Stop hook |
 | Mechanical: pattern, banned API, file place, size, shape | Deterministic check at its owner: an existing lint or check rule first, else the smallest new one; never one checker per incident |
-| Judgement | Add or sharpen one rule in [Code Review's review method](../code-review/references/review.md) so review catches it next time; name that rule |
-| Outside cause: outage, upstream release | None + the reason, or a freshness hold |
+| Judgement: a defect only a reviewer can find | Add or sharpen one project `REQ-` rule in `docs/requirements.md`, which review applies; name its ID. In Hard Eng itself, the owner is [Code Review's review method](../code-review/references/review.md) |
+| Outside cause: outage, upstream release | None + the reason, or a freshness hold on the broken release (the freshness gate's `holds`, in [gates](../he/references/gates.md)) |
 
-- A retro item caused by a second copy of a rule, value or type → merge that copy into its one owner in this change and list it on the plan's `Single source:` line; it cannot merge now → `Blockers`.
+- A retro item caused by a second copy of a rule, value or type → merge that copy into its one owner in this change and record it on the plan's `Single source:` line. That line says what to do when the copy cannot merge.
 
 ## Apply + continue
 
