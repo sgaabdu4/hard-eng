@@ -33,7 +33,7 @@ Slice 1: the report sees every human action
 - [ ] An edited comment replaces the old text and counts at its edit time, so an edit after our reply is a request → `tests/test_trello_board.py::test_edited_comment_counts_at_its_edit_time` (`board.py` reads `data.dateLastEdited` on `commentCard` actions; Trello logs no separate edit action, checked on a real board on 2026-11-08).
 - [ ] A short reply such as "ok", "thanks", "works" or "done" (tags allowed) on a card in `done` is not a request; on an open card it still is (`report.py`) → extend `tests/test_trello_coordinator.py::test_done_card_requests_expire_after_the_grace_hours`.
 - [ ] The newer of two open cards with the same `#N` (higher card id) is listed in `unnumbered` as a duplicate (`report.py`) → `tests/test_trello_board.py::test_duplicate_numbers_are_listed_and_refused_as_a_card_reference`.
-- [ ] A card reference `#N` that matches two cards is refused with both shortLinks, so no write reaches the wrong card (`commands.py`) → same test.
+- [ ] A card reference `#N` that matches two cards is refused with both shortLinks, so no write reaches the wrong card (`commands.py`) → `tests/test_trello_board.py::test_duplicate_numbers_are_listed_and_refused_as_a_card_reference`.
 - [ ] `update <card> --renumber` names the card `#<next free number> <title>` (`commands.py`) → extend `tests/test_trello_board.py::test_update_renames_and_sets_the_due_date`.
 
 Slice 2: open questions and chasing
