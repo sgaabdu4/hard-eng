@@ -22,6 +22,10 @@ class TrelloError(Exception):
     pass
 
 
+class TokenRefused(TrelloError):
+    pass
+
+
 @dataclass(frozen=True)
 class Secrets:
     key: str
@@ -170,6 +174,8 @@ class Client:
             if reply.status == 429:
                 pause(wait_seconds(reply.headers))
                 continue
+            if reply.status == 401:
+                raise TokenRefused("Trello refused the token: it is revoked or expired")
             if reply.status >= 400:
                 snippet = reply.body[:100].decode(errors="replace")
                 raise TrelloError(

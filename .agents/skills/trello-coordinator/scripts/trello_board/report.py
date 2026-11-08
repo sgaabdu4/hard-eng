@@ -3,7 +3,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
-from .board import Event, Snapshot
+from .board import QUESTION, TAG, Event, Snapshot, questions_in
 from .config import Config
 from .shapes import Obj, parse_time, text
 
@@ -13,26 +13,30 @@ FIELDS = (
     "owner",
     "promises",
     "silent",
+    "buried",
     "badTags",
     "labels",
     "waitsOnUs",
+    "testQueue",
     "unnumbered",
     "overdue",
     "realCases",
 )
 REAL_CASE = "Waiting for real case"
-PROMISE = re.compile(r"\bI will\b|\bI['’]ll\b|\bNext:", re.IGNORECASE)
+WORKING = r"\b(?:I am (?:fixing|building|changing)|I will fix|being built|waits for the #\d+ fix)\b"
+PROMISE = re.compile(rf"\bI will\b|\bI['’]ll\b|\bNext:|{WORKING}", re.IGNORECASE)
 CONDITION = re.compile(
-    r"\b(?:when|once|after|until|before|if)\b[^.!?,;\n]*", re.IGNORECASE
+    r"\b(?:when|once|after|until|before|if)\b[^.!?\n]*|[^.!?\n]*\bshould\b[^.!?\n]*\?",
+    re.IGNORECASE,
 )
-FINISHED = re.compile(r"\bis (?:now |already )?(?:live|done)\b", re.IGNORECASE)
-WAITS = re.compile(r"next release|not built yet|I am fixing", re.IGNORECASE)
-LIVE = re.compile(r"\bis (?:now |already )?live\b", re.IGNORECASE)
-TAG = re.compile(r"(?<![\w@])@(\w+)")
-QUESTION = re.compile(
-    r"\?|\b(please|reply|can you|could you|let me know)\b", re.IGNORECASE
+FINISHED = re.compile(
+    r"\b(?:(?:is|are) (?:now |already )?(?:live|done)|went live)\b", re.IGNORECASE
 )
+WAITS = re.compile(rf"next release|not built yet|{WORKING}", re.IGNORECASE)
+LIVE = re.compile(r"\b(?:(?:is|are) (?:now |already )?live|went live)\b", re.IGNORECASE)
 NUMBER = re.compile(r"^\s*#(\d+)")
+ACK_WORD = r"(?:ok(?:ay)?|thanks?(?: you)?|works?|done)"
+ACK = re.compile(rf"{ACK_WORD}(?:[\s,.!]+{ACK_WORD})*[\s,.!]*", re.IGNORECASE)
 SPECIAL_TAGS = frozenset({"card", "board"})
 EXCERPT = 120
 
@@ -59,14 +63,26 @@ class View:
     labels: frozenset[str]
     last_ours: Event | None
     after: tuple[Event, ...]
+    questions: tuple[tuple[Event, str], ...]
+    owed: frozenset[str]
 
 
 def clean(value: str) -> str:
     return " ".join(value.split())[:EXCERPT]
 
 
+def plain(body: str) -> str:
+    return CONDITION.sub(lambda found: " " * len(found.group()), body)
+
+
 def says(pattern: re.Pattern[str], body: str) -> bool:
-    return pattern.search(CONDITION.sub(" ", body)) is not None
+    return pattern.search(plain(body)) is not None
+
+
+def after_finished(body: str) -> str:
+    hidden = plain(body)
+    ends = [found.end() for found in FINISHED.finditer(hidden)]
+    return hidden[ends[-1] :] if ends else hidden
 
 
 def is_own(ctx: Context, event: Event) -> bool:
@@ -78,9 +94,16 @@ def hours_since(now: datetime, date: str) -> float:
 
 
 def event_excerpt(event: Event) -> str:
-    if event.kind == "image":
-        return clean(f"[image] {event.text}")
-    return "[description edited]" if event.kind == "desc" else clean(event.text)
+    match event.kind:
+        case "image":
+            return clean(f"[image] {event.text}")
+        case "desc":
+            return "[description edited]"
+        case "move":
+            return clean(f"[moved to {event.text}]")
+        case "created":
+            return "[made the card]"
+    return clean(event.text)
 
 
 def item(view: View, at: str, author: str, excerpt: str) -> Item:
@@ -120,9 +143,18 @@ def may_request(ctx: Context, event: Event) -> bool:
     return event.author.lower() in allowed
 
 
+def thanks(event: Event) -> bool:
+    return ACK.fullmatch(TAG.sub("", event.text).strip()) is not None
+
+
 def requests(ctx: Context, view: View) -> list[Item]:
     event = newest(ctx, view)
-    if event and not is_own(ctx, event) and may_request(ctx, event):
+    if (
+        event
+        and not is_own(ctx, event)
+        and may_request(ctx, event)
+        and not (view.role == "done" and event.kind == "comment" and thanks(event))
+    ):
         return [from_event(view, event)]
     return []
 
@@ -136,33 +168,20 @@ def information(ctx: Context, view: View) -> list[Item]:
 
 def owner(ctx: Context, view: View) -> list[Item]:
     event = view.after[-1] if view.after else None
-    if (
-        event
-        and event.kind == "comment"
-        and is_own(ctx, event)
-        and parse_time(event.date) > ctx.first_check
-    ):
+    if event and is_own(ctx, event) and parse_time(event.date) > ctx.first_check:
         return [from_event(view, event)]
     return []
 
 
 def promises(ctx: Context, view: View) -> list[Item]:
     ours = view.last_ours
-    if not ours or view.role == "done" or not PROMISE.search(ours.text):
+    if not ours or view.role == "done":
         return []
-    if (
-        says(FINISHED, ours.text)
-        or hours_since(ctx.now, ours.date) <= ctx.config.promise_hours
-    ):
+    if not PROMISE.search(after_finished(ours.text)):
+        return []
+    if hours_since(ctx.now, ours.date) <= ctx.config.promise_hours:
         return []
     return [from_event(view, ours)]
-
-
-def tags(ctx: Context, view: View) -> set[str]:
-    if not view.last_ours or not QUESTION.search(view.last_ours.text):
-        return set()
-    found = {name.lower() for name in TAG.findall(view.last_ours.text)}
-    return found & {name.lower() for name in ctx.snapshot.members.values()}
 
 
 def label_people(ctx: Context, view: View) -> set[str]:
@@ -174,19 +193,57 @@ def label_people(ctx: Context, view: View) -> set[str]:
 
 
 def answered(view: View, person: str) -> bool:
-    return any(event.author.lower() == person for event in view.after)
+    return any(
+        event.kind == "comment" and event.author.lower() == person
+        for event in view.after
+    )
+
+
+def our_questions(ctx: Context, view: View) -> list[tuple[Event, str]]:
+    found = [(e, person) for e, person in view.questions if e.id in ctx.posted]
+    ours = view.last_ours
+    if ours and QUESTION.search(ours.text):
+        found += [
+            (ours, person)
+            for person in label_people(ctx, view)
+            if not answered(view, person)
+        ]
+    return found
 
 
 def silent(ctx: Context, view: View) -> list[Item]:
+    if view.role == "done":
+        return []
+    testers = label_people(ctx, view) if view.role == "testing" else set()
+    newest: dict[str, Event] = {}
+    for event, person in our_questions(ctx, view):
+        known = newest.get(person)
+        if person not in testers and (
+            known is None or parse_time(event.date) > parse_time(known.date)
+        ):
+            newest[person] = event
+    if not newest:
+        return []
+    oldest = min(newest.values(), key=lambda e: parse_time(e.date))
+    if hours_since(ctx.now, oldest.date) < ctx.config.chase_hours:
+        return []
+    return [from_event(view, oldest)]
+
+
+def buried(ctx: Context, view: View) -> list[Item]:
     ours = view.last_ours
-    targets = tags(ctx, view) | label_people(ctx, view)
-    if not ours or view.role == "done" or not targets or not QUESTION.search(ours.text):
+    if not ours or view.role == "done":
         return []
-    if hours_since(ctx.now, ours.date) < ctx.config.chase_hours:
-        return []
-    if any(answered(view, person) for person in targets):
-        return []
-    return [from_event(view, ours)]
+    tagged = {name.lower() for name in TAG.findall(ours.text)}
+    testers = label_people(ctx, view) if view.role == "testing" else set()
+    hidden: dict[str, Event] = {}
+    for event, person in our_questions(ctx, view):
+        if event.id != ours.id and person not in tagged | testers:
+            hidden.setdefault(person, event)
+    return [
+        item(view, event.date, person, clean(event.text))
+        for person, event in hidden.items()
+    ]
 
 
 def bad_tags(ctx: Context, view: View) -> list[Item]:
@@ -203,7 +260,8 @@ def bad_tags(ctx: Context, view: View) -> list[Item]:
 
 def label_gap(ctx: Context, view: View, person: str, label: str) -> str:
     has = label in view.labels
-    asked = person.lower() in tags(ctx, view) and not answered(view, person.lower())
+    asked = person.lower() in {name for _, name in view.questions}
+    asked = asked or (view.role == "testing" and person.lower() in view.owed)
     if has and not asked:
         return f"{label} is set with no open question to @{person}"
     if asked and not has:
@@ -228,15 +286,51 @@ def waits_on_us(ctx: Context, view: View) -> list[Item]:
     ours = view.last_ours
     if not ours or view.role != "testing":
         return []
-    if WAITS.search(ours.text) and not says(LIVE, ours.text):
+    if says(WAITS, ours.text) and not says(LIVE, ours.text):
         return [from_event(view, ours)]
     return []
 
 
-def unnumbered(ctx: Context, view: View) -> list[Item]:
-    if NUMBER.match(view.name):
+def duplicate_ids(cards: list[Obj]) -> set[str]:
+    by_number: dict[str, list[Obj]] = {}
+    for card in cards:
+        if found := NUMBER.match(text(card.get("name"))):
+            by_number.setdefault(found.group(1), []).append(card)
+    ids = (text(card.get("id")) for same in by_number.values() for card in same)
+    older = {
+        min((text(card.get("id")) for card in same), key=lambda i: (len(i), i))
+        for same in by_number.values()
+    }
+    return set(ids) - older
+
+
+def test_queue(ctx: Context, view: View) -> list[Item]:
+    if view.role != "testing":
         return []
-    return [item(view, text(view.card.get("dateLastActivity")), "", "")]
+    since = ctx.snapshot.moves.get(text(view.card.get("id")))
+    at = since or text(view.card.get("dateLastActivity"))
+    return [item(view, at, person, "") for person in sorted(label_people(ctx, view))]
+
+
+def queues(items: list[Item]) -> list[Item]:
+    by_person: dict[str, list[Item]] = {}
+    for found in items:
+        by_person.setdefault(text(found["author"]), []).append(found)
+    result: list[Item] = []
+    for rows in by_person.values():
+        oldest = min(rows, key=lambda row: parse_time(text(row["at"])))
+        summary = f"{len(rows)} cards in testing, oldest is #{oldest['card']}"
+        result.append({**oldest, "excerpt": summary})
+    return result
+
+
+def unnumbered(ctx: Context, view: View) -> list[Item]:
+    at = text(view.card.get("dateLastActivity"))
+    if not NUMBER.match(view.name):
+        return [item(view, at, "", "")]
+    if text(view.card.get("id")) in duplicate_ids(ctx.snapshot.cards):
+        return [item(view, at, "", f"another card also has #{view.ref}")]
+    return []
 
 
 def overdue(ctx: Context, view: View) -> list[Item]:
@@ -258,9 +352,11 @@ CHECKS: dict[str, Callable[[Context, View], list[Item]]] = {
     "owner": owner,
     "promises": promises,
     "silent": silent,
+    "buried": buried,
     "badTags": bad_tags,
     "labels": labels,
     "waitsOnUs": waits_on_us,
+    "testQueue": test_queue,
     "unnumbered": unnumbered,
     "overdue": overdue,
     "realCases": real_cases,
@@ -279,6 +375,8 @@ def view_of(ctx: Context, card: Obj) -> View:
     name = text(card.get("name"))
     number = NUMBER.match(name)
     label_ids = card.get("idLabels")
+    people = frozenset(person.lower() for person in snapshot.members.values())
+    found = questions_in(events, people, ctx.posted)
     names = (
         {snapshot.labels.get(text(i), "") for i in label_ids}
         if isinstance(label_ids, list)
@@ -293,11 +391,15 @@ def view_of(ctx: Context, card: Obj) -> View:
         frozenset(names),
         events[last] if last >= 0 else None,
         tuple(events[last + 1 :]),
+        tuple((e, p) for _, e, p in found if QUESTION.search(e.text)),
+        frozenset(p for _, e, p in found if e.id in ctx.posted),
     )
 
 
 def build(ctx: Context) -> dict[str, list[Item]]:
     views = [view_of(ctx, card) for card in ctx.snapshot.cards]
-    return {
+    found = {
         field: [i for v in views for i in CHECKS[field](ctx, v)] for field in FIELDS
     }
+    found["testQueue"] = queues(found["testQueue"])
+    return found

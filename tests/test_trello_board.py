@@ -15,9 +15,15 @@ from trello_fakes import (
     TOKEN,
     Mods,
     Project,
+    ago,
+    checklist,
     comment,
+    create_action,
+    edit_comment,
     lease_owner,
+    make_action,
     make_card,
+    move_action,
     refs,
     write_lease,
 )
@@ -69,6 +75,15 @@ def test_a_stale_lease_is_taken_by_one_run_only(project: Project, mods: Mods) ->
         ("I will wait until it is live", True),
         ("I will send the link. The fix is now live.", False),
         ("Next: nothing. It is done.", False),
+        ("The fix is now live. I will check the totals tomorrow.", True),
+        ("The fix went live. Next: I will ask Sam.", True),
+        ("I am changing the screen", True),
+        ("I am building the export", True),
+        ("The export went live. Nothing more to do.", False),
+        ("The new screens are live.", False),
+        ("The export is live. If anything looks wrong, I will look at it.", False),
+        ("Part one is live. I will add part two tomorrow.", True),
+        ("If it still fails, I will fix it today.", False),
     ],
 )
 def test_promises_ignore_conditional_live(
@@ -86,6 +101,16 @@ def test_promises_ignore_conditional_live(
         ("Not built yet. I will tell you when it is live", True),
         ("This waits for the next release, until it is live", True),
         ("Not built yet. The fix is now live", False),
+        ("I am building it", True),
+        ("I am changing the screen", True),
+        ("I will fix it", True),
+        ("The export is being built", True),
+        ("This waits for the #12 fix", True),
+        ("I will fix it. The fix went live", False),
+        ("Not built yet. The screens are live", False),
+        ("Try it again. If it still fails, I will fix it today.", False),
+        ("Should the menu change wait for the next release?", False),
+        ("I am fixing the button colour.", True),
     ],
 )
 def test_waits_on_us_ignores_conditional_live(
@@ -137,8 +162,16 @@ def test_a_reply_clears_the_request_across_two_checks(
 def test_card_prints_the_whole_card_and_hides_secrets(project: Project) -> None:
     due = "2026-12-01T10:00:00.000Z"
     project.fake.cards = [
-        make_card(1, "#1 Card", "l-doing", idLabels=["lb-sam"], due=due)
+        make_card(
+            1, "#1 Card", "l-doing", idLabels=["lb-sam"], idMembers=["m-sam"], due=due
+        )
     ]
+    project.fake.checklists = {
+        "card1": checklist(
+            ("ci1", "Check total", "complete"),
+            ("ci2", "Check export", "incomplete"),
+        )
+    }
     project.fake.descriptions = {"card1": f"Spec with {TOKEN}"}
     shot: dict[str, object] = {
         "id": "att9",
@@ -160,6 +193,16 @@ def test_card_prints_the_whole_card_and_hides_secrets(project: Project) -> None:
         "name": "#1 Card",
         "list": "Doing",
         "labels": ["Needs Sam"],
+        "members": ["sam"],
+        "checklists": [
+            {
+                "name": "Steps",
+                "items": [
+                    {"name": "Check total", "state": "complete"},
+                    {"name": "Check export", "state": "incomplete"},
+                ],
+            }
+        ],
         "due": due,
         "description": "Spec with ***",
         "comments": [
@@ -192,6 +235,13 @@ def test_update_renames_and_sets_the_due_date(project: Project) -> None:
     planned = project.run("update", "1", "--name", "Other", "--dry-run")
     assert isinstance(planned.payload["dryRun"], list)
     assert len(project.fake.writes) == 1
+    project.fake.cards += [
+        make_card(2, "Copy", "l-doing"),
+        make_card(9, "#9 Old", "l-done", closed=True),
+    ]
+    renumbered = project.run("update", "sl2", "--renumber")
+    assert renumbered.code == 0, renumbered.text
+    assert project.fake.writes[-1].form == {"name": "#10 Copy"}
 
 
 def test_redirects_leave_the_trello_host_without_credentials(mods: Mods) -> None:
@@ -300,8 +350,12 @@ def test_testing_proof_must_be_an_image(
     project.fake.cards = [make_card(5, "#5 Move", "l-doing")]
     proof = tmp_path / name
     proof.write_bytes(b"fake image")
+    note = tmp_path / "testing.txt"
+    note.write_text("**Ready to try.**\n\n@sam please check the total.")
     result = project.run(
-        "move", "5", "testing", "--proof", str(proof), "--shows", "The new total"
+        "move",
+        *("5", "testing", "--proof", str(proof), "--shows", "The new total"),
+        *("--comment", str(note)),
     )
     assert (result.code == 0) == accepted
     assert bool(project.fake.writes) == accepted
@@ -335,20 +389,25 @@ def test_owner_reply_before_a_missing_first_check_is_kept(project: Project) -> N
 
 
 @pytest.mark.parametrize(
-    "text,labelled,listed",
+    "text,labelled,listed,later",
     [
-        ("Thanks @sam, it is live now.", False, False),
-        ("Thanks @sam, it is live now.", True, True),
-        ("@sam can you confirm?", False, True),
-        ("@sam please reply with the page name", True, False),
+        ("Thanks @sam, it is live now.", False, False, ""),
+        ("Thanks @sam, it is live now.", True, True, ""),
+        ("@sam can you confirm?", False, True, ""),
+        ("@sam please reply with the page name", True, False, ""),
+        ("@sam can you confirm?", False, True, "Still working on the fix"),
+        ("@sam can you confirm?", True, False, "Still working on the fix"),
     ],
 )
 def test_labels_follow_open_questions_not_any_tag(
-    project: Project, text: str, labelled: bool, listed: bool
+    project: Project, text: str, labelled: bool, listed: bool, later: str
 ) -> None:
     extra = {"idLabels": ["lb-sam"]} if labelled else {}
     project.fake.cards = [make_card(1, "#1 Card", "l-doing", **extra)]
     project.fake.actions = [comment("ours-1", 1, "m-owner", text, 30)]
+    if later:
+        project.fake.actions.append(comment("ours-2", 1, "m-owner", later, 2))
+        project.mods.state.log_posted(project.state, "ours-2")
     project.mods.state.log_posted(project.state, "ours-1")
     report = project.report()
     assert (refs(report["labels"]) == {"1"}) == listed
@@ -534,6 +593,8 @@ def test_card_text_must_be_short_and_laid_out(project: Project, tmp_path: Path) 
         "Reply yes, or say what to change."
     )
     assert project.run("comment", "1", str(note)).code == 0
+    note.write_text("@sam @pat **The fix is live.**\n\n- It shows the total.\n- Yes.")
+    assert project.run("comment", "1", str(note)).code == 0
 
 
 def test_comment_adds_the_needs_label_of_each_person_asked(
@@ -541,24 +602,248 @@ def test_comment_adds_the_needs_label_of_each_person_asked(
 ) -> None:
     project.fake.cards = [
         make_card(1, "#1 Card", "l-doing"),
-        make_card(2, "#2 Labelled", "l-doing", idLabels=["lb-sam"]),
+        make_card(
+            2, "#2 Labelled", "l-doing", idLabels=["lb-sam"], idMembers=["m-sam"]
+        ),
     ]
     note = tmp_path / "note.txt"
     note.write_text("@sam @pat can you check the total?")
     asked = project.run("comment", "1", str(note))
     assert asked.code == 0, asked.text
     assert asked.payload["addedLabels"] == ["Needs Sam"]
-    post, label = project.fake.writes
+    assert asked.payload["addedMembers"] == ["sam", "pat"]
+    post, label, *people = project.fake.writes
     assert post.path == "/cards/card1/actions/comments"
     assert (label.method, label.path, label.form) == (
         "POST",
         "/cards/card1/idLabels",
         {"value": "lb-sam"},
     )
-    assert project.run("comment", "2", str(note)).code == 0
-    note.write_text("@sam the total is live.")
-    assert project.run("comment", "1", str(note)).code == 0
-    assert [c.path for c in project.fake.writes[2:]] == [
-        "/cards/card2/actions/comments",
-        "/cards/card1/actions/comments",
+    assert [(c.path, c.form) for c in people] == [
+        ("/cards/card1/idMembers", {"value": "m-sam"}),
+        ("/cards/card1/idMembers", {"value": "m-pat"}),
     ]
+    assert project.run("comment", "2", str(note)).code == 0
+    two = [c for c in project.fake.writes[4:] if c.path.startswith("/cards/card2")]
+    assert [(c.path, c.form) for c in two] == [
+        ("/cards/card2/actions/comments", {"text": note.read_text()}),
+        ("/cards/card2/idMembers", {"value": "m-pat"}),
+    ]
+    note.write_text("@sam the total is live.")
+    before = len(project.fake.writes)
+    assert project.run("comment", "1", str(note)).code == 0
+    assert [c.path for c in project.fake.writes[before:]] == [
+        "/cards/card1/actions/comments"
+    ]
+
+
+def test_people_moves_and_new_cards_are_requests(project: Project) -> None:
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2, 3, 4)]
+    project.fake.actions = [
+        move_action("a1", 1, "l-testing", 3, who="m-sam", name="Testing"),
+        create_action("a2", 2, "m-sam", 2),
+        move_action("a3", 3, "l-done", 1, who="m-pat", name="Done"),
+        make_action("a4", "updateCard", 4, "m-sam", 1, old={"pos": 1}),
+    ]
+    report = project.report()
+    assert refs(report["requests"]) == {"1", "2"}
+    excerpts = {item["card"]: item["excerpt"] for item in report["requests"]}
+    assert excerpts == {"1": "[moved to Testing]", "2": "[made the card]"}
+    assert refs(report["information"]) == {"3"}
+
+
+def test_owner_moves_and_cards_not_made_by_the_tool_are_owner_items(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2, 3)]
+    assert project.report()["owner"] == []
+    project.finish()
+    project.fake.actions = [
+        move_action("h1", 1, "l-testing", -0.02, name="Testing"),
+        create_action("h2", 3, "m-owner", -0.02),
+    ]
+    assert project.run("move", "2", "doing").code == 0
+    details = tmp_path / "details.txt"
+    details.write_text("Steps")
+    made = project.run(
+        "new", "todo", "Made by the tool", "--description-file", str(details)
+    )
+    assert made.code == 0, made.text
+    report = project.report()
+    assert refs(report["owner"]) == {"1", "3"}
+    excerpts = {item["card"]: item["excerpt"] for item in report["owner"]}
+    assert excerpts == {"1": "[moved to Testing]", "3": "[made the card]"}
+    assert report["requests"] == []
+    posted = (project.state / "posted.log").read_text().split()
+    assert len(posted) == 2
+    assert not {"h1", "h2"} & set(posted)
+
+
+def test_edited_comment_counts_at_its_edit_time(project: Project) -> None:
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2)]
+    said = "Please add the export too"
+    edited = edit_comment(comment("e1", 1, "m-sam", said, 10), 1)
+    early = edit_comment(comment("e2", 2, "m-sam", said, 10), 7)
+    project.fake.actions = [edited, early]
+    ours(project, ("ours-1", 1, "Added", 5), ("ours-2", 2, "Added", 5))
+    report = project.report()
+    assert refs(report["requests"]) == {"1"}
+    (found,) = report["requests"]
+    assert found["excerpt"] == said
+    assert found["at"] == data_edit(edited)
+    project.finish()
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2, 3)]
+    again = comment("e3", 3, "m-sam", "Please add the export", 40)
+    project.fake.actions.append(again)
+    ours(project, ("ours-3", 3, "Added", 30))
+    assert project.run("check").code == 0
+    project.finish()
+    new = "Please add the export and the import"
+    edit_comment(again, -0.02, new)
+    project.fake.cards[2]["dateLastActivity"] = ago(-0.02)
+    late = project.report()
+    assert refs(late["requests"]) == {"1", "3"}
+    third = next(item for item in late["requests"] if item["card"] == "3")
+    assert (third["excerpt"], third["at"]) == (new, data_edit(again))
+
+
+def data_edit(action: dict[str, object]) -> str:
+    data = action["data"]
+    assert isinstance(data, dict)
+    return str(data["dateLastEdited"])
+
+
+def test_duplicate_numbers_are_listed_and_refused_as_a_card_reference(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(2, "#1 Card copy", "l-doing"),
+        make_card(3, "#3 Other", "l-doing"),
+    ]
+    found = project.report()["unnumbered"]
+    assert [item["url"] for item in found] == ["https://trello.com/c/sl2"]
+    note = tmp_path / "note.txt"
+    note.write_text("All good")
+    refused = project.run("comment", "1", str(note))
+    assert refused.code == 1
+    assert "sl1" in str(refused.payload["error"])
+    assert "sl2" in str(refused.payload["error"])
+    assert project.fake.writes == []
+    assert project.run("comment", "sl1", str(note)).code == 0
+    assert project.run("comment", "3", str(note)).code == 0
+
+
+def ours(project: Project, *rows: tuple[str, int, str, float]) -> None:
+    for ident, card, text, hours in rows:
+        project.fake.actions.append(comment(ident, card, "m-owner", text, hours))
+        project.mods.state.log_posted(project.state, ident)
+
+
+def test_hidden_open_question_is_listed_as_buried(project: Project) -> None:
+    project.fake.cards = [
+        make_card(n, f"#{n} Card", "l-done" if n == 5 else "l-doing")
+        for n in range(1, 6)
+    ]
+    ask = "@sam can you confirm?"
+    ours(
+        project,
+        ("a1", 1, ask, 30),
+        ("b1", 1, "Still working on the fix", 2),
+        ("a2", 2, ask, 30),
+        ("b2", 2, "@sam still waiting, can you confirm?", 2),
+        ("a3", 3, ask, 30),
+        ("b3", 3, "Still working on the fix", 2),
+        ("a5", 5, ask, 30),
+        ("b5", 5, "Still working on the fix", 2),
+    )
+    project.fake.actions.append(comment("s3", 3, "m-sam", "Yes, it works", 1))
+    project.fake.actions.append(comment("a4", 4, "m-owner", ask, 3))
+    project.mods.state.log_posted(project.state, "a4")
+    buried = project.report()["buried"]
+    assert refs(buried) == {"1"}
+    assert buried[0]["author"] == "sam"
+    assert buried[0]["excerpt"] == ask
+
+
+def test_silent_uses_the_open_question_not_the_newest_comment(
+    project: Project,
+) -> None:
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2)]
+    ask = "@sam can you confirm?"
+    ours(
+        project,
+        ("a1", 1, ask, 30),
+        ("b1", 1, "Still working on the fix", 1),
+        ("a2", 2, ask, 10),
+        ("b2", 2, "Still working on the fix", 1),
+    )
+    asked_at = str(project.fake.actions[0]["date"])
+    silent = project.report()["silent"]
+    assert refs(silent) == {"1"}
+    assert (silent[0]["at"], silent[0]["excerpt"]) == (asked_at, ask)
+
+
+def test_a_member_asking_another_member_opens_a_question(project: Project) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(2, "#2 Card", "l-doing", idLabels=["lb-sam"]),
+        make_card(3, "#3 Card", "l-doing"),
+    ]
+    ask = "@sam can you check the total?"
+    project.fake.actions = [
+        comment("p1", 1, "m-pat", ask, 5),
+        comment("p2", 2, "m-pat", ask, 5),
+        comment("s2", 2, "m-sam", "Checked, it is right", 3),
+        comment("p3", 3, "m-pat", ask, 20),
+    ]
+    ours(project, ("b3", 3, "On it", 2))
+    report = project.report()
+    assert refs(report["labels"]) == {"1", "2", "3"}
+    gaps = {item["card"]: item["excerpt"] for item in report["labels"]}
+    assert gaps["1"].startswith("open question to @sam")
+    assert gaps["2"].startswith("Needs Sam is set")
+    assert report["silent"] == []
+
+
+def test_testing_cards_count_for_their_tester_and_are_not_chased(
+    project: Project,
+) -> None:
+    project.fake.cards = [
+        make_card(
+            1, "#1 Card", "l-testing", idLabels=["lb-sam"], dateLastActivity=ago(10)
+        ),
+        make_card(
+            2, "#2 Card", "l-testing", idLabels=["lb-sam"], dateLastActivity=ago(50)
+        ),
+        make_card(3, "#3 Card", "l-doing", idLabels=["lb-sam"]),
+        make_card(4, "#4 Card", "l-testing"),
+    ]
+    ask = "@sam please test it"
+    ours(project, ("a1", 1, ask, 30), ("a2", 2, ask, 30), ("a3", 3, ask, 30))
+    report = project.report()
+    assert refs(report["silent"]) == {"3"}
+    (queue,) = report["testQueue"]
+    assert (queue["author"], queue["card"]) == ("sam", "2")
+    assert queue["excerpt"] == "2 cards in testing, oldest is #2"
+
+
+def test_comment_refuses_links_to_cards_not_on_the_board(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(9, "#9 Old", "l-done", closed=True),
+    ]
+    note = tmp_path / "note.txt"
+    for good in ("https://trello.com/c/sl1/1-card", "https://trello.com/c/sl9"):
+        note.write_text(f"Same work as {good}")
+        assert project.run("comment", "1", str(note)).code == 0, good
+    writes = len(project.fake.writes)
+    note.write_text("See https://trello.com/c/zzz999/1-gone")
+    refused = project.run("comment", "1", str(note))
+    assert refused.code == 1
+    assert "zzz999" in str(refused.payload["error"])
+    made = project.run("new", "todo", "Card", "--description-file", str(note))
+    assert made.code == 1
+    assert len(project.fake.writes) == writes

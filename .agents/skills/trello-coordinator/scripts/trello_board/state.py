@@ -53,6 +53,17 @@ def log_posted(directory: Path, action_id: str) -> None:
         log.write(action_id + "\n")
 
 
+def note_refusal(directory: Path) -> bool:
+    marker = directory / "refused"
+    first = not marker.exists()
+    write_atomic(marker, "")
+    return first
+
+
+def clear_refusal(directory: Path) -> None:
+    (directory / "refused").unlink(missing_ok=True)
+
+
 @contextmanager
 def lease_lock(directory: Path) -> Generator[None]:
     directory.mkdir(parents=True, exist_ok=True)

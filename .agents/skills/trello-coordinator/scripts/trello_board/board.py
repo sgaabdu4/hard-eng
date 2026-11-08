@@ -1,3 +1,5 @@
+import re
+from collections.abc import Collection
 from dataclasses import asdict, dataclass, replace
 
 from .api import Client, TrelloError, redact
@@ -8,6 +10,10 @@ CARD_FIELDS = (
     "idList,name,due,dueComplete,idLabels,idMembers,shortLink,dateLastActivity"
 )
 PAGE = 1000
+TAG = re.compile(r"(?<![\w@])@(\w+)")
+QUESTION = re.compile(
+    r"\?|\b(please|reply|can you|could you|let me know)\b", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -28,6 +34,26 @@ class Snapshot:
     members: dict[str, str]
     threads: dict[str, list[Event]]
     moves: dict[str, str]
+
+
+def questions_in(
+    events: list[Event], members: frozenset[str], also: Collection[str] = ()
+) -> list[tuple[int, Event, str]]:
+    found: list[tuple[int, Event, str]] = []
+    for index, event in enumerate(events):
+        if event.kind != "comment":
+            continue
+        if not QUESTION.search(event.text) and event.id not in also:
+            continue
+        asked = {name.lower() for name in TAG.findall(event.text)} & members
+        for person in sorted(asked - {event.author.lower()}):
+            replied = any(
+                e.kind == "comment" and e.author.lower() == person
+                for e in events[index + 1 :]
+            )
+            if not replied:
+                found.append((index, event, person))
+    return found
 
 
 def fetch_cards(client: Client, board: str) -> list[Obj]:
@@ -65,11 +91,27 @@ def board_actions(client: Client, board: str, since: str) -> list[Obj]:
     return paged(client, f"/boards/{board}/actions", params)
 
 
+def edited_comments(client: Client, cards: list[Obj], since: str) -> list[Obj]:
+    if not since:
+        return []
+    found: list[Obj] = []
+    for card in cards:
+        active = text(card.get("dateLastActivity"))
+        if not active or parse_time(active) <= parse_time(since):
+            continue
+        path = f"/cards/{text(card.get('id'))}/actions"
+        for action in paged(client, path, {"filter": "commentCard"}):
+            edited = text(obj(action.get("data")).get("dateLastEdited"))
+            if edited and parse_time(edited) > parse_time(since):
+                found.append(action)
+    return found
+
+
 def updated(data: Obj) -> tuple[str, str]:
     if "desc" in obj(data.get("old")):
         return "desc", ""
     if "listAfter" in data:
-        return "move", text(obj(data["listAfter"]).get("id"))
+        return "move", text(obj(data["listAfter"]).get("name"))
     return "", ""
 
 
@@ -77,6 +119,8 @@ def describe(kind: str, data: Obj) -> tuple[str, str]:
     match kind:
         case "commentCard":
             return "comment", text(data.get("text"))
+        case "createCard":
+            return "created", ""
         case "addAttachmentToCard":
             return "image", text(obj(data.get("attachment")).get("name"))
         case "updateCard":
@@ -84,18 +128,20 @@ def describe(kind: str, data: Obj) -> tuple[str, str]:
     return "", ""
 
 
-def to_event(action: Obj, members: dict[str, str]) -> Event | None:
+def to_event(action: Obj, members: dict[str, str], own: str) -> Event | None:
     data = obj(action.get("data"))
     card = text(obj(data.get("card")).get("id"))
     kind, body = describe(text(action.get("type")), data)
     if not card or not kind:
         return None
     creator = text(action.get("idMemberCreator"))
+    mine = members.get(creator, creator).lower() == own.lower()
+    edited = text(data.get("dateLastEdited")) if kind == "comment" and not mine else ""
     return Event(
         text(action.get("id")),
         card,
         kind,
-        text(action.get("date")),
+        edited or text(action.get("date")),
         members.get(creator, creator),
         body,
     )
@@ -127,7 +173,11 @@ def threads_to(threads: dict[str, list[Event]]) -> Obj:
 
 
 def merge_threads(
-    saved: dict[str, list[Event]], fresh: list[Event], own: str, posted: set[str]
+    saved: dict[str, list[Event]],
+    fresh: list[Event],
+    own: str,
+    posted: set[str],
+    members: frozenset[str],
 ) -> dict[str, list[Event]]:
     def ours(event: Event) -> bool:
         return (
@@ -136,16 +186,22 @@ def merge_threads(
             and event.id in posted
         )
 
+    def kept(event: Event) -> bool:
+        if event.kind == "comment" or event.author.lower() != own.lower():
+            return True
+        return event.kind in ("move", "created") and event.id not in posted
+
     by_card: dict[str, dict[str, Event]] = {}
     for event in [e for events in saved.values() for e in events] + fresh:
-        mine = event.author.lower() == own.lower()
-        if event.kind != "move" and (event.kind == "comment" or not mine):
+        if kept(event):
             by_card.setdefault(event.card, {})[event.id] = event
     merged: dict[str, list[Event]] = {}
     for card, found in by_card.items():
         ordered = sorted(found.values(), key=lambda e: parse_time(e.date))
         last = max((i for i, e in enumerate(ordered) if ours(e)), default=0)
-        merged[card] = ordered[last:]
+        tagged = questions_in(ordered, members, posted)
+        oldest = min((i for i, _, _ in tagged), default=last)
+        merged[card] = ordered[min(last, oldest) :]
     return merged
 
 
@@ -171,11 +227,17 @@ def fetch(
     since = text(saved.get("checkedAt"))
     fresh = [
         replace(e, text=redact(e.text, client.secrets))
-        for a in board_actions(client, board, since)
-        if (e := to_event(a, members))
+        for a in [
+            *board_actions(client, board, since),
+            *edited_comments(client, cards, since),
+        ]
+        if (e := to_event(a, members, own))
     ]
     open_ids = {text(card.get("id")) for card in cards}
-    threads = merge_threads(threads_from(saved.get("threads")), fresh, own, posted)
+    people = frozenset(name.lower() for name in members.values())
+    threads = merge_threads(
+        threads_from(saved.get("threads")), fresh, own, posted, people
+    )
     return Snapshot(
         cards,
         lists,

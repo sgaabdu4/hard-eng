@@ -697,33 +697,37 @@ def show_decisions(root: Path, names: list[str], state: Path | None) -> str:
 
 def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
     with tempfile.TemporaryFile() as log:
-        check = subprocess.Popen(
-            [
-                sys.executable,
-                str(root / ".hooks/hard-eng.py"),
-                "check",
-                "--quick",
-                "--base",
-                base,
-                *(["--plan-stage", "Ready"] if building else []),
-            ],
-            cwd=root,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        check: subprocess.Popen[bytes] | None = None
 
         def stop_check(signum: int, _frame: object) -> None:
+            if check is None:
+                raise SystemExit(128 + signum)
             with suppress(ProcessLookupError, PermissionError):
                 os.killpg(check.pid, signum)
 
         # An interrupted Stop hook must not leave the check's tools running.
         previous = signal.signal(signal.SIGTERM, stop_check)
         try:
+            check = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(root / ".hooks/hard-eng.py"),
+                    "check",
+                    "--quick",
+                    "--base",
+                    base,
+                    *(["--plan-stage", "Ready"] if building else []),
+                ],
+                cwd=root,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
             returncode = check.wait(timeout=3500)
         except subprocess.TimeoutExpired:
             stop_check(signal.SIGKILL, None)
-            check.wait()
+            if check is not None:
+                check.wait()
             raise
         finally:
             signal.signal(signal.SIGTERM, previous)

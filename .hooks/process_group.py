@@ -35,29 +35,32 @@ def run_in_group(
     stderr: int | IO[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Like subprocess.run, but a timeout or interrupt kills the whole group first."""
-    with STARTING:
-        if STOPPED.is_set():
-            raise KeyboardInterrupt
-        process = subprocess.Popen(
-            command,
-            cwd=cwd,
-            env=env,
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
-            text=True,
-            start_new_session=True,
-        )
-        RUNNING.add(process.pid)
+    process: subprocess.Popen[str] | None = None
     try:
+        with STARTING:
+            if STOPPED.is_set():
+                raise KeyboardInterrupt
+            process = subprocess.Popen(
+                command,
+                cwd=cwd,
+                env=env,
+                stdin=stdin,
+                stdout=stdout,
+                stderr=stderr,
+                text=True,
+                start_new_session=True,
+            )
+            RUNNING.add(process.pid)
         out, err = process.communicate(timeout=timeout)
     except BaseException:
-        with suppress(ProcessLookupError):
-            os.killpg(process.pid, signal.SIGKILL)
-        process.communicate()
+        if process is not None:
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
         raise
     finally:
-        RUNNING.discard(process.pid)
+        if process is not None:
+            RUNNING.discard(process.pid)
     return subprocess.CompletedProcess(command, process.returncode, out, err)
 
 
