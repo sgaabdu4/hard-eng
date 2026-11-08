@@ -110,6 +110,7 @@ Status: Ready
 
 Owners: `average` in `calc.py`; tests in `test_calc.py`.
 Same cause: No earlier fix of this error; `average` is the only division in `calc.py`.
+Single source: `average` in `calc.py` owns the mean; no other copy (searched the repository for `sum(` and `len(`).
 
 ## Decisions + authorization
 
