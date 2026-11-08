@@ -330,6 +330,19 @@ def build_in_progress(root: Path, changed: set[str]) -> bool:
         return False
 
 
+def newer_fields(
+    sections: dict[str, str], status: str, *, legacy: bool, changed: bool
+) -> None:
+    """Old Complete plans skip Same cause; Single source and Retro bind only edited plans."""
+    if not legacy:
+        field(sections["Repository context"], "Same cause")
+        acceptance_tests(sections)
+    if changed:
+        field(sections["Repository context"], "Single source")
+        if status == "Complete":
+            field(sections["Verification"], "Retro")
+
+
 def validate_plan(path: Path, *, changed: bool = True) -> str:
     """Unchanged Complete plans predate later rules such as the E2E field."""
     content = path.read_text()
@@ -349,9 +362,7 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     errors = readiness_errors(sections, status, legacy=legacy)
     if errors:
         raise ValueError("; ".join(errors))
-    if not legacy:
-        field(sections["Repository context"], "Same cause")
-        acceptance_tests(sections)
+    newer_fields(sections, status, legacy=legacy, changed=changed)
     if status == "Complete":
         markers = CHECKBOX_LABEL.findall(content)
         if any(marker.lower() != "x" for marker in markers):

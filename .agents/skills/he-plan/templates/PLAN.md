@@ -10,6 +10,7 @@ Status: Draft
 
 Owners: [TODO: Relevant paths + decisive evidence links]
 Same cause: [TODO: Fix → earlier fixes of this cause (plan/issue + helped, hurt, no effect or confounded) + every other place it can occur, searched + fixed; else N/A — reason]
+Single source: [TODO: For each rule, value or type this change touches (constants, types, UI text, config, validation, queries): its one owner; the paths searched for other copies; each copy found, merged in this change. A copy you cannot merge in this change → Blockers; the plan cannot be Ready or Complete until that copy is merged. Else N/A — reason]
 
 ## Decisions + authorization
 
@@ -46,5 +47,6 @@ Review: [TODO: Inspected flow/states/devices + direction]
 Result: Pending
 Evidence: [TODO: Actual commands/results + limits before Complete]
 E2E: Required — [TODO: Journey + E2E test + expected proof; Complete needs Passed evidence or N/A — reason; deployment-only proof uses Delivery plus configured Deploy verifier]
+Retro: [TODO: Required on Complete plans; write it at task end per HE Learn's Retro section, before setting Status: Complete]
 
 [TODO: If shipping: Delivery target: PR, Merge or Deploy; Delivery: Pending — required remote proof.]
