@@ -705,6 +705,16 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     core = (SKILL / "SKILL.md").read_text()
     assert "vary the wording" in core and "`--check`" in core
     assert "quietHours" not in core + hosts + run
+    release = next(line for line in run.splitlines() if line.startswith("- Release:"))
+    assert "red boxes around each change" in release
+    assert "`develop`" in release and "gh pr merge --merge" in release
+    assert "fix or revert" in release and "done once production" in release
+    hosting = (SKILL.parent / "he/references/integrations.md").read_text()
+    hosting = hosting.split("- **Hosting**", 1)[1].split("\n- **", 1)[0]
+    assert "base branch → production" in hosting
+    assert "`trello.json`" in hosting and "`shipping.base` = `develop`" in hosting
+    assert "own preview on the staging backend" in hosting
+    assert "only the `develop` release PR" in hosting
 
 
 def test_refused_token_is_reported_once(project: Project) -> None:
