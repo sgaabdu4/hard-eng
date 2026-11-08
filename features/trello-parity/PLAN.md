@@ -1,6 +1,6 @@
 # The Trello coordinator sees and does what a mature coordinator does
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
@@ -30,7 +30,7 @@ Slice 1: the report sees every human action
 
 - [ ] A card move or a new card by a board member is a request; by anyone else it is information → `tests/test_trello_board.py::test_people_moves_and_new_cards_are_requests` (`board.py` keeps `move` and new `created` events from others; `report.py` excerpts "[moved to <list>]" and "[made the card]").
 - [ ] A move or new card by the token's account that our `move` or `new` did not make is an `owner` item; after each write, `move` and `new` read the card's newest move or create action once and append its id to the posted log (`commands.py`, `report.py`) → `tests/test_trello_board.py::test_owner_moves_and_cards_not_made_by_the_tool_are_owner_items`.
-- [ ] An edited comment replaces the old text and counts at its edit time, so an edit after our reply is a request → `tests/test_trello_board.py::test_edited_comment_counts_at_its_edit_time` (`board.py` reads `updateComment`).
+- [ ] An edited comment replaces the old text and counts at its edit time, so an edit after our reply is a request → `tests/test_trello_board.py::test_edited_comment_counts_at_its_edit_time` (`board.py` reads `data.dateLastEdited` on `commentCard` actions; Trello logs no separate edit action, checked on a real board on 2026-11-08).
 - [ ] A short reply such as "ok", "thanks", "works" or "done" (tags allowed) on a card in `done` is not a request; on an open card it still is (`report.py`) → extend `tests/test_trello_coordinator.py::test_done_card_requests_expire_after_the_grace_hours`.
 - [ ] The newer of two open cards with the same `#N` (higher card id) is listed in `unnumbered` as a duplicate (`report.py`) → `tests/test_trello_board.py::test_duplicate_numbers_are_listed_and_refused_as_a_card_reference`.
 - [ ] A card reference `#N` that matches two cards is refused with both shortLinks, so no write reaches the wrong card (`commands.py`) → same test.
@@ -71,15 +71,15 @@ Slice 4: sign-in, duplicates, text and links
 
 ## Baseline + execution
 
-Result: Pending
-Evidence: not run yet; the planning checkout is mid-push and was not touched. The builder runs `python3 .hooks/hard-eng.py check --plan-stage Draft` on a fresh worktree from `origin/develop` after the picture-lines change merges, and records the result here.
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Draft --base origin/develop` passed on 2026-11-08 at develop 4a5b0f3c, which passed required CI.
 Execution: one Sonnet builder, slices 1 to 4 in order, failing test first for each checkbox, the full check after each slice. A fresh Opus reviewer reads the whole diff before merge. Built in order: slice 2 needs slice 1's event changes, and slice 3 reuses slice 2's phrases. When a test file would pass the HE-FILE-LENGTH limit, the new report tests move to `tests/test_trello_report.py`.
 
 ## Risks + recovery
 
 - `move <card> testing` changes shape: it needs `--comment FILE`. A coordinator that still runs `move` then `comment` gets a clear refusal and follows the updated `references/run.md`.
 - Hard checklist blocks can stall an automatic release. The refusal names the open items, so the coordinator ticks proven ones or asks.
-- The shape of Trello's comment-edit action (`updateComment`) is assumed. Cheapest check: build the fake from a recorded real action of that type, never from memory. If the shape differs, only slice 1's edit item changes.
+- Edit, move and create shapes were read from a real board on 2026-11-08: an edited comment keeps its `commentCard` action and gains `data.dateLastEdited`; a move is `updateCard` with `data.listBefore`/`listAfter`; a new card is `createCard`. Fakes copy those shapes. A board read may need `filter` to include `createCard`.
 - Keeping our comments back to the oldest open question makes the saved state larger on long threads. It stays bounded, because a reply from the person ends that question.
 - Hard checklist blocks could stop a real release move. Recovery: `tick` the proven items; nothing else bypasses the check.
 - Recovery for any slice: revert that slice's commits; each slice passes the gate alone.
