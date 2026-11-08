@@ -179,9 +179,9 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
 
 
 def add_needs(session: Session, card: Obj, body: str) -> list[Json]:
-    if not report.QUESTION.search(body):
+    if not board.QUESTION.search(body):
         return []
-    asked = {name.lower() for name in report.TAG.findall(body)}
+    asked = {name.lower() for name in board.TAG.findall(body)}
     wanted = [
         label
         for person, label in session.config.needs.items()

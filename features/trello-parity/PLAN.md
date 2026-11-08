@@ -38,13 +38,13 @@ Slice 1: the report sees every human action
 
 Slice 2: open questions and chasing
 
-- [ ] An open question = any of our comments that tags a person and asks something, with no comment from that person after it, even when newer comments of ours do not tag them. `board.py` keeps our comments back to the oldest open question; `report.py` reads them → extend `tests/test_trello_board.py::test_labels_follow_open_questions_not_any_tag`.
-- [ ] A hidden open question (our newest comment does not tag that person) is listed in a new `buried` list; the run asks it again in a new tagged comment (`report.py`, `references/run.md`) → `tests/test_trello_board.py::test_hidden_open_question_is_listed_as_buried`.
-- [ ] `silent` counts from the open question's date, not from our newest comment (`report.py`) → `tests/test_trello_board.py::test_silent_uses_the_open_question_not_the_newest_comment`.
-- [ ] A board member's comment that tags another member and asks something opens a question to that member: `labels` lists the missing label until they reply (`report.py`) → `tests/test_trello_board.py::test_a_member_asking_another_member_opens_a_question`.
-- [ ] On a `testing` card, a person whose `needsLabels` label is on the card is counted in a new `testQueue` list (one item per person: card count and oldest card) and never listed in `silent` (`report.py`) → `tests/test_trello_board.py::test_testing_cards_count_for_their_tester_and_are_not_chased`.
-- [ ] A promise after a "now live" or "done" part of the same comment is still a promise; only text after the last finished phrase is checked (`report.py`) → extend `tests/test_trello_board.py::test_promises_ignore_conditional_live`.
-- [ ] `waitsOnUs` and `promises` also match "I am building", "I am changing", "I will fix", "being built" and "waits for the #N fix"; finished also matches "went live" and "are live" (`report.py`) → extend `tests/test_trello_board.py::test_waits_on_us_ignores_conditional_live`.
+- [x] An open question = any of our comments that tags a person and asks something, with no comment from that person after it, even when newer comments of ours do not tag them. `board.py` keeps our comments back to the oldest open question; `report.py` reads them → extend `tests/test_trello_board.py::test_labels_follow_open_questions_not_any_tag`.
+- [x] A hidden open question (our newest comment does not tag that person) is listed in a new `buried` list; the run asks it again in a new tagged comment (`report.py`, `references/run.md`) → `tests/test_trello_board.py::test_hidden_open_question_is_listed_as_buried`.
+- [x] `silent` counts from the open question's date, not from our newest comment (`report.py`) → `tests/test_trello_board.py::test_silent_uses_the_open_question_not_the_newest_comment`.
+- [x] A board member's comment that tags another member and asks something opens a question to that member: `labels` lists the missing label until they reply (`report.py`) → `tests/test_trello_board.py::test_a_member_asking_another_member_opens_a_question`.
+- [x] On a `testing` card, a person whose `needsLabels` label is on the card is counted in a new `testQueue` list (one item per person: card count and oldest card) and never listed in `silent` (`report.py`) → `tests/test_trello_board.py::test_testing_cards_count_for_their_tester_and_are_not_chased`.
+- [x] A promise after a "now live" or "done" part of the same comment is still a promise; only text after the last finished phrase is checked (`report.py`) → extend `tests/test_trello_board.py::test_promises_ignore_conditional_live`.
+- [x] `waitsOnUs` and `promises` also match "I am building", "I am changing", "I will fix", "being built" and "waits for the #N fix"; finished also matches "went live" and "are live" (`report.py`) → extend `tests/test_trello_board.py::test_waits_on_us_ignores_conditional_live`.
 
 Slice 3: the testing flow writes
 
