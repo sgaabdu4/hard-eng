@@ -148,6 +148,7 @@ Verify fixture command exits; no product release.
 ## Repository context
 The test creates commands in a temporary Git repository.
 Same cause: N/A — fixture command, not a fix.
+Single source: N/A — fixture command owns no rule.
 ## Decisions + authorization
 Blockers: None
 Handoff: Approval
@@ -166,6 +167,7 @@ N/A — fixture commands have no visual interface.
 Result: Passed
 Evidence: The test asserts the observed command exit; this is fixture data.
 E2E: Passed — fixture command is invoked through the native CLI and its exit is asserted.
+Retro: None — fixture command, no check failed.
 """
 
 

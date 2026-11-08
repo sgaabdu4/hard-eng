@@ -352,6 +352,10 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     if not legacy:
         field(sections["Repository context"], "Same cause")
         acceptance_tests(sections)
+    if changed:
+        field(sections["Repository context"], "Single source")
+    if changed and status == "Complete":
+        field(verification, "Retro")
     if status == "Complete":
         markers = CHECKBOX_LABEL.findall(content)
         if any(marker.lower() != "x" for marker in markers):
