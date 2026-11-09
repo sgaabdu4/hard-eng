@@ -1,6 +1,6 @@
 # Move the Appwrite skill to its latest commit
 
-Status: In progress
+Status: Complete
 
 ## Outcome + scope
 
