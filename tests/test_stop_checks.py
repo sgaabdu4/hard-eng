@@ -329,6 +329,22 @@ def test_failures_without_a_fail_or_error_line_keep_their_own_count(
     assert "Repeat failure: seen 2 times" in failures.repeat_note(tmp_path, stage)
 
 
+def test_different_lint_findings_are_not_one_repeat(tmp_path: Path) -> None:
+    def lint(code: str, message: str, place: str) -> str:
+        return (
+            "FAIL lint (exit 1; elapsed 0.2s) @ .\n"
+            f"{code} [*] {message}\n --> {place}\n  |\nhelp: fix it\n\nFound 1 error.\n"
+        )
+
+    unused_import = lint("F401", "`os` imported but unused", "a.py:1:8")
+    unused_name = lint(
+        "F841", "Local variable `x` is assigned to but never used", "b.py:4:5"
+    )
+    assert failures.repeat_note(tmp_path, unused_import) == ""
+    assert failures.repeat_note(tmp_path, unused_name) == ""
+    assert "Repeat failure: seen 2 times" in failures.repeat_note(tmp_path, unused_name)
+
+
 def test_failures_with_no_output_are_not_counted_as_repeats(tmp_path: Path) -> None:
     for output in ("", "\n  \n", ""):
         assert failures.repeat_note(tmp_path, output) == ""

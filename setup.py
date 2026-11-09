@@ -809,13 +809,14 @@ def plan_install(
     retired += configure_mcp(root, changes)
     configure_ignores(root, changes)
     from gate_config import (
+        SOURCE_FILE,
         json_file,
         parse_config,
         repository_files,
         typescript_packages,
     )
 
-    changes[".hooks/hard-eng-source.json"] = json_file(root, install_record(unused))
+    changes[SOURCE_FILE] = json_file(root, install_record(unused))
     generated = (
         retired_config(root)
         if (root / "hard-eng.gates.json").exists()

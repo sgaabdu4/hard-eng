@@ -1,11 +1,11 @@
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .board import QUESTION, TAG, Event, Snapshot, questions_in
 from .config import Config
-from .shapes import Obj, parse_time, text
+from .shapes import Obj, parse_time, stamp, text
 
 FIELDS = (
     "requests",
@@ -22,6 +22,8 @@ FIELDS = (
     "overdue",
     "realCases",
 )
+AWAKE = ("requests", "owner", "promises", "silent", "buried")
+WAKE_FIELDS = ("idle", "quietMinutes", "nextDue")
 REAL_CASE = "Waiting for real case"
 WORKING = r"\b(?:I am (?:fixing|building|changing)|I will fix|being built|waits for the #\d+ fix)\b"
 PROMISE = re.compile(rf"\bI will\b|\bI['’]ll\b|\bNext:|{WORKING}", re.IGNORECASE)
@@ -173,15 +175,18 @@ def owner(ctx: Context, view: View) -> list[Item]:
     return []
 
 
-def promises(ctx: Context, view: View) -> list[Item]:
+def promise_due(ctx: Context, view: View) -> datetime | None:
     ours = view.last_ours
-    if not ours or view.role == "done":
+    if not ours or view.role == "done" or not PROMISE.search(after_finished(ours.text)):
+        return None
+    return parse_time(ours.date) + timedelta(hours=ctx.config.promise_hours)
+
+
+def promises(ctx: Context, view: View) -> list[Item]:
+    due = promise_due(ctx, view)
+    if due is None or view.last_ours is None or ctx.now <= due:
         return []
-    if not PROMISE.search(after_finished(ours.text)):
-        return []
-    if hours_since(ctx.now, ours.date) <= ctx.config.promise_hours:
-        return []
-    return [from_event(view, ours)]
+    return [from_event(view, view.last_ours)]
 
 
 def label_people(ctx: Context, view: View) -> set[str]:
@@ -211,9 +216,9 @@ def our_questions(ctx: Context, view: View) -> list[tuple[Event, str]]:
     return found
 
 
-def silent(ctx: Context, view: View) -> list[Item]:
+def oldest_unanswered(ctx: Context, view: View) -> Event | None:
     if view.role == "done":
-        return []
+        return None
     testers = label_people(ctx, view) if view.role == "testing" else set()
     newest: dict[str, Event] = {}
     for event, person in our_questions(ctx, view):
@@ -222,10 +227,12 @@ def silent(ctx: Context, view: View) -> list[Item]:
             known is None or parse_time(event.date) > parse_time(known.date)
         ):
             newest[person] = event
-    if not newest:
-        return []
-    oldest = min(newest.values(), key=lambda e: parse_time(e.date))
-    if hours_since(ctx.now, oldest.date) < ctx.config.chase_hours:
+    return min(newest.values(), key=lambda e: parse_time(e.date)) if newest else None
+
+
+def silent(ctx: Context, view: View) -> list[Item]:
+    oldest = oldest_unanswered(ctx, view)
+    if oldest is None or hours_since(ctx.now, oldest.date) < ctx.config.chase_hours:
         return []
     return [from_event(view, oldest)]
 
@@ -333,11 +340,16 @@ def unnumbered(ctx: Context, view: View) -> list[Item]:
     return []
 
 
-def overdue(ctx: Context, view: View) -> list[Item]:
+def card_due(view: View) -> str:
     due = text(view.card.get("due"))
     if not due or view.role == "done" or view.card.get("dueComplete") is True:
-        return []
-    return [item(view, due, "", "")] if parse_time(due) < ctx.now else []
+        return ""
+    return due
+
+
+def overdue(ctx: Context, view: View) -> list[Item]:
+    due = card_due(view)
+    return [item(view, due, "", "")] if due and parse_time(due) < ctx.now else []
 
 
 def real_cases(ctx: Context, view: View) -> list[Item]:
@@ -396,10 +408,35 @@ def view_of(ctx: Context, card: Obj) -> View:
     )
 
 
-def build(ctx: Context) -> dict[str, list[Item]]:
+def due_times(ctx: Context, view: View) -> list[datetime]:
+    oldest = oldest_unanswered(ctx, view)
+    due = card_due(view)
+    times = [
+        promise_due(ctx, view),
+        oldest and parse_time(oldest.date) + timedelta(hours=ctx.config.chase_hours),
+        parse_time(due) if due else None,
+    ]
+    return [time for time in times if time and time > ctx.now]
+
+
+def last_heard(ctx: Context, saved: str) -> str:
+    known = [date for date in (saved, ctx.snapshot.heard) if date]
+    return max(known, key=parse_time) if known else stamp(ctx.first_check)
+
+
+def build(ctx: Context, heard: str) -> Obj:
     views = [view_of(ctx, card) for card in ctx.snapshot.cards]
     found = {
         field: [i for v in views for i in CHECKS[field](ctx, v)] for field in FIELDS
     }
     found["testQueue"] = queues(found["testQueue"])
-    return found
+    quiet = int((ctx.now - parse_time(heard)).total_seconds() // 60)
+    latest = ctx.now + timedelta(hours=ctx.config.chase_hours)
+    due = min((t for v in views for t in due_times(ctx, v)), default=latest)
+    return {
+        **found,
+        "idle": quiet >= ctx.config.idle_stop_minutes
+        and not any(found[field] for field in AWAKE),
+        "quietMinutes": quiet,
+        "nextDue": stamp(min(due, latest)),
+    }

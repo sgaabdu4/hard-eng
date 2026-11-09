@@ -9,7 +9,13 @@ import tempfile
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
-from gate_config import Gate, Group, generated_sources, repository_files
+from gate_config import (
+    SOURCE_FILE,
+    Gate,
+    Group,
+    generated_sources,
+    repository_files,
+)
 from tool_setup import managed_command
 
 RULES = (
@@ -63,9 +69,9 @@ def describe(result: dict[str, object]) -> str:
     return f"{result['path']}:{start['line']} {extra['message']}"
 
 
-def scan_all(root: Path, timeout: float = 600) -> int:
-    """List every finding in the repository, for a requested hot-path scan."""
-    results = findings(root, ["."], timeout)
+def scan_all(root: Path, timeout: float = 600, paths: list[str] | None = None) -> int:
+    """List every finding in the named files, else the whole repository."""
+    results = findings(root, paths or ["."], timeout)
     for result in results:
         print(describe(result))
     print(f"HE-HOT-PATH: {len(results)} findings")
@@ -134,7 +140,7 @@ def rules_skipping(skipped: list[str], directory: Path) -> str:
 
 def installed_paths(root: Path) -> list[str]:
     """Folders Hard Eng installed at the repository root, as its install record lists them; an older record lists no skills."""
-    marker = root / ".hooks/hard-eng-source.json"
+    marker = root / SOURCE_FILE
     if not marker.is_file():
         return []
     try:

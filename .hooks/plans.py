@@ -2,9 +2,16 @@
 
 import re
 import subprocess
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
-from gate_config import ALL_ZERO_OBJECT_ID, Group, changed_files, repository_files
+from gate_config import (
+    ALL_ZERO_OBJECT_ID,
+    SOURCE_FILE,
+    Group,
+    changed_files,
+    repository_files,
+)
 from shipping import DELIVERY_TARGET_LINE, ShippingError, load_policy, target_problem
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
@@ -330,17 +337,48 @@ def build_in_progress(root: Path, changed: set[str]) -> bool:
         return False
 
 
+def touched_since_update(path: Path) -> bool:
+    """A long-lived branch differs from its base in every plan; only edits after the last Hard Eng update count."""
+    root = path.parent
+    try:
+        if _git_output(root, "status", "--porcelain", "--", path.name).strip():
+            return True
+        updated = _git_output(
+            root, "log", "-1", "--format=%cI", "--", f":/{SOURCE_FILE}"
+        ).strip()
+        written = _git_output(
+            root, "log", "-1", "--format=%aI", "--", path.name
+        ).strip()
+    except (subprocess.CalledProcessError, OSError):
+        return True
+    return (
+        not updated
+        or not written
+        or datetime.fromisoformat(written) > datetime.fromisoformat(updated)
+    )
+
+
 def newer_fields(
-    sections: dict[str, str], status: str, *, legacy: bool, changed: bool
+    sections: dict[str, str],
+    status: str,
+    *,
+    legacy: bool,
+    changed: bool,
+    path: Path,
 ) -> None:
     """Old Complete plans skip Same cause; Single source and Retro bind only edited plans."""
     if not legacy:
         field(sections["Repository context"], "Same cause")
         acceptance_tests(sections)
-    if changed:
+    if not changed:
+        return
+    try:
         field(sections["Repository context"], "Single source")
         if status == "Complete":
             field(sections["Verification"], "Retro")
+    except ValueError:
+        if status != "Complete" or touched_since_update(path):
+            raise
 
 
 def validate_plan(path: Path, *, changed: bool = True) -> str:
@@ -362,7 +400,7 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     errors = readiness_errors(sections, status, legacy=legacy)
     if errors:
         raise ValueError("; ".join(errors))
-    newer_fields(sections, status, legacy=legacy, changed=changed)
+    newer_fields(sections, status, legacy=legacy, changed=changed, path=path)
     if status == "Complete":
         markers = CHECKBOX_LABEL.findall(content)
         if any(marker.lower() != "x" for marker in markers):
@@ -823,9 +861,7 @@ def requirement_tests(root: Path) -> dict[str, list[Reference]]:
 def unproven_requirements(
     root: Path, entries: dict[str, tuple[str, str]], references: list[Reference]
 ) -> list[str]:
-    installed = (root / ".hooks/hard-eng-source.json").is_file() or not (
-        root / "setup.py"
-    ).is_file()
+    installed = (root / SOURCE_FILE).is_file() or not (root / "setup.py").is_file()
     tests = requirement_tests(root)
     enforced: set[str] = set()
     linked: set[str] = set()

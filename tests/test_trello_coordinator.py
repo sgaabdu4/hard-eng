@@ -661,7 +661,9 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
             )
         )
     assert set(first_cells(parts["`trello.json`"])) == set(mods.config.FIELDS)
-    assert tuple(first_cells(parts["`check` report"])) == mods.report.FIELDS
+    assert tuple(first_cells(parts["`check` report"])) == (
+        mods.report.FIELDS + mods.report.WAKE_FIELDS
+    )
     assert set(mods.report.CHECKS) == set(mods.report.FIELDS)
     timing_row = next(
         line
@@ -693,7 +695,7 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     t3 = hosts.split("## T3 Code", 1)[1].split("\n## ", 1)[0]
     assert "`coordinator` role's model" in t3
     assert "coordinator = strongest model" in hosts
-    assert "`everyMs` differs" in t3 and "`scheduledTaskId`" in t3
+    assert "`everyMs` is not `timing.everyMinutes`" in t3 and "`scheduledTaskId`" in t3
     lists = run.split("\n## Report lists\n", 1)[1].split("\n## ", 1)[0]
     assert "| `realCases`" in lists and "last checked" in lists
     workers = run.split("\n## Workers\n", 1)[1].split("\n## ", 1)[0]

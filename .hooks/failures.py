@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-FAILURE_WORD = re.compile(r"(?i)fail|error")
+FINDING = re.compile(r"(?i)fail|error|\.[a-z]\w*[:(]#|(?-i:^[A-Z]+# )")
 EXIT_CODE_OR_SPACE_OR_DIGIT = re.compile(r"(?i)exit code|[\d\s]")
 NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
@@ -25,13 +25,13 @@ ERROR_NOISE = (
 
 
 def repeat_note(root: Path, output: str) -> str:
-    """Counts each failure by its failing lines, else all lines, with numbers masked; a second sighting is a repeat."""
+    """Counts each failure by its failing, file-location and rule-code lines, else all lines, with numbers masked; a second sighting is a repeat."""
     masked = [
         NUMBER.sub("#", line.strip()) for line in output.splitlines() if line.strip()
     ]
     if not masked:
         return ""
-    lines = {line for line in masked if FAILURE_WORD.search(line)} or set(masked)
+    lines = {line for line in masked if FINDING.search(line)} or set(masked)
     key = hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()[:16]
     path = root / ".hard-eng/failures.json"
     try:

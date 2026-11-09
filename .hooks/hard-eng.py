@@ -783,7 +783,7 @@ def deliver(args: "Namespace") -> int:
     if args.command == "hot-paths":
         from hot_paths import scan_all
 
-        return scan_all(ROOT)
+        return scan_all(ROOT, paths=args.paths)
     if args.command == "gap-issue":
         from gap_issue import file_gap
 
@@ -863,8 +863,9 @@ def main() -> int:
         "--runs", type=int, help="Use the newest N runs instead of --days"
     )
     commands.add_parser(
-        "hot-paths", help="List known slow patterns across the whole repository"
-    )
+        "hot-paths",
+        help="List known slow patterns in the named files, else the whole repository",
+    ).add_argument("paths", nargs="*")
     mutating = commands.add_parser(
         "mutation",
         help="Report changed lines whose tests miss small deliberate bugs",
