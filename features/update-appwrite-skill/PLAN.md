@@ -19,7 +19,7 @@ Authority: Abid asked on 2026-11-09 to move the submodule to the latest commit, 
 
 ## Acceptance + steps
 
-- [ ] The recorded `appwrite-backend` commit is 4590ecf → N/A — a pointer change has no test; `git submodule status` shows the commit and the `hard-eng` and `canary` checks pass on the PR.
+- [x] The recorded `appwrite-backend` commit is 4590ecf → N/A — a pointer change has no test; `git submodule status` shows the commit and the `hard-eng` and `canary` checks pass on the PR.
 
 ## Baseline + execution
 
@@ -34,3 +34,11 @@ N/A — a one-line pointer change. Recovery: revert the commit.
 ## ux_reference
 
 N/A — no visible UI.
+
+## Verification
+
+Result: Passed
+Evidence: `git submodule status` shows 4590ecf for `appwrite-backend`; the pre-push clone checked out that commit.
+E2E: N/A — no user journey changes.
+Delivery target: Merge
+Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
