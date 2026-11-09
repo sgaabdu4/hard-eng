@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-FINDING = re.compile(r"(?i)fail|error|\.[a-z]\w*[:(]#|^[A-Z]+# ")
+FINDING = re.compile(r"(?i)fail|error|\.[a-z]\w*[:(]#|(?-i:^[A-Z]+# )")
 EXIT_CODE_OR_SPACE_OR_DIGIT = re.compile(r"(?i)exit code|[\d\s]")
 NUMBER = re.compile(r"\d+(?:\.\d+)?")
 

@@ -10,7 +10,7 @@ On T3 Code, a stakeholder comment starts a coordinator run through a webhook tas
 
 Owners: `.agents/skills/trello-coordinator/scripts/trello_board/report.py` (report fields), `board.py` (newest stakeholder comment from the fresh read), `commands.py` (`check` state), `config.py` (`timing`), `references/hosts.md` (schedule), `references/run.md`, `references/commands.md`, `SKILL.md`; tests in `tests/test_trello_report.py`, `tests/trello_fakes.py`, `tests/test_trello_coordinator.py`. Bug fixes: `.hooks/plans.py` (`newer_fields`, `touched_since_update`), `.hooks/failures.py` (`repeat_note`), `.hooks/hot_paths.py` (`scan_all`), `.hooks/hard-eng.py` (`hot-paths` paths), `.agents/skills/he-build/SKILL.md` (focused checks).
 Bug evidence: the consumer's report reproduced as `plan needs one 'Single source:' field, found 0` on an untouched old plan. A reviewer ran two different ruff findings through `repeat_note` and got "seen 2 times". `gate_schedule.py` keeps `security` out of the Stop hook's quick gates, and HE Build's focused checks named no Semgrep run. Two other reported items were not Hard Eng faults: `landed_commit` keeps only Hard Eng's own update commit by design, and Semgrep's partial parse of `abstract: string;` is printed and does not fail the gate.
-Evidence: T3 webhook tasks take `filters` and `dedupe.coalesceKey`; a fixed key renders to one hash, so a burst of comments becomes one run. Trello REST webhooks need a HEAD check that the T3 relay refuses, so the owner adds a Trello Automation rule that posts the commenter's username. A consumer board's workspace is on Trello's free plan (250 Automation runs a month); it had 12 stakeholder comments in its first 3 days.
+Evidence: T3 webhook tasks take `filters` and `dedupe.coalesceKey`; a fixed key renders to one hash, so a burst of comments becomes one run. Trello REST webhooks need a HEAD check that the T3 relay refuses, so the owner adds a Trello Automation rule that posts the commenter's username. Trello's free plan allows 250 Automation runs a month per workspace.
 Same cause: the old hosts rule reset the timer on every run, so any self-pause was undone; it is replaced, not patched. The five rules come from 18 quoted mistakes in a consumer coordinator thread on 2026-11-08 and 2026-11-09.
 Single source: the Hard Eng marker path `.hooks/hard-eng-source.json` had seven copies (`update.py`, `debt.py`, `hot_paths.py`, `plans.py`, `release_history.py`, `setup.py`, `release_canary.py`); all now use `gate_config.SOURCE_FILE`, which every hook already loads. `idleStopMinutes` lives in `config.TIMING_HOURS`, and the docs test reads its row from there; the wake fields live in `report.WAKE_FIELDS`, which the docs test and the report tests read; promise and chase due times come from `promise_due` and `oldest_unanswered`, which both the lists and `nextDue` use. Searched `.agents/skills/` and `tests/` for `everyMinutes`, `promiseHours`, `chaseHours`: no other copy.
 
@@ -18,12 +18,15 @@ Single source: the Hard Eng marker path `.hooks/hard-eng-source.json` had seven 
 
 Blockers: None
 Handoff: Approval
-Authority: Abid approved the comment wake and quiet pause on 2026-11-09, relayed from another thread; in this thread he chose the alarm before a pause and asked for the five review rules in the same PR.
+Authority: the maintainer approved the comment wake and quiet pause on 2026-11-09, relayed from another thread. In this thread the maintainer chose the alarm before a pause, asked for the five review rules in the same PR, and sent the plan-field bug report.
 Decision: `idle` = quiet for `idleStopMinutes` and no `requests`, `owner`, `promises`, `silent` or `buried` item. Persistent lists (`testQueue`, `realCases`, `overdue`) do not keep the board awake.
 Decision: `nextDue` is never later than `chaseHours` from now, so a paused coordinator still wakes daily. That covers card moves and new cards with no comment, real-case checks, and a stopped Trello rule.
 Decision: a run pauses only when it posted nothing, moved no card and changed no date, so `nextDue` is never older than the run's own changes.
 Decision: the token's own comments never count as heard, matching the wake filter; the owner's comments do not wake the coordinator.
 Decision: `timer` pauses only after `wake` has run once, so a board whose Trello rule is not set up keeps its timer.
+Decision: an old plan is legacy when its newest commit's author date is before the newest commit that changed the Hard Eng marker. Known limit: a plan written on a branch after the base got the update, but before the branch merged that update in, still has to add the fields.
+Decision: while paused, project health (error tracker, CI, background jobs) is checked only when a comment, an alarm or a worker starts a run, so an outage can wait up to `chaseHours`. This follows from pausing; the maintainer is told in the PR.
+Decision: an existing interval task bound to the coordinator thread becomes `timer`; if it is paused, the first run that is not idle turns it on.
 
 ## Acceptance + steps
 
@@ -39,12 +42,13 @@ Decision: `timer` pauses only after `wake` has run once, so a board whose Trello
 ## Baseline + execution
 
 Result: Passed
-Evidence: `develop` c2fa3c57 passed its push runs (Hard Eng and Canary) on 2026-11-09.
+Evidence: `develop` 1b3fe5bb, the rebase base, passed its push runs on 2026-11-09; the branch started from c2fa3c57, which passed Hard Eng and Canary the same day.
 Execution: this session, one builder; Reader passes by fresh subagents.
 
 ## Risks + recovery
 
-- Trello's free plan allows 250 Automation runs a month per workspace; past it, comments stop waking the coordinator. Recovery: the hosts rule tells the owner when comments arrive and `wake` does not run.
+- Trello's free plan allows 250 Automation runs a month per workspace; past it, comments stop waking the coordinator. Recovery: `nextDue` is never more than `chaseHours` away, so the alarm still wakes it, and the owner was told the quota at setup.
+- Not checked: whether Trello's "post to url" sends the payload as JSON, and whether `{username}` fills in for a comment trigger. Either failing leaves `wake` without a working filter or never running; the 24-hour alarm and the rule that `wake` must have run before a pause keep the coordinator working.
 - The webhook URL holds its token; anyone with it can start a run, and the run reads the board itself. Recovery: delete and recreate `wake`.
 
 ## ux_reference
@@ -54,9 +58,18 @@ N/A — no app screens; coordinator skill text and its script only.
 ## Verification
 
 Result: Passed
-Evidence: [TODO: focused tests, Reader passes, Complete check]
-E2E: N/A — the script has no user journey; the fake board tests run the real `check` command.
-Retro: [TODO]
+Evidence: On 2026-11-09 each new test failed first: no `idle` field; `found 0` for the old plan; "seen 2 times" for two lint findings. Then passed: `tests/test_trello_report.py`, `tests/test_trello_board.py`, `tests/test_trello_coordinator.py` (122); the plan, update, debt, hot path and canary tests (359); `tests/test_stop_checks.py` and `tests/test_failures.py` (37); the hot-path scan tests (3); `python3 .hooks/hard-eng.py hot-paths .hooks/plans.py` printed 0 findings. Reader pass 1 found six ways a paused coordinator could miss work; each was fixed. Reader pass 2 found that an alarm run which posted something left `timer` paused with no new alarm; every run now ends either paused with a fresh alarm or with `timer` on. Its eight reread sentences were reworded.
+E2E: N/A — the script has no user journey; the fake board tests run the real `check` command. The wake itself needs a consumer run after release: the first run creates `wake`, and the owner adds the Trello rule.
+Retro: these items, each sorted by HE Learn's Retro rows.
+- User correction, five times: I ended turns on a finished-task notice ("No response requested") or did not answer, including a 10-hour release stall and "Did you check advisor?" → judgement: `references/run.md` now says a task notice means read the result and act in the same turn; the same rule covers coordinator workers.
+- User correction: "I don't understand, explain pls" on the chase question → judgement: the question used internal words; the existing plain-question rule covers it. None new.
+- `quietMinutes` first read 0, because card threads drop comments older than our last reply → caught by the new test; the newest stakeholder comment now comes from the fresh read. None new.
+- The docs test skipped the `quietMinutes` table row, which had no space before `|` → caught by `test_cli_matches_the_reference_contract`. None new.
+- `pytest -n auto` failed without pytest-xdist → my command slip; outside cause. None.
+- `tests/test_planning_handoffs.py::test_native_stop_only_pauses_ready_approval[False]` failed once with "No such file or directory" under a temporary folder, while other test runs were active; it passed alone and in 10 repeat runs → not reproduced, so no cause found. None until it recurs.
+- Bug found on the base branch: old Complete plans failed the new fields on long-lived branches, the same class as the earlier `Same cause` break → mechanical: `tests/test_planning_handoffs.py::test_a_plan_untouched_since_the_hard_eng_update_skips_the_newer_fields`.
+- Reported Stop hook repeat on different findings → mechanical: `tests/test_stop_checks.py::test_different_lint_findings_are_not_one_repeat`.
+- Reported hot-path rules first running at the Complete check → ran too late: HE Build's focused checks now name `hot-paths <touched source files>`.
 
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with `hard-eng` and `canary` green, then release.
