@@ -10,6 +10,7 @@ The `appwrite-backend` skill source moves from 981ec54 to 4590ecf, the newest co
 
 Owners: the `.agents/skill-sources/appwrite-backend` submodule pointer.
 Same cause: N/A — a submodule stays on its recorded commit until someone moves it; the other source is already latest.
+Single source: N/A — a submodule pointer; no rule or text is copied.
 
 ## Decisions + authorization
 
@@ -40,5 +41,6 @@ N/A — no visible UI.
 Result: Passed
 Evidence: `git submodule status` shows 4590ecf for `appwrite-backend`; the pre-push clone checked out that commit.
 E2E: N/A — no user journey changes.
+Retro: The push hook asked for the plan fields one at a time: plan, Verification, Status, Single source, Retro. Nothing failed in the change itself; no prevention needed.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
