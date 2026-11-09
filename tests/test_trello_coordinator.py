@@ -661,7 +661,9 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
             )
         )
     assert set(first_cells(parts["`trello.json`"])) == set(mods.config.FIELDS)
-    assert tuple(first_cells(parts["`check` report"])) == mods.report.FIELDS
+    assert tuple(first_cells(parts["`check` report"])) == (
+        mods.report.FIELDS + mods.report.WAKE_FIELDS
+    )
     assert set(mods.report.CHECKS) == set(mods.report.FIELDS)
     timing_row = next(
         line
