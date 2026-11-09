@@ -1,6 +1,7 @@
 """Plan stage rules: an explicit Draft pause before Stop exempts unfinished planning, and the fields an edited plan must carry."""
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -10,7 +11,7 @@ from unittest.mock import Mock
 
 import agent_hooks
 import pytest
-from conftest import SOURCE, git
+from conftest import SOURCE, commit, git, init
 from gate_config import JsonObject
 from plans import validate_plan
 
@@ -231,5 +232,42 @@ def test_changed_plans_need_single_source_and_retro(
     assert validate_plan(path) == "Ready"
     template = (SOURCE / ".agents/skills/he-plan/templates/PLAN.md").read_text()
     assert "\nSingle source: " in template and "\nRetro: " in template
+
+
+def test_a_plan_untouched_since_the_hard_eng_update_skips_the_newer_fields(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    """A long-lived branch differs from its base in every plan; only later edits bind."""
+    root = tmp_path / "project"
+    init(root)
+    (root / "README.md").write_text("base\n")
+    commit(root, "base")
+    marker = root / ".hooks/hard-eng-source.json"
+    marker.parent.mkdir()
+    plan = root / "features/old/PLAN.md"
+    plan.parent.mkdir(parents=True)
+    old = re.sub(r"(?m)^(Single source|Retro):.*\n", "", completed_plan)
+
+    def dated(day: int, message: str) -> None:
+        stamp = f"2026-11-0{day}T12:00:00+00:00"
+        git(root, "add", ".")
+        subprocess.run(
+            ["git", "commit", "-qm", message],
+            cwd=root,
+            check=True,
+            env={**os.environ, "GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp},
+        )
+
+    plan.write_text(old)
+    dated(1, "finish the old plan")
+    marker.write_text('{"revision": "new"}\n')
+    dated(2, "update Hard Eng")
+    assert validate_plan(plan) == "Complete"
+    plan.write_text(old.replace("Result: Passed", "Result: Passed\n", 1))
+    with pytest.raises(ValueError, match="Single source"):
+        validate_plan(plan)
+    dated(3, "edit the old plan after the update")
+    with pytest.raises(ValueError, match="Single source"):
+        validate_plan(plan)
     learn = (SOURCE / ".agents/skills/he-learn/SKILL.md").read_text()
     assert "\n## Retro\n" in learn and "issue" in learn.split("\n## Retro\n", 1)[1]

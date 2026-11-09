@@ -27,6 +27,7 @@ class Unit(Protocol):
 
 
 SOURCE = Path(__file__).resolve().parent
+sys.path[:0] = [str(SOURCE / ".hooks")]
 UPSTREAM = "sgaabdu4/hard-eng"
 DICTIONARY = Path("/usr/share/dict/words")
 WORDS = frozenset(
@@ -156,7 +157,9 @@ def output(command: list[str], cwd: Path = SOURCE) -> str:
 
 def installed(name: str) -> bool:
     """Whether the default branch holds Hard Eng's marker; other errors stop the run."""
-    marker = f"repos/{name}/contents/.hooks/hard-eng-source.json"
+    from gate_config import SOURCE_FILE
+
+    marker = f"repos/{name}/contents/{SOURCE_FILE}"
     found = subprocess.run(
         ["gh", "api", marker, "--silent"],
         capture_output=True,
@@ -235,7 +238,9 @@ def update_installed(name: str, revision: str, work: Path, log: IO[str]) -> str:
             "update branch checkout failed",
             ["git", "checkout", "-q", "hard-eng/update"],
         )
-    marker = json.loads((work / ".hooks/hard-eng-source.json").read_text())
+    from gate_config import SOURCE_FILE
+
+    marker = json.loads((work / SOURCE_FILE).read_text())
     if marker.get("revision") != revision:
         raise Failed("update did not apply")
     return output(["git", "rev-parse", "origin/HEAD"], work)

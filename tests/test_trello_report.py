@@ -18,6 +18,13 @@ def wake(project: Project) -> dict[str, object]:
     return {name: result.payload[name] for name in project.mods.report.WAKE_FIELDS}
 
 
+def hours_ahead(found: dict[str, object], hours: float) -> bool:
+    due = parse_time(str(found["nextDue"]))
+    return abs(due - (datetime.now(UTC) + timedelta(hours=hours))) < timedelta(
+        minutes=1
+    )
+
+
 @pytest.mark.parametrize(("minutes", "idle"), [(59, False), (61, True)])
 def test_the_board_goes_idle_only_after_the_stop_time(
     project: Project, minutes: int, idle: bool
@@ -27,7 +34,9 @@ def test_the_board_goes_idle_only_after_the_stop_time(
         comment("s1", 1, "m-sam", "The total is wrong", minutes / 60)
     )
     ours(project, ("a1", 1, "**Fixed.** The total shows now.", 0.5))
-    assert wake(project) == {"idle": idle, "quietMinutes": minutes, "nextDue": ""}
+    found = wake(project)
+    assert found["idle"] is idle
+    assert found["quietMinutes"] == minutes
 
 
 def test_an_unanswered_request_keeps_a_quiet_board_awake(project: Project) -> None:
@@ -41,7 +50,9 @@ def test_an_unanswered_request_keeps_a_quiet_board_awake(project: Project) -> No
 def test_our_own_comments_never_count_as_heard(project: Project) -> None:
     project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
     ours(project, ("a1", 1, "**Fixed.** The total shows now.", 5))
-    assert wake(project) == {"idle": False, "quietMinutes": 0, "nextDue": ""}
+    found = wake(project)
+    assert found["idle"] is False
+    assert found["quietMinutes"] == 0
 
 
 def test_next_due_is_the_earliest_promise_chase_or_due_date(
@@ -61,19 +72,13 @@ def test_next_due_is_the_earliest_promise_chase_or_due_date(
     assert wake(project)["nextDue"] == due
 
 
-def test_a_chase_or_a_real_case_check_sets_next_due(project: Project) -> None:
-    project.fake.labels.append({"id": "lb-real", "name": "Waiting for real case"})
-    project.fake.cards = [
-        make_card(1, "#1 Card", "l-doing"),
-        make_card(2, "#2 Card", "l-testing", idLabels=["lb-real"]),
-    ]
+def test_next_due_is_a_chase_and_never_beyond_chase_hours(project: Project) -> None:
+    project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2)]
     ours(project, ("a1", 1, "@sam can you confirm the total?", 20))
-    chase = parse_time(str(wake(project)["nextDue"]))
-    assert abs(chase - (datetime.now(UTC) + timedelta(hours=4))) < timedelta(minutes=1)
+    assert hours_ahead(wake(project), 4)
     project.finish()
     project.fake.cards = project.fake.cards[1:]
-    real = parse_time(str(wake(project)["nextDue"]))
-    assert abs(real - (datetime.now(UTC) + timedelta(hours=24))) < timedelta(minutes=1)
+    assert hours_ahead(wake(project), 24)
 
 
 def test_a_chase_restarts_the_silent_clock(project: Project) -> None:

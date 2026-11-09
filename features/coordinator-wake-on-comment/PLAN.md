@@ -4,21 +4,24 @@ Status: Complete
 
 ## Outcome + scope
 
-On T3 Code, a stakeholder comment starts a coordinator run through a webhook task; the interval timer pauses after `timing.idleStopMinutes` quiet minutes, and a one-time alarm keeps chases, promises and due dates. The same change adds five coordinator rules from a review of a consumer coordinator's mistakes. Non-goals: wake on hosts other than T3 Code, Trello REST webhooks, changing the consumer's own coordinator rules.
+On T3 Code, a stakeholder comment starts a coordinator run through a webhook task; the interval timer pauses after `timing.idleStopMinutes` quiet minutes, and a one-time alarm keeps chases, promises and due dates. The same change adds five coordinator rules from a review of a consumer coordinator's mistakes, and fixes three consumer bugs: on a long-lived branch, Complete plans written before the `Single source:` and `Retro:` fields failed once the project updated Hard Eng; the Stop hook counted different lint findings as one repeat; and the hot-path rules first ran at the Complete check. Non-goals: wake on hosts other than T3 Code, Trello REST webhooks, changing the consumer's own coordinator rules.
 
 ## Repository context
 
-Owners: `.agents/skills/trello-coordinator/scripts/trello_board/report.py` (report fields), `board.py` (newest stakeholder comment from the fresh read), `commands.py` (`check` state), `config.py` (`timing`), `references/hosts.md` (schedule), `references/run.md`, `references/commands.md`, `SKILL.md`; tests in `tests/test_trello_report.py`, `tests/trello_fakes.py`, `tests/test_trello_coordinator.py`.
+Owners: `.agents/skills/trello-coordinator/scripts/trello_board/report.py` (report fields), `board.py` (newest stakeholder comment from the fresh read), `commands.py` (`check` state), `config.py` (`timing`), `references/hosts.md` (schedule), `references/run.md`, `references/commands.md`, `SKILL.md`; tests in `tests/test_trello_report.py`, `tests/trello_fakes.py`, `tests/test_trello_coordinator.py`. Bug fixes: `.hooks/plans.py` (`newer_fields`, `touched_since_update`), `.hooks/failures.py` (`repeat_note`), `.hooks/hot_paths.py` (`scan_all`), `.hooks/hard-eng.py` (`hot-paths` paths), `.agents/skills/he-build/SKILL.md` (focused checks).
+Bug evidence: the consumer's report reproduced as `plan needs one 'Single source:' field, found 0` on an untouched old plan. A reviewer ran two different ruff findings through `repeat_note` and got "seen 2 times". `gate_schedule.py` keeps `security` out of the Stop hook's quick gates, and HE Build's focused checks named no Semgrep run. Two other reported items were not Hard Eng faults: `landed_commit` keeps only Hard Eng's own update commit by design, and Semgrep's partial parse of `abstract: string;` is printed and does not fail the gate.
 Evidence: T3 webhook tasks take `filters` and `dedupe.coalesceKey`; a fixed key renders to one hash, so a burst of comments becomes one run. Trello REST webhooks need a HEAD check that the T3 relay refuses, so the owner adds a Trello Automation rule that posts the commenter's username. A consumer board's workspace is on Trello's free plan (250 Automation runs a month); it had 12 stakeholder comments in its first 3 days.
 Same cause: the old hosts rule reset the timer on every run, so any self-pause was undone; it is replaced, not patched. The five rules come from 18 quoted mistakes in a consumer coordinator thread on 2026-11-08 and 2026-11-09.
-Single source: `idleStopMinutes` lives in `config.TIMING_HOURS`, and the docs test reads its row from there; the wake fields live in `report.WAKE_FIELDS`, which the docs test and the report tests read; promise and chase due times come from `promise_due` and `oldest_unanswered`, which both the lists and `nextDue` use. Searched `.agents/skills/` and `tests/` for `everyMinutes`, `promiseHours`, `chaseHours`: no other copy.
+Single source: the Hard Eng marker path `.hooks/hard-eng-source.json` had seven copies (`update.py`, `debt.py`, `hot_paths.py`, `plans.py`, `release_history.py`, `setup.py`, `release_canary.py`); all now use `gate_config.SOURCE_FILE`, which every hook already loads. `idleStopMinutes` lives in `config.TIMING_HOURS`, and the docs test reads its row from there; the wake fields live in `report.WAKE_FIELDS`, which the docs test and the report tests read; promise and chase due times come from `promise_due` and `oldest_unanswered`, which both the lists and `nextDue` use. Searched `.agents/skills/` and `tests/` for `everyMinutes`, `promiseHours`, `chaseHours`: no other copy.
 
 ## Decisions + authorization
 
 Blockers: None
 Handoff: Approval
 Authority: Abid approved the comment wake and quiet pause on 2026-11-09, relayed from another thread; in this thread he chose the alarm before a pause and asked for the five review rules in the same PR.
-Decision: `idle` = quiet for `idleStopMinutes` and no `requests`, `owner`, `promises`, `silent` or `buried` item. Persistent lists (`testQueue`, `realCases`, `overdue`) do not keep the board awake; `realCases` adds a `chaseHours` alarm instead.
+Decision: `idle` = quiet for `idleStopMinutes` and no `requests`, `owner`, `promises`, `silent` or `buried` item. Persistent lists (`testQueue`, `realCases`, `overdue`) do not keep the board awake.
+Decision: `nextDue` is never later than `chaseHours` from now, so a paused coordinator still wakes daily. That covers card moves and new cards with no comment, real-case checks, and a stopped Trello rule.
+Decision: a run pauses only when it posted nothing, moved no card and changed no date, so `nextDue` is never older than the run's own changes.
 Decision: the token's own comments never count as heard, matching the wake filter; the owner's comments do not wake the coordinator.
 Decision: `timer` pauses only after `wake` has run once, so a board whose Trello rule is not set up keeps its timer.
 
@@ -27,7 +30,10 @@ Decision: `timer` pauses only after `wake` has run once, so a board whose Trello
 - [x] The board is idle only after the stop time, with nothing to answer → `tests/test_trello_report.py::test_the_board_goes_idle_only_after_the_stop_time` (59 minutes awake, 61 idle).
 - [x] An unanswered request keeps a quiet board awake → `tests/test_trello_report.py::test_an_unanswered_request_keeps_a_quiet_board_awake`.
 - [x] Our own comments never count as heard → `tests/test_trello_report.py::test_our_own_comments_never_count_as_heard`.
-- [x] `nextDue` is the earliest future promise, chase or due date, and a real-case card adds `chaseHours` → `tests/test_trello_report.py::test_next_due_is_the_earliest_promise_chase_or_due_date`, `tests/test_trello_report.py::test_a_chase_or_a_real_case_check_sets_next_due`.
+- [x] `nextDue` is the earliest future promise, chase or due date, never beyond `chaseHours` → `tests/test_trello_report.py::test_next_due_is_the_earliest_promise_chase_or_due_date`, `tests/test_trello_report.py::test_next_due_is_a_chase_and_never_beyond_chase_hours`.
+- [x] A Complete plan untouched since the project's last Hard Eng update skips `Single source:` and `Retro:`; a later edit, committed or not, binds them → `tests/test_planning_handoffs.py::test_a_plan_untouched_since_the_hard_eng_update_skips_the_newer_fields`.
+- [x] Two different lint findings are not one repeat failure → `tests/test_stop_checks.py::test_different_lint_findings_are_not_one_repeat`.
+- [x] `hot-paths` scans only the files it names, so HE Build can run it as a focused check → `tests/test_hot_paths.py::test_a_focused_scan_reads_only_the_named_files`.
 - [x] The reference lists every timing field and report field → `tests/test_trello_coordinator.py::test_cli_matches_the_reference_contract`.
 
 ## Baseline + execution

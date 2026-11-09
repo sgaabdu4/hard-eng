@@ -206,6 +206,20 @@ def test_a_repository_scan_lists_every_finding_and_fails(
     assert scan_all(tmp_path, 600) == 0
 
 
+def test_a_focused_scan_reads_only_the_named_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-HOT-PATH: a focused check scans only the touched files it names."""
+    cached = (
+        "from functools import cache\n\n\n@cache\ndef square(x):\n    return x * x\n"
+    )
+    (tmp_path / "old.py").write_text(cached)
+    (tmp_path / "new.py").write_text("def square(x):\n    return x * x\n")
+    assert scan_all(tmp_path, 600, ["new.py"]) == 0
+    assert "HE-HOT-PATH: 0 findings" in capsys.readouterr().out
+    assert scan_all(tmp_path, 600, ["new.py", "old.py"]) == 1
+
+
 def test_a_partly_parsed_file_still_reports_its_findings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
