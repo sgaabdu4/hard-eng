@@ -7,7 +7,7 @@ Load in every run, for the schedule check and the pause check, and to start a wo
 - Start = a new thread on the project's main checkout (Local), never a new worktree, on the `coordinator` role's model; run the skill once.
 - Schedule = three tasks bound to this thread. Give each task its name below as its `title`. Each prompt is only "Run the trello-coordinator skill."; never put webhook request text in a prompt.
   - `timer`: interval `timing.everyMinutes`; slowed = interval `chaseHours`. Never set it to `enabled: false`. An older untitled interval task bound to this thread is `timer`: give it the title.
-  - `wake`: `{type: "webhook", filters: [{path: "body.user", op: "notEquals", value: <account>}], dedupe: {coalesceKey: "board"}}`, where `<account>` = the `account` that `probe` prints. A new comment by anyone else starts a run. Our own comments, and the owner's (same account), never start one.
+  - `wake`: `{type: "webhook", filters: [{path: "body.user", op: "notEquals", value: <account>}], dedupe: {coalesceKey: "{{body.board}}"}}`, where `<account>` = the `account` that `probe` prints. T3 refuses fixed text as the key; every request carries the same `board` value, so comments close together start one run. A new comment by anyone else starts a run. Our own comments, and the owner's (same account), never start one.
   - `alarm`: `{type: "once", runAt: <nextDue>}`. The pause check replaces it each time.
 - Schedule check = in every run, after the worktree check and before `probe`: call `list_scheduled_tasks` and use only tasks bound to this thread. Call it in scheduled runs too, even though the tool text says not to. Only this step and the pause check change `timer`.
   - No `timer` → create it. `timer` turned off, or its `everyMs` is not `timing.everyMinutes` × 60000 → set `enabled: true` and that `everyMs` now, with its `scheduledTaskId`. Its next run then comes one interval from now, not at once. So a run that stops after this step leaves `timer` at full speed.
@@ -21,7 +21,7 @@ Load in every run, for the schedule check and the pause check, and to start a wo
 - Trello steps for `wake`, for the owner:
   1. Open the board, click Automation, then Rules, then Create rule.
   2. Add the trigger "when a comment is posted to a card by …"; choose "anyone except me" if offered, else "anyone".
-  3. Add the action "post to url" (Content tab), paste the URL, choose "with payload" and enter `{"user": "{username}"}`. Save.
+  3. Add the action "post to url" (Content tab), paste the URL, choose "with payload" and enter `{"user": "{username}", "board": "board"}`. Save.
   - Tell the owner with the steps: each comment uses one Automation run, and Trello's free plan allows 250 a month for the whole workspace. When the rule stops or its quota runs out, a comment waits for the next `alarm` or `timer` run.
 - Workers = `delegate_task` with `target.providerInstanceId` = the role's `provider` (none set → the coordinator's own provider) and `target.model` = its `model`, `isolation: "worktree"`, `clientRequestId` `card<N>-r<round>`. Follow-ups = `t3_thread_send` to the worker's thread. Mixed Claude + GPT roles work here.
 - Builder after a planner on the same card = `delegate_task` without `isolation`; the brief names the planner's worktree path from `handover.md` and says to work only there. Start it only after the planner has ended.
