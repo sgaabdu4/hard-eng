@@ -33,6 +33,7 @@ OPTIONAL_ROLES = ("computerUse",)
 ROLE_FIELDS = ("model", "why", "provider")
 TIMING_HOURS = {
     "everyMinutes": 15,
+    "idleStopMinutes": 60,
     "chaseHours": 24,
     "promiseHours": 6,
     "doneGraceHours": 72,
@@ -58,6 +59,7 @@ class Config:
     lists: dict[str, str]
     needs: dict[str, str]
     every_minutes: float
+    idle_stop_minutes: float
     chase_hours: float
     promise_hours: float
     done_grace_hours: float
@@ -259,6 +261,7 @@ def load_config(root: Path) -> Config:
         lists=lists,
         needs=string_map(data.get("needsLabels", {}), "needsLabels"),
         every_minutes=hours["everyMinutes"],
+        idle_stop_minutes=hours["idleStopMinutes"],
         chase_hours=hours["chaseHours"],
         promise_hours=hours["promiseHours"],
         done_grace_hours=hours["doneGraceHours"],

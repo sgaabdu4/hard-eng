@@ -34,6 +34,7 @@ class Snapshot:
     members: dict[str, str]
     threads: dict[str, list[Event]]
     moves: dict[str, str]
+    heard: str
 
 
 def questions_in(
@@ -245,4 +246,13 @@ def fetch(
         members,
         {card: events for card, events in threads.items() if card in open_ids},
         merge_moves(saved.get("moves"), fresh),
+        max(
+            (
+                e.date
+                for e in fresh
+                if e.kind == "comment" and e.author.lower() != own.lower()
+            ),
+            key=parse_time,
+            default="",
+        ),
     )
