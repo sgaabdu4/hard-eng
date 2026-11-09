@@ -7,17 +7,18 @@ Load to start or change the schedule, or to start a worker. Use the section for 
 - Start = a new thread on the project's main checkout (Local), never a new worktree, on the `coordinator` role's model; run the skill once.
 - Schedule = three tasks bound to this thread. Give each task its name below as its `title`. Each prompt is only "Run the trello-coordinator skill."; never put webhook request text in a prompt.
   - `timer`: interval `timing.everyMinutes`. An older untitled interval task bound to this thread is `timer`: give it the title.
-  - `wake`: `{type: "webhook", filters: [{path: "body.user", op: "notEquals", value: <account>}], dedupe: {coalesceKey: "board"}}`, where `<account>` = `probe`'s `account`, as Trello prints it. A new comment by anyone else starts a run. Our own comments, and the owner's (same account), never start one.
+  - `wake`: `{type: "webhook", filters: [{path: "body.user", op: "notEquals", value: <account>}], dedupe: {coalesceKey: "board"}}`, where `<account>` = the `account` that `probe` prints. A new comment by anyone else starts a run. Our own comments, and the owner's (same account), never start one.
   - `alarm`: `{type: "once", runAt: <nextDue>}`. Set it in every run that ends with `timer` paused.
-- Schedule check = in every run, before `check`, call `list_scheduled_tasks`; it is required in scheduled runs too. Use only tasks bound to this thread.
+- Schedule check = in every run, after the worktree check and before `probe`: call `list_scheduled_tasks` and use only tasks bound to this thread. Scheduled runs call it too, because only this step and the pause check turn `timer` on and off.
+  - `timer` paused → set it to `enabled: true` now. A run that stops early then leaves `timer` on. T3 counts its next run from this change, so it does not start a run at once.
   - No `timer` → create it. Its `everyMs` differs from `timing.everyMinutes` → fix it with its `scheduledTaskId`; tell the owner once that a change belongs in `trello.json`.
-  - No `wake` → create it. It returns a `webhookUrl` → give the owner that URL and the Trello steps below, once. No `webhookUrl` = T3 Connect remote access is off → tell the owner once; `timer` then never pauses.
+  - No `wake` → create it after `probe`, because its filter needs the account. It returns a `webhookUrl` → give the owner that URL and the Trello steps below, once. No `webhookUrl` = T3 Connect remote access is off → tell the owner once; `timer` then never pauses.
   - The first manual run sets these up; tell the owner once.
-- `check` printed `skipped` → change no task.
-- End of every other run, before `finish`, leave exactly one of two states:
-  - Paused, when all are true: (1) `check` succeeded and printed `idle: true`; (2) this run posted nothing, moved no card and changed no date; (3) no worker of yours is running, since a worker's end starts a run; (4) `wake` has run at least once (`lastRunStatus` is set), so Trello reaches it. Then set `timer` to `enabled: false`, and set `alarm` to this run's `nextDue` with `enabled: true` (create it, or update the existing one).
-  - Otherwise `timer` on: set it to `enabled: true` when it is paused. A later quiet run pauses it with a fresh `nextDue`.
-- `nextDue` is at most `chaseHours` away. So a paused coordinator still sees card moves and new cards with no comment within that time. While paused, project health (error tracker, CI, background jobs) is checked only in these runs too. A paused `timer` is normal: do not report it.
+- `check` printed `skipped` → no pause check; `timer` stays on.
+- Pause check = the last step of every run that was not skipped, before `finish`. Pause only when all are true: (1) `check` succeeded and printed `idle: true`; (2) this run posted nothing, moved no card and changed no date; (3) no worker of yours is running, since a worker's end starts a run; (4) `wake` shows a `lastRunStatus` other than `never`, which proves Trello reaches it.
+  - Pause = delete each `alarm` bound to this thread, then create a new `alarm` at this run's `nextDue`, with no `clientRequestId`. Set `timer` to `enabled: false` only after T3 returns a future `nextRunAt` for that `alarm`. T3 refuses a past time; then leave `timer` on.
+  - Otherwise leave `timer` on. A later quiet run pauses it with a fresh `nextDue`.
+- `nextDue` is at most `chaseHours` away. So a paused coordinator still sees card moves and new cards with no comment within that time. While `timer` is paused, project health (error tracker, CI, background jobs) is checked only in `alarm` and `wake` runs. A paused `timer` is normal: do not report it.
 - Trello steps for `wake`, for the owner:
   1. Open the board, click Automation, then Rules, then Create rule.
   2. Add the trigger "when a comment is posted to a card by …"; choose "anyone except me" if offered, else "anyone".
