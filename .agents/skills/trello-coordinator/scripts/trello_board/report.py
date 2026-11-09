@@ -415,9 +415,6 @@ def due_times(ctx: Context, view: View) -> list[datetime]:
         promise_due(ctx, view),
         oldest and parse_time(oldest.date) + timedelta(hours=ctx.config.chase_hours),
         parse_time(due) if due else None,
-        ctx.now + timedelta(hours=ctx.config.chase_hours)
-        if real_cases(ctx, view)
-        else None,
     ]
     return [time for time in times if time and time > ctx.now]
 
@@ -434,11 +431,12 @@ def build(ctx: Context, heard: str) -> Obj:
     }
     found["testQueue"] = queues(found["testQueue"])
     quiet = int((ctx.now - parse_time(heard)).total_seconds() // 60)
-    due = min((t for v in views for t in due_times(ctx, v)), default=None)
+    latest = ctx.now + timedelta(hours=ctx.config.chase_hours)
+    due = min((t for v in views for t in due_times(ctx, v)), default=latest)
     return {
         **found,
         "idle": quiet >= ctx.config.idle_stop_minutes
         and not any(found[field] for field in AWAKE),
         "quietMinutes": quiet,
-        "nextDue": stamp(due) if due else "",
+        "nextDue": stamp(min(due, latest)),
     }

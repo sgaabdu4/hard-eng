@@ -17,6 +17,7 @@ from pathlib import Path
 import agent_hooks
 import hook_chain
 import source_trees
+from gate_config import SOURCE_FILE
 from mcp_setup import retired_settings
 from release_history import StaleRelease, ordered
 from submodules import update_submodules
@@ -40,7 +41,6 @@ COMMIT_ID = re.compile(r"[0-9a-f]{40}")
 
 UPSTREAM = "sgaabdu4/hard-eng"
 REPOSITORY = f"https://github.com/{UPSTREAM}.git"
-SOURCE_FILE = ".hooks/hard-eng-source.json"
 
 
 def github_token() -> str | None:

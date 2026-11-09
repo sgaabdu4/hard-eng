@@ -64,6 +64,7 @@ def json_text(
 JSONC = re.compile(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', re.DOTALL)
 TRAILING_COMMA = re.compile(r",(\s*[}\]])")
 ALL_ZERO_OBJECT_ID = re.compile(r"0{40}|0{64}")
+SOURCE_FILE = ".hooks/hard-eng-source.json"
 
 
 def json_layout(root: Path) -> tuple[str, int, int]:
@@ -499,7 +500,7 @@ def changed_packages(
     selected = packages_for(root, base, names, by_path)
     if isinstance(selected, set) or not prove_update:
         return selected
-    from update import SOURCE_FILE, installed_update_paths, maybe_installed
+    from update import installed_update_paths, maybe_installed
 
     other = {name for name in names if not maybe_installed(name)}
     narrowed = (

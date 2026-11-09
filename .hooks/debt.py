@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
-from gate_config import Gate, Group, JsonObject
+from gate_config import SOURCE_FILE, Gate, Group, JsonObject
 
 WORD_CHARACTER = re.compile(r"\w")
 DIGIT_RUN = re.compile(r"\d+")
@@ -224,7 +224,7 @@ def require_shrink(root: Path, base: str | None) -> None:
         return
     before = git_file(root, base, DEBT_FILE)
     if before is None:
-        if git_file(root, base, ".hooks/hard-eng-source.json") is not None:
+        if git_file(root, base, SOURCE_FILE) is not None:
             raise ValueError(
                 f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings instead"
             )

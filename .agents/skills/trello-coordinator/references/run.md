@@ -8,7 +8,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 2. `check`; `skipped` → end the run. Read `handover.md` from the same folder. Act on every item in every list before anything else.
 3. Project health: error tracker, CI, release state, background jobs (below).
 4. Workers: start, follow up, review (below).
-5. Update `handover.md`, report (below), then `finish <runId>`. Last, the pause check for this host in [hosts](hosts.md).
+5. Update `handover.md`, report (below), the pause check for this host in [hosts](hosts.md), then `finish <runId>`.
 
 ## Report lists
 
@@ -48,10 +48,11 @@ Load at the start of every run. Commands = [commands](commands.md).
 - Before starting a builder, compare the files its plan touches with each open card PR; shared files → start it after that PR merges. After each merge to the base branch, an open card PR that now conflicts is its builder's next job: rebase, rerun its check, push.
 - New or changed save → one real save on a deployed test environment, read back and removed, before the testing move; tests and fakes are not proof.
 - Only a real user event can prove the card → `label <card> add "Waiting for real case"` + its check in `handover.md`.
-- A brief with a long run (suite, build, deploy, review) says: stay with the run until it ends, then report; a finished-run notice = read the result and do the next step in the same turn. No result by the run's expected end → send the worker its next step. Stalled (no writes for 20 minutes) → cancel its task, then a fresh worker in the same worktree from its handover note.
+- A brief with a long run (suite, build, deploy, review) says: stay with the run until it ends, then report; a finished-run notice = read the result and do the next step in the same turn.
+- A worker waiting on its own long run is not stalled. No report by the time the run should end → tell the worker to read the run's result and go on. Stalled (no writes for 20 minutes and no run of its own going) → cancel its task, then a fresh worker in the same worktree from its handover note.
 - A task notice to you (a worker or run finished) = read its result and act in the same turn. Never end a turn on a notice without acting.
-- Live setting, price or data change → the brief first reads the code the change triggers and lists who gets what and when (each time zone, current subscriptions, queued rows). The owner approves that list; check the live result within the hour.
-- `handover.md` lists the project's test and demo accounts. A finding that names one = our test data, never a task for staff.
+- Live setting, price or data change → the brief first reads the code the change triggers and lists who gets what and when (each time zone, current subscriptions, queued rows). The owner approves that list. Within one hour after the change goes live, a worker checks the real result.
+- Keep the project's test and demo accounts in `handover.md`. A finding that names one = our test data, never a task for staff.
 - Change touching sign-in, permissions, payments or personal data → a security review worker before the testing move.
 - Proven checklist item → `tick`; a person to add to or drop from a card → `member`.
 - Idle capacity + an unblocked card → start it. Never archive a worker you still wait on.
