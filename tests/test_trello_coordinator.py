@@ -695,7 +695,7 @@ def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
     t3 = hosts.split("## T3 Code", 1)[1].split("\n## ", 1)[0]
     assert "`coordinator` role's model" in t3
     assert "coordinator = strongest model" in hosts
-    assert "`everyMs` differs" in t3 and "`scheduledTaskId`" in t3
+    assert "`everyMs` is not `timing.everyMinutes`" in t3 and "`scheduledTaskId`" in t3
     lists = run.split("\n## Report lists\n", 1)[1].split("\n## ", 1)[0]
     assert "| `realCases`" in lists and "last checked" in lists
     workers = run.split("\n## Workers\n", 1)[1].split("\n## ", 1)[0]
