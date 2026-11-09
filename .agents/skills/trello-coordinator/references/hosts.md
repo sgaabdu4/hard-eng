@@ -5,22 +5,19 @@ Load to start or change the schedule, or to start a worker. Use the section for 
 ## T3 Code
 
 - Start = a new thread on the project's main checkout (Local), never a new worktree, on the `coordinator` role's model; run the skill once.
-- Schedule = three tasks bound to this thread. Each has the `title` below and the prompt "Run the trello-coordinator skill.", never any webhook request text:
+- Schedule = three tasks bound to this thread. Give each task its name below as its `title`. Each prompt is only "Run the trello-coordinator skill."; never put webhook request text in a prompt.
   - `timer`: interval `timing.everyMinutes`. An older untitled interval task bound to this thread is `timer`: give it the title.
-  - `wake`: `{type: "webhook", filters: [{path: "body.user", op: "notEquals", value: <account>}], dedupe: {coalesceKey: "board"}}`, where `<account>` = `trello.json` `account`, else `probe`'s `account`. A new comment by anyone else starts a run. Our own comments, and the owner's (same account), never start one.
-  - `alarm`: `{type: "once", runAt: <nextDue>}`, set only when `timer` pauses.
+  - `wake`: `{type: "webhook", filters: [{path: "body.user", op: "notEquals", value: <account>}], dedupe: {coalesceKey: "board"}}`, where `<account>` = `probe`'s `account`, as Trello prints it. A new comment by anyone else starts a run. Our own comments, and the owner's (same account), never start one.
+  - `alarm`: `{type: "once", runAt: <nextDue>}`. Set it in every run that ends with `timer` paused.
 - Schedule check = in every run, before `check`, call `list_scheduled_tasks`; it is required in scheduled runs too. Use only tasks bound to this thread.
   - No `timer` → create it. Its `everyMs` differs from `timing.everyMinutes` → fix it with its `scheduledTaskId`; tell the owner once that a change belongs in `trello.json`.
   - No `wake` → create it. It returns a `webhookUrl` → give the owner that URL and the Trello steps below, once. No `webhookUrl` = T3 Connect remote access is off → tell the owner once; `timer` then never pauses.
   - The first manual run sets these up; tell the owner once.
 - `check` printed `skipped` → change no task.
-- Turn `timer` back on (`enabled: true`) when it is paused and `idle` is `false`, or when a worker of yours is running.
-- Pause = before `finish`, set `timer` to `enabled: false` only when all are true:
-  1. `idle` is `true`.
-  2. This run posted nothing, moved no card and changed no date. Otherwise the next `timer` run decides, with a fresh `nextDue`.
-  3. No worker of yours is running. A worker's end starts a run.
-  4. `wake` has run at least once (`lastRunStatus` is set), so Trello reaches it.
-- At the pause, set `alarm` to `nextDue` with `enabled: true`: create it, or update the existing one. `nextDue` is never more than `chaseHours` away, so a paused coordinator still sees card moves and new cards that came with no comment. A paused `timer` is normal: do not report it.
+- End of every other run, before `finish`, leave exactly one of two states:
+  - Paused, when all are true: (1) `check` succeeded and printed `idle: true`; (2) this run posted nothing, moved no card and changed no date; (3) no worker of yours is running, since a worker's end starts a run; (4) `wake` has run at least once (`lastRunStatus` is set), so Trello reaches it. Then set `timer` to `enabled: false`, and set `alarm` to this run's `nextDue` with `enabled: true` (create it, or update the existing one).
+  - Otherwise `timer` on: set it to `enabled: true` when it is paused. A later quiet run pauses it with a fresh `nextDue`.
+- `nextDue` is at most `chaseHours` away. So a paused coordinator still sees card moves and new cards with no comment within that time. While paused, project health (error tracker, CI, background jobs) is checked only in these runs too. A paused `timer` is normal: do not report it.
 - Trello steps for `wake`, for the owner:
   1. Open the board, click Automation, then Rules, then Create rule.
   2. Add the trigger "when a comment is posted to a card by …"; choose "anyone except me" if offered, else "anyone".
