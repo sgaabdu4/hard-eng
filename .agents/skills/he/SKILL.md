@@ -15,6 +15,7 @@ flowchart LR
   T -->|Task-end retro / repeated failures / lasting decisions| L[../he-learn/SKILL.md]
   T -->|Task context / review| W[references/workflow.md]
   T -->|Adapt / repair checks| G[references/gates.md]
+  T -->|Plan checks / baseline repair| C[references/plan-checks.md]
   T -->|Bulk / async / performance| E[references/efficiency.md]
   T -->|Design / change / review tests| Q[references/testing.md]
   T -->|Setup / update / MCP failure| I[references/integrations.md]
@@ -24,6 +25,7 @@ flowchart LR
   click S "../he-ship/SKILL.md"
   click L "../he-learn/SKILL.md"
   click G "references/gates.md"
+  click C "references/plan-checks.md"
   click E "references/efficiency.md"
   click Q "references/testing.md"
   click I "references/integrations.md"
