@@ -81,6 +81,34 @@ def test_setup_keeps_a_project_pre_push_hook_and_runs_it_first(
     ).read_text() == "refs/heads/a 1 refs/heads/a 0\n"
 
 
+def test_a_linked_project_hook_stays_a_link(
+    installer: ModuleType, repository: Path, shipping_policy: ShippingPolicy
+) -> None:
+    go_project(repository)
+    real = repository / "tools/pre-push.sh"
+    real.parent.mkdir()
+    real.write_text(PROJECT_HOOK)
+    real.chmod(0o755)
+    path = repository / ".git/hooks/pre-push"
+    path.symlink_to("../../tools/pre-push.sh")
+    config = installer.gate_config(repository)
+    config["shipping"] = shipping_policy
+    (repository / "hard-eng.gates.json").write_text(json.dumps(config))
+    installer.install(repository)
+    kept = hook_chain.project_copy(path)
+    assert kept.is_symlink()
+    assert real.read_text() == PROJECT_HOOK
+    real.write_text("#!/bin/sh\necho edited > edited.flag\n")
+    subprocess.run(
+        [str(kept), "origin", "https://example.test/r"],
+        cwd=repository,
+        input="",
+        text=True,
+        check=True,
+    )
+    assert (repository / "edited.flag").exists()
+
+
 def test_setup_chains_a_husky_projects_own_pre_push_script(
     installer: ModuleType,
     repository: Path,

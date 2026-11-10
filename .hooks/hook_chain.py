@@ -124,7 +124,8 @@ def preserve(root: Path, hook: Path) -> bool:
     if not foreign_hook(root, hook):
         return False
     if not kept_copy_matches(hook):
-        shutil.copy2(hook, project_copy(hook))
+        project_copy(hook).unlink(missing_ok=True)
+        shutil.copy2(hook, project_copy(hook), follow_symlinks=False)
     return True
 
 
