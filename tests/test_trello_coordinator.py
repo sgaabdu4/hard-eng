@@ -1,4 +1,6 @@
+import importlib
 import json
+import os
 import re
 from pathlib import Path
 from types import ModuleType
@@ -26,7 +28,16 @@ from trello_fakes import (
     refs,
     write_lease,
 )
-from trello_fixtures import load_mods, make_project
+from trello_fixtures import (
+    CLAIM_REF,
+    drop_claim,
+    enter,
+    load_claim,
+    load_mods,
+    make_project,
+    origin_of,
+    second_machine,
+)
 
 mods = pytest.fixture(load_mods)
 project = pytest.fixture(make_project)
@@ -596,6 +607,152 @@ def test_one_run_at_a_time(project: Project, mods: Mods) -> None:
     assert lease_owner(project) == project.run_id
 
 
+def make_note(tmp_path: Path) -> Path:
+    note = tmp_path / "claim-note.txt"
+    note.write_text("Planned text")
+    return note
+
+
+def claim_commit(project: Project) -> str:
+    return git(origin_of(project), "for-each-ref", "--format=%(objectname)", CLAIM_REF)
+
+
+def test_a_second_machine_is_skipped_and_cannot_write(
+    project: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drop_claim(project)
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    first = project.run("check")
+    assert first.code == 0 and "skipped" not in first.payload
+    assert claim_commit(project)
+    other = enter(monkeypatch, second_machine(project))
+    calls = len(project.fake.calls)
+    skipped = other.run("check")
+    assert skipped.code == 0
+    assert skipped.payload["skipped"] is True
+    assert skipped.payload["heldElsewhere"] is True
+    assert skipped.payload["heldSince"]
+    assert len(project.fake.calls) == calls
+    assert not (other.state / "lease").exists()
+    refused = other.run("comment", "1", str(make_note(tmp_path)))
+    assert refused.code == 1
+    assert "claim" in str(refused.payload["error"])
+    assert project.fake.writes == []
+    who = git(
+        origin_of(project), "log", "-1", "--format=%an <%ae>|%cn <%ce>", CLAIM_REF
+    )
+    fixed = "trello-coordinator <trello-coordinator@invalid>"
+    assert who == f"{fixed}|{fixed}"
+    assert (
+        enter(monkeypatch, project).run("comment", "1", str(make_note(tmp_path))).code
+        == 0
+    )
+
+
+def test_takeover_moves_the_claim_and_memory(
+    project: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(load_claim(), "is_private", lambda _place: True)
+    drop_claim(project)
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    assert project.run("check").code == 0
+    assert project.run("comment", "1", str(make_note(tmp_path))).code == 0
+    (project.state / "handover.md").write_text("card 1: worker thread t1\n")
+    assert project.finish().payload == {"finished": True}
+    names = git(origin_of(project), "ls-tree", "--name-only", CLAIM_REF).split()
+    assert {"holder", "posted.log", "handover.md", "state.json"} <= set(names)
+    other = enter(monkeypatch, second_machine(project))
+    held = other.run("check").payload
+    assert held["heldElsewhere"] is True
+    write_lease(other, "busy", 1)
+    busy = other.run("takeover")
+    assert busy.code == 1 and "run" in str(busy.payload["error"])
+    (other.state / "lease").unlink()
+    moved = other.run("takeover")
+    assert moved.code == 0, moved.text
+    assert moved.payload == {"tookOver": True, "previousSince": held["heldSince"]}
+    for name in ("posted.log", "handover.md"):
+        assert (other.state / name).read_text() == (project.state / name).read_text()
+    assert other.run("check").code == 0
+    assert other.finish().payload == {"finished": True}
+    old = enter(monkeypatch, project)
+    assert old.run("check").payload["heldElsewhere"] is True
+    assert not (old.state / "lease").exists()
+    assert old.run("comment", "1", str(make_note(tmp_path))).code == 1
+    (old.state / "handover.md").write_text("late note\n")
+    lost = old.run("finish", "late")
+    assert lost.code == 1
+    assert "another machine" in str(lost.payload["error"])
+
+
+def test_a_public_remote_gets_no_memory(
+    project: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drop_claim(project)
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    assert project.run("check").code == 0
+    assert project.run("comment", "1", str(make_note(tmp_path))).code == 0
+    (project.state / "handover.md").write_text("card 1: worker thread t1\n")
+    assert project.finish().payload == {"finished": True}
+    assert git(origin_of(project), "ls-tree", "--name-only", CLAIM_REF) == "holder"
+    other = enter(monkeypatch, second_machine(project))
+    (other.state).mkdir(parents=True)
+    (other.state / "handover.md").write_text("my own note\n")
+    moved = other.run("takeover")
+    assert moved.code == 0, moved.text
+    assert (other.state / "handover.md").read_text() == "my own note\n"
+    assert other.run("check").code == 0
+
+
+@pytest.mark.parametrize("leak", [KEY, TOKEN, "0123456789abcdef0123456789abcdef"])
+def test_memory_with_a_key_is_never_pushed(
+    project: Project, monkeypatch: pytest.MonkeyPatch, leak: str
+) -> None:
+    monkeypatch.setattr(load_claim(), "is_private", lambda _place: True)
+    drop_claim(project)
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    assert project.run("check").code == 0
+    before = claim_commit(project)
+    (project.state / "notes.md").write_text(f"login was {leak} yesterday\n")
+    refused = project.finish()
+    assert refused.code == 1
+    assert "notes.md" in str(refused.payload["error"])
+    assert leak not in refused.text
+    assert claim_commit(project) == before
+
+
+def test_an_unreachable_origin_stops_the_run(project: Project) -> None:
+    git(project.main, "remote", "set-url", "origin", str(project.main.parent / "gone"))
+    calls = len(project.fake.calls)
+    failed = project.run("check")
+    assert failed.code == 1
+    assert "origin" in str(failed.payload["error"])
+    assert len(project.fake.calls) == calls
+    assert not (project.state / "lease").exists()
+
+
+def test_only_a_github_remote_can_be_private(
+    project: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    claim = load_claim()
+    place = importlib.import_module("trello_board.secrets").locate(project.main)
+    folder = tmp_path / "bin"
+    folder.mkdir()
+    monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ['PATH']}")
+    answers = []
+    for answer in ("PRIVATE", "PUBLIC", ""):
+        (folder / "gh").write_text(f"#!/bin/sh\necho '{answer}'\n")
+        (folder / "gh").chmod(0o755)
+        answers.append(claim.is_private(place))
+    assert answers == [False, False, False]
+    git(project.main, "remote", "set-url", "origin", "https://github.com/o/r.git")
+    answers = []
+    for answer in ("PRIVATE", "PUBLIC", "", "INTERNAL"):
+        (folder / "gh").write_text(f"#!/bin/sh\necho '{answer}'\n")
+        answers.append(claim.is_private(place))
+    assert answers == [True, False, False, False]
+
+
 def test_state_saves_atomically(
     project: Project, mods: Mods, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -639,7 +796,7 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
     assert (
         set(subcommands)
         == set(documented)
-        == {*mods.commands.HANDLERS, "finish", "save-secret"}
+        == {*mods.commands.HANDLERS, "finish", "save-secret", "takeover"}
     )
     for name, (count, flags) in documented.items():
         actions = subcommands[name]._actions
