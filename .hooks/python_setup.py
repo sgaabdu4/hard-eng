@@ -152,7 +152,8 @@ def print_import_contract(directory: Path, package: Group) -> None:
     if import_linter_owner(directory) is None:
         block = import_configuration(directory, package, content)[len(content) :]
         if block:
-            print(f"Import Linter has no contract. Add this to pyproject.toml:{block}")
+            where = Path(package["path"], "pyproject.toml")
+            print(f"Import Linter has no contract. Add this to {where}:{block}")
 
 
 def configure_python(

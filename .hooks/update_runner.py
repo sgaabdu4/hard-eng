@@ -133,8 +133,8 @@ def pulled_message(root: Path, revision: str) -> str | None:
     if revision_at(root, f"refs/remotes/origin/{base}") != revision:
         return None
     return (
-        f"Hard Eng update {revision} is already on {base}: run `git fetch origin {base}` "
-        f"and rebase this branch on origin/{base}, or pull {base}."
+        f"Hard Eng update {revision} is already on origin/{base}; this checkout does not "
+        f"hold it yet. On {base}: `git pull`. On another branch: `git rebase origin/{base}`."
     )
 
 
@@ -649,7 +649,7 @@ def prepare_update(root: Path, repair: bool = False) -> str:
 
 def free_step(root: Path, worktree: Path) -> str:
     if worktree == Path(registered_worktrees(root)[0]["worktree"]):
-        return f"switch this checkout to another branch with `git -C {worktree} switch <branch>`"
+        return f"switch the main checkout to another branch with `git -C {worktree} switch <branch>`"
     return (
         f"free it with `git -C {worktree} switch --detach` or "
         f"`git worktree remove {worktree}`"
@@ -747,10 +747,12 @@ def refuse_untracked_overlap(
         if line.startswith(("?? ", "!! "))
     ]
     if found:
+        from hook_chain import SETUP_COMMAND
+
         error = ValueError(
             "The update would replace local files that Git does not track: "
             + ", ".join(found)
-            + "; move them away, then run the published setup command to retry"
+            + f"; move or rename them, then rerun setup to retry: {SETUP_COMMAND}"
         )
         if not repair:
             remember_failure(root, update_attempt(tip, revision), error)

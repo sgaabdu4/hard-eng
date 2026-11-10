@@ -494,7 +494,7 @@ def test_an_update_refuses_to_replace_a_local_file_git_does_not_track(
     assert update_runner.apply_update(target) == 0
     result = (target / update_runner.RESULT_FILE).read_text()
     assert ".mcp.json" in result and "ready on" not in result
-    assert "then run the published setup command to retry" in result
+    assert "move or rename them, then rerun setup to retry: curl " in result
     assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
     assert (target / ".mcp.json").read_text() == PRIVATE_MCP
     assert update_runner.apply_update(target) == 0
@@ -710,7 +710,7 @@ def test_the_note_says_pull_when_the_update_is_already_on_the_base(
         f"{update_runner.UPDATE_BRANCH}:main",
     )
     note = update_runner.freshness_note(target)
-    assert "already on main" in note and "rebase" in note
+    assert "already on origin/main" in note and "git rebase origin/main" in note
     assert "update-pr" not in note
 
 
@@ -744,7 +744,7 @@ def test_the_refusal_for_a_main_checkout_names_a_step_that_works(
     assert update_runner.apply_update(target) == 0
     result = (target / update_runner.RESULT_FILE).read_text()
     assert "checked out" in result
-    assert "switch this checkout to another branch" in result
+    assert "switch the main checkout to another branch" in result
     assert "git worktree remove" not in result
 
 

@@ -135,7 +135,9 @@ def report_stage(
             "Hard Eng: planning checks passed — ready for build within the authorized scope."
         )
     elif stage == "Complete" and quick:
-        print("Hard Eng: quick checks passed; tests run in the full check.")
+        print(
+            "Hard Eng: quick checks passed; the full check runs the tests and the other gates."
+        )
     elif stage == "Complete":
         print(
             "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."
@@ -806,7 +808,10 @@ def registry_entries(root: Path) -> tuple[dict[str, tuple[str, str]], list[str]]
             requirement = heading.split(" — ", 1)[0].strip()
             if not REQUIREMENT_ID.fullmatch(requirement):
                 if requirement.startswith(("HE-", "REQ-")):
-                    errors.append(f"{requirement} is not a valid requirement ID")
+                    errors.append(
+                        f"{name}: heading {requirement} is not a valid requirement ID; "
+                        "see the ID format at the top of the Hard Eng requirements"
+                    )
                 continue
             if requirement in entries:
                 errors.append(f"{requirement} is defined more than once")

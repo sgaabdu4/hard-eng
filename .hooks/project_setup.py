@@ -261,7 +261,7 @@ def package_script_invocation(
         script = package.get("scripts", {}).get(arguments[2])
         if not isinstance(script, str):
             raise TypeError(
-                f"Configured package test script {arguments[2]} is missing from package.json"
+                f"package script {arguments[2]} is missing from package.json"
             )
         arguments = shlex.split(script) + arguments[3:]
         if not arguments:

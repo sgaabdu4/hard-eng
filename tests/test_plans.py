@@ -567,7 +567,7 @@ def test_native_cli_plan_stage_and_missing_plan(
         check=True,
     )
     notice = json.loads(stopped.stdout)["systemMessage"]
-    assert "quick checks passed; tests run in the full check" in notice
+    assert "quick checks passed; the full check runs the tests" in notice
     assert "ready for ship" not in notice
     result = subprocess.run(
         command + ["--base", "missing-comparison-base"],
