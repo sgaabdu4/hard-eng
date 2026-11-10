@@ -636,6 +636,9 @@ def test_the_missing_boundary_error_names_the_file_and_the_key(
     assert step, str(caught.value)
     key, name = step.groups()
     (tmp_path / name).write_text("{" + key + "}")
+    for folder in ("domain", "ui"):
+        (tmp_path / "lib" / folder).mkdir(parents=True)
+        (tmp_path / "lib" / folder / "page.dart").write_text("void main() {}\n")
     validate_dart_boundaries(command, tmp_path, 5)
 
 
@@ -656,3 +659,27 @@ def test_a_settings_file_that_the_tool_rejects_shows_the_tools_text(
     assert reason in str(caught.value)
     assert "\n" not in str(caught.value)
     assert "returned non-zero" not in str(caught.value)
+
+
+def boundary_tool(monkeypatch: pytest.MonkeyPatch, rules: list[dict[str, str]]) -> None:
+    def native_config(*_args: object, **_kwargs: object) -> str:
+        return json.dumps({"config": {"boundaries": rules}})
+
+    monkeypatch.setattr(subprocess, "check_output", native_config)
+
+
+def test_a_boundary_rule_with_a_missing_folder_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "lib/feature_a").mkdir(parents=True)
+    (tmp_path / "lib/feature_a/page.dart").write_text("void main() {}\n")
+    (tmp_path / ".dart-decimaterc.json").write_text("{}")
+    command = ["dart-decimate", "check", ".", "--strict"]
+    boundary_tool(monkeypatch, [{"from": "lib/feature", "disallow": "lib/feature_a"}])
+    validate_dart_boundaries(command, tmp_path, 5)
+    for prefix in ("lib/features", "ui/pages"):
+        boundary_tool(monkeypatch, [{"from": "lib/feature_a", "disallow": prefix}])
+        with pytest.raises(
+            ValueError, match=rf"{prefix} in .dart-decimaterc.json matches no .dart file"
+        ):
+            validate_dart_boundaries(command, tmp_path, 5)

@@ -5,6 +5,30 @@ import subprocess
 from pathlib import Path
 
 
+SETTINGS_FILES = (
+    ".dart-decimaterc",
+    ".dart-decimaterc.json",
+    ".dart-decimaterc.jsonc",
+    "dart-decimate.toml",
+    ".dart-decimate.toml",
+)
+
+
+def has_dart_file(directory: Path, prefix: str) -> bool:
+    head, slash, _ = prefix.partition("/")
+    starts = [
+        path
+        for path in directory.iterdir()
+        if (path.name == head if slash else path.name.startswith(head))
+    ]
+    return any(
+        file.relative_to(directory).as_posix().startswith(prefix)
+        for start in starts
+        for file in ([start] if start.is_file() else start.rglob("*.dart"))
+        if file.suffix == ".dart"
+    )
+
+
 def validate_dart_boundaries(
     command: list[str], directory: Path, timeout: float
 ) -> None:
@@ -48,3 +72,14 @@ def validate_dart_boundaries(
             "prefixes in the package's Dart Decimate settings file; if the package "
             "has none, make .dart-decimaterc.json for it"
         )
+    settings_file = next(
+        (name for name in SETTINGS_FILES if (directory / name).exists()),
+        "the Dart Decimate settings file",
+    )
+    for rule in boundaries:
+        for prefix in (rule["from"], rule["disallow"]):
+            if not has_dart_file(directory, prefix):
+                raise ValueError(
+                    f"{directory.name}: the boundary prefix {prefix} in {settings_file} "
+                    "matches no .dart file; fix the folder name or remove the rule"
+                )

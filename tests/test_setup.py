@@ -299,6 +299,9 @@ def test_dart_boundary_gate_requires_blocking_project_rules(
         "check_output",
         native_config,
     )
+    for folder in ("test", "lib/src"):
+        (tmp_path / folder).mkdir(parents=True)
+        (tmp_path / folder / "page.dart").write_text("void main() {}\n")
     for command in (
         ["dart-decimate", "check", ".", "--boundary-violations", "--strict"],
         [
