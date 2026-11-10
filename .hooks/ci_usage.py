@@ -25,8 +25,12 @@ def billed_job(job: dict[str, JsonValue]) -> tuple[int, float, int] | None:
     ) / 60
     labels = job.get("labels")
     names = " ".join(map(str, labels if isinstance(labels, list) else [])).lower()
-    multiplier = next(
-        (value for name, value in RUNNER_MULTIPLIERS.items() if name in names), 1
+    multiplier = (
+        0
+        if "self-hosted" in names
+        else next(
+            (value for name, value in RUNNER_MULTIPLIERS.items() if name in names), 1
+        )
     )
     return math.ceil(minutes) * multiplier, minutes, multiplier
 
@@ -142,7 +146,14 @@ def ci_usage(
     )
     count, rows = workflow_jobs(root, repository, days, limit)
     billed: dict[tuple[str, str, str], list[tuple[int, float, int]]] = {}
-    totals = {"billed": 0, "cancelled": 0, "failure": 0, "unstarted": 0, "running": 0}
+    totals = {
+        "billed": 0,
+        "cancelled": 0,
+        "failure": 0,
+        "unstarted": 0,
+        "running": 0,
+        "own": 0,
+    }
     actual = 0.0
     for workflow, event, job in rows:
         if job.get("status") != "completed":
@@ -153,6 +164,7 @@ def ci_usage(
             totals["unstarted"] += 1
             continue
         billed.setdefault((workflow, event, str(job.get("name"))), []).append(usage)
+        totals["own"] += usage[2] == 0
         totals["billed"] += usage[0]
         actual += usage[1] * usage[2]
         if job.get("conclusion") in {"cancelled", "failure"}:
@@ -163,6 +175,7 @@ def ci_usage(
         f"Billed {totals['billed']} min ({totals['billed'] - actual:.0f} rounding up to whole minutes); "
         f"cancelled {totals['cancelled']}, failed {totals['failure']}; "
         f"{totals['unstarted']} jobs never got a runner and are not billed; "
+        f"{totals['own']} self-hosted jobs are not billed; "
         f"{totals['running']} jobs still running are not counted. "
         "Standard runners on public repositories are free."
     )
