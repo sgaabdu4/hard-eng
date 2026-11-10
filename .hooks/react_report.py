@@ -40,7 +40,8 @@ def finding_lines(path: Path) -> list[str]:
     try:
         diagnostics = json.loads(path.read_text())["diagnostics"]
         return [
-            f"{item['filePath']} {item['rule']} {item['message']}"
+            f"{item['filePath']}{':' + str(item['line']) if type(item.get('line')) is int else ''}"
+            f" {item['rule']} {item['message']}"
             for item in diagnostics
         ]
     except (OSError, ValueError, KeyError, TypeError):

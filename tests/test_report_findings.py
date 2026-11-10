@@ -76,7 +76,8 @@ def test_a_failed_react_doctor_gate_prints_its_findings(
     path = tmp_path / "react-doctor.json"
     path.write_text(json.dumps(report))
     output = failed("react-doctor", path, tmp_path, capsys)
-    assert "src/List.tsx" in output
+    assert "src/List.tsx:6 no-derived-state" in output
+    assert "src/List.tsx no-array-index-as-key" in output
     assert "no-derived-state" in output
     assert "Do not copy a prop into state" in output
     assert "no-array-index-as-key" in output
@@ -113,10 +114,68 @@ def test_a_failed_fallow_gate_prints_its_findings(
     path = tmp_path / "fallow.json"
     path.write_text(json.dumps(report))
     output = failed("fallow", path, tmp_path, capsys)
-    assert "src/math.ts" in output
-    assert "quadruple" in output
-    assert "is-odd" in output
-    assert "package.json" in output
+    assert "src/math.ts:3 unused_exports quadruple" in output
+    assert "package.json:9 unused_dependencies is-odd" in output
+
+
+def test_a_failed_fallow_gate_names_every_copy_without_its_code(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    group = {
+        "instances": [
+            {
+                "file": "src/alpha.ts",
+                "start_line": 1,
+                "end_line": 33,
+                "fragment": "SECRET_BODY",
+            },
+            {
+                "file": "src/beta.ts",
+                "start_line": 4,
+                "end_line": 36,
+                "fragment": "SECRET_BODY",
+            },
+        ]
+    }
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps({"check": {}, "dupes": {"clone_groups": [group]}}))
+    output = failed("fallow", path, tmp_path, capsys)
+    assert "src/alpha.ts:1-33" in output
+    assert "src/beta.ts:4-36" in output
+    assert output.count("\n") == 1
+    assert "SECRET_BODY" not in output
+
+
+def test_a_secret_found_in_history_names_its_commit(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def result(sha: str) -> dict[str, object]:
+        place = {"artifactLocation": {"uri": "a.py"}, "region": {"startLine": 2}}
+        return {
+            "ruleId": "github-pat",
+            "locations": [{"physicalLocation": place}],
+            "partialFingerprints": {"commitSha": sha},
+        }
+
+    sarif = {"runs": [{"results": [result("0123456789abcdef0123"), result("")]}]}
+    path = tmp_path / "history.sarif"
+    path.write_text(json.dumps(sarif))
+    lines = failed("gitleaks", path, tmp_path, capsys).splitlines()
+    assert lines == ["github-pat a.py 2 0123456789ab", "github-pat a.py 2"]
+
+
+def test_the_findings_of_all_kinds_stop_at_twenty(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exports = [{"path": f"s{n}.ts", "export_name": "x"} for n in range(30)]
+    clones = [{"instances": [{"file": "d.ts", "start_line": 1, "end_line": 2}]}] * 30
+    path = tmp_path / "fallow.json"
+    path.write_text(
+        json.dumps(
+            {"check": {"unused_exports": exports}, "dupes": {"clone_groups": clones}}
+        )
+    )
+    assert len(failed("fallow", path, tmp_path, capsys).splitlines()) == 20
 
 
 @pytest.mark.parametrize("scanner", ["gitleaks", "react-doctor", "fallow"])
