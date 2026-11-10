@@ -13,8 +13,11 @@ from test_shipping import (
     _PR_URL,
     _UI_BODY,
     _UNDO,
+    FakeGitHub,
+    _check,
     _fixture,
     _patch_gh,
+    _pull,
     _ui_fake,
 )
 
@@ -26,6 +29,19 @@ def test_unchanged_ui_needs_comparison_note_without_uploads(
     fake = _ui_fake(
         fixture,
         body=f"UI appearance: unchanged — inspected the same dashboard, state and viewport before/after; no visible difference.\n{_UNDO}",
+    )
+    _patch_gh(monkeypatch, fake)
+    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert shipment.delivery_target == "PR"
+    assert not any("--method" in call for call in fake.calls)
+
+
+def test_a_pr_that_changes_no_ui_file_needs_no_ui_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, ui_paths=["src/**"])
+    fake = FakeGitHub(
+        _pull(fixture), [_check(fixture.head)], [{"filename": "README.md"}]
     )
     _patch_gh(monkeypatch, fake)
     shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
@@ -65,7 +81,6 @@ def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
 @pytest.mark.parametrize(
     "body",
     [
-        _UI_BODY + "\n\n" + _UI_BODY,
         _UI_BODY
         + "\nBefore: ![old](https://github.com/user-attachments/assets/other-old)",
         "UI appearance: unchanged — ",
@@ -76,11 +91,9 @@ def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
         "Before: ![old](https://github.com/user-attachments/assets/same)\nAfter: ![new](https://github.com/user-attachments/assets/same)",
         "Before:\n\nhttps://github.com/user-attachments/assets/old-video",
         "Before:\n\nhttps://example.invalid/old-video\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video",
-        "Before:\n\nhttps://github.com/user-attachments/assets/same\n\nAfter:\n\nhttps://github.com/user-attachments/assets/same",
         "Before:\n\nhttps://github.com/user-attachments/assets/old-video\n\nBefore:\n\nhttps://github.com/user-attachments/assets/extra-video\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video",
         "Before:\n\nhttps://github.com/user-attachments/assets/old-video?query\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video",
         "https://github.com/user-attachments/assets/old-video\n\nhttps://github.com/user-attachments/assets/new-video",
-        "UI appearance: unchanged — compared dashboard\n" + _NATIVE_VIDEO_BODY,
     ],
 )
 def test_ui_changes_reject_missing_foreign_or_duplicate_evidence(

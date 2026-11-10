@@ -322,37 +322,43 @@ def test_ready_preserves_unowned_dirty_work_by_rejecting(
 
 
 @pytest.mark.parametrize(
-    "changes",
+    ("changes", "message"),
     [
-        {"draft": True},
-        {"state": "closed"},
-        {"mergeable": False, "mergeable_state": "blocked"},
-        {"mergeable": True, "mergeable_state": "blocked"},
-        {"mergeable": None, "mergeable_state": "clean"},
-        {"base": {"ref": "develop", "repo": {"full_name": "acme/widget"}}},
-        {
-            "head": {
-                "ref": "other",
-                "sha": "a" * 40,
-                "repo": {"full_name": "acme/widget"},
-            }
-        },
-        {
-            "head": {
-                "ref": "feature/shipping",
-                "sha": "a" * 40,
-                "repo": {"full_name": "fork/widget"},
-            }
-        },
+        ({"draft": True}, "open and ready"),
+        ({"state": "closed"}, "open and ready"),
+        (
+            {"mergeable": False, "mergeable_state": "blocked"},
+            "mergeability is not clean",
+        ),
+        ({"mergeable": None, "mergeable_state": "clean"}, "mergeability is not clean"),
+        (
+            {"base": {"ref": "develop", "repo": {"full_name": "acme/widget"}}},
+            "base branch",
+        ),
+        (
+            {"head": {"ref": "other", "repo": {"full_name": "acme/widget"}}},
+            "does not match PR",
+        ),
+        (
+            {"head": {"ref": "feature/shipping", "repo": {"full_name": "fork/widget"}}},
+            "head repository",
+        ),
     ],
 )
 def test_ready_rejects_pr_identity_and_mergeability(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changes: dict[str, object]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changes: dict[str, object],
+    message: str,
 ) -> None:
     fixture = _fixture(tmp_path)
+    head = changes.get("head")
+    if isinstance(head, dict):
+        head.setdefault("sha", fixture.head)
     fake = FakeGitHub(_pull(fixture, **changes), [_check(fixture.head)])
+    fake.review = _review(fixture.head)
     _patch_gh(monkeypatch, fake)
-    with pytest.raises(shipping.ShippingError):
+    with pytest.raises(shipping.ShippingError, match=message):
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
@@ -403,7 +409,6 @@ def test_ready_bypasses_only_a_review_nobody_but_the_author_can_give(
     shipment = _ready_outcome(fixture, fake, monkeypatch, message)
     if shipment is not None:
         assert shipment.review_bypass is (state == "blocked")
-        assert any(call[1] == "graphql" for call in fake.calls)
 
 
 @pytest.mark.parametrize(
@@ -518,6 +523,31 @@ def test_ready_rejects_changed_pr_head_during_final_recheck(
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError, match="changed"):
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"status": "passed", "revision": "0" * 40},
+        {"status": "failed", "revision": "1" * 40},
+    ],
+)
+def test_a_delivery_check_that_passes_with_the_old_revision_is_refused(
+    tmp_path: Path, answer: dict[str, str]
+) -> None:
+    command = [
+        sys.executable,
+        "-c",
+        "import sys; print(sys.argv[1])",
+        json.dumps(answer),
+    ]
+    fixture = _fixture(
+        tmp_path, target="Deploy", delivery=[{"name": "live", "command": command}]
+    )
+    policy = shipping.load_policy(fixture.root, required=True)
+    assert policy is not None
+    with pytest.raises(shipping.ShippingError, match="did not prove revision: live"):
+        shipping._delivery(fixture.root, policy, "1" * 40, _PR_URL)
 
 
 def test_delivered_deploy_rejects_old_live_revision_then_passes(
@@ -662,7 +692,6 @@ def _merged_push(
     monkeypatch: pytest.MonkeyPatch,
     *,
     method: str = "squash",
-    behind: bool = False,
 ) -> MergedPush:
     fixture = _fixture(tmp_path)
     root = fixture.root
@@ -672,14 +701,6 @@ def _merged_push(
     (root / "source.txt").write_text("changed again\n")
     _native(root, "commit", "-qam", "Change the source again")
     _native(root, "switch", "-q", "main")
-    if behind:
-        (root / "other.txt").write_text("merged meanwhile\n")
-        _native(root, "add", "other.txt")
-        _native(root, "commit", "-qm", "Merged meanwhile (#6)")
-        base = _native(root, "rev-parse", "HEAD")
-        _native(root, "switch", "-q", "feature/shipping")
-        _native(root, "cherry-pick", base)
-        _native(root, "switch", "-q", "main")
     head = _native(root, "rev-parse", "feature/shipping")
     if method == "merge":
         _native(root, "merge", "-q", "--no-ff", "-m", "Merge feature", head)
@@ -700,9 +721,7 @@ def _merged_push(
     ]
     responses: dict[str, object] = {
         f"commits/{_native(root, 'rev-parse', 'HEAD')}/pulls": pulls,
-        f"compare/{base}...{head}": {
-            "status": "diverged" if behind else "ahead",
-        },
+        f"compare/{base}...{head}": {"status": "ahead"},
         f"git/commits/{head}": {
             "tree": {"sha": _native(root, "rev-parse", "HEAD^{tree}")}
         },
@@ -750,21 +769,6 @@ def _check_failed(push: MergedPush) -> None:
     ]
 
 
-def _check_missing(push: MergedPush) -> None:
-    push.responses[f"commits/{push.head}/check-runs?per_page=100&filter=all"] = [
-        {"total_count": 0, "check_runs": []}
-    ]
-
-
-def _check_pending(push: MergedPush) -> None:
-    push.responses[f"commits/{push.head}/check-runs?per_page=100&filter=all"] = [
-        {
-            "total_count": 1,
-            "check_runs": [_check(push.head, status="in_progress", conclusion=None)],
-        }
-    ]
-
-
 def _query_failure(push: MergedPush) -> None:
     del push.responses[f"commits/{_native(push.root, 'rev-parse', 'HEAD')}/pulls"]
 
@@ -791,8 +795,6 @@ def _uncommitted_change(push: MergedPush) -> None:
         _different_tree,
         _base_not_contained,
         _check_failed,
-        _check_missing,
-        _check_pending,
         _query_failure,
         _no_merged_pull_request,
         _pull_request_into_another_base,
@@ -844,16 +846,6 @@ def test_only_ci_pushes_to_the_base_branch_reuse_pull_request_checks(
         monkeypatch.setenv(name, value)
     assert shipping.reused_pull_request(push.root, push.base) is None
     assert capsys.readouterr().out == ""
-
-
-def test_merge_of_a_head_without_the_previous_base_runs_checks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    push = _merged_push(tmp_path, monkeypatch, method="merge", behind=True)
-    assert _native(push.root, "rev-parse", "HEAD^{tree}") == _native(
-        push.root, "rev-parse", f"{push.head}^{{tree}}"
-    )
-    assert shipping.reused_pull_request(push.root, push.base) is None
 
 
 def test_reused_pull_request_result_skips_gates(

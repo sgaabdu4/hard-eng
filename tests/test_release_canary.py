@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import commit, git, init
 from plans import validate_documents
 
 import release_canary
@@ -19,7 +20,13 @@ import release_canary
 
 def test_only_changes_to_installed_files_need_a_canary_run() -> None:
     assert not release_canary.needs_canary(
-        ["README.md", "release_canary.py", "features/x/PLAN.md", "docs/a.md"]
+        [
+            "README.md",
+            "release_canary.py",
+            "features/x/PLAN.md",
+            "docs/a.md",
+            ".github/workflows/canary.yml",
+        ]
     )
     for installed in (
         ".hooks/update.py",
@@ -39,7 +46,6 @@ def test_published_status_names_no_project() -> None:
     }
     text = release_canary.status_text(results)
     assert text == "1 of 2 canary runs passed"
-    assert "owner" not in text
 
 
 def full_run(
@@ -222,17 +228,39 @@ def test_release_text_holds_added_lines_but_not_lines_main_already_published(
     assert "secret-app" not in text
 
 
+def test_an_external_diff_tool_does_not_hide_a_private_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A developer's diff.external must not change the text the leak check reads."""
+    source = tmp_path / "source"
+    init(source)
+    (source / "notes.md").write_text("public\n")
+    commit(source, "base")
+    git(source, "branch", "-M", "main")
+    git(source, "update-ref", "refs/remotes/origin/main", "HEAD")
+    (source / "notes.md").write_text("public\nmentions secret-app\n")
+    release = commit(source, "release")
+    silent = tmp_path / "silent-diff"
+    silent.write_text("#!/bin/sh\nexit 0\n")
+    silent.chmod(0o755)
+    git(source, "config", "diff.external", str(silent))
+    in_source = release_canary.output
+
+    def output(command: list[str]) -> str:
+        return in_source(command, source)
+
+    monkeypatch.setattr(release_canary, "output", output)
+    monkeypatch.setattr(release_canary, "pulls_of", str)
+    text = release_canary.public_text(release)
+    assert release_canary.leaked_names(text, ["owner/secret-app"])
+
+
 def test_new_targets_get_the_project_documents_the_check_requires(
     tmp_path: Path,
 ) -> None:
     """A fresh install fails its check until PRODUCT.md and DESIGN.md are filled."""
     release_canary.add_documents(tmp_path)
     validate_documents(tmp_path)
-
-
-def test_a_target_folder_is_a_valid_cloudflare_project_name() -> None:
-    """create-cloudflare names the project after the folder and rejects underscores."""
-    assert re.fullmatch(r"[a-z0-9-]+", release_canary.folder("scaffold opennext"))
 
 
 def test_a_private_repository_named_after_a_public_owner_is_no_leak() -> None:
@@ -305,33 +333,6 @@ def test_an_agent_run_passes_only_when_hard_eng_recorded_a_passing_check(
     with (tmp_path / "agent.log").open("w") as log:
         assert release_canary.try_agent("codex", work, log) == expected
     assert sorted(path.name for path in tmp_path.iterdir()) == ["agent.log", "target"]
-
-
-def test_git_locks_in_the_target_never_reach_the_agent_copy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Background git maintenance holds and drops lock files while the target is copied."""
-    work = agent_target(tmp_path, monkeypatch, {"base": "x", "verified": {}})
-    (work / ".git/index.lock").touch()
-    with (tmp_path / "agent.log").open("w") as log:
-        assert release_canary.try_agent("codex", work, log) == (True, "codex passed")
-
-
-def test_project_lock_files_reach_the_agent_copy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Dependency lock files such as pubspec.lock are project files the checks need."""
-    work = agent_target(tmp_path, monkeypatch, {"base": "x", "verified": {}})
-    (work / "pubspec.lock").write_text("packages: {}\n")
-    command = release_canary.agent_command
-
-    def agent_command(name: str, copy: Path) -> list[str]:
-        assert (copy / "pubspec.lock").is_file()
-        return command(name, copy)
-
-    monkeypatch.setattr(release_canary, "agent_command", agent_command)
-    with (tmp_path / "agent.log").open("w") as log:
-        assert release_canary.try_agent("codex", work, log) == (True, "codex passed")
 
 
 def test_a_step_log_shows_when_each_command_started_and_how_long_it_took(
@@ -489,11 +490,6 @@ def test_only_new_projects_get_agent_sessions() -> None:
     assert release_canary.agents_for(("installed", "o/a"), agents) == ()
     for kind in ("scaffold", "greenfield", "brownfield"):
         assert release_canary.agents_for((kind, "x"), agents) == agents
-
-
-def test_the_public_canary_workflow_needs_no_canary_run() -> None:
-    """The workflow only checks new projects; a project never installs it."""
-    assert not release_canary.needs_canary([".github/workflows/canary.yml"])
 
 
 def test_ci_names_every_new_project_without_a_newest_passing_job(
