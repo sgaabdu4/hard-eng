@@ -151,14 +151,25 @@ def frontmatter_failures(root: Path) -> list[str]:
 SKILL_BYTES = 8000
 
 
+# Codex 0.166 cuts the middle from one tool output near 40,000 bytes; line numbers add to a read.
+REFERENCE_BYTES = 36000
+
+
 def size_failures(root: Path) -> list[str]:
     """Symlinked skills come from submodules that own their own size."""
-    return [
-        f"{skill.name}: SKILL.md has {size} bytes; Codex may cut it at {SKILL_BYTES}"
-        for skill in sorted((root / ".agents/skills").iterdir())
-        if not skill.is_symlink()
-        and (size := (skill / "SKILL.md").stat().st_size) > SKILL_BYTES
-    ]
+    failures: list[str] = []
+    for skill in sorted((root / ".agents/skills").iterdir()):
+        if skill.is_symlink():
+            continue
+        for document in sorted(skill.rglob("*.md")):
+            name = document.relative_to(skill).as_posix()
+            limit = SKILL_BYTES if name == "SKILL.md" else REFERENCE_BYTES
+            size = document.stat().st_size
+            if size > limit:
+                failures.append(
+                    f"{skill.name}: {name} has {size} bytes; Codex may cut it at {limit}"
+                )
+    return failures
 
 
 COMMAND = re.compile(r"hard-eng\.py ([a-z][a-z-]*)([^`\n|]*)")
@@ -335,4 +346,24 @@ def test_an_oversized_skill_fails_unless_a_submodule_owns_it(tmp_path: Path) -> 
 
     assert size_failures(tmp_path) == [
         f"over: SKILL.md has {SKILL_BYTES + 1} bytes; Codex may cut it at {SKILL_BYTES}"
+    ]
+
+
+def test_an_oversized_reference_fails_unless_a_submodule_owns_it(
+    tmp_path: Path,
+) -> None:
+    skills = tmp_path / ".agents/skills"
+    skill(skills, "local", "# Local\n")
+    skill(tmp_path / "submodule", "linked", "# Linked\n")
+    for owner in (skills / "local", tmp_path / "submodule/linked"):
+        (owner / "references").mkdir()
+        (owner / "references/full.md").write_text("x" * REFERENCE_BYTES)
+        (owner / "references/over.md").write_text("x" * (REFERENCE_BYTES + 1))
+    (skills / "linked").symlink_to(tmp_path / "submodule/linked")
+
+    assert size_failures(tmp_path) == [
+        (
+            f"local: references/over.md has {REFERENCE_BYTES + 1} bytes; "
+            f"Codex may cut it at {REFERENCE_BYTES}"
+        )
     ]
