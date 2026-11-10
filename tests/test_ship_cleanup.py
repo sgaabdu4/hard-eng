@@ -6,12 +6,14 @@ from conftest import add_origin, commit, init
 from shipping import Shipment, git
 
 
+@pytest.mark.parametrize("husky_ignores_itself", [True, False])
 def test_cleanup_ignores_only_what_hard_eng_put_in_the_worktree(
-    tmp_path: Path,
+    tmp_path: Path, husky_ignores_itself: bool
 ) -> None:
     root, task = tmp_path / "checkout", tmp_path / "task"
     init(root)
-    (root / ".gitignore").write_text("*.private\n.env*\n.husky/_/\n")
+    listed = "" if husky_ignores_itself else ".husky/_/\n"
+    (root / ".gitignore").write_text("*.private\n.env*\n" + listed)
     (root / ".husky").mkdir()
     (root / ".husky/pre-push").write_text("hook\n")
     commit(root, "baseline")
@@ -21,6 +23,9 @@ def test_cleanup_ignores_only_what_hard_eng_put_in_the_worktree(
     git(task, "push", "-q", "origin", "feature/ship")
     (root / ".husky/_").mkdir()
     (root / ".husky/_/pre-push").write_text("shim\n")
+    (root / ".husky/_/h").write_text("shim\n")
+    if husky_ignores_itself:
+        (root / ".husky/_/.gitignore").write_text("*\n")
     (root / ".env.local").write_text("KEY=value\n")
     ship_actions.link_local_files(root, task)
     assert (task / ".env.local").is_symlink()

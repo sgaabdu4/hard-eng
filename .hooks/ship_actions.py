@@ -348,7 +348,10 @@ def unchanged_checkout(shipment: Shipment) -> None:
         "--ignored=matching",
         "--ignore-submodules=none",
     )
-    if any(line not in own for line in status.splitlines()):
+    folders = tuple(line for line in own if line.endswith("/"))
+    if any(
+        line not in own and not line.startswith(folders) for line in status.splitlines()
+    ):
         raise ValueError("Cleanup preserves modified, untracked or ignored work")
     if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:
         raise ValueError("Cleanup preserves commits added after the verified PR")
