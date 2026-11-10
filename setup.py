@@ -465,10 +465,7 @@ def prepare_hook(root: Path) -> tuple[Path, str]:
     hook, target = hook_chain.locate(root)
     shell = target != hook
     hook_chain.check_free(root, target)
-    chained = (
-        hook_chain.foreign_hook(root, target)
-        or hook_chain.project_copy(target).exists()
-    )
+    chained = hook_chain.foreign_hook(root, target) or hook_chain.keeps_copy(target)
     if shell:
         launcher = (
             hook_chain.HUSKY_CHAINED_LAUNCHER if chained else hook_chain.SHELL_LAUNCHER
@@ -895,8 +892,7 @@ def install(root: Path, previous: Path | None = None) -> None:
         ),
         (
             worktree,
-            hook_chain.foreign_hook(root, worktree)
-            or hook_chain.project_copy(worktree).exists(),
+            hook_chain.foreign_hook(root, worktree) or hook_chain.keeps_copy(worktree),
         ),
     ):
         if path.is_relative_to(root) and ".git" not in path.relative_to(root).parts:
