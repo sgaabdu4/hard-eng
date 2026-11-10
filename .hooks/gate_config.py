@@ -273,6 +273,13 @@ def dart_rule_settings(value: object) -> object:
         if not all(isinstance(rule, str) for rule in value):
             raise ValueError("Dart lint rule names must be strings")
         return {rule: True for rule in value}
+    if isinstance(value, dict):
+        for rule, enabled in value.items():
+            if enabled is False:
+                raise ValueError(
+                    f"analysis_options.yaml: {rule} is set to false, which turns off "
+                    "a lint rule of the included set; remove that entry"
+                )
     return value
 
 

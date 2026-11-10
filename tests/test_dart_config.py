@@ -683,3 +683,20 @@ def test_a_boundary_rule_with_a_missing_folder_is_refused(
             ValueError, match=rf"{prefix} in .dart-decimaterc.json matches no .dart file"
         ):
             validate_dart_boundaries(command, tmp_path, 5)
+
+
+def test_a_linter_rule_set_to_false_is_refused_by_name(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    options = json.loads(json.dumps(runner.DART_TYPING))
+    options["linter"]["rules"]["avoid_print"] = False
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(yaml.safe_dump(options))
+    with pytest.raises(
+        ValueError, match=r"analysis_options.yaml: avoid_print is set to false"
+    ) as caught:
+        runner.validate_typing(tmp_path, "dart", ["lib"])
+    assert str(caught.value).endswith("; remove that entry")
+    del options["linter"]["rules"]["avoid_print"]
+    path.write_text(yaml.safe_dump(options))
+    runner.validate_typing(tmp_path, "dart", ["lib"])
