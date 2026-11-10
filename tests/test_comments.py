@@ -262,6 +262,45 @@ SWITCHES = [
         "abc:config.yml:generic-api-key:1",
     ),
     ("app/.semgrepignore", "src/\n", "src/"),
+    ("t.py", "@unittest." + "skip('x')\ndef t(): ...\n", "unittest." + "skip"),
+    ("t.py", "@unittest." + "skipIf(a, 'x')\ndef t(): ...\n", "unittest." + "skipIf"),
+    (
+        "t.py",
+        "@unittest." + "expectedFailure\ndef t(): ...\n",
+        "unittest." + "expectedFailure",
+    ),
+    ("t.py", "        self.skip" + "Test('x')\n", "skip" + "Test("),
+    ("t.py", "np = pytest.import" + "orskip('numpy')\n", "import" + "orskip("),
+    ("t.py", "__test__ " + "= False\n", "__test__ " + "= False"),
+    ("t.py", "    raise unittest" + ".SkipTest('x')\n", "unittest" + ".SkipTest"),
+    ("t.py", "@sk" + "ip('x')\ndef t(): ...\n", "@sk" + "ip("),
+    ("a.test.ts", "it." + "skip.each([1])('s', () => {});\n", "it." + "skip."),
+    ("a.test.ts", "test." + "skipIf(ci)('s', () => {});\n", "test." + "skipIf("),
+    ("a.spec.ts", "test." + "fixme('s', () => {});\n", "test." + "fixme("),
+    ("a.test.js", "x" + "test('s', () => {});\n", "x" + "test("),
+    ("a.test.js", "test('s', { ski" + "p: true }, () => {});\n", "ski" + "p: true"),
+    ("a.test.js", "test('s', { ski" + "p: 'later' }, () => {});\n", "ski" + "p: '"),
+    ("a.test.js", "test('s', { on" + "ly: true }, () => {});\n", "on" + "ly: true"),
+    ("test/a_test.dart", "test('t', () {}, so" + "lo: true);\n", "so" + "lo:"),
+    ("lib/a.dart", "f(); // coverage:" + "ignore-line\n", "coverage:" + "ignore-"),
+    (
+        "ios/RunnerTests/ATests.swift",
+        "@Test(.enab" + "led(if: false)) func a() {}\n",
+        ".enab" + "led(if: false)",
+    ),
+    ("src/a.ts", "// jscpd:" + "ignore-start\n", "jscpd:" + "ignore"),
+    ("src/a.ts", "// fallow-" + "ignore-next-line\n", "fallow-" + "ignore"),
+    ("build.sh", "# shellcheck " + "disable=SC2086\n", "shellcheck " + "disable="),
+    (
+        ".github/workflows/ci.yml",
+        "      - uses: a/b@v1 # zizmor: " + "ignore[unpinned-uses]\n",
+        "zizmor: " + "ignore",
+    ),
+    (
+        ".gitleaks.toml",
+        "paths = ['''tests/fixtures''']\n",
+        "paths = ['''tests/fixtures''']",
+    ),
 ]
 
 
@@ -309,6 +348,27 @@ def test_scaffold_paths_and_ordinary_words_are_not_flagged(tmp_path: Path) -> No
     (root / ".semgrepignore").write_text("# Include production and tests.\n\n")
     (root / "notes.md").write_text("Nosy semantics.\n")
     validate_suppressions(root, "HEAD")
+
+
+def test_skip_argument_counts_only_in_test_files(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a paging value named skip is data; a skipped test is not."""
+    root = switch_root(tmp_path, "app.py", "")
+    for name, text in (
+        ("lib/page.dart", "final rows = query(ski" + "p: offset, so" + "lo: true);\n"),
+        ("src/page.ts", "const rows = find({ ski" + "p: true, on" + "ly: true });\n"),
+        (
+            "src/page.test.ts",
+            "const rows = find({ ski" + "p: 10, on" + "ly: 'admin' });\n",
+        ),
+        ("tests/doubles.py", "class TestDouble:\n    __test__ " + "= False\n"),
+    ):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    validate_suppressions(root, "HEAD")
+    (root / "test").mkdir()
+    (root / "test/page_test.dart").write_text("test('t', () {}, ski" + "p: offset);\n")
+    with pytest.raises(ValueError, match="test/page_test.dart:1 adds 'ski" + "p:'"):
+        validate_suppressions(root, "HEAD")
 
 
 ASSERTS = [
