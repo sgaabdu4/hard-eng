@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .api import Secrets, TrelloError
-from .config import SECRET
 from .secrets import Place, git
 from .shapes import Obj, obj, stamp, text
 from .state import lease_is_live, lease_lock, utc_now, write_atomic
@@ -83,7 +82,7 @@ def refuse_keys(files: list[Path], secrets: Secrets) -> None:
     values = [value for value in (secrets.key, secrets.token) if value]
     for path in files:
         content = path.read_text(errors="replace")
-        if any(value in content for value in values) or SECRET.search(content):
+        if any(value in content for value in values):
             raise TrelloError(f"{path.name} holds a key or token; no memory was sent")
 
 

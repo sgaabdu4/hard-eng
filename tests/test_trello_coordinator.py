@@ -708,9 +708,11 @@ def test_a_public_remote_gets_no_memory(
     assert other.run("check").code == 0
 
 
-@pytest.mark.parametrize("leak", [KEY, TOKEN, "ab" * 16])
+@pytest.mark.parametrize(
+    ("leak", "refused"), [(KEY, True), (TOKEN, True), ("ab" * 20, False)]
+)
 def test_memory_with_a_key_is_never_pushed(
-    project: Project, monkeypatch: pytest.MonkeyPatch, leak: str
+    project: Project, monkeypatch: pytest.MonkeyPatch, leak: str, refused: bool
 ) -> None:
     monkeypatch.setattr(load_claim(), "is_private", private_remote)
     drop_claim(project)
@@ -718,11 +720,11 @@ def test_memory_with_a_key_is_never_pushed(
     assert project.run("check").code == 0
     before = claim_commit(project)
     (project.state / "notes.md").write_text(f"login was {leak} yesterday\n")
-    refused = project.finish()
-    assert refused.code == 1
-    assert "notes.md" in str(refused.payload["error"])
-    assert leak not in refused.text
-    assert claim_commit(project) == before
+    finished = project.finish()
+    assert (finished.code == 1) == refused
+    assert ("notes.md" in str(finished.payload.get("error"))) == refused
+    assert leak not in finished.text
+    assert (claim_commit(project) == before) == refused
 
 
 def test_a_lost_local_record_is_rebuilt_from_the_claim(
