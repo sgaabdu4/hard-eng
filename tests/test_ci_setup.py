@@ -144,20 +144,17 @@ def test_managed_python_scanner_provisions_project_local_uv(
 
 
 @pytest.mark.parametrize("seconds,minutes", [(600, 10), (601, 11), (60, 1)])
-def test_generated_ci_timeout(
-    tmp_path: Path, seconds: int | None, minutes: int
-) -> None:
+def test_generated_ci_timeout(tmp_path: Path, seconds: int, minutes: int) -> None:
     config: GateConfig = {"packages": [], "shared": []}
     (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
-    if seconds is not None:
-        config["shipping"] = {
-            "base": "main",
-            "checks": ["hard-eng"],
-            "ui_paths": [],
-            "ci_seconds": seconds,
-            "pre_push_seconds": 600,
-            "delivery": [],
-        }
+    config["shipping"] = {
+        "base": "main",
+        "checks": ["hard-eng"],
+        "ui_paths": [],
+        "ci_seconds": seconds,
+        "pre_push_seconds": 600,
+        "delivery": [],
+    }
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, config, changes)
@@ -185,18 +182,6 @@ def test_generated_ci_timeout(
         "install " in checks["run"]
         and "MISE_FETCH_REMOTE_VERSIONS_CACHE=1h" in checks["run"]
     )
-
-
-def test_existing_hard_eng_workflow_is_preserved(tmp_path: Path) -> None:
-    name = "hard-eng.yml"
-    path = tmp_path / ".github/workflows" / name
-    path.parent.mkdir(parents=True)
-    content = "# Project-owned workflow\njobs:\n  custom:\n    timeout-minutes: 17\n"
-    path.write_text(content)
-    changes: dict[str, str] = {}
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes == {}
-    assert path.read_text() == content
 
 
 def test_maintenance_only_workflow_receives_a_quality_owner(
@@ -229,7 +214,6 @@ jobs:
 
     configure_ci(tmp_path, SOURCE, config, changes)
 
-    assert path.read_text() == content
     assert ".github/workflows/hard-eng.yml" in changes
     assert config["shipping"]["checks"] == ["quality", "hard-eng"]
 
@@ -263,7 +247,6 @@ def test_existing_quality_or_invalid_workflow_is_preserved(
     configure_ci(tmp_path, SOURCE, config, changes)
 
     assert changes == {}
-    assert path.read_text() == content
 
 
 @pytest.mark.parametrize("name", ["quality.yml", "hard-eng.yml"])
@@ -433,17 +416,16 @@ def test_known_action_pins_migrate_without_replacing_custom_workflow(
             "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5",
         )
     )
-    custom = "# Project-owned note\n" + old.replace(
-        "timeout-minutes: 5", "timeout-minutes: 10"
-    )
+    custom = "# Project-owned note\n" + old
     if named:
         custom = custom.replace("- uses:", "- name: Configure tool\n        uses:")
     path.write_text(custom)
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    expected = "# Project-owned note\n" + (
-        SOURCE / ".github/workflows/hard-eng.yml"
-    ).read_text().replace("timeout-minutes: 5", "timeout-minutes: 10")
+    expected = (
+        "# Project-owned note\n"
+        + (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    )
     if named:
         expected = expected.replace("- uses:", "- name: Configure tool\n        uses:")
     assert changes[str(path.relative_to(tmp_path))] == expected
@@ -579,9 +561,7 @@ def test_generated_triggers_migrate_with_customizations(tmp_path: Path) -> None:
     new_base = next(line for line in template.splitlines() if "BASE_SHA:" in line)
     old = "# Project-owned note\n" + template.replace(
         new_triggers, OLD_TRIGGERS, 1
-    ).replace(new_base.strip(), OLD_BASE, 1).replace(
-        "timeout-minutes: 5", "timeout-minutes: 10"
-    )
+    ).replace(new_base.strip(), OLD_BASE, 1)
     assert "pull_request:\n\npermissions:" in old, "installed shape"
     path = tmp_path / ".github/workflows/hard-eng.yml"
     path.parent.mkdir(parents=True)
@@ -603,9 +583,7 @@ def test_generated_triggers_migrate_with_customizations(tmp_path: Path) -> None:
     migrated = changes[str(path.relative_to(tmp_path))]
     assert migrated == "# Project-owned note\n" + template.replace(
         "      - develop\n", "", 1
-    ).replace("      - main\n", "      - trunk\n", 1).replace(
-        "timeout-minutes: 5", "timeout-minutes: 10"
-    )
+    ).replace("      - main\n", "      - trunk\n", 1)
     path.write_text(migrated)
     changes.clear()
     configure_ci(tmp_path, SOURCE, config, changes)

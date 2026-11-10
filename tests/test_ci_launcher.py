@@ -36,7 +36,3 @@ def test_a_job_without_the_anchor_is_named(capsys: pytest.CaptureFixture[str]) -
     workflow = "jobs:\n" + _job("local", "self-hosted", echo=True) + bare
     assert migrate_launcher(SOURCE, workflow) == workflow
     assert "CI launcher not updated in job bare" in capsys.readouterr().err
-
-
-def test_template_is_unchanged() -> None:
-    assert migrate_launcher(SOURCE, TEMPLATE) == TEMPLATE

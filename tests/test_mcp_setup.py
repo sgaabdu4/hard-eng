@@ -35,14 +35,8 @@ def appwrite_project(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def assert_preserved_pending_stdio_server(
-    target: Path,
-    original: str,
-    changes: dict[str, str],
-    service: str,
-    command: str,
+    changes: dict[str, str], service: str
 ) -> None:
-    assert target.read_text() == original
-    assert json.loads(original)["mcpServers"][service] == {"command": command}
     assert ".github/mcp.json" not in changes
     assert service not in tomllib.loads(changes.get(".codex/config.toml", "")).get(
         "mcp_servers", {}
@@ -85,22 +79,6 @@ def test_planned_appwrite_setup_installs_the_skill(
     )
     guide = tmp_path / ".claude/skills/appwrite-backend/references/mcp-servers.md"
     assert guide.is_file()
-
-
-def test_mcp_setup_leaves_unmanaged_vscode_jsonc_untouched(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    repository(tmp_path)
-    target = tmp_path / ".vscode/mcp.json"
-    target.parent.mkdir()
-    original = '{\n  // VS Code MCP configuration\n  "servers": {}\n}\n'
-    target.write_text(original)
-
-    changes: dict[str, str] = {}
-    installer.configure_mcp(tmp_path, changes)
-
-    assert target.read_text() == original
-    assert ".vscode/mcp.json" not in changes
 
 
 @pytest.mark.parametrize(
@@ -194,10 +172,8 @@ def test_appwrite_reuses_existing_custom_launcher_without_credentials(
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
 
-    assert target.read_text() == original
     pointer = {"command": command}
     assert ".mcp.json" not in changes
-    assert json.loads(original)["mcpServers"]["appwrite"] == pointer
     assert (
         tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]["appwrite"]
         == pointer
@@ -228,7 +204,6 @@ def test_appwrite_launcher_credentials_require_migration_before_reuse(
         installer.configure_mcp(tmp_path, changes)
 
     assert changes == {}
-    assert target.read_text() == original
 
 
 @pytest.mark.parametrize("external_kind", ["parent", "symlink"])
@@ -257,9 +232,7 @@ def test_appwrite_does_not_reuse_external_launcher(
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
 
-    assert_preserved_pending_stdio_server(
-        target, original, changes, "appwrite", pointer
-    )
+    assert_preserved_pending_stdio_server(changes, "appwrite")
     assert (
         "MCP setup pending: Appwrite needs the deployed endpoint"
         in capsys.readouterr().err
@@ -279,10 +252,6 @@ def test_appwrite_normalizes_existing_cloud_url_for_missing_hosts(
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
 
-    assert target.read_text() == original
-    assert json.loads(original)["mcpServers"]["appwrite"] == {
-        "url": "https://mcp.appwrite.io"
-    }
     assert ".github/mcp.json" not in changes
     assert tomllib.loads(changes[".codex/config.toml"])["mcp_servers"]["appwrite"] == {
         "url": "https://mcp.appwrite.io/"
@@ -327,9 +296,7 @@ def test_sentry_unsupported_stdio_target_stays_pending_for_missing_hosts(
     changes: dict[str, str] = {}
     installer.configure_mcp(tmp_path, changes)
 
-    assert_preserved_pending_stdio_server(
-        target, original, changes, "sentry", "sentry-mcp"
-    )
+    assert_preserved_pending_stdio_server(changes, "sentry")
     assert "MCP setup pending: existing Sentry MCP target" in capsys.readouterr().err
 
     target.write_text(

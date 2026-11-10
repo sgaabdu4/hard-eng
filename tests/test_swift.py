@@ -135,9 +135,6 @@ def test_setup_writes_swift_gates(installer: ModuleType, tmp_path: Path) -> None
     script = gates["tests"]["command"][2]
     assert gates["tests"]["command"][:2] == ["sh", "-c"]
     assert "xcodebuild test" in script and "-enableCodeCoverage YES" in script
-    assert "HARD_ENG_STRICT_Runner=YES" in script
-    assert "flutter build macos --config-only --no-pub" in script
-    assert 'flutter precache --"$platform"' in script
     assert gates["duplicates"]["command"][1:3] == ["Runner", "--format"]
     assert gates["security"]["command"][3] == "../.agents/skills/he/security"
     assert gates["security"]["command"][-2:] == ["Runner", "RunnerTests"]

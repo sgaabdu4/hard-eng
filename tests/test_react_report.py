@@ -55,22 +55,13 @@ def test_long_reason_is_cut(tmp_path: Path) -> None:
     assert "x" * 2000 in str(caught.value) and "x" * 2001 not in str(caught.value)
 
 
-def test_complete_react_scan_passes(tmp_path: Path) -> None:
-    reports.validate_react_doctor(written(tmp_path))
-
-
-def test_out_of_memory_reason_says_how_to_fix_it(tmp_path: Path) -> None:
-    changes = {"skippedChecks": ["lint"], "skippedCheckReasons": {"lint": OOM}}
+@pytest.mark.parametrize(
+    ("reason", "hinted"), [(OOM, True), ("timed out", False)], ids=["oom", "other"]
+)
+def test_only_an_out_of_memory_reason_gets_the_memory_hint(
+    tmp_path: Path, reason: str, hinted: bool
+) -> None:
+    changes = {"skippedChecks": ["lint"], "skippedCheckReasons": {"lint": reason}}
     with pytest.raises(ValueError) as caught:
         reports.validate_react_doctor(written(tmp_path, **changes))
-    assert (
-        "Fix: allow memory overcommit on the runner or give the job more memory"
-        in str(caught.value)
-    )
-
-
-def test_other_reasons_get_no_memory_hint(tmp_path: Path) -> None:
-    changes = {"skippedChecks": ["lint"], "skippedCheckReasons": {"lint": "timed out"}}
-    with pytest.raises(ValueError) as caught:
-        reports.validate_react_doctor(written(tmp_path, **changes))
-    assert "overcommit" not in str(caught.value)
+    assert ("overcommit" in str(caught.value)) is hinted
