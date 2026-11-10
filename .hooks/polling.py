@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 REASON = (
     "HE-NO-FOREGROUND-POLL: this command waits in the foreground with sleep. "
-    "Start the long job once with run_in_background: true, then keep working or end the turn; "
+    "Start the long job once with run_in_background: true; "
     "the harness tells you when it exits. Read its output file after that notice."
 )
 
