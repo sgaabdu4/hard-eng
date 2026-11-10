@@ -654,20 +654,17 @@ def published(root: Path, base: str) -> bool:
 
 def prepare_update(root: Path, repair: bool = False) -> str:
     """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
-    repaired = ""
+    note = ""
     if repair:
-        from update import repair_current_hook
+        from update import repair_checkout
 
-        repaired = repair_current_hook(
+        note = repair_checkout(
             root, json.loads((root / SOURCE_FILE).read_text())["revision"]
         )
     base = update_base(root)
     if not published(root, base):
-        return NOT_PUBLISHED
-    outcome = build_update(root, base, repair)
-    if "installed the missing" in repaired:
-        return f"{outcome} This checkout: installed the missing pre-push hook."
-    return outcome
+        return f"{NOT_PUBLISHED} {note}".strip()
+    return f"{build_update(root, base, repair)} {note}".strip()
 
 
 def free_step(root: Path, worktree: Path) -> str:

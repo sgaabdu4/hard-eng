@@ -19,7 +19,7 @@ import pytest
 import update
 import update_pr
 import update_runner
-from conftest import SOURCE, add_origin, commit, git
+from conftest import SOURCE, add_origin, commit, git, init
 from gate_config import JsonObject
 from test_setup import project_with_commit_hook
 from test_updates import select_release
@@ -425,7 +425,7 @@ def test_setup_retries_a_remembered_refusal(
     assert fetch.call_count == 1
     with pytest.raises(ValueError, match="secrets-files requires native"):
         update_runner.locked_update(target, repair=True)
-    assert fetch.call_count == 2
+    assert fetch.call_count == 3
 
 
 def test_an_update_replaces_the_old_tool_hook_commands(
@@ -760,3 +760,84 @@ def test_a_setup_rerun_records_its_result(
     recorded = (target / update_runner.RESULT_FILE).read_text()
     assert outcome in recorded
     assert "old refusal" not in recorded
+
+
+GATES_FILE = "hard-eng.gates.json"
+SRC_PROJECT = '[project]\nname="mylib"\nversion="1"\n[build-system]\nrequires = ["uv_build"]\nbuild-backend = "uv_build"\n'
+
+
+def add_src_package(root: Path, name: str) -> None:
+    package = root / "src" / name
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(f"NAME = '{name}'\n")
+    (package / "use.py").write_text(f"from {name} import NAME\n\nvalue = NAME\n")
+
+
+def installed_python_project(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, remote: bool
+) -> Path:
+    source = release[0]
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    project = source.parent / "project"
+    init(project)
+    (project / "uv.lock").touch()
+    (project / "pyproject.toml").write_text(SRC_PROJECT)
+    add_src_package(project, "mylib")
+    subprocess.run(
+        [sys.executable, str(source / "setup.py"), str(project)],
+        check=True,
+        capture_output=True,
+    )
+    commit(project, "installed")
+    if remote:
+        add_origin(project)
+    git(project, "switch", "-q", "-c", "task")
+    add_src_package(project, "extra")
+    commit(project, "a second package")
+    return project
+
+
+@pytest.mark.parametrize("remote", [True, False])
+def test_a_rerun_writes_the_planned_gates_file_to_the_current_checkout(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, remote: bool
+) -> None:
+    project = installed_python_project(release, monkeypatch, remote)
+    before = (project / GATES_FILE).read_text()
+    assert "extra" not in before
+    outcome = update_runner.locked_update(project, repair=True)
+    assert "This checkout: hard-eng.gates.json now matches" in outcome
+    assert ("pushed to a remote" in outcome) is not remote
+    assert '"extra"' in (project / GATES_FILE).read_text()
+    assert git(project, "status", "--porcelain") == f"M {GATES_FILE}"
+    assert git(project, "diff", "--cached", "--name-only") == ""
+    again = update_runner.locked_update(project, repair=True)
+    assert "This checkout" not in again
+
+
+def test_a_rerun_the_plan_refuses_writes_nothing(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    before = (project / GATES_FILE).read_text()
+    (project / "AGENTS.md").write_text("# Project rules\n")
+    monkeypatch.setattr(
+        update, "update_plan", Mock(side_effect=ValueError("setup refused the update"))
+    )
+    with pytest.raises(ValueError, match="setup refused"):
+        update_runner.locked_update(project, repair=True)
+    assert (project / GATES_FILE).read_text() == before
+
+
+def test_an_update_at_session_start_does_not_touch_the_checkout(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    before = (project / GATES_FILE).read_text()
+    fetch = Mock(side_effect=update.fetch_sources)
+    monkeypatch.setattr(update, "fetch_sources", fetch)
+    outcome = update_runner.prepare_update(project)
+    assert "This checkout" not in outcome
+    assert (project / GATES_FILE).read_text() == before
+    assert fetch.call_count == 0
