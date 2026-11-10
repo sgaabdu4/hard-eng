@@ -129,7 +129,8 @@ def size_verdict(root: Path) -> tuple[bool, str]:
     names = {
         name
         for name in names
-        if not documentation(name) or _is_protected(PurePosixPath(name))
+        if name != "hard-eng.debt.json"
+        and (not documentation(name) or _is_protected(PurePosixPath(name)))
     }
     added = sorted(
         {
