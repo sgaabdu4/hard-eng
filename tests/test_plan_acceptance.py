@@ -7,7 +7,8 @@ from types import ModuleType
 import gate_config
 import pytest
 from conftest import commit, configure, gate, git, init, plan_document
-from plans import validate_plan, validate_plans
+from gate_config import repository_files
+from plans import is_plan_path, plan_files, validate_plan, validate_plans
 
 # Fixture IDs are built so this file names no real registry ID.
 REQ = "REQ"
@@ -203,3 +204,29 @@ def test_plan_stage_cannot_reuse_an_old_plan_for_changed_work(tmp_path: Path) ->
     (root / "app.py").write_text("value = 1\n")
     with pytest.raises(ValueError, match="need an applicable PLAN.md"):
         validate_plans(root, stage="Complete")
+
+
+def test_plan_listing_matches_the_full_listing_filter(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / ".gitignore").write_text("features/ignored/\n")
+    (root / "Plan.MD").write_text(plan_document())
+    for name in ("features/a/PLAN.md", "features/deep/er/plan.md", "features/PLAN.md"):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(plan_document())
+    (root / "docs").mkdir()
+    (root / "docs/PLAN.md").write_text("not a plan path\n")
+    (root / "other/features").mkdir(parents=True)
+    (root / "other/features/PLAN.md").write_text("not a plan path\n")
+    (root / "features/ignored").mkdir()
+    (root / "features/ignored/PLAN.md").write_text(plan_document())
+    (root / "features/linked").mkdir()
+    (root / "features/linked/PLAN.md").symlink_to(root / "Plan.MD")
+    commit(root, "plans")
+    (root / "features/new").mkdir()
+    (root / "features/new/PLAN.md").write_text(plan_document())
+    expected = [
+        path for path in repository_files(root) if is_plan_path(path.relative_to(root))
+    ]
+    assert len(expected) == 5
+    assert plan_files(root) == expected
