@@ -57,6 +57,7 @@ SECTIONS = (
     "Verification",
 )
 STAGES = ("Draft", "Ready", "Complete")
+DRAFT_STEP = "; files outside the plan changed, so get approval for the plan, set its Status to Ready, then build"
 HANDOFFS = ("Clarification", "Approval")
 PLACEHOLDERS = re.compile(
     r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"
@@ -665,8 +666,10 @@ def validate_plans(
             # A Draft plan claims no implementation, so it may ride along with finished work.
             if status == "Draft" and reached:
                 continue
+            ready = status == "Draft" and stage == "Complete" and not explicit_stage
             raise ValueError(
                 f"{path.relative_to(root)}: plan is {status}; this check requires {stage}"
+                f"{DRAFT_STEP if ready else ''}"
             )
         effective_stage = min(effective_stage, status, key=STAGES.index)
     return stage if explicit_stage or not applicable else effective_stage
