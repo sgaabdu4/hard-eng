@@ -584,12 +584,14 @@ def session_context(root: Path, payload: JsonObject) -> str:
 
     if note := restore_note(root):
         messages.append(note)
+    if os.name == "posix":
+        from process_group import start_process_scan, stop_idle_codex_brokers
+
+        scan = start_process_scan()
     messages.append(gate_status(root))
     if os.name == "posix":
-        from process_group import stop_idle_codex_brokers
-
         try:
-            brokers, processes = stop_idle_codex_brokers()
+            brokers, processes = stop_idle_codex_brokers(scan())
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             messages.append(f"Idle Codex broker cleanup failed: {error}")
             brokers = processes = 0
