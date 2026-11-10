@@ -557,9 +557,9 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
         "sources": ["src"],
         "checks": [
             {"name": "types", "role": "types", "command": ["tsc"]},
-            {"name": "typing", "role": "typing-style", "command": ["biome"]},
-            {"name": "format", "role": "format-lint", "command": ["biome"]},
-            {"name": "focused", "role": "focused-tests", "command": ["biome"]},
+            {"name": "typing", "role": "typing-style", "command": ["biome", "lint"]},
+            {"name": "format", "role": "format-lint", "command": ["biome", "ci"]},
+            {"name": "focused", "role": "focused-tests", "command": ["biome", "lint"]},
             {"name": "tests", "role": "tests", "command": ["node", "test.js"]},
             {
                 "name": "dead-code",
