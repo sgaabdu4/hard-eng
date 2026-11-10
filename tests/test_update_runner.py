@@ -726,7 +726,8 @@ def test_a_failed_remote_lookup_keeps_gits_reason(
         text=True,
         check=False,
     )
-    reason = lookup.stderr.strip().splitlines()[-1]
+    reason = lookup.stderr.splitlines()[0]
+    assert reason.startswith("fatal:") and "gone.git" in reason
     assert update_runner.apply_update(target) == 0
     assert reason in (target / update_runner.RESULT_FILE).read_text()
 
