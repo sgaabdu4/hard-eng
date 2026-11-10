@@ -68,14 +68,19 @@ def import_linter_findings(path: Path) -> list[str]:
         text = path.read_text()
     except (OSError, ValueError):
         return []
-    lines = [
-        line.rstrip()
-        for line in text.splitlines()
-        if line.strip() and set(line.strip()) != {"-"}
-    ]
+    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+    rules = [set(line.strip()) == {"-"} for line in lines]
     if "Broken contracts" in lines:
-        return lines[lines.index("Broken contracts") + 1 :]
-    return [] if any(line.startswith("Contracts:") for line in lines) else lines[:1]
+        start = lines.index("Broken contracts") + 1
+        return [
+            f"broken contract: {line}"
+            if rules[index + 1 : index + 2] == [True]
+            else line
+            for index, line in enumerate(lines)
+            if index >= start and not rules[index]
+        ]
+    kept = [line for line, rule in zip(lines, rules, strict=True) if not rule]
+    return [] if any(line.startswith("Contracts:") for line in kept) else kept[:1]
 
 
 def dart_performance_findings(path: Path) -> list[str]:

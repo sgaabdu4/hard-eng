@@ -322,7 +322,7 @@ def test_flutter_dart_outside_lib_is_measured_on_the_dart_vm(tmp_path: Path) -> 
     assert "relative" not in result.stderr
     with pytest.raises(
         ValueError,
-        match="omits production files: scripts/check.dart.*import it by relative path",
+        match="omits production files: scripts/check.dart.*import it by a relative path",
     ):
         line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected)
     script.write_text("export '../lib/app.dart';\n")

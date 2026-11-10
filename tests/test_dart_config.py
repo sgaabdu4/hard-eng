@@ -628,9 +628,11 @@ def test_the_missing_boundary_error_names_the_file_and_the_key(
 
     monkeypatch.setattr(subprocess, "check_output", native_config)
     command = ["dart-decimate", "check", ".", "--strict"]
-    with pytest.raises(ValueError, match="nonempty project from/disallow") as caught:
+    with pytest.raises(
+        ValueError, match="Dart boundaries are missing or not usable"
+    ) as caught:
         validate_dart_boundaries(command, tmp_path, 5)
-    step = re.search(r'Add (".+?": \[.+?\]) .*?to (\S+)', str(caught.value))
+    step = re.search(r'Set (".+?": \[.+?\]) .* is (\S+) when', str(caught.value))
     assert step, str(caught.value)
     key, name = step.groups()
     (tmp_path / name).write_text("{" + key + "}")
