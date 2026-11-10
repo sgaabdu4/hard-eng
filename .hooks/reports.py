@@ -24,6 +24,14 @@ from project_setup import (
 )
 from react_report import finding_lines as react_findings
 from react_report import incomplete_reason
+from scan_findings import (
+    dart_performance_findings,
+    decimate_findings,
+    import_linter_findings,
+    jscpd_findings,
+    semgrep_findings,
+    trivy_findings,
+)
 
 SHELL_OPERATOR = re.compile(r"[;&|]")
 WARNINGS_LINE = re.compile(r"^Warnings$", re.MULTILINE)
@@ -832,7 +840,7 @@ def scanner_result(
     """A failed scan shows its findings from its report, as the tool prints none."""
     if passed:
         validate_scanner_report(scanner, gate, path, command, directory, timeout)
-    elif scanner == "osv" and path.is_file():
+    elif scanner in {"osv", "osv-image"} and path.is_file():
         try:
             validate_scanner_report(scanner, gate, path, command, directory, timeout)
         except ValueError as error:
@@ -958,5 +966,11 @@ FINDING_READERS = {
     "gitleaks": gitleaks_findings,
     "react-doctor": react_findings,
     "fallow": fallow_findings,
+    "semgrep": semgrep_findings,
+    "trivy": trivy_findings,
+    "dart-decimate": decimate_findings,
+    "jscpd": jscpd_findings,
+    "import-linter": import_linter_findings,
+    "performance-dart": dart_performance_findings,
 }
 SCANNER_LOGS = {"deptry": validate_deptry_log, "trivy": validate_trivy_log}
