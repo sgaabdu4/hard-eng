@@ -676,7 +676,7 @@ def validate_performance(group: Group) -> None:
     suites = [gate for gate in group["checks"] if gate.get("role") == "performance"]
     if group.get("language") and not suites and reason is None:
         raise ValueError(
-            "HE-PERFORMANCE-SUITE: Missing mandatory performance suite; configure a workload and budget "
+            f"{group['path']}: HE-PERFORMANCE-SUITE: Missing mandatory performance suite; configure a workload and budget "
             "or a reviewed performance_exception"
         )
     for gate in suites:
