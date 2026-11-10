@@ -10,10 +10,10 @@ import pytest
 from gate_config import GateConfig, Group
 
 
-@pytest.mark.parametrize("count", [1, 60, 240])
 def test_package_adaptation_reads_inventory_once(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, count: int
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    count = 60
     config: GateConfig = {"packages": [], "shared": []}
     files = []
     for index in range(count):

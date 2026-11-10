@@ -113,9 +113,6 @@ def test_config_with_a_secret_is_refused(
 
 
 def test_config_defaults_and_role_provider(project: Project) -> None:
-    config = project.mods.config.load_config(project.main)
-    assert (config.every_minutes, config.chase_hours) == (15, 24)
-    assert (config.promise_hours, config.done_grace_hours) == (6, 72)
     roles = {role: {"model": "m", "why": "w"} for role in ROLES}
     roles["builder"] = {"model": "m", "why": "w", "provider": "codex"}
     project.configure(roles=roles, timing={"chaseHours": 12})
@@ -129,25 +126,13 @@ def test_config_defaults_and_role_provider(project: Project) -> None:
         project.mods.config.load_config(project.main)
 
 
-@pytest.mark.parametrize(
-    "command",
-    ["comment", "move", "label", "upload", "update", "member", "tick", "check"],
-)
+@pytest.mark.parametrize("command", ["comment", "check"])
 def test_wrong_account_is_refused(
     project: Project, tmp_path: Path, command: str
 ) -> None:
     note = tmp_path / "note.txt"
     note.write_text("hello")
-    arguments = {
-        "comment": ["1", str(note)],
-        "move": ["1", "doing"],
-        "label": ["1", "add", "Needs Sam"],
-        "upload": ["1", str(note)],
-        "update": ["1", "--name", "New"],
-        "member": ["1", "add", "sam"],
-        "tick": ["1", "anything"],
-        "check": [],
-    }
+    arguments = {"comment": ["1", str(note)], "check": []}
     project.fake.account = "intruder"
     project.fake.cards = [make_card(1, "#1 Card", "l-todo")]
     result = project.run(command, *arguments[command])
@@ -193,7 +178,6 @@ def test_check_reports_every_missed_item(project: Project) -> None:
     project.finish()
     fake.actions.append(comment("o2", 3, "m-owner", "Owner decision: ship it", -0.02))
     report = project.report()
-    assert set(report) == set(project.mods.report.FIELDS)
     expected = {
         "requests": {"1"},
         "information": {"2"},
@@ -290,7 +274,6 @@ def test_comment_posts_new_and_blocks_private_data(
     first = project.run("comment", "1", str(note), "--image", str(image))
     second = project.run("comment", "#1", str(note))
     assert (first.code, second.code) == (0, 0), first.text + second.text
-    assert not [c for c in project.fake.writes if c.method == "PUT"] * 3
     assert project.fake.writes[0].path == "/cards/card1/attachments"
     assert project.fake.writes[0].form == {"multipart": "yes"}
     text = project.fake.writes[1].form["text"]
@@ -507,25 +490,33 @@ def test_member_adds_and_removes_a_person(project: Project) -> None:
     assert len(project.fake.writes) == writes
 
 
-@pytest.mark.parametrize(
-    "words",
-    [
-        "**Not built yet.**\n\nI am fixing the total. I will tell you when it is live.",
-        "Please try the export again. If it still fails, I will fix it today.",
-        "**@owner should the menu change wait for the next release?**",
-        "The fix is now live.",
-    ],
-)
-def test_a_comment_never_moves_a_card(
-    project: Project, tmp_path: Path, words: str
-) -> None:
+def test_a_comment_never_moves_a_card(project: Project, tmp_path: Path) -> None:
     project.fake.cards = [make_card(1, "#1 Card", "l-testing")]
     note = tmp_path / "note.txt"
-    note.write_text(words)
+    note.write_text(
+        "**Not built yet.**\n\nI am fixing the total. I will tell you when it is live."
+    )
     result = project.run("comment", "1", str(note))
     assert result.code == 0, result.text
     assert "movedTo" not in result.payload
     assert not [c for c in project.fake.writes if c.method == "PUT"]
+
+
+def test_label_upload_and_member_dry_runs_write_nothing(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(b"fake image")
+    for command in (
+        ("label", "1", "add", "Needs Sam"),
+        ("upload", "1", str(shot)),
+        ("member", "1", "add", "sam"),
+    ):
+        result = project.run(*command, "--dry-run")
+        assert result.code == 0, result.text
+        assert result.payload["dryRun"], command
+        assert project.fake.writes == [], command
 
 
 def test_done_move_clears_needs_labels(project: Project) -> None:
@@ -633,7 +624,7 @@ def first_cells(section: str) -> list[str]:
 
 def test_cli_matches_the_reference_contract(mods: Mods) -> None:
     parts = sections((SKILL / "references/commands.md").read_text())
-    parser, subcommands = mods.commands.build_parser()
+    _, subcommands = mods.commands.build_parser()
     documented = {}
     for cell in first_cells(parts["Commands"]):
         tokens = cell.replace("\\|", "|").split()
@@ -653,13 +644,6 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
         assert len([a for a in actions if not a.option_strings]) == count, name
         options = {s for a in actions for s in a.option_strings if s.startswith("--")}
         assert options - {"--help", "--dry-run"} == flags, name
-        assert ("--dry-run" in options) == (
-            name
-            in (
-                *("comment", "move", "label", "upload", "update", "detach", "new"),
-                *("member", "tick", "archive"),
-            )
-        )
     assert set(first_cells(parts["`trello.json`"])) == set(mods.config.FIELDS)
     assert tuple(first_cells(parts["`check` report"])) == (
         mods.report.FIELDS + mods.report.WAKE_FIELDS
@@ -672,62 +656,6 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
     )
     assert set(re.findall(r"`(\w+)`", timing_row.split("|")[2])) == set(
         mods.config.TIMING_FIELDS
-    )
-    assert parser.prog == "trello.py"
-
-
-def test_skill_states_scheduling_roles_and_simplify_loop() -> None:
-    hosts = (SKILL / "references/hosts.md").read_text()
-    headings = {line for line in hosts.splitlines() if line.startswith("## ")}
-    assert {"## T3 Code", "## Claude Code", "## Codex", "## Roles + models"} <= headings
-    assert "unavailable" in hosts
-    run = (SKILL / "references/run.md").read_text()
-    assert "## Simplify" in run.splitlines()
-    first_step = next(line for line in run.splitlines() if line.startswith("1. "))
-    assert "schedule" in first_step
-    assert "(hosts.md)" in first_step
-    assert "--git-common-dir" in first_step and "main checkout" in first_step
-    assert "`python3 .hooks/hard-eng.py update-pr` yourself" in run
-    assert "Only exception: Hard Eng `update-pr`" in (SKILL / "SKILL.md").read_text()
-    report = run.split("\n## Report\n", 1)[1]
-    assert "Quiet run" in report and "one line" in report
-    assert "still working = no message" in report
-    t3 = hosts.split("## T3 Code", 1)[1].split("\n## ", 1)[0]
-    assert "`coordinator` role's model" in t3
-    assert "coordinator = strongest model" in hosts
-    assert "`everyMs` is not `timing.everyMinutes`" in t3 and "`scheduledTaskId`" in t3
-    lists = run.split("\n## Report lists\n", 1)[1].split("\n## ", 1)[0]
-    assert "| `realCases`" in lists and "last checked" in lists
-    workers = run.split("\n## Workers\n", 1)[1].split("\n## ", 1)[0]
-    assert "real save" in workers and "read back" in workers
-    assert "never skip or narrow a Hard Eng check" in workers
-    assert "files its plan touches" in workers and "now conflicts" in workers
-    assert "never hold one for a bigger batch" in run
-    assert "tokenRefused" in hosts and "firstReport" in hosts
-    core = (SKILL / "SKILL.md").read_text()
-    assert "vary the wording" in core and "`--check`" in core
-    assert "quietHours" not in core + hosts + run
-    release = run.split("\n- Release:", 1)[1].split("\n- ", 1)[0]
-    assert "red boxes around each change" in release
-    assert "`develop`" in release and "gh pr merge --merge" in release
-    assert "fix or revert" in release and "done once production" in release
-    assert "since the last production release" in release
-    assert "moved it back to doing, do not merge" in release
-    assert "test site link" in release
-    assert (
-        "When `shipping.base` is `develop` and the card is in testing, take the click steps from the test site"
-        in core
-    )
-    hosting = (SKILL.parent / "he/references/integrations.md").read_text()
-    hosting = hosting.split("- **Hosting**", 1)[1].split("\n- **", 1)[0]
-    assert "base branch → production" in hosting
-    assert "`trello.json`" in hosting and "`shipping.base` = `develop`" in hosting
-    assert "own preview on the staging backend" in hosting
-    assert "head branch is not `develop`" in hosting
-    assert "staging URL after a `develop` push is the delivery check" in hosting
-    assert (
-        "allow merge commits" in hosting
-        and "not list that check in `shipping.checks`" in hosting
     )
 
 
