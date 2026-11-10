@@ -16,7 +16,7 @@ def shipped(
     root, task = tmp_path / "checkout", tmp_path / "task"
     init(root)
     listed = "" if husky_ignores_itself else ".husky/_/\n"
-    (root / ".gitignore").write_text("*.private\n.env*\n" + listed)
+    (root / ".gitignore").write_text("*.private\n.env*\n__pycache__/\n" + listed)
     (root / ".husky").mkdir()
     (root / ".husky/pre-push").write_text("hook\n")
     commit(root, "baseline")
@@ -90,5 +90,23 @@ def test_cleanup_keeps_what_the_task_added_or_changed_in_the_copied_hooks_folder
         ship_actions.cleanup(root, shipment)
     moved.unlink()
     moved.symlink_to("h")
+    ship_actions.cleanup(root, shipment)
+    assert not task.exists()
+
+
+def test_cleanup_does_not_count_compiled_hook_modules(
+    shipped: tuple[Path, Path, Shipment],
+) -> None:
+    root, task, shipment = shipped
+    compiled = task / ".hooks/__pycache__"
+    compiled.mkdir(parents=True)
+    (compiled / "hard-eng.cpython-313.pyc").write_bytes(b"compiled")
+    other = task / "tools/__pycache__"
+    other.mkdir(parents=True)
+    (other / "mine.cpython-313.pyc").write_bytes(b"compiled")
+    with pytest.raises(ValueError, match=r"ignored work: tools/__pycache__/$"):
+        ship_actions.cleanup(root, shipment)
+    (other / "mine.cpython-313.pyc").unlink()
+    other.rmdir()
     ship_actions.cleanup(root, shipment)
     assert not task.exists()
