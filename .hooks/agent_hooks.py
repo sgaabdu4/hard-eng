@@ -1,6 +1,5 @@
 """Native context/completion responses; Git records scope, never gate results."""
 
-import fcntl
 import hashlib
 import json
 import os
@@ -717,15 +716,10 @@ def show_decisions(root: Path, names: list[str], state: Path | None) -> str:
 
 
 def check_is_running(root: Path) -> bool:
-    name = subprocess.check_output(
-        ["git", "rev-parse", "--git-path", "hard-eng-check.lock"], cwd=root, text=True
-    ).strip()
-    with (root / name).open("w") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-    return False
+    from process_group import check_lock_file
+
+    with check_lock_file(root) as (_, held):
+        return held
 
 
 def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:

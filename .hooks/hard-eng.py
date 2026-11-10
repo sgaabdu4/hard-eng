@@ -648,13 +648,10 @@ def run_limited_gate(
 @contextmanager
 def check_lock(root: Path) -> Generator[None]:
     """Gates write fixed report paths, so one check runs per checkout at a time."""
-    name = subprocess.check_output(
-        ["git", "rev-parse", "--git-path", "hard-eng-check.lock"], cwd=root, text=True
-    ).strip()
-    with (root / name).open("w") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+    from process_group import check_lock_file
+
+    with check_lock_file(root) as (lock, held):
+        if held:
             print("Waiting for another Hard Eng check in this checkout", flush=True)
             fcntl.flock(lock, fcntl.LOCK_EX)
         yield

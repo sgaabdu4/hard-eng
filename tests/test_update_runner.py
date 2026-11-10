@@ -359,6 +359,16 @@ def install_hook(root: Path, name: str, script: str) -> None:
     hook.chmod(0o755)
 
 
+def pushed_release(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    source, target, _ = release
+    add_origin(target)
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    return target
+
+
 def refused_release(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, Mock]:
@@ -423,15 +433,13 @@ def test_setup_retries_a_remembered_refusal(
 def test_an_update_replaces_the_old_tool_hook_commands(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source, target, _ = release
+    target = release[1]
     settings = target / ".claude/settings.json"
     old = "$(git rev-parse --show-toplevel 2>/dev/null)"
     settings.write_text(settings.read_text().replace("$CLAUDE_PROJECT_DIR", old))
     assert settings.read_text().count(old) == 3
     commit(target, "old tool hooks")
-    add_origin(target)
-    select_release(source, monkeypatch)
-    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    pushed_release(release, monkeypatch)
     assert update_runner.apply_update(target) == 0
     updated = git(
         target, "show", f"{update_runner.UPDATE_BRANCH}:.claude/settings.json"
@@ -443,10 +451,7 @@ def test_an_update_replaces_the_old_tool_hook_commands(
 def test_a_linked_local_settings_file_does_not_block_the_update(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source, target, _ = release
-    add_origin(target)
-    select_release(source, monkeypatch)
-    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    target = pushed_release(release, monkeypatch)
     local = target / ".claude/settings.local.json"
     local.write_text(
         '{"permissions":{"allow":'
@@ -510,10 +515,7 @@ def test_a_setup_rerun_refuses_to_replace_a_local_file_git_does_not_track(
 def test_a_failing_project_commit_hook_leaves_the_checkout_and_worktrees_unchanged(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source, target, _ = release
-    add_origin(target)
-    select_release(source, monkeypatch)
-    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    target = pushed_release(release, monkeypatch)
     install_hook(target, "pre-commit", "echo rejected by project hook\nexit 1\n")
 
     def files() -> dict[Path, bytes]:

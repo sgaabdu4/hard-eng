@@ -1,12 +1,13 @@
 """Run a command in its own process group so a timeout stops every process it started."""
 
+import fcntl
 import os
 import re
 import signal
 import subprocess
 import threading
-from collections.abc import Callable
-from contextlib import suppress
+from collections.abc import Callable, Generator
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import IO, NamedTuple
 
@@ -109,6 +110,22 @@ def start_process_scan() -> Callable[[], list[Process]]:
         return outcome
 
     return result
+
+
+@contextmanager
+def check_lock_file(root: Path) -> Generator[tuple[IO[str], bool]]:
+    """Open this checkout's check lock and try to take it; the flag says another check holds it."""
+    name = subprocess.check_output(
+        ["git", "rev-parse", "--git-path", "hard-eng-check.lock"], cwd=root, text=True
+    ).strip()
+    with (root / name).open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            held = True
+        else:
+            held = False
+        yield lock, held
 
 
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:
