@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from xml.parsers.expat import ExpatError
@@ -86,8 +86,8 @@ def snapshot_environment(root: Path) -> dict[str, str]:
 LOCAL_FILES = {".claude/settings.local.json", "CLAUDE.local.md"}
 
 
-def link_local_files(root: Path, checkout: Path) -> None:
-    """Builds read ignored local .env* files; link them and local settings without reading them."""
+def local_files(root: Path) -> Iterator[tuple[str, bool]]:
+    """Ignored paths of the main checkout that a new worktree gets: (name, copied)."""
     ignored = git(
         root,
         "ls-files",
@@ -102,16 +102,35 @@ def link_local_files(root: Path, checkout: Path) -> None:
     )
     for name in filter(None, ignored.split("\0")):
         source = root / name
-        target = checkout / name
-        if not target.parent.is_dir() or target.exists() or target.is_symlink():
-            continue
         if (
             Path(name).name.startswith(".env") and source.is_file()
         ) or name in LOCAL_FILES:
-            target.symlink_to(source)
+            yield name, False
         elif source.resolve() == hooks.resolve():
             # Git ignores files inside a linked folder, not the link; Husky's folder holds only shims.
+            yield name, True
+
+
+def link_local_files(root: Path, checkout: Path) -> None:
+    """Builds read ignored local .env* files; link them and local settings without reading them."""
+    for name, copied in local_files(root):
+        source = root / name
+        target = checkout / name
+        if not target.parent.is_dir() or target.exists() or target.is_symlink():
+            continue
+        if copied:
             shutil.copytree(source, target, symlinks=True)
+        else:
+            target.symlink_to(source)
+
+
+def placed_by_hard_eng(root: Path, checkout: Path) -> set[str]:
+    """Status lines for what link_local_files put in this worktree."""
+    return {
+        f"!! {name}"
+        for name, copied in local_files(root)
+        if copied or (checkout / name).resolve() == (root / name).resolve()
+    }
 
 
 def prepare_checkout(root: Path, checkout: Path, environment: dict[str, str]) -> None:
@@ -320,14 +339,16 @@ def unchanged_checkout(shipment: Shipment) -> None:
     index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
     if (target / index_lock).exists():
         raise ValueError("Cleanup preserves a task with an active Git index lock")
-    if git(
+    own = placed_by_hard_eng(Path(worktrees(target)[0]["worktree"]), target)
+    status = git(
         target,
         "status",
         "--porcelain",
         "--untracked-files=all",
         "--ignored=matching",
         "--ignore-submodules=none",
-    ).strip():
+    )
+    if any(line not in own for line in status.splitlines()):
         raise ValueError("Cleanup preserves modified, untracked or ignored work")
     if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:
         raise ValueError("Cleanup preserves commits added after the verified PR")
