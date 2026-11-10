@@ -104,7 +104,7 @@ After setup, start a new agent session so it loads the installed skills.
 
 ### Codex
 
-Start Codex with `codex --enable hooks`, trust the project, then review Hard Eng's hooks with `/hooks`. Review them again when they change. `--yolo` removes sandbox and approval protection; it does not set up hooks. See [Codex hook trust](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
+Start Codex, trust the project, then review Hard Eng's hooks with `/hooks`. Review them again when they change. `--yolo` removes sandbox and approval protection; it does not set up hooks. See [Codex hook trust](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
 
 ### Requirements
 
