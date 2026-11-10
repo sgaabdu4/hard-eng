@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 
@@ -436,7 +437,7 @@ def test_python_security_gate_replaces_only_the_registry_sha1_rule(
         "command": [part.format("p/javascript") for part in scan],
     }
 
-    assert runner.prepare_command(group, python, 5)[5:] == [
+    assert runner.prepare_command(group, python, 5)[7:] == [
         "--config",
         os.path.relpath(RULES, runner.ROOT),
         "--config",
@@ -771,3 +772,28 @@ sys.exit(int(sys.argv[2]))
         ]
         assert [future.result() for future in futures] == [bool(exit_code)] * 2
     assert all((tmp_path / str(index)).exists() for index in range(2))
+
+
+def test_uvx_tools_wait_two_days_after_a_release(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2026, 11, 10, 13, 45, 10, tzinfo=UTC)
+    cutoff = ["--exclude-newer", "2026-11-08T13:00:00Z"]
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check"])
+    monkeypatch.setattr(tool_setup, "SCANNER_VERSIONS", {})
+    assert tool_setup.managed_command(["ruff", "check"], now=now) == [
+        "uvx",
+        *cutoff,
+        "ruff@latest",
+        "check",
+    ]
+    asked: list[list[str]] = []
+
+    def answer(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        asked.append(command)
+        return subprocess.CompletedProcess(command, 0, "ruff 9.9.9\n", "")
+
+    monkeypatch.setattr(subprocess, "run", answer)
+    assert tool_setup.scanner_version("ruff", False, 30, now=now) == "9.9.9"
+    assert asked == [["uvx", *cutoff, "ruff@latest", "--version"]]
+    assert "UV_EXCLUDE_NEWER" not in os.environ
