@@ -10,7 +10,13 @@ from types import ModuleType
 
 import pytest
 from conftest import SOURCE, git
-from gate_config import Gate, Group, JsonObject, validate_required_checks
+from gate_config import (
+    Gate,
+    Group,
+    JsonObject,
+    validate_performance,
+    validate_required_checks,
+)
 from plans import validate_plans
 from python_setup import python_gate_command, python_roots
 from test_plans import edit, sized_branch
@@ -46,6 +52,12 @@ def test_missing_performance_suite_names_the_requirement(
     output = capsys.readouterr().out
     assert "HE-PERFORMANCE-SUITE: tests/performance does not exist" in output
     assert "performance_exception" in output
+
+
+def test_the_performance_suite_error_names_its_package() -> None:
+    group: Group = {"path": "services/api", "language": "python", "checks": []}
+    with pytest.raises(ValueError, match="^services/api: HE-PERFORMANCE-SUITE"):
+        validate_performance(group)
 
 
 @pytest.mark.parametrize(("rescanned", "failed"), [(1, False), (0, True)])
