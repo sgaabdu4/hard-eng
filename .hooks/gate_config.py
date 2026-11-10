@@ -736,12 +736,11 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
     require_roles(group["path"], required, roles)
     scripts: list[list[str]] = []
     if group.get("language") == "javascript":
-        from project_setup import javascript_manager, package_script_arguments
+        from project_setup import gate_script_arguments, javascript_manager
 
         javascript_manager(directory)
         scripts = [
-            package_script_arguments(gate["command"], directory, bun_only=True)
-            for gate in group["checks"]
+            gate_script_arguments(group, gate, directory) for gate in group["checks"]
         ]
     from tool_setup import require_role_tool
 

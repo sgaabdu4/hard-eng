@@ -221,6 +221,13 @@ def package_directory(arguments: list[str], directory: Path) -> tuple[list[str],
     return arguments, directory
 
 
+def gate_script_arguments(group: Group, gate: Gate, directory: Path) -> list[str]:
+    try:
+        return package_script_arguments(gate["command"], directory, bun_only=True)
+    except TypeError as error:
+        raise TypeError(f"{group['path']}: gate {gate['name']}: {error}") from error
+
+
 def package_script_invocation(
     command: list[str], directory: Path, bun_only: bool = False
 ) -> tuple[list[str], Path]:
@@ -253,7 +260,9 @@ def package_script_invocation(
         package = json.loads((directory / "package.json").read_text())
         script = package.get("scripts", {}).get(arguments[2])
         if not isinstance(script, str):
-            raise TypeError("Configured package test script is missing")
+            raise TypeError(
+                f"Configured package test script {arguments[2]} is missing from package.json"
+            )
         arguments = shlex.split(script) + arguments[3:]
         if not arguments:
             raise ValueError("Configured package test script is empty")
