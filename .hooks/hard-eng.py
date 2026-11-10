@@ -88,6 +88,14 @@ ROOT = Path(__file__).resolve().parents[1]
 FAILED_GATES: list[str] = []
 RECORDING = threading.Event()
 TEST_REPORTS = {"python-tests", "lcov-tests", "dart-tests", "xcode-tests"}
+SUITE_FILTERS = {
+    "python": "--lf --last-failed --deselect --stepwise --sw --ignore --ignore-glob",
+    "javascript": "--test-only --test-name-pattern --test-skip-pattern --testNamePattern "
+    "--testPathPattern --testPathPatterns --testPathIgnorePatterns --grep --fgrep "
+    "--changed --onlyChanged --findRelatedTests --related --onlyFailures "
+    "--shard --project --selectProjects",
+    "dart": "--name --plain-name --tags --exclude-tags --total-shards --shard-index",
+}
 DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
     "analyzer": {
         "exclude": [],
@@ -238,6 +246,7 @@ def reject_test_filters(
     if language == "swift":
         return swift_setup.reject_test_filters(command)
     arguments = test_arguments(command, directory)
+    short_flags: tuple[str, ...] = ("-n", "-N", "-t", "-x")
     if language == "python":
         short_flags = ()
         for index, argument in enumerate(arguments):
@@ -247,28 +256,9 @@ def reject_test_filters(
                 arguments += pytest_options(directory)
                 short_flags = ("-k", "-m")
                 break
-        long_flags = {"--lf", "--last-failed", "--deselect", "--stepwise", "--sw"}
     elif language == "javascript":
-        long_flags = {
-            "--test-only",
-            "--test-name-pattern",
-            "--test-skip-pattern",
-            "--testNamePattern",
-            "--testPathPattern",
-            "--testPathPatterns",
-            "--testPathIgnorePatterns",
-            "--grep",
-            "--fgrep",
-            "--changed",
-            "--onlyChanged",
-            "--findRelatedTests",
-            "--related",
-            "--onlyFailures",
-        }
         short_flags = ("-t", "-g", "-f")
-    else:
-        long_flags = {"--name", "--plain-name", "--tags", "--exclude-tags"}
-        short_flags = ("-n", "-N", "-t", "-x")
+    long_flags = SUITE_FILTERS.get(language or "", SUITE_FILTERS["dart"]).split()
     for argument in arguments:
         if (
             argument.split("=", 1)[0] in long_flags
