@@ -237,7 +237,7 @@ def save(place: Place, secrets: Secrets) -> None:
         raise rejected(place, record.sha)
 
 
-def restore(place: Place, sha: str) -> None:
+def restore(place: Place, sha: str) -> bool:
     rows = [
         row.partition("\t") for row in plumbing(place, "ls-tree", "-z", sha).split("\0")
     ]
@@ -247,11 +247,12 @@ def restore(place: Place, sha: str) -> None:
         if name and meta.split()[1] == "blob" and is_memory_name(name)
     }
     if not kept:
-        return
+        return False
     for old in memory_files(place.state):
         old.unlink()
     for name, blob in kept.items():
         write_atomic(place.state / name, plumbing(place, "cat-file", "blob", blob))
+    return True
 
 
 def takeover(place: Place, secrets: Secrets, every_minutes: float) -> Obj:
@@ -261,12 +262,18 @@ def takeover(place: Place, secrets: Secrets, every_minutes: float) -> Obj:
             raise TrelloError("A run is going on this machine; take over after it ends")
         remote = remote_sha(place)
         previous = saved = ""
+        restored = False
         if remote:
             previous = text(holder_of(place, remote).get("since"))
             saved = plumbing(place, "log", "-1", "--format=%cI", remote).strip()
-            restore(place, remote)
+            restored = restore(place, remote)
         since = stamp(utc_now())
         tree = build_tree(place, secrets, me, since, shared_memory(place))
         if not publish(place, tree, since, remote):
             raise rejected(place, remote)
-    return {"tookOver": True, "previousSince": previous, "previousSaved": saved}
+    return {
+        "tookOver": True,
+        "previousSince": previous,
+        "previousSaved": saved,
+        "memoryRestored": restored,
+    }
