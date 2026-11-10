@@ -632,7 +632,7 @@ def test_the_missing_boundary_error_names_the_file_and_the_key(
         ValueError, match="Dart boundaries are missing or not usable"
     ) as caught:
         validate_dart_boundaries(command, tmp_path, 5)
-    step = re.search(r'Set (".+?": \[.+?\]) .* is (\S+) when', str(caught.value))
+    step = re.search(r'Set (".+?": \[.+?\]) .* makes (\S+) if', str(caught.value))
     assert step, str(caught.value)
     key, name = step.groups()
     (tmp_path / name).write_text("{" + key + "}")

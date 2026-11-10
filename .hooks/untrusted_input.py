@@ -278,12 +278,13 @@ def validate_typescript(
     if omitted := sorted({(directory / name).resolve() for name in expected} - files):
         shown = [os.path.relpath(path, root.resolve()) for path in omitted]
         configs = [os.path.relpath(path, root.resolve()) for path in read]
-        where = "that file" if len(configs) == 1 else "the one that owns them"
+        several = "the configuration that should compile it"
+        where = "that configuration" if len(configs) == 1 else several
         raise ValueError(
             "TypeScript configuration omits declared production files: "
             + ", ".join(shown[:3])
             + (f" and {len(shown) - 3} more" if len(shown) > 3 else "")
-            + f". The check read {', '.join(configs)}; add their folder to the `include` list of {where}"
+            + f". The check read {', '.join(configs)}; add the folder of each to the `include` list of {where}"
         )
     build_composites(root, compiler, selected, directory, timeout)
 

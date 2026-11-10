@@ -446,8 +446,8 @@ def validate_dart_boundaries(
             "Dart boundaries are missing or not usable: each rule needs a `from` and a "
             "`disallow` folder prefix of this project, with no `*` or `?`. Set "
             '"boundaries": [{"from": "lib/domain", "disallow": "lib/ui"}] with your own '
-            "prefixes in the package's Dart Decimate settings file, which is "
-            ".dart-decimaterc.json when setup made it"
+            "prefixes in the package's Dart Decimate settings file; setup makes "
+            ".dart-decimaterc.json if the package has none"
         )
 
 

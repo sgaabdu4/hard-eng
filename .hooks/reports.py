@@ -328,8 +328,8 @@ def line_coverage(
             + (
                 ". For Dart code outside lib/: move it under lib/ and test it there."
                 " Or leave it in place and write tests under test/ that import it by a"
-                " relative path and use package:test/test.dart (not flutter_test); that"
-                " way needs `test` as a dev dependency and a setup rerun, which adds"
+                " relative path and use package:test/test.dart (not flutter_test). The"
+                " second way needs `test` as a dev dependency and a setup rerun, which adds"
                 " the VM test run"
                 if outside_lib
                 else ""
