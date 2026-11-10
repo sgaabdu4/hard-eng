@@ -732,7 +732,9 @@ def commit_install(
     dirty: list[str],
     expected: dict[str, str | None] | None = None,
 ) -> str:
-    reason = "these paths already had local changes"
+    reason = "these paths already had local changes: " + install_paths(
+        [line[3:].strip('"') for line in dirty]
+    )
     if not dirty:
         subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
         if not subprocess.run(
@@ -766,9 +768,8 @@ def commit_install(
             )
             reason = " | ".join(result.stdout.strip().splitlines()[-3:])
     return (
-        f"Installed files are not committed ({reason}). Commit them so updates and "
-        "worktrees include them: "
-        + install_paths([line[3:].strip('"') for line in dirty] or names)
+        f"Installed files are not committed ({reason}). Commit all installed files so "
+        "updates and worktrees include them: " + install_paths(names)
     )
 
 
