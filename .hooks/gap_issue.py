@@ -3,7 +3,7 @@
 import json
 import re
 from collections.abc import Collection
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from basic_mode import MANIFEST_LABELS, SUFFIX_LABELS, language_label
 from gate_config import repository_files
@@ -72,11 +72,13 @@ def origin_names(root: Path) -> list[str]:
 def package_names(root: Path) -> list[str]:
     try:
         config = json.loads((root / "hard-eng.gates.json").read_text())
-        return [
-            package["name"]
+        found = [
+            value
             for package in config["packages"]
-            if isinstance(package.get("name"), str)
+            for value in (package.get("name"), package.get("path"))
+            if isinstance(value, str)
         ]
+        return [*found, *(PurePosixPath(value).name for value in found)]
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return []
 
