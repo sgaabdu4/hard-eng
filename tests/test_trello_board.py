@@ -98,6 +98,30 @@ def test_promises_ignore_conditional_live(
 @pytest.mark.parametrize(
     "text,listed",
     [
+        ("I post here when the store answers.", True),
+        ("I check the next new order and post here who it was.", True),
+        ("I'm adding the export now.", True),
+        ("I am checking the logs.", True),
+        ("I am going to move it today.", True),
+        ("The report is being fixed.", True),
+        ("I checked the logs. Nothing is wrong.", False),
+        ("I posted the steps above.", False),
+        ("Can I check the totals with you?", False),
+        ("Shall I post the steps here?", False),
+    ],
+)
+def test_promises_catch_present_tense_plans(
+    project: Project, text: str, listed: bool
+) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    project.fake.actions = [comment("ours-1", 1, "m-owner", text, 8)]
+    project.mods.state.log_posted(project.state, "ours-1")
+    assert (refs(project.report()["promises"]) == {"1"}) == listed
+
+
+@pytest.mark.parametrize(
+    "text,listed",
+    [
         ("Not built yet. I will tell you when it is live", True),
         ("This waits for the next release, until it is live", True),
         ("Not built yet. The fix is now live", False),
