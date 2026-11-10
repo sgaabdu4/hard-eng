@@ -100,8 +100,9 @@ After setup, start a new agent session so it loads the installed skills. `git pu
 - The update builds in a separate worktree from the remote base branch. It leaves one commit on the local branch `hard-eng/update`. It never touches your current branch.
 - `python3 .hooks/hard-eng.py update-pr` pushes that branch and opens or reuses the "Update Hard Eng" PR. It merges the PR only after every check passes. Rerun it to merge once pending checks finish. `--no-merge` prints the merge command instead.
 - The update PR may sit beside your task PR. Fix a failing update PR on its own branch first.
-- A refused update retries only when upstream changes, the checkout changes or 24 hours pass. The setup command always retries.
-- A failed update never switches off checks. The agent fixes the cause in its own commit, then reruns setup.
+- The update reads tracked files only. It stops and names any local file that Git does not track and that it would replace.
+- A refused update retries after a new release, a new commit on the remote base branch or 24 hours. The setup command always retries.
+- A failed update never switches off checks. The agent fixes the cause on the base branch in its own commit, then reruns setup.
 
 ### Codex
 
