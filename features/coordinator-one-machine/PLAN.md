@@ -1,6 +1,6 @@
 # Coordinator runs on any one machine, never two
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
@@ -15,14 +15,15 @@ Single source: the claim ref name, the memory file set and the take/save/release
 
 ## Decisions + authorization
 
-Blockers: the Hard Eng pre-push hook runs the full check on every pushed revision (`.hooks/ship_actions.py::pre_push`). A claim commit holds no `.hooks/hard-eng.py`, so the hook cannot check it and the push fails. Pending the maintainer's choice: push the claim with `--no-verify` (claim pushes only; the claim code refuses any file that holds the key, the token or a key-like value), or a hook exemption for the claim ref.
-Handoff: Clarification
+Blockers: None
+Handoff: Approval
 Authority: the maintainer asked on 2026-11-10 that the coordinator run on any one machine or server, never two at once, and approved keeping the coordinator's rules and memory in the private repository ("yes"). This plan is that change, landed before the consumer's read-only trial.
 Decision: the claim is a parentless commit on `refs/trello-coordinator/claim` at `origin`, taken with `git push --force-with-lease=<ref>:<expected>`, which git applies all or nothing (local test 2026-11-10: two pushers at once, one winner in 5 of 5 rounds). It is not a branch, so it starts no workflow.
 Decision: no silent takeover and no `release`. A quiet board can sleep for `chaseHours`, so any expiry could hand a live board to a second machine, and a released claim would go back to the old machine's own timer. `check` takes only an absent claim; after that only `takeover`, run on the user's order on the new machine, changes the holder.
 Decision: a `check` skipped because another machine holds the claim prints `heldElsewhere: true`; that coordinator deletes this host's `timer` and `wake` and tells the user once. So the old machine stops itself after a takeover.
 Decision: the memory goes into the claim commit only when `gh repo view --json visibility` says `PRIVATE`; any other answer or error means the commit holds the holder line only and the memory stays on the machine. A claim commit with no memory leaves the local memory untouched.
 Decision: every write command compares `origin`'s claim with this machine's last claim commit (one `ls-remote`) and refuses on a mismatch; `check` and `finish` read and push the remote ref.
+Decision: claim pushes use `git push --no-verify`, and no other push does; the maintainer said yes on 2026-11-10. The Hard Eng pre-push hook runs the full check on a snapshot of each pushed revision (`.hooks/ship_actions.py::pre_push`), and a claim commit holds no `.hooks/hard-eng.py`, so the hook cannot check it. Instead the claim code refuses any memory file that holds the loaded key, the token or a value that `config.SECRET` matches, before it builds the commit.
 Decision: claim commits use a fixed author and committer, never the user's identity. Every network git call has a time limit and `GIT_TERMINAL_PROMPT=0`.
 
 ## Acceptance + steps
@@ -32,7 +33,7 @@ Decision: claim commits use a fixed author and committer, never the user's ident
 - [ ] `takeover` on the user's order: the new machine holds the claim and gets the old machine's posted log and `handover.md` when `origin` is private; the old machine's `finish` reports the lost claim, its `check` prints `heldElsewhere` and its writes are refused → `tests/test_trello_coordinator.py::test_takeover_moves_the_claim_and_memory`.
 - [ ] A repository that is not private gets the holder line only; a takeover there leaves local memory untouched → `tests/test_trello_coordinator.py::test_a_public_remote_gets_no_memory`.
 - [ ] A memory file that holds the Trello key, the token or a key-like value stops `finish` before any push → `tests/test_trello_coordinator.py::test_memory_with_a_key_is_never_pushed`.
-- [ ] Claim commits carry the fixed identity, not the repository's → asserted in `test_a_second_machine_is_skipped_and_cannot_write`.
+- [ ] Claim commits carry the fixed identity, not the repository's → `tests/test_trello_coordinator.py::test_a_second_machine_is_skipped_and_cannot_write`.
 - [ ] Reference rows match the commands → `tests/test_trello_coordinator.py::test_cli_matches_the_reference_contract`.
 - [x] Real GitHub, private repository, 2026-11-10 07:45Z: two pushers at once with `--force-with-lease=<ref>:` on a scratch ref, 3 rounds, one winner each; the loser got "cannot lock ref … reference already exists"; no workflow run after 07:45Z (`gh run list`); the scratch ref was deleted (`ls-remote` empty). Pushed from a repository with no hooks.
 
