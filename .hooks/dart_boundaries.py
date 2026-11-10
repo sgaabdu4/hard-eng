@@ -4,7 +4,6 @@ import json
 import subprocess
 from pathlib import Path
 
-
 SETTINGS_FILES = (
     ".dart-decimaterc",
     ".dart-decimaterc.json",

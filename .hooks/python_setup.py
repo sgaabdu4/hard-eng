@@ -209,7 +209,9 @@ def import_contract_gap(directory: Path, package: Group) -> str | None:
     name = "No sibling dependency cycles in " + ", ".join(missing)
     kept = [
         value.strip()
-        for value in parser.get("importlinter", "root_packages", fallback="").splitlines()
+        for value in parser.get(
+            "importlinter", "root_packages", fallback=""
+        ).splitlines()
         if value.strip()
     ]
     listed = sorted({*kept, *missing})
