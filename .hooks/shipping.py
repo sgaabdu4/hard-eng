@@ -810,6 +810,8 @@ def _ready_state(
             "PR body needs a line that starts `Undo:` and lists the undo steps"
         )
     _current_with_base(root, identity, pull.base_ref, pull.head_sha)
+    if pull.mergeable is not True or pull.mergeable_state != "clean":
+        _checks(root, "/".join(identity[:2]), pull.head_sha, policy)
     bypass = pull.mergeable is True and pull.mergeable_state == "blocked"
     if bypass:
         from review_bypass import bypass_problem
@@ -831,7 +833,9 @@ def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) ->
         try:
             stdout = _run(root, command[0], tuple(command[1:]), _DELIVERY_TIMEOUT, env)
         except ShippingError as error:
-            raise ShippingError(f"delivery check failed: {item['name']}") from error
+            raise ShippingError(
+                f"delivery check failed: {item['name']}: {error}"
+            ) from error
         value = _json(stdout, f"delivery check {item['name']}")
         data = _object(value, f"delivery check {item['name']}")
         if data.get("status") != "passed" or data.get("revision") != revision:
