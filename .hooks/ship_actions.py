@@ -358,6 +358,17 @@ def common_directory(root: Path) -> Path:
     ).resolve()
 
 
+def kept_groups(kept: list[str]) -> list[str]:
+    counts: dict[str, int] = {}
+    for name in kept:
+        top, slash, _ = name.partition("/")
+        counts[top + slash] = counts.get(top + slash, 0) + 1
+    return [
+        f"{name} ({count} file{'s' * (count != 1)})" if name.endswith("/") else name
+        for name, count in counts.items()
+    ]
+
+
 def unchanged_checkout(shipment: Shipment) -> None:
     target = shipment.root.resolve()
     index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
@@ -384,7 +395,9 @@ def unchanged_checkout(shipment: Shipment) -> None:
     if kept:
         raise ValueError(
             "Cleanup preserves modified, untracked or ignored work: "
-            + ", ".join(kept[:3])
+            + ", ".join(kept_groups(kept))
+            + ". Remove the generated files that nobody needs, keep or move the rest, "
+            "then run cleanup again."
         )
     if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:
         raise ValueError("Cleanup preserves commits added after the verified PR")
@@ -518,6 +531,11 @@ def run(
     worktree: str | None,
     merge_method: str | None,
 ) -> int:
+    if stage == "cleanup" and not worktree:
+        raise ValueError(
+            "Cleanup needs --worktree <path of the task's worktree>; "
+            "run it from the repository's main checkout."
+        )
     target = Path(worktree).resolve() if worktree else coordinator.resolve()
     if common_directory(coordinator) != common_directory(target):
         raise ValueError("Shipping target belongs to a different repository")

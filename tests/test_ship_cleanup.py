@@ -75,18 +75,18 @@ def test_cleanup_keeps_what_the_task_added_or_changed_in_the_copied_hooks_folder
     root, task, shipment = shipped
     added = task / ".husky/_/mine"
     added.write_text("a hook that the task wrote\n")
-    with pytest.raises(ValueError, match=r"ignored work: \.husky/_/mine$"):
+    with pytest.raises(ValueError, match=r"ignored work: \.husky/ \(1 file\)\."):
         ship_actions.cleanup(root, shipment)
     added.unlink()
     shim = task / ".husky/_/h"
     shim.write_text("changed in the task\n")
-    with pytest.raises(ValueError, match=r"ignored work: \.husky/_/h$"):
+    with pytest.raises(ValueError, match=r"ignored work: \.husky/ \(1 file\)\."):
         ship_actions.cleanup(root, shipment)
     shim.write_text("shim\n")
     moved = task / ".husky/_/link"
     moved.unlink()
     moved.symlink_to("pre-push")
-    with pytest.raises(ValueError, match=r"ignored work: \.husky/_/link$"):
+    with pytest.raises(ValueError, match=r"ignored work: \.husky/ \(1 file\)\."):
         ship_actions.cleanup(root, shipment)
     moved.unlink()
     moved.symlink_to("h")
@@ -104,9 +104,43 @@ def test_cleanup_does_not_count_compiled_hook_modules(
     other = task / "tools/__pycache__"
     other.mkdir(parents=True)
     (other / "mine.cpython-313.pyc").write_bytes(b"compiled")
-    with pytest.raises(ValueError, match=r"ignored work: tools/__pycache__/$"):
+    with pytest.raises(ValueError, match=r"ignored work: tools/ \(1 file\)\."):
         ship_actions.cleanup(root, shipment)
     (other / "mine.cpython-313.pyc").unlink()
     other.rmdir()
     ship_actions.cleanup(root, shipment)
     assert not task.exists()
+
+
+def test_cleanup_with_no_worktree_names_the_option(
+    shipped: tuple[Path, Path, Shipment],
+) -> None:
+    root, task, shipment = shipped
+    with pytest.raises(ValueError, match="Cleanup needs --worktree <path of the task"):
+        ship_actions.run(root, None, shipment.pr_url, "cleanup", None, None)
+    assert task.exists()
+
+
+def test_the_cleanup_refusal_names_every_kept_path_and_the_step(
+    shipped: tuple[Path, Path, Shipment],
+) -> None:
+    root, task, shipment = shipped
+    for name in (".coverage", "coverage/a.json", "coverage/b.json", ".venv/x/y.py"):
+        (task / name).parent.mkdir(parents=True, exist_ok=True)
+        (task / name).write_text("x")
+    (task / "notes.private").write_text("valuable work")
+    with pytest.raises(ValueError) as refusal:
+        ship_actions.cleanup(root, shipment)
+    message = str(refusal.value)
+    for kept in (
+        ".coverage",
+        "coverage/ (2 files)",
+        ".venv/ (1 file)",
+        "notes.private",
+    ):
+        assert kept in message
+    assert message.endswith(
+        "Remove the generated files that nobody needs, keep or move the rest, "
+        "then run cleanup again."
+    )
+    assert task.exists()
