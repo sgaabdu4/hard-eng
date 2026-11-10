@@ -106,8 +106,9 @@ def generic_problem(text: str, names: Collection[str] = ()) -> str | None:
     if LOOKS_LIKE_DETAIL.search(stripped):
         return "it looks like a path, file name, URL or email"
     spoken = [f" {words(form)} " for form in (text, CAMEL_BOUNDARY.sub(" ", text))]
-    if any(f" {name} " in form for form in spoken for name in names):
-        return "it names the project, its owner or one of its packages"
+    named = (name for form in spoken for name in sorted(names) if f" {name} " in form)
+    if match := next(named, None):
+        return f"it names the project, its owner or one of its packages: {match}"
     return None
 
 

@@ -167,6 +167,17 @@ def test_words_from_a_remote_that_are_not_names_are_accepted(
     assert gap_issue.file_gap(project, text) == 0
 
 
+def test_the_refusal_says_which_name_matched(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (project / "hard-eng.gates.json").write_text(
+        '{"packages": [{"name": "web", "path": "web"}], "shared": []}'
+    )
+    fake(monkeypatch, [])
+    with pytest.raises(ValueError, match="one of its packages: web"):
+        gap_issue.file_gap(project, "web has no lint check")
+
+
 @pytest.mark.parametrize(
     "text",
     ["go.sum drift", "package.json scripts", "Dockerfile base image pinning"],
