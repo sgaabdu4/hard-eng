@@ -36,6 +36,7 @@ Decision: claim commits use a fixed author and committer, never the user's ident
 - [ ] Claim commits carry the fixed identity, not the repository's → `tests/test_trello_coordinator.py::test_a_second_machine_is_skipped_and_cannot_write`.
 - [ ] Reference rows match the commands → `tests/test_trello_coordinator.py::test_cli_matches_the_reference_contract`.
 - [x] GitHub gives one winner and starts no workflow → N/A — tests cannot push to a real private repository; one-time proof on 2026-11-10 07:45Z: two pushers at once with `--force-with-lease=<ref>:` on a scratch ref, 3 rounds, one winner each; the loser got "cannot lock ref … reference already exists"; no workflow run after 07:45Z (`gh run list`); the scratch ref was deleted (`ls-remote` empty). Pushed from a repository with no hooks.
+- [x] The real claim code on GitHub, with a pre-push hook that always fails → N/A — tests cannot reach a real private repository; one-time proof on 2026-11-10 12:40Z from two fresh repositories with that private `origin` (`/tmp/trello-build/claim-live.py`): `is_private` True; A took the claim; B's check printed `heldElsewhere` and B's write was refused; A's save pushed memory and a second save pushed nothing; B's `takeover` restored A's `handover.md` and `posted.log`; then A's write was refused, A's save said another machine holds the claim and A's check printed `heldElsewhere`. The hook never ran; no workflow run after 12:28Z; the claim ref was deleted after (`ls-remote` empty). Each network step took 0.4 to 4 seconds.
 
 ## Baseline + execution
 
