@@ -96,10 +96,16 @@ def test_flutter_pins_each_any_constraint_to_the_resolved_version() -> None:
 
 
 def created(
-    root: Path, monkeypatch: pytest.MonkeyPatch, stack: str, files: dict[str, str]
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stack: str,
+    files: dict[str, str],
+    existing: dict[str, str] | None = None,
 ) -> list[list[str]]:
     """Create the stack with a fake scaffold that writes these files; the commands run."""
     subprocess.run(["git", "init", "-q", str(root)], check=True)
+    for name, text in (existing or {}).items():
+        (root / name).write_text(text)
     ran: list[list[str]] = []
 
     def run(target: Path, command: list[str]) -> None:
@@ -141,6 +147,27 @@ def test_nextjs_moves_the_scaffold_to_the_installed_biome(
     assert (tmp_path / "public/next.svg").read_text() == (
         '<svg viewBox="0 0 1 1"><title>next</title><path/></svg>'
     )
+
+
+def test_new_project_keeps_a_readme_license_and_ignore_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    existing = {
+        "README.md": "# Acme Shop\n",
+        "LICENSE": "MIT\n",
+        ".gitignore": "node_modules\nsecret.env\n",
+    }
+    files = {
+        "package.json": "{}",
+        ".oxlintrc.json": "{}",
+        "README.md": "# scaffold\n",
+        ".gitignore": "node_modules\ndist\n",
+    }
+    created(tmp_path, monkeypatch, "vite", files, existing)
+    assert (tmp_path / "README.md").read_text() == "# Acme Shop\n"
+    assert (tmp_path / "LICENSE").read_text() == "MIT\n"
+    assert (tmp_path / ".gitignore").read_text() == "node_modules\ndist\nsecret.env\n"
+    assert (tmp_path / "package.json").exists()
 
 
 def test_nextjs_scaffold_installs_nothing_before_the_age_filter(

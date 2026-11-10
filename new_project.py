@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -25,6 +26,7 @@ SCAFFOLDS = {
     # uv 0.12 builds apps as packages; the starter needs a root main.py on the test path.
     "python": ["uv", "init", "--quiet", "--app", "--no-package"],
 }
+MERGED = {".gitignore", ".gitattributes"}
 REMOVED = {"opennext": ["eslint.config.mjs"], "vite": [".oxlintrc.json"]}
 ANY_CONSTRAINT = re.compile(r"^(  ([a-z0-9_]+)): any$", re.MULTILINE)
 SDK_CONSTRAINT = re.compile(r"^  sdk: (\S+)$", re.MULTILINE)
@@ -112,14 +114,46 @@ def finish_flutter(root: Path) -> None:
     run(root, ["dart", "format", "lib", "test"])
 
 
+def kept_files(root: Path) -> list[Path]:
+    from basic_mode import trivial
+
+    present = sorted(path for path in root.iterdir() if path.name != ".git")
+    if not all(path.is_file() and trivial(path) for path in present):
+        names = ", ".join(path.name for path in present)
+        raise ValueError(f"--new needs an empty repository; it holds {names}")
+    return present
+
+
+def put_back(root: Path, aside: Path) -> None:
+    for kept in sorted(aside.iterdir()):
+        target = root / kept.name
+        if kept.name in MERGED and target.is_file():
+            lines = target.read_text().splitlines()
+            extra = [
+                line
+                for line in kept.read_text().splitlines()
+                if line.strip() and line not in lines
+            ]
+            kept.write_text("\n".join([*lines, *extra]) + "\n")
+        shutil.move(kept, target)
+
+
 def create(root: Path, stack: str) -> None:
     if not (root / ".git").exists():
         raise ValueError(f"--new must run at the Git repository root, not {root}")
-    present = sorted(path.name for path in root.iterdir() if path.name != ".git")
-    if present:
-        raise ValueError(
-            f"--new needs an empty repository; it holds {', '.join(present)}"
-        )
+    with tempfile.TemporaryDirectory() as folder:
+        aside = Path(folder)
+        for kept in kept_files(root):
+            shutil.move(kept, aside / kept.name)
+        try:
+            build(root, stack)
+        finally:
+            put_back(root, aside)
+    run(root, ["git", "add", "--all"])
+    run(root, ["git", "commit", "--quiet", "-m", f"Create the {stack} project"])
+
+
+def build(root: Path, stack: str) -> None:
     run(root, SCAFFOLDS[stack])
     for name in REMOVED.get(stack, []):
         (root / name).unlink()
@@ -132,5 +166,3 @@ def create(root: Path, stack: str) -> None:
         finish_web(root)
     for command in GENERATED.get(stack, []):
         run(root, command)
-    run(root, ["git", "add", "--all"])
-    run(root, ["git", "commit", "--quiet", "-m", f"Create the {stack} project"])
