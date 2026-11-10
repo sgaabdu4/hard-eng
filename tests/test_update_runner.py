@@ -420,6 +420,26 @@ def test_setup_retries_a_remembered_refusal(
     assert fetch.call_count == 2
 
 
+def test_an_update_replaces_the_old_tool_hook_commands(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    settings = target / ".claude/settings.json"
+    old = "$(git rev-parse --show-toplevel 2>/dev/null)"
+    settings.write_text(settings.read_text().replace("$CLAUDE_PROJECT_DIR", old))
+    assert settings.read_text().count(old) == 3
+    commit(target, "old tool hooks")
+    add_origin(target)
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    assert update_runner.apply_update(target) == 0
+    updated = git(
+        target, "show", f"{update_runner.UPDATE_BRANCH}:.claude/settings.json"
+    )
+    assert old not in updated
+    assert updated.count("$CLAUDE_PROJECT_DIR/.hooks/") == 3
+
+
 def test_a_linked_local_settings_file_does_not_block_the_update(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
