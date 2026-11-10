@@ -145,6 +145,22 @@ def put_back(root: Path, aside: Path) -> None:
     aside.rmdir()
 
 
+def restore_stopped_run(root: Path, aside: Path) -> None:
+    if not aside.is_dir():
+        return
+    for kept in sorted(aside.iterdir()):
+        target = root / kept.name
+        if not (target.exists() or target.is_symlink()):
+            shutil.move(kept, target)
+    if waiting := sorted(path.name for path in aside.iterdir()):
+        raise ValueError(
+            f"A stopped --new run left {', '.join(waiting)} in {aside}, and the "
+            "repository holds a file of the same name. Keep the copy you want, "
+            "remove the other, then rerun."
+        )
+    aside.rmdir()
+
+
 def create(root: Path, stack: str) -> None:
     if not (root / ".git").exists():
         raise ValueError(f"--new must run at the Git repository root, not {root}")
@@ -152,7 +168,7 @@ def create(root: Path, stack: str) -> None:
         ["git", "rev-parse", "--absolute-git-dir"], cwd=root, text=True
     )
     aside = Path(git_folder.strip()) / ASIDE
-    put_back(root, aside)
+    restore_stopped_run(root, aside)
     kept = kept_files(root)
     if kept:
         aside.mkdir()
