@@ -40,13 +40,14 @@ curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | s
 | `nextjs` | Next.js app (App Router, Tailwind) with Bun. |
 | `opennext` | Next.js on Cloudflare Workers through OpenNext, with Bun. |
 | `flutter` | Flutter app with Riverpod, code generation and localization. |
+| `python` | Python app with uv. |
 
 `--new` does five things:
 
-1. Runs the stack's official scaffold tool, at a pinned version.
+1. Runs the stack's official scaffold tool. The web tools run at a pinned version.
 2. Adds starter tests, a performance test and architecture boundary rules. Every check passes at once.
 3. Replaces other linters with Biome (JavaScript stacks).
-4. Pins each package to an exact version: the newest release that your Bun `minimumReleaseAge` rule allows.
+4. Pins each package to an exact version. Web stacks get the newest release that is two days old. Flutter gets the version pub picks.
 5. Commits the project, then installs Hard Eng as usual.
 
 You or your agent still write `PRODUCT.md` and `DESIGN.md`, because only you know the product.
@@ -70,7 +71,7 @@ You or your agent still write `PRODUCT.md` and `DESIGN.md`, because only you kno
 Setup also:
 
 - Adds shared rules at the top of `AGENTS.md`. Codex and Claude Code (v2.1.277 or later) read this file.
-- Removes Claude instruction files that repeat `AGENTS.md`. Move any unique rules into `AGENTS.md` first.
+- Removes Claude instruction files that only import `AGENTS.md`. Any other one stops setup, `CLAUDE.local.md` too. Move its shared rules into `AGENTS.md`, keep private rules out of tracked files, then remove it.
 - Connects Appwrite, Sentry, Dart and Marionette when the project uses them. Every Flutter app gets Marionette, pinned to the `marionette_flutter` version in `pubspec.lock`.
 - Installs the Appwrite and Flutter skills only when the project uses Appwrite or Dart.
 - Never pushes.
@@ -90,7 +91,7 @@ flowchart TD
   U -->|Yes| V[Prepare the update commit]
 ```
 
-After setup, start a new agent session so it loads the installed skills.
+After setup, start a new agent session so it loads the installed skills. `git push` stays blocked until the agent adds a shipping policy with HE Plan.
 
 ### Updates
 
@@ -108,7 +109,7 @@ Start Codex, trust the project, then review Hard Eng's hooks with `/hooks`. Revi
 
 ### Requirements
 
-Git, curl, uv, Python 3.12 or later, and the project's SDK and package manager (Bun for JavaScript, Flutter for Dart, Xcode on macOS for Swift in Flutter apps). Dart Decimate needs npm 11.16 or later. Details: [entry command](setup.sh), [installer](setup.py), [new projects](new_project.py), [integrations](.agents/skills/he/references/integrations.md).
+Git, curl, uv, Bun, Python 3.12 or later, and the project's SDK and package manager (Flutter for Dart, Xcode on macOS for Swift in Flutter apps). Bun installs the check tools on every stack. `update-pr` and `ship` need the GitHub CLI (`gh`). Dart Decimate needs npm 11.16 or later. Details: [entry command](setup.sh), [installer](setup.py), [new projects](new_project.py), [integrations](.agents/skills/he/references/integrations.md).
 
 ## 2. Plan
 
@@ -191,7 +192,7 @@ flowchart LR
   G --> K
 ```
 
-- Before a big change ships, the other agent reviews it: `python3 .hooks/hard-eng.py challenge`. Codex reviews Claude Code work. Claude Code reviews Codex work.
+- Before a big change ships, the agent runs `python3 .hooks/hard-eng.py challenge`, and the other agent reviews the change. Codex reviews Claude Code work. Claude Code reviews Codex work. When the other agent is not installed, the PR says the review was not done.
 - For visible changes, the agent compares the before and after states. It posts an image pair only when the look changed.
 - The agent checks outgoing text for secrets, personal data and private project details.
 - The PR body has a line that starts with `Undo:` and gives the steps to undo the change on that line. `ship` refuses a PR without it.
@@ -267,7 +268,7 @@ Skills guide the agent. Hooks and checks enforce. Plan checks validate the plan'
 | Agent stops | Checks the plan handoff. After code changes, runs quick checks on this session's changes: format, lint, types and the current-files secret scan. Tests run at pre-push and in CI. A failure shows the failed checks and the first one's output. |
 | `git push` | Checks the pushed commits in a separate worktree, for the changed packages. With Vitest or Jest, runs only the related tests. Then reports changed lines whose tests miss small deliberate bugs (mutation report; it never blocks the push and stops after `pre_push_mutation_seconds`, default 120 s). |
 | `git worktree add` | Links the main checkout's ignored `.env*` files, `.claude/settings.local.json` and `CLAUDE.local.md` into the new worktree. It never reads or copies their contents. Copies an ignored hooks folder, such as Husky's, so pushes from the worktree are checked. Initializes submodules. |
-| CI | Runs every configured check. Fails the job on any failure. |
+| CI | Runs the checks for the packages a change affects. A change to documents only gets the secret scan alone. Fails the job on any failure. |
 | Every `check` | Enforces [HE-NO-SWITCH-OFF](.agents/skills/he/references/requirements.md#he-no-switch-off), [HE-COMMENT-LINES](.agents/skills/he/references/requirements.md#he-comment-lines) and the [requirement registry](.agents/skills/he/references/requirements.md). |
 
 Before the merge, shipping blocks when the installed Hard Eng is out of date or its version cannot be confirmed. It names the next step: run `update-pr`, fix the failing update PR, wait for it, or rebase after it merges.
