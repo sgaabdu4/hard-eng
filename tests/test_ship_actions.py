@@ -608,9 +608,11 @@ def update_pull(*checks: dict[str, str]) -> str:
     ],
     ids=["no-pr", "failing-pr", "pending-pr", "merged"],
 )
+@pytest.mark.parametrize("stage", ["ready", "merge"])
 def test_shipping_a_stale_install_names_the_update_pr_step(
     delivered_worktree: tuple[Path, Shipment],
     monkeypatch: pytest.MonkeyPatch,
+    stage: str,
     answer: str,
     instruction: str,
 ) -> None:
@@ -629,7 +631,7 @@ def test_shipping_a_stale_install_names_the_update_pr_step(
     remote = Mock()
     monkeypatch.setattr(ship_actions, "gh", remote)
     with pytest.raises(ValueError, match="freshness") as blocked:
-        ship_actions.run(root, "PLAN.md", shipment.pr_url, "merge", None, "rebase")
+        ship_actions.run(root, "PLAN.md", shipment.pr_url, stage, None, "rebase")
     assert instruction in str(blocked.value)
     assert "Shipping stays blocked" in str(blocked.value)
     remote.assert_not_called()
