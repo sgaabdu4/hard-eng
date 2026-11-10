@@ -9,10 +9,10 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from conftest import git
+from conftest import SOURCE, git
 from gate_config import Gate, Group, JsonObject, validate_required_checks
 from plans import validate_plans
-from python_setup import python_roots
+from python_setup import python_gate_command, python_roots
 from test_plans import edit, sized_branch
 from test_setup import repository
 
@@ -226,6 +226,39 @@ def test_python_code_added_after_setup_must_join_the_checked_sources(
         validate_required_checks(tmp_path, config)
     config["packages"][0]["sources"].append("calc.py")
     validate_required_checks(tmp_path, config)
+
+
+def test_an_imports_gate_without_a_contract_prints_the_block_to_add(
+    runner: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    template = json.loads(
+        (SOURCE / ".agents/skills/he/templates/hard-eng.python.json").read_text()
+    )
+    gate: Gate = next(
+        check
+        for check in template["packages"][0]["checks"]
+        if check["role"] == "imports"
+    )
+    gate["command"] = python_gate_command(gate["command"], "uv")
+    group: Group = {
+        "path": ".",
+        "language": "python",
+        "sources": ["pkg"],
+        "checks": [gate],
+    }
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg/__init__.py").write_text("")
+    (tmp_path / "pkg/mod.py").write_text("value = 1\n")
+    (tmp_path / "uv.lock").touch()
+    project = tmp_path / "pyproject.toml"
+    project.write_text(PROJECT)
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is True
+    output = capsys.readouterr().out
+    assert "[tool.importlinter]" in output
+    block = output[output.index("[tool.importlinter]") : output.index("FAIL imports")]
+    project.write_text(PROJECT + "\n" + block)
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is False
+    assert "PASS imports" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("default", ["master", "trunk"])

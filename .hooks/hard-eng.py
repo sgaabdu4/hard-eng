@@ -601,6 +601,10 @@ def run_limited_gate(
         if scanner and report_path is not None:
             report_args = (gate, report_path, command, directory, timeout)
             scanner_result(result.returncode == 0, scanner, *report_args)
+        if result.returncode and scanner == "import-linter":
+            from python_setup import print_import_contract
+
+            print_import_contract(directory, group)
         from reports import completed_tests, line_coverage, parallel_hint
 
         if (
