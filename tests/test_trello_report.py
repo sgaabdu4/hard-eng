@@ -72,6 +72,28 @@ def test_next_due_is_the_earliest_promise_chase_or_due_date(
     assert wake(project)["nextDue"] == due
 
 
+def test_next_due_is_the_promise_when_it_comes_first(project: Project) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing"),
+        make_card(2, "#2 Card", "l-doing"),
+        make_card(3, "#3 Card", "l-doing", due=ago(-2)),
+    ]
+    ours(
+        project,
+        ("a1", 1, "**Accepted.** I will post the fix tonight.", 5),
+        ("a2", 2, "@sam can you confirm the total?", 20),
+    )
+    assert hours_ahead(wake(project), 1)
+
+
+def test_a_ticked_due_date_is_not_overdue(project: Project) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing", due=ago(3), dueComplete=True),
+        make_card(2, "#2 Card", "l-doing", due=ago(3)),
+    ]
+    assert refs(project.report()["overdue"]) == {"2"}
+
+
 def test_next_due_is_a_chase_and_never_beyond_chase_hours(project: Project) -> None:
     project.fake.cards = [make_card(n, f"#{n} Card", "l-doing") for n in (1, 2)]
     ours(project, ("a1", 1, "@sam can you confirm the total?", 20))
