@@ -133,6 +133,27 @@ def placed_by_hard_eng(root: Path, checkout: Path) -> set[str]:
     }
 
 
+def changed_copies(root: Path, checkout: Path, folder: str) -> list[str]:
+    """Paths in a copied folder that the main checkout does not hold with the same content."""
+    changed = []
+    for path in sorted((checkout / folder).rglob("*")):
+        name = path.relative_to(checkout)
+        source = root / name
+        if path.is_symlink() or source.is_symlink():
+            same = (
+                path.is_symlink()
+                and source.is_symlink()
+                and path.readlink() == source.readlink()
+            )
+        else:
+            same = path.is_dir() or (
+                source.is_file() and path.read_bytes() == source.read_bytes()
+            )
+        if not same:
+            changed.append(str(name))
+    return changed
+
+
 def prepare_checkout(root: Path, checkout: Path, environment: dict[str, str]) -> None:
     link_local_files(root, checkout)
     update_submodules(checkout, root, environment)
@@ -339,7 +360,8 @@ def unchanged_checkout(shipment: Shipment) -> None:
     index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
     if (target / index_lock).exists():
         raise ValueError("Cleanup preserves a task with an active Git index lock")
-    own = placed_by_hard_eng(Path(worktrees(target)[0]["worktree"]), target)
+    main = Path(worktrees(target)[0]["worktree"])
+    own = placed_by_hard_eng(main, target)
     status = git(
         target,
         "status",
@@ -349,10 +371,18 @@ def unchanged_checkout(shipment: Shipment) -> None:
         "--ignore-submodules=none",
     )
     folders = tuple(line for line in own if line.endswith("/"))
-    if any(
-        line not in own and not line.startswith(folders) for line in status.splitlines()
-    ):
-        raise ValueError("Cleanup preserves modified, untracked or ignored work")
+    kept = [
+        line[3:]
+        for line in status.splitlines()
+        if line not in own and not line.startswith(folders)
+    ]
+    for folder in folders:
+        kept += changed_copies(main, target, folder[3:])
+    if kept:
+        raise ValueError(
+            "Cleanup preserves modified, untracked or ignored work: "
+            + ", ".join(kept[:3])
+        )
     if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:
         raise ValueError("Cleanup preserves commits added after the verified PR")
 
