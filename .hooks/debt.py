@@ -12,6 +12,7 @@ from gate_config import SOURCE_FILE, Gate, Group, JsonObject
 WORD_CHARACTER = re.compile(r"\w")
 DIGIT_RUN = re.compile(r"\d+")
 COUNTED_WORDS = re.compile(r"(?<!\w)N((?: \w+){1,2})")
+WORD = re.compile(r"\w+")
 
 DEBT_FILE = "hard-eng.debt.json"
 # Failing tests, broken installs and leaked secrets are never old findings to keep.
@@ -114,7 +115,7 @@ def neutral(line: str) -> str:
         return word.group().removesuffix("s").removesuffix("e")
 
     return COUNTED_WORDS.sub(
-        lambda counted: "N" + re.sub(r"\w+", singular, counted.group(1)), line
+        lambda counted: "N" + WORD.sub(singular, counted.group(1)), line
     )
 
 
