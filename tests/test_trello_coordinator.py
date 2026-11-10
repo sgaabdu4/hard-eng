@@ -689,6 +689,7 @@ def test_takeover_moves_the_claim_and_memory(
         "tookOver": True,
         "previousSince": held["heldSince"],
         "previousSaved": saved,
+        "memoryRestored": True,
     }
     for name in ("posted.log", "handover.md"):
         assert (other.state / name).read_text() == (project.state / name).read_text()
@@ -715,6 +716,7 @@ def test_a_public_remote_gets_no_memory(
     (other.state / "handover.md").write_text("my own note\n")
     moved = other.run("takeover")
     assert moved.code == 0, moved.text
+    assert moved.payload["memoryRestored"] is False
     assert (other.state / "handover.md").read_text() == "my own note\n"
     assert other.run("check").code == 0
 
