@@ -181,7 +181,11 @@ def test_leftover_env_mapping_stops_overriding_the_runner_directories(
 
 
 def test_a_missing_uv_is_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+
+    def no_spec(name: str) -> None:
+        return None
+
+    monkeypatch.setattr(importlib.util, "find_spec", no_spec)
     monkeypatch.setenv("PATH", str(tmp_path))
     with pytest.raises(OSError, match="uv"):
         tool_setup.ensure_python_runtime()
