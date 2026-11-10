@@ -816,10 +816,11 @@ def validate_required_checks(
     from tool_setup import require_shared_roles
 
     require_swift_groups(root, config, files)
-    require_listed_sources(root, config["packages"], files)
+    # Session start keeps its speed: `check` alone judges what this round added.
+    require_listed_sources(root, config["packages"], files, python_only=starting)
     basic = not config["packages"] and not manifests
     if basic and starting:
-        return  # Session start keeps its speed; `check` judges files added later.
+        return
     shared_roles = require_shared_roles(root, config, files, secrets=not basic)
     if basic:
         return
