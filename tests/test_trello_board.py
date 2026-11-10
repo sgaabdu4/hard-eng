@@ -1,3 +1,4 @@
+import importlib
 import io
 import json
 import threading
@@ -27,7 +28,13 @@ from trello_fakes import (
     refs,
     write_lease,
 )
-from trello_fixtures import load_mods, make_project
+from trello_fixtures import (
+    drop_claim,
+    load_claim,
+    load_mods,
+    make_project,
+    second_machine,
+)
 
 mods = pytest.fixture(load_mods)
 project = pytest.fixture(make_project)
@@ -48,7 +55,7 @@ def test_finish_only_ends_its_own_lease(project: Project) -> None:
 
 
 def test_a_stale_lease_is_taken_by_one_run_only(project: Project, mods: Mods) -> None:
-    project.state.mkdir(parents=True)
+    project.state.mkdir(parents=True, exist_ok=True)
     write_lease(project, "old", 31)
     winners: list[str | None] = []
     start = threading.Barrier(8)
@@ -64,6 +71,37 @@ def test_a_stale_lease_is_taken_by_one_run_only(project: Project, mods: Mods) ->
         thread.join()
     assert len([w for w in winners if w]) == 1
     assert lease_owner(project) in winners
+
+
+def test_one_machine_wins_an_open_claim(project: Project, mods: Mods) -> None:
+    claim = load_claim()
+    other = second_machine(project)
+    secrets = mods.api.Secrets(KEY, TOKEN)
+    locate = importlib.import_module("trello_board.secrets").locate
+    places = [locate(project.main), locate(other.main)]
+
+    def race() -> list[object]:
+        answers: list[object] = []
+        start = threading.Barrier(2)
+
+        def contend(place: object) -> None:
+            start.wait()
+            answers.append(claim.hold(place, secrets))
+
+        threads = [threading.Thread(target=contend, args=(p,)) for p in places]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        return answers
+
+    for _ in range(3):
+        drop_claim(project, other)
+        answers = race()
+        assert len(answers) == 2
+        assert answers.count(None) == 1
+        lost = next(answer for answer in answers if answer is not None)
+        assert isinstance(lost, dict) and lost["heldElsewhere"] is True
 
 
 @pytest.mark.parametrize(
@@ -379,7 +417,7 @@ def test_detach_deletes_only_the_named_attachments(project: Project) -> None:
 def test_owner_reply_before_a_missing_first_check_is_kept(project: Project) -> None:
     project.fake.cards = [make_card(3, "#3 Owner", "l-doing")]
     project.fake.actions = [comment("o1", 3, "m-owner", "Yes, go ahead", 0.5)]
-    project.state.mkdir(parents=True)
+    project.state.mkdir(parents=True, exist_ok=True)
     read_at = datetime.now(UTC) - timedelta(hours=1)
     project.mods.state.save_state(project.state, {"checkedAt": read_at.isoformat()})
     assert refs(project.report()["owner"]) == {"3"}

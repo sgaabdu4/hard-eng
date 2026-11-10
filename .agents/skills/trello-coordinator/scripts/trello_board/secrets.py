@@ -17,11 +17,26 @@ class Place:
     state: Path
 
 
-def git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+def git(
+    cwd: Path,
+    *arguments: str,
+    timeout: float | None = None,
+    env: dict[str, str] | None = None,
+    stdin: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
-            ["git", *arguments], cwd=cwd, capture_output=True, text=True, check=False
+            ["git", *arguments],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+            env={**os.environ, **env} if env else None,
+            input=stdin,
         )
+    except subprocess.TimeoutExpired as error:
+        raise TrelloError("git did not answer in time") from error
     except OSError as error:
         raise TrelloError("git could not run") from error
 

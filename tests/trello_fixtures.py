@@ -1,10 +1,44 @@
+import dataclasses
 import importlib
 import json
 from pathlib import Path
+from types import ModuleType
 
 import pytest
-from conftest import commit, init
+from conftest import add_origin, commit, git, init
 from trello_fakes import CONFIG, KEY, SCRIPTS, TOKEN, FakeTrello, Mods, Project
+
+CLAIM_REF = "refs/trello-coordinator/claim"
+
+
+def load_claim() -> ModuleType:
+    return importlib.import_module("trello_board.claim")
+
+
+def origin_of(project: Project) -> Path:
+    return project.main.parent / "origin.git"
+
+
+def drop_claim(*projects: Project) -> None:
+    git(origin_of(projects[0]), "update-ref", "-d", CLAIM_REF)
+    for project in projects:
+        (project.state / "claim-record").unlink(missing_ok=True)
+
+
+def second_machine(project: Project, name: str = "second") -> Project:
+    clone = project.main.parent / name
+    git(project.main, "clone", "-q", str(origin_of(project)), str(clone))
+    git(clone, "config", "user.name", "Repo Owner")
+    git(clone, "config", "user.email", "owner@example.invalid")
+    (clone / ".env.trello.local").write_text(
+        f"TRELLO_KEY={KEY}\nTRELLO_TOKEN={TOKEN}\n"
+    )
+    return dataclasses.replace(project, main=clone, run_id="")
+
+
+def enter(monkeypatch: pytest.MonkeyPatch, project: Project) -> Project:
+    monkeypatch.chdir(project.main)
+    return project
 
 
 def load_mods(monkeypatch: pytest.MonkeyPatch) -> Mods:
@@ -32,6 +66,9 @@ def make_project(
     (main / "trello.json").write_text(json.dumps(CONFIG))
     (main / ".env.trello.local").write_text(f"TRELLO_KEY={KEY}\nTRELLO_TOKEN={TOKEN}\n")
     commit(main, "fixture")
+    add_origin(main)
+    place = importlib.import_module("trello_board.secrets").locate(main)
+    assert load_claim().hold(place, mods.api.Secrets(KEY, TOKEN)) is None
     fake = FakeTrello(mods.api)
     waits: list[float] = []
     real = mods.api.transport
