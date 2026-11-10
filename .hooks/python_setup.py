@@ -5,6 +5,7 @@ import json
 import os
 import shlex
 import tomllib
+from itertools import pairwise
 from pathlib import Path
 
 from gate_config import Group
@@ -108,15 +109,14 @@ def known_first_party(directory: Path, package: Group) -> None:
     src = directory / "src"
     if not any(map(is_src, package["sources"])) or not src.is_dir():
         return
-    options = [
-        arg for name, _ in src_children(src) for arg in ("--known-first-party", name)
-    ]
+    option = "--known-first-party"
     for gate in package["checks"]:
         command = gate["command"]
-        if "--known-first-party" not in command and ["deptry", "."] in [
-            command[i : i + 2] for i in range(len(command))
-        ]:
-            gate["command"] = [*command, *options]
+        if ["deptry", "."] not in [command[i : i + 2] for i in range(len(command))]:
+            continue
+        named = {name for flag, name in pairwise(command) if flag == option}
+        new = [name for name, _ in src_children(src) if name not in named]
+        gate["command"] = [*command, *(arg for name in new for arg in (option, name))]
 
 
 def import_linter_owner(
