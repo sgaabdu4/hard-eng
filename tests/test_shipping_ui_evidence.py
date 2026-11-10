@@ -86,6 +86,7 @@ def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
         "UI appearance: unchanged — ",
         "UI appearance: unchanged — compared dashboard\nUI appearance: unchanged — compared dashboard",
         "UI appearance: unchanged — compared dashboard\n" + _UI_BODY,
+        "UI appearance: unchanged — compared dashboard\n" + _NATIVE_VIDEO_BODY,
         "After: ![new](https://github.com/user-attachments/assets/new-image)",
         "Before: ![old](https://example.invalid/old)\nAfter: ![new](https://github.com/user-attachments/assets/new-image)",
         "Before: ![old](https://github.com/user-attachments/assets/same)\nAfter: ![new](https://github.com/user-attachments/assets/same)",

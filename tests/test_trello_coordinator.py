@@ -112,7 +112,9 @@ def test_config_with_a_secret_is_refused(
     assert project.fake.calls == []
 
 
-def test_config_defaults_and_role_provider(project: Project) -> None:
+def test_config_takes_timing_overrides_and_refuses_retired_fields(
+    project: Project,
+) -> None:
     roles = {role: {"model": "m", "why": "w"} for role in ROLES}
     roles["builder"] = {"model": "m", "why": "w", "provider": "codex"}
     project.configure(roles=roles, timing={"chaseHours": 12})
