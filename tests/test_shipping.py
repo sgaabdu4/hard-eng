@@ -561,30 +561,24 @@ def test_ready_rejects_changed_pr_head_during_final_recheck(
 def test_a_delivery_check_must_report_passed_for_the_new_revision(
     tmp_path: Path, answer: dict[str, str]
 ) -> None:
-    command = [
-        sys.executable,
-        "-c",
-        "import sys; print(sys.argv[1])",
-        json.dumps(answer),
-    ]
+    code = "import sys; print(sys.argv[1])"
+    command = [sys.executable, "-c", code, json.dumps(answer)]
+    _delivery_refusal(tmp_path, command, "did not prove revision: live")
+
+
+def _delivery_refusal(tmp_path: Path, command: list[str], match: str) -> None:
     fixture = _fixture(
         tmp_path, target="Deploy", delivery=[{"name": "live", "command": command}]
     )
     policy = shipping.load_policy(fixture.root, required=True)
     assert policy is not None
-    with pytest.raises(shipping.ShippingError, match="did not prove revision: live"):
+    with pytest.raises(shipping.ShippingError, match=match):
         shipping._delivery(fixture.root, policy, "1" * 40, _PR_URL)
 
 
 def test_a_failed_delivery_check_keeps_its_reason(tmp_path: Path) -> None:
     command = [sys.executable, "-c", "import sys; sys.exit('deploy not found')"]
-    fixture = _fixture(
-        tmp_path, target="Deploy", delivery=[{"name": "live", "command": command}]
-    )
-    policy = shipping.load_policy(fixture.root, required=True)
-    assert policy is not None
-    with pytest.raises(shipping.ShippingError, match="live.*deploy not found"):
-        shipping._delivery(fixture.root, policy, "1" * 40, _PR_URL)
+    _delivery_refusal(tmp_path, command, "live.*deploy not found")
 
 
 def test_delivered_deploy_rejects_old_live_revision_then_passes(

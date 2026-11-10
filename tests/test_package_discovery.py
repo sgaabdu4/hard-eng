@@ -13,6 +13,7 @@ from gate_config import (
     validate_required_checks,
 )
 from project_setup import javascript_manager
+from test_setup import repository
 
 
 @pytest.mark.parametrize("attribute", ["linguist-generated", "linguist-vendored"])
@@ -184,9 +185,7 @@ def test_install_lands_with_a_pending_bun_migration(
 def test_a_missing_package_script_names_package_gate_and_script(
     installer: ModuleType, tmp_path: Path
 ) -> None:
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    (tmp_path / "package.json").write_text('{"private":true}')
-    (tmp_path / "bun.lock").write_text('{"lockfileVersion": 1}\n')
+    repository(tmp_path)
     group = installer.gate_config(tmp_path)["packages"][0]
     with pytest.raises(
         TypeError,
