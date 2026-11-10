@@ -436,6 +436,22 @@ def test_a_src_layout_package_that_imports_itself_passes_the_dependencies_gate(
     gate = dependencies_gate(group)
     assert runner.run_gate(group, gate, 300, threading.Lock()) is False
     assert "PASS dependencies" in capsys.readouterr().out
+    second = tmp_path / "src/extra"
+    second.mkdir()
+    (second / "__init__.py").write_text("NAME = 'extra'\n")
+    (second / "use.py").write_text("from extra import NAME\n\nvalue = NAME\n")
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is True
+    assert "DEP001 'extra'" in capsys.readouterr().out
+    grown = json.loads(gates.read_text())
+    dependencies_gate(grown["packages"][0])["command"] += [FIRST_PARTY, "vendored"]
+    gates.write_text(json.dumps(grown))
+    installer.install(tmp_path)
+    group = json.loads(gates.read_text())["packages"][0]
+    gate = dependencies_gate(group)
+    names = [FIRST_PARTY, "mylib", FIRST_PARTY, "vendored", FIRST_PARTY, "extra"]
+    assert gate["command"][-6:] == names
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is False
+    assert "PASS dependencies" in capsys.readouterr().out
     (tmp_path / "script.py").write_text("import yaml_missing_package\n")
     assert runner.run_gate(group, gate, 300, threading.Lock()) is True
     assert "DEP001 'yaml_missing_package'" in capsys.readouterr().out
