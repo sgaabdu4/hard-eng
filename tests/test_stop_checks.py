@@ -261,6 +261,22 @@ def test_stop_lists_only_gates_with_findings_beyond_the_debt(
     assert "findings beyond hard-eng.debt.json:\n  new.py:N bad type" in reason
 
 
+def test_stop_keeps_the_debt_line_of_a_failed_gate() -> None:
+    log = (
+        "OUTPUT ./lint\nold lint finding\n"
+        "OUTPUT ./types\ntypes finding\n"
+        "FAIL lint (exit 1; elapsed 1.0s) @ .\n"
+        "FAIL types (exit 1; elapsed 1.0s) @ .\n"
+        "DEBT lint @ .: the failure above holds only the 1 lines recorded\n"
+    )
+    summary = agent_hooks.failure_summary(log)
+    assert summary.startswith("Failed gates: types\n")
+    assert (
+        "FAIL lint (exit 1; elapsed 1.0s) @ .\n"
+        "DEBT lint @ .: the failure above holds only the 1 lines recorded\n"
+    ) in summary
+
+
 def test_stop_keeps_a_failed_gate_whose_name_another_package_had_forgiven(
     repository: Path,
 ) -> None:
