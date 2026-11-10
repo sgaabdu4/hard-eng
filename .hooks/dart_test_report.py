@@ -8,6 +8,8 @@ from typing import cast
 from gate_config import JsonObject
 
 WHITESPACE_RUN = re.compile(r"\s+")
+FLUTTER_FAILURE = "Test failed. See exception logs above"
+PRINT_LIMIT = 600
 
 
 def dart_events(path: Path) -> list[JsonObject]:
@@ -24,6 +26,12 @@ def dart_events(path: Path) -> list[JsonObject]:
     return events
 
 
+def test_place(test: JsonObject) -> str:
+    url = test.get("root_url") or test.get("url")
+    line = test.get("root_line") if test.get("root_url") else test.get("line")
+    return f"{url}:{line}"
+
+
 def failure_summary(path: Path) -> str | None:
     """Return one bounded failing-test summary from a machine-format Dart report."""
     try:
@@ -31,6 +39,8 @@ def failure_summary(path: Path) -> str | None:
     except (OSError, ValueError):
         return None
     names: dict[int, str] = {}
+    places: dict[int, str] = {}
+    prints: dict[int, list[str]] = {}
     failures: list[int] = []
     errors: dict[int, str] = {}
     for event in events:
@@ -39,6 +49,7 @@ def failure_summary(path: Path) -> str | None:
             identifier, name = test.get("id"), test.get("name")
             if type(identifier) is int and isinstance(name, str):
                 names[identifier] = name
+                places[identifier] = test_place(test)
         identifier = event.get("testID")
         if type(identifier) is not int:
             continue
@@ -47,6 +58,8 @@ def failure_summary(path: Path) -> str | None:
             "error",
         }:
             failures.append(identifier)
+        if event.get("type") == "print" and isinstance(event.get("message"), str):
+            prints.setdefault(identifier, []).append(event["message"])
         if event.get("type") == "error" and isinstance(event.get("error"), str):
             errors.setdefault(identifier, event["error"])
     if not failures:
@@ -56,4 +69,10 @@ def failure_summary(path: Path) -> str | None:
     if (error := errors.get(identifier)) is None:
         return f"Dart test failure: {name}"
     detail = WHITESPACE_RUN.sub(" ", error).strip()
+    if error.startswith(FLUTTER_FAILURE):
+        printed = WHITESPACE_RUN.sub(" ", " ".join(prints.get(identifier, []))).strip()
+        detail = (
+            f"{printed[:PRINT_LIMIT]} ({places.get(identifier, 'no file')})".strip()
+        )
+        return f"Dart test failure: {name}: {detail}"
     return f"Dart test failure: {name}: {detail[:300]}"
