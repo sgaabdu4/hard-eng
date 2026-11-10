@@ -1,6 +1,7 @@
 """Run a command in its own process group so a timeout stops every process it started."""
 
 import fcntl
+import json
 import os
 import re
 import signal
@@ -19,6 +20,8 @@ RUNNING: set[int] = set()
 STOPPED = threading.Event()
 STOP_SIGNAL: list[int] = []
 STARTING = threading.Lock()
+INSTALLS: dict[str, bool] = {}
+INSTALLED_FILE = "hard-eng-installed"
 
 
 class Process(NamedTuple):
@@ -147,6 +150,32 @@ def check_lock_file(root: Path) -> Generator[tuple[IO[str], bool]]:
         else:
             held = False
         yield lock, held
+
+
+def read_installed(lock: IO[str]) -> frozenset[str]:
+    """Packages whose install passed in this checkout; a bad state file counts as none."""
+    INSTALLS.clear()
+    try:
+        names = json.loads(Path(lock.name).with_name(INSTALLED_FILE).read_text())
+    except (OSError, ValueError):
+        return frozenset()
+    if not isinstance(names, list):
+        return frozenset()
+    return frozenset(name for name in names if isinstance(name, str))
+
+
+def note_install(path: str, role: object, failed: bool) -> None:
+    if role == "lockfiles":
+        INSTALLS[path] = INSTALLS.get(path, True) and not failed
+
+
+def save_installed(lock: IO[str], before: frozenset[str]) -> None:
+    after = before | {path for path, passed in INSTALLS.items() if passed}
+    if after != before:
+        with suppress(OSError):
+            Path(lock.name).with_name(INSTALLED_FILE).write_text(
+                json.dumps(sorted(after))
+            )
 
 
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:
