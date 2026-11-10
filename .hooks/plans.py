@@ -781,7 +781,9 @@ REQUIREMENT_FILES = (
     ".agents/skills/he/references/requirements.md",
     "docs/requirements.md",
 )
-REQUIREMENT_ID = re.compile(r"\b(?:HE|REQ)-[A-Z0-9]+(?:-[A-Z0-9]+)+\b")
+REQUIREMENT_ID = re.compile(
+    r"\b(?:HE-[A-Z0-9]+(?:-[A-Z0-9]+)*|REQ-[A-Z0-9]+(?:-[A-Z0-9]+)+)\b"
+)
 TEST_CALL = re.compile(r"""\b(?:test|it|testWidgets)\(\s*(['"])(.+?)\1""")
 PYTHON_TEST = re.compile(r"^\s*(?:async\s+)?def\s+(test\w*)")
 Reference = tuple[str, int, str]
@@ -798,6 +800,8 @@ def registry_entries(root: Path) -> tuple[dict[str, tuple[str, str]], list[str]]
             heading, _, body = chunk.partition("\n")
             requirement = heading.split(" — ", 1)[0].strip()
             if not REQUIREMENT_ID.fullmatch(requirement):
+                if requirement.startswith(("HE-", "REQ-")):
+                    errors.append(f"{requirement} is not a valid requirement ID")
                 continue
             if requirement in entries:
                 errors.append(f"{requirement} is defined more than once")
@@ -831,7 +835,7 @@ def requirement_references(root: Path) -> list[tuple[str, int, str]]:
             "-n",
             "-z",
             "-E",
-            r"(HE|REQ)-[A-Z0-9]+(-[A-Z0-9]+)+",
+            r"(HE|REQ)-[A-Z0-9]",
         )
     except subprocess.CalledProcessError as error:
         if error.returncode == 1:
