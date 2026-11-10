@@ -728,7 +728,7 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         "dart": {"format", "types", "tests", "dead-code-duplicates", "boundaries"},
         "swift": {"format-lint", "tests", "duplicates"},
     }.get(group.get("language", ""), set())
-    roles = {gate.get("role") for gate in group["checks"] if isinstance(gate, dict)}
+    roles = {gate.get("role", "") for gate in group["checks"] if isinstance(gate, dict)}
     if group.get("language") == "dart" and any(
         dart_scan_includes_boundaries(gate) for gate in group["checks"]
     ):
