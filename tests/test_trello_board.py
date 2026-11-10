@@ -535,6 +535,20 @@ def test_save_secret_ignores_the_file_without_a_tracked_change(
     assert ".env.trello.local" not in status
 
 
+def test_the_refusal_of_an_unignored_secrets_file_names_a_step_that_works(
+    project: Project, tmp_path: Path
+) -> None:
+    (project.main / ".gitignore").write_text("")
+    refused = project.run("probe")
+    assert refused.code == 1
+    assert "save-secret" in str(refused.payload["error"])
+    assert ".gitignore" not in str(refused.payload["error"])
+    for name, value in (("TRELLO_KEY", KEY), ("TRELLO_TOKEN", TOKEN)):
+        saved = project.run("save-secret", name, paste(tmp_path, name, value))
+        assert saved.code == 0, saved.text
+    assert project.run("probe").code == 0
+
+
 def test_save_secret_refuses_a_tracked_file(project: Project, tmp_path: Path) -> None:
     git(project.main, "add", "-f", ".env.trello.local")
     git(project.main, "commit", "-qm", "tracked by mistake")

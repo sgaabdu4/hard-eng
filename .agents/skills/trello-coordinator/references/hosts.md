@@ -52,7 +52,7 @@ Ask with `request_secret`, `delivery: "file"`, one value at a time, key first. T
 - Unattended = an OS timer (launchd or cron) runs `claude -p "Run the trello-coordinator skill."` from the repository root; each run is a new session, so workers continue from their handover notes.
 - Workers = subagents with the role's `model` in their own worktree; follow-ups = message the same subagent while the session lives. Claude models only.
 
-- Missing key or token = no popup here: stop and give the same steps, then the two lines to add to `.env.trello.local` in the main checkout.
+- Missing key or token = no popup here: stop and give the same steps. The person puts each value alone in its own file outside the repository and gives the path. Then `save-secret <name> <file>` for each, and `probe`; the person deletes the two files after it passes.
 
 ## Codex
 

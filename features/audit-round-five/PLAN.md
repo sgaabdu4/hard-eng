@@ -41,7 +41,7 @@ Decided (10): for a Python package whose import root is `src`, setup gives the d
 Decided (11): the Dart sources message says to move the code under `lib/`. A hand run in the Flutter scaffold followed that step to a passing `check`. The second way, tests that import `package:test`, stays in the coverage message with its two conditions: `test` as a dev dependency, and a setup rerun that adds the VM test run. In today's Flutter scaffold the dev dependency does not resolve beside the pinned build tools, so the message names `lib/` first.
 Decided (12): the TypeScript sources error names the files that the configuration omits and the configuration file. The JavaScript sources message also names the `include` list of that configuration.
 Decided (13): a `sources` entry with a trailing slash or a leading `./` is read as the same folder.
-Decided (14): on Claude Code and Codex the route for a missing Trello key or token is the route of the popup hosts: the person puts each value in a file and gives its path, and `save-secret` reads it. `save-secret` already makes Git ignore the secrets file. The script's refusal of a secrets file that Git does not ignore stays.
+Decided (14): on Claude Code and Codex the route for a missing Trello key or token is the route of the popup hosts: the person puts each value in a file and gives its path, and `save-secret` reads it. `save-secret` already makes Git ignore the secrets file. The script's refusal of a secrets file that Git does not ignore stays, and its message names `save-secret` where it named an edit of the tracked ignore file.
 Decided (15): the speed slice changes only when code runs, not what it does: imports of the network modules move to the functions that use them, and a pattern that a Stop with nothing changed does not use is compiled at its first use. Two tests pin it: such a Stop loads no network module, and it starts no more Git commands than today.
 Decided (16): `update-pr` and `update` with no update branch print no raw Git error line.
 
@@ -92,7 +92,8 @@ Slice 5, setup and source messages:
 
 Slice 6, Trello key route (by the coordinator):
 
-- [ ] The Claude Code and Codex route for a missing key or token ends in `save-secret` and a passing `probe` → N/A — skill text; the Reader check goes in Verification, and `tests/test_trello_coordinator.py` still pins the refusal of a file that Git does not ignore.
+- [ ] The refusal of a secrets file that Git does not ignore names `save-secret`, and a `probe` passes after that step → `tests/test_trello_board.py::test_the_refusal_of_an_unignored_secrets_file_names_a_step_that_works`.
+- [ ] The Claude Code and Codex route for a missing key or token ends in `save-secret` and `probe` → N/A — skill text; the Reader check and one run of the route in a sealed copy go in Verification.
 
 Slice 7, Stop start-up (after the join):
 
@@ -120,7 +121,7 @@ Execution: one builder on Sonnet for each of slices 1 to 5, each in its own work
 - Slice 3: `parse_config`, the `package.json` read and the Dart boundary check in `.hooks/gate_config.py`, `load` in `.hooks/debt.py`, `load_policy` in `.hooks/shipping.py`, the `pubspec.yaml` reads in `.hooks/project_setup.py` and `.hooks/swift_setup.py`, the `l10n.yaml` and settings reads in `setup.py` and its helpers, `tests/test_project_files.py` (new), `tests/test_dart_config.py`.
 - Slice 4: `.hooks/mutation.py`, the gate result line in `.hooks/hard-eng.py`, `.hooks/process_group.py`, `.hooks/ship_actions.py`, `.hooks/update_pr.py`, `.hooks/update_runner.py`, `tests/test_mutation.py`, `tests/test_check_signals.py`, `tests/test_ship_cleanup.py`, `tests/test_update_pr_refusal.py`.
 - Slice 5: the gate adapt loop in `.hooks/project_setup.py`, `.hooks/python_setup.py`, `.hooks/coverage_sources.py`, the coverage message in `line_coverage` in `.hooks/reports.py`, `.hooks/untrusted_input.py`, `tests/test_greenfield.py`, `tests/test_typescript_sources.py` (new).
-- Slice 6: the coordinator skill's host reference.
+- Slice 6: the coordinator skill's host reference, `require_ignored` in the skill's secrets script, `tests/test_trello_board.py`.
 - Slice 7: `.hooks/update.py`, `.hooks/plans.py`, `.hooks/agent_hooks.py`, `tests/test_gate_speed.py`.
 
 Dependencies: slices 1 to 6 have none between them; no two share a function. Slices 1 and 5 edit `.hooks/reports.py` in different functions, slices 2 and 3 edit `.hooks/debt.py` in different functions, and slices 3 and 5 edit `.hooks/project_setup.py` in different functions. Slice 7 needs the join of slices 1 to 6.
