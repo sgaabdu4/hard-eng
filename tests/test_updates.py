@@ -14,6 +14,7 @@ import pytest
 import update
 from conftest import SOURCE, commit, git, init
 from gate_config import JsonObject, json_file
+from legacy_command import script_operand
 from shipping import ShippingPolicy
 from test_setup import repository as setup_repository
 from test_setup import snapshot
@@ -887,9 +888,9 @@ def test_retired_families_config_is_regenerated_and_reported(
     ],
 )
 def test_retired_interpreter_script_is_found_past_options(
-    installer: ModuleType, command: list[str], script: str | None
+    command: list[str], script: str | None
 ) -> None:
-    assert installer.script_operand(command) == script
+    assert script_operand(command) == script
 
 
 REACT_DOCTOR_0_9_14_COMMAND_INPUT_RISK = re.compile(
