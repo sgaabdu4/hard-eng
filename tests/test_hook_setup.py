@@ -1,5 +1,6 @@
 """Codex hook-configuration conflicts preserve target project settings."""
 
+import ast
 import json
 import subprocess
 import sys
@@ -352,3 +353,50 @@ def test_retired_harness_symlinks_preserve_shared_configuration(
     assert path.is_symlink()
     assert shared.read_text() == content
     assert not (root / ".hooks").exists()
+
+
+OLD_PYTHON = (
+    "import runpy, sys\n"
+    "sys.version_info = (3, 9, 6, 'final', 0)\n"
+    "sys.modules['tomllib'] = None\n"
+    "sys.argv = sys.argv[1:]\n"
+    "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+)
+
+
+def on_old_python(event: str, payload: object) -> subprocess.CompletedProcess[str]:
+    entry = str(SOURCE / ".hooks/hard-eng.py")
+    return subprocess.run(
+        [sys.executable, "-c", OLD_PYTHON, entry, event, "claude"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_old_python_gets_a_plain_refusal_before_any_import() -> None:
+    blocked = on_old_python("stop", {})
+    again = on_old_python("stop", {"stop_hook_active": True})
+    session = on_old_python("session", {})
+    check = on_old_python("check", {})
+    ast.parse((SOURCE / ".hooks/hard-eng.py").read_text(), feature_version=(3, 9))
+    for run in (blocked, again, session, check):
+        assert "Traceback" not in run.stderr, run.stderr
+    stop = json.loads(blocked.stdout)
+    assert stop["decision"] == "block"
+    assert "Python 3.12 or later" in stop["reason"]
+    assert "3.9" in stop["reason"]
+    for run in (again, session):
+        assert run.returncode == 0
+        (message,) = json.loads(run.stdout).items()
+        assert message == ("systemMessage", stop["reason"])
+    assert check.returncode == 1
+    assert stop["reason"] in check.stderr
+
+
+def test_python_floor_has_one_value(runner: ModuleType) -> None:
+    major, minor = runner.PYTHON_FLOOR
+    project = tomllib.loads((SOURCE / "pyproject.toml").read_text())["project"]
+    assert project["requires-python"] == f">={major}.{minor}"
+    assert f"Python {major}.{minor} or later" in (SOURCE / "README.md").read_text()
