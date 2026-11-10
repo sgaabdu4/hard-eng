@@ -675,11 +675,13 @@ def test_a_boundary_rule_with_a_missing_folder_is_refused(
 ) -> None:
     (tmp_path / "lib/feature_a").mkdir(parents=True)
     (tmp_path / "lib/feature_a/page.dart").write_text("void main() {}\n")
+    (tmp_path / "lib/notes").mkdir()
+    (tmp_path / "lib/notes/plan.md").write_text("no code here\n")
     (tmp_path / ".dart-decimaterc.json").write_text("{}")
     command = ["dart-decimate", "check", ".", "--strict"]
-    boundary_tool(monkeypatch, [{"from": "lib/feature", "disallow": "lib/feature_a"}])
+    boundary_tool(monkeypatch, [{"from": "lib/feature", "disallow": "lib"}])
     validate_dart_boundaries(command, tmp_path, 5)
-    for prefix in ("lib/features", "ui/pages"):
+    for prefix in ("lib/features", "ui/pages", "lib/notes"):
         boundary_tool(monkeypatch, [{"from": "lib/feature_a", "disallow": prefix}])
         with pytest.raises(
             ValueError,
