@@ -146,14 +146,26 @@ def import_configuration(directory: Path, package: Group, content: str) -> str:
     )
 
 
-def print_import_contract(directory: Path, package: Group) -> None:
-    """Show the block that a failed imports gate lacks when the package has no contract."""
+def imports_step(directory: Path, package: Group) -> str:
+    """The whole step after a first module: the template gate as setup adapts it, and its contract."""
+    template = Path(__file__).resolve().parents[1] / (
+        ".agents/skills/he/templates/hard-eng.python.json"
+    )
+    gate = next(
+        check
+        for check in json.loads(template.read_text())["packages"][0]["checks"]
+        if check.get("role") == "imports"
+    )
+    manager = dependency_command(directory, "python")[0]
+    gate["command"] = python_gate_command(gate["command"], manager)
     content = (directory / "pyproject.toml").read_text()
-    if import_linter_owner(directory) is None:
-        block = import_configuration(directory, package, content)[len(content) :]
-        if block:
-            where = Path(package["path"], "pyproject.toml")
-            print(f"Import Linter has no contract. Add this to {where}:{block}")
+    block = import_configuration(directory, package, content)[len(content) :]
+    where = Path(package["path"], "pyproject.toml")
+    return (
+        f"add this gate to package {package['path']} in hard-eng.gates.json: "
+        + json.dumps(gate)
+        + (f"; then add this to {where}:{block}" if block else "")
+    )
 
 
 def configure_python(

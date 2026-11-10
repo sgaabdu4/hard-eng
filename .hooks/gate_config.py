@@ -752,14 +752,20 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
     return len(group["checks"])
 
 
-def require_roles(directory: str, required: set[str], roles: set[str]) -> None:
+def require_roles(
+    directory: str, required: set[str], roles: set[str], step: str = ""
+) -> None:
     if missing := required - roles:
         where = "the `shared` list" if directory == "shared" else f"package {directory}"
         raise ValueError(
-            f"{directory}: missing mandatory checks: {', '.join(sorted(missing))}; add a "
-            f"gate with each role to {where} in hard-eng.gates.json (package and secret "
-            "scan roles: the language template in .agents/skills/he/templates/; other "
-            "shared roles: .agents/skills/he/references/gates.md)"
+            f"{directory}: missing mandatory checks: {', '.join(sorted(missing))}; "
+            + (
+                step
+                or f"add a gate with each role to {where} in hard-eng.gates.json (package "
+                "and secret scan roles: the language template in "
+                ".agents/skills/he/templates/; other shared roles: "
+                ".agents/skills/he/references/gates.md)"
+            )
         )
 
 
@@ -888,8 +894,15 @@ def validate_package_services(
     if not group.get("language"):
         return
     require_roles(group["path"], {"security"}, roles | shared_roles)
-    if language == "python" and python_roots(directory, group):
-        require_roles(group["path"], {"imports"}, roles)
+    if (
+        language == "python"
+        and "imports" not in roles
+        and python_roots(directory, group)
+    ):
+        from python_setup import imports_step
+
+        step = imports_step(directory, group)
+        require_roles(group["path"], {"imports"}, roles, step)
     if language == "javascript":
         from fallow_report import owns_package_fallow
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from conftest import SOURCE, git
+from conftest import git
 from gate_config import (
     Gate,
     Group,
@@ -18,7 +18,7 @@ from gate_config import (
     validate_required_checks,
 )
 from plans import validate_plans
-from python_setup import python_gate_command, python_roots
+from python_setup import python_roots
 from test_plans import edit, sized_branch
 from test_setup import repository
 
@@ -240,35 +240,33 @@ def test_python_code_added_after_setup_must_join_the_checked_sources(
     validate_required_checks(tmp_path, config)
 
 
-def test_an_imports_gate_without_a_contract_prints_the_block_to_add(
-    runner: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_the_missing_imports_message_gives_a_gate_and_a_block_that_pass(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    template = json.loads(
-        (SOURCE / ".agents/skills/he/templates/hard-eng.python.json").read_text()
-    )
-    gate: Gate = next(
-        check
-        for check in template["packages"][0]["checks"]
-        if check["role"] == "imports"
-    )
-    gate["command"] = python_gate_command(gate["command"], "uv")
-    group: Group = {
-        "path": ".",
-        "language": "python",
-        "sources": ["pkg"],
-        "checks": [gate],
-    }
+    uv_project(tmp_path, PROJECT)
+    (tmp_path / "main.py").write_text("value = 1\n")
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg/__init__.py").write_text("")
     (tmp_path / "pkg/mod.py").write_text("value = 1\n")
-    (tmp_path / "uv.lock").touch()
+    group = config["packages"][0]
+    group["sources"].append("pkg")
+    with pytest.raises(
+        ValueError, match="missing mandatory checks: imports"
+    ) as refusal:
+        validate_required_checks(tmp_path, config)
+    message = str(refusal.value)
+    gate: Gate = json.JSONDecoder().raw_decode(message[message.index("{") :])[0]
+    group["checks"].append(gate)
     project = tmp_path / "pyproject.toml"
-    project.write_text(PROJECT)
-    assert runner.run_gate(group, gate, 300, threading.Lock()) is True
-    output = capsys.readouterr().out
-    assert "[tool.importlinter]" in output
-    block = output[output.index("[tool.importlinter]") : output.index("FAIL imports")]
-    project.write_text(PROJECT + "\n" + block)
+    project.write_text(
+        project.read_text() + "\n" + message[message.index("[tool.importlinter]") :]
+    )
+    validate_required_checks(tmp_path, config)
     assert runner.run_gate(group, gate, 300, threading.Lock()) is False
     assert "PASS imports" in capsys.readouterr().out
 
