@@ -29,7 +29,7 @@ def test_a_poetry_gate_stays_in_the_active_environment_when_uv_has_a_pinned_path
     (project / "pyproject.toml").write_text(PROJECT)
     pin = tmp_path / "config/uv/.python-version"
     pin.parent.mkdir(parents=True)
-    pin.write_text(f"{sys._base_executable}\n")
+    pin.write_text(f"{sys.executable}\n")
     command = python_gate_command(["pytest"], "poetry")
     assert command[:2] == ["poetry", "run"]
     active = {
