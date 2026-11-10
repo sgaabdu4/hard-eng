@@ -185,7 +185,10 @@ def test_interrupted_installation_is_replaced_cleanly(
     tmp_path: Path, registry: Path
 ) -> None:
     interrupted = launch(tmp_path, add_seconds=30)
+    deadline = time.monotonic() + 60
     while not (registry / "adds").exists():
+        assert interrupted.poll() is None, "provisioning ended before it began to add"
+        assert time.monotonic() < deadline, "provisioning never began to add"
         time.sleep(0.05)
     os.killpg(interrupted.pid, signal.SIGKILL)
     interrupted.wait()
@@ -236,6 +239,67 @@ def test_tools_are_provisioned_outside_a_project_that_pins_bun(
     tool_setup.provision_tools(project, [react], 30)
     directories = [Path(call.kwargs["cwd"]) for call in native.call_args_list]
     assert directories == [tmp_path / "runner/hard-eng-tools"] * 2
+
+
+@pytest.mark.parametrize("gh_installed", [True, False])
+def test_tool_installs_borrow_the_gh_sign_in_for_github_downloads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gh_installed: bool
+) -> None:
+    from unittest.mock import Mock
+
+    import tool_setup
+    from conftest import use_installed_mise
+    from gate_config import Group
+
+    use_installed_mise(tmp_path, monkeypatch)
+    monkeypatch.delenv("MISE_GITHUB_CREDENTIAL_COMMAND", raising=False)
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    if gh_installed:
+        (tools / "gh").write_text("#!/bin/sh\nexit 0\n")
+        (tools / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", str(tools))
+    native = Mock(return_value=subprocess.CompletedProcess([], 0, '{"PATH": ""}', ""))
+    monkeypatch.setattr(subprocess, "run", native)
+    scan: Group = {"path": ".", "checks": [{"name": "s", "command": ["gitleaks"]}]}
+    tool_setup.provision_tools(tmp_path, [scan], 30)
+    environments = [call.kwargs["env"] for call in native.call_args_list]
+    assert environments
+    assert {env.get("MISE_GITHUB_CREDENTIAL_COMMAND") for env in environments} == {
+        'gh auth token --hostname "$MISE_CREDENTIAL_HOST"' if gh_installed else None
+    }
+
+
+@pytest.mark.parametrize(
+    ("command", "message"),
+    [
+        (
+            ["bun", "--cwd=app", "x", "react-doctor", "."],
+            "Configure the React Doctor gate in its explicit package directory",
+        ),
+        (
+            ["react-doctor", ".", "&&", "true"],
+            "React Doctor must be one native invocation with its arguments",
+        ),
+        (
+            ["fallow", "audit", "|", "cat"],
+            "Fallow audit must be one native invocation with its arguments",
+        ),
+    ],
+)
+def test_a_scanner_gate_outside_its_package_or_in_a_chain_is_refused(
+    tmp_path: Path, command: list[str], message: str
+) -> None:
+    import tool_setup
+
+    (tmp_path / "app").mkdir()
+    with pytest.raises(ValueError, match=message):
+        tool_setup.managed_scanner_command(command, tmp_path)
+    assert tool_setup.managed_scanner_command(["react-doctor", "."], tmp_path) == [
+        "react-doctor",
+        ".",
+    ]
 
 
 def test_dead_code_gate_treats_console_script_targets_as_used(tmp_path: Path) -> None:

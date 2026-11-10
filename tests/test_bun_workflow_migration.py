@@ -34,32 +34,49 @@ def test_pnpm_setup_step_with_a_condition_migrates_as_one_step(step: str) -> Non
     assert migrate_bun(SOURCE, old) == template
 
 
-def test_pnpm_bootstrap_migrates_to_the_template_bun_steps() -> None:
+def test_pnpm_bootstrap_migrates_to_the_template_bun_steps(tmp_path: Path) -> None:
     template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
-    launcher = 'bun x --package="@jdxcode/mise-linux-${RUNNER_ARCH,,}@latest" mise'
-    old = (
-        template.replace(
-            "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0\n"
-            "        with:\n          bun-version: ${{ steps.impact.outputs.bun || 'latest' }}\n",
-            "      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0\n"
-            "        with:\n          version: latest\n          runtime: node@latest\n"
-            "          install: false\n",
-        )
-        .replace(
-            launcher,
-            "pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise "
-            "--package=@jdxcode/mise@latest mise",
-        )
-        .replace("'uv@latest python@3.12'", "'uv@latest python@3.12 node@latest'")
-        .replace(
-            '            echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/bun/cache"\n',
-            '            echo "PNPM_CONFIG_STORE_DIR=$RUNNER_TEMP/hard-eng-tools/pnpm/store"\n'
-            '            echo "PNPM_CONFIG_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/pnpm/cache"\n',
-        )
+    bun_step = (
+        "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0\n"
+        "        with:\n          bun-version: ${{ steps.impact.outputs.bun || 'latest' }}\n"
     )
-    assert "pnpm" in old and old != template
-    assert migrate_bun(SOURCE, old) == template
-    assert migrate_bun(SOURCE, template) == template
+    pnpm_step = (
+        "      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0\n"
+        "        with:\n          version: latest\n          runtime: node@latest\n"
+        "          install: false\n"
+    )
+    pnpm_launcher = (
+        "pnpm dlx --config.ignore-scripts=false --allow-build=@jdxcode/mise "
+        "--package=@jdxcode/mise@latest mise"
+    )
+    bun_cache = (
+        '            echo "BUN_INSTALL_CACHE_DIR=${BUN_INSTALL_CACHE_DIR:-'
+        '$RUNNER_TEMP/hard-eng-tools/bun/cache}"\n'
+    )
+    pnpm_cache = (
+        '            echo "PNPM_CONFIG_STORE_DIR=$RUNNER_TEMP/hard-eng-tools/pnpm/store"\n'
+        '            echo "PNPM_CONFIG_CACHE_DIR=$RUNNER_TEMP/hard-eng-tools/pnpm/cache"\n'
+    )
+    pairs = (
+        (bun_step, pnpm_step),
+        ('bun x --package="$MISE_PACKAGE" mise', pnpm_launcher),
+        ("'uv@latest python@3.12'", "'uv@latest python@3.12 node@latest'"),
+        (bun_cache, pnpm_cache),
+    )
+    old = template
+    for current, previous in pairs:
+        assert current in template
+        old = old.replace(current, previous)
+    path = tmp_path / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(old)
+    changes: dict[str, str] = {}
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes == {".github/workflows/hard-eng.yml": template}
+    path.write_text(template)
+    changes.clear()
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes == {}
 
 
 def test_pnpm_tool_ending_a_tool_list_line_is_removed() -> None:
