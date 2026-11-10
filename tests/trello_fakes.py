@@ -337,8 +337,9 @@ class Project:
         assert result.code == 0, result.text
         found: dict[str, list[dict[str, str]]] = {}
         for name, items in result.payload.items():
-            if not isinstance(items, list):
+            if name == "runId":
                 continue
+            assert isinstance(items, list), name
             found[name] = [{k: str(v) for k, v in item.items()} for item in items]
         return found
 
