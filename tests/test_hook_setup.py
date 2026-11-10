@@ -207,6 +207,27 @@ def test_failure_hook_runs_its_own_script_and_replaces_the_old_entry(
     assert "Same tool error 3 times" in printed[2]
 
 
+def test_a_changed_timeout_keeps_one_hook_entry(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    repository(root)
+    installer.install(root)
+    kept: dict[str, JsonObject] = {}
+    for name in agent_hooks.HOOK_FILES.values():
+        settings: JsonObject = json.loads((root / name).read_text())
+        for items in settings["hooks"].values():
+            for item in items:
+                for handler in item["hooks"]:
+                    handler["timeout"] += 1
+        (root / name).write_text(json.dumps(settings))
+        kept[name] = settings
+    installer.install(root)
+    for name, settings in kept.items():
+        assert json.loads((root / name).read_text()) == settings
+
+
 def test_setup_replaces_the_old_tool_hook_commands(
     installer: ModuleType, tmp_path: Path
 ) -> None:

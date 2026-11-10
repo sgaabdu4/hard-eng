@@ -23,6 +23,15 @@ SOURCE = Path(__file__).resolve().parent
 sys.path[:0] = [str(SOURCE / ".hooks"), str(SOURCE)]
 
 
+def hook_identity(item: object) -> str:
+    """The same matcher and commands are the same hook, whatever its timeout."""
+    handlers = item.get("hooks") if isinstance(item, dict) else None
+    if not isinstance(item, dict) or not isinstance(handlers, list):
+        return json.dumps(item, sort_keys=True)
+    commands = [h.get("command") for h in handlers if isinstance(h, dict)]
+    return json.dumps([item.get("matcher"), commands])
+
+
 def merge(
     current: JsonObject, additions: JsonObject, path: tuple[str, ...] = ()
 ) -> JsonObject:
@@ -44,8 +53,9 @@ def merge(
             and path == ("hooks",)
             and isinstance(existing, list)
         ):
+            known = {hook_identity(item) for item in existing}
             for item in value:
-                if item not in existing:
+                if hook_identity(item) not in known:
                     existing.append(item)
         elif current[key] != value:
             raise ValueError(
