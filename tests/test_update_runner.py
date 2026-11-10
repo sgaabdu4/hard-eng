@@ -410,8 +410,11 @@ def test_background_update_does_not_repeat_a_refusal_until_inputs_change(
     result = target / update_runner.RESULT_FILE
     assert update_runner.apply_update(target) == 0
     assert "secrets-files requires native" in result.read_text()
+    assert "Fix its cause on the base branch" in result.read_text()
     assert update_runner.apply_update(target) == 0
-    assert "nothing changed since, so it was not retried" in result.read_text()
+    assert "the base branch has not changed since, so it was not retried" in (
+        result.read_text()
+    )
     assert fetch.call_count == 1
     with pytest.raises(ValueError, match="secrets-files requires native"):
         update.update(target, repair=True)
