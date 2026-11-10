@@ -1,0 +1,31 @@
+F401 [*] `os` imported but unused
+ --> a.py:1:8
+  |
+1 | import os
+  |        ^^
+2 | import sys
+  |
+help: Remove unused import: `os`
+  |
+  - import os
+1 | import sys
+  |
+
+F401 [*] `sys` imported but unused
+ --> a.py:2:8
+  |
+1 | import os
+2 | import sys
+  |        ^^^
+3 |
+4 | print(1)
+  |
+help: Remove unused import: `sys`
+  |
+1 | import os
+  - import sys
+2 |
+  |
+
+Found 2 errors.
+[*] 2 fixable with `--fix`.

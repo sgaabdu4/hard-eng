@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "gates": {
+    "./lint": {
+      "> N \u2502 var first = N;": 1,
+      "> N \u2502 var second = N;": 1,
+      "Checked N files in Nms. No fixes applied.": 1,
+      "Found N errors.": 1,
+      "N   \u2502 - var\u00b7first\u00b7=\u00b7N;": 1,
+      "N   \u2502 - var\u00b7second\u00b7=\u00b7N;": 1,
+      "N N \u2502": 1,
+      "N N \u2502   console.log(first, second);": 2,
+      "N N \u2502   var first = N;": 1,
+      "N N \u2502   var second = N;": 1,
+      "N \u2502": 1,
+      "N \u2502 + const\u00b7first\u00b7=\u00b7N;": 1,
+      "N \u2502 + const\u00b7second\u00b7=\u00b7N;": 1,
+      "N \u2502 console.log(first, second);": 2,
+      "N \u2502 var first = N;": 1,
+      "N \u2502 var second = N;": 1,
+      "a.js:N:N \u001b]N;;https://biomejs.dev/linter/rules/no-var\u001b\\lint/suspicious/noVar\u001b]N;;\u001b\\  FIXABLE  \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501": 2,
+      "ci \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501": 1,
+      "\u2139 A variable declared with var is accessible in the whole module. Thus, the variable can be accessed before its initialization and outside the block where it is declared.": 2,
+      "\u2139 See \u001b]N;;https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/var\u001b\\MDN web docs\u001b]N;;\u001b\\ for more details.": 2,
+      "\u2139 Unsafe fix: Use 'const' instead.": 2,
+      "\u2502 ^^^^^^^^^^^^^": 1,
+      "\u2502 ^^^^^^^^^^^^^^": 1,
+      "\u2716 Some errors were emitted while running checks.": 1,
+      "\u2716 Use let or const instead of var.": 2
+    }
+  }
+}
