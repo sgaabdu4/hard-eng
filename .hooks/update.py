@@ -831,26 +831,6 @@ def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
     local_settings(root)
     before = snapshot(root, changes)
     validate_gates(root, source, changes)
-    if snapshot(root, changes) != before:
-        raise ValueError(
-            "Files changed during verification; the update was not applied"
-        )
-    if subprocess.check_output(
-        [
-            "git",
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-            "--ignored",
-            "--",
-            *names,
-        ],
-        cwd=root,
-        text=True,
-    ):
-        raise ValueError(
-            "The update paths changed during verification; nothing was applied"
-        )
     commit_update(root, changes, links, revision, before)
     retire_local_generation(root)
     if hook[0] not in changes:
