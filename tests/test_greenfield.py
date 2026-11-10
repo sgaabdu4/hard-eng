@@ -301,8 +301,10 @@ def test_javascript_and_dart_code_added_after_setup_must_join_the_checked_source
     validate_required_checks(tmp_path, config)
     (tmp_path / added).write_text("export const b = 2;\n")
     folder = Path(added).parts[0]
-    with pytest.raises(ValueError, match=f"outside its sources: {folder};.*`sources`"):
+    step = "`sources` list in hard-eng.gates.json; tests must then cover its files"
+    with pytest.raises(ValueError, match=f"outside its sources: {folder};.*{step}"):
         validate_required_checks(tmp_path, config)
+    validate_required_checks(tmp_path, config, starting=True)
     config["packages"][0]["sources"].append(folder)
     validate_required_checks(tmp_path, config)
 

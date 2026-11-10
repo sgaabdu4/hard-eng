@@ -6,6 +6,7 @@ import re
 import shlex
 import subprocess
 import tomllib
+from collections.abc import Iterator
 from fnmatch import fnmatchcase
 from pathlib import Path
 
@@ -150,8 +151,17 @@ def is_shell_script(path: Path) -> bool:
         return bool(SHELL_SHEBANG.match(source.readline(4096)))
 
 
-def project_shell_scripts(root: Path, files: list[Path]) -> list[Path]:
-    return [path for path in files if is_shell_script(path) and not is_own(root, path)]
+def project_shell_scripts(
+    root: Path, files: list[Path], listed: frozenset[str] = frozenset()
+) -> Iterator[Path]:
+    """The project's own shell scripts, one at a time; a listed one is not read whole."""
+    return (
+        path
+        for path in files
+        if is_shell_script(path)
+        and str(path.relative_to(root)) not in listed
+        and not is_own(root, path)
+    )
 
 
 def unlisted_shell_scripts(
@@ -168,15 +178,14 @@ def unlisted_shell_scripts(
         for gate in gates
     ):
         return []
-    listed = {
+    listed = frozenset(
         argument
         for gate in gates
         for argument in gate["command"][gate["command"].index("--") + 1 :]
-    }
+    )
     return sorted(
-        name
-        for path in project_shell_scripts(root, files)
-        if (name := str(path.relative_to(root))) not in listed
+        str(path.relative_to(root))
+        for path in project_shell_scripts(root, files, listed)
     )
 
 

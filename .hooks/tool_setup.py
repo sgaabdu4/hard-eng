@@ -137,7 +137,7 @@ def require_shared_roles(
         required.add("secrets-history")
     if has_workflows(root, files):
         required.update({"workflows", "ci-security"})
-    if project_shell_scripts(root, files):
+    if next(project_shell_scripts(root, files), None) is not None:
         required.add("shell")
     if any(is_deployment_file(path) for path in files):
         required.add("deployment")

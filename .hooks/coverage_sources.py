@@ -110,13 +110,14 @@ def owned_files(
 
 
 def require_listed_sources(
-    root: Path, packages: list[Group], files: list[Path]
+    root: Path, packages: list[Group], files: list[Path], python_only: bool
 ) -> None:
     """Code added after setup is checked only once its package lists it."""
     owned = owned_files(root, packages, files)
+    languages = {"python"} if python_only else {"python", "javascript", "dart"}
     for group in packages:
         language = group.get("language", "")
-        if language not in {"python", "javascript", "dart"}:
+        if language not in languages:
             continue
         directory = root / group["path"]
         if missing := sorted(
@@ -127,7 +128,7 @@ def require_listed_sources(
             checks = (
                 " and to every check that names them (tests --cov=, annotations, dead-code, duplicates)"
                 if language == "python"
-                else ""
+                else "; tests must then cover its files, and test-only code belongs in test/, tests/ or __tests__/"
             )
             raise ValueError(
                 f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; "
