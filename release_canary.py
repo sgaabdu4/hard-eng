@@ -135,7 +135,7 @@ def public_text(revision: str) -> str:
     span = f"origin/main..{revision}"
     pulls = {pulls_of(sha) for sha in output(["git", "rev-list", span]).split()}
     diff = output(
-        ["git", "diff", "--no-ext-diff", f"origin/main...{revision}"]
+        ["git", "diff", "--no-color", "--no-ext-diff", f"origin/main...{revision}"]
     ).splitlines()
     added = [line for line in diff if line.startswith("+")]
     return "\n".join([output(["git", "log", "--format=%B", span]), *added, *pulls])

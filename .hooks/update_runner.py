@@ -602,7 +602,6 @@ def published(root: Path, base: str) -> bool:
 
 def prepare_update(root: Path, repair: bool = False) -> str:
     """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
-    base = update_base(root)
     repaired = ""
     if repair:
         from update import SOURCE_FILE, repair_current_hook
@@ -610,6 +609,7 @@ def prepare_update(root: Path, repair: bool = False) -> str:
         repaired = repair_current_hook(
             root, json.loads((root / SOURCE_FILE).read_text())["revision"]
         )
+    base = update_base(root)
     if not published(root, base):
         return NOT_PUBLISHED
     outcome = build_update(root, base, repair)

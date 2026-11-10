@@ -228,10 +228,11 @@ def test_release_text_holds_added_lines_but_not_lines_main_already_published(
     assert "secret-app" not in text
 
 
-def test_an_external_diff_tool_does_not_hide_a_private_name(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("setting", ["diff.external", "color.ui"])
+def test_a_developers_diff_settings_do_not_hide_a_private_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, setting: str
 ) -> None:
-    """A developer's diff.external must not change the text the leak check reads."""
+    """A developer's Git diff settings must not change the text the leak check reads."""
     source = tmp_path / "source"
     init(source)
     (source / "notes.md").write_text("public\n")
@@ -243,7 +244,9 @@ def test_an_external_diff_tool_does_not_hide_a_private_name(
     silent = tmp_path / "silent-diff"
     silent.write_text("#!/bin/sh\nexit 0\n")
     silent.chmod(0o755)
-    git(source, "config", "diff.external", str(silent))
+    git(
+        source, "config", setting, {"diff.external": str(silent)}.get(setting, "always")
+    )
     in_source = release_canary.output
 
     def output(command: list[str]) -> str:
