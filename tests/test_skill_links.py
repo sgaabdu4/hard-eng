@@ -2,6 +2,7 @@
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -214,6 +215,15 @@ def test_documented_commands_and_flags_exist() -> None:
         *(SOURCE / ".agents/skills").glob("**/*.md"),
     ]
     assert command_failures(SOURCE, documents) == []
+
+
+def test_documented_time_limit_command_fails_on_a_missing_program() -> None:
+    text = (SOURCE / ".agents/skills/he-build/SKILL.md").read_text()
+    (limit,) = re.findall(r"`(perl -e '[^'`]*') <s> <cmd>`", text)
+    run = subprocess.run(
+        [*shlex.split(limit), "5", "hard-eng-no-such-program"], check=False
+    )
+    assert run.returncode == 127
 
 
 def test_an_unknown_command_or_flag_in_docs_fails(tmp_path: Path) -> None:
