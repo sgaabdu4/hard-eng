@@ -102,20 +102,25 @@ def quick_mode() -> bool:
 def ensure_python_runtime() -> None:
     """Run the installed CLI with its YAML dependency without changing host Python."""
     if importlib.util.find_spec("yaml") is None:
-        os.execvp(
-            "uv",
-            [
+        try:
+            os.execvp(
                 "uv",
-                "run",
-                "--no-project",
-                "--with",
-                "pyyaml",
-                "--python",
-                sys.executable,
-                "python",
-                *sys.argv,
-            ],
-        )
+                [
+                    "uv",
+                    "run",
+                    "--no-project",
+                    "--with",
+                    "pyyaml",
+                    "--python",
+                    sys.executable,
+                    "python",
+                    *sys.argv,
+                ],
+            )
+        except FileNotFoundError as error:
+            raise FileNotFoundError(
+                "uv is not on PATH; Hard Eng needs it. Install uv, then run again."
+            ) from error
 
 
 def entry_point_names(directory: Path) -> list[str]:
