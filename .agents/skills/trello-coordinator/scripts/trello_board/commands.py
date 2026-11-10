@@ -763,7 +763,7 @@ def guarded(args: argparse.Namespace, place: Place, secrets: Secrets) -> Obj:
     if args.command == "takeover":
         return claim.takeover(place, secrets, config.every_minutes)
     if args.command != "check":
-        if args.command in WRITE_COMMANDS:
+        if args.command in WRITE_COMMANDS and not args.dry_run:
             claim.require(place)
         return refusal_aware(args, place, secrets, config, "")
     run_id = state.take_lease(place.state, config.every_minutes)

@@ -9,11 +9,11 @@ Load in every run, for the schedule check and the pause check, and to start a wo
   - `timer`: interval `timing.everyMinutes`; slowed = interval `chaseHours`. Never set it to `enabled: false`. An older untitled interval task bound to this thread is `timer`: give it the title.
   - `wake`: `{type: "webhook", filters: [{path: "body.user", op: "notEquals", value: <account>}], dedupe: {coalesceKey: "{{body.board}}"}}`, where `<account>` = the `account` that `probe` prints. T3 refuses fixed text as the key; every request carries the same `board` value, so comments close together start one run. A new comment by anyone else starts a run. Our own comments, and the owner's (same account), never start one.
   - `alarm`: `{type: "once", runAt: <nextDue>}`. The pause check replaces it each time.
-- Schedule check = in every run, after the worktree check and before `probe`: call `list_scheduled_tasks` and use only tasks bound to this thread. Call it in scheduled runs too, even though the tool text says not to. Only this step and the pause check change `timer`.
+- Schedule check = in every run, after the worktree check and before `probe`: call `list_scheduled_tasks` and use only tasks bound to this thread. Call it in scheduled runs too, even though the tool text says not to. Only this step, the pause check and the [claim stop](#another-machine-holds-the-claim) change `timer`.
   - No `timer` → create it. `timer` turned off, or its `everyMs` is not `timing.everyMinutes` × 60000 → set `enabled: true` and that `everyMs` now, with its `scheduledTaskId`. Its next run then comes one interval from now, not at once. So a run that stops after this step leaves `timer` at full speed.
   - No `wake` → run `probe` first if it has not passed in this session, then create `wake` with the account that `probe` printed. It returns a `webhookUrl` → give the owner that URL and the Trello steps below, once. No `webhookUrl` = T3 Connect remote access is off → tell the owner once; `timer` then never slows.
   - The first manual run sets these up; tell the owner once.
-- `check` printed `skipped` → no pause check; `timer` stays at full speed.
+- `check` printed `skipped` without `heldElsewhere` → no pause check; `timer` stays at full speed.
 - Pause check = the step just before `finish`, in every run that `check` did not skip. Pause only when all are true: (1) `check` succeeded and printed `idle: true`; (2) this run posted nothing, moved no card and changed no date; (3) no worker of yours is running, since a worker's end starts a run; (4) `wake` shows a `lastRunStatus` other than `never`, which proves Trello reaches it.
   - Pause = delete each `alarm` bound to this thread, then create a new `alarm` at this run's `nextDue`. Leave out `clientRequestId`, so T3 gives the new `alarm` a fresh id. When T3 returns a future `nextRunAt` for it, set `timer`'s `everyMs` to `chaseHours` × 3600000, with its `scheduledTaskId`. No future `nextRunAt` → leave `timer` at full speed.
   - Not all four true → do not pause. `timer` stays at full speed from the schedule check.
@@ -29,7 +29,7 @@ Load in every run, for the schedule check and the pause check, and to start a wo
 
 ### Another machine holds the claim
 
-`check` printed `heldElsewhere` → the coordinator runs on another machine now. Delete this host's `timer`, `wake` and `alarm` (T3 Code: `delete_scheduled_task`; other hosts: remove the OS timer), end the run, and tell the owner once, with the `heldSince` time. This host stays off until the owner orders a move back.
+`check` printed `heldElsewhere` → the coordinator runs on another machine now. Before you end the run, delete this host's `timer`, `wake` and `alarm` (T3 Code: `delete_scheduled_task`; Claude Code: stop the `/loop` or remove the OS timer; Codex: remove the OS timer). Then tell the owner once, with the `heldSince` time. This host stays off until the owner orders a move back.
 
 Move to a new machine = only on the owner's order, on the new machine, in this order:
 
@@ -37,7 +37,7 @@ Move to a new machine = only on the owner's order, on the new machine, in this o
 2. Run `takeover`; it prints `tookOver`.
 3. Run the skill; the host's schedule check creates `timer` and `wake` there.
 
-The old machine stops by itself at its next `check`. A dead machine needs the same three steps; comments posted since its last `finish` can look like the owner's, so read those cards before answering.
+The old machine stops by itself at its next `check`. A dead machine needs the same three steps. The posted log lacks the comments the old machine posted after `previousSaved`, so they can look like the owner's: read those cards before you answer. When memory does not travel ([commands](commands.md#secrets--state)), the log lacks all of the old machine's comments: read every card with a comment from the owner's account since `previousSince`.
 
 ### Missing key or token
 

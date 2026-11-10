@@ -649,6 +649,8 @@ def test_a_second_machine_is_skipped_and_cannot_write(
     refused = other.run("comment", "1", str(make_note(tmp_path)))
     assert refused.code == 1
     assert "claim" in str(refused.payload["error"])
+    planned = other.run("comment", "1", str(make_note(tmp_path)), "--dry-run")
+    assert planned.code == 0, planned.text
     assert project.fake.writes == []
     who = git(
         origin_of(project), "log", "-1", "--format=%an <%ae>|%cn <%ce>", CLAIM_REF
@@ -676,9 +678,14 @@ def test_takeover_moves_the_claim_and_memory(
     busy = other.run("takeover")
     assert busy.code == 1 and "run" in str(busy.payload["error"])
     (other.state / "lease").unlink()
+    saved = git(origin_of(project), "log", "-1", "--format=%cI", CLAIM_REF)
     moved = other.run("takeover")
     assert moved.code == 0, moved.text
-    assert moved.payload == {"tookOver": True, "previousSince": held["heldSince"]}
+    assert moved.payload == {
+        "tookOver": True,
+        "previousSince": held["heldSince"],
+        "previousSaved": saved,
+    }
     for name in ("posted.log", "handover.md"):
         assert (other.state / name).read_text() == (project.state / name).read_text()
     assert other.run("check").code == 0
@@ -752,6 +759,20 @@ def test_unchanged_memory_pushes_nothing(
     saved = claim_commit(project)
     assert saved != taken
     assert project.run("finish", "again").payload == {"finished": False}
+    assert claim_commit(project) == saved
+
+
+def test_a_failed_private_check_keeps_the_saved_memory(
+    project: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(load_claim(), "is_private", private_remote)
+    drop_claim(project)
+    run_and_remember(project, tmp_path)
+    saved = claim_commit(project)
+    monkeypatch.setattr(load_claim(), "is_private", lambda _place: False)
+    assert project.run("check").code == 0
+    (project.state / "handover.md").write_text("changed while the check failed\n")
+    assert project.finish().payload == {"finished": True}
     assert claim_commit(project) == saved
 
 

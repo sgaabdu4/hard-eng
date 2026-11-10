@@ -5,7 +5,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 ## Order
 
 1. Running in a worktree (`git rev-parse --git-dir` ≠ `--git-common-dir`) → stop; tell the owner to start the coordinator from the main checkout, because a worktree branch keeps old skill text after updates. Then the schedule check for this host in [hosts](hosts.md). Then `probe` if it has not passed in this session, or if the skill or `trello.json` changed since it last ran; wrong account or missing list → stop and report.
-2. `check`; `skipped` → end the run, and when it also prints `heldElsewhere` another machine runs the coordinator: [stop this host](hosts.md#another-machine-holds-the-claim). Read `handover.md` from the same folder. Act on every item in every list before anything else.
+2. `check`; `heldElsewhere` → [stop this host](hosts.md#another-machine-holds-the-claim), then end the run. Other `skipped` → end the run. Read `handover.md` from the same folder. Act on every item in every list before anything else.
 3. Project health: error tracker, CI, release state, background jobs (below).
 4. Workers: start, follow up, review (below).
 5. Update `handover.md`, report (below), the pause check for this host in [hosts](hosts.md), then `finish <runId>`.
