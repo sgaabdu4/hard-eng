@@ -4,7 +4,6 @@ import json
 import re
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
 import yaml
@@ -28,6 +27,7 @@ SCAFFOLDS = {
     "python": ["uv", "init", "--quiet", "--app", "--no-package"],
 }
 MERGED = {".gitignore", ".gitattributes"}
+ASIDE = "hard-eng-new-kept"
 REMOVED = {"opennext": ["eslint.config.mjs"], "vite": [".oxlintrc.json"]}
 ANY_CONSTRAINT = re.compile(r"^(  ([a-z0-9_]+)): any$", re.MULTILINE)
 SDK_CONSTRAINT = re.compile(r"^  sdk: (\S+)$", re.MULTILINE)
@@ -129,30 +129,39 @@ def kept_files(root: Path) -> list[Path]:
 
 
 def put_back(root: Path, aside: Path) -> None:
+    if not aside.is_dir():
+        return
     for kept in sorted(aside.iterdir()):
         target = root / kept.name
         if kept.name in MERGED and target.is_file():
-            lines = target.read_text().splitlines()
+            lines = target.read_bytes().splitlines()
             extra = [
                 line
-                for line in kept.read_text().splitlines()
+                for line in kept.read_bytes().splitlines()
                 if line.strip() and line not in lines
             ]
-            kept.write_text("\n".join([*lines, *extra]) + "\n")
+            kept.write_bytes(b"\n".join([*lines, *extra]) + b"\n")
         shutil.move(kept, target)
+    aside.rmdir()
 
 
 def create(root: Path, stack: str) -> None:
     if not (root / ".git").exists():
         raise ValueError(f"--new must run at the Git repository root, not {root}")
-    with tempfile.TemporaryDirectory() as folder:
-        aside = Path(folder)
-        for kept in kept_files(root):
-            shutil.move(kept, aside / kept.name)
-        try:
-            build(root, stack)
-        finally:
-            put_back(root, aside)
+    git_folder = subprocess.check_output(
+        ["git", "rev-parse", "--absolute-git-dir"], cwd=root, text=True
+    )
+    aside = Path(git_folder.strip()) / ASIDE
+    put_back(root, aside)
+    kept = kept_files(root)
+    if kept:
+        aside.mkdir()
+    for path in kept:
+        shutil.move(path, aside / path.name)
+    try:
+        build(root, stack)
+    finally:
+        put_back(root, aside)
     run(root, ["git", "add", "--all"])
     run(root, ["git", "commit", "--quiet", "-m", f"Create the {stack} project"])
 
