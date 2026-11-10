@@ -113,7 +113,7 @@ def test_registered_hook_allows_commands_outside_a_repository(tmp_path: Path) ->
         input=json.dumps(bash("sleep 600")),
         capture_output=True,
         text=True,
-        env={"PATH": os.environ["PATH"], "GIT_CEILING_DIRECTORIES": str(tmp_path)},
+        env={"PATH": os.environ["PATH"], "CLAUDE_PROJECT_DIR": str(tmp_path)},
         check=False,
     )
     assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
