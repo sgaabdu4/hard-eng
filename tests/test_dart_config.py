@@ -10,13 +10,13 @@ from unittest.mock import Mock
 import pytest
 import yaml
 from conftest import git
+from dart_boundaries import validate_dart_boundaries
 from gate_config import (
     Gate,
     Group,
     JsonObject,
     dart_scan_includes_boundaries,
     generated_sources,
-    validate_dart_boundaries,
 )
 from project_setup import adapt_package, dependency_command, validate_dart_exclusions
 
@@ -637,3 +637,22 @@ def test_the_missing_boundary_error_names_the_file_and_the_key(
     key, name = step.groups()
     (tmp_path / name).write_text("{" + key + "}")
     validate_dart_boundaries(command, tmp_path, 5)
+
+
+def test_a_settings_file_that_the_tool_rejects_shows_the_tools_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "app"
+    package.mkdir()
+    reason = "failed to parse config .dart-decimaterc.json: expected `,` or `]`"
+
+    def rejecting_tool(*args: list[str], **_kwargs: object) -> str:
+        raise subprocess.CalledProcessError(2, args[0], output="", stderr=reason + "\n")
+
+    monkeypatch.setattr(subprocess, "check_output", rejecting_tool)
+    command = ["dart-decimate", "check", ".", "--strict"]
+    with pytest.raises(ValueError, match=r"^app: dart-decimate config failed") as caught:
+        validate_dart_boundaries(command, package, 5)
+    assert reason in str(caught.value)
+    assert "\n" not in str(caught.value)
+    assert "returned non-zero" not in str(caught.value)
