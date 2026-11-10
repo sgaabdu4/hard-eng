@@ -1,0 +1,208 @@
+# Keep an update when a project hook changes the commit message, remove tests that protect nothing, test the real gaps and seal the suite from the developer's machine
+
+Status: Ready
+
+## Outcome + scope
+
+A project commit hook that changes the commit message no longer loses a built update, and no longer leaves the session base behind an install. The suite loses the tests that cannot fail, the copies of a document, a constant or another test, and the padding rows. Each real gap in the round 3 list gets one test. The suite no longer reads the developer's gh sign-in, default Git ignore file, bytecode setting or `python3`. Three small bugs found by the round 2 review and audit are fixed: the parent path in the update, the wait hook's deny text and the release text read through a user's diff tool. One more is fixed too: the default branch of a project with no shipping policy.
+
+Non-goals:
+
+- Stricter checks that can change what an installed project must do: instruction files that count as documentation only, the Swift file length rule, a `Gap:` line for a second language, `sources` cover for JavaScript and Dart, the first-parent walk in the updater, plain-bullet acceptance lines, unreadable freshness tables, a required approval count of 2 or more, and `changed_files` listed more than once per check. They change installed projects' results, so they need their own round.
+- A license file, a wait before new Hard Eng code installs, hooks that block on a crash, the video and Trello skills, the idle Codex broker stop, the 1000-line rule, the canary repository scope, the Linux shared temporary folder, the size of skills that a submodule owns, a secret scan of changed files only at Stop, and the merge method on `main`. These are the maintainer's choices.
+- The worktree that a session start builds when no newer release exists. Moving its two steps to the live checkout changes what a session start writes there, so it needs its own plan.
+- The other round 2 hook review items: the remembered local-file refusal key, both tool hook entries after a user edit, the Complete check without a remote, literal pathspecs, the requirements intro and the traceback outside the hook handler. Each changes a stored state, a check result or a message, so each needs its own decision.
+- A linked worktree folder name and plural spellings in the gap issue check. The maintainer decided against word lists in round 2. An owner name inside the remote's host name is left out for the same reason: a rule for host labels needs a list of well-known hosts.
+- A repair commit whose subject a project hook changed. `publish` in `.hooks/update_pr.py` and `update_in_diff` in `.hooks/update.py` still find a repair by its `Install Hard Eng` subject. When a hook changed it, the update branch does not move and `update-pr` prints "Nothing to publish", as today. A repair keeps the source marker, so the commit carries no other mark that CI can read. A looser text match would let a hand-written commit pass as a repair.
+- The Stop hook's lock probe. A no-wait option on `check` would save about 11 ms on a path that takes about 2 seconds, and `.hooks/hard-eng.py` is at 990 of 1,000 lines. The pre-push check runs in its own temporary checkout with its own lock, so it does not share report paths with a Stop check.
+- Three rare cases from the independent review of round 2. `--new` drops a user ignore line that the scaffold's file also holds; keeping every line would repeat lines in each merged file. A project hook link that moves to another file with the same content keeps the old link. The undo of an install commit does not write back a link, an in-tree launcher or the kept project hook that a project commit hook rewrote; setup's message already names the path. Each needs a rare project setup.
+- `test_the_canary_job_runs_the_release_gate_on_a_release_pr` and `test_async_helpers_keep_honest_and_escape_controls_in_each_language`. Each is the only pin of a workflow step or of test fixtures (Decided 2).
+- Slow tests that still prove something: the Semgrep runs, the 28 s agent check and the setup and clone runs. They are speed work, not cleanup.
+- Gaps that the audit reports name but the round 3 list did not take: the "Verification could not run" message, the agent check judges and the Claude run parser, the Dart mutation adapter, the JUnit `<error>` element, the Swift template stripping, the release order refusal, the Trello transport and header code, the Dart freshness dispatch, the comment scope errors and the Dart failure cut. Each needs its own check of user impact first.
+- Rows that a report called padding from reading alone, with no run, and anything this tree did not confirm. They are listed apart from this plan.
+
+## Repository context
+
+Owners: `tests/conftest.py` owns the test environment. `rebase_sessions` and `build_update` in `.hooks/update_runner.py` own the search for the updater's own commit, and `replaceable_remote` in `.hooks/update_pr.py` owns the choice to replace the remote update branch. `refuse_untracked_overlap` and `update_base` in `.hooks/update_runner.py` own the update refusal and the update base. `public_text` in `release_canary.py` owns the release leak text. `REASON` in `.hooks/polling.py` owns the deny text. The test files listed in the slices own their tests. The evidence is the eight reports of the round 2 test audit, which sit outside the repository. Each reviewer broke the code under each finding and ran the tests. Every item in this plan was checked again against this tree. Line numbers in the reports are stale, so items here are named by test and row value.
+Same cause: six causes. (6) The updater finds its own commit by its subject, and a project `commit-msg` or `prepare-commit-msg` hook can change that subject. No earlier fix. A search of every subject read in `.hooks/`, `setup.py`, `new_project.py` and `release_canary.py` found four: `landed_commit` in `.hooks/update_runner.py` (two callers), `replaceable_remote` and `publish` in `.hooks/update_pr.py`, and `update_in_diff` in `.hooks/update.py`. The first two are fixed here. The last two read only a repair's subject and are a non-goal. A normal update is proved by content in `release_installed`, which reads no subject. The other five follow. (1) A test reads the developer's machine. `features/test-git-isolation` sealed the global Git config (helped). `tests/conftest.py` already keeps the developer's Codex brokers and temporary folder out (helped). The gh sign-in and the `python3` on PATH are still read: `github_token` in `.hooks/update.py` and `private_repository` in `.hooks/gitleaks_scan.py` call the real `gh`. `release_template` in `tests/conftest.py` and one test in `tests/test_setup.py` run `setup.py` with the `python3` on PATH. Searched every `gh` call in `.hooks/`: shipping calls go through `shipping.gh`, which the tests replace, and the tool setup only passes a command string to mise. Also searched every test that runs `setup.py` with a bare `python3`. (2) A test cannot fail, because its input never reaches the branch it names, or it repeats a document, a constant or another test. Round 2 removed 21 such tests (helped) and wrote the Tests rule in `AGENTS.md`. The round 2 audit read every test file; this plan takes each finding still true here. (3) A fake answers in a shape the real service never sends. The Trello fake serves archived cards on `cards/open`, and the update PR fake always reports the new head. The round 2 retro added a fresh review that probes with the real command (helped there). The Trello `api.transport` path is the other case found, and it is a non-goal. (4) A reader trusts `git diff` output that a user's diff tool replaces. Round 2 fixed `diff_lines` in `.hooks/comments.py` (helped) and left `public_text`, on the claim that it runs only in CI. In fact `canary` returns early for `--ci` before it reads the release text, so the text is read on the maintainer's own run. Searched every `git diff` that reads a patch: `.hooks/mutation.py` passes `--no-ext-diff`, and the others read names or only hash the output. (5) A path check misses a parent path. `refuse_untracked_overlap` passes only the changed paths to `local_state`. The in-place update had the same gap (no earlier fix). The other `local_state` callers in `.hooks/update.py` and `setup.py` write through `replace_file`. That write stops with an error when a parent is a file, so nothing is replaced silently there (found by reading). The `main` default in `update_base` has no earlier fix. A search of `.hooks/` and `setup.py` found no other `main` default for a base branch.
+Single source: the updater's own commit has one rule per checkout, by position, and `landed_commit` loses its subject match. The test of a generated commit on the remote branch has one owner, `replaceable_remote`. The base branch without a shipping policy has one owner, `update_base` in `.hooks/update_runner.py`. `.hooks/update_pr.py` calls it, and no other `"main"` base default exists in `.hooks/` or `setup.py`. `release_references` in `.hooks/plans.py` is a list of local refs used to find a branch point, not a base name. It already reaches `origin/HEAD`, so it stays. The test environment seal has one owner, `tests/conftest.py`. The deny text has one owner, `REASON` in `.hooks/polling.py`. The rule stays in the requirements reference, and the text keeps only its ID and the next step. Copies that tests made of four values go with their mirror lines: `QUICK_ROLES`, `NEVER` in `.hooks/debt.py`, and `TIMING_HOURS` and `WRITE_COMMANDS` in the Trello scripts. The smaller switch-off list in `tests/test_comments.py` picks its rows from `SWITCHES` by file name; it is not a second table.
+Escaped bug: four bugs are on the base branch: the updater's commit found by subject (a lost update and a session base left behind), the parent path gap, the `main` default without a shipping policy, and the release text read through a user's diff tool. The test gate should have caught each. Each gets a case that fails on `develop` before its fix, after the round 2 merge. The gh sign-in and the bare `python3` are faults of the test setup, not of the product.
+
+## Decisions + authorization
+
+Blockers: None.
+Handoff: Approval
+Authority: Autonomous. On 2026-11-10 the maintainer told the builder to run the audit and fix rounds autonomously, to remove what protects nothing and to follow Hard Eng and Learn.
+Decided (1): a test that only repeats wording or a constant goes, even when nothing else pins that text. The Tests rule bans mirrors, and a text change gets the Reader check. Each such removal has its own acceptance line.
+Decided (2): a test that is the only pin of a workflow step or of test fixtures stays. The audit kept the reusable workflow input check by the same rule.
+Decided (3): `test_quick_set_is_chosen_by_role` keeps its slow half and drops its copy of the quick roles. Only that slow half proves that tests, performance and unlabelled gates stay out of a quick check.
+Decided (4): an untracked nested Git repository stops the secret scan with today's message. The scan fails closed, and the new test pins that.
+Decided (5): at import, `tests/conftest.py` puts a stub `gh` that exits 1 first on PATH, so no test reads the stored gh sign-in. An empty `GH_CONFIG_DIR` is not enough: on a signed-in Mac, `gh auth token` still exits 0 with it (probe of 2026-11-10; the token is in the system keyring). A test that needs gh already puts its own fake first. A token in `GH_TOKEN` or `GITHUB_TOKEN` stays, because CI hands its job token to the check on purpose. Conftest also points `XDG_CONFIG_HOME` at an empty folder, because Git reads the default ignore file there even with `GIT_CONFIG_GLOBAL` at the null device. It removes `PYTHONDONTWRITEBYTECODE`, so a local agent run writes bytecode files as CI does. Both `python3 setup.py` runs use `sys.executable`.
+Decided (6): an update refuses an ignored or untracked file or link where the update needs a folder. A parent that is a link counts, also a link to a folder. It uses the same message and the same remembered refusal as for an exact path.
+Decided (7): without a shipping policy, updates use the remote's default branch, read with `git ls-remote --symref origin HEAD` under the 120 second limit that `published` uses. The local `origin/HEAD` is missing after a fetch of one branch and stale after the remote's default moves, so it is not used. With no `origin` remote, or when the remote names no default branch, the base stays `main`. When the call fails, the update stops with that error, as a failed lookup in `published` does today.
+Decided (8): the deny text loses "keep working or end the turn". It keeps the rule ID, the background step and the exit notice, and adds no new advice.
+Decided (10): the updater finds its own commit by position, not by subject. In the private update worktree nobody else commits, so the built commit is that worktree's HEAD when HEAD differs from the base tip and the source marker's revision differs from the base tip's. A commit that keeps the revision is a repair, and it moves the update branch only with the exact subject `Install Hard Eng`, as `publish` needs. In the live checkout the install commit is the first commit after the head that setup read just before it committed; `undo_hooked_commit` already uses that rule. Work that the agent commits after it stays session work.
+Decided (11): on the remote update branch, a commit counts as generated when it changes the source marker `.hooks/hard-eng-source.json`, or when its subject is exactly `Install Hard Eng` (a repair). A fix commit never changes the marker, so it still blocks the replace, even when its subject names the update. One listing gives each commit's subject and files; a second listing with a path filter can drop an update commit, because Git then compares only the marker change. A text match that only contains the update subject is refused as a design: a commit such as "Fix lint after Update Hard Eng to 1a2b3c" would pass as generated and be overwritten.
+Decided (9): each removal follows its report's proof. Where a report names a code change that the removed test missed, the builder makes that change in a scratch copy and sees the keeper fail, before the delete.
+
+## Acceptance + steps
+
+Slice 0, the updater's own commit (first, alone):
+
+- [ ] After an install with a `commit-msg` hook that adds a prefix, the session base moves to the install commit → `tests/test_update_runner.py::test_install_moves_session_bases_when_a_hook_changes_the_commit_message`.
+- [ ] With the same hook, a background update reaches the update branch and says it is ready → `tests/test_update_runner.py::test_an_update_lands_when_a_project_hook_changes_the_commit_message`.
+- [ ] Work committed after the update commit stays session work → `tests/test_update_runner.py::test_update_commit_is_not_counted_as_session_work`.
+- [ ] `update-pr` replaces an older generated update on the remote branch when a hook changed its subject → `tests/test_update_pr.py::test_update_pr_replaces_a_generated_update_whose_subject_a_hook_changed`.
+- [ ] `update-pr` keeps a remote branch with a fix commit, even when the fix's subject is the update's own subject → `tests/test_update_pr.py::test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch`.
+
+Slice 1, runner, hooks and test seal:
+
+- [ ] With no token in the environment, a test finds no gh sign-in → `tests/test_gate_tools.py::test_fixture_gh_ignores_the_developers_sign_in`.
+- [ ] A fixture repository does not read the developer's default Git ignore file, and a child Python run writes bytecode files as in CI → N/A — test setup, not product behavior; the proof is two runs recorded in Verification. Each of the two tests that failed in CI on the round 2 PR, with its round 2 fix taken out, must fail on the developer's machine too.
+- [ ] The release fixture and the setup test run `setup.py` with the test's own interpreter → N/A — test setup, not product behavior; the proof is a run with a `python3` without PyYAML first on PATH, recorded in Verification.
+- [ ] A stale report that would pass if read is removed before the gate runs → `tests/test_runner.py::test_stale_report_cannot_pass`.
+- [ ] An empty, template, unfilled or out-of-order `PRODUCT.md` or `DESIGN.md` stops the check with its own message → `tests/test_runner.py::test_invalid_documents_prevent_commands`.
+- [ ] A session id cannot write outside the session folder, with that folder present → `tests/test_failures.py::test_failure_hook_ignores_session_ids_that_leave_the_session_folder`.
+- [ ] A quick check keeps no slow or unlabelled gate → `tests/test_quick_check.py::test_quick_set_is_chosen_by_role`.
+- [ ] A gate's limit is three times its last passing time when that is above the floor → `tests/test_gate_speed.py::test_the_gate_limit_is_three_times_the_last_passing_time`.
+- [ ] Adoption records osv, jscpd and deptry findings as debt lines, from real report shapes → `tests/test_debt.py::test_osv_jscpd_and_deptry_reports_become_debt_lines`.
+- [ ] This repository's own gates name their tools, checked once → `tests/test_gate_tools.py::test_this_repository_gates_name_their_tools`.
+- [ ] A loop that starts after `do`, `then` or `else` with a sleep is denied → `tests/test_polling.py::test_foreground_sleep_wait_is_denied`.
+- [ ] The deny text no longer advises ending the turn → N/A — wording; the Reader check and the hook timing go in Verification, and `tests/test_polling.py::test_foreground_sleep_wait_is_denied` still runs the hook.
+- [ ] Removed: the whole `tests/test_test_filters.py`. Its six filter rows move into the runner test → `tests/test_runner.py::test_suite_filters_are_rejected`.
+- [ ] Removed in `tests/test_runner.py`: the deptry, Dart and Lighthouse stale-report rows, the blank-only document row and the `False`, `[]` and `{}` reasons. Each took a kept row's path → `tests/test_runner.py::test_stale_report_cannot_pass`, `tests/test_runner.py::test_invalid_documents_prevent_commands`, `tests/test_runner.py::test_performance_exception_requires_a_nonblank_reason`.
+- [ ] Removed in `tests/test_failures.py`: the `a/b` and empty session id rows, which never wrote a file → `tests/test_failures.py::test_failure_hook_ignores_session_ids_that_leave_the_session_folder`.
+- [ ] Removed in `tests/test_quick_check.py`: the copy of the nine quick roles → `tests/test_quick_check.py::test_quick_check_runs_only_the_fast_roles_and_plain_check_runs_all` runs the format, lint and types roles.
+- [ ] Removed in `tests/test_process_group.py`: `test_stops_broker_whose_folder_is_gone`. With no job it never reads the folder → `tests/test_process_group.py::test_stops_broker_without_a_job`, `tests/test_process_group.py::test_stops_broker_whose_folder_is_gone_while_a_job_runs`.
+- [ ] Removed in `tests/test_gate_speed.py`: `test_scans_still_read_what_a_serial_generator_produced`. No code change fails it alone → `tests/test_gate_speed.py::test_scans_wait_for_a_parallel_generator_still_running`.
+- [ ] Removed in `tests/test_debt.py`: the role rows built from `NEVER`. A role dropped from it removed its own row → `tests/test_debt.py::test_tests_lockfiles_and_secrets_never_become_debt` and `tests/test_debt.py::test_hand_written_debt_never_passes_tests_lockfiles_or_secrets`, with one literal role each.
+- [ ] Removed in `tests/test_polling.py`: the `grep -c "sleep 60" notes.md` row, which flips with the `sleep 600` search row → `tests/test_polling.py::test_sleep_and_loop_words_as_data_pass`.
+
+Slice 2, shipping and canary:
+
+- [ ] A fork PR, a PR on another branch and a blocked PR that GitHub calls not mergeable are each refused for their own reason → `tests/test_shipping.py::test_ready_rejects_pr_identity_and_mergeability`.
+- [ ] A delivery check that exits 0 with the old revision, or with a status other than passed, is refused → `tests/test_shipping.py::test_a_delivery_check_that_passes_with_the_old_revision_is_refused`.
+- [ ] A UI-path project whose PR changes no UI file ships with no screenshots → `tests/test_shipping_ui_evidence.py::test_a_pr_that_changes_no_ui_file_needs_no_ui_evidence`.
+- [ ] An installed project with its own `setup.py` needs none of Hard Eng's own tests → `tests/test_requirements.py::test_installed_project_does_not_need_hard_eng_tests`.
+- [ ] A user's external diff tool does not hide an added line from the release leak check, in a real repository with `diff.external` set → `tests/test_release_canary.py::test_an_external_diff_tool_does_not_hide_a_private_name`.
+- [ ] Removed in `tests/test_shipping.py`: `test_merge_of_a_head_without_the_previous_base_runs_checks` with the `behind` setup, the `_check_missing` and `_check_pending` rows, the second blocked mergeability row and the always-true `graphql` check. Each repeated a kept path → `tests/test_shipping.py::test_push_runs_checks_when_pull_request_proof_is_missing`, `tests/test_shipping.py::test_required_check_that_has_not_started_is_pending_not_failed`, `tests/test_shipping.py::test_ready_bypasses_only_a_review_nobody_but_the_author_can_give`.
+- [ ] Removed in `tests/test_review_bypass.py`: the `{}` comparison row, which reads as `None` → `tests/test_review_bypass.py::test_ready_refuses_a_pr_behind_its_base`.
+- [ ] Removed in `tests/test_shipping_ui_evidence.py`: the doubled body, the same-video pair and the unchanged note with a video. They fail only with the same-image row and the unchanged-with-images row → `tests/test_shipping_ui_evidence.py::test_ui_changes_reject_missing_foreign_or_duplicate_evidence`.
+- [ ] Removed in `tests/test_release_canary.py`: the two agent-copy lock tests, the Cloudflare folder test, the public workflow test, and the `owner` line that the equality before it implies → `tests/test_release_canary.py::test_a_clone_drops_git_locks_and_keeps_project_lock_files`, `tests/test_release_canary.py::test_a_failed_clone_falls_back_to_a_full_copy_without_git_locks`, `tests/test_release_canary.py::test_ci_and_reruns_pick_only_the_named_new_projects`, `tests/test_release_canary.py::test_only_changes_to_installed_files_need_a_canary_run` (it gains the workflow path), `tests/test_release_canary.py::test_published_status_names_no_project`.
+
+Slice 3, update and adoption:
+
+- [ ] An update refuses an ignored or untracked file or link where it needs a folder, names it, leaves it unchanged and remembers the refusal → `tests/test_update_runner.py::test_an_update_refuses_a_local_file_where_it_needs_a_folder`.
+- [ ] Without a shipping policy, an update starts for a project whose remote default branch is `master` → `tests/test_update_runner.py::test_an_update_without_a_shipping_policy_uses_the_remote_default_branch`.
+- [ ] The update PR stays pending while GitHub still shows the old head → `tests/test_update_pr.py::test_update_pr_waits_while_github_shows_the_old_head`.
+- [ ] Install keeps an `AGENTS.override.md` that holds project text after its Hard Eng block → `tests/test_adoption.py::test_install_keeps_an_override_file_with_project_text_after_its_block`.
+- [ ] A Go project with a Makefile is labelled Go → `tests/test_basic_mode.py::test_language_label_comes_from_manifest_or_extension`.
+- [ ] Removed in `tests/test_adoption.py`: `test_setup_rerun_retires_old_generation`, merged with its clean status line, and two of the three ancestor file names → `tests/test_adoption.py::test_update_retires_old_generation`, `tests/test_adoption.py::test_install_preserves_blocking_ancestor_instructions_without_a_fallback`.
+- [ ] Removed in `tests/test_scaffold_replay.py`: `test_update_still_refuses_an_edited_skill_file` → `tests/test_updates.py::test_overlapping_local_edit_prevents_update`.
+- [ ] Removed in `tests/test_basic_mode.py`: ten rows that restate `MANIFEST_LABELS` or repeat the suffix or fallback path → `tests/test_basic_mode.py::test_language_label_comes_from_manifest_or_extension`.
+- [ ] Removed in `tests/test_package_discovery.py`: the migration message test (wording), two of the three manifest names and the `devDependencies` row → `tests/test_setup.py::test_legacy_lockfile_requires_migration`, `tests/test_package_discovery.py::test_generated_package_ownership`, `tests/test_package_discovery.py::test_bun_lockfile_is_optional_only_without_dependencies`.
+- [ ] Removed in `tests/test_previews.py`: the loop over note phrases (wording) and five of the six read actions → `tests/test_previews.py::test_notes_artifact_page_calls`, `tests/test_previews.py::test_ignores_artifact_reads_and_other_tools`.
+
+Slice 4, CI, tools and languages:
+
+- [ ] The pnpm cache line of an old workflow becomes the Bun cache line, built from today's template → `tests/test_bun_workflow_migration.py::test_pnpm_bootstrap_migrates_to_the_template_bun_steps`.
+- [ ] Tool installs from GitHub use the gh sign-in command when gh is installed, and not otherwise → `tests/test_tool_setup.py::test_tool_installs_borrow_the_gh_sign_in_for_github_downloads`.
+- [ ] A scanner gate set outside its package folder, or chained with another command, is refused → `tests/test_tool_setup.py::test_a_scanner_gate_outside_its_package_or_in_a_chain_is_refused`.
+- [ ] The interrupted install test fails under a deadline when provisioning ends early → `tests/test_tool_setup.py::test_interrupted_installation_is_replaced_cleanly`.
+- [ ] Only an out-of-memory reason gets the memory hint → `tests/test_react_report.py::test_only_an_out_of_memory_reason_gets_the_memory_hint`.
+- [ ] Removed in `tests/test_apple_jobs.py`: `test_generated_budget_applies_to_the_check_jobs`, `test_new_install_without_swift_keeps_one_job` and the failure-skipped-skipped row → `tests/test_apple_jobs.py::test_swift_project_splits_the_check_by_runner`, `tests/test_swift.py::test_workflow_without_swift_keeps_its_jobs`, `tests/test_apple_jobs.py::test_the_required_check_passes_only_when_every_needed_job_did`.
+- [ ] Removed in `tests/test_ci_launcher.py`: `test_template_is_unchanged` → `tests/test_ci_launcher.py::test_each_job_that_launches_mise_gets_the_package_line`, `tests/test_ci_setup.py::test_old_workflow_gains_docs_only_steps`, `tests/test_swift.py::test_launcher_migration`.
+- [ ] Removed in `tests/test_ci_setup.py`: `test_existing_hard_eng_workflow_is_preserved`, two file-unchanged checks after `configure_ci` (it writes no file), four `timeout-minutes: 5` replaces that match nothing, and the unused `None` branch of the timeout test → `tests/test_ci_setup.py::test_customised_workflow_names_missing_sdk`, `tests/test_ci_setup.py::test_existing_tool_bootstrap_migrates_with_customizations`.
+- [ ] Removed in `tests/test_mcp_setup.py`: the VS Code test (no code reads that file), five checks of the test's own input, and four file-unchanged checks after `configure_mcp` (it writes no file) → the `changes` checks of the same tests, for example `tests/test_mcp_setup.py::test_appwrite_reuses_existing_custom_launcher_without_credentials`.
+- [ ] Removed in `tests/test_swift.py`: the template strings of the tests gate, and `test_setup_adds_the_pods_gate_only_with_a_podfile` → `tests/test_swift.py::test_ios_tests_script_picks_a_simulator_by_id`, `tests/test_swift.py::test_macos_tests_script_keeps_the_project_files_unchanged`, `tests/test_swift.py::test_flutter_dependency_setup_runs_before_the_pods_gate`, `tests/test_swift.py::test_setup_writes_swift_gates`.
+- [ ] Removed in `tests/test_mutation.py`: the `concurrency` and `inPlace` checks → N/A — they repeat two constants of the Stryker config writer, and no test runs Stryker.
+- [ ] Removed in `tests/test_react_report.py`: `test_complete_react_scan_passes` and the two memory hint tests → `tests/test_reports.py::test_valid_report_contract` and the merged test above.
+- [ ] Removed in `tests/test_reports.py`: the third junit row, the threshold 45 row and the dead `None` branch of the osv test → `tests/test_reports.py::test_nonempty_completed_tests`, `tests/test_reports.py::test_fallow_audit_requires_active_crap_enforcement`, `tests/test_reports.py::test_osv_empty_cannot_hide_dependency_or_scan_gaps`.
+- [ ] Removed in `tests/test_dart_coverage.py`: the unused `dart pub get` setup and three classifier calls whose results other checks prove, about 20 s faster → `tests/test_dart_coverage.py::test_native_dart_lcov_omits_declaration_only_libraries`, `tests/test_dart_coverage.py::test_flutter_dart_outside_lib_is_measured_on_the_dart_vm`, `tests/test_reports.py::test_dart_coverage_allows_export_barrels_but_requires_executable_files`.
+- [ ] Removed in `tests/test_dart_config.py`: ten version rows that take a kept row's path → `tests/test_dart_config.py::test_dart_setup_migrates_known_plugin_with_rules`.
+
+Slice 5, review, scan and agent tests:
+
+- [ ] A failed `git ls-files` stops the scan, run in a folder that is not a Git repository → `tests/test_current_files_gitleaks.py::test_current_files_propagate_inventory_failure`.
+- [ ] An untracked nested Git repository stops the secret scan and names its path → `tests/test_current_files_gitleaks.py::test_an_untracked_nested_repository_stops_the_scan`.
+- [ ] The types gate refuses a project without strict, without checkJs or with noCheck, or one that leaves out declared production files → `tests/test_untrusted_input.py::test_types_gate_rejects_loose_options_and_left_out_production_files`.
+- [ ] Each composite row fails on its own check → `tests/test_untrusted_input.py::test_types_gate_rejects_a_composite_reference_that_skips_strict_checks`.
+- [ ] A yanked PyPI release is never taken as the newest → `tests/test_freshness.py::test_uv_uses_pypi_upload_dates`.
+- [ ] The routing checker reports the exact misrouted request → `tests/test_skill_routing.py::test_misrouting_and_overlapping_descriptions_are_caught`.
+- [ ] Removed in `tests/test_challenge.py`: the inherited host test and its helper line, the safe-mode prompt test, the not-done shipping note test and the `never instructions` line (wording) → `tests/test_challenge.py::test_claude_host_runs_codex_read_only_without_user_plugins_and_closed_stdin`, `tests/test_challenge.py::test_codex_host_runs_claude_with_read_only_tools_and_no_git_write_flags`, `tests/test_challenge.py::test_a_failed_rerun_replaces_a_completed_review_that_does_not_cover_the_branch`, `tests/test_challenge.py::test_unavailable_reviewer_records_not_done`.
+- [ ] Removed in `tests/test_freshness.py`: the Dart and Flutter upgrade text rows (wording) → `tests/test_freshness.py::test_failure_names_upgrade_route`.
+- [ ] Removed in `tests/test_comments.py`: 53 of the 59 rows of the already-in-project test, keeping one per scanner route, about 24 s faster → `tests/test_comments.py::test_switch_off_already_in_the_project_is_not_flagged`.
+- [ ] Removed in `tests/test_skill_routing.py`: `NEAR_MISSES` and its clause. Each request is also in `ROUTES` → `tests/test_skill_routing.py::test_every_request_picks_its_own_skill`.
+- [ ] Removed in `tests/test_agent_checks.py`: the run 3 row below the boundary → `tests/test_agent_checks.py::test_repeat_failure_needs_the_agent_to_stop_and_report`.
+- [ ] Removed in `tests/test_planning_handoffs.py`: the Clarification row, two unchanged twins and the Retro heading lines (wording) → `tests/test_plans.py::test_native_stop_reports_incomplete_visual_planning`, `tests/test_planning_handoffs.py::test_draft_stop_requires_handoff_before_exempting_questions`.
+
+Slice 6, Trello and performance:
+
+- [ ] The Trello fake leaves archived cards out of `cards/open`, so the archived-card checks can fail → `tests/test_trello_board.py::test_new_card_gets_the_next_number_at_the_top`, `tests/test_trello_board.py::test_update_renames_and_sets_the_due_date`, `tests/test_trello_board.py::test_comment_refuses_links_to_cards_not_on_the_board`.
+- [ ] The next wake is the promise time when a promise comes first → `tests/test_trello_report.py::test_next_due_is_the_promise_when_it_comes_first`.
+- [ ] A ticked due date is not listed as overdue → `tests/test_trello_report.py::test_a_ticked_due_date_is_not_overdue`.
+- [ ] A check that stops on a paging error frees the run lease → `tests/test_trello_board.py::test_activity_paging_stops_when_it_does_not_advance`.
+- [ ] An upload body holds each file's name and bytes → `tests/test_trello_board.py::test_an_upload_body_holds_each_file`.
+- [ ] `label`, `upload` and `member` with `--dry-run` write nothing → `tests/test_trello_coordinator.py::test_label_upload_and_member_dry_runs_write_nothing`.
+- [ ] Removed in `tests/test_trello_board.py`: the two-check reply test, five promise rows and the `clip.mp4` row → `tests/test_trello_board.py::test_owner_comment_stays_listed_until_we_reply`, `tests/test_trello_board.py::test_edited_comment_counts_at_its_edit_time`, `tests/test_trello_report.py::test_the_board_goes_idle_only_after_the_stop_time`, `tests/test_trello_board.py::test_promises_ignore_conditional_live`, `tests/test_trello_board.py::test_testing_proof_must_be_an_image`.
+- [ ] Removed in `tests/test_trello_coordinator.py`: the skill document test and the `TIMING_HOURS` lines → N/A — they repeat document phrases and a constant (Decided 1).
+- [ ] Removed in `tests/test_trello_coordinator.py`: the field set line, the PUT line, the copied write-command list, the parser name line, six wrong-account rows and three comment rows → `tests/test_trello_coordinator.py::test_check_reports_every_missed_item`, `tests/test_trello_coordinator.py::test_comment_posts_new_and_blocks_private_data`, `tests/test_trello_coordinator.py::test_wrong_account_is_refused`, `tests/test_trello_coordinator.py::test_a_comment_never_moves_a_card`, the new dry-run test.
+- [ ] Removed in `tests/performance/test_setup_scaling.py`: the 1 and 240 package rows. Row 1 cannot catch a read per package → `tests/performance/test_setup_scaling.py::test_package_adaptation_reads_inventory_once`.
+
+All slices:
+
+- [ ] No removed test is the only test that names a rule ID → N/A — a search of every removed test found no rule ID; `check` runs the requirement registry.
+
+Steps:
+
+1. Each builder takes one slice in its own worktree. Slice 0 runs first and alone. Its builder then takes slice 3 in the same worktree.
+2. For each bug fix, the builder writes the test first and sees it fail on `develop`.
+3. For each fixed test that could not fail, the builder sees it fail on the report's mutant, then pass.
+4. For each removal, the builder follows Decided (9).
+5. Slice 1 times the wait hook old against new before it changes the text.
+
+## Baseline + execution
+
+Result: Passed
+Evidence: the starting tree is `develop` 052aa2d7, the round 2 merge. On that commit the `hard-eng` and `canary` CI checks passed on 2026-11-10. The pre-push full check on the same tree passed that day with 20 gates and 2,517 tests. `python3 .hooks/hard-eng.py check --plan-stage Draft` with no `--base` on this branch: exit 0. It reused that commit's passed CI and ran only the secret scan, because this plan was the only change. A second reviewer then tried the update design against the code with probes; Decided (6), (7), (10) and (11) hold its four changes.
+Execution: six builders on Sonnet, each in its own worktree. Slice 0 and slice 3 share files, so one builder does slice 0 first and alone, and slice 3 after it in the same worktree. No other file is shared between slices. Each slice is one commit with its own tests. The coordinator joins the slices in order 0, 1, 2, 3, 4, 5, 6 and runs the full check once. Files have a limit of 1,000 lines: `tests/test_adoption.py` is at 1,000, `tests/test_ci_setup.py` at 996, `tests/test_runner.py` at 995, `tests/test_reports.py` at 988 and `tests/test_update_pr.py` at 978. A builder removes rows before it adds a test to one of them. A fresh Opus reviewer reads the joined diff. A reader who did not write the deny text runs the Reader check.
+
+- Slice 0, the updater's own commit: `.hooks/update_runner.py`, `.hooks/update_pr.py`, `tests/test_update_runner.py`, `tests/test_update_pr.py`.
+- Slice 1, runner, hooks and test seal: `.hooks/polling.py`, `tests/conftest.py`, `tests/test_setup.py` (the one `python3` line), `tests/test_runner.py`, `tests/test_test_filters.py` (deleted), `tests/test_failures.py`, `tests/test_quick_check.py`, `tests/test_process_group.py`, `tests/test_gate_speed.py`, `tests/test_debt.py`, `tests/test_gate_tools.py`, `tests/test_polling.py`.
+- Slice 2, shipping and canary: `release_canary.py`, `tests/test_shipping.py`, `tests/test_review_bypass.py`, `tests/test_shipping_ui_evidence.py`, `tests/test_requirements.py`, `tests/test_release_canary.py`.
+- Slice 3, update and adoption: `.hooks/update_runner.py`, `tests/test_update_runner.py`, `tests/test_update_pr.py`, `tests/test_adoption.py`, `tests/test_scaffold_replay.py`, `tests/test_basic_mode.py`, `tests/test_package_discovery.py`, `tests/test_previews.py`.
+- Slice 4, CI, tools and languages: `tests/test_apple_jobs.py`, `tests/test_ci_launcher.py`, `tests/test_ci_setup.py`, `tests/test_mcp_setup.py`, `tests/test_bun_workflow_migration.py`, `tests/test_tool_setup.py`, `tests/test_swift.py`, `tests/test_mutation.py`, `tests/test_react_report.py`, `tests/test_reports.py`, `tests/test_dart_coverage.py`, `tests/test_dart_config.py`.
+- Slice 5, review, scan and agent tests: `tests/test_current_files_gitleaks.py`, `tests/test_challenge.py`, `tests/test_freshness.py`, `tests/test_comments.py`, `tests/test_untrusted_input.py`, `tests/test_skill_routing.py`, `tests/test_agent_checks.py`, `tests/test_planning_handoffs.py`.
+- Slice 6, Trello and performance: `tests/trello_fakes.py`, `tests/test_trello_board.py`, `tests/test_trello_coordinator.py`, `tests/test_trello_report.py`, `tests/performance/test_setup_scaling.py`.
+
+Dependencies: slice 0 lands before slice 3, by the same builder in the same worktree. None between the other builders. Some keepers sit in files no slice edits: `tests/test_setup.py` outside its one line, `tests/test_updates.py` and `tests/test_plans.py`. The join check runs them all. Slice 1 changes the environment of every test, so it joins first.
+
+## Risks + recovery
+
+- Uncertainty: a test may call the real gh on purpose and fail with the stub. Cheapest check: the full suite with the stub in place. If one does, that test puts its own fake first, as the others do.
+- Uncertainty: a tool test may read the developer's mise settings through `XDG_CONFIG_HOME`. Cheapest check: the tool tests with the variable at an empty folder. The full suite passed that way on 2026-11-10.
+- The position rule in the live checkout picks the wrong commit only if another process commits between setup's head read and setup's own commit. The session base then moves to that other commit. `undo_hooked_commit` has the same limit today.
+- A hand-written commit that changes the source marker counts as generated and can be replaced on the remote update branch. No fix of a failing update needs to change the marker.
+- `git ls-remote --symref origin HEAD` named the default branch in a probe of 2026-11-10: a fresh clone, `git init` with `remote add` (with a full fetch, a fetch of one branch and no fetch), a fetch of one commit as in CI, and after the remote's default moved. An empty remote gave no output with exit 0. Not checked: a private GitHub repository.
+- With the seal, a test that installs a tool from GitHub on the developer's machine uses GitHub's anonymous limit. CI keeps its job token. Recovery: export `GH_TOKEN` for that run.
+- A text or constant that loses its mirror can change with no failing test. The Reader check covers text. Recovery: none needed; the behavior tests stay.
+- Old Complete plans name some removed tests. The check reads test names only in plans that a branch edits. A later edit of such a plan must update its line.
+- An update now refuses an ignored file where it needs a folder. The message names the file and the retry step.
+- Each update without a shipping policy makes one more remote call, about 0.6 seconds against GitHub in the probe. It runs in the background update and in `update-pr`, not in a hook.
+- A project `post-commit` hook that adds its own commit is not handled: the update worktree then holds two commits.
+- The comment test keeps one row per scanner route. A fault in a removed row's scanner would fail that kept row.
+- Recovery for any slice: revert its commit.
+
+## ux_reference
+
+N/A — test, hook and command changes with no visual surface.
+
+## Verification
+
+Result: Pending
+Evidence: Pending — each new test's failing run before its fix and its passing run after, each fixed test's mutant run, and the focused runs per slice. Also the full check on the joined branch. The wait hook timing goes here: old against new, 40 alternating runs, medians. So do a run of the release fixture tests with a `python3` without PyYAML first on PATH, and the two seal runs of slice 1. Last, the Reader check of the deny text.
+E2E: N/A — no user journey changes; each behavior is a hook, command or fixture result that its test runs directly.
+Retro: Pending — written at task end per HE Learn's Retro section, before the plan is set to Complete.
+
+Delivery target: Merge
+Delivery: Pending — PR into `develop` with the `hard-eng` CI check green.
