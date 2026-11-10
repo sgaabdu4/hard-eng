@@ -8,10 +8,10 @@ The trello-coordinator `promises` list now catches a promise written in plain pr
 
 ## Repository context
 
-Owners: `.agents/skills/trello-coordinator/scripts/trello_board/report.py` (`INTENT`, `PROMISE`, `CONDITION`), `references/commands.md` (`promises` and `waitsOnUs` rows); test in `tests/test_trello_board.py`.
+Owners: `.agents/skills/trello-coordinator/scripts/trello_board/report.py` (`INTENT`, `PROMISE`, `CONDITION`), `references/commands.md` (`promises` and `waitsOnUs` rows, "Promise words" section); test in `tests/test_trello_board.py`.
 Bug evidence: a map for moving a consumer coordinator to this skill ran its open promises through `PROMISE`; about half did not match, because that coordinator writes plans in plain present tense, as ASD-STE100 asks. Two made-up sentences of that form returned no match on `develop` dbb5badf.
 Same cause: the parity work copied only part of the consumer's promise words; the present-tense forms and the longer "I am …ing" list were left out. The fix widens the one `PROMISE` pattern; no second list.
-Single source: the promise words live in `report.INTENT` and `report.PROMISE` only. `commands.md` describes them in its `promises` row; no other code copy. `WORKING` stays shared by `PROMISE` and `WAITS`. Searched `.agents/skills/trello-coordinator/` and `tests/` for `PROMISE`, `WORKING` and `should ...?`: no other copy.
+Single source: the promise words live in `report.INTENT` and `report.PROMISE` only. `commands.md` describes them once, in its "Promise words" section, which both rows link; no other code copy. `WORKING` stays shared by `PROMISE` and `WAITS`. Searched `.agents/skills/trello-coordinator/` and `tests/` for `PROMISE`, `WORKING` and `should ...?`: no other copy.
 
 ## Decisions + authorization
 
@@ -46,7 +46,7 @@ N/A — no app screens; coordinator script and reference text only.
 ## Verification
 
 Result: Passed
-Evidence: On 2026-11-10 the new cases failed first: 6 of 6 promise cases listed no promise on `develop` dbb5badf. A Reader pass then found that hiding a whole question sentence dropped "I'll post it tonight, can you test it?" and "I am fixing the crash now, can you send the log?", which `develop` caught, and that move, tag and confirm listed descriptions as promises; those 7 cases failed before the second fix. The Reader's reworded `promises` row and its three older mismatches ("are done" and "now" forms, "waits for the #N fix", how far a conditional reaches) were fixed. After the fixes: `tests/test_trello_board.py`, `tests/test_trello_report.py`, `tests/test_trello_coordinator.py` (139) passed; ruff format and lint passed; `biome ci` with `.agents/biome.json` passed; jscpd found 0 clones.
+Evidence: On 2026-11-10 the new cases failed first: 6 of 6 promise cases listed no promise on `develop` dbb5badf. A Reader pass then found that hiding a whole question sentence dropped "I'll post it tonight, can you test it?" and "I am fixing the crash now, can you send the log?", which `develop` caught, and that move, tag and confirm listed descriptions as promises; those 7 cases failed before the second fix. The Reader's reworded `promises` row and its three older mismatches ("are done" and "now" forms, "waits for the #N fix", how far a conditional reaches) were fixed. Reader pass 2 found three row sentences that did not match the code (the hidden parts come before the "is live" cut; a semicolon also starts a hidden question; `done` cards never list a promise) and five that needed a second read. The promise words moved out of the table into a "Promise words" section in `commands.md`, because the table pads every row to its widest row; the file went from 27,284 to 24,939 bytes. Its six examples were run through `PROMISE` and `after_finished` and each gives the stated result. After the fixes: `tests/test_trello_board.py`, `tests/test_trello_report.py`, `tests/test_trello_coordinator.py` (139) passed; ruff format and lint passed; `biome ci` with `.agents/biome.json` passed; jscpd found 0 clones.
 E2E: N/A — the script has no user journey; the fake board tests run the real `check` command.
 Retro: these items, each sorted by HE Learn's Retro rows.
 - Bug found on the base branch: the promise check missed present-tense plans → mechanical: new cases in `tests/test_trello_board.py::test_promises_ignore_conditional_live`, the gate that should have caught it.
