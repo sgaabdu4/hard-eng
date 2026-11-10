@@ -33,13 +33,12 @@ OPTIONAL_ROLES = ("computerUse",)
 ROLE_FIELDS = ("model", "why", "provider")
 TIMING_HOURS = {
     "everyMinutes": 15,
-    "idleStopMinutes": 60,
     "chaseHours": 24,
     "promiseHours": 6,
     "doneGraceHours": 72,
 }
 TIMING_FIELDS = tuple(TIMING_HOURS)
-GONE_TIMING = ("quietHours", "timeZone")
+GONE_TIMING = ("quietHours", "timeZone", "idleStopMinutes")
 SECRET = re.compile(r"\b(?:[0-9a-f]{32,}|ATTA[0-9A-Za-z]{20,})\b", re.IGNORECASE)
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 PHONE = re.compile(r"(?<![\w#])\+?\d(?:[\s().-]?\d){8,}(?![\d:])")
@@ -60,7 +59,6 @@ class Config:
     lists: dict[str, str]
     needs: dict[str, str]
     every_minutes: float
-    idle_stop_minutes: float
     chase_hours: float
     promise_hours: float
     done_grace_hours: float
@@ -262,7 +260,6 @@ def load_config(root: Path) -> Config:
         lists=lists,
         needs=string_map(data.get("needsLabels", {}), "needsLabels"),
         every_minutes=hours["everyMinutes"],
-        idle_stop_minutes=hours["idleStopMinutes"],
         chase_hours=hours["chaseHours"],
         promise_hours=hours["promiseHours"],
         done_grace_hours=hours["doneGraceHours"],

@@ -169,15 +169,13 @@ def check(session: Session, args: argparse.Namespace) -> Obj:
     context = report.Context(
         session.config, snapshot, posted, session.own, started, parse_time(first)
     )
-    heard = report.last_heard(context, text(saved.get("lastHeard")))
-    result = report.build(context, heard)
+    result: Obj = {field: list(items) for field, items in report.build(context).items()}
     result["runId"] = session.run_id
     state.save_state(
         directory,
         {
             "checkedAt": stamp(started),
             "firstCheck": first,
-            "lastHeard": heard,
             "threads": board.threads_to(snapshot.threads),
             "moves": dict(snapshot.moves),
         },

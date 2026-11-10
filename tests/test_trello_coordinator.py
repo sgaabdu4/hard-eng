@@ -130,7 +130,7 @@ def test_config_takes_timing_overrides_and_refuses_retired_fields(
     roles["builder"] = {"model": "m", "why": "w", "provider": "codex"}
     project.configure(roles=roles, timing={"chaseHours": 12})
     assert project.mods.config.load_config(project.main).chase_hours == 12
-    for gone in ("quietHours", "timeZone"):
+    for gone in ("quietHours", "timeZone", "idleStopMinutes"):
         project.configure(timing={gone: "22:00-07:00"})
         with pytest.raises(project.mods.api.TrelloError, match=f"delete {gone}"):
             project.mods.config.load_config(project.main)
@@ -865,9 +865,7 @@ def test_cli_matches_the_reference_contract(mods: Mods) -> None:
         options = {s for a in actions for s in a.option_strings if s.startswith("--")}
         assert options - {"--help", "--dry-run"} == flags, name
     assert set(first_cells(parts["`trello.json`"])) == set(mods.config.FIELDS)
-    assert tuple(first_cells(parts["`check` report"])) == (
-        mods.report.FIELDS + mods.report.WAKE_FIELDS
-    )
+    assert tuple(first_cells(parts["`check` report"])) == mods.report.FIELDS
     assert set(mods.report.CHECKS) == set(mods.report.FIELDS)
     timing_row = next(
         line
