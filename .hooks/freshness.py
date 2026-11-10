@@ -148,11 +148,13 @@ UV_ROW = re.compile(
 def uv_rows(text: str) -> list[tuple[str, str]]:
     if not VERSION_LINE.match(text):
         raise ValueError("uv tree printed no dependency tree")
-    return [
-        (match["name"], match["current"])
-        for line in text.splitlines()
-        if (match := UV_ROW.match(line))
-    ]
+    return list(
+        dict.fromkeys(
+            (match["name"].partition("[")[0], match["current"])
+            for line in text.splitlines()
+            if (match := UV_ROW.match(line))
+        )
+    )
 
 
 def poetry_rows(text: str) -> list[Stale]:
