@@ -90,18 +90,23 @@ def recordable(gate: Gate) -> bool:
     )
 
 
-def fingerprints(root: Path, group: Group, gate: Gate, output: str) -> Counter[str]:
-    """Output lines with line numbers, counts and the checkout path made neutral."""
+def real_lines(root: Path, group: Group, gate: Gate, output: str) -> list[str]:
     report = gate.get("report", {})
     path = root / group["path"] / report.get("path", "")
     lines = output.splitlines()
     if report.get("stdout") is True and path.is_file():
         lines += path.read_text().splitlines()
-    found: Counter[str] = Counter()
-    for line in lines:
-        line = DIGIT_RUN.sub("N", ANSI.sub("", line).replace(str(root), ".")).strip()
-        if line and not RUNNER_LINES.match(line):
-            found[line] += 1
+    cleaned = [ANSI.sub("", line).replace(str(root), ".").strip() for line in lines]
+    return [line for line in cleaned if line and not RUNNER_LINES.match(line)]
+
+
+def fingerprints(root: Path, group: Group, gate: Gate, output: str) -> Counter[str]:
+    """Output lines with line numbers, counts and the checkout path made neutral."""
+    report = gate.get("report", {})
+    path = root / group["path"] / report.get("path", "")
+    found: Counter[str] = Counter(
+        DIGIT_RUN.sub("N", line) for line in real_lines(root, group, gate, output)
+    )
     extract = REPORT_FINDINGS.get(str(report.get("type")))
     if extract is not None and path.is_file():
         try:
@@ -121,6 +126,13 @@ def neutral(line: str) -> str:
         lambda counted: "N" + WORD.sub(singular, counted.group(1)),
         TIME.sub("Ntime", ANSI.sub("", line)),
     )
+
+
+def real_forms(lines: list[str]) -> dict[str, list[str]]:
+    forms: dict[str, list[str]] = {}
+    for line in lines:
+        forms.setdefault(neutral(DIGIT_RUN.sub("N", line)), []).append(line)
+    return forms
 
 
 def by_form(lines: Counter[str]) -> Counter[str]:
@@ -171,11 +183,15 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     if debt is None or gate.get("role") in NEVER:
         return failed
     current = fingerprints(root, group, gate, output) if failed else Counter()
-    spelling = {neutral(line): line for line in current}
     if new := by_form(current) - by_form(debt):
         print(f"FAIL {gate['name']} @ {group['path']}: findings beyond {DEBT_FILE}:")
+        spelling = {neutral(line): [line] for line in current}
+        spelling.update(real_forms(real_lines(root, group, gate, output)))
+        recorded = by_form(debt)
+        if unsure := sum(count for form, count in new.items() if recorded[form]):
+            print(f"  New lines among these: {unsure}. The rest were recorded.")
         shown = sorted(
-            (spelling[form] for form in new.elements()),
+            (line for form in new for line in spelling[form]),
             key=lambda line: not WORD_CHARACTER.search(line),
         )
         print("".join(f"  {line}\n" for line in shown[:20]), end="")

@@ -51,12 +51,40 @@ def test_old_findings_pass_new_ones_fail_and_fixed_ones_must_be_dropped(
         run(runner, group, lint, "a.py:9:1: F841 unused x\nb.py:2:1: F841 unused y\n")
         is True
     )
-    assert "  b.py:N:N: FN unused y" in capsys.readouterr().out
+    assert "  b.py:2:1: F841 unused y" in capsys.readouterr().out
     assert run(runner, group, lint, "") is True
     assert "1 recorded lines are fixed" in capsys.readouterr().out
 
     assert debt.record(tmp_path, [group], set(), {}) == 0
     assert json.loads((tmp_path / debt.DEBT_FILE).read_text())["gates"] == {}
+
+
+def test_a_new_finding_beyond_the_debt_prints_its_real_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lint: Gate = {"name": "lint", "role": "lint", "command": ["biome"]}
+    group: Group = {"path": ".", "checks": [lint]}
+    kind = "lint/suspicious/noDebugger"
+    recorded = {f"src/fN.ts:N:N {kind}": 25}
+    (tmp_path / debt.DEBT_FILE).write_text(
+        json.dumps({"version": 1, "gates": {"./lint": recorded}})
+    )
+    old = "".join(
+        f"src/f{number:02d}.ts:{number}:5 {kind}\n" for number in range(1, 26)
+    )
+    assert debt.judge(tmp_path, group, lint, True, old) is False
+    capsys.readouterr()
+    new = f"{tmp_path}/app/price-list.tsx:41:9 lint/style/useConst\n"
+    assert debt.judge(tmp_path, group, lint, True, old + new) is True
+    shown = capsys.readouterr().out
+    assert "  ./app/price-list.tsx:41:9 lint/style/useConst" in shown
+    assert (
+        debt.judge(tmp_path, group, lint, True, old + old.splitlines(keepends=True)[0])
+        is True
+    )
+    mixed = capsys.readouterr().out
+    assert "  src/f07.ts:7:5 " + kind in mixed
+    assert "New lines among these: 1." in mixed
 
 
 def test_a_later_adoption_only_drops_lines(tmp_path: Path) -> None:
