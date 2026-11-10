@@ -290,3 +290,32 @@ def test_adoption_records_what_the_fixed_code_still_fails_with(
     assert runner.adopt() == 0
     recorded = json.loads((tmp_path / debt.DEBT_FILE).read_text())["gates"]
     assert recorded == {"./lint": {"a.py:N:N: FN still wrong": 1}}
+
+
+COUNT_WORD_PAIRS = [
+    ("Found 3 errors.", "Found 1 error."),
+    (
+        "3 hidden fixes can be enabled with the `--unsafe-fixes` option.",
+        "1 hidden fix can be enabled with the `--unsafe-fixes` option.",
+    ),
+    ("3 files would be reformatted", "1 file would be reformatted"),
+    ("INFO 3 diagnostics", "INFO 1 diagnostic"),
+    ("Checked 3 files in 5ms. No fixes applied.", "Checked 1 file in 5ms. No fixes applied."),
+    ("3 issues found.", "1 issue found."),
+]
+
+
+@pytest.mark.parametrize(("recorded", "current"), COUNT_WORD_PAIRS)
+def test_a_count_word_for_one_or_many_is_the_same_debt_line(
+    repository: Path, recorded: str, current: str
+) -> None:
+    lint: Gate = {"name": "lint", "role": "lint", "command": ["ruff"]}
+    group: Group = {"path": ".", "checks": [lint]}
+    failed = {"./lint"}
+    assert debt.record(repository, [group], failed, {"./lint": recorded + "\n"}) == 0
+    base = commit(repository, "record debt")
+    written = (repository / debt.DEBT_FILE).read_text()
+    assert debt.judge(repository, group, lint, True, current + "\n") is False
+    assert debt.record(repository, [group], failed, {"./lint": current + "\n"}) == 0
+    assert (repository / debt.DEBT_FILE).read_text() == written
+    debt.require_shrink(repository, base)
