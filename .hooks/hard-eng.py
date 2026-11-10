@@ -1,12 +1,29 @@
 #!/usr/bin/env python3
 """Run native gate commands and handle the three agreed hook events."""
 
-import fcntl
 import json
+import sys
+
+PYTHON_FLOOR = (3, 12)
+if sys.version_info < PYTHON_FLOOR:
+    refusal = (
+        f"Hard Eng needs Python {PYTHON_FLOOR[0]}.{PYTHON_FLOOR[1]} or later, but python3 "
+        f"here is {sys.version_info[0]}.{sys.version_info[1]}. No check or hook ran. "
+        "Put a newer python3 first on PATH."
+    )
+    event = sys.argv[1:2]
+    if event == ["stop"] and json.load(sys.stdin).get("stop_hook_active") is not True:
+        print(json.dumps({"decision": "block", "reason": refusal}))
+    elif event in (["stop"], ["session"]):
+        print(json.dumps({"systemMessage": refusal}))
+    else:
+        sys.exit(refusal)
+    sys.exit(0)
+
+import fcntl
 import os
 import shlex
 import subprocess
-import sys
 import tempfile
 import threading
 import time
