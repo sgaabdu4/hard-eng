@@ -972,3 +972,23 @@ def test_unknown_branch_point_is_big(
     assert "the branch point with the default branch cannot be found" in (
         capsys.readouterr().out
     )
+
+
+def test_a_check_with_no_base_judges_the_size_of_the_whole_branch(
+    repository: Path, completed_plan: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    remote = repository.parent / "origin.git"
+    git(repository, "clone", "--bare", str(repository), str(remote))
+    git(repository, "remote", "add", "origin", str(remote))
+    git(repository, "fetch", "-q", "origin")
+    validate_plans(repository)
+    assert "Size:" not in capsys.readouterr().out
+    new_file(repository)
+    commit(repository, "big change")
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+    assert "Size: big, because it adds" in capsys.readouterr().out
+    (repository / "PLAN.md").write_text(completed_plan)
+    commit(repository, "plan")
+    assert validate_plans(repository) == "Complete"
