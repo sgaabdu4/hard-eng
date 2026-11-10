@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 
 from basic_mode import MANIFEST_LABELS, SUFFIX_LABELS, language_label
 from gate_config import repository_files
-from shipping import gh, git, origin_repository
+from shipping import gh, git
 from update_runner import installed_revision
 
 REPO = "sgaabdu4/hard-eng"
@@ -15,6 +15,8 @@ MAX_LENGTH = 120
 LABELS = sorted({*MANIFEST_LABELS.values(), *SUFFIX_LABELS.values()}, key=len)
 LOOKS_LIKE_DETAIL = re.compile(r"[/\\@]|://|\bwww\.|[\w-]\.[A-Za-z][A-Za-z0-9]{0,4}\b")
 NAME_SEPARATORS = re.compile(r"[\W_]+")
+URL_SEPARATORS = re.compile(r"[:/]")
+CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 COMMON_FILES = (
     "go.mod",
     "go.sum",
@@ -63,10 +65,10 @@ def words(value: str) -> str:
 
 def origin_names(root: Path) -> list[str]:
     try:
-        url = git(root, "remote", "get-url", "origin").strip()
-        return origin_repository(url).split("/")
+        url = git(root, "remote", "get-url", "origin").strip().removesuffix(".git")
     except ValueError:
         return []
+    return [part for part in URL_SEPARATORS.split(url) if part][-2:]
 
 
 def package_names(root: Path) -> list[str]:
@@ -85,7 +87,8 @@ def package_names(root: Path) -> list[str]:
 
 def project_names(root: Path) -> set[str]:
     names = [root.resolve().name, *origin_names(root), *package_names(root)]
-    return {name for name in map(words, names) if name}
+    spoken = {name for name in map(words, names) if name}
+    return spoken | {name.replace(" ", "") for name in spoken}
 
 
 def generic_problem(text: str, names: Collection[str] = ()) -> str | None:
@@ -96,8 +99,8 @@ def generic_problem(text: str, names: Collection[str] = ()) -> str | None:
         return f"keep it to one generic line under {MAX_LENGTH} characters"
     if LOOKS_LIKE_DETAIL.search(stripped):
         return "it looks like a path, file name, URL or email"
-    spoken = f" {words(text)} "
-    if any(f" {name} " in spoken for name in names):
+    spoken = [f" {words(form)} " for form in (text, CAMEL_BOUNDARY.sub(" ", text))]
+    if any(f" {name} " in form for form in spoken for name in names):
         return "it names the project, its owner or one of its packages"
     return None
 
