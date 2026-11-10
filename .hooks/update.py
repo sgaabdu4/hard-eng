@@ -22,13 +22,13 @@ from release_history import StaleRelease, ordered
 from submodules import update_submodules
 from update_runner import (
     commit_update,
-    committed_matches,
     current_head,
     known_failure,
-    landed_commit,
     rebase_sessions,
     remember_failure,
     stale_error,
+    tree_entries,
+    undo_hooked_commit,
     update_attempt,
     update_blocker,
 )
@@ -725,31 +725,6 @@ def repair_installation(root: Path, previous: str) -> str:
     )
 
 
-def undo_hooked_commit(
-    root: Path, head: str, expected: dict[str, str | None], names: list[str]
-) -> list[str]:
-    """Undo the install commit when a project commit hook rewrote it; return the changed paths."""
-    landed = landed_commit(root, head, "Install Hard Eng")
-    if landed is None or committed_matches(root, landed[0], expected):
-        return []
-    changed = [
-        name
-        for name, content in expected.items()
-        if not committed_matches(root, landed[0], {name: content})
-    ]
-    if changed and current_head(root) == landed[0]:
-        undo = ["git", "reset", "--soft", head]
-        subprocess.run(
-            undo if head else ["git", "update-ref", "-d", "HEAD"], cwd=root, check=True
-        )
-        write_changes(
-            root,
-            {n: expected[n] for n in changed if not (root / n).is_symlink()},
-        )
-        subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
-    return changed
-
-
 def commit_install(
     root: Path,
     names: list[str],
@@ -763,6 +738,7 @@ def commit_install(
             ["git", "diff", "--cached", "--quiet", "--", *names], cwd=root, check=False
         ).returncode:
             return "Installed files already match the current commit."
+        staged = tree_entries(root, ["git", "ls-files", "-s"], 1, names)
         head = current_head(root)
         result = subprocess.run(
             ["git", "commit", "--only", "-m", "Install Hard Eng", "--", *names],
@@ -772,7 +748,9 @@ def commit_install(
             text=True,
             check=False,
         )
-        changed = undo_hooked_commit(root, head, expected, names) if expected else []
+        changed: list[str] = []
+        if result.returncode == 0 and expected:
+            changed = undo_hooked_commit(root, head, staged, expected, names)
         if result.returncode == 0 and not changed:
             rebase_sessions(root, head, "Install Hard Eng")
             return "Committed the installed files locally without pushing."
