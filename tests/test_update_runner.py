@@ -452,6 +452,8 @@ def test_a_linked_local_settings_file_does_not_block_the_update(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = pushed_release(release, monkeypatch)
+    with (target / ".git/info/exclude").open("a") as exclude:
+        exclude.write(".claude/settings.local.json\n")
     local = target / ".claude/settings.local.json"
     local.write_text(
         '{"permissions":{"allow":'
@@ -523,8 +525,7 @@ def test_a_failing_project_commit_hook_leaves_the_checkout_and_worktrees_unchang
             path.relative_to(target): path.read_bytes()
             for path in target.rglob("*")
             if path.is_file()
-            and ".git" not in path.parts
-            and ".hard-eng" not in path.parts
+            and not {".git", ".hard-eng", "__pycache__"} & set(path.parts)
         }
 
     before = files()
