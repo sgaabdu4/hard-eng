@@ -326,9 +326,10 @@ def line_coverage(
             "Cover them, or mark generator output with "
             "`<pattern> linguist-generated=true` in .gitattributes"
             + (
-                ". Dart outside lib/ needs tests under test/ that import it by relative"
-                " path and import package:test/test.dart (not flutter_test), with test"
-                " as a dev dependency"
+                ". Move Dart code outside lib/ under lib/ and test it there, or write"
+                " tests under test/ that import it by relative path and"
+                " package:test/test.dart, which needs test as a dev dependency and a"
+                " setup rerun for the VM test run"
                 if outside_lib
                 else ""
             )

@@ -251,6 +251,7 @@ def validate_typescript(
     compiler = list(takewhile(lambda argument: not argument.startswith("-"), command))
     selected = explicit_project(command)
     files: set[Path] = set()
+    read: list[Path] = []
     for project in typescript_projects(root, command, directory):
         options = shown_config(project_command(command, project), directory, timeout)
         target = project or selected
@@ -263,7 +264,9 @@ def validate_typescript(
                 "TypeScript requires all strict checks and JavaScript checking without noCheck"
             )
         config = directory / target[1] if target else directory / "tsconfig.json"
-        base = config if config.is_dir() else config.parent
+        config = config / "tsconfig.json" if config.is_dir() else config
+        base = config.parent
+        read.append(config)
         listed = options.get("files", [])
         names: list[JsonValue] = listed if isinstance(listed, list) else []
         resolved = {(base / str(name)).resolve() for name in names}
@@ -272,8 +275,15 @@ def validate_typescript(
                 f"HE-UNTRUSTED-JSON: TypeScript configuration omits {DECLARATIONS}; rerun the Hard Eng installer"
             )
         files |= resolved
-    if not {(directory / name).resolve() for name in expected} <= files:
-        raise ValueError("TypeScript configuration omits declared production files")
+    if omitted := sorted({(directory / name).resolve() for name in expected} - files):
+        shown = [os.path.relpath(path, root.resolve()) for path in omitted]
+        raise ValueError(
+            "TypeScript configuration omits declared production files: "
+            + ", ".join(shown[:3])
+            + (f" and {len(shown) - 3} more" if len(shown) > 3 else "")
+            + f" (read {', '.join(os.path.relpath(path, root.resolve()) for path in read)}); "
+            "add their folder to `include` there"
+        )
     build_composites(root, compiler, selected, directory, timeout)
 
 
