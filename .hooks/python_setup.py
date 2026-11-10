@@ -146,6 +146,15 @@ def import_configuration(directory: Path, package: Group, content: str) -> str:
     )
 
 
+def print_import_contract(directory: Path, package: Group) -> None:
+    """Show the block that a failed imports gate lacks when the package has no contract."""
+    content = (directory / "pyproject.toml").read_text()
+    if import_linter_owner(directory) is None:
+        block = import_configuration(directory, package, content)[len(content) :]
+        if block:
+            print(f"Import Linter has no contract. Add this to pyproject.toml:{block}")
+
+
 def configure_python(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
