@@ -937,9 +937,11 @@ def main() -> int:
         hook.add_argument("agent", choices=("claude", "codex"))
     args = parser.parse_args()
     if args.command == "check":
+        from process_group import exit_when_stopped
         from tool_setup import ensure_python_runtime
 
         ensure_python_runtime()
+        exit_when_stopped()
         return check(
             base=args.base,
             plan_stage=args.plan_stage,

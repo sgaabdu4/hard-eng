@@ -66,6 +66,17 @@ def run_in_group(
     return subprocess.CompletedProcess(command, process.returncode, out, err)
 
 
+def exit_when_stopped() -> None:
+    """SIGTERM and SIGHUP end the process through the exit path that stops its groups."""
+
+    def stop(number: int, _frame: object) -> None:
+        raise SystemExit(128 + number)
+
+    for number in (signal.SIGTERM, signal.SIGHUP):
+        if signal.getsignal(number) is not signal.SIG_IGN:
+            signal.signal(number, stop)
+
+
 def stop_groups() -> None:
     """An interrupt reaches only the main thread, not commands run by worker threads;
     they start no new command until `STOPPED` is cleared."""

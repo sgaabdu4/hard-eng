@@ -16,6 +16,7 @@ from xml.parsers.expat import ExpatError
 
 from challenge import shipping_note
 from gate_config import Group
+from process_group import exit_when_stopped
 from shipping import (
     PendingCheck,
     Shipment,
@@ -51,10 +52,6 @@ def remote_base(root: Path, branch: str | None) -> str | None:
     revision = advertised[0]
     git(root, "fetch", "--no-tags", "--no-write-fetch-head", "origin", revision)
     return revision
-
-
-def interrupted(number: int, _frame: object) -> None:
-    raise SystemExit(128 + number)
 
 
 def run_hard_eng(
@@ -181,8 +178,7 @@ def mutate(
     production: Callable[[Path, Group], set[Path]],
 ) -> int:
     """Mutate committed changes in a snapshot, since Dart mutates source in place."""
-    signal.signal(signal.SIGTERM, interrupted)
-    signal.signal(signal.SIGHUP, interrupted)
+    exit_when_stopped()
     if in_place:
         from mutation import report
 
@@ -230,8 +226,7 @@ def push_base(
 
 
 def pre_push(root: Path) -> int:
-    signal.signal(signal.SIGTERM, interrupted)
-    signal.signal(signal.SIGHUP, interrupted)
+    exit_when_stopped()
     policy = load_policy(root)
     assert policy is not None
     started, mutating = time.monotonic(), 0.0
