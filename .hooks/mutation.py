@@ -78,6 +78,9 @@ def run(
             raise Capped from None
 
 
+NO_MUTANTS = "Filtered for specific mutants, but nothing matches"
+
+
 def failed(tool: str, output: Path) -> ValueError:
     lines = output.read_text(errors="replace").strip().splitlines()
     tail = [line for line in lines if not STACK_FRAME.match(line)][-15:]
@@ -299,9 +302,11 @@ def python(
     configure_mutmut(directory, files)
     manager = "poetry" if tests[0] == "poetry" else "uv"
     output, listing = work / "log", work / "results"
-    if run(mutmut(manager, "run", *globs), directory, deadline, output) or run(
-        mutmut(manager, "results", "--all", "true"), directory, deadline, listing
-    ):
+    if run(mutmut(manager, "run", *globs), directory, deadline, output):
+        if NO_MUTANTS in output.read_text(errors="replace"):
+            return 0, []
+        raise failed("mutmut", output)
+    if run(mutmut(manager, "results", "--all", "true"), directory, deadline, listing):
         raise failed("mutmut", output)
     statuses = mutmut_statuses(listing.read_text(), list(globs))
     survivors: list[Survivor] = []
