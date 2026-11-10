@@ -513,7 +513,7 @@ def configure_shellcheck(
     root: Path, config: GateConfig, retired: tuple[str, ...] = ()
 ) -> None:
     from gate_config import repository_files
-    from project_setup import is_shell_script, unlisted_shell_scripts
+    from project_setup import project_shell_scripts, unlisted_shell_scripts
 
     existing = [
         gate
@@ -535,8 +535,8 @@ def configure_shellcheck(
         return
     scripts = [
         str(path.relative_to(root))
-        for path in repository_files(root)
-        if is_shell_script(path) and str(path.relative_to(root)) not in retired
+        for path in project_shell_scripts(root, repository_files(root))
+        if str(path.relative_to(root)) not in retired
     ]
     if scripts:
         config["shared"].append(

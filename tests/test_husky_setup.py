@@ -11,7 +11,13 @@ import pytest
 import update
 import update_runner
 from conftest import add_origin, commit, git, init
+from gate_config import GateConfig, parse_config, validate_required_checks
+from test_setup import repository as plain_repository
 from test_updates import select_release
+
+
+def load_config(root: Path) -> GateConfig:
+    return parse_config((root / "hard-eng.gates.json").read_text())
 
 
 def test_husky_update_preserves_shim_and_runs_shell_launcher(
@@ -219,3 +225,27 @@ def test_linked_worktree_may_use_the_common_checkout_hooks(
             update.check_scaffold_update(linked, base)
     finally:
         git(target, "worktree", "remove", "--force", str(linked))
+
+
+def test_own_launchers_alone_need_no_shell_gate(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    plain_repository(tmp_path)
+    shim = tmp_path / ".husky/_/pre-push"
+    shim.parent.mkdir(parents=True)
+    shim.write_text('#!/usr/bin/env sh\n. "$(dirname "$0")/h"')
+    (shim.parent / "h").write_text(
+        'n=$(basename "$0")\ns=$(dirname "$(dirname "$0")")/$n\nsh -e "$s" "$@"\n'
+    )
+    (shim.parent / ".gitignore").write_text("*\n")
+    git(tmp_path, "config", "core.hooksPath", ".husky/_")
+    installer.install(tmp_path)
+    assert (tmp_path / ".husky/pre-push").is_file()
+    config = load_config(tmp_path)
+    assert not any(gate.get("role") == "shell" for gate in config["shared"])
+    validate_required_checks(tmp_path, config)
+    installer.install(tmp_path)
+    assert load_config(tmp_path) == config
+    (tmp_path / "deploy.sh").write_text("#!/bin/sh\necho deploy\n")
+    with pytest.raises(ValueError, match="missing mandatory checks: shell"):
+        validate_required_checks(tmp_path, load_config(tmp_path))

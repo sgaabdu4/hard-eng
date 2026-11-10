@@ -807,7 +807,7 @@ def validate_required_checks(
 ) -> None:
     from project_setup import (
         is_deployment_file,
-        is_shell_script,
+        project_shell_scripts,
         require_listed_shell_scripts,
     )
 
@@ -827,7 +827,7 @@ def validate_required_checks(
         required.add("secrets-history")
     if has_workflows(root, files):
         required.update({"workflows", "ci-security"})
-    if any(is_shell_script(path) for path in files):
+    if project_shell_scripts(root, files):
         required.add("shell")
     if any(is_deployment_file(path) for path in files):
         required.add("deployment")
