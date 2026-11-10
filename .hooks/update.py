@@ -10,7 +10,6 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from collections.abc import Callable
 from operator import itemgetter
 from pathlib import Path
 
@@ -25,16 +24,11 @@ from update_runner import (
     commit_update,
     current_head,
     known_failure,
-    link_state,
     rebase_sessions,
-    relink_verified,
     remember_failure,
-    roll_back,
-    snapshot,
     stale_error,
     update_attempt,
     update_blocker,
-    write_verified,
 )
 
 COMMIT_ID = re.compile(r"[0-9a-f]{40}")
@@ -592,27 +586,20 @@ def write_changes(root: Path, changes: dict[str, str | None]) -> None:
             replace_file(target, content.encode())
 
 
-def replace_file(
-    target: Path, content: bytes, ready: Callable[[], bool] = lambda: True
-) -> bool:
-    """Swap in the whole file if `ready` holds just before, so a write is never partial."""
+def replace_file(target: Path, content: bytes) -> None:
+    """Swap in the whole file, so a write is never partial."""
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.is_symlink():
-        if not ready():
-            return False
         target.write_bytes(content)
-        return True
+        return
     pending = target.with_name(target.name + ".hard-eng-pending")
     try:
         pending.write_bytes(content)
         if target.exists():
             shutil.copymode(target, pending)
-        if not ready():
-            return False
         pending.replace(target)
     finally:
         pending.unlink(missing_ok=True)
-    return True
 
 
 def write_links(root: Path, links: dict[str, str | None]) -> None:
@@ -726,26 +713,11 @@ def repair_installation(root: Path, previous: str) -> str:
     status += hook_chain.install_worktree_hook(root)
     names = sorted({*missing, *added})
     clean = bool(names) and not local_state(root, names)
-    moved = {name for name in missing if retired_parent(root, name)}
     retire_local_generation(root)
     if not names:
         return status + "."
-    # Files beneath a retired link must still be absent when the repair writes them.
-    before = {
-        name: None if name in moved else content
-        for name, content in snapshot(root, missing).items()
-    }
-    before_links = link_state(root, added)
-    applied: list[str] = []
-    try:
-        write_verified(root, missing, before, (), applied)
-        relink_verified(root, added, before_links, applied)
-    except (OSError, ValueError) as error:
-        if kept := roll_back(root, missing, added, before, before_links, applied):
-            raise ValueError(
-                f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"
-            ) from error
-        raise
+    write_changes(root, missing)
+    write_links(root, added)
     return f"{status}; repaired {install_paths(names)}. " + commit_install(
         root, names, clean, {**missing, **added}
     )
@@ -829,9 +801,8 @@ def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
     names = sorted({*changes, *links})
     refuse_local_state(root, names)
     local_settings(root)
-    before = snapshot(root, changes)
     validate_gates(root, source, changes)
-    commit_update(root, changes, links, revision, before)
+    commit_update(root, changes, links, revision)
     retire_local_generation(root)
     if hook[0] not in changes:
         install_planned_hook(root, hook)

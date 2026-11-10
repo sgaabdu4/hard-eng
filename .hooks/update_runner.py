@@ -11,9 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Generator, Iterable
-from contextlib import contextmanager, suppress
-from functools import partial
+from contextlib import suppress
 from pathlib import Path
 from typing import TextIO
 
@@ -243,176 +241,6 @@ def rebase_sessions(
     return True
 
 
-def written(root: Path, name: str, content: str | None, link: bool) -> bool:
-    """Whether a path still holds what the updater wrote, so rollback cannot erase a later edit."""
-    target = root / name
-    if content is None:
-        return not target.exists() and not target.is_symlink()
-    if link:
-        return target.is_symlink() and str(target.readlink()) == content
-    return (
-        target.is_file()
-        and not target.is_symlink()
-        and target.read_text(errors="replace") == content
-    )
-
-
-def snapshot(root: Path, names: Iterable[str]) -> dict[str, bytes | None]:
-    return {
-        name: (root / name).read_bytes() if (root / name).exists() else None
-        for name in names
-    }
-
-
-def holds(root: Path, name: str, content: bytes | None) -> bool:
-    return snapshot(root, [name])[name] == content
-
-
-def link_state(root: Path, names: Iterable[str]) -> dict[str, str | None]:
-    return {
-        name: str((root / name).readlink()) if (root / name).is_symlink() else None
-        for name in names
-    }
-
-
-def prune(directory: Path) -> None:
-    """Remove the empty directories left beneath a path, deepest first."""
-    for path in [*sorted(directory.rglob("*"), reverse=True), directory]:
-        with suppress(OSError):
-            path.rmdir()
-
-
-def roll_back(
-    root: Path,
-    changes: dict[str, str | None],
-    links: dict[str, str | None],
-    before: dict[str, bytes | None],
-    before_links: dict[str, str | None],
-    applied: list[str],
-) -> list[str]:
-    """Restore each applied path only while it still holds the updater's write, checked just before."""
-    from update import replace_file
-
-    kept = []
-    for name in applied:
-        if name not in changes:
-            continue
-        content = before[name]
-        unchanged = partial(written, root, name, changes[name], False)
-        if content is None and unchanged():
-            (root / name).unlink(missing_ok=True)
-        elif content is None or not replace_file(root / name, content, unchanged):
-            kept.append(name)
-    for name in applied:
-        if name not in links:
-            continue
-        if links[name] is None and not (root / name).is_symlink():
-            prune(root / name)
-        if not written(root, name, links[name], True):
-            kept.append(name)
-            continue
-        (root / name).unlink(missing_ok=True)
-        if (target := before_links[name]) is not None:
-            (root / name).symlink_to(target, target_is_directory=True)
-    return kept
-
-
-def index_entries(root: Path, names: list[str]) -> dict[str, str]:
-    listing = subprocess.check_output(
-        ["git", "ls-files", "--stage", "-z", "--", *names], cwd=root, text=True
-    )
-    return {
-        path: entry
-        for entry, _, path in (
-            line.partition("\t") for line in listing.split("\0") if line
-        )
-    }
-
-
-def unstage_own(
-    root: Path, names: list[str], staging: tuple[dict[str, str], dict[str, str]]
-) -> None:
-    """Restore only index entries the updater changed and that still hold its staging."""
-    before, staged = staging
-    current = index_entries(root, names)
-    own = [
-        path
-        for path in {*before, *staged, *current}
-        if current.get(path) == staged.get(path) != before.get(path)
-    ]
-    if restored := "".join(
-        f"{before[path]}\t{path}\0" for path in own if path in before
-    ):
-        subprocess.run(
-            ["git", "update-index", "-z", "--index-info"],
-            input=restored,
-            cwd=root,
-            text=True,
-            check=True,
-        )
-    if added := [path for path in own if path not in before]:
-        subprocess.run(
-            ["git", "update-index", "--force-remove", "--", *added],
-            cwd=root,
-            check=True,
-        )
-
-
-@contextmanager
-def deferred_sigterm() -> Generator[None]:
-    """Hold SIGTERM, whichever thread receives it, and keep it from child git commands until the block ends."""
-    received: list[int] = []
-    previous = signal.signal(
-        signal.SIGTERM, lambda signum, _frame: received.append(signum)
-    )
-    mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
-    try:
-        yield
-    finally:
-        signal.pthread_sigmask(signal.SIG_SETMASK, mask)
-        signal.signal(signal.SIGTERM, previous)
-        if received:
-            signal.raise_signal(signal.SIGTERM)
-
-
-def relink_verified(
-    root: Path,
-    links: dict[str, str | None],
-    before_links: dict[str, str | None],
-    applied: list[str],
-) -> None:
-    """Replace each link only while it still holds its verified state, checked just before."""
-    from update import write_links
-
-    for name, target in links.items():
-        if link_state(root, [name])[name] != before_links[name]:
-            raise ValueError(f"{name} changed while the update was being applied")
-        applied.append(name)
-        write_links(root, {name: target})
-
-
-def write_verified(
-    root: Path,
-    changes: dict[str, str | None],
-    before: dict[str, bytes | None],
-    relinked: tuple[str, ...],
-    applied: list[str],
-) -> None:
-    """Write each file only while it still holds its verified content, checked just before."""
-    from update import replace_file, write_changes
-
-    for name, content in changes.items():
-        verified = partial(holds, root, name, before[name])
-        applied.append(name)
-        if name.startswith(relinked) or (content is None and verified()):
-            write_changes(root, {name: content})
-        elif content is None or not replace_file(
-            root / name, content.encode(), verified
-        ):
-            applied.pop()
-            raise ValueError(f"{name} changed while the update was being applied")
-
-
 def git_commit(
     root: Path, names: list[str], changes: dict[str, str | None], message: str
 ) -> None:
@@ -448,76 +276,19 @@ def git_commit(
         )
 
 
-def unwritten(
-    root: Path,
-    changes: dict[str, str | None],
-    links: dict[str, str | None],
-    applied: list[str],
-) -> list[str]:
-    """Applied paths that no longer hold the updater's write; a retired link's planned folder is checked by its files."""
-    return [
-        name
-        for name in applied
-        if (name in changes and not written(root, name, changes[name], False))
-        or (
-            name in links
-            and not any(other.startswith(f"{name}/") for other in changes)
-            and not written(root, name, links[name], True)
-        )
-    ]
-
-
 def commit_update(
     root: Path,
     changes: dict[str, str | None],
     links: dict[str, str | None],
     revision: str,
-    before: dict[str, bytes | None],
 ) -> None:
+    from update import write_changes, write_links
+
     names = sorted({*changes, *links})
-    before_links = link_state(root, links)
-    retired = tuple(
-        f"{name}/"
-        for name, target in links.items()
-        if target is None and before_links[name] is not None
-    )
-    # Files beneath a retired link must still be absent when the update writes them.
-    expected = {
-        name: None if name.startswith(retired) else content
-        for name, content in before.items()
-    }
-    head = current_head(root)
-    message = f"Update Hard Eng to {revision}"
-    staging: tuple[dict[str, str], dict[str, str]] | None = None
-    applied: list[str] = []
-    try:
-        relink_verified(root, links, before_links, applied)
-        # Paths under a link the update repointed no longer show their verified content.
-        relinked = tuple(f"{name}/" for name, target in links.items() if target)
-        write_verified(root, changes, expected, relinked, applied)
-        with deferred_sigterm():
-            index = index_entries(root, names)
-            subprocess.run(
-                ["git", "add", "--force", "--", *names], cwd=root, check=True
-            )
-            staging = (index, index_entries(root, names))
-        if moved := unwritten(root, changes, links, applied):
-            raise ValueError(
-                f"{', '.join(moved)} changed while the update was being applied"
-            )
-        git_commit(root, names, changes, message)
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
-        if rebase_sessions(root, head, message, {**changes, **links}):
-            raise
-        kept = roll_back(root, changes, links, expected, before_links, applied)
-        if staging is not None:
-            unstage_own(root, names, staging)
-        if kept:
-            raise subprocess.SubprocessError(
-                f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"
-            ) from error
-        raise
-    rebase_sessions(root, head, message, {**changes, **links})
+    write_links(root, links)
+    write_changes(root, changes)
+    subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
+    git_commit(root, names, changes, f"Update Hard Eng to {revision}")
 
 
 def alive(process: int) -> bool:
