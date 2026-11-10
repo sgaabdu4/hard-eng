@@ -212,6 +212,19 @@ def test_uv_counts_a_post_release_as_newer() -> None:
     )
 
 
+def test_uv_reads_a_dependency_with_an_extra_once() -> None:
+    report = (
+        "app v0.1.0\n"
+        "├── httpx[http2] v0.27.0 (latest: v0.28.1)\n"
+        "└── httpx v0.27.0 (group: dev) (latest: v0.28.1)\n"
+    )
+    records = {PYPI + "httpx/json": fixture("pypi-httpx.json")}
+    stale = stale_dependencies(
+        "uv", report, Registry(records), moment("2024-12-08T15:37:22+00:00")
+    )
+    assert stale == [("httpx", "0.27.0", "0.28.1")]
+
+
 def test_poetry_reads_outdated_with_wait(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=r"httpx 0\.27\.0 → 0\.28\.1") as failure:
         check(tmp_path, "poetry", fixture("poetry-show.json"))
