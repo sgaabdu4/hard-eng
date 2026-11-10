@@ -5,11 +5,12 @@ Load in every run, for the schedule check, and to start a worker. Use the sectio
 ## T3 Code
 
 - Start = a new thread on the project's main checkout (Local), never a new worktree, on the `coordinator` role's model; run the skill once.
-- Schedule = one interval task bound to this thread, titled `timer`, every `timing.everyMinutes`. Its prompt is only "Run the trello-coordinator skill.". Never set it to `enabled: false`. An older interval task bound to this thread with the same prompt, under another title or none, is `timer`: give it the title.
-- Schedule check = in every run, after the worktree check and before `probe`: call `list_scheduled_tasks` and use only tasks bound to this thread. Call it in scheduled runs too, even though the tool text says not to. Only this step and the [claim stop](#another-machine-holds-the-claim) change `timer`.
-  - No `timer` → create it. `timer` turned off, or its `everyMs` is not `timing.everyMinutes` × 60000 → set `enabled: true` and that `everyMs` now, with its `scheduledTaskId`. Its next run then comes one interval from now, not at once.
-  - A task bound to this thread titled `wake` or `alarm` came from an older release → delete it with `delete_scheduled_task`. After deleting `wake`, tell the owner once to delete the board's Trello Automation rule that posts to its URL.
-  - The first manual run sets it up; tell the owner once.
+- Schedule = one interval task bound to this thread, titled `timer`, every `timing.everyMinutes`. Its prompt is only "Run the trello-coordinator skill.". Never set it to `enabled: false`.
+- Schedule check = in every run, after the worktree check and before `probe`: call `list_scheduled_tasks` and use only tasks bound to this thread. Call it in scheduled runs too, even though the tool text says not to. Only this step and the [claim stop](#another-machine-holds-the-claim) change `timer`. Do these steps in order:
+  1. An interval task with that prompt and another title, or none, came from an older release → give it the title `timer`. Two or more interval tasks with that prompt → keep one as `timer` and delete the others with `delete_scheduled_task`.
+  2. No `timer` → create it. `timer` turned off, or its `everyMs` is not `timing.everyMinutes` × 60000 → set `enabled: true` and that `everyMs` now, with its `scheduledTaskId`. Its next run then comes one interval from now, not at once.
+  3. A task titled `wake` or `alarm` came from an older release → delete it with `delete_scheduled_task`. After deleting `wake`, tell the owner once to delete the board's Trello Automation rule that sends each comment to a URL.
+  4. A run that created `timer` or changed its `everyMs` → tell the owner once how often the coordinator now runs.
 - Workers = `delegate_task` with `target.providerInstanceId` = the role's `provider` (none set → the coordinator's own provider) and `target.model` = its `model`, `isolation: "worktree"`, `clientRequestId` `card<N>-r<round>`. Follow-ups = `t3_thread_send` to the worker's thread. Mixed Claude + GPT roles work here.
 - Builder after a planner on the same card = `delegate_task` without `isolation`; the brief names the planner's worktree path from `handover.md` and says to work only there. Start it only after the planner has ended.
 - Stalls = read worker threads; follow each task's own wake-up instead of polling. Cancel = `task_cancel`.
