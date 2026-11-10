@@ -790,7 +790,10 @@ def branch_current(root: Path, tip: str) -> bool:
     waiting = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
     branch = f"refs/heads/{UPDATE_BRANCH}"
     based = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", tip, branch], cwd=root, check=False
+        ["git", "merge-base", "--is-ancestor", tip, branch],
+        cwd=root,
+        stderr=subprocess.DEVNULL,
+        check=False,
     )
     return bool(
         current
