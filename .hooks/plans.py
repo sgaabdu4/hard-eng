@@ -648,7 +648,7 @@ def validate_plans(
     if not applicable and explicit_stage and not changed:
         applicable = paths
     if (
-        (changed != set() or explicit_stage)
+        (changed != set() or explicit_stage or base is None)
         and not applicable
         and (explicit_stage or not plan_not_needed(root))
     ):

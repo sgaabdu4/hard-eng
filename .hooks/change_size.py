@@ -7,6 +7,7 @@ from dependency_graph import owner_language
 from gate_config import Group, parse_config
 from plans import _git_output, _is_test, default_branch_point, is_documentation
 
+NO_CHANGE = "no change"
 MAX_SMALL_LINES = 20
 MAX_SMALL_FILES = 3
 PROTECTED_NAMES = {
@@ -115,6 +116,8 @@ def size_verdict(root: Path) -> tuple[bool, str]:
     except (subprocess.CalledProcessError, OSError):
         return False, "the change cannot be measured"
     names = {name for name in status[1::2] + untracked if name}
+    if not names:
+        return True, NO_CHANGE
     names -= update_written(root, point)
     if not names:
         return True, "only files the verified Hard Eng update wrote"
@@ -156,6 +159,8 @@ def size_verdict(root: Path) -> tuple[bool, str]:
 
 def plan_not_needed(root: Path) -> bool:
     small, reason = size_verdict(root)
+    if reason == NO_CHANGE:
+        return True
     if small:
         print(f"Size: small ({reason}); no plan needed.")
     else:
