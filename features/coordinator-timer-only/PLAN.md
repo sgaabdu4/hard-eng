@@ -9,8 +9,8 @@ The trello-coordinator on T3 Code runs only on its interval `timer` at `timing.e
 ## Repository context
 
 Owners: `.agents/skills/trello-coordinator/scripts/trello_board/report.py` (`build`, `AWAKE`, `WAKE_FIELDS`, `due_times`, `last_heard`), `board.py` (`Snapshot.heard`), `commands.py` (`check`, `lastHeard` state), `config.py` (`TIMING_HOURS`, `GONE_TIMING`, `Config.idle_stop_minutes`); text in `references/hosts.md` (T3 Code schedule, pause check, claim stop, move steps), `references/run.md:11`, `references/commands.md` (timing row, three report rows); tests in `tests/test_trello_report.py`, `tests/test_trello_coordinator.py`.
-Bug evidence: N/A — a removal on the maintainer's order, not a defect.
-Same cause: N/A — no defect.
+Bug evidence: the removal is on the maintainer's order. One defect found on the way: since 2026-11-09 the schedule check adopted only an untitled older interval task as `timer`, so a live consumer task titled "Trello coordinator" with the coordinator's prompt would get a second timer beside it.
+Same cause: searched `references/` for other steps that find a task by title: the claim stop deletes `timer` by title, which is safe once the schedule check has adopted the old task; the old `wake` and `alarm` titles exist only from the 2026-11-09 release.
 Single source: the wake code came in one commit (`ccaed336`). Searched the skill folder, `tests/`, `README.md` and `docs/` for `wake`, `idle`, `quietMinutes`, `nextDue`, `alarm`, `pause`, `lastHeard` and `idleStopMinutes`: only the owners above hold them. `first_check` stays, because the owner check also reads it. The helpers `promise_due`, `oldest_unanswered` and `card_due` stay, because `promises`, `silent` and `overdue` call them.
 
 ## Decisions + authorization
@@ -60,6 +60,7 @@ E2E: N/A — no user journey; the coordinator's behavior is proven by its script
 Retro: these items, each sorted by HE Learn's Retro rows.
 - The comment wake shipped on 2026-11-09 without a check of Trello's Automation quota against a real board's comment count; a consumer review found a real board's monthly comments several times the 250 runs a month → judgement, first occurrence: check an outside service's quota before building on it. None new.
 - No step handled a `wake` left by the older release → caught by the Reader rule. None new.
+- The schedule check adopted only an untitled older task, so a titled one would get a second timer → escaped from the 2026-11-09 release; no gate can read a host's live task list, so the fix and its Reader check are in the skill text. None new.
 - `shipped-format` refused the command table after rows were removed, and HE-NO-SWITCH-OFF asked for `Removed test:` lines → caught by the gates. None new.
 
 Delivery target: Merge
