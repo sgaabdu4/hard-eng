@@ -13,6 +13,7 @@ from types import ModuleType
 
 import pytest
 from freshness import (
+    freshness_waiting,
     pub_waiting,
     stale_dependencies,
     validate_freshness,
@@ -534,3 +535,45 @@ def test_install_adds_freshness_to_an_existing_gate_file(
     installed = json.loads((tmp_path / "hard-eng.gates.json").read_text())
     roles = [gate.get("role") for gate in installed["packages"][0]["checks"]]
     assert roles.count("freshness") == 1
+
+
+WORKSPACE_REPORT = """bun outdated v1.4.3 (c6da4a4d3)
+|-------------------------------------|
+| Package     | Current | Update | Latest |
+|-------------|---------|--------|--------|
+| typescript  | 5.9.3   | 5.9.3  | 7.0.2  |
+|-------------|---------|--------|--------|
+| typescript  | 5.9.3   | 5.9.3  | 7.0.2  |
+|-------------|---------|--------|--------|
+| left-pad    | 1.2.0   | 1.2.0  | 1.3.0  |
+|-------------------------------------|
+"""
+
+
+def test_the_bun_repair_command_covers_a_workspace_once(tmp_path: Path) -> None:
+    path = tmp_path / "freshness.report"
+    path.write_text(WORKSPACE_REPORT)
+    gate = freshness_gate("bun")
+    gate["command"] = ["bun", "outdated", "-r"]
+    with pytest.raises(ValueError, match="baseline repair") as failure:
+        validate_freshness(
+            path, gate, Registry({}), moment("2026-10-26T00:00:00+00:00")
+        )
+    assert "`bun update -r --latest typescript left-pad`" in str(failure.value)
+
+
+def test_the_bun_release_age_check_runs_in_the_gates_workspace_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tool = tmp_path / "bin/bun"
+    tool.parent.mkdir()
+    seen = tmp_path / "seen.txt"
+    tool.write_text(f'#!/bin/sh\necho "$@" >> {seen}\nexit 1\n')
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool.parent}:{os.environ['PATH']}")
+    gate = freshness_gate("bun")
+    gate["command"] = ["bun", "outdated", "-r"]
+    waiting = freshness_waiting(gate, tmp_path)
+    assert waiting is not None
+    waiting("typescript")
+    assert seen.read_text().startswith("update -r --latest typescript")

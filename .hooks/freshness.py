@@ -169,7 +169,7 @@ def poetry_rows(text: str) -> list[Stale]:
 
 
 UPGRADES = {
-    "bun": "bun update --latest {names}",
+    "bun": "bun update {recursive}--latest {names}",
     "dart": "dart pub upgrade --major-versions {names}",
     "flutter": "flutter pub upgrade --major-versions {names}",
     "uv": "uv add [--group <group>] {minimums}",
@@ -194,13 +194,14 @@ def stale_dependencies(
     return behind(uv_rows(text), lambda name: pypi_eligible(name, fetch, cutoff))
 
 
-def bun_waiting(directory: Path) -> Callable[[str], bool]:
+def bun_waiting(directory: Path, recursive: bool) -> Callable[[str], bool]:
     """A release Bun cannot install yet, because a dependency it pins is younger than the wait."""
 
     def waiting(name: str) -> bool:
         age = f"--minimum-release-age={int(WAIT.total_seconds())}"
         done = subprocess.run(
-            ["bun", "update", "--latest", name, "--dry-run", age],
+            ["bun", "update", *(["-r"] if recursive else []), "--latest", name]
+            + ["--dry-run", age],
             cwd=directory,
             capture_output=True,
             text=True,
@@ -254,7 +255,7 @@ def pub_waiting(
 def freshness_waiting(gate: Gate, directory: Path) -> Callable[[str], bool] | None:
     tool = Path(gate["command"][0]).name
     if tool == "bun":
-        return bun_waiting(directory)
+        return bun_waiting(directory, "-r" in gate["command"])
     if tool in {"dart", "flutter"}:
         return pub_waiting(tool, directory, fetch_json, datetime.now(UTC))
     return None
@@ -318,13 +319,14 @@ def validate_freshness(
             print(f"{name} {target} needs a dependency that is not 2 days old yet")
         stale = [item for item in stale if item not in early]
     if stale:
-        names = " ".join(name for name, _, _ in stale)
+        names = " ".join(dict.fromkeys(name for name, _, _ in stale))
+        recursive = "-r " if "-r" in gate["command"] else ""
         latest = " ".join(f"{name}@latest" for name, _, _ in stale)
         minimums = " ".join(f"'{name}>={target}'" for name, _, target in stale)
         raise ValueError(
             "Outdated direct dependencies: "
             + "; ".join(f"{n} {c} → {t}" for n, c, t in stale)
-            + f". Run `{UPGRADES[tool].format(names=names, latest=latest, minimums=minimums)}` in a "
+            + f". Run `{UPGRADES[tool].format(recursive=recursive, names=names, latest=latest, minimums=minimums)}` in a "
             "separate PR first (baseline repair)."
         )
     print("Every direct dependency is on its newest release at least 2 days old")
