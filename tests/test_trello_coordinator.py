@@ -611,6 +611,10 @@ def private_remote(_place: object) -> bool:
     return True
 
 
+def failed_private_check(_place: object) -> bool:
+    return False
+
+
 def make_note(tmp_path: Path) -> Path:
     note = tmp_path / "claim-note.txt"
     note.write_text("Planned text")
@@ -769,7 +773,7 @@ def test_a_failed_private_check_keeps_the_saved_memory(
     drop_claim(project)
     run_and_remember(project, tmp_path)
     saved = claim_commit(project)
-    monkeypatch.setattr(load_claim(), "is_private", lambda _place: False)
+    monkeypatch.setattr(load_claim(), "is_private", failed_private_check)
     assert project.run("check").code == 0
     (project.state / "handover.md").write_text("changed while the check failed\n")
     assert project.finish().payload == {"finished": True}
