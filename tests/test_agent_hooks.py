@@ -434,18 +434,21 @@ def test_completion_runs_real_command_and_bounds_failure_log(
 
 
 @pytest.mark.parametrize("agent", ["claude", "codex"])
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check.",
+        "Hard Eng: quick checks passed; tests run in the full check.",
+    ],
+)
 def test_completion_surfaces_only_authoritative_stage_handoffs(
-    repository: Path, agent: str
+    repository: Path, agent: str, line: str
 ) -> None:
     hooks = repository / ".hooks"
     hooks.mkdir()
-    (hooks / "hard-eng.py").write_text(
-        "print('Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check.')\n"
-    )
+    (hooks / "hard-eng.py").write_text(f"print({line!r})\n")
     result = agent_hooks.completion(repository, {}, agent)
-    assert result == {
-        "systemMessage": "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."
-    }
+    assert result == {"systemMessage": line}
 
 
 def test_stop_retry_allows_honest_blocker_without_rerunning(repository: Path) -> None:
