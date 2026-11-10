@@ -80,6 +80,11 @@ def project_copy(hook: Path) -> Path:
     return hook.with_name(hook.name + ".project")
 
 
+def keeps_copy(hook: Path) -> bool:
+    copy = project_copy(hook)
+    return copy.exists() or copy.is_symlink()
+
+
 def is_own(root: Path, hook: Path) -> bool:
     if hook.is_symlink():
         return hook.resolve() == root / ".hooks/hard-eng.py"
@@ -197,9 +202,7 @@ def planned_hook(root: Path, plan: object) -> tuple[str, str]:
     if hook_path == ".husky/pre-push":
         if (root / hook_path).is_symlink():
             raise ValueError("Preserve the existing hook symlink before updating")
-        if foreign_hook(root, root / hook_path) and not (
-            project_copy(root / hook_path).exists()
-        ):
+        if foreign_hook(root, root / hook_path) and not keeps_copy(root / hook_path):
             raise ValueError(
                 "Existing pre-push hook must be preserved; run the setup command to keep it"
             )

@@ -81,9 +81,9 @@ def test_setup_keeps_a_project_pre_push_hook_and_runs_it_first(
     ).read_text() == "refs/heads/a 1 refs/heads/a 0\n"
 
 
-def test_a_linked_project_hook_stays_a_link(
+def linked_hook(
     installer: ModuleType, repository: Path, shipping_policy: ShippingPolicy
-) -> None:
+) -> tuple[Path, Path]:
     go_project(repository)
     real = repository / "tools/pre-push.sh"
     real.parent.mkdir()
@@ -95,6 +95,21 @@ def test_a_linked_project_hook_stays_a_link(
     config["shipping"] = shipping_policy
     (repository / "hard-eng.gates.json").write_text(json.dumps(config))
     installer.install(repository)
+    return real, path
+
+
+def test_a_linked_project_hook_stays_chained_while_its_target_is_missing(
+    installer: ModuleType, repository: Path, shipping_policy: ShippingPolicy
+) -> None:
+    real, _ = linked_hook(installer, repository, shipping_policy)
+    real.unlink()
+    assert installer.prepare_hook(repository)[1] == hook_chain.CHAINED_LAUNCHER
+
+
+def test_a_linked_project_hook_stays_a_link(
+    installer: ModuleType, repository: Path, shipping_policy: ShippingPolicy
+) -> None:
+    real, path = linked_hook(installer, repository, shipping_policy)
     kept = hook_chain.project_copy(path)
     assert kept.is_symlink()
     assert real.read_text() == PROJECT_HOOK
