@@ -687,19 +687,20 @@ def failure_summary(log: str) -> str:
     failures = [f for f in failures if f"\nDEBT {f[0]} @ {f[1]}:" not in log]
     if not failures:
         return bounded(log, tail=True)
-    heading = "Failed gates: " + ", ".join(dict.fromkeys(n for n, _ in failures)) + "\n"
+    named = {p for _, p in failures} - {".", ""}
+    labels = [f"{n} @ {p}" if named else n for n, p in failures]
+    heading = "Failed gates: " + ", ".join(dict.fromkeys(labels)) + "\n"
     name, package = failures[0]
     owner = re.escape(f"{package}/" if package else "") or r"(?:\S*/)?"
     start = re.search(rf"OUTPUT {owner}{re.escape(name)}[^\n]*\n", log)
     if start is None:
         return heading + bounded(log, tail=True)
     body = log[start.end() :]
-    tail = f"[^\n]* @ {re.escape(package)}(?!\\S)" if package else ""
-    finished = re.escape(name) + r"(?: \(exit|:)" + tail
+    where = f" @ {re.escape(package)}" if package else r"(?: @ \S+)?"
+    finished = re.escape(name) + r"(?: \(exit|:)[^\n]*" + where + r"(?!\S)"
     end = re.search(rf"(?m)^(?:CHECK|OUTPUT) \S*/\S+|(?:PASS|FAIL) {finished}", body)
     cut = end.start() if end else len(body)
-    where = f" @ {re.escape(package)}" if package else r"(?: @ \S+)?"
-    beyond = rf"(?m)^FAIL {re.escape(name)}{where}: findings beyond.*\n(?:  .*\n)*"
+    beyond = rf"(?m)^FAIL {re.escape(name)}{where}: (?:findings beyond|\d+ recorded lines are fixed).*\n(?:  .*\n)*"
     return heading + bounded(body[:cut]) + "".join(re.findall(beyond, body[cut:])[:1])
 
 
