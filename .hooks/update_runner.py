@@ -16,6 +16,8 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TextIO
 
+from gate_config import SOURCE_FILE
+
 RESULT_FILE = ".hard-eng/update-result.txt"
 LOG_FILE = ".hard-eng/update.log"
 FAILURE_FILE = ".hard-eng/update-failure.json"
@@ -42,8 +44,6 @@ class UpdateNeeded(ValueError):
 
 
 def update_blocker(root: Path) -> str | None:
-    from update import SOURCE_FILE
-
     marker = root / SOURCE_FILE
     if not marker.exists():
         return "Auto-update unavailable: no installed source revision."
@@ -102,8 +102,6 @@ def stale_error(root: Path, revision: str) -> ValueError:
 @contextmanager
 def source_reader(root: Path) -> Generator[Callable[[str], str | None]]:
     """One Git process gives the source revision at each ref when it is asked."""
-    from update import SOURCE_FILE
-
     git = subprocess.Popen(
         ["git", "cat-file", "--batch"],
         cwd=root,
@@ -171,8 +169,6 @@ def ready_message(revision: str) -> str:
 
 def freshness_note(root: Path) -> str:
     """What the session-start update already found, read without any network request."""
-    from update import SOURCE_FILE
-
     if not (root / SOURCE_FILE).exists():
         return ""
     try:
@@ -534,8 +530,6 @@ def interrupt_update(signum: int, _frame: object) -> None:
 
 
 def installed_revision(root: Path) -> object:
-    from update import SOURCE_FILE
-
     try:
         return json.loads((root / SOURCE_FILE).read_text()).get("revision")
     except (OSError, ValueError, AttributeError):
@@ -662,7 +656,7 @@ def prepare_update(root: Path, repair: bool = False) -> str:
     """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
     repaired = ""
     if repair:
-        from update import SOURCE_FILE, repair_current_hook
+        from update import repair_current_hook
 
         repaired = repair_current_hook(
             root, json.loads((root / SOURCE_FILE).read_text())["revision"]

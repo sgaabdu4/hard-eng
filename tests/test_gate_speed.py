@@ -1,6 +1,8 @@
 """Checks avoid waiting: packages and scans overlap, hung gates stop early, proven changes skip setup."""
 
 import json
+import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -8,6 +10,7 @@ import time
 from pathlib import Path
 from types import ModuleType
 
+import agent_hooks
 import gate_config
 import gate_times
 import pytest
@@ -424,3 +427,56 @@ def test_parallel_gates_run_beside_the_serial_gates_of_their_package(
         {"path": "app", "depends_on": [], "checks": [suite, lint]},
     )
     assert runner.check() == 0
+
+
+QUIET_STOP = {"session_id": "quiet", "stop_hook_active": False}
+
+
+def quiet_stop(repository: Path, *options: str, **environment: str) -> str:
+    """Standard error of one Stop hook run that finds nothing changed in its session."""
+    shutil.copytree(
+        SOURCE / ".hooks",
+        repository / ".hooks",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    (repository / ".gitignore").write_text(".hard-eng/\n__pycache__/\n")
+    state = agent_hooks.session_state(repository, dict(QUIET_STOP))
+    assert state is not None
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"base": commit(repository, "hooks"), "dirty": {}}))
+    result = subprocess.run(
+        [
+            sys.executable,
+            *options,
+            str(repository / ".hooks/hard-eng.py"),
+            "stop",
+            "claude",
+        ],
+        cwd=repository,
+        input=json.dumps(QUIET_STOP),
+        text=True,
+        capture_output=True,
+        check=True,
+        env={**os.environ, **environment},
+    )
+    assert "No changes since session base" in result.stdout, result.stdout
+    return result.stderr
+
+
+def test_stop_with_nothing_changed_loads_no_network_module(repository: Path) -> None:
+    trace = quiet_stop(repository, "-X", "importtime")
+    loaded = {line.rpartition("|")[2].strip() for line in trace.splitlines()}
+    assert "agent_hooks" in loaded
+    unused = {"socket", "ssl", "http.client", "urllib.request", "update", "shipping"}
+    assert not loaded & unused
+
+
+def test_stop_with_nothing_changed_starts_no_more_git_commands_than_before(
+    repository: Path, tmp_path: Path
+) -> None:
+    events = tmp_path / "git-events"
+    quiet_stop(repository, GIT_TRACE2_EVENT=str(events))
+    starts = [
+        line for line in events.read_text().splitlines() if '"event":"start"' in line
+    ]
+    assert len(starts) <= 6, len(starts)
