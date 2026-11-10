@@ -647,9 +647,10 @@ def test_a_newer_release_after_the_merge_does_not_block_delivered_or_cleanup(
     monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
     monkeypatch.setattr(update_pr, "gh", Mock(return_value="[]"))
     monkeypatch.setattr(ship_actions, "verify", Mock(return_value=shipment))
-    for stage in ("delivered", "cleanup"):
+    for stage, worktree in (("delivered", None), ("cleanup", str(shipment.root))):
         assert (
-            ship_actions.run(root, "PLAN.md", shipment.pr_url, stage, None, None) == 0
+            ship_actions.run(root, "PLAN.md", shipment.pr_url, stage, worktree, None)
+            == 0
         )
     assert not shipment.root.exists()
 
