@@ -457,6 +457,7 @@ def run_gate(
 ) -> bool:
     """Run a gate under its own limit and record how long a pass took."""
     from gate_times import gate_limit, record_gate_time
+    from process_group import note_install
 
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
     started = time.monotonic()
@@ -468,6 +469,7 @@ def run_gate(
         from debt import judge
 
         failed = judge(ROOT, group, gate, failed, OUTPUTS.get(name, ""))
+    note_install(group["path"], gate.get("role"), failed)
     if failed:
         FAILED_GATES.append(key)
     else:
@@ -642,7 +644,7 @@ def run_limited_gate(
 
 
 @contextmanager
-def check_lock(root: Path) -> Generator[None]:
+def check_lock(root: Path) -> Generator[IO[str]]:
     """Gates write fixed report paths, so one check runs per checkout at a time."""
     from process_group import check_lock_file
 
@@ -650,7 +652,7 @@ def check_lock(root: Path) -> Generator[None]:
         if held:
             print("Waiting for another Hard Eng check in this checkout", flush=True)
             fcntl.flock(lock, fcntl.LOCK_EX)
-        yield
+        yield lock
 
 
 def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path, ...]:
@@ -741,6 +743,7 @@ def check(
 ) -> int:
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
+    from process_group import read_installed, save_installed
     from reports import quick_groups
     from shipping import gate_budget
 
@@ -750,9 +753,10 @@ def check(
     if proven_elsewhere(base):
         return 0
 
-    with check_lock(ROOT):
+    with check_lock(ROOT) as lock:
+        installed = read_installed(lock)
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
-        groups = quick_groups(language_groups(groups, languages), quick)
+        groups = quick_groups(language_groups(groups, languages), quick, installed)
         from debt import require_shrink
 
         require_shrink(ROOT, base)
@@ -768,6 +772,7 @@ def check(
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
+        save_installed(lock, installed)
         failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
         return int(failed)

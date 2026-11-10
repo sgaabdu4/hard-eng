@@ -86,14 +86,19 @@ def parallel_hint(code: int, tests: bool, command: list[str]) -> str:
     )
 
 
-def quick_groups(groups: list[Group], quick: bool = True) -> list[Group]:
+def quick_groups(
+    groups: list[Group], quick: bool = True, installed: frozenset[str] = frozenset()
+) -> list[Group]:
     if not quick:
         return groups
     return [
         {
             **group,
             "checks": [
-                gate for gate in group["checks"] if gate.get("role") in QUICK_ROLES
+                gate
+                for gate in group["checks"]
+                if gate.get("role") in QUICK_ROLES
+                or (gate.get("role") == "lockfiles" and group["path"] not in installed)
             ],
         }
         for group in groups
