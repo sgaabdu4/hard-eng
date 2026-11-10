@@ -654,7 +654,9 @@ def test_a_settings_file_that_the_tool_rejects_shows_the_tools_text(
 
     monkeypatch.setattr(subprocess, "check_output", rejecting_tool)
     command = ["dart-decimate", "check", ".", "--strict"]
-    with pytest.raises(ValueError, match=r"^app: dart-decimate config failed") as caught:
+    with pytest.raises(
+        ValueError, match=r"^app: dart-decimate config failed"
+    ) as caught:
         validate_dart_boundaries(command, package, 5)
     assert reason in str(caught.value)
     assert "\n" not in str(caught.value)
@@ -680,7 +682,8 @@ def test_a_boundary_rule_with_a_missing_folder_is_refused(
     for prefix in ("lib/features", "ui/pages"):
         boundary_tool(monkeypatch, [{"from": "lib/feature_a", "disallow": prefix}])
         with pytest.raises(
-            ValueError, match=rf"{prefix} in .dart-decimaterc.json matches no .dart file"
+            ValueError,
+            match=rf"{prefix} in .dart-decimaterc.json matches no .dart file",
         ):
             validate_dart_boundaries(command, tmp_path, 5)
 
