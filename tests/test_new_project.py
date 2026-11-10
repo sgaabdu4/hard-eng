@@ -143,6 +143,15 @@ def test_nextjs_moves_the_scaffold_to_the_installed_biome(
     )
 
 
+def test_nextjs_scaffold_installs_nothing_before_the_age_filter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ran = created(tmp_path, monkeypatch, "nextjs", {"package.json": "{}"})
+    assert ran[0] == new_project.SCAFFOLDS["nextjs"]
+    assert "--skip-install" in ran[0]
+    assert ran[1] == UPGRADE
+
+
 def test_opennext_replaces_the_vulnerable_glob_its_minifier_pins() -> None:
     """@node-minify/core pins glob 10.3.3 (GHSA-5j98-mcp5-4vw2); it only calls globSync."""
     starter = new_project.SOURCE / ".agents/starters/opennext/package.json"
