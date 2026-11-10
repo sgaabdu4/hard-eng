@@ -44,6 +44,7 @@ SECRET = re.compile(r"\b(?:[0-9a-f]{32,}|ATTA[0-9A-Za-z]{20,})\b", re.IGNORECASE
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 PHONE = re.compile(r"(?<![\w#])\+?\d(?:[\s().-]?\d){8,}(?![\d:])")
 SKIP_LINE = re.compile(r"^(?:!\[|```|https?://)")
+LINK = re.compile(r"https?://\S+")
 BOLD_LEAD = re.compile(r"^(?:#+\s+)?(?:@\w+\s+)*\*\*.+\*\*")
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 JARGON = re.compile(
@@ -77,7 +78,7 @@ class Config:
 def refuse_wall(body: str) -> None:
     lines = [line.strip() for line in body.splitlines()]
     prose = [line for line in lines if line and not SKIP_LINE.match(line)]
-    plain = "\n".join(prose)
+    plain = LINK.sub("", "\n".join(prose))
     if "`" in plain:
         raise TrelloError("Card text has code formatting; say it in plain words")
     if word := JARGON.search(plain):
