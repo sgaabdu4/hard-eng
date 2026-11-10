@@ -241,8 +241,9 @@ Probes: a reviewer ran the flow with a hook that adds `chore: ` to each commit s
 Reader check: a reader that did not write the texts compared old and new wording. For the deny text: no sentence needs a change. For the new sentence in the review method: the reader named four unclear points in the first wording; the second wording takes all four.
 Review: a design review before the build found two gaps (a repair must keep its exact subject; one Git listing, not two) and both went into Decided (10) and (11). After the join, a production review found one regression (the hook repair ran after the default branch lookup) and two rare faults (file names split at spaces; Git colour hides added lines), all fixed. A test review found three removals that were the only protection, one more on a trust boundary, and five test names that said more than the test proves; the rows are restored and the names corrected.
 E2E: N/A — no user journey changes; each behavior is a hook, command or fixture result that its test runs directly.
-Retro:
+Retro: these items, each sorted by HE Learn's Retro rows.
 
+- Final check, mechanical: this label had no text on its own line, so the plan check stopped the first full check → None — the plan check found it in its first second, before any gate ran.
 - Design review, before the build: a repair whose subject a hook changed would have moved the update branch, and `update-pr` would then publish nothing → None — a second reviewer tests a trust design with probes before the build; Decided (10) holds the rule.
 - Design review: a second Git listing with a path filter drops an update commit → None — found by a probe before the build; `replaceable_remote` reads one listing.
 - Probe: an empty gh config folder does not hide a sign-in that the system keyring holds → `tests/test_gate_tools.py::test_fixture_gh_ignores_the_developers_sign_in`.
