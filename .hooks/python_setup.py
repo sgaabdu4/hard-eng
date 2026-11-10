@@ -6,8 +6,9 @@ import shlex
 import tomllib
 from pathlib import Path
 
+from coverage_sources import owned_files, source_roots
 from gate_config import Group
-from project_setup import dependency_command, owned_files, source_roots
+from project_setup import dependency_command
 
 
 def parallel_pytest(package: Group) -> None:

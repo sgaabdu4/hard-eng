@@ -5,6 +5,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from gate_config import Group, nonproduction_source
+
 IF_DIRECTIVE = re.compile(r"(?m)^\s*#if\b")
 
 
@@ -70,3 +72,38 @@ def erased_swift(files: set[Path]) -> set[Path]:
         ):
             erased.add(file)
     return erased
+
+
+def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:
+    """Top-level names that hold a package's production code."""
+    extensions = {
+        "python": {".py"},
+        "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
+        "dart": {".dart"},
+    }
+    sources = set()
+    for path in files:
+        if (
+            not path.is_relative_to(directory)
+            or path.suffix not in extensions[language]
+        ):
+            continue
+        relative = path.relative_to(directory)
+        if nonproduction_source(relative) or {".hooks", ".agents"} & set(
+            relative.parts
+        ):
+            continue
+        sources.add(relative.parts[0])
+    return sources
+
+
+def owned_files(
+    root: Path, packages: list[Group], files: list[Path]
+) -> dict[Path, list[Path]]:
+    """Each file belongs to the package nearest to it."""
+    owned: dict[Path, list[Path]] = {root / package["path"]: [] for package in packages}
+    for path in files:
+        owner = next((parent for parent in path.parents if parent in owned), None)
+        if owner is not None:
+            owned[owner].append(path)
+    return owned

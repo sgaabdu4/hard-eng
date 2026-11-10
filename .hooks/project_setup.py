@@ -9,6 +9,7 @@ import tomllib
 from fnmatch import fnmatchcase
 from pathlib import Path
 
+from coverage_sources import owned_files, source_roots
 from fallow_report import fallow_report_path, validate_scanner_command
 from gate_config import (
     LANGUAGES,
@@ -20,7 +21,6 @@ from gate_config import (
     Report,
     dart_scan_includes_boundaries,
     generated_sources,
-    nonproduction_source,
     repository_files,
     typescript_packages,
 )
@@ -340,41 +340,6 @@ def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
             f"{directory}: bun.lock is required; run bun install and commit bun.lock"
         )
     return "bun", ["bun", "install", "--frozen-lockfile"], lockfile
-
-
-def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:
-    """Top-level names that hold a package's production code."""
-    extensions = {
-        "python": {".py"},
-        "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
-        "dart": {".dart"},
-    }
-    sources = set()
-    for path in files:
-        if (
-            not path.is_relative_to(directory)
-            or path.suffix not in extensions[language]
-        ):
-            continue
-        relative = path.relative_to(directory)
-        if nonproduction_source(relative) or {".hooks", ".agents"} & set(
-            relative.parts
-        ):
-            continue
-        sources.add(relative.parts[0])
-    return sources
-
-
-def owned_files(
-    root: Path, packages: list[Group], files: list[Path]
-) -> dict[Path, list[Path]]:
-    """Each file belongs to the package nearest to it."""
-    owned: dict[Path, list[Path]] = {root / package["path"]: [] for package in packages}
-    for path in files:
-        owner = next((parent for parent in path.parents if parent in owned), None)
-        if owner is not None:
-            owned[owner].append(path)
-    return owned
 
 
 def adapt_sources(root: Path, package: Group, files: list[Path]) -> None:
