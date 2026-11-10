@@ -124,7 +124,9 @@ def is_documentation(path: Path, owner_language: str | None = None) -> bool:
     return is_plan_path(path) or (markdown and not site)
 
 
-def report_stage(failed: bool, stage: str | None, gates: list[str]) -> None:
+def report_stage(
+    failed: bool, stage: str | None, gates: list[str], quick: bool = False
+) -> None:
     if failed:
         where = f" in {', '.join(sorted(gates))}" if gates else ""
         print(f"Hard Eng: verification failed{where}; the next stage is blocked.")
@@ -132,6 +134,8 @@ def report_stage(failed: bool, stage: str | None, gates: list[str]) -> None:
         print(
             "Hard Eng: planning checks passed — ready for build within the authorized scope."
         )
+    elif stage == "Complete" and quick:
+        print("Hard Eng: quick checks passed; tests run in the full check.")
     elif stage == "Complete":
         print(
             "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."

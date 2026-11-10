@@ -620,9 +620,7 @@ def completion_notice(agent: str | None, output: str) -> JsonObject:
     if agent not in {"claude", "codex"}:
         return {}
     lines = output.splitlines()
-    if lines and lines[-1].startswith(
-        ("Hard Eng: planning checks passed", "Hard Eng: build checks passed")
-    ):
+    if lines and lines[-1].startswith("Hard Eng: ") and " checks passed" in lines[-1]:
         return {"systemMessage": lines[-1]}
     return {}
 
