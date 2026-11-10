@@ -939,3 +939,28 @@ def test_branch_point_is_reused_only_after_its_checks_passed(
 
     monkeypatch.setattr(shipping, "gh", github)
     assert shipping.passed_branch_point(fixture.root) == (point if expected else None)
+
+
+def test_the_clean_checkout_refusal_names_the_files(tmp_path: Path) -> None:
+    _native(tmp_path, "init", "-q")
+    (tmp_path / "tracked.py").write_text("x = 1\n")
+    _native(tmp_path, "add", ".")
+    _native(
+        tmp_path,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-qm",
+        "base",
+    )
+    shipping._clean(tmp_path)
+    (tmp_path / "tracked.py").write_text("x = 2\n")
+    for number in range(6):
+        (tmp_path / f"extra{number}.py").write_text("y = 1\n")
+    with pytest.raises(shipping.ShippingError) as refusal:
+        shipping._clean(tmp_path)
+    message = str(refusal.value)
+    assert "tracked.py, extra0.py, extra1.py, extra2.py, extra3.py" in message
+    assert "extra4.py" not in message and message.endswith("and 2 more")

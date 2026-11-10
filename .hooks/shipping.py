@@ -663,8 +663,15 @@ def origin_repository(remote_url: str) -> str:
 
 
 def _clean(root: Path) -> None:
-    if git(root, "status", "--porcelain", "-uall", "--ignore-submodules=none").strip():
-        raise ShippingError("shipping requires a clean task checkout")
+    status = git(root, "status", "--porcelain", "-uall", "--ignore-submodules=none")
+    names = [line[3:] for line in status.splitlines()]
+    if names:
+        more = f" and {len(names) - 5} more" if len(names) > 5 else ""
+        raise ShippingError(
+            "shipping requires a clean task checkout; these files changed: "
+            + ", ".join(names[:5])
+            + more
+        )
 
 
 def _plan_target(root: Path, plan: Path) -> tuple[Path, str]:
