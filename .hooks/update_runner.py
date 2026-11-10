@@ -510,10 +510,13 @@ def installed_revision(root: Path) -> object:
         return None
 
 
-def lookup_failure(found: "subprocess.CompletedProcess[str]") -> subprocess.SubprocessError:
+def lookup_failure(
+    found: "subprocess.CompletedProcess[str]",
+) -> subprocess.SubprocessError:
     reason = (found.stderr or "").strip().splitlines()[-1:]
     return subprocess.SubprocessError(
-        f"git ls-remote exited {found.returncode}" + (f": {reason[0]}" if reason else "")
+        f"git ls-remote exited {found.returncode}"
+        + (f": {reason[0]}" if reason else "")
     )
 
 
@@ -640,6 +643,15 @@ def prepare_update(root: Path, repair: bool = False) -> str:
     return outcome
 
 
+def free_step(root: Path, worktree: Path) -> str:
+    if worktree == Path(registered_worktrees(root)[0]["worktree"]):
+        return f"switch this checkout to another branch with `git -C {worktree} switch <branch>`"
+    return (
+        f"free it with `git -C {worktree} switch --detach` or "
+        f"`git worktree remove {worktree}`"
+    )
+
+
 def build_update(root: Path, base: str, repair: bool) -> str:
     from hook_chain import use_own_hooks
     from update import update
@@ -657,8 +669,8 @@ def build_update(root: Path, base: str, repair: bool) -> str:
     if (worktree := branch_worktree(root)) is not None:
         raise ValueError(
             f"{UPDATE_BRANCH} is checked out in {worktree} with no unfinished work, so the "
-            f"update cannot move it; free it with `git -C {worktree} switch --detach` or "
-            f"`git worktree remove {worktree}`, then rerun `python3 .hooks/hard-eng.py update`"
+            f"update cannot move it; {free_step(root, worktree)}, then rerun "
+            "`python3 .hooks/hard-eng.py update`"
         )
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         candidate = Path(temporary) / "candidate"
@@ -734,7 +746,7 @@ def refuse_untracked_overlap(
         error = ValueError(
             "The update would replace local files that Git does not track: "
             + ", ".join(found)
-            + "; move them away or commit them, then run the published setup command to retry"
+            + "; move them away, then run the published setup command to retry"
         )
         if not repair:
             remember_failure(root, update_attempt(tip, revision), error)

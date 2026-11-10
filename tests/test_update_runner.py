@@ -701,7 +701,14 @@ def test_the_note_says_pull_when_the_update_is_already_on_the_base(
     target = pushed_release(release, monkeypatch)
     assert update_runner.apply_update(target) == 0
     assert "update-pr" in update_runner.freshness_note(target)
-    git(target, "push", "-q", "--no-verify", "origin", f"{update_runner.UPDATE_BRANCH}:main")
+    git(
+        target,
+        "push",
+        "-q",
+        "--no-verify",
+        "origin",
+        f"{update_runner.UPDATE_BRANCH}:main",
+    )
     note = update_runner.freshness_note(target)
     assert "already on main" in note and "rebase" in note
     assert "update-pr" not in note
@@ -722,3 +729,19 @@ def test_a_failed_remote_lookup_keeps_gits_reason(
     reason = lookup.stderr.strip().splitlines()[-1]
     assert update_runner.apply_update(target) == 0
     assert reason in (target / update_runner.RESULT_FILE).read_text()
+
+
+def test_the_refusal_for_a_main_checkout_names_a_step_that_works(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    (target / "notes.txt").write_text("base moved\n")
+    commit(target, "base moved")
+    git(target, "push", "-q", "--no-verify", "origin", "main")
+    git(target, "switch", "-q", update_runner.UPDATE_BRANCH)
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "checked out" in result
+    assert "switch this checkout to another branch" in result
+    assert "git worktree remove" not in result
