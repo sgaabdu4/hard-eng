@@ -35,10 +35,22 @@ def bash(command: str, **extra: object) -> dict[str, object]:
         "sleep 2m && tail log",
         "python3 -c 'import time\nwhile True: time.sleep(5)'",
         "perl -e 'while (1) { select(undef, undef, undef, 3) }'",
+        "sleep 25; git status; sleep 25",
+        "python3 -c 'import time; time.sleep(600)'",
+        "python3 - <<'EOF'\nimport time\ntime.sleep(600)\nEOF",
+        'bash -lc "sleep 45"',
+        "python3 -c 'import time; time.sleep(20); time.sleep(20)'",
+        'ssh build-host "while ! test -f done; do sleep 5; done"',
+        'eval "sleep 40"',
+        "ssh build-host <<'EOF'\nsleep 40\nEOF",
+        "# wait, don't spam\nuntil curl -s localhost; do sleep 2; done\necho 'ready'",
+        'out="$(until test -f done; do sleep 2; done)"',
+        "python3 - <<'EOF'\n# don't stop\nimport time\ntime.sleep(60)\nprint('done')\nEOF",
+        "ruby -e 'sleep 60'",
     ],
 )
 def test_foreground_sleep_wait_is_denied(command: str) -> None:
-    """HE-NO-FOREGROUND-POLL denies a main-session sleep loop or long sleep."""
+    """HE-NO-FOREGROUND-POLL denies a main-session sleep loop or a long wait in total."""
     output = json.loads(run(bash(command)))["hookSpecificOutput"]
     assert output["permissionDecision"] == "deny"
     assert "run_in_background" in output["permissionDecisionReason"]
@@ -59,6 +71,36 @@ def test_foreground_sleep_wait_is_denied(command: str) -> None:
 def test_background_subagent_and_short_waits_pass(payload: object) -> None:
     """A background job, a subagent, a short settle wait or a bounded retry is allowed."""
     assert run(payload) == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'grep -rn "sleep 600" .hooks',
+        'grep -c "sleep 60" notes.md',
+        'git commit -m "Stop the retry loop; sleep 60 was too long while CI runs"',
+        "cat > notes.md <<'EOF'\nuntil the job ends, sleep 600\nEOF",
+        "cat > docs/python/notes.md <<'EOF'\nuntil the job ends, sleep 600\nEOF",
+        (
+            "gh issue create --title \"Fix the bash hook\" --body-file - <<'EOF'\n"
+            "The hook denies `while true; do sleep 5; done`.\nEOF"
+        ),
+        "sleep 2; grep -c while notes.md",
+    ],
+)
+def test_sleep_and_loop_words_as_data_pass(command: str) -> None:
+    """A search pattern, a message or a file body that names a wait is not a wait."""
+    assert run(bash(command)) == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    ['echo "open quote; sleep 60', "cat <<EOF\nsleep 600"],
+)
+def test_odd_shell_text_never_crashes_the_hook(command: str) -> None:
+    """An open quote or an unclosed heredoc is read as commands, so the wait in it is denied."""
+    output = json.loads(run(bash(command)))["hookSpecificOutput"]
+    assert output["permissionDecision"] == "deny"
 
 
 def test_registered_hook_allows_commands_outside_a_repository(tmp_path: Path) -> None:

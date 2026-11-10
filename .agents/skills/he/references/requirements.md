@@ -66,7 +66,7 @@ Proof: guidance
 
 ## HE-NO-FOREGROUND-POLL
 
-An agent starts a long job in the background and waits for the host's exit notice; it never waits in a foreground sleep loop or a long sleep. In Claude Code, a hook denies a main-session shell command that sleeps at least 1 second inside a `while` or `until` loop, or at least 30 seconds at once. A subagent may wait in the foreground, because nothing watches its background job after its turn ends. Codex returns a long command early and waits on that command's session, not on a sleep loop.
+An agent starts a long job in the background and waits for the host's exit notice; it never waits in a foreground sleep loop or a long sleep. In Claude Code, a hook denies a main-session shell command that holds a `while` or `until` loop and a sleep of at least 1 second, or sleeps that add up to at least 30 seconds. Text in quotes and heredoc bodies does not count, unless `sh`, `bash`, `zsh`, `python`, `perl`, `ssh` or `eval` runs it. A subagent may wait in the foreground, because nothing watches its background job after its turn ends. Codex returns a long command early and waits on that command's session, not on a sleep loop.
 
 Proof: check
 
