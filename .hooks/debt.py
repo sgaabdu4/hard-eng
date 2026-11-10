@@ -18,6 +18,8 @@ TIME = re.compile(r"(?<!\w)N(?:\.N)?(?:ns|[µu]s|ms|s)(?!\w)")
 CODE_FRAME = re.compile(r"[> ]*(?:N[ ]*)*[│|]")
 
 DEBT_FILE = "hard-eng.debt.json"
+GATE_OUTPUT_LIMIT = 8000
+DEBT_LINE = re.compile(r"(?m)^DEBT (\S+) @ (\S+):.*$")
 # Failing tests, broken installs and leaked secrets are never old findings to keep.
 NEVER = {"tests", "lockfiles", "secrets-files", "secrets-history"}
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
@@ -314,3 +316,22 @@ def require_shrink(root: Path, base: str | None) -> None:
         raise ValueError(
             f"HE-DEBT-SHRINK-ONLY: {DEBT_FILE} grew for {', '.join(grown)}; repair the new findings instead"
         )
+
+
+def bounded(text: str, *, tail: bool = False) -> str:
+    if len(text := ANSI.sub("", text)) <= GATE_OUTPUT_LIMIT:
+        return text
+    note = "\n[gate output cut; rerun check for the full log]\n"
+    return note + text[-GATE_OUTPUT_LIMIT:] if tail else text[:GATE_OUTPUT_LIMIT] + note
+
+
+def keep_debt_lines(shown: str, log: str) -> str:
+    """Put each DEBT line of the log right after the FAIL line of its gate, where shown has it."""
+    for note in DEBT_LINE.finditer(log):
+        failed = re.search(
+            rf"(?m)^FAIL {re.escape(note[1])} \(exit \d+;[^\n]* @ {re.escape(note[2])}(?!\S)[^\n]*\n",
+            shown,
+        )
+        if failed:
+            shown = shown[: failed.end()] + note[0] + "\n" + shown[failed.end() :]
+    return shown

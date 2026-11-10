@@ -22,7 +22,6 @@ COPILOT_HOOK_COMMAND = re.compile(
     r'\.hard-eng/(?:bootstrap|hook)\.sh"? copilot(?: [a-z]+)?'
 )
 
-GATE_OUTPUT_LIMIT = 8000
 # The HE Build handoff line, not a quoted or negated mention of it.
 SHIP_CLAIM = re.compile(r"^[*_ ]*Ready for ship[*_]*\s*[—–-]", re.MULTILINE)
 
@@ -672,17 +671,10 @@ def passed_notice(
     return {"systemMessage": notice} if notice else completion_notice(agent, output)
 
 
-def bounded(text: str, *, tail: bool = False) -> str:
-    from debt import ANSI
-
-    if len(text := ANSI.sub("", text)) <= GATE_OUTPUT_LIMIT:
-        return text
-    note = "\n[gate output cut; rerun check for the full log]\n"
-    return note + text[-GATE_OUTPUT_LIMIT:] if tail else text[:GATE_OUTPUT_LIMIT] + note
-
-
 def failure_summary(log: str) -> str:
     """Failed gate names, then the first failing gate's output from its start."""
+    from debt import bounded, keep_debt_lines
+
     failures = FAILED_COMMAND_LINE.findall(log)
     failures = [f for f in failures if f"\nDEBT {f[0]} @ {f[1]}:" not in log]
     if not failures:
@@ -701,7 +693,11 @@ def failure_summary(log: str) -> str:
     end = re.search(rf"(?m)^(?:CHECK|OUTPUT) \S*/\S+|(?:PASS|FAIL) {finished}", body)
     cut = end.start() if end else len(body)
     beyond = rf"(?m)^FAIL {re.escape(name)}{where}: (?:findings beyond|\d+ recorded lines are fixed).*\n(?:  .*\n)*"
-    return heading + bounded(body[:cut]) + "".join(re.findall(beyond, body[cut:])[:1])
+    return (
+        heading
+        + bounded(keep_debt_lines(body[:cut], log))
+        + "".join(re.findall(beyond, body[cut:])[:1])
+    )
 
 
 def show_decisions(root: Path, names: list[str], state: Path | None) -> str:
