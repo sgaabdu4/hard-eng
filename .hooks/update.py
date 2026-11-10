@@ -32,6 +32,7 @@ from update_runner import (
 )
 
 COMMIT_ID = re.compile(r"[0-9a-f]{40}")
+GATES_FILE = "hard-eng.gates.json"
 
 UPSTREAM = "sgaabdu4/hard-eng"
 REPOSITORY = f"https://github.com/{UPSTREAM}.git"
@@ -679,6 +680,27 @@ def repair_current_hook(root: Path, previous: str) -> str:
         _, _, hook, _ = update_plan(root, source, old)
         install_planned_hook(root, hook)
     return "No newer CI-verified Hard Eng revision is available; installed the missing pre-push hook."
+
+
+def repair_checkout(root: Path, previous: str) -> str:
+    """A setup rerun fixes this checkout's pre-push hook and gates file; the update path owns every other file."""
+    hook_chain.install_worktree_hook(root)
+    needs_hook = pre_push_missing(root) or hook_chain.foreign_hook(
+        root, hook_chain.locate(root)[1]
+    )
+    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
+        source, old = fetch_sources(Path(temporary), previous, previous)
+        changes, _, hook, _ = update_plan(root, source, old)
+    notes = []
+    if needs_hook:
+        install_planned_hook(root, hook)
+        notes.append("installed the missing pre-push hook")
+    if (gates := changes.get(GATES_FILE)) is not None:
+        replace_file(root / GATES_FILE, gates.encode())
+        notes.append(
+            f"{GATES_FILE} now matches the project's files; review it and commit it with your change"
+        )
+    return f"This checkout: {'; '.join(notes)}." if notes else ""
 
 
 def repair_installation(root: Path, previous: str) -> str:
