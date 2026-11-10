@@ -17,6 +17,7 @@ BROKER = re.compile(
 COMPANION = "codex-companion.mjs"
 RUNNING: set[int] = set()
 STOPPED = threading.Event()
+STOP_SIGNAL: list[int] = []
 STARTING = threading.Lock()
 
 
@@ -70,6 +71,7 @@ def exit_when_stopped() -> None:
     """SIGTERM and SIGHUP end the process through the exit path that stops its groups."""
 
     def stop(number: int, _frame: object) -> None:
+        STOP_SIGNAL[:] = [number]
         raise SystemExit(128 + number)
 
     for number in (signal.SIGTERM, signal.SIGHUP):
@@ -85,6 +87,14 @@ def stop_groups() -> None:
         for group in RUNNING.copy():
             with suppress(ProcessLookupError, PermissionError):
                 os.killpg(group, signal.SIGKILL)
+
+
+def stopped_note(code: int) -> str:
+    """The text for a gate that ended because the check was stopped."""
+    if code == 0 or not STOPPED.is_set():
+        return ""
+    cause = f" by {signal.Signals(STOP_SIGNAL[0]).name}" if STOP_SIGNAL else ""
+    return f"\nThe check was stopped{cause}, so this gate was ended before it finished."
 
 
 def process_table() -> list[Process]:
