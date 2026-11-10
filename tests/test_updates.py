@@ -275,12 +275,12 @@ def test_install_commits_only_clean_installed_paths(
             )
         return
     reason = {
-        "dirty": "these paths already had local changes",
+        "dirty": "these paths already had local changes: AGENTS.md",
         "rejected": "rejected by project hook",
     }[case]
     assert f"Installed files are not committed ({reason})" in output
-    if case == "rejected":
-        assert ".hooks/ " in output and ".agents/skills/he/ " in output
+    advice = output.split("Commit all installed files so updates and ")[1]
+    assert ".hooks/ " in advice and ".agents/skills/he/ " in advice
     assert "?? AGENTS.md" in status and "?? .hooks/" in status
     assert not subprocess.run(
         ["git", "diff", "--cached", "--name-only"],
@@ -289,21 +289,6 @@ def test_install_commits_only_clean_installed_paths(
         text=True,
         check=True,
     ).stdout
-
-
-def test_install_over_local_changes_names_only_the_changed_paths(
-    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    tmp_path = tmp_path / "project"
-    init(tmp_path)
-    (tmp_path / "package.json").write_text('{"private":true}')
-    (tmp_path / "bun.lock").write_text('{"lockfileVersion": 1}\n')
-    commit(tmp_path, "project")
-    (tmp_path / "AGENTS.md").write_text("# Uncommitted project rules\n")
-    installer.install(tmp_path)
-    output = capsys.readouterr().out
-    advice = output.split("Commit them so updates and worktrees include them: ")[1]
-    assert advice.splitlines()[0].split() == ["AGENTS.md"]
 
 
 @pytest.mark.parametrize("wrapped", [True, False])
