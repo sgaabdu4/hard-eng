@@ -84,33 +84,24 @@ def test_a_stale_lease_is_taken_by_one_run_only(project: Project, mods: Mods) ->
         ("The export is live. If anything looks wrong, I will look at it.", False),
         ("Part one is live. I will add part two tomorrow.", True),
         ("If it still fails, I will fix it today.", False),
-    ],
-)
-def test_promises_ignore_conditional_live(
-    project: Project, text: str, listed: bool
-) -> None:
-    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
-    project.fake.actions = [comment("ours-1", 1, "m-owner", text, 8)]
-    project.mods.state.log_posted(project.state, "ours-1")
-    assert (refs(project.report()["promises"]) == {"1"}) == listed
-
-
-@pytest.mark.parametrize(
-    "text,listed",
-    [
         ("I post here when the store answers.", True),
         ("I check the next new order and post here who it was.", True),
         ("I'm adding the export now.", True),
         ("I am checking the logs.", True),
+        ("I am testing it on the new build now.", True),
         ("I am going to move it today.", True),
         ("The report is being fixed.", True),
+        ("I'll post the new build tonight, can you test it tomorrow?", True),
         ("I checked the logs. Nothing is wrong.", False),
         ("I posted the steps above.", False),
         ("Can I check the totals with you?", False),
         ("Shall I post the steps here?", False),
+        ("Fixed in the new build. I move this card to Testing.", False),
+        ("I tag @sam to test it.", False),
+        ("I confirm the crash is gone.", False),
     ],
 )
-def test_promises_catch_present_tense_plans(
+def test_promises_ignore_conditional_live(
     project: Project, text: str, listed: bool
 ) -> None:
     project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
@@ -135,6 +126,8 @@ def test_promises_catch_present_tense_plans(
         ("Try it again. If it still fails, I will fix it today.", False),
         ("Should the menu change wait for the next release?", False),
         ("I am fixing the button colour.", True),
+        ("I am fixing the crash now, can you send the log?", True),
+        ("Next release has it. It is now live on the test site, can you check?", False),
     ],
 )
 def test_waits_on_us_ignores_conditional_live(
