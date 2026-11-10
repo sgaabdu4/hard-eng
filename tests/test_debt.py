@@ -77,6 +77,18 @@ def test_tests_lockfiles_and_secrets_never_become_debt(
     assert "must pass before adoption" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("role", sorted(debt.NEVER))
+def test_hand_written_debt_never_passes_tests_lockfiles_or_secrets(
+    tmp_path: Path, role: str
+) -> None:
+    """HE-DEBT-SHRINK-ONLY: an entry written by hand for one of these gates changes nothing."""
+    check: Gate = {"name": role, "role": role, "command": ["tool"]}
+    group: Group = {"path": ".", "checks": [check]}
+    written = {"version": 1, "gates": {f"./{role}": {"failed": 1}}}
+    (tmp_path / debt.DEBT_FILE).write_text(json.dumps(written))
+    assert debt.judge(tmp_path, group, check, True, "failed\n") is True
+
+
 def test_a_gate_that_cannot_run_is_never_passed_as_debt(
     runner: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
