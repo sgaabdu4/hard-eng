@@ -733,10 +733,7 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         dart_scan_includes_boundaries(gate) for gate in group["checks"]
     ):
         roles.add("boundaries")
-    if required - roles:
-        raise ValueError(
-            f"{group['path']}: missing mandatory checks: {', '.join(sorted(required - roles))}"
-        )
+    require_roles(group["path"], required, roles)
     scripts: list[list[str]] = []
     if group.get("language") == "javascript":
         from project_setup import javascript_manager, package_script_arguments
@@ -759,7 +756,10 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
 def require_roles(directory: str, required: set[str], roles: set[str]) -> None:
     if missing := required - roles:
         raise ValueError(
-            f"{directory}: missing mandatory checks: {', '.join(sorted(missing))}"
+            f"{directory}: missing mandatory checks: {', '.join(sorted(missing))}; "
+            "add a gate for each role to this group in hard-eng.gates.json (a package "
+            "role comes from the language template in .agents/skills/he/templates/, "
+            "a shared role from .agents/skills/he/references/gates.md)"
         )
 
 
