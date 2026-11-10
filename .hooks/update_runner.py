@@ -516,10 +516,11 @@ def installed_revision(root: Path) -> object:
 def lookup_failure(
     found: "subprocess.CompletedProcess[str]",
 ) -> subprocess.SubprocessError:
-    reason = (found.stderr or "").strip().splitlines()[-1:]
+    lines = (found.stderr or "").strip().splitlines()
+    fatal = [line for line in lines if line.startswith("fatal:")]
+    reason = fatal[0] if fatal else "".join(lines[-1:])
     return subprocess.SubprocessError(
-        f"git ls-remote exited {found.returncode}"
-        + (f": {reason[0]}" if reason else "")
+        f"git ls-remote exited {found.returncode}" + (f": {reason}" if reason else "")
     )
 
 
