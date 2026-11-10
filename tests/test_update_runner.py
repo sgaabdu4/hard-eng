@@ -554,8 +554,11 @@ def test_a_setup_rerun_refuses_to_replace_a_local_file_git_does_not_track(
 ) -> None:
     target = private_mcp_release(release, monkeypatch, True)
     monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    update_runner.record_result(target, update_runner.failed_update("old refusal"))
     with pytest.raises(ValueError, match=r"\.mcp\.json"):
         update_runner.locked_update(target, repair=True)
+    recorded = (target / update_runner.RESULT_FILE).read_text()
+    assert ".mcp.json" in recorded and "old refusal" not in recorded
     assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
     assert (target / ".mcp.json").read_text() == PRIVATE_MCP
 
