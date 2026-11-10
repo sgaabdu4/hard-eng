@@ -444,7 +444,12 @@ def locked_update(root: Path, repair: bool = False) -> str:
                 "wait for its result instead of starting another"
             )
         remove_stale_candidates(root)
-        outcome = prepare_update(root, repair)
+        try:
+            outcome = prepare_update(root, repair)
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+            if repair:
+                record_result(root, failed_update(error))
+            raise
         if repair:
             record_result(root, outcome)
         return outcome
