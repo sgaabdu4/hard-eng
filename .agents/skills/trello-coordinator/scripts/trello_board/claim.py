@@ -151,8 +151,13 @@ def holder_of(place: Place, sha: str) -> Obj:
         return {}
 
 
-def build_tree(place: Place, secrets: Secrets, me: str, since: str) -> str:
-    memory = memory_files(place.state) if is_private(place) else []
+def shared_memory(place: Place) -> list[Path]:
+    return memory_files(place.state) if is_private(place) else []
+
+
+def build_tree(
+    place: Place, secrets: Secrets, me: str, since: str, memory: list[Path]
+) -> str:
     refuse_keys(memory, secrets)
     holder = json.dumps({"machine": me, "since": since})
     rows = [
@@ -189,7 +194,8 @@ def rejected(place: Place, expected: str) -> TrelloError:
 
 def take(place: Place, secrets: Secrets, expected: str) -> bool:
     since = stamp(utc_now())
-    tree = build_tree(place, secrets, machine_id(place.state), since)
+    memory = shared_memory(place)
+    tree = build_tree(place, secrets, machine_id(place.state), since, memory)
     return publish(place, tree, since, expected)
 
 
@@ -220,9 +226,10 @@ def require(place: Place) -> None:
 
 def save(place: Place, secrets: Secrets) -> None:
     record = load_record(place.state)
-    if record is None:
+    memory = shared_memory(place) if record else []
+    if record is None or not memory:
         return
-    tree = build_tree(place, secrets, machine_id(place.state), record.since)
+    tree = build_tree(place, secrets, machine_id(place.state), record.since, memory)
     saved = git(place.main, "rev-parse", "--verify", "-q", f"{record.sha}^{{tree}}")
     if saved.stdout.strip() == tree:
         return
@@ -253,12 +260,13 @@ def takeover(place: Place, secrets: Secrets, every_minutes: float) -> Obj:
         if lease_is_live(place.state, every_minutes):
             raise TrelloError("A run is going on this machine; take over after it ends")
         remote = remote_sha(place)
-        previous = ""
+        previous = saved = ""
         if remote:
             previous = text(holder_of(place, remote).get("since"))
+            saved = plumbing(place, "log", "-1", "--format=%cI", remote).strip()
             restore(place, remote)
         since = stamp(utc_now())
-        tree = build_tree(place, secrets, me, since)
+        tree = build_tree(place, secrets, me, since, shared_memory(place))
         if not publish(place, tree, since, remote):
             raise rejected(place, remote)
-    return {"tookOver": True, "previousSince": previous}
+    return {"tookOver": True, "previousSince": previous, "previousSaved": saved}
