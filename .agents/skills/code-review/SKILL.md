@@ -5,7 +5,7 @@ description: Review PR, branch, commit or working-tree changes for concrete defe
 
 # Code Review
 
-Load the review method; load the independent-challenge branch for any challenge.
+Load the review method; an independent review also loads challenge.md.
 
 ```mermaid
 flowchart LR

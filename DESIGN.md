@@ -12,7 +12,7 @@ Visual Atomic Design does not apply. The interface consists of the installer, sk
 - `python3 .hooks/hard-eng.py check` runs the installed project's configured checks.
 - `hard-eng.gates.json` holds native check commands and report locations.
 - `.agents/skills` owns conditional guidance; Code Review reuses Hard Eng's test-quality reference.
-- `.hooks/hard-eng.py` is the session and stop hook entry point; Claude's tool hooks run `polling.py`, `previews.py` and `failures.py` directly.
+- `.hooks/hard-eng.py` is the entry point for the session, stop and pre-push hooks; Claude's tool hooks run `polling.py`, `previews.py` and `failures.py` directly.
 - `python3 .hooks/hard-eng.py ship --plan PLAN.md --pr <actual-PR-URL>` verifies delivery readiness using the project's `shipping` settings in the existing gate file. Merge/cleanup are explicit guarded stages; local plan Complete remains build completion, not publication.
 - Session hooks request updates and give conditional tool-readiness guidance; completion hooks invoke checks. Integration detection runs during setup, not every session. Git pre-push verifies the pushed commits; CI runs independently. Native host limitations are tracked in [DECISION](DECISION.md#current-status).
 - Session checkpoints request HE Learn; ordinary prompts and successful tools have no learning callback. Claude's failure event warns only from the third identical tool error in a session ([ADR 0002](docs/adr/0002-repeat-gated-failure-warning.md)). Failed completion checks retain a learning prompt, the existing loop guard and a per-checkout repeat count. No test-result cache.
