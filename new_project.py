@@ -14,7 +14,7 @@ SCAFFOLDS = {
     "nextjs": [
         *("bun", "x", "create-next-app@16.4.0", ".", "--ts", "--app", "--use-bun"),
         *("--biome", "--tailwind", "--no-src-dir", "--import-alias", "@/*"),
-        *("--disable-git", "--no-agent-feedback", "--yes"),
+        *("--disable-git", "--no-agent-feedback", "--skip-install", "--yes"),
     ],
     "opennext": [
         *("bun", "x", "create-cloudflare@2.73.3", "."),
