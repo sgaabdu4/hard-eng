@@ -838,22 +838,25 @@ def scanner_result(
         except ValueError as error:
             print(error)
     elif scanner in FINDING_READERS:
-        for line in FINDING_READERS[scanner](path)[:FINDING_LIMIT]:
-            print(line)
+        lines = FINDING_READERS[scanner](path)
+        if (more := len(lines) - FINDING_LIMIT) > 0:
+            lines[FINDING_LIMIT:] = [f"{more} more findings in {path}"]
+        for line in lines:
+            print(f"{gate['name']}: {line}")
 
 
 def commit_sha(item: JsonObject) -> str:
     prints = item.get("partialFingerprints")
     sha = prints.get("commitSha") if isinstance(prints, dict) else None
-    return sha[:12] if isinstance(sha, str) else ""
+    return f" in commit {sha[:12]}" if isinstance(sha, str) and sha else ""
 
 
 def gitleaks_findings(path: Path) -> list[str]:
     try:
         results = json.loads(path.read_text())["runs"][0]["results"]
         return [
-            f"{item['ruleId']} {place['artifactLocation']['uri']} "
-            f"{place['region']['startLine']} {commit_sha(item)}".rstrip()
+            f"{item['ruleId']} {place['artifactLocation']['uri']}:"
+            f"{place['region']['startLine']}{commit_sha(item)}"
             for item in results
             for place in [item["locations"][0]["physicalLocation"]]
         ]

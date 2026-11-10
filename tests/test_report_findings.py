@@ -48,7 +48,7 @@ def test_a_failed_secret_scan_names_rule_file_and_line(
     path = tmp_path / "gitleaks.sarif"
     path.write_text(json.dumps(report))
     output = failed("gitleaks", path, tmp_path, capsys)
-    assert "github-pat main.py 5" in output
+    assert output == "scan: github-pat main.py:5 in commit 000000000000\n"
     assert token not in output
     assert "ghp_" not in output
 
@@ -76,7 +76,7 @@ def test_a_failed_react_doctor_gate_prints_its_findings(
     path = tmp_path / "react-doctor.json"
     path.write_text(json.dumps(report))
     output = failed("react-doctor", path, tmp_path, capsys)
-    assert "src/List.tsx:6 no-derived-state" in output
+    assert "scan: src/List.tsx:6 no-derived-state" in output
     assert "src/List.tsx no-array-index-as-key" in output
     assert "no-derived-state" in output
     assert "Do not copy a prop into state" in output
@@ -161,7 +161,10 @@ def test_a_secret_found_in_history_names_its_commit(
     path = tmp_path / "history.sarif"
     path.write_text(json.dumps(sarif))
     lines = failed("gitleaks", path, tmp_path, capsys).splitlines()
-    assert lines == ["github-pat a.py 2 0123456789ab", "github-pat a.py 2"]
+    assert lines == [
+        "scan: github-pat a.py:2 in commit 0123456789ab",
+        "scan: github-pat a.py:2",
+    ]
 
 
 def test_the_findings_of_all_kinds_stop_at_twenty(
@@ -175,7 +178,9 @@ def test_the_findings_of_all_kinds_stop_at_twenty(
             {"check": {"unused_exports": exports}, "dupes": {"clone_groups": clones}}
         )
     )
-    assert len(failed("fallow", path, tmp_path, capsys).splitlines()) == 20
+    lines = failed("fallow", path, tmp_path, capsys).splitlines()
+    assert len(lines) == 21
+    assert lines[-1] == f"scan: 40 more findings in {path}"
 
 
 @pytest.mark.parametrize("scanner", ["gitleaks", "react-doctor", "fallow"])
