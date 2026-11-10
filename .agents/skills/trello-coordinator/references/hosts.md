@@ -27,6 +27,17 @@ Load in every run, for the schedule check and the pause check, and to start a wo
 - Builder after a planner on the same card = `delegate_task` without `isolation`; the brief names the planner's worktree path from `handover.md` and says to work only there. Start it only after the planner has ended.
 - Stalls = read worker threads; follow each task's own wake-up instead of polling. Cancel = `task_cancel`.
 
+### Another machine holds the claim
+
+`check` printed `heldElsewhere` → the coordinator runs on another machine now. Delete this host's `timer` and `wake` (T3 Code: `delete_scheduled_task`; other hosts: remove the OS timer), end the run, and tell the owner once, with the `heldSince` time. This host stays off until the owner orders a move back.
+
+Move to a new machine = only on the owner's order, on the new machine, in this order:
+1. Save the key and token there ([missing key or token](#missing-key-or-token)).
+2. Run `takeover`; it prints `tookOver`.
+3. Run the skill; the host's schedule check creates `timer` and `wake` there.
+
+The old machine stops by itself at its next `check`. A dead machine needs the same three steps; comments posted since its last `finish` can look like the owner's, so read those cards before answering.
+
 ### Missing key or token
 
 Ask with `request_secret`, `delivery: "file"`, one value at a time, key first. Then `save-secret <name> <file>` with the file path given, and `probe`. Copy each popup text exactly; fill `<account>` from `trello.json`.

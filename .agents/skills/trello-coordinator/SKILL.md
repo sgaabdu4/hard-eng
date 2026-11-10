@@ -7,7 +7,7 @@ description: Run a repository's Trello board as its coordinator - answer every c
 
 - Setup = tracked `trello.json` (no secrets; `{"board": "<board link>"}` is enough) + `.env.trello.local` with `TRELLO_KEY` + `TRELLO_TOKEN`. Key or token missing → [ask for it](references/hosts.md#missing-key-or-token); `save-secret` also makes git ignore the file.
 - Project edits to this skill = commit them; Hard Eng updates add release lines around them. Same lines changed both sides → the update stops and names the file.
-- One coordinator thread per board; the run lease (`check` … `finish <runId>`) enforces it. Ordinary coding threads never load this skill.
+- One coordinator thread per board, on one machine at a time; the run lease (`check` … `finish <runId>`) and the claim on `origin` enforce it. Ordinary coding threads never load this skill.
 - Budget = least human attention, most value. Each message changes what someone does or closes a question they asked; a clean run sends no message.
 
 ## Routes
