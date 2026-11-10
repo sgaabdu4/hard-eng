@@ -14,8 +14,8 @@ from typing import TypedDict, cast
 from urllib.parse import urlparse
 
 from agent_hooks import reject_attribution
-from dependency_graph import read_project_file
 from gate_config import JsonValue
+from project_files import read_project_file
 from ship_evidence import attachment_urls
 
 REPOSITORY_NAME_PART = re.compile(r"[A-Za-z0-9_.-]+")

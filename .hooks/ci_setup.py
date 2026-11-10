@@ -11,8 +11,8 @@ from pathlib import Path
 
 from ci_cache import TOOL_DIRECTORIES, report_cache_problems
 from ci_jobs import migrate_bun_version, migrate_runner_variable, migrate_swift_runner
-from dependency_graph import read_project_file
 from gate_config import GateConfig, Group
+from project_files import read_project_file
 from project_setup import dependency_command
 from tool_setup import RELEASE_AGE_SECONDS
 

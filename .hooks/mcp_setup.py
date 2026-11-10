@@ -9,8 +9,8 @@ import tomllib
 from pathlib import Path
 from urllib.parse import urlparse
 
-from dependency_graph import parse_project_text, read_project_file
 from gate_config import JsonObject, json_file, repository_files
+from project_files import parse_project_text, read_project_file
 
 PATH_SEPARATOR = r"""(?:[/\\]+|['"]\s*/\s*['"])"""
 RETIRED_APPWRITE_REFERENCE = re.compile(

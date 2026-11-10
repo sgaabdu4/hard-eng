@@ -9,7 +9,6 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import NamedTuple
 
-from dependency_graph import read_project_file
 from gate_config import (
     GateConfig,
     Group,
@@ -17,6 +16,7 @@ from gate_config import (
     package_manifests,
     repository_files,
 )
+from project_files import read_project_file
 
 WHITESPACE_RUN = re.compile(r"\s+")
 BLOCK_OR_LINE_COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
