@@ -1,12 +1,17 @@
+import os
+import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import override
+from unittest.mock import Mock
 
+import agent_hooks
 import process_group
 import pytest
-from conftest import gone, running, spawner
+import update_runner
+from conftest import below, gone, running, spawner
 from process_group import Process, process_table, stop_idle_codex_brokers
 
 
@@ -27,7 +32,9 @@ time.sleep(60)
 """
 
 
-def broker(tmp_path: Path, folder: Path) -> tuple[subprocess.Popen[bytes], Path]:
+def broker(
+    tmp_path: Path, folder: Path, launcher: tuple[str, ...] = ()
+) -> tuple[subprocess.Popen[bytes], Path]:
     script = tmp_path / "scripts/app-server-broker.mjs"
     script.parent.mkdir(exist_ok=True)
     script.write_text(BROKER_SCRIPT)
@@ -40,19 +47,13 @@ def broker(tmp_path: Path, folder: Path) -> tuple[subprocess.Popen[bytes], Path]
         "--pid-file",
         str(pid_file),
     ]
-    return start(command, Path(f"{pid_file}.child"), tmp_path), Path(
+    return start([*launcher, *command], Path(f"{pid_file}.child"), tmp_path), Path(
         f"{pid_file}.child"
     )
 
 
 def own_table(*roots: subprocess.Popen[bytes]) -> list[Process]:
-    rows = process_table()
-    mine = {root.pid for root in roots}
-    while True:
-        more = {row.pid for row in rows if row.parent in mine} - mine
-        if not more:
-            return [row for row in rows if row.pid in mine]
-        mine |= more
+    return below(process_table(), {root.pid for root in roots})
 
 
 def ended(process: subprocess.Popen[bytes], child: Path) -> bool:
@@ -71,6 +72,33 @@ def test_stops_broker_without_a_job(tmp_path: Path) -> None:
     process, child = broker(tmp_path, folder)
     assert stop_idle_codex_brokers(own_table(process)) == (1, 2)
     assert ended(process, child)
+
+
+def test_a_session_start_in_a_test_stops_no_broker_that_the_test_did_not_start(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handover = "import subprocess, sys; subprocess.Popen(sys.argv[1:])"
+    launcher, child = broker(
+        tmp_path, tmp_path / "gone", (sys.executable, "-c", handover)
+    )
+    launcher.wait(timeout=30)
+    scripts = str(tmp_path / "scripts")
+    outside = [row.pid for row in process_table() if scripts in row.command]
+    stop = os.kill
+    sent: list[int] = []
+
+    def record(pid: int, _signal: int) -> None:
+        sent.append(pid)
+
+    monkeypatch.setattr(update_runner, "start_update", Mock(return_value="status"))
+    monkeypatch.setattr(os, "kill", record)
+    try:
+        agent_hooks.session_context(repository, {"session_id": "outside"})
+    finally:
+        for pid in (*outside, int(child.read_text())):
+            stop(pid, signal.SIGKILL)
+    assert outside
+    assert not set(sent) & set(outside)
 
 
 def start_job(tmp_path: Path) -> tuple[subprocess.Popen[bytes], Path]:
