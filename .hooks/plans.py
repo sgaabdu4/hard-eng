@@ -622,7 +622,7 @@ def validate_plans(
         path for path in repository_files(root) if is_plan_path(path.relative_to(root))
     ]
     applicable = applicable_plans(root, paths, changed)
-    if not applicable and explicit_stage:
+    if not applicable and explicit_stage and not changed:
         applicable = paths
     if (
         (changed != set() or explicit_stage)

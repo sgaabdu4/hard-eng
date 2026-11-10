@@ -192,3 +192,14 @@ def test_feature_check_sees_plans_the_release_will_check(tmp_path: Path) -> None
     commit(root, "feature code")
     with pytest.raises(ValueError, match="features/old/PLAN.md: Acceptance"):
         validate_plans(root, base="develop", stage="Complete")
+
+
+def test_plan_stage_cannot_reuse_an_old_plan_for_changed_work(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / "PLAN.md").write_text(plan_document())
+    commit(root, "finished work")
+    assert validate_plans(root, stage="Complete") == "Complete"
+    (root / "app.py").write_text("value = 1\n")
+    with pytest.raises(ValueError, match="need an applicable PLAN.md"):
+        validate_plans(root, stage="Complete")
