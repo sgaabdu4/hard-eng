@@ -501,6 +501,42 @@ def test_an_update_refuses_to_replace_a_local_file_git_does_not_track(
     assert "not retried" in (target / update_runner.RESULT_FILE).read_text()
 
 
+@pytest.mark.parametrize("kind", ["untracked", "ignored", "link"])
+def test_an_update_refuses_a_local_file_where_it_needs_a_folder(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    target = private_mcp_release(release, monkeypatch, False)
+    (target / ".mcp.json").unlink()
+    skill = Path(".agents/skills/appwrite-backend")
+    if kind == "link":
+        (target / skill).symlink_to(target / ".agents")
+    else:
+        (target / skill).write_text("mine\n")
+    if kind == "ignored":
+        with (target / ".git/info/exclude").open("a") as exclude:
+            exclude.write(f"{skill}\n")
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert str(skill) in result and "ready on" not in result
+    assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
+    assert (target / skill).is_symlink() == (kind == "link")
+    assert update_runner.apply_update(target) == 0
+    assert "not retried" in (target / update_runner.RESULT_FILE).read_text()
+
+
+def test_an_update_without_a_shipping_policy_uses_the_remote_default_branch(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    remote = target.parent / "origin.git"
+    git(remote, "branch", "-m", "main", "master")
+    git(remote, "symbolic-ref", "HEAD", "refs/heads/master")
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "ready on" in result
+    assert update_runner.NOT_PUBLISHED not in result
+
+
 def test_a_setup_rerun_refuses_to_replace_a_local_file_git_does_not_track(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
