@@ -579,7 +579,11 @@ def _revision(root: Path, reference: str) -> str | None:
 
 def released_plans(root: Path, base: str | None) -> set[str]:
     """Plans changed since the release base, so a feature check sees what the release checks."""
-    tips = {_revision(root, reference) for reference in release_references(root)}
+    references = release_references(root)
+    remote = {
+        _revision(root, name) for name in references if name.startswith("origin/")
+    }
+    tips = remote - {None} or {_revision(root, name) for name in references}
     point = default_branch_point(root)
     if point is None or _revision(root, base or "HEAD") in tips:
         return set()
