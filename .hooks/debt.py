@@ -237,6 +237,7 @@ def record(
     old = load(root) if (root / DEBT_FILE).is_file() else None
     gates: JsonObject = {}
     refused = []
+    left_out: Counter[str] = Counter()
     for group in groups:
         for gate in group["checks"]:
             key = f"{group['path']}/{gate['name']}"
@@ -247,7 +248,10 @@ def record(
                 refused.append(key)
                 continue
             if old is not None:
-                current = still_found(old.get(key, Counter()), current)
+                kept = still_found(old.get(key, Counter()), current)
+                if fresh := by_form(current) - by_form(kept):
+                    left_out[key] = fresh.total()
+                current = kept
             if current:
                 gates[key] = dict(sorted(current.items()))
     if refused and old is None:
@@ -261,6 +265,11 @@ def record(
     print(
         f"Recorded {len(gates)} checks with old findings in {DEBT_FILE}; it can only shrink."
     )
+    if left_out:
+        print(
+            f"Left out {left_out.total()} new findings in {', '.join(left_out)}; "
+            "check fails until they are fixed."
+        )
     return 0
 
 

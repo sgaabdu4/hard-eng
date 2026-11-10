@@ -96,6 +96,22 @@ def test_a_later_adoption_only_drops_lines(tmp_path: Path) -> None:
     assert debt.load(tmp_path) == {"./lint": {"a.py:N x": 1}}
 
 
+def test_adopt_says_how_many_new_findings_it_left_out(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lint: Gate = {"name": "lint", "role": "lint", "command": ["ruff"]}
+    group: Group = {"path": ".", "checks": [lint]}
+    assert debt.record(tmp_path, [group], {"./lint"}, {"./lint": "a.py:1 x\n"}) == 0
+    assert "Left out" not in capsys.readouterr().out
+    more = {"./lint": "a.py:1 x\nb.py:1 y\nc.py:1 z\n"}
+    assert debt.record(tmp_path, [group], {"./lint"}, more) == 0
+    said = capsys.readouterr().out
+    assert "Recorded 1 checks with old findings in hard-eng.debt.json" in said
+    assert (
+        "Left out 2 new findings in ./lint; check fails until they are fixed." in said
+    )
+
+
 NEVER_DEBT = ["tests", "lockfiles", "secrets-files", "secrets-history"]
 
 
