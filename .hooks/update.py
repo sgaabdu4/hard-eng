@@ -816,7 +816,7 @@ def update(root: Path, repair: bool = False, *, remember: Path | None = None) ->
         if repair or local_generation(root):
             return repair_installation(root, previous)
         return repair_current_hook(root, previous)
-    attempt = update_attempt(root, revision) if remember else None
+    attempt = update_attempt(current_head(root), revision) if remember else None
     if attempt is not None and remember and (known := known_failure(remember, attempt)):
         return known
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:

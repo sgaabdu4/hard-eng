@@ -400,16 +400,9 @@ def locked_update(root: Path, repair: bool = False) -> str:
         return prepare_update(root, repair)
 
 
-def update_attempt(root: Path, revision: str) -> str:
-    """What a refused update would see again: the base tip it builds on and the local inputs."""
-    digest = hashlib.sha256(
-        subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root)
-    )
-    for name in LOCAL_INPUTS:
-        path = root / name
-        if path.is_file():
-            digest.update(name.encode() + b"\0" + path.read_bytes())
-    return f"{revision} {digest.hexdigest()}"
+def update_attempt(head: str, revision: str) -> str:
+    """What a refused update would see again: the release and the base tip it builds on."""
+    return f"{revision} {hashlib.sha256(head.encode()).hexdigest()}"
 
 
 def known_failure(root: Path, attempt: str) -> str | None:
@@ -601,6 +594,9 @@ def build_update(root: Path, base: str, repair: bool) -> str:
         )
         try:
             use_own_hooks(root, candidate)
+            for name in LOCAL_INPUTS:
+                if (candidate / name).is_symlink():
+                    (candidate / name).unlink()
             outcome = update(candidate, repair, remember=None if repair else root)
             revision = installed_revision(candidate)
             landed = landed_commit(candidate, tip, f"Update Hard Eng to {revision}")
@@ -616,6 +612,7 @@ def build_update(root: Path, base: str, repair: bool) -> str:
             )
     if landed is None or not isinstance(revision, str):
         return outcome
+    refuse_untracked_overlap(root, tip, landed[0], revision, repair)
     # Work committed or checked out on the branch during the build stays.
     if branch_worktree(root) or not set_update_branch(root, landed[0], expected):
         return (
@@ -623,6 +620,36 @@ def build_update(root: Path, base: str, repair: bool) -> str:
             f"rerun `python3 .hooks/hard-eng.py update` once that work is finished."
         )
     return ready_message(revision)
+
+
+def refuse_untracked_overlap(
+    root: Path, tip: str, landed: str, revision: str, repair: bool
+) -> None:
+    """The candidate never held this checkout's ignored or untracked files, so a pull could replace them."""
+    from update import local_state
+
+    changed = subprocess.check_output(
+        ["git", "diff", "--name-only", "--no-renames", "-z", tip, landed],
+        cwd=root,
+        text=True,
+    )
+    names = list(filter(None, changed.split("\0")))
+    if not names:
+        return
+    found = [
+        line[3:].strip('"')
+        for line in local_state(root, names)
+        if line.startswith(("?? ", "!! "))
+    ]
+    if found:
+        error = ValueError(
+            "The update would replace local files that Git does not track: "
+            + ", ".join(found)
+            + "; move them away or commit them, then rerun the update"
+        )
+        if not repair:
+            remember_failure(root, update_attempt(tip, revision), error)
+        raise error
 
 
 def branch_current(root: Path, tip: str) -> bool:
