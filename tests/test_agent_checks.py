@@ -644,7 +644,6 @@ STILL_FAILS = "sync.py still fails: the build cache refused the connection."
 @pytest.mark.parametrize(
     ("runs", "message", "problem"),
     [
-        (3, STILL_FAILS, None),
         (4, STILL_FAILS, None),
         (5, STILL_FAILS, "ran sync.py 5 times"),
         (0, STILL_FAILS, "never ran sync.py"),

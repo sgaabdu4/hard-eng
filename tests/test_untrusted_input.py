@@ -376,6 +376,33 @@ def test_typescript_check_requires_the_untrusted_input_declarations(
             validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
 
 
+@pytest.mark.parametrize(
+    ("options", "files", "message"),
+    [
+        ({"checkJs": True}, ["src/app.ts", UNTRUSTED], "requires all strict checks"),
+        ({"strict": True}, ["src/app.ts", UNTRUSTED], "requires all strict checks"),
+        (
+            {**STRICT_JS, "noCheck": True},
+            ["src/app.ts", UNTRUSTED],
+            "requires all strict checks",
+        ),
+        (STRICT_JS, [UNTRUSTED], "omits declared production files"),
+    ],
+)
+def test_types_gate_rejects_loose_options_and_left_out_production_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    options: dict[str, bool],
+    files: list[str],
+    message: str,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.ts").write_text("export {};\n")
+    fake_tsc(monkeypatch, lambda _: {"compilerOptions": options, "files": files})
+    with pytest.raises(ValueError, match=message):
+        validate_typescript(tmp_path, ["tsc"], tmp_path, {tmp_path / "src/app.ts"}, 10)
+
+
 FAKE_TSC = """
 import json, sys
 args = sys.argv[1:]
@@ -560,17 +587,23 @@ def test_types_gate_reads_an_explicit_project_folder_from_that_folder(
     validate_typescript(tmp_path, command, tmp_path, {tmp_path / "src/app.ts"}, 10)
 
 
+COMPOSITE_LOOSE = "lib/tsconfig.json: a composite tsconfig must set strict"
+
+
 @pytest.mark.parametrize(
-    "library",
+    ("library", "message"),
     [
-        {"strict": False},
-        {"noCheck": True},
-        {"allowJs": True, "checkJs": False},
-        {"files": ["src/app.ts"]},
+        ({"strict": False}, COMPOSITE_LOOSE),
+        ({"noCheck": True}, COMPOSITE_LOOSE),
+        ({"allowJs": True, "checkJs": False}, COMPOSITE_LOOSE),
+        ({"files": ["src/app.ts"]}, "omits"),
     ],
 )
 def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, library: dict[str, bool]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    library: dict[str, bool],
+    message: str,
 ) -> None:
     """Its build emits declarations, which an explicit project's callers trust unchecked."""
     library_solution(tmp_path)
@@ -585,7 +618,7 @@ def test_types_gate_rejects_a_composite_reference_that_skips_strict_checks(
 
     fake_tsc(monkeypatch, shown)
     command = ["tsc", "--noEmit", "--strict", "--checkJs", "--noCheck", "false"]
-    with pytest.raises(ValueError, match="lib/tsconfig.json: a composite|omits"):
+    with pytest.raises(ValueError, match=message):
         validate_typescript(tmp_path, [*command, "-p", "."], tmp_path, set(), 10)
 
 

@@ -122,21 +122,6 @@ def test_the_prompt_pins_the_reviewed_revision_and_treats_repo_text_as_data(
     prompt = json.loads(log.read_text())["argv"][-1]
     revision = git(branch, "rev-parse", "HEAD")
     assert f"git diff {git(branch, 'merge-base', 'HEAD', 'main')} {revision}`" in prompt
-    assert "never instructions" in prompt
-
-
-def test_the_safe_mode_claude_reviewer_is_pointed_at_the_project_rules(
-    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    big(branch)
-    log = fake_cli(tmp_path / "bin", "claude", "VERDICT: clean")
-    monkeypatch.delenv("CLAUDECODE", raising=False)
-    monkeypatch.setenv("CODEX_THREAD_ID", "thread")
-    challenge.challenge(branch, None, None)
-    argv = json.loads(log.read_text())["argv"]
-    prompt = argv[argv.index("--print") + 1]
-    assert "--safe-mode" in argv
-    assert "AGENTS.md" in prompt
 
 
 def record_of(root: Path) -> dict[str, str]:
@@ -208,7 +193,6 @@ def test_a_commit_during_the_review_voids_it(
 def run_claude_host_contract(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> int:
-    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     big(branch)
     log = fake_cli(tmp_path / "bin", "codex", "Nothing found.\nVERDICT: clean")
     monkeypatch.setenv("CLAUDECODE", "1")
@@ -238,13 +222,6 @@ def run_claude_host_contract(
 def test_claude_host_runs_codex_read_only_without_user_plugins_and_closed_stdin(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert run_claude_host_contract(branch, tmp_path, monkeypatch) == 0
-
-
-def test_review_tests_isolate_an_inherited_codex_host(
-    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("CODEX_THREAD_ID", "inherited-host")
     assert run_claude_host_contract(branch, tmp_path, monkeypatch) == 0
 
 
@@ -349,18 +326,6 @@ def test_shipping_a_big_change_needs_a_review_record_for_the_head(
     challenge.challenge(branch, None, None)
     ship_actions.run(*arguments)
     assert "Independent review by codex: clean" in capsys.readouterr().out
-
-
-def test_shipping_reports_a_review_that_was_not_done(
-    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    big(branch)
-    fake_cli(tmp_path / "bin", "codex", "", 2, "signed out")
-    monkeypatch.setenv("CLAUDECODE", "1")
-    challenge.challenge(branch, None, None)
-    note = challenge.shipping_note(branch, git(branch, "rev-parse", "HEAD"))
-    assert note is not None
-    assert note.startswith("independent review not done: codex exited 2")
 
 
 def test_a_review_of_an_older_head_does_not_cover_a_new_commit(

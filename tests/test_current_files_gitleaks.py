@@ -374,14 +374,33 @@ def test_current_files_rejects_an_in_repository_directory_symlink_cycle(
 def test_current_files_propagate_inventory_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    project = repository(tmp_path)
-
-    def fail_inventory(*_args: object, **_kwargs: object) -> None:
-        raise subprocess.CalledProcessError(1, ["git", "ls-files"])
-
-    monkeypatch.setattr(gitleaks_scan.subprocess, "run", fail_inventory)
+    folder = tmp_path / "not-a-repository"
+    folder.mkdir()
 
     with pytest.raises(subprocess.CalledProcessError):
+        run_current_files(
+            scan_command(scanner_script(tmp_path), monkeypatch),
+            folder,
+            30,
+            None,
+            sys.stderr,
+        )
+
+
+def test_an_untracked_nested_repository_stops_the_scan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = repository(tmp_path)
+    nested = project / "vendor" / "nested"
+    nested.mkdir(parents=True)
+    git(nested, "init", "-q")
+    (nested / "secret.txt").write_text("not scanned\n")
+    result = tmp_path / "result.json"
+    monkeypatch.setenv("GITLEAKS_SCOPE_RESULT", str(result))
+
+    with pytest.raises(
+        ValueError, match="Scan source is not a tracked submodule: vendor/nested"
+    ):
         run_current_files(
             scan_command(scanner_script(tmp_path), monkeypatch),
             project,
@@ -389,6 +408,8 @@ def test_current_files_propagate_inventory_failure(
             None,
             sys.stderr,
         )
+
+    assert not result.exists()
 
 
 def test_current_files_preserve_scanner_failure(

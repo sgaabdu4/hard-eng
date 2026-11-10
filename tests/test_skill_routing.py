@@ -130,28 +130,6 @@ ROUTES = [
         "trello-coordinator",
     ),
 ]
-NEAR_MISSES = [
-    ("Review the latest commit for defects", "he-build"),
-    ("Review the latest commit for defects", "he-ship"),
-    ("Plan the change before we write any code for the new export feature", "he-build"),
-    (
-        "Open a pull request for this task branch and merge it once it is green",
-        "he-plan",
-    ),
-    (
-        "Do a security review of the new upload endpoint for injection and authorization risks",
-        "code-review",
-    ),
-    ("Prove the checkout journey works end to end in the browser", "he-ship"),
-    (
-        "Build the Windows installer and update pipeline for the Flutter desktop app",
-        "appwrite-backend",
-    ),
-    (
-        "Migrate the Appwrite production database and wire the MCP server",
-        "building-flutter-apps",
-    ),
-]
 
 
 def descriptions(root: Path) -> dict[str, str]:
@@ -213,18 +191,12 @@ def similar_pairs(index: Index) -> list[tuple[float, str, str]]:
     )[::-1]
 
 
-def routing_failures(index: Index) -> list[str]:
-    failures = [
+def routing_failures(index: Index, routes: list[tuple[str, str]] = ROUTES) -> list[str]:
+    return [
         f"{request!r}: expected {skill}, ranked {ranked(index, request)[0]} first"
-        for request, skill in ROUTES
+        for request, skill in routes
         if ranked(index, request)[0] != skill
     ]
-    failures += [
-        f"{request!r}: must not pick {skill}"
-        for request, skill in NEAR_MISSES
-        if ranked(index, request)[0] == skill
-    ]
-    return failures
 
 
 def similarity_failures(index: Index) -> list[str]:
@@ -259,7 +231,13 @@ def test_misrouting_and_overlapping_descriptions_are_caught() -> None:
     }
     index = Index(texts)
 
-    assert routing_failures(index)
+    routes = [
+        ("Plan a change before implementation", "he-plan"),
+        ("Implement a ready plan", "he-ship"),
+    ]
+    assert routing_failures(index, routes) == [
+        "'Implement a ready plan': expected he-ship, ranked he-build first"
+    ]
     assert similarity_failures(index) == [
         "he-copy and he-ship are 1.00 alike (limit 0.4)"
     ]

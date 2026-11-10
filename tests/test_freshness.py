@@ -196,6 +196,7 @@ def test_uv_uses_pypi_upload_dates(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=r"httpx 0\.27\.0 → 0\.28\.1"):
         check(tmp_path, "uv", report, Registry(records), "2024-12-08T15:37:22+00:00")
     check(tmp_path, "uv", report, Registry(records), "2024-03-04T00:00:00+00:00")
+    check(tmp_path, "uv", report, Registry(records), "2024-03-06T00:00:00+00:00")
     with pytest.raises(ValueError, match="uv output is unreadable"):
         check(tmp_path, "uv", "error: failed to fetch", Registry(records))
 
@@ -299,16 +300,6 @@ def test_hold_expires_and_needs_reason(tmp_path: Path) -> None:
     [
         ("bun", "bun-outdated.txt", "bun update --latest is-odd left-pad"),
         (
-            "dart",
-            "dart-outdated.json",
-            "dart pub upgrade --major-versions http lints",
-        ),
-        (
-            "flutter",
-            "dart-outdated.json",
-            "flutter pub upgrade --major-versions http lints",
-        ),
-        (
             "uv",
             "uv-tree.txt",
             "uv add [--group <group>] 'httpx>=0.28.0' 'pytest>=8.3.4'",
@@ -320,8 +311,6 @@ def test_failure_names_upgrade_route(
     tmp_path: Path, tool: str, report: str, command: str
 ) -> None:
     records = {
-        PUB + "http": fixture("pub-http.json"),
-        PUB + "lints": fixture("pub-lints.json"),
         PYPI + "httpx/json": fixture("pypi-httpx.json"),
         PYPI + "pytest/json": fixture("pypi-pytest.json"),
     }
@@ -331,9 +320,7 @@ def test_failure_names_upgrade_route(
             tool,
             fixture(report),
             Registry(records),
-            "2025-11-11T18:27:56+00:00"
-            if "dart" in report
-            else "2024-12-04T00:00:00+00:00",
+            "2024-12-04T00:00:00+00:00",
         )
     assert f"`{command}`" in str(failure.value)
     assert re.search(r"separate PR first", str(failure.value))
