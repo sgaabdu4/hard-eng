@@ -510,6 +510,13 @@ def installed_revision(root: Path) -> object:
         return None
 
 
+def lookup_failure(found: "subprocess.CompletedProcess[str]") -> subprocess.SubprocessError:
+    reason = (found.stderr or "").strip().splitlines()[-1:]
+    return subprocess.SubprocessError(
+        f"git ls-remote exited {found.returncode}" + (f": {reason[0]}" if reason else "")
+    )
+
+
 def update_base(root: Path) -> str:
     from shipping import load_policy
 
@@ -535,7 +542,7 @@ def update_base(root: Path) -> str:
         timeout=120,
     )
     if found.returncode != 0:
-        raise subprocess.SubprocessError(f"git ls-remote exited {found.returncode}")
+        raise lookup_failure(found)
     for line in found.stdout.splitlines():
         if line.startswith("ref: refs/heads/"):
             return line.partition("\t")[0].removeprefix("ref: refs/heads/")
@@ -606,11 +613,12 @@ def published(root: Path, base: str) -> bool:
         ["git", "ls-remote", "--exit-code", "--heads", "origin", base],
         cwd=root,
         capture_output=True,
+        text=True,
         check=False,
         timeout=120,
     )
     if found.returncode not in {0, 2}:
-        raise subprocess.SubprocessError(f"git ls-remote exited {found.returncode}")
+        raise lookup_failure(found)
     return found.returncode == 0
 
 

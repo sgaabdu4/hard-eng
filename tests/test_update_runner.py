@@ -705,3 +705,20 @@ def test_the_note_says_pull_when_the_update_is_already_on_the_base(
     note = update_runner.freshness_note(target)
     assert "already on main" in note and "rebase" in note
     assert "update-pr" not in note
+
+
+def test_a_failed_remote_lookup_keeps_gits_reason(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    git(target, "remote", "set-url", "origin", str(target.parent / "gone.git"))
+    lookup = subprocess.run(
+        ["git", "ls-remote", "origin"],
+        cwd=target,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    reason = lookup.stderr.strip().splitlines()[-1]
+    assert update_runner.apply_update(target) == 0
+    assert reason in (target / update_runner.RESULT_FILE).read_text()
