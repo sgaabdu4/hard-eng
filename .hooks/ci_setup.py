@@ -12,6 +12,7 @@ from pathlib import Path
 from ci_cache import TOOL_DIRECTORIES, report_cache_problems
 from ci_jobs import migrate_bun_version, migrate_runner_variable, migrate_swift_runner
 from gate_config import GateConfig, Group
+from project_files import read_project_file
 from project_setup import dependency_command
 from tool_setup import RELEASE_AGE_SECONDS
 
@@ -79,7 +80,7 @@ BOOTSTRAP_TOOLS = ["uv@latest", "python@3.12"]
 def bun_specification(root: Path, package: Group, groups: list[Group]) -> str:
     """Reuse the pin of an established workspace dependency-install owner."""
     directory = root / package["path"]
-    manifest = json.loads((directory / "package.json").read_text())
+    manifest = read_project_file(directory / "package.json", root)
     if (
         "packageManager" not in manifest
         and not (directory / "bun.lock").exists()
@@ -100,7 +101,7 @@ def bun_specification(root: Path, package: Group, groups: list[Group]) -> str:
             reverse=True,
         )
         if owners and (owners[0] / "package.json").is_file():
-            manifest = json.loads((owners[0] / "package.json").read_text())
+            manifest = read_project_file(owners[0] / "package.json", root)
     declared = manifest.get("packageManager", "bun@latest")
     if isinstance(declared, str) and not declared.startswith("bun@"):
         declared = "bun@latest"

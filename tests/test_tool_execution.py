@@ -587,7 +587,7 @@ def test_package_script_dart_boundary_gate_checks_native_configuration(
         return json.dumps({"config": {"boundaries": []}})
 
     monkeypatch.setattr(subprocess, "check_output", native_config)
-    with pytest.raises(ValueError, match="nonempty project from/disallow prefixes"):
+    with pytest.raises(ValueError, match="Dart boundaries are missing or not usable"):
         runner.prepare_command(group, gate, 5)
     assert calls == [["dart-decimate", "config", ".", "--format", "json"]]
 

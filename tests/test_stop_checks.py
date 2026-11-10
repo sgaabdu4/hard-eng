@@ -275,7 +275,7 @@ def test_stop_keeps_a_failed_gate_whose_name_another_package_had_forgiven(
         "print('FAIL types (exit 1; elapsed 1.0s) @ web')\n"
         "raise SystemExit(1)\n",
     )
-    assert reason.startswith("Failed gates: types\n")
+    assert reason.startswith("Failed gates: types @ web\n")
     assert "web finding" in reason
     assert "old api finding" not in reason
 
@@ -299,6 +299,42 @@ def test_stop_shows_the_new_debt_findings_of_the_package_whose_output_it_shows(
     summary = agent_hooks.failure_summary(log + capsys.readouterr().out)
     assert "  new in api\n" in summary
     assert "new in web" not in summary
+
+
+def test_stop_shows_the_adopt_step_when_recorded_lines_are_fixed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lint: Gate = {"name": "lint", "role": "lint", "command": ["lint"]}
+    group: Group = {"path": ".", "checks": [lint]}
+    recorded = "a.py:3:1: F841 unused x\nb.py:2:1: F841 unused y\n"
+    assert debt.record(tmp_path, [group], {"./lint"}, {"./lint": recorded}) == 0
+    output = "b.py:2:1: F841 unused y\n"
+    printed = f"OUTPUT ./lint\n{output}FAIL lint (exit 1; elapsed 1.0s) @ .\n"
+    assert debt.judge(tmp_path, group, lint, True, output) is True
+    summary = agent_hooks.failure_summary(printed + capsys.readouterr().out)
+    step = "run `python3 .hooks/hard-eng.py adopt`"
+    assert f"FAIL lint @ .: 1 recorded lines are fixed; {step}" in summary
+    assert debt.record(tmp_path, [group], {"./lint"}, {"./lint": output}) == 0
+    assert debt.judge(tmp_path, group, lint, True, output) is False
+
+
+def test_stop_text_has_no_link_codes() -> None:
+    biome = (Path(__file__).parent / "fixtures/debt/biome-two.txt").read_text()
+    assert "\x1b]8;;https://biomejs.dev" in biome
+    log = f"OUTPUT ./lint\n{biome}FAIL lint (exit 1; elapsed 1.0s) @ .\n"
+    summary = agent_hooks.failure_summary(log)
+    assert "\x1b" not in summary
+    assert "lint/suspicious/noVar" in summary
+
+
+def test_stop_names_the_package_of_each_failed_gate() -> None:
+    log = "".join(
+        f"OUTPUT {name}/lint\n{name} finding\nFAIL lint (exit 1; elapsed 1.0s) @ {name}\n"
+        for name in ("alpha", "beta")
+    )
+    assert agent_hooks.failure_summary(log).startswith(
+        "Failed gates: lint @ alpha, lint @ beta\n"
+    )
 
 
 def test_stop_text_has_no_colour_codes(repository: Path) -> None:

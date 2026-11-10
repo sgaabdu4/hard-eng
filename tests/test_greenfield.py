@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -18,7 +19,7 @@ from gate_config import (
     validate_required_checks,
 )
 from plans import validate_plans
-from python_setup import python_roots
+from python_setup import known_first_party, python_roots
 from test_plans import edit, sized_branch
 from test_setup import repository
 
@@ -238,8 +239,9 @@ def test_python_code_added_after_setup_must_join_the_checked_sources(
         validate_required_checks(tmp_path, config)
     config["packages"][0]["sources"].append("calc.py")
     validate_required_checks(tmp_path, config)
-    config["packages"][0]["sources"] = ["."]
-    validate_required_checks(tmp_path, config)
+    for listed in (["."], ["./main.py", "./calc.py"], ["./"]):
+        config["packages"][0]["sources"] = listed
+        validate_required_checks(tmp_path, config)
 
 
 def test_the_missing_imports_message_gives_a_gate_and_a_block_that_pass(
@@ -301,13 +303,19 @@ def test_javascript_and_dart_code_added_after_setup_must_join_the_checked_source
     validate_required_checks(tmp_path, config)
     (tmp_path / added).write_text("export const b = 2;\n")
     folder = Path(added).parts[0]
-    step = "`sources` list in hard-eng.gates.json; tests must then cover its files"
+    step = "`sources` list in hard-eng.gates.json. .*Tests must then cover that code"
     with pytest.raises(ValueError, match=f"outside its sources: {folder};.*{step}"):
         validate_required_checks(tmp_path, config)
     validate_required_checks(tmp_path, config, starting=True)
     config["packages"][0]["sources"].append(folder)
     validate_required_checks(tmp_path, config)
-    for listed in (["."], [first, added], [Path(first).parts[0], added]):
+    top = Path(first).parts[0]
+    for listed in (
+        ["."],
+        [f"./{top}", f"{folder}/"],
+        [first, added],
+        [top, added],
+    ):
         config["packages"][0]["sources"] = listed
         validate_required_checks(tmp_path, config)
     (tmp_path / added).with_stem("other").write_text("export const c = 3;\n")
@@ -372,3 +380,102 @@ def test_failed_vulnerability_scan_names_the_vulnerable_packages(
     monkeypatch.setattr(runner, "ROOT", tmp_path)
     assert runner.run_gate(group, gate, 30, threading.Lock()) is True
     assert "lib@1: GHSA-0001, GHSA-0002" in capsys.readouterr().out
+
+
+FIRST_PARTY = "--known-first-party"
+
+
+def dependencies_gate(group: Group) -> Gate:
+    return next(gate for gate in group["checks"] if gate["role"] == "dependencies")
+
+
+@pytest.mark.parametrize("entry", ["src/", "./src"])
+def test_python_setup_reads_a_src_entry_with_a_slash_or_a_dot_as_src(
+    tmp_path: Path, entry: str
+) -> None:
+    library = tmp_path / "src/mylib"
+    library.mkdir(parents=True)
+    (library / "__init__.py").write_text("")
+    (library / "core.py").write_text("")
+    command = ["uv", "run", "--no-sync", "--with", "deptry", "deptry", "."]
+    gate: Gate = {"name": "dependencies", "role": "dependencies", "command": command}
+    package: Group = {
+        "path": ".",
+        "language": "python",
+        "sources": [entry],
+        "checks": [gate],
+    }
+    assert python_roots(tmp_path, package) == ["mylib"]
+    known_first_party(tmp_path, package)
+    assert dependencies_gate(package)["command"] == [*command, FIRST_PARTY, "mylib"]
+    known_first_party(tmp_path, package)
+    assert dependencies_gate(package)["command"] == [*command, FIRST_PARTY, "mylib"]
+
+
+def test_a_src_layout_package_that_imports_itself_passes_the_dependencies_gate(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    build = '[build-system]\nrequires = ["uv_build"]\nbuild-backend = "uv_build"\n'
+    uv_project(tmp_path, PROJECT.replace("fixture", "mylib") + build)
+    library = tmp_path / "src/mylib"
+    library.mkdir(parents=True)
+    (library / "__init__.py").write_text("def hello() -> str:\n    return 'hi'\n")
+    (library / "cli.py").write_text("from mylib import hello\n\nvalue = hello()\n")
+    installer.install(tmp_path)
+    gates = tmp_path / "hard-eng.gates.json"
+    older = json.loads(gates.read_text())
+    command = dependencies_gate(older["packages"][0])["command"]
+    assert command[-2:] == ["--known-first-party", "mylib"]
+    del command[-2:]
+    gates.write_text(json.dumps(older))
+    installer.install(tmp_path)
+    group = json.loads(gates.read_text())["packages"][0]
+    gate = dependencies_gate(group)
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is False
+    assert "PASS dependencies" in capsys.readouterr().out
+    second = tmp_path / "src/extra"
+    second.mkdir()
+    (second / "__init__.py").write_text("NAME = 'extra'\n")
+    (second / "use.py").write_text("from extra import NAME\n\nvalue = NAME\n")
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is True
+    assert "DEP001 'extra'" in capsys.readouterr().out
+    grown = json.loads(gates.read_text())
+    dependencies_gate(grown["packages"][0])["command"] += [FIRST_PARTY, "vendored"]
+    gates.write_text(json.dumps(grown))
+    installer.install(tmp_path)
+    group = json.loads(gates.read_text())["packages"][0]
+    gate = dependencies_gate(group)
+    names = [FIRST_PARTY, "mylib", FIRST_PARTY, "vendored", FIRST_PARTY, "extra"]
+    assert gate["command"][-6:] == names
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is False
+    assert "PASS dependencies" in capsys.readouterr().out
+    (tmp_path / "script.py").write_text("import yaml_missing_package\n")
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is True
+    assert "DEP001 'yaml_missing_package'" in capsys.readouterr().out
+
+
+def test_the_dart_sources_message_gives_a_step_that_passes(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "bun.lock").unlink()
+    (tmp_path / "pubspec.yaml").write_text("name: app_fixture\n")
+    (tmp_path / "pubspec.lock").touch()
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/main.dart").write_text("void main() {}\n")
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
+    (tmp_path / "tool").mkdir()
+    (tmp_path / "tool/build.dart").write_text("void build() {}\n")
+    with pytest.raises(ValueError, match="outside its sources: tool;") as refusal:
+        validate_required_checks(tmp_path, config)
+    step = re.search(
+        r"move each under lib/ \(for example (\w+) to (lib/\1)\)", str(refusal.value)
+    )
+    assert step is not None
+    (tmp_path / step[1]).rename(tmp_path / step[2])
+    validate_required_checks(tmp_path, config)

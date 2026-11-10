@@ -12,7 +12,6 @@ from gate_config import (
     changed_files,
     repository_files,
 )
-from shipping import DELIVERY_TARGET_LINE, ShippingError, load_policy, target_problem
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
@@ -487,13 +486,10 @@ def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
 def _validate_shipping(root: Path, path: Path, status: str) -> None:
     content = path.read_text()
     if status in {"Ready", "Complete"} and DELIVERY_TARGET_FIELD.search(content):
-        policy = load_policy(root)
-        target = DELIVERY_TARGET_LINE.search(plan_sections(content)["Verification"])
-        if (
-            policy is not None
-            and target
-            and (problem := target_problem(target[1], policy["delivery"]))
-        ):
+        from shipping import plan_target_problem
+
+        verification = plan_sections(content)["Verification"]
+        if problem := plan_target_problem(root, verification):
             raise ValueError(problem)
 
 
@@ -539,6 +535,8 @@ def _git_output(root: Path, *args: str) -> str:
 
 
 def release_references(root: Path) -> tuple[str, ...]:
+    from shipping import ShippingError, load_policy
+
     try:
         policy = load_policy(root, required=False)
     except ShippingError:

@@ -16,6 +16,7 @@ from gate_config import (
     package_manifests,
     repository_files,
 )
+from project_files import read_project_file
 
 WHITESPACE_RUN = re.compile(r"\s+")
 BLOCK_OR_LINE_COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
@@ -189,7 +190,9 @@ def local_plugin_folders(root: Path, app: Path, path: str) -> list[str]:
     """Native folders of the path dependencies, whose Swift builds into the app."""
     import yaml
 
-    manifest = yaml.safe_load((root / app / "pubspec.yaml").read_text()) or {}
+    manifest = (
+        read_project_file(root / app / "pubspec.yaml", root, yaml.safe_load) or {}
+    )
     folders: list[str] = []
     for section in ("dependencies", "dev_dependencies", "dependency_overrides"):
         for value in (manifest.get(section) or {}).values():

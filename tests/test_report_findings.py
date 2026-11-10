@@ -118,6 +118,48 @@ def test_a_failed_fallow_gate_prints_its_findings(
     assert "package.json:9 unused_dependencies is-odd" in output
 
 
+def test_a_failed_fallow_gate_prints_findings_that_have_no_path_of_their_own(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    site = {"path": "src/a.ts", "line": 2, "col": 7}
+    script = {"path": "package.json", "line": 11, "col": 0, "script_name": "lint"}
+    edge = {"path": "src/b.ts", "line": 1, "col": 9}
+    check = {
+        "unlisted_dependencies": [
+            {"package_name": "left-pad", "imported_from": [site]}
+        ],
+        "unlisted_binaries": [{"binary_name": "fallow", "used_in": [script]}],
+        "circular_dependencies": [
+            {"files": ["src/a.ts", "src/b.ts"], "length": 2, "line": 1, "edges": [edge]}
+        ],
+    }
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps({"kind": "combined", "check": check, "dupes": {}}))
+    assert failed("fallow", path, tmp_path, capsys).splitlines() == [
+        "scan: src/a.ts:2 unlisted_dependencies left-pad",
+        "scan: package.json:11 unlisted_binaries fallow",
+        "scan: src/a.ts:1 circular_dependencies src/a.ts -> src/b.ts",
+    ]
+
+
+def test_a_fallow_workspace_note_that_fails_the_gate_is_named(
+    tmp_path: Path,
+) -> None:
+    note = {
+        "path": "node_modules",
+        "kind": "node-modules-missing",
+        "message": "'node_modules' does not exist. Run bun install first.",
+        "degrades_analysis": True,
+    }
+    report = json.loads(REPORTS["fallow"])
+    report["workspace_diagnostics"] = [note]
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="node-modules-missing") as error:
+        reports.validate_fallow(path)
+    assert note["message"] in str(error.value)
+
+
 def test_a_failed_fallow_audit_prints_its_findings_and_no_workspace_note(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

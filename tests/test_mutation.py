@@ -189,6 +189,39 @@ def test_failed_mutmut_run_is_reported_instead_of_a_clean_result(
         )
 
 
+def test_changed_functions_with_no_mutants_are_reported_as_no_mutants(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "src/shop").mkdir(parents=True)
+    (tmp_path / "src/shop/price.py").write_text(PRICE)
+    traceback = """\
+Traceback (most recent call last):
+  File "/cache/mutmut/__main__.py", line 983, in _run
+    mutants, data = collect_source_file_mutation_data(mutant_names=mutant_names)
+  File "/cache/mutmut/__main__.py", line 815, in collect_source_file_mutation_data
+    assert filtered_mutants, f"Filtered for specific mutants, but nothing matches\\n\\nFilter: {mutant_names}"
+           ^^^^^^^^^^^^^^^^
+AssertionError: Filtered for specific mutants, but nothing matches
+
+Filter: ('shop.price.x_discount__mutmut_*',)
+"""
+
+    def run(
+        command: list[str], _directory: Path, _deadline: object, output: Path
+    ) -> int:
+        if "results" in command:
+            return 0
+        output.write_text(traceback)
+        return 1
+
+    monkeypatch.setattr(mutation, "run", run)
+    tested, survivors = mutation.python(
+        tmp_path, {"src/shop/price.py": {2}}, ["pytest"], None, tmp_path
+    )
+    mutation.summary("python", tested, survivors, tmp_path)
+    assert capsys.readouterr().out == "python: no mutants on the changed lines.\n"
+
+
 def test_node_failure_keeps_its_error_above_the_stack_frames(tmp_path: Path) -> None:
     log = tmp_path / "log"
     frames = [

@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 from agent_hooks import reject_attribution
 from gate_config import JsonValue
+from project_files import read_project_file
 from ship_evidence import attachment_urls
 
 REPOSITORY_NAME_PART = re.compile(r"[A-Za-z0-9_.-]+")
@@ -310,9 +311,9 @@ def load_policy(root: Path, required: bool = True) -> ShippingPolicy | None:
             raise ShippingError("hard-eng.gates.json is required for shipping")
         return None
     try:
-        payload = json.loads(path.read_text())
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ShippingError("hard-eng.gates.json is invalid") from error
+        payload = read_project_file(path, root)
+    except (OSError, ValueError) as error:
+        raise ShippingError(str(error)) from error
     if not isinstance(payload, dict):
         raise ShippingError("hard-eng.gates.json must be an object")
     if "shipping" not in payload:
@@ -701,6 +702,15 @@ def target_problem(target: str, delivery: list[Delivery]) -> str | None:
     if target.lower() == "merge" and delivery:
         return "configured delivery checks need Delivery target: Deploy"
     return None
+
+
+def plan_target_problem(root: Path, verification: str) -> str | None:
+    """Why the delivery target in a plan's Verification does not fit the shipping policy."""
+    policy = load_policy(root)
+    target = DELIVERY_TARGET_LINE.search(verification)
+    if policy is None or not target:
+        return None
+    return target_problem(target[1], policy["delivery"])
 
 
 def _delivery_scope(

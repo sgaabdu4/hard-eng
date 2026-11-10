@@ -2,11 +2,14 @@
 
 import configparser
 import json
+import os
 import shlex
 import tomllib
+from itertools import pairwise
 from pathlib import Path
 
 from gate_config import Group
+from project_files import parse_project_text
 from project_setup import dependency_command
 
 
@@ -38,6 +41,17 @@ def parallel_pytest(package: Group) -> None:
         ]
 
 
+POETRY_PREFIX = ["poetry", "run", "uv", "run", "--active", "--no-sync"]
+RETIRED_POETRY_PREFIX = ["poetry", "run", "uv", "run", "--no-project", "--active"]
+
+
+def current_poetry_prefix(package: Group) -> None:
+    """`--no-project` lets an interpreter path pinned for uv replace Poetry's environment."""
+    for gate in package["checks"]:
+        if gate["command"][:6] == RETIRED_POETRY_PREFIX:
+            gate["command"] = [*POETRY_PREFIX, *gate["command"][6:]]
+
+
 def python_gate_command(command: list[str], manager: str) -> list[str]:
     packages = {
         "pytest": ["pytest", "pytest-cov"],
@@ -47,10 +61,28 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
     }[command[0]]
     prefix = ["uv", "run", "--no-sync"]
     if manager == "poetry":
-        prefix = ["poetry", "run", "uv", "run", "--no-project", "--active"]
+        prefix = [*POETRY_PREFIX]
     for package in packages:
         prefix.extend(["--with", package, "--upgrade-package", package])
     return [*prefix, *command]
+
+
+def src_children(src: Path) -> list[tuple[str, Path]]:
+    """Name and path of each package or module directly under `src`."""
+    children = []
+    for child in sorted(src.iterdir()):
+        name = child.name if child.is_dir() else child.stem
+        if name.isidentifier() and (
+            (child / "__init__.py").exists()
+            if child.is_dir()
+            else child.suffix == ".py"
+        ):
+            children.append((name, child))
+    return children
+
+
+def is_src(source: str) -> bool:
+    return os.path.normpath(source) == "src"
 
 
 def python_roots(directory: Path, package: Group) -> list[str]:
@@ -60,16 +92,31 @@ def python_roots(directory: Path, package: Group) -> list[str]:
         path = directory / name
         if not path.is_dir():
             continue
-        candidates = [path] if name != "src" else list(path.iterdir())
+        candidates = src_children(path) if is_src(name) else [(path.name, path)]
         roots.update(
-            child.name
-            for child in candidates
+            root
+            for root, child in candidates
             if child.is_dir()
-            and child.name.isidentifier()
+            and root.isidentifier()
             and (child / "__init__.py").exists()
             and any(file != child / "__init__.py" for file in child.rglob("*.py"))
         )
     return sorted(roots)
+
+
+def known_first_party(directory: Path, package: Group) -> None:
+    """A `src` layout package imports itself, and deptry cannot tell it from a dependency."""
+    src = directory / "src"
+    if not any(map(is_src, package["sources"])) or not src.is_dir():
+        return
+    option = "--known-first-party"
+    for gate in package["checks"]:
+        command = gate["command"]
+        if ["deptry", "."] not in [command[i : i + 2] for i in range(len(command))]:
+            continue
+        named = {name for flag, name in pairwise(command) if flag == option}
+        new = [name for name, _ in src_children(src) if name not in named]
+        gate["command"] = [*command, *(arg for name in new for arg in (option, name))]
 
 
 def import_linter_owner(
@@ -173,13 +220,17 @@ def configure_python(
 ) -> None:
     dependency_command(directory, "python")  # Existing configurations need a lock too.
     parallel_pytest(package)
+    current_poetry_prefix(package)
+    known_first_party(directory, package)
     native = directory / "pyrefly.toml"
     project = directory / "pyproject.toml"
+    name = str(project.relative_to(root))
     content = project.read_text()
+    settings = parse_project_text(content, name, tomllib.loads)
     options = (
         tomllib.loads(native.read_text())
         if native.exists()
-        else tomllib.loads(content).get("tool", {}).get("pyrefly")
+        else settings.get("tool", {}).get("pyrefly")
     )
     if options is not None:
         if (
@@ -190,11 +241,10 @@ def configure_python(
                 f"{package['path']}: existing Pyrefly settings need strict checking; preserve them and ask before changing them"
             )
     else:
-        changes[str(project.relative_to(root))] = (
+        changes[name] = (
             content
             + '\n[tool.pyrefly]\npreset = "strict"\ncheck-unannotated-defs = true\n'
         )
-    name = str(project.relative_to(root))
     current = test_import_path(directory, package, changes.get(name, content))
     updated = import_configuration(directory, package, current)
     if updated != content:

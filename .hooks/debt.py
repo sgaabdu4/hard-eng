@@ -8,16 +8,19 @@ from collections.abc import Callable
 from pathlib import Path
 
 from gate_config import SOURCE_FILE, Gate, Group, JsonObject
+from project_files import read_project_file
 
 WORD_CHARACTER = re.compile(r"\w")
 DIGIT_RUN = re.compile(r"\d+")
 COUNTED_WORDS = re.compile(r"(?<!\w)N((?: \w+){1,2})")
 WORD = re.compile(r"\w+")
+TIME = re.compile(r"(?<!\w)N(?:\.N)?(?:ns|[µu]s|ms|s)(?!\w)")
+CODE_FRAME = re.compile(r"[> ]*(?:N[ ]*)*[│|]")
 
 DEBT_FILE = "hard-eng.debt.json"
 # Failing tests, broken installs and leaked secrets are never old findings to keep.
 NEVER = {"tests", "lockfiles", "secrets-files", "secrets-history"}
-ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 RUNNER_LINES = re.compile(
     r"^(warning: (The `UV_|`VIRTUAL_ENV=)|mise |(Downloading|Downloaded|Installed|Uninstalled"
     r"|Resolved|Prepared|Audited|Building|Built) )"
@@ -115,14 +118,16 @@ def neutral(line: str) -> str:
         return word.group().removesuffix("s").removesuffix("e")
 
     return COUNTED_WORDS.sub(
-        lambda counted: "N" + WORD.sub(singular, counted.group(1)), line
+        lambda counted: "N" + WORD.sub(singular, counted.group(1)),
+        TIME.sub("Ntime", ANSI.sub("", line)),
     )
 
 
 def by_form(lines: Counter[str]) -> Counter[str]:
     forms: Counter[str] = Counter()
     for line, count in lines.items():
-        forms[neutral(line)] += count
+        if not CODE_FRAME.match(form := neutral(line)):
+            forms[form] += count
     return forms
 
 
@@ -142,10 +147,11 @@ def load(root: Path) -> dict[str, Counter[str]]:
     path = root / DEBT_FILE
     if not path.is_file():
         return {}
-    debt = json.loads(path.read_text())
+    debt = read_project_file(path, root)
     gates = debt.get("gates") if isinstance(debt, dict) else None
     if (
-        debt.get("version") != 1
+        not isinstance(debt, dict)
+        or debt.get("version") != 1
         or not isinstance(gates, dict)
         or not all(
             isinstance(lines, dict)
@@ -176,7 +182,7 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
         return True
     if fixed := by_form(debt) - by_form(current):
         print(
-            f"FAIL {gate['name']}: {fixed.total()} recorded lines are fixed; run "
+            f"FAIL {gate['name']} @ {group['path']}: {fixed.total()} recorded lines are fixed; run "
             f"`python3 .hooks/hard-eng.py adopt` to drop them from {DEBT_FILE}"
         )
         return True

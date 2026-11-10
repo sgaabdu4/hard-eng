@@ -316,7 +316,7 @@ def test_dart_boundary_gate_requires_blocking_project_rules(
             validate_dart_boundaries(command, tmp_path, 5)
         else:
             with pytest.raises(
-                ValueError, match="nonempty project from/disallow prefixes"
+                ValueError, match="Dart boundaries are missing or not usable"
             ):
                 validate_dart_boundaries(command, tmp_path, 5)
 

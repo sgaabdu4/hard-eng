@@ -129,7 +129,7 @@ def require_listed_sources(
     for group in groups:
         language = group["language"]
         directory = root / group["path"]
-        listed = tuple(group.get("sources", []))
+        listed = tuple(os.path.normpath(source) for source in group.get("sources", []))
         if "." in listed:
             continue
         inside = tuple(f"{source}{os.sep}" for source in listed)
@@ -141,12 +141,14 @@ def require_listed_sources(
         ]
         if missing := sorted(source_roots(directory, language, unlisted)):
             label = {"javascript": "JavaScript"}.get(language, language.title())
-            checks = (
-                " and to every check that names them (tests --cov=, annotations, dead-code, duplicates)"
-                if language == "python"
-                else "; tests must then cover its files, and test-only code belongs in test/, tests/ or __tests__/"
-            )
+            add = "add each to that package's `sources` list in hard-eng.gates.json"
+            tests = "Test-only code belongs in test/, tests/ or __tests__/."
+            first = missing[0]
+            steps = {
+                "python": f"{add} and to every check that names them (tests --cov=, annotations, dead-code, duplicates)",
+                "javascript": f"{add}. TypeScript also needs each in the `include` list of the package's TypeScript configuration. Tests must then cover that code. {tests}",
+                "dart": f"move each under lib/ (for example {first} to lib/{first}) and test it there. Or {add}. Tests must then cover that code, and those tests need `test` as a dev dependency and a setup rerun. {tests}",
+            }[language]
             raise ValueError(
-                f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; "
-                f"add each to that package's `sources` list in hard-eng.gates.json{checks}"
+                f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; {steps}"
             )

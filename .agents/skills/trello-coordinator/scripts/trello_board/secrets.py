@@ -63,7 +63,8 @@ def parse_env(content: str) -> dict[str, str]:
 def require_ignored(main: Path) -> None:
     if git(main, "check-ignore", "-q", "--", ENV_NAME).returncode != 0:
         raise TrelloError(
-            f"Git does not ignore {ENV_NAME} in the main checkout; add it to .gitignore"
+            f"Git does not ignore {ENV_NAME} in the main checkout; save the key and "
+            "the token with save-secret, which makes Git ignore the file"
         )
 
 
