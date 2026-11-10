@@ -602,7 +602,7 @@ def run_limited_gate(
             report_args = (gate, report_path, command, directory, timeout)
             scanner_result(result.returncode == 0, scanner, *report_args)
         from process_group import stopped_note
-        from reports import completed_tests, line_coverage, parallel_hint
+        from reports import check_coverage, completed_tests, parallel_hint
 
         if (
             result.returncode == 0
@@ -613,14 +613,7 @@ def run_limited_gate(
         ):
             raise ValueError("No tests actually ran (empty or entirely skipped report)")
         if result.returncode == 0 and coverage_path is not None:
-            covered, total = line_coverage(
-                coverage_path, kind, directory, expected_sources
-            )
-            print(
-                f"Line coverage: {covered}/{total} ({100 * covered / total:.2f}%; minimum 70%)"
-            )
-            if covered * 100 < total * 70:
-                raise ValueError("HE-COVERAGE-MIN: Line coverage is below 70%")
+            check_coverage(coverage_path, kind, directory, expected_sources)
         stop = stopped_note(result.returncode)
         print(
             f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} "

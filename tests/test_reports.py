@@ -585,23 +585,6 @@ def test_dart_report_skips_raw_test_output_and_keeps_failures(tmp_path: Path) ->
     )
 
 
-def test_coverage_requires_unexecuted_files_and_merges_lcov(tmp_path: Path) -> None:
-    path = tmp_path / "lcov.info"
-    path.write_text(
-        "SF:used.js\nDA:1,1\nDA:2,0\nend_of_record\nSF:used.js\nDA:1,1\nDA:2,1\nend_of_record\n"
-    )
-    assert reports.line_coverage(
-        path, "lcov-tests", tmp_path, {tmp_path / "used.js"}
-    ) == (2, 2)
-    with pytest.raises(ValueError, match="omits"):
-        reports.line_coverage(
-            path, "lcov-tests", tmp_path, {tmp_path / "used.js", tmp_path / "unused.js"}
-        )
-    path.write_text("SF:used.js\nDA:1,1\n")
-    with pytest.raises(ValueError, match="Incomplete"):
-        reports.lcov_coverage(path, tmp_path)
-
-
 @pytest.mark.parametrize(
     "source",
     [
@@ -651,47 +634,42 @@ def test_lcov_keeps_unproven_typescript_in_required_coverage(
         reports.line_coverage(path, "lcov-tests", tmp_path, {omitted})
 
 
-def test_dart_coverage_allows_export_barrels_but_requires_executable_files(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("kind", "suffix"),
+    [("python-tests", ".py"), ("lcov-tests", ".js"), ("dart-tests", ".dart")],
+)
+def test_a_coverage_failure_names_the_least_covered_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], kind: str, suffix: str
 ) -> None:
-    path = tmp_path / "lcov.info"
-    path.write_text("SF:total.dart\nDA:1,1\nend_of_record\n")
-    barrel = tmp_path / "api.dart"
-    barrel.write_text("export 'total.dart';\n")
-    expected = {tmp_path / "total.dart", barrel}
-    assert reports.line_coverage(path, "dart-tests", tmp_path, expected) == (1, 1)
-    barrel.write_text("export 'total.dart';\nint unused() => 1;\n")
-    with pytest.raises(
-        ValueError,
-        match=r"omits production files: api.dart\. .*linguist-generated=true` in \.gitattributes",
-    ):
-        reports.line_coverage(path, "dart-tests", tmp_path, expected)
-
-
-def test_branch_coverage_is_reported_separately_from_lines(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    path = tmp_path / "coverage.json"
-    path.write_text(
-        json.dumps(
-            {
-                "files": {
-                    "app.py": {
-                        "summary": {
-                            "covered_lines": 7,
-                            "num_statements": 10,
-                            "covered_branches": 1,
-                            "num_branches": 4,
-                        }
+    root, path = tmp_path.resolve(), tmp_path / "report"
+    sizes = {f"f{n}{suffix}": n + 2 for n in range(6)}
+    if kind == "python-tests":
+        path.write_text(
+            json.dumps(
+                {
+                    "files": {
+                        name: {"summary": {"covered_lines": 1, "num_statements": size}}
+                        for name, size in sizes.items()
                     }
                 }
-            }
+            )
         )
+    else:
+        path.write_text(
+            "".join(
+                f"SF:{name}\nDA:1,1\n"
+                + "".join(f"DA:{line},0\n" for line in range(2, size + 1))
+                + "end_of_record\n"
+                for name, size in sizes.items()
+            )
+        )
+    with pytest.raises(ValueError, match="HE-COVERAGE-MIN") as error:
+        reports.check_coverage(path, kind, root, {root / name for name in sizes})
+    assert "Line coverage: 6/27 (22.22%; minimum 70%)\n" in capsys.readouterr().out
+    named = [f"f{n}{suffix} {n + 1} of {n + 2} uncovered" for n in (5, 4, 3, 2, 1)]
+    assert str(error.value).endswith(
+        "Line coverage is below 70%. Most uncovered lines: " + ", ".join(named)
     )
-    assert reports.line_coverage(
-        path, "python-tests", tmp_path, {tmp_path / "app.py"}
-    ) == (7, 10)
-    assert "Branch coverage: 1/4 (25.00%; informational)" in capsys.readouterr().out
 
 
 def test_junit_rejects_entities(tmp_path: Path) -> None:

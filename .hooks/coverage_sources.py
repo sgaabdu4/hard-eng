@@ -1,4 +1,4 @@
-"""Prove omitted TypeScript and Swift files have no runtime content without executing them."""
+"""Read per-file line counts from coverage reports; prove omitted TypeScript and Swift files have no runtime content without executing them."""
 
 import json
 import os
@@ -152,3 +152,74 @@ def require_listed_sources(
             raise ValueError(
                 f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; {steps}"
             )
+
+
+def python_coverage(path: Path, directory: Path) -> dict[Path, tuple[int, int]]:
+    files = {}
+    report = json.loads(path.read_text())
+    entries = report.get("files") if isinstance(report, dict) else None
+    if not isinstance(entries, dict):
+        raise TypeError("Invalid Python coverage files")
+    for name, entry in entries.items():
+        summary = entry.get("summary") if isinstance(entry, dict) else None
+        if not isinstance(summary, dict):
+            raise TypeError("Invalid Python coverage summary")
+        covered, total = summary.get("covered_lines"), summary.get("num_statements")
+        if (
+            type(covered) is not int
+            or type(total) is not int
+            or not 0 <= covered <= total
+        ):
+            raise ValueError("Invalid Python line coverage counts")
+        file = (directory / name).resolve()
+        if file in files:
+            raise ValueError(f"Duplicate Python coverage file: {name}")
+        files[file] = covered, total
+    return files
+
+
+def xccov_coverage(path: Path, directory: Path) -> dict[Path, tuple[int, int]]:
+    """Per-file counts from `xccov view --report --json`; targets share a file."""
+    report = json.loads(path.read_text())
+    targets = report.get("targets") if isinstance(report, dict) else None
+    if not isinstance(targets, list):
+        raise TypeError("Invalid xccov targets")
+    files: dict[Path, tuple[int, int]] = {}
+    for target in targets:
+        for entry in target["files"]:
+            covered, total = entry["coveredLines"], entry["executableLines"]
+            if type(covered) is not int or type(total) is not int:
+                raise TypeError("Invalid xccov line counts")
+            if not 0 <= covered <= total:
+                raise ValueError("Invalid xccov line counts")
+            file = (directory / entry["path"]).resolve()
+            files[file] = max(
+                files.get(file, (0, 0)), (covered, total), key=lambda c: (c[1], c[0])
+            )
+    return files
+
+
+def lcov_coverage(path: Path, directory: Path) -> dict[Path, tuple[int, int]]:
+    files = {}
+    lines = {}
+    source = None
+    for record in path.read_text().splitlines():
+        if record.startswith("SF:"):
+            if source is not None or not record[3:]:
+                raise ValueError("Invalid LCOV source record")
+            source = (directory / record[3:]).resolve()
+            files.setdefault(source, (0, 0))
+        elif record.startswith("DA:"):
+            number, hits, *_ = record[3:].split(",")
+            number, hits = int(number), int(hits)
+            if source is None or number <= 0 or hits < 0:
+                raise ValueError("Invalid LCOV line record")
+            lines[source, number] = lines.get((source, number), False) or hits > 0
+        elif record == "end_of_record":
+            source = None
+    if source is not None:
+        raise ValueError("Incomplete LCOV source record")
+    for (file, _), hit in lines.items():
+        covered, total = files[file]
+        files[file] = covered + hit, total + 1
+    return files
