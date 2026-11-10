@@ -682,7 +682,7 @@ def bounded(text: str, *, tail: bool = False) -> str:
 def failure_summary(log: str) -> str:
     """Failed gate names, then the first failing gate's output from its start."""
     failures = FAILED_COMMAND_LINE.findall(log)
-    failures = [f for f in failures if f"\nDEBT {f[0]}:" not in log]
+    failures = [f for f in failures if f"\nDEBT {f[0]} @ {f[1]}:" not in log]
     if not failures:
         return bounded(log, tail=True)
     heading = "Failed gates: " + ", ".join(dict.fromkeys(n for n, _ in failures)) + "\n"

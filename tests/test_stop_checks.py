@@ -246,7 +246,7 @@ def test_stop_lists_only_gates_with_findings_beyond_the_debt(
         "print('OUTPUT ./lint')\n"
         "print('old lint finding')\n"
         "print('FAIL lint (exit 1; elapsed 1.0s) @ .')\n"
-        "print('DEBT lint: the failure above holds only the 1 lines recorded')\n"
+        "print('DEBT lint @ .: the failure above holds only the 1 lines recorded')\n"
         "print('OUTPUT ./types')\n"
         "print('types noise')\n"
         "print('FAIL types (exit 1; elapsed 1.0s) @ .')\n"
@@ -257,6 +257,25 @@ def test_stop_lists_only_gates_with_findings_beyond_the_debt(
     assert reason.startswith("Failed gates: types\n")
     assert "old lint finding" not in reason
     assert "findings beyond hard-eng.debt.json:\n  new.py:N bad type" in reason
+
+
+def test_stop_keeps_a_failed_gate_whose_name_another_package_had_forgiven(
+    repository: Path,
+) -> None:
+    reason = stop_reason(
+        repository,
+        "print('OUTPUT api/types')\n"
+        "print('old api finding')\n"
+        "print('FAIL types (exit 1; elapsed 1.0s) @ api')\n"
+        "print('DEBT types @ api: the failure above holds only the 1 lines recorded')\n"
+        "print('OUTPUT web/types')\n"
+        "print('web finding')\n"
+        "print('FAIL types (exit 1; elapsed 1.0s) @ web')\n"
+        "raise SystemExit(1)\n",
+    )
+    assert reason.startswith("Failed gates: types\n")
+    assert "web finding" in reason
+    assert "old api finding" not in reason
 
 
 def test_stop_text_has_no_colour_codes(repository: Path) -> None:
