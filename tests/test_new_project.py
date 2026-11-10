@@ -241,6 +241,23 @@ def test_an_earlier_stopped_run_gets_its_files_back_first(tmp_path: Path) -> Non
     assert not waiting.exists()
 
 
+def test_a_stopped_run_never_replaces_a_file_the_repository_now_holds(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    waiting = tmp_path / ".git" / new_project.ASIDE
+    waiting.mkdir()
+    (waiting / "README.md").write_text("old")
+    (waiting / "LICENSE").write_text("MIT\n")
+    (tmp_path / "README.md").write_text("new")
+    with pytest.raises(ValueError, match=r"README\.md.*remove the other"):
+        new_project.create(tmp_path, "vite")
+    assert (tmp_path / "README.md").read_text() == "new"
+    assert (waiting / "README.md").read_text() == "old"
+    assert (tmp_path / "LICENSE").read_text() == "MIT\n"
+    assert not (waiting / "LICENSE").exists()
+
+
 def test_a_kept_ignore_file_with_odd_bytes_keeps_them(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
