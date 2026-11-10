@@ -11,7 +11,8 @@ import subprocess
 import sys
 import tempfile
 import time
-from contextlib import suppress
+from collections.abc import Callable, Generator
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TextIO
 
@@ -98,33 +99,41 @@ def stale_error(root: Path, revision: str) -> ValueError:
     )
 
 
-def source_revisions(root: Path, refs: list[str]) -> list[str | None]:
+@contextmanager
+def source_reader(root: Path) -> Generator[Callable[[str], str | None]]:
+    """One Git process gives the source revision at each ref when it is asked."""
     from update import SOURCE_FILE
 
-    # One Git process answers every ref, so the Stop note costs the same with an update waiting.
-    names = "".join(f"{ref}:{SOURCE_FILE}\n" for ref in refs).encode()
-    rest = subprocess.run(
+    git = subprocess.Popen(
         ["git", "cat-file", "--batch"],
         cwd=root,
-        input=names,
-        capture_output=True,
-        check=False,
-    ).stdout
-    revisions: list[str | None] = []
-    for _ in refs:
-        header, _, rest = rest.partition(b"\n")
-        fields = header.split()
-        revision = None
-        if len(fields) == 3 and fields[2].isdigit():
-            blob, rest = rest[: int(fields[2])], rest[int(fields[2]) + 1 :]
-            with suppress(ValueError, AttributeError):
-                revision = json.loads(blob).get("revision")
-        revisions.append(revision if isinstance(revision, str) else None)
-    return revisions
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
+    stdin, stdout = git.stdin, git.stdout
+
+    def read(ref: str) -> str | None:
+        if stdin is None or stdout is None:
+            return None
+        name = f"{ref}:{SOURCE_FILE}\n".encode()
+        with suppress(OSError, ValueError, AttributeError):
+            stdin.write(name)
+            stdin.flush()
+            fields = stdout.readline().split()
+            if len(fields) == 3 and fields[2].isdigit():
+                revision = json.loads(stdout.read(int(fields[2]) + 1)).get("revision")
+                return revision if isinstance(revision, str) else None
+        return None
+
+    try:
+        yield read
+    finally:
+        git.communicate()
 
 
 def revision_at(root: Path, ref: str) -> str | None:
-    return source_revisions(root, [ref])[0]
+    with source_reader(root) as read:
+        return read(ref)
 
 
 def shipping_base(root: Path) -> str:
@@ -138,12 +147,13 @@ def shipping_base(root: Path) -> str:
 
 
 def waiting_note(root: Path) -> str | None:
-    base = shipping_base(root)
-    waiting, landed = source_revisions(
-        root, [f"refs/heads/{UPDATE_BRANCH}", f"refs/remotes/origin/{base}"]
-    )
-    if waiting is None or waiting == installed_revision(root):
-        return None
+    # The base is read only when an update waits, so the usual Stop pays for one Git start alone.
+    with source_reader(root) as read:
+        waiting = read(f"refs/heads/{UPDATE_BRANCH}")
+        if waiting is None or waiting == installed_revision(root):
+            return None
+        base = shipping_base(root)
+        landed = read(f"refs/remotes/origin/{base}")
     if landed != waiting:
         return ready_message(waiting)
     return (
