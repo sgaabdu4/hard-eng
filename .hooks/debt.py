@@ -222,6 +222,7 @@ def worktree(root: Path) -> bytes:
 
 def settled_run(root: Path, run: Callable[[], object]) -> None:
     """Run the gates; when they fixed files, record what the fixed code still fails with."""
+    refuse_new_debt(root, None)
     before = worktree(root)
     run()
     if worktree(root) != before:
@@ -272,20 +273,30 @@ def git_file(root: Path, base: str, name: str) -> str | None:
         return None
 
 
-def require_shrink(root: Path, base: str | None) -> None:
-    """HE-DEBT-SHRINK-ONLY: debt appears only with the install and never grows."""
+def refuse_new_debt(root: Path, base: str | None) -> str | None:
+    """HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add the debt file."""
     from plans import default_branch_point
 
-    current = load(root)
     base = base or default_branch_point(root)
-    if not current or base is None:
+    if (
+        base is not None
+        and git_file(root, base, DEBT_FILE) is None
+        and git_file(root, base, SOURCE_FILE) is not None
+    ):
+        raise ValueError(
+            f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings instead"
+        )
+    return base
+
+
+def require_shrink(root: Path, base: str | None) -> None:
+    """HE-DEBT-SHRINK-ONLY: debt appears only with the install and never grows."""
+    current = load(root)
+    if not current:
         return
-    before = git_file(root, base, DEBT_FILE)
+    base = refuse_new_debt(root, base)
+    before = git_file(root, base, DEBT_FILE) if base is not None else None
     if before is None:
-        if git_file(root, base, SOURCE_FILE) is not None:
-            raise ValueError(
-                f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings instead"
-            )
         return
     old = {key: Counter(lines) for key, lines in json.loads(before)["gates"].items()}
     if grown := sorted(
