@@ -386,9 +386,9 @@ def test_background_update_does_not_repeat_a_refusal_until_inputs_change(
     result = target / update_runner.RESULT_FILE
     assert update_runner.apply_update(target) == 0
     assert "secrets-files requires native" in result.read_text()
-    assert "Fix its cause on the base branch" in result.read_text()
+    assert "A fix in tracked files goes on the base branch" in result.read_text()
     assert update_runner.apply_update(target) == 0
-    assert "the base branch has not changed since, so it was not retried" in (
+    assert "it is not retried before 24 hours unless a new release" in (
         result.read_text()
     )
     assert fetch.call_count == 1
@@ -469,6 +469,7 @@ def test_an_update_refuses_to_replace_a_local_file_git_does_not_track(
     assert update_runner.apply_update(target) == 0
     result = (target / update_runner.RESULT_FILE).read_text()
     assert ".mcp.json" in result and "ready on" not in result
+    assert "then run the published setup command to retry" in result
     assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
     assert (target / ".mcp.json").read_text() == PRIVATE_MCP
     assert update_runner.apply_update(target) == 0

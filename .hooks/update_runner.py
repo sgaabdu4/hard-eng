@@ -441,9 +441,9 @@ def known_failure(root: Path, attempt: str) -> str | None:
         return None
     failed = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(saved["at"]))
     return failed_update(
-        f"{saved.get('error')} (at {failed}; the base branch has not changed since, so "
-        "it was not retried; fix the cause on the base branch or run the published "
-        "setup command to retry now)"
+        f"{saved.get('error')} (at {failed}; it is not retried before 24 hours unless "
+        "a new release or a new base-branch commit appears; run the published setup "
+        "command to retry now)"
     )
 
 
@@ -457,8 +457,9 @@ def remember_failure(root: Path, attempt: str, error: Exception) -> None:
 
 def failed_update(error: Exception | str) -> str:
     return (
-        f"Hard Eng update failed: {error}. Fix its cause on the base branch, since "
-        "the update is built from it; cause outside repo → tell user. Installed gates still apply."
+        f"Hard Eng update failed: {error}. Fix that cause first. A fix in tracked files "
+        "goes on the base branch as its own commit, since the update is built from it. "
+        "Cause outside repo → tell user. Installed gates still apply."
     )
 
 
@@ -668,7 +669,7 @@ def refuse_untracked_overlap(
         error = ValueError(
             "The update would replace local files that Git does not track: "
             + ", ".join(found)
-            + "; move them away or commit them, then rerun the update"
+            + "; move them away or commit them, then run the published setup command to retry"
         )
         if not repair:
             remember_failure(root, update_attempt(tip, revision), error)
