@@ -438,7 +438,7 @@ def test_completion_runs_real_command_and_bounds_failure_log(
     "line",
     [
         "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check.",
-        "Hard Eng: quick checks passed; tests run in the full check.",
+        "Hard Eng: quick checks passed; the full check runs the tests and the other gates.",
     ],
 )
 def test_completion_surfaces_only_authoritative_stage_handoffs(

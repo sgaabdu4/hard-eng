@@ -2,7 +2,7 @@
 
 Each Hard Eng rule is defined once here, under a stable ID. Code, tests, skills and docs name the ID instead of restating the rule. `python3 .hooks/hard-eng.py check` fails on a repeated, unknown or retired ID, a `Proof: check` rule without an enforcing source and a test that name it, a `Proof: guidance` rule without a skill or `AGENTS.md` link, and a definition sentence copied into other Markdown.
 
-A project may add its own rules as `REQ-` IDs in `docs/requirements.md`, in the same format. An ID is `HE-` followed by one or more upper-case parts, or `REQ-` followed by two or more, joined by hyphens. A test names an ID in its name string (JavaScript, Dart) or the first line of its docstring (Python). Never reuse an ID; a retired entry keeps its heading and holds only `Status: Retired — use <ID>`.
+A project may add its own rules as `REQ-` IDs in `docs/requirements.md`, in the same format. An ID is a prefix and parts joined by hyphens; each part holds only capital letters and digits. An `HE-` ID has one or more parts, and a `REQ-` ID has two or more. A test names an ID in its name string (JavaScript, Dart) or the first line of its docstring (Python). Never reuse an ID; a retired entry keeps its heading and holds only `Status: Retired — use <ID>`.
 
 ## HE-REQUIREMENT-REGISTRY
 

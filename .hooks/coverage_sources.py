@@ -131,5 +131,5 @@ def require_listed_sources(
             )
             raise ValueError(
                 f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; "
-                f"add each to the package's `sources`{checks}"
+                f"add each to that package's `sources` list in hard-eng.gates.json{checks}"
             )

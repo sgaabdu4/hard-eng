@@ -54,7 +54,10 @@ LAUNCHERS = {
     HUSKY_WORKTREE_LAUNCHER,
 }
 KEPT = "Kept your existing pre-push hook; it runs before Hard Eng's checks. Compare its checks with Hard Eng's (he references: adopting existing checks)."
-RESTORE = "Hard Eng pre-push hook missing or replaced (maybe by another tool) → pushes unchecked. Rerun setup to restore: curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh"
+SETUP_COMMAND = (
+    "curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/setup.sh | sh"
+)
+RESTORE = f"Hard Eng pre-push hook missing or replaced (maybe by another tool) → pushes unchecked. Rerun setup to restore: {SETUP_COMMAND}"
 
 
 def locate(root: Path, name: str = "pre-push") -> tuple[Path, Path]:
