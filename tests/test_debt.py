@@ -43,7 +43,8 @@ def test_old_findings_pass_new_ones_fail_and_fixed_ones_must_be_dropped(
 
     assert run(runner, group, lint, "a.py:9:1: F841 unused x\n") is False
     assert (
-        "DEBT lint: the failure above holds only the 1 lines" in capsys.readouterr().out
+        "DEBT lint @ .: the failure above holds only the 1 lines"
+        in capsys.readouterr().out
     )
     assert (
         run(runner, group, lint, "a.py:9:1: F841 unused x\nb.py:2:1: F841 unused y\n")

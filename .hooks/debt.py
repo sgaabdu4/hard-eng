@@ -181,8 +181,8 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
         )
         return True
     print(
-        f"DEBT {gate['name']}: the failure above holds only the {debt.total()} lines "
-        f"recorded in {DEBT_FILE}; no new finding"
+        f"DEBT {gate['name']} @ {group['path']}: the failure above holds only the "
+        f"{debt.total()} lines recorded in {DEBT_FILE}; no new finding"
     )
     return False
 
