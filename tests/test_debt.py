@@ -322,6 +322,36 @@ def test_adoption_records_what_the_fixed_code_still_fails_with(
     assert recorded == {"./lint": {"a.py:N:N: FN still wrong": 1}}
 
 
+def adoptable(tmp_path: Path, command: str, installed: bool) -> None:
+    lint = {"name": "lint", "role": "lint", "command": [sys.executable, "-c", command]}
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [lint]})
+    )
+    git(tmp_path, "config", "user.name", "Fixture")
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    if installed:
+        (tmp_path / ".hooks").mkdir()
+        (tmp_path / ".hooks/hard-eng-source.json").write_text("{}")
+    commit(tmp_path, "baseline")
+    git(tmp_path, "branch", "-f", "main", "HEAD")
+
+
+def test_adopt_refuses_first_when_check_would_refuse_the_debt_file(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ran = tmp_path / "ran.txt"
+    failing = f"import pathlib; pathlib.Path({str(ran)!r}).write_text('x'); print('a.py:1:1: F1 bad'); raise SystemExit(1)"
+    adoptable(tmp_path, failing, installed=True)
+    monkeypatch.setattr(runner, "provision_tools", no_provisioning)
+    debt.OUTPUTS.clear()
+    with pytest.raises(
+        ValueError, match="HE-DEBT-SHRINK-ONLY: only the change that installs"
+    ):
+        runner.adopt()
+    assert not ran.exists()
+    assert not (tmp_path / debt.DEBT_FILE).exists()
+
+
 COUNT_WORD_PAIRS = [
     ("Found 3 errors.", "Found 1 error."),
     (
