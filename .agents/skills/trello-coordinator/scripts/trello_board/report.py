@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from .board import QUESTION, TAG, Event, Snapshot, questions_in
 from .config import Config
-from .shapes import Obj, parse_time, stamp, text
+from .shapes import Obj, parse_time, text
 
 FIELDS = (
     "requests",
@@ -22,8 +22,6 @@ FIELDS = (
     "overdue",
     "realCases",
 )
-AWAKE = ("requests", "owner", "promises", "silent", "buried")
-WAKE_FIELDS = ("idle", "quietMinutes", "nextDue")
 REAL_CASE = "Waiting for real case"
 WORKING = r"\b(?:I am (?:fixing|building|changing)|I will fix|being built|waits for the #\d+ fix)\b"
 INTENT = (
@@ -416,35 +414,10 @@ def view_of(ctx: Context, card: Obj) -> View:
     )
 
 
-def due_times(ctx: Context, view: View) -> list[datetime]:
-    oldest = oldest_unanswered(ctx, view)
-    due = card_due(view)
-    times = [
-        promise_due(ctx, view),
-        oldest and parse_time(oldest.date) + timedelta(hours=ctx.config.chase_hours),
-        parse_time(due) if due else None,
-    ]
-    return [time for time in times if time and time > ctx.now]
-
-
-def last_heard(ctx: Context, saved: str) -> str:
-    known = [date for date in (saved, ctx.snapshot.heard) if date]
-    return max(known, key=parse_time) if known else stamp(ctx.first_check)
-
-
-def build(ctx: Context, heard: str) -> Obj:
+def build(ctx: Context) -> dict[str, list[Item]]:
     views = [view_of(ctx, card) for card in ctx.snapshot.cards]
     found = {
         field: [i for v in views for i in CHECKS[field](ctx, v)] for field in FIELDS
     }
     found["testQueue"] = queues(found["testQueue"])
-    quiet = int((ctx.now - parse_time(heard)).total_seconds() // 60)
-    latest = ctx.now + timedelta(hours=ctx.config.chase_hours)
-    due = min((t for v in views for t in due_times(ctx, v)), default=latest)
-    return {
-        **found,
-        "idle": quiet >= ctx.config.idle_stop_minutes
-        and not any(found[field] for field in AWAKE),
-        "quietMinutes": quiet,
-        "nextDue": stamp(min(due, latest)),
-    }
+    return found
