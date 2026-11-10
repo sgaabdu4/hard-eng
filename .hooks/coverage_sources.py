@@ -107,3 +107,29 @@ def owned_files(
         if owner is not None:
             owned[owner].append(path)
     return owned
+
+
+def require_listed_sources(
+    root: Path, packages: list[Group], files: list[Path]
+) -> None:
+    """Code added after setup is checked only once its package lists it."""
+    owned = owned_files(root, packages, files)
+    for group in packages:
+        language = group.get("language", "")
+        if language not in {"python", "javascript", "dart"}:
+            continue
+        directory = root / group["path"]
+        if missing := sorted(
+            source_roots(directory, language, owned[directory])
+            - set(group.get("sources", []))
+        ):
+            label = {"javascript": "JavaScript"}.get(language, language.title())
+            checks = (
+                " and to every check that names them (tests --cov=, annotations, dead-code, duplicates)"
+                if language == "python"
+                else ""
+            )
+            raise ValueError(
+                f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; "
+                f"add each to the package's `sources`{checks}"
+            )

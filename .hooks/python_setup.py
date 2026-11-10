@@ -6,7 +6,6 @@ import shlex
 import tomllib
 from pathlib import Path
 
-from coverage_sources import owned_files, source_roots
 from gate_config import Group
 from project_setup import dependency_command
 
@@ -261,26 +260,6 @@ def pytest_config(path: Path) -> str | list[str] | None:
     ):
         raise TypeError("pytest addopts must be text or a list of arguments")
     return value
-
-
-def require_listed_python_sources(
-    root: Path, packages: list[Group], files: list[Path]
-) -> None:
-    """Code added after setup is checked only once its package lists it."""
-    owned = owned_files(root, packages, files)
-    for group in packages:
-        if group.get("language") != "python":
-            continue
-        directory = root / group["path"]
-        listed = set(group.get("sources", []))
-        if missing := sorted(
-            source_roots(directory, "python", owned[directory]) - listed
-        ):
-            raise ValueError(
-                f"{group['path']}: Python code is outside its sources: {', '.join(missing)}; "
-                "add each to the package's sources and to every check that names them "
-                "(tests --cov=, annotations, dead-code, duplicates)"
-            )
 
 
 def locks_nothing(directory: Path) -> bool:
