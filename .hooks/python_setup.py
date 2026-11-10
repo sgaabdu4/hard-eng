@@ -53,6 +53,20 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
     return [*prefix, *command]
 
 
+def src_children(src: Path) -> list[tuple[str, Path]]:
+    """Name and path of each package or module directly under `src`."""
+    children = []
+    for child in sorted(src.iterdir()):
+        name = child.name if child.is_dir() else child.stem
+        if name.isidentifier() and (
+            (child / "__init__.py").exists()
+            if child.is_dir()
+            else child.suffix == ".py"
+        ):
+            children.append((name, child))
+    return children
+
+
 def python_roots(directory: Path, package: Group) -> list[str]:
     """Packages with a submodule; Import Linter rejects a `root.**` that matches nothing."""
     roots = set()
@@ -60,16 +74,32 @@ def python_roots(directory: Path, package: Group) -> list[str]:
         path = directory / name
         if not path.is_dir():
             continue
-        candidates = [path] if name != "src" else list(path.iterdir())
+        candidates = [(path.name, path)] if name != "src" else src_children(path)
         roots.update(
-            child.name
-            for child in candidates
+            root
+            for root, child in candidates
             if child.is_dir()
-            and child.name.isidentifier()
+            and root.isidentifier()
             and (child / "__init__.py").exists()
             and any(file != child / "__init__.py" for file in child.rglob("*.py"))
         )
     return sorted(roots)
+
+
+def known_first_party(directory: Path, package: Group) -> None:
+    """A `src` layout package imports itself, and deptry cannot tell it from a dependency."""
+    src = directory / "src"
+    if "src" not in package["sources"] or not src.is_dir():
+        return
+    options = [
+        arg for name, _ in src_children(src) for arg in ("--known-first-party", name)
+    ]
+    for gate in package["checks"]:
+        command = gate["command"]
+        if "--known-first-party" not in command and ["deptry", "."] in [
+            command[i : i + 2] for i in range(len(command))
+        ]:
+            gate["command"] = [*command, *options]
 
 
 def import_linter_owner(
@@ -173,6 +203,7 @@ def configure_python(
 ) -> None:
     dependency_command(directory, "python")  # Existing configurations need a lock too.
     parallel_pytest(package)
+    known_first_party(directory, package)
     native = directory / "pyrefly.toml"
     project = directory / "pyproject.toml"
     content = project.read_text()
