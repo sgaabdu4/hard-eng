@@ -526,7 +526,9 @@ def gate_status(root: Path) -> str:
         KeyError,
         subprocess.SubprocessError,
     ) as error:
-        status = "Gates: not runnable — " + " ".join(str(error).split())
+        first, _, rest = str(error).strip().partition("\n")
+        more = " (`python3 .hooks/hard-eng.py check` prints the rest)" if rest else ""
+        status = "Gates: not runnable — " + " ".join(first.split()) + more
     try:
         pending: list[str] = [
             line[3:]

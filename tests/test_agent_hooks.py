@@ -14,6 +14,7 @@ from typing import override
 from unittest.mock import Mock
 
 import agent_hooks
+import gate_config
 import plans
 import process_group
 import pytest
@@ -572,6 +573,17 @@ def test_session_start_reports_a_failed_process_scan(
     context = agent_hooks.session_context(repository, {"session_id": "scan"})
     assert "Gates: stubbed" in context
     assert "Idle Codex broker cleanup failed: ps unavailable" in context
+
+
+def test_session_start_shows_the_first_line_of_a_gate_error_and_points_to_check(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refusal = ValueError("add this to pyproject.toml:\n[tool.x]\nkey = 1\n")
+    monkeypatch.setattr(gate_config, "load_groups", Mock(side_effect=refusal))
+    assert agent_hooks.gate_status(repository) == (
+        "Gates: not runnable — add this to pyproject.toml: "
+        "(`python3 .hooks/hard-eng.py check` prints the rest)"
+    )
 
 
 def test_session_states_whether_gates_can_run(repository: Path) -> None:
