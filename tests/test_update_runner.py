@@ -654,6 +654,18 @@ def test_background_update_does_not_repeat_a_refusal_until_inputs_change(
     assert fetch.call_count == 4
 
 
+def test_setup_retries_a_remembered_refusal(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target, fetch = refused_release(release, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    assert update_runner.apply_update(target) == 0
+    assert fetch.call_count == 1
+    with pytest.raises(ValueError, match="secrets-files requires native"):
+        update_runner.locked_update(target, repair=True)
+    assert fetch.call_count == 2
+
+
 def test_background_update_retries_after_a_network_failure(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
