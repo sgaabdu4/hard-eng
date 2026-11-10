@@ -40,6 +40,12 @@ def test_the_gate_limit_is_three_times_the_last_passing_time(
     assert gate_times.gate_limit(tmp_path, "./suite", 100) == 6
 
 
+def no_requirements(
+    _root: Path, _config: object, _listed: object = None, _starting: bool = False
+) -> None:
+    return None
+
+
 PERFORMANCE = gate(
     "performance",
     "from pathlib import Path\n"
@@ -51,8 +57,12 @@ PERFORMANCE = gate(
 
 @pytest.mark.parametrize("first", [[], [PERFORMANCE]])
 def test_scans_start_beside_a_serial_suite_listed_before_them(
-    runner: ModuleType, tmp_path: Path, first: list[dict[str, object]]
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    first: list[dict[str, object]],
 ) -> None:
+    monkeypatch.setattr(gate_config, "validate_required_checks", no_requirements)
     wait = (
         "from pathlib import Path;import time;end = time.monotonic() + 10\n"
         "Path('{mine}').touch()\n"
@@ -74,8 +84,9 @@ def test_scans_start_beside_a_serial_suite_listed_before_them(
 
 
 def test_performance_suites_still_run_alone_after_early_scans(
-    runner: ModuleType, tmp_path: Path
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(gate_config, "validate_required_checks", no_requirements)
     scan = gate(
         "scan",
         "from pathlib import Path;import time;Path('scanning').touch();time.sleep(1);Path('scanning').unlink()",
@@ -199,8 +210,9 @@ def test_performance_still_follows_a_parallel_build() -> None:
 
 
 def test_scans_wait_for_a_parallel_generator_still_running(
-    runner: ModuleType, tmp_path: Path
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(gate_config, "validate_required_checks", no_requirements)
     generator = gate(
         "generate",
         "from pathlib import Path;import time;time.sleep(1);Path('generated').touch()",
@@ -215,10 +227,6 @@ def test_scans_wait_for_a_parallel_generator_still_running(
     )
     configure(tmp_path, [generator, scan])
     assert runner.check() == 0
-
-
-def no_requirements(_root: Path, _config: object, _listed: object = None) -> None:
-    return None
 
 
 def packages(

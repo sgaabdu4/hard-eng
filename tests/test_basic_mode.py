@@ -209,12 +209,11 @@ def test_basic_mode_requires_checks_for_scripts_and_workflows_added_later(
         validate_required_checks(repository, installed)
     validate_required_checks(repository, installed, starting=True)
     installed["shared"].append(
-        {
-            "name": "shellcheck",
-            "role": "shell",
-            "command": ["shellcheck", "--", "run.sh"],
-        }
+        {"name": "shellcheck", "role": "shell", "command": ["true"]}
     )
+    with pytest.raises(ValueError, match="the shell check must run `shellcheck`"):
+        validate_required_checks(repository, installed)
+    installed["shared"][-1]["command"] = ["shellcheck", "--", "run.sh"]
     validate_required_checks(repository, installed)
     (repository / "other.sh").write_text("#!/bin/sh\necho other\n")
     with pytest.raises(ValueError, match="shellcheck omits other.sh"):
