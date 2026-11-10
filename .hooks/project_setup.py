@@ -5,6 +5,7 @@ import os
 import re
 import shlex
 import subprocess
+import tomllib
 from collections.abc import Iterator
 from fnmatch import fnmatchcase
 from pathlib import Path
@@ -406,7 +407,9 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
             "declaring dependencies in pyproject.toml (`uv add -r requirements.txt` "
             "imports a requirements file), then review and commit the lockfile"
         )
-    manifest = read_project_file(directory / "pubspec.yaml", kind="yaml")
+    import yaml
+
+    manifest = read_project_file(directory / "pubspec.yaml", parse=yaml.safe_load)
     dependencies = {
         **(manifest.get("dependencies") or {}),
         **(manifest.get("dev_dependencies") or {}),
@@ -485,7 +488,7 @@ def adapt_boundaries(package: Group, typescript: set[str]) -> None:
 
 def workspace_members(directory: Path, language: str) -> list[str]:
     if language == "python":
-        project = read_project_file(directory / "pyproject.toml", kind="toml")
+        project = read_project_file(directory / "pyproject.toml", parse=tomllib.loads)
         workspace = project.get("tool", {}).get("uv", {}).get("workspace", {})
         return [
             *workspace.get("members", []),
@@ -500,7 +503,9 @@ def workspace_members(directory: Path, language: str) -> list[str]:
             if isinstance(workspaces, dict)
             else workspaces
         )
-    manifest = read_project_file(directory / "pubspec.yaml", kind="yaml")
+    import yaml
+
+    manifest = read_project_file(directory / "pubspec.yaml", parse=yaml.safe_load)
     return manifest.get("workspace", [])
 
 

@@ -149,7 +149,7 @@ def existing_servers(root: Path, service: str) -> list[JsonObject]:
         if not path.exists():
             continue
         parsed = read_project_file(
-            path, root, "toml" if name.endswith(".toml") else "json"
+            path, root, tomllib.loads if name.endswith(".toml") else json.loads
         )
         servers = parsed.get(
             "mcp_servers" if name.endswith(".toml") else "mcpServers", {}
@@ -300,7 +300,7 @@ def marionette_server(root: Path) -> JsonObject | None:
             continue
         if {".agents", ".claude", ".hooks"} & set(relative.parts):
             continue
-        manifest = read_project_file(path, root, "yaml")
+        manifest = read_project_file(path, root, yaml.safe_load)
         dependencies = {
             **(manifest.get("dependencies") or {}),
             **(manifest.get("dev_dependencies") or {}),
@@ -572,7 +572,7 @@ def configure_codex_mcp(
     retired: list[str] = []
     target = root / ".codex/config.toml"
     original = target.read_text() if target.exists() else ""
-    configured = parse_project_text(original, ".codex/config.toml", "toml").get(
+    configured = parse_project_text(original, ".codex/config.toml", tomllib.loads).get(
         "mcp_servers", {}
     )
     removed = {
