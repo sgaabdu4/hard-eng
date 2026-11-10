@@ -39,8 +39,8 @@ EMPTY_REPOSITORY = (
     "search ranking or fast first load, and React + Vite for apps behind a login, internal "
     "tools and apps with a separate backend. Then rerun the setup command with "
     "`sh -s -- --new STACK` (flutter, nextjs, opennext, vite or python): it creates the project with "
-    "the official scaffold, adds starter tests and checks, pins each package to the newest "
-    "release minimumReleaseAge allows, commits, and installs Hard Eng."
+    "the official scaffold, adds starter tests and checks, pins each package to an exact "
+    "version, commits, and installs Hard Eng."
 )
 
 
@@ -124,7 +124,10 @@ def kept_files(root: Path) -> list[Path]:
         path.is_file() and not path.is_symlink() and trivial(path) for path in present
     ):
         names = ", ".join(path.name for path in present)
-        raise ValueError(f"--new needs an empty repository; it holds {names}")
+        raise ValueError(
+            "--new needs an empty repository, or one with only plain README, "
+            f"license and ignore files (no links); it holds {names}"
+        )
     return present
 
 

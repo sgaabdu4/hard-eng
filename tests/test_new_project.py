@@ -17,10 +17,16 @@ def test_new_project_refuses_a_repository_that_holds_files(tmp_path: Path) -> No
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "notes.txt").write_text("keep\n")
     with pytest.raises(
-        ValueError, match="needs an empty repository; it holds notes.txt"
+        ValueError,
+        match=r"or one with only plain README, license and ignore files \(no links\); it holds notes.txt",
     ):
         new_project.create(tmp_path, "vite")
     assert sorted(path.name for path in tmp_path.iterdir()) == [".git", "notes.txt"]
+
+
+def test_the_new_project_advice_does_not_overstate_the_release_age() -> None:
+    assert "pins each package to an exact version" in new_project.EMPTY_REPOSITORY
+    assert "minimumReleaseAge" not in new_project.EMPTY_REPOSITORY
 
 
 def test_new_project_refuses_a_linked_ignore_file(tmp_path: Path) -> None:
