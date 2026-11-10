@@ -373,23 +373,28 @@ def validate_fallow(path: Path, provided: set[str] | None = None) -> None:
         raise ValueError("Fallow report is incomplete") from error
 
 
+def located(path: object, line: object) -> str:
+    return f"{path}:{line}" if type(line) is int else str(path)
+
+
 def finding_lines(path: Path) -> list[str]:
     try:
         report = json.loads(path.read_text())
-        check = report.get("check") or report["dead_code"]
-        return [
-            " ".join(
-                [
-                    item["path"],
-                    kind,
-                    item.get("export_name") or item.get("package_name") or "",
-                ]
-            ).rstrip()
-            for kind, items in check.items()
+        found = [
+            f"{located(item['path'], item.get('line'))} {kind} "
+            f"{item.get('export_name') or item.get('package_name') or ''}".rstrip()
+            for kind, items in report["check"].items()
             if isinstance(items, list)
             for item in items
             if isinstance(item, dict) and "path" in item
         ]
+        for group in report.get("dupes", {}).get("clone_groups", []):
+            copies = [
+                f"{copy['file']}:{copy['start_line']}-{copy['end_line']}"
+                for copy in group["instances"]
+            ]
+            found.append("copied code " + " ".join(copies))
+        return found
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return []
 

@@ -842,12 +842,18 @@ def scanner_result(
             print(line)
 
 
+def commit_sha(item: JsonObject) -> str:
+    prints = item.get("partialFingerprints")
+    sha = prints.get("commitSha") if isinstance(prints, dict) else None
+    return sha[:12] if isinstance(sha, str) else ""
+
+
 def gitleaks_findings(path: Path) -> list[str]:
     try:
         results = json.loads(path.read_text())["runs"][0]["results"]
         return [
             f"{item['ruleId']} {place['artifactLocation']['uri']} "
-            f"{place['region']['startLine']}"
+            f"{place['region']['startLine']} {commit_sha(item)}".rstrip()
             for item in results
             for place in [item["locations"][0]["physicalLocation"]]
         ]
