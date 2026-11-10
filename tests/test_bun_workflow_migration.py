@@ -4,8 +4,7 @@ from pathlib import Path
 
 import pytest
 from ci_setup import configure_ci, migrate_bun
-
-SOURCE = Path(__file__).resolve().parents[1]
+from conftest import SOURCE, migrates_to_template
 
 
 @pytest.mark.parametrize(
@@ -67,16 +66,7 @@ def test_pnpm_bootstrap_migrates_to_the_template_bun_steps(tmp_path: Path) -> No
     for current, previous in pairs:
         assert current in template
         old = old.replace(current, previous)
-    path = tmp_path / ".github/workflows/hard-eng.yml"
-    path.parent.mkdir(parents=True)
-    path.write_text(old)
-    changes: dict[str, str] = {}
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes == {".github/workflows/hard-eng.yml": template}
-    path.write_text(template)
-    changes.clear()
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes == {}
+    migrates_to_template(tmp_path, old)
 
 
 def test_pnpm_tool_ending_a_tool_list_line_is_removed() -> None:

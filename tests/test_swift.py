@@ -15,7 +15,7 @@ from basic_mode import announce
 from ci_jobs import LanguageFilter, impact_runner
 from ci_setup import configure_ci
 from comments import validate_comments, validate_suppressions
-from conftest import SOURCE, commit, init, load_module
+from conftest import SOURCE, commit, init, load_module, migrates_to_template
 from gate_config import GateConfig, Group, validate_group, validate_required_checks
 from gate_schedule import gate_order
 from swift_setup import add_swift_groups, swift_projects
@@ -651,17 +651,8 @@ def test_launcher_migration(tmp_path: Path) -> None:
     old = template.replace(echo + "\n", "").replace(
         '"$MISE_PACKAGE"', LEGACY_LAUNCHER[10:]
     )
-    path = tmp_path / ".github/workflows/hard-eng.yml"
-    path.parent.mkdir(parents=True)
-    path.write_text(old)
     assert LEGACY_LAUNCHER in old
-    changes: dict[str, str] = {}
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes == {".github/workflows/hard-eng.yml": template}
-    path.write_text(template)
-    changes.clear()
-    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    assert changes == {}
+    migrates_to_template(tmp_path, old)
 
 
 def commit_swift(root: Path, name: str, before: str, after: str) -> Path:

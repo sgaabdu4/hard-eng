@@ -345,6 +345,23 @@ def release(
     source_trees.forget_all()
 
 
+def migrates_to_template(root: Path, old: str) -> None:
+    """An old generated workflow becomes today's template, which then needs no change."""
+    from ci_setup import configure_ci
+
+    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    path = root / ".github/workflows/hard-eng.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(old)
+    changes: dict[str, str] = {}
+    configure_ci(root, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes == {".github/workflows/hard-eng.yml": template}
+    path.write_text(template)
+    changes.clear()
+    configure_ci(root, SOURCE, {"packages": [], "shared": []}, changes)
+    assert changes == {}
+
+
 def gate(name: str, code: str, **options: object) -> dict[str, object]:
     return {"name": name, "command": [sys.executable, "-c", code], **options}
 
