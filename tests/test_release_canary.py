@@ -228,7 +228,9 @@ def test_release_text_holds_added_lines_but_not_lines_main_already_published(
     assert "secret-app" not in text
 
 
-@pytest.mark.parametrize("setting", ["diff.external", "color.ui"])
+@pytest.mark.parametrize(
+    "setting", ["diff.external", "color.ui", "diff.quiet.textconv"]
+)
 def test_a_developers_diff_settings_do_not_hide_a_private_name(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, setting: str
 ) -> None:
@@ -244,9 +246,8 @@ def test_a_developers_diff_settings_do_not_hide_a_private_name(
     silent = tmp_path / "silent-diff"
     silent.write_text("#!/bin/sh\nexit 0\n")
     silent.chmod(0o755)
-    git(
-        source, "config", setting, {"diff.external": str(silent)}.get(setting, "always")
-    )
+    (source / ".git/info/attributes").write_text("*.md diff=quiet\n")
+    git(source, "config", setting, "always" if setting == "color.ui" else str(silent))
     in_source = release_canary.output
 
     def output(command: list[str]) -> str:
