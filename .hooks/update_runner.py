@@ -98,42 +98,56 @@ def stale_error(root: Path, revision: str) -> ValueError:
     )
 
 
-def revision_at(root: Path, ref: str) -> str | None:
+def source_revisions(root: Path, refs: list[str]) -> list[str | None]:
     from update import SOURCE_FILE
 
-    path = f"{ref}:{SOURCE_FILE}"
-    shown = subprocess.run(
-        ["git", "show", path],
+    # One Git process answers every ref, so the Stop note costs the same with an update waiting.
+    names = "".join(f"{ref}:{SOURCE_FILE}\n" for ref in refs).encode()
+    rest = subprocess.run(
+        ["git", "cat-file", "--batch"],
         cwd=root,
+        input=names,
         capture_output=True,
-        text=True,
         check=False,
-    )
+    ).stdout
+    revisions: list[str | None] = []
+    for _ in refs:
+        header, _, rest = rest.partition(b"\n")
+        fields = header.split()
+        revision = None
+        if len(fields) == 3 and fields[2].isdigit():
+            blob, rest = rest[: int(fields[2])], rest[int(fields[2]) + 1 :]
+            with suppress(ValueError, AttributeError):
+                revision = json.loads(blob).get("revision")
+        revisions.append(revision if isinstance(revision, str) else None)
+    return revisions
+
+
+def revision_at(root: Path, ref: str) -> str | None:
+    return source_revisions(root, [ref])[0]
+
+
+def shipping_base(root: Path) -> str:
     try:
-        revision = json.loads(shown.stdout).get("revision")
-    except (ValueError, AttributeError):
-        return None
-    return revision if isinstance(revision, str) else None
+        base = json.loads((root / "hard-eng.gates.json").read_text())["shipping"][
+            "base"
+        ]
+    except (OSError, ValueError, KeyError, TypeError):
+        return "main"
+    return base if isinstance(base, str) else "main"
 
 
-def ready_revision(root: Path) -> str | None:
-    """The revision waiting on the update branch that this checkout does not hold yet."""
-    waiting = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
-    return (
-        waiting if waiting is not None and waiting != installed_revision(root) else None
+def waiting_note(root: Path) -> str | None:
+    base = shipping_base(root)
+    waiting, landed = source_revisions(
+        root, [f"refs/heads/{UPDATE_BRANCH}", f"refs/remotes/origin/{base}"]
     )
-
-
-def pulled_message(root: Path, revision: str) -> str | None:
-    """The local origin/<base> already holds the waiting update, as after its PR merged."""
-    from shipping import load_policy
-
-    policy = load_policy(root, required=False)
-    base = policy["base"] if policy else "main"
-    if revision_at(root, f"refs/remotes/origin/{base}") != revision:
+    if waiting is None or waiting == installed_revision(root):
         return None
+    if landed != waiting:
+        return ready_message(waiting)
     return (
-        f"Hard Eng update {revision} is already on origin/{base}; this checkout does not "
+        f"Hard Eng update {waiting} is already on origin/{base}; this checkout does not "
         f"hold it yet. On {base}: `git pull`. On another branch: `git rebase origin/{base}`."
     )
 
@@ -156,8 +170,8 @@ def freshness_note(root: Path) -> str:
             return blocker
         if update_running(root):
             return f"Hard Eng update still running ({LOG_FILE}); scaffold may be stale."
-        if (ready := ready_revision(root)) is not None:
-            return pulled_message(root, ready) or ready_message(ready)
+        if (waiting := waiting_note(root)) is not None:
+            return waiting
         result = last_result(root)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return f"Hard Eng freshness unknown: {error}."
