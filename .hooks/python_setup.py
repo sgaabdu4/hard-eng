@@ -2,6 +2,7 @@
 
 import configparser
 import json
+import os
 import shlex
 import tomllib
 from pathlib import Path
@@ -79,6 +80,10 @@ def src_children(src: Path) -> list[tuple[str, Path]]:
     return children
 
 
+def is_src(source: str) -> bool:
+    return os.path.normpath(source) == "src"
+
+
 def python_roots(directory: Path, package: Group) -> list[str]:
     """Packages with a submodule; Import Linter rejects a `root.**` that matches nothing."""
     roots = set()
@@ -86,7 +91,7 @@ def python_roots(directory: Path, package: Group) -> list[str]:
         path = directory / name
         if not path.is_dir():
             continue
-        candidates = [(path.name, path)] if name != "src" else src_children(path)
+        candidates = src_children(path) if is_src(name) else [(path.name, path)]
         roots.update(
             root
             for root, child in candidates
@@ -101,7 +106,7 @@ def python_roots(directory: Path, package: Group) -> list[str]:
 def known_first_party(directory: Path, package: Group) -> None:
     """A `src` layout package imports itself, and deptry cannot tell it from a dependency."""
     src = directory / "src"
-    if "src" not in package["sources"] or not src.is_dir():
+    if not any(map(is_src, package["sources"])) or not src.is_dir():
         return
     options = [
         arg for name, _ in src_children(src) for arg in ("--known-first-party", name)
