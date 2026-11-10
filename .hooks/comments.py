@@ -381,6 +381,7 @@ def diff_lines(
             "-c",
             "core.quotepath=off",
             "diff",
+            "--no-ext-diff",
             "-U0",
             "--no-color",
             "--src-prefix=a/",
