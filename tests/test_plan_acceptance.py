@@ -6,7 +6,7 @@ from types import ModuleType
 
 import gate_config
 import pytest
-from conftest import commit, configure, gate, git, init, plan_document
+from conftest import add_origin, commit, configure, gate, git, init, plan_document
 from gate_config import repository_files
 from plans import is_plan_path, plan_files, validate_plan, validate_plans
 
@@ -230,3 +230,18 @@ def test_plan_listing_matches_the_full_listing_filter(tmp_path: Path) -> None:
     ]
     assert len(expected) == 5
     assert plan_files(root) == expected
+
+
+def test_an_unpushed_plan_on_the_default_branch_covers_a_later_fix(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / "README.md").write_text("first\n")
+    commit(root, "first")
+    add_origin(root)
+    git(root, "fetch", "-q", "origin")
+    (root / "PLAN.md").write_text(plan_document())
+    commit(root, "plan and work")
+    (root / "app.py").write_text("value = 1\n")
+    assert validate_plans(root, stage="Complete") == "Complete"

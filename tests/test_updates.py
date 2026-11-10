@@ -275,11 +275,12 @@ def test_install_commits_only_clean_installed_paths(
             )
         return
     reason = {
-        "dirty": "these paths already had local changes",
+        "dirty": "these paths already had local changes: AGENTS.md",
         "rejected": "rejected by project hook",
     }[case]
     assert f"Installed files are not committed ({reason})" in output
-    assert ".hooks/ " in output and ".agents/skills/he/ " in output
+    advice = output.split("Commit all installed files so updates and ")[1]
+    assert ".hooks/ " in advice and ".agents/skills/he/ " in advice
     assert "?? AGENTS.md" in status and "?? .hooks/" in status
     assert not subprocess.run(
         ["git", "diff", "--cached", "--name-only"],

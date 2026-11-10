@@ -3,8 +3,8 @@
 from pathlib import Path
 
 import pytest
-from conftest import init
-from plans import requirement_tests, validate_requirements
+from conftest import SOURCE, init
+from plans import registry_entries, requirement_tests, validate_requirements
 
 # Fixture IDs are built so this file names no real registry ID.
 HE, REQ = "HE", "REQ"
@@ -150,3 +150,32 @@ def test_requirement_tests_name_each_covering_test(tmp_path: Path) -> None:
             ("tests/test_coverage.py", 2, "test_low_coverage_fails"),
         ]
     }
+
+
+def test_one_part_he_ids_are_checked(tmp_path: Path) -> None:
+    solo = f"## {HE}-SOLO — Solo\n\nOne word rule.\n\nProof: guidance\n"
+    root = proven(
+        tmp_path,
+        registry=COVERAGE + STYLE + solo,
+        **{
+            ".agents/skills/he/SKILL.md": f"See {STYLE_ID} and {HE}-SOLO.\n",
+            "src/codec.ts": f'const codec = "{HE}-AAC";\n',
+        },
+    )
+    assert f"{HE}-SOLO" in registry_entries(root)[0]
+    assert registry_entries(SOURCE)[0][f"{HE}-YAGNI"][0] == "guidance"
+    validate_requirements(root)
+    (root / ".agents/skills/he/SKILL.md").write_text(f"See {STYLE_ID}.\n")
+    with pytest.raises(ValueError, match=f"{HE}-SOLO"):
+        validate_requirements(root)
+
+
+@pytest.mark.parametrize("heading", [f"{REQ}-12", f"{HE}-lower", f"{REQ}-PAY--X"])
+def test_a_registry_heading_with_a_malformed_id_is_refused(
+    tmp_path: Path, heading: str
+) -> None:
+    root = proven(
+        tmp_path, registry=COVERAGE + STYLE + f"## {heading} — Odd\n\nText.\n"
+    )
+    with pytest.raises(ValueError, match=f"{heading} is not a valid requirement ID"):
+        validate_requirements(root)

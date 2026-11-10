@@ -494,7 +494,7 @@ def test_an_update_refuses_to_replace_a_local_file_git_does_not_track(
     assert update_runner.apply_update(target) == 0
     result = (target / update_runner.RESULT_FILE).read_text()
     assert ".mcp.json" in result and "ready on" not in result
-    assert "then run the published setup command to retry" in result
+    assert "move or rename them, then rerun setup to retry: curl " in result
     assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
     assert (target / ".mcp.json").read_text() == PRIVATE_MCP
     assert update_runner.apply_update(target) == 0
@@ -554,8 +554,11 @@ def test_a_setup_rerun_refuses_to_replace_a_local_file_git_does_not_track(
 ) -> None:
     target = private_mcp_release(release, monkeypatch, True)
     monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    update_runner.record_result(target, update_runner.failed_update("old refusal"))
     with pytest.raises(ValueError, match=r"\.mcp\.json"):
         update_runner.locked_update(target, repair=True)
+    recorded = (target / update_runner.RESULT_FILE).read_text()
+    assert ".mcp.json" in recorded and "old refusal" not in recorded
     assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
     assert (target / ".mcp.json").read_text() == PRIVATE_MCP
 
@@ -693,3 +696,67 @@ def test_an_update_lands_when_a_project_hook_changes_the_commit_message(
     assert "ready on" in (target / update_runner.RESULT_FILE).read_text()
     subject = git(target, "log", "-1", "--format=%s", update_runner.UPDATE_BRANCH)
     assert subject.startswith("chore: Update Hard Eng to ")
+
+
+def test_the_note_says_pull_when_the_update_is_already_on_the_base(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    assert "update-pr" in update_runner.freshness_note(target)
+    git(
+        target,
+        "push",
+        "-q",
+        "--no-verify",
+        "origin",
+        f"{update_runner.UPDATE_BRANCH}:main",
+    )
+    note = update_runner.freshness_note(target)
+    assert "already on origin/main" in note and "git rebase origin/main" in note
+    assert "update-pr" not in note
+
+
+def test_a_failed_remote_lookup_keeps_gits_reason(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    git(target, "remote", "set-url", "origin", str(target.parent / "gone.git"))
+    lookup = subprocess.run(
+        ["git", "ls-remote", "origin"],
+        cwd=target,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    reason = lookup.stderr.splitlines()[0]
+    assert reason.startswith("fatal:") and "gone.git" in reason
+    assert update_runner.apply_update(target) == 0
+    assert reason in (target / update_runner.RESULT_FILE).read_text()
+
+
+def test_the_refusal_for_a_main_checkout_names_a_step_that_works(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    (target / "notes.txt").write_text("base moved\n")
+    commit(target, "base moved")
+    git(target, "push", "-q", "--no-verify", "origin", "main")
+    git(target, "switch", "-q", update_runner.UPDATE_BRANCH)
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "checked out" in result
+    assert "switch the main checkout to another branch" in result
+    assert "git worktree remove" not in result
+
+
+def test_a_setup_rerun_records_its_result(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    update_runner.record_result(target, update_runner.failed_update("old refusal"))
+    outcome = update_runner.locked_update(target, repair=True)
+    recorded = (target / update_runner.RESULT_FILE).read_text()
+    assert outcome in recorded
+    assert "old refusal" not in recorded

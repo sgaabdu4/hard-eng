@@ -14,6 +14,7 @@ from typing import override
 from unittest.mock import Mock
 
 import agent_hooks
+import gate_config
 import plans
 import process_group
 import pytest
@@ -434,18 +435,29 @@ def test_completion_runs_real_command_and_bounds_failure_log(
 
 
 @pytest.mark.parametrize("agent", ["claude", "codex"])
+@pytest.mark.parametrize(
+    ("line", "relayed"),
+    [
+        (
+            "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check.",
+            True,
+        ),
+        (
+            "Hard Eng: quick checks passed; the full check runs the tests and the other gates.",
+            True,
+        ),
+        ("PASS fixture (exit 0; elapsed 1.0s) @ .", False),
+        ("Hard Eng warning: pre-push checks passed in 9s", False),
+    ],
+)
 def test_completion_surfaces_only_authoritative_stage_handoffs(
-    repository: Path, agent: str
+    repository: Path, agent: str, line: str, relayed: bool
 ) -> None:
     hooks = repository / ".hooks"
     hooks.mkdir()
-    (hooks / "hard-eng.py").write_text(
-        "print('Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check.')\n"
-    )
+    (hooks / "hard-eng.py").write_text(f"print({line!r})\n")
     result = agent_hooks.completion(repository, {}, agent)
-    assert result == {
-        "systemMessage": "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."
-    }
+    assert result == ({"systemMessage": line} if relayed else {})
 
 
 def test_stop_retry_allows_honest_blocker_without_rerunning(repository: Path) -> None:
@@ -561,6 +573,17 @@ def test_session_start_reports_a_failed_process_scan(
     context = agent_hooks.session_context(repository, {"session_id": "scan"})
     assert "Gates: stubbed" in context
     assert "Idle Codex broker cleanup failed: ps unavailable" in context
+
+
+def test_session_start_shows_the_first_line_of_a_gate_error_and_points_to_check(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refusal = ValueError("add this to pyproject.toml:\n[tool.x]\nkey = 1\n")
+    monkeypatch.setattr(gate_config, "load_groups", Mock(side_effect=refusal))
+    assert agent_hooks.gate_status(repository) == (
+        "Gates: not runnable — add this to pyproject.toml: "
+        "(`python3 .hooks/hard-eng.py check` prints the rest)"
+    )
 
 
 def test_session_states_whether_gates_can_run(repository: Path) -> None:

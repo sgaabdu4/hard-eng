@@ -1,15 +1,17 @@
 """Ending a turn must not rerun a passing check or leave an interrupted one running."""
 
+import json
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 import agent_hooks
+import debt
 import failures
 import pytest
 from conftest import SOURCE, add_origin, commit, git, gone
-from gate_config import JsonObject
+from gate_config import Gate, Group, JsonObject
 
 
 def install_check(repository: Path, script: str) -> Path:
@@ -228,6 +230,87 @@ def test_failure_reason_shows_the_failing_packages_output_not_a_passing_one_of_t
     reason = str(agent_hooks.completion(repository, payload)["reason"])
     assert "b is broken" in reason
     assert "a is clean" not in reason
+
+
+def stop_reason(repository: Path, script: str) -> str:
+    install_check(repository, script)
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "work.py").write_text("value = 1\n")
+    return str(agent_hooks.completion(repository, payload)["reason"])
+
+
+def test_stop_lists_only_gates_with_findings_beyond_the_debt(
+    repository: Path,
+) -> None:
+    reason = stop_reason(
+        repository,
+        "print('OUTPUT ./lint')\n"
+        "print('old lint finding')\n"
+        "print('FAIL lint (exit 1; elapsed 1.0s) @ .')\n"
+        "print('DEBT lint @ .: the failure above holds only the 1 lines recorded')\n"
+        "print('OUTPUT ./types')\n"
+        "print('types noise')\n"
+        "print('FAIL types (exit 1; elapsed 1.0s) @ .')\n"
+        "print('FAIL types @ .: findings beyond hard-eng.debt.json:')\n"
+        "print('  new.py:N bad type')\n"
+        "raise SystemExit(1)\n",
+    )
+    assert reason.startswith("Failed gates: types\n")
+    assert "old lint finding" not in reason
+    assert "findings beyond hard-eng.debt.json:\n  new.py:N bad type" in reason
+
+
+def test_stop_keeps_a_failed_gate_whose_name_another_package_had_forgiven(
+    repository: Path,
+) -> None:
+    reason = stop_reason(
+        repository,
+        "print('OUTPUT api/types')\n"
+        "print('old api finding')\n"
+        "print('FAIL types (exit 1; elapsed 1.0s) @ api')\n"
+        "print('DEBT types @ api: the failure above holds only the 1 lines recorded')\n"
+        "print('OUTPUT web/types')\n"
+        "print('web finding')\n"
+        "print('FAIL types (exit 1; elapsed 1.0s) @ web')\n"
+        "raise SystemExit(1)\n",
+    )
+    assert reason.startswith("Failed gates: types\n")
+    assert "web finding" in reason
+    assert "old api finding" not in reason
+
+
+def test_stop_shows_the_new_debt_findings_of_the_package_whose_output_it_shows(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lint: Gate = {"name": "lint", "role": "lint", "command": ["lint"]}
+    groups: list[Group] = [{"path": name, "checks": [lint]} for name in ("api", "web")]
+    recorded = {f"{name}/lint": {"old finding": 1} for name in ("api", "web")}
+    (tmp_path / debt.DEBT_FILE).write_text(
+        json.dumps({"version": 1, "gates": recorded})
+    )
+    log = "".join(
+        f"OUTPUT {name}/lint\nold finding\nFAIL lint (exit 1; elapsed 1.0s) @ {name}\n"
+        for name in ("api", "web")
+    )
+    for group in reversed(groups):
+        output = f"old finding\nnew in {group['path']}\n"
+        assert debt.judge(tmp_path, group, lint, True, output) is True
+    summary = agent_hooks.failure_summary(log + capsys.readouterr().out)
+    assert "  new in api\n" in summary
+    assert "new in web" not in summary
+
+
+def test_stop_text_has_no_colour_codes(repository: Path) -> None:
+    reason = stop_reason(
+        repository,
+        "print('OUTPUT ./lint')\n"
+        "print('\\x1b[31ma\\x1b[0m' * 8500)\n"
+        "print('FAIL lint (exit 1; elapsed 1.0s) @ .')\n"
+        "raise SystemExit(1)\n",
+    )
+    assert "\x1b" not in reason
+    assert "a" * 8000 in reason
 
 
 def decision_record(repository: Path, status: str, applies: str = "") -> None:

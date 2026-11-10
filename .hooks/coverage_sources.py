@@ -1,9 +1,12 @@
 """Prove omitted TypeScript and Swift files have no runtime content without executing them."""
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
+
+from gate_config import Group, nonproduction_source
 
 IF_DIRECTIVE = re.compile(r"(?m)^\s*#if\b")
 
@@ -70,3 +73,80 @@ def erased_swift(files: set[Path]) -> set[Path]:
         ):
             erased.add(file)
     return erased
+
+
+def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:
+    """Top-level names that hold a package's production code."""
+    extensions = {
+        "python": {".py"},
+        "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
+        "dart": {".dart"},
+    }
+    sources = set()
+    for path in files:
+        if (
+            not path.is_relative_to(directory)
+            or path.suffix not in extensions[language]
+        ):
+            continue
+        relative = path.relative_to(directory)
+        if nonproduction_source(relative) or {".hooks", ".agents"} & set(
+            relative.parts
+        ):
+            continue
+        sources.add(relative.parts[0])
+    return sources
+
+
+def owned_files(
+    root: Path, packages: list[Group], files: list[Path]
+) -> dict[Path, list[Path]]:
+    """Each file belongs to the package nearest to it."""
+    owned: dict[Path, list[Path]] = {root / package["path"]: [] for package in packages}
+    # Text prefixes, longest first: building each file's parents made large projects slow.
+    prefixes = sorted(
+        ((f"{directory}{os.sep}", paths) for directory, paths in owned.items()),
+        key=lambda item: -len(item[0]),
+    )
+    for path in files:
+        text = str(path)
+        for prefix, paths in prefixes:
+            if text.startswith(prefix):
+                paths.append(path)
+                break
+    return owned
+
+
+def require_listed_sources(
+    root: Path, packages: list[Group], files: list[Path], python_only: bool
+) -> None:
+    """Code added after setup is checked only once its package lists it."""
+    languages = {"python"} if python_only else {"python", "javascript", "dart"}
+    groups = [group for group in packages if group.get("language") in languages]
+    if not groups:
+        return
+    owned = owned_files(root, packages, files)
+    for group in groups:
+        language = group["language"]
+        directory = root / group["path"]
+        listed = tuple(group.get("sources", []))
+        if "." in listed:
+            continue
+        inside = tuple(f"{source}{os.sep}" for source in listed)
+        start = len(str(directory)) + 1
+        unlisted = [
+            path
+            for path in owned[directory]
+            if (name := str(path)[start:]) not in listed and not name.startswith(inside)
+        ]
+        if missing := sorted(source_roots(directory, language, unlisted)):
+            label = {"javascript": "JavaScript"}.get(language, language.title())
+            checks = (
+                " and to every check that names them (tests --cov=, annotations, dead-code, duplicates)"
+                if language == "python"
+                else "; tests must then cover its files, and test-only code belongs in test/, tests/ or __tests__/"
+            )
+            raise ValueError(
+                f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; "
+                f"add each to that package's `sources` list in hard-eng.gates.json{checks}"
+            )

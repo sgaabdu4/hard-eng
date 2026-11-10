@@ -6,9 +6,11 @@ import re
 import shlex
 import subprocess
 import tomllib
+from collections.abc import Iterator
 from fnmatch import fnmatchcase
 from pathlib import Path
 
+from coverage_sources import owned_files, source_roots
 from fallow_report import fallow_report_path, validate_scanner_command
 from gate_config import (
     LANGUAGES,
@@ -20,7 +22,6 @@ from gate_config import (
     Report,
     dart_scan_includes_boundaries,
     generated_sources,
-    nonproduction_source,
     repository_files,
     typescript_packages,
 )
@@ -150,6 +151,19 @@ def is_shell_script(path: Path) -> bool:
         return bool(SHELL_SHEBANG.match(source.readline(4096)))
 
 
+def project_shell_scripts(
+    root: Path, files: list[Path], listed: frozenset[str] = frozenset()
+) -> Iterator[Path]:
+    """The project's own shell scripts, one at a time; a listed one is not read whole."""
+    return (
+        path
+        for path in files
+        if is_shell_script(path)
+        and str(path.relative_to(root)) not in listed
+        and not is_own(root, path)
+    )
+
+
 def unlisted_shell_scripts(
     root: Path, files: list[Path], shared: list[Gate]
 ) -> list[str]:
@@ -164,17 +178,14 @@ def unlisted_shell_scripts(
         for gate in gates
     ):
         return []
-    listed = {
+    listed = frozenset(
         argument
         for gate in gates
         for argument in gate["command"][gate["command"].index("--") + 1 :]
-    }
+    )
     return sorted(
         str(path.relative_to(root))
-        for path in files
-        if is_shell_script(path)
-        and str(path.relative_to(root)) not in listed
-        and not is_own(root, path)
+        for path in project_shell_scripts(root, files, listed)
     )
 
 
@@ -219,6 +230,13 @@ def package_directory(arguments: list[str], directory: Path) -> tuple[list[str],
     return arguments, directory
 
 
+def gate_script_arguments(group: Group, gate: Gate, directory: Path) -> list[str]:
+    try:
+        return package_script_arguments(gate["command"], directory, bun_only=True)
+    except TypeError as error:
+        raise TypeError(f"{group['path']}: gate {gate['name']}: {error}") from error
+
+
 def package_script_invocation(
     command: list[str], directory: Path, bun_only: bool = False
 ) -> tuple[list[str], Path]:
@@ -251,7 +269,9 @@ def package_script_invocation(
         package = json.loads((directory / "package.json").read_text())
         script = package.get("scripts", {}).get(arguments[2])
         if not isinstance(script, str):
-            raise TypeError("Configured package test script is missing")
+            raise TypeError(
+                f"package script {arguments[2]} is missing from package.json"
+            )
         arguments = shlex.split(script) + arguments[3:]
         if not arguments:
             raise ValueError("Configured package test script is empty")
@@ -338,41 +358,6 @@ def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
             f"{directory}: bun.lock is required; run bun install and commit bun.lock"
         )
     return "bun", ["bun", "install", "--frozen-lockfile"], lockfile
-
-
-def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:
-    """Top-level names that hold a package's production code."""
-    extensions = {
-        "python": {".py"},
-        "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
-        "dart": {".dart"},
-    }
-    sources = set()
-    for path in files:
-        if (
-            not path.is_relative_to(directory)
-            or path.suffix not in extensions[language]
-        ):
-            continue
-        relative = path.relative_to(directory)
-        if nonproduction_source(relative) or {".hooks", ".agents"} & set(
-            relative.parts
-        ):
-            continue
-        sources.add(relative.parts[0])
-    return sources
-
-
-def owned_files(
-    root: Path, packages: list[Group], files: list[Path]
-) -> dict[Path, list[Path]]:
-    """Each file belongs to the package nearest to it."""
-    owned: dict[Path, list[Path]] = {root / package["path"]: [] for package in packages}
-    for path in files:
-        owner = next((parent for parent in path.parents if parent in owned), None)
-        if owner is not None:
-            owned[owner].append(path)
-    return owned
 
 
 def adapt_sources(root: Path, package: Group, files: list[Path]) -> None:

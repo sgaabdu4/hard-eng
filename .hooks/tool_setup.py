@@ -20,8 +20,13 @@ from pathlib import Path
 from typing import IO
 
 from fallow_report import native_scanner_command
-from gate_config import Gate, Group
-from project_setup import package_script_invocation
+from gate_config import Gate, GateConfig, Group, has_workflows, require_roles
+from project_setup import (
+    is_deployment_file,
+    package_script_invocation,
+    project_shell_scripts,
+    require_listed_shell_scripts,
+)
 
 RELEASE_AGE_SECONDS = 2 * 24 * 60 * 60
 DIGIT_RUN = re.compile(r"\d+")
@@ -102,20 +107,54 @@ def quick_mode() -> bool:
 def ensure_python_runtime() -> None:
     """Run the installed CLI with its YAML dependency without changing host Python."""
     if importlib.util.find_spec("yaml") is None:
-        os.execvp(
-            "uv",
-            [
+        try:
+            os.execvp(
                 "uv",
-                "run",
-                "--no-project",
-                "--with",
-                "pyyaml",
-                "--python",
-                sys.executable,
-                "python",
-                *sys.argv,
-            ],
+                [
+                    "uv",
+                    "run",
+                    "--no-project",
+                    "--with",
+                    "pyyaml",
+                    "--python",
+                    sys.executable,
+                    "python",
+                    *sys.argv,
+                ],
+            )
+        except FileNotFoundError as error:
+            raise FileNotFoundError(
+                "uv is not on PATH; Hard Eng needs it. Install uv, then run again."
+            ) from error
+
+
+def require_shared_roles(
+    root: Path, config: GateConfig, files: list[Path], secrets: bool
+) -> set[str]:
+    """Files decide the mandatory shared roles; a gate that names a role's tool fills it."""
+    required = {"secrets-files"} if secrets else set()
+    if secrets and config.get("scan_git_history", True):
+        required.add("secrets-history")
+    if has_workflows(root, files):
+        required.update({"workflows", "ci-security"})
+    if next(project_shell_scripts(root, files), None) is not None:
+        required.add("shell")
+    if any(is_deployment_file(path) for path in files):
+        required.add("deployment")
+    roles = {gate.get("role", "") for gate in config["shared"]}
+    for gate in config["shared"]:
+        command = gate["command"]
+        require_role_tool("shared", gate, command)
+        roles.update(
+            role
+            for role, tool in ROLE_TOOLS["shared"].items()
+            if Path(command[0]).name == tool[0]
         )
+        if Path(command[0]).name == "trivy" and "config" in command[1:]:
+            roles.add("deployment")
+    require_roles("shared", required, roles)
+    require_listed_shell_scripts(root, files, config["shared"])
+    return roles
 
 
 def entry_point_names(directory: Path) -> list[str]:

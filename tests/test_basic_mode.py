@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -87,6 +88,7 @@ def test_basic_mode_check_impact_and_mutation_run_without_packages(
     for name in ("PRODUCT.md", "DESIGN.md"):
         (repository / name).write_text((SOURCE / name).read_text())
     config["shared"] = config["shared"][:2]
+    shutil.rmtree(repository / ".github/workflows")
     scanner = tmp_path / "bin/gitleaks"
     scanner.parent.mkdir()
     scanner.write_text(
@@ -190,3 +192,37 @@ def test_whole_project_security_scans_carry_no_unanchored_excludes() -> None:
     assert scans
     for command in scans:
         assert not {"--exclude=.agents", "--exclude=.hooks"} & set(command), command
+
+
+def test_basic_mode_requires_checks_for_scripts_and_workflows_added_later(
+    installer: ModuleType, repository: Path, shipping_policy: ShippingPolicy
+) -> None:
+    go_project(repository)
+    config = installer.gate_config(repository)
+    config["shipping"] = shipping_policy
+    (repository / "hard-eng.gates.json").write_text(json.dumps(config))
+    installer.install(repository)
+    installed = parse_config((repository / "hard-eng.gates.json").read_text())
+    validate_required_checks(repository, installed)
+    (repository / "run.sh").write_text("#!/bin/sh\necho run\n")
+    with pytest.raises(ValueError, match="shared: missing mandatory checks: shell"):
+        validate_required_checks(repository, installed)
+    validate_required_checks(repository, installed, starting=True)
+    installed["shared"].append(
+        {"name": "shellcheck", "role": "shell", "command": ["true"]}
+    )
+    with pytest.raises(ValueError, match="the shell check must run `shellcheck`"):
+        validate_required_checks(repository, installed)
+    installed["shared"][-1]["command"] = ["shellcheck", "--", "run.sh"]
+    validate_required_checks(repository, installed)
+    (repository / "other.sh").write_text("#!/bin/sh\necho other\n")
+    with pytest.raises(ValueError, match="shellcheck omits other.sh"):
+        validate_required_checks(repository, installed)
+    installed["shared"] = [
+        gate
+        for gate in installed["shared"]
+        if gate["role"] not in {"workflows", "ci-security"}
+    ]
+    (repository / "other.sh").unlink()
+    with pytest.raises(ValueError, match="missing mandatory checks: ci-security"):
+        validate_required_checks(repository, installed)

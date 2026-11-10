@@ -411,6 +411,32 @@ def test_ready_bypasses_only_a_review_nobody_but_the_author_can_give(
         assert shipment.review_bypass is (state == "blocked")
 
 
+@pytest.mark.parametrize("state", ["blocked", "unstable"])
+@pytest.mark.parametrize(
+    ("changes", "error", "message"),
+    [
+        ({"status": "in_progress"}, shipping.PendingCheck, "has not completed"),
+        ({"conclusion": "failure"}, shipping.ShippingError, "not successful"),
+    ],
+)
+def test_ready_names_a_pending_or_failed_check_before_the_review_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+    changes: dict[str, object],
+    error: type[Exception],
+    message: str,
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(
+        _pull(fixture, mergeable_state=state), [_check(fixture.head, **changes)]
+    )
+    fake.review = _review(fixture.head, viewerCanMergeAsAdmin=False)
+    _patch_gh(monkeypatch, fake)
+    with pytest.raises(error, match=message):
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+
+
 @pytest.mark.parametrize(
     ("changes", "message"),
     [
@@ -535,19 +561,24 @@ def test_ready_rejects_changed_pr_head_during_final_recheck(
 def test_a_delivery_check_must_report_passed_for_the_new_revision(
     tmp_path: Path, answer: dict[str, str]
 ) -> None:
-    command = [
-        sys.executable,
-        "-c",
-        "import sys; print(sys.argv[1])",
-        json.dumps(answer),
-    ]
+    code = "import sys; print(sys.argv[1])"
+    command = [sys.executable, "-c", code, json.dumps(answer)]
+    _delivery_refusal(tmp_path, command, "did not prove revision: live")
+
+
+def _delivery_refusal(tmp_path: Path, command: list[str], match: str) -> None:
     fixture = _fixture(
         tmp_path, target="Deploy", delivery=[{"name": "live", "command": command}]
     )
     policy = shipping.load_policy(fixture.root, required=True)
     assert policy is not None
-    with pytest.raises(shipping.ShippingError, match="did not prove revision: live"):
+    with pytest.raises(shipping.ShippingError, match=match):
         shipping._delivery(fixture.root, policy, "1" * 40, _PR_URL)
+
+
+def test_a_failed_delivery_check_keeps_its_reason(tmp_path: Path) -> None:
+    command = [sys.executable, "-c", "import sys; sys.exit('deploy not found')"]
+    _delivery_refusal(tmp_path, command, "live.*deploy not found")
 
 
 def test_delivered_deploy_rejects_old_live_revision_then_passes(

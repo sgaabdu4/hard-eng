@@ -9,13 +9,14 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from xml.parsers.expat import ExpatError
 
 from challenge import shipping_note
 from gate_config import Group
+from process_group import exit_when_stopped
 from shipping import (
     PendingCheck,
     Shipment,
@@ -53,10 +54,6 @@ def remote_base(root: Path, branch: str | None) -> str | None:
     return revision
 
 
-def interrupted(number: int, _frame: object) -> None:
-    raise SystemExit(128 + number)
-
-
 def run_hard_eng(
     checkout: Path, arguments: list[str], environment: dict[str, str]
 ) -> int:
@@ -89,8 +86,8 @@ def snapshot_environment(root: Path) -> dict[str, str]:
 LOCAL_FILES = {".claude/settings.local.json", "CLAUDE.local.md"}
 
 
-def link_local_files(root: Path, checkout: Path) -> None:
-    """Builds read ignored local .env* files; link them and local settings without reading them."""
+def local_files(root: Path) -> Iterator[tuple[str, bool]]:
+    """Ignored paths of the main checkout that a new worktree gets: (name, copied)."""
     ignored = git(
         root,
         "ls-files",
@@ -105,16 +102,56 @@ def link_local_files(root: Path, checkout: Path) -> None:
     )
     for name in filter(None, ignored.split("\0")):
         source = root / name
-        target = checkout / name
-        if not target.parent.is_dir() or target.exists() or target.is_symlink():
-            continue
         if (
             Path(name).name.startswith(".env") and source.is_file()
         ) or name in LOCAL_FILES:
-            target.symlink_to(source)
+            yield name, False
         elif source.resolve() == hooks.resolve():
             # Git ignores files inside a linked folder, not the link; Husky's folder holds only shims.
+            yield name, True
+
+
+def link_local_files(root: Path, checkout: Path) -> None:
+    """Builds read ignored local .env* files; link them and local settings without reading them."""
+    for name, copied in local_files(root):
+        source = root / name
+        target = checkout / name
+        if not target.parent.is_dir() or target.exists() or target.is_symlink():
+            continue
+        if copied:
             shutil.copytree(source, target, symlinks=True)
+        else:
+            target.symlink_to(source)
+
+
+def placed_by_hard_eng(root: Path, checkout: Path) -> set[str]:
+    """Status lines for what link_local_files put in this worktree."""
+    return {
+        f"!! {name}"
+        for name, copied in local_files(root)
+        if copied or (checkout / name).resolve() == (root / name).resolve()
+    }
+
+
+def changed_copies(root: Path, checkout: Path, folder: str) -> list[str]:
+    """Paths in a copied folder that the main checkout does not hold with the same content."""
+    changed = []
+    for path in sorted((checkout / folder).rglob("*")):
+        name = path.relative_to(checkout)
+        source = root / name
+        if path.is_symlink() or source.is_symlink():
+            same = (
+                path.is_symlink()
+                and source.is_symlink()
+                and path.readlink() == source.readlink()
+            )
+        else:
+            same = path.is_dir() or (
+                source.is_file() and path.read_bytes() == source.read_bytes()
+            )
+        if not same:
+            changed.append(str(name))
+    return changed
 
 
 def prepare_checkout(root: Path, checkout: Path, environment: dict[str, str]) -> None:
@@ -181,8 +218,7 @@ def mutate(
     production: Callable[[Path, Group], set[Path]],
 ) -> int:
     """Mutate committed changes in a snapshot, since Dart mutates source in place."""
-    signal.signal(signal.SIGTERM, interrupted)
-    signal.signal(signal.SIGHUP, interrupted)
+    exit_when_stopped()
     if in_place:
         from mutation import report
 
@@ -230,8 +266,7 @@ def push_base(
 
 
 def pre_push(root: Path) -> int:
-    signal.signal(signal.SIGTERM, interrupted)
-    signal.signal(signal.SIGHUP, interrupted)
+    exit_when_stopped()
     policy = load_policy(root)
     assert policy is not None
     started, mutating = time.monotonic(), 0.0
@@ -325,15 +360,29 @@ def unchanged_checkout(shipment: Shipment) -> None:
     index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
     if (target / index_lock).exists():
         raise ValueError("Cleanup preserves a task with an active Git index lock")
-    if git(
+    main = Path(worktrees(target)[0]["worktree"])
+    own = placed_by_hard_eng(main, target)
+    status = git(
         target,
         "status",
         "--porcelain",
         "--untracked-files=all",
         "--ignored=matching",
         "--ignore-submodules=none",
-    ).strip():
-        raise ValueError("Cleanup preserves modified, untracked or ignored work")
+    )
+    folders = tuple(line for line in own if line.endswith("/"))
+    kept = [
+        line[3:]
+        for line in status.splitlines()
+        if line not in own and not line.startswith(folders)
+    ]
+    for folder in folders:
+        kept += changed_copies(main, target, folder[3:])
+    if kept:
+        raise ValueError(
+            "Cleanup preserves modified, untracked or ignored work: "
+            + ", ".join(kept[:3])
+        )
     if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:
         raise ValueError("Cleanup preserves commits added after the verified PR")
 

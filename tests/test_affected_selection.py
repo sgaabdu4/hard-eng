@@ -425,7 +425,9 @@ def test_input_selection_reads_native_git_paths(repository: Path, change: str) -
     ]
 
 
-def _no_requirements(_root: Path, _config: object, _listed: object = None) -> None:
+def _no_requirements(
+    _root: Path, _config: object, _listed: object = None, _starting: bool = False
+) -> None:
     return None
 
 

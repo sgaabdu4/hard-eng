@@ -8,10 +8,12 @@ from types import ModuleType
 import pytest
 from gate_config import (
     package_manifests,
+    validate_group,
     validate_manifest_groups,
     validate_required_checks,
 )
 from project_setup import javascript_manager
+from test_setup import repository
 
 
 @pytest.mark.parametrize("attribute", ["linguist-generated", "linguist-vendored"])
@@ -178,3 +180,15 @@ def test_install_lands_with_a_pending_bun_migration(
     (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
     installer.install(tmp_path)
     assert "Bun migration pending" in capsys.readouterr().err
+
+
+def test_a_missing_package_script_names_package_gate_and_script(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    group = installer.gate_config(tmp_path)["packages"][0]
+    with pytest.raises(
+        TypeError,
+        match=r"^\.: gate \S+: .*script test:coverage is missing from package.json",
+    ):
+        validate_group(tmp_path, group, set())

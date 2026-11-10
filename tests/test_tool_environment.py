@@ -1,11 +1,14 @@
 """The generated workflow keeps tool and cache directories a runner already exports."""
 
+import importlib.util
 import os
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+import tool_setup
 import yaml
 from ci_setup import configure_ci
 from conftest import SOURCE
@@ -175,3 +178,14 @@ def test_leftover_env_mapping_stops_overriding_the_runner_directories(
 
     current, changes, _ = update_from(installer, tmp_path, with_mapping)
     assert changes == {WORKFLOW: current}
+
+
+def test_a_missing_uv_is_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
+    def no_spec(name: str) -> None:
+        return None
+
+    monkeypatch.setattr(importlib.util, "find_spec", no_spec)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    with pytest.raises(OSError, match="uv"):
+        tool_setup.ensure_python_runtime()

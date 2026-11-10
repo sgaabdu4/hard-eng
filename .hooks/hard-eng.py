@@ -773,7 +773,7 @@ def check(
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))
-        plans.report_stage(failed, plan_stage, FAILED_GATES)
+        plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
         return int(failed)
 
 
@@ -832,6 +832,22 @@ def adopt() -> int:
         finally:
             RECORDING.clear()
         return record(ROOT, groups, set(FAILED_GATES), OUTPUTS)
+
+
+def check_command(args: "Namespace") -> int:
+    from process_group import exit_when_stopped
+    from tool_setup import ensure_python_runtime
+
+    ensure_python_runtime()
+    exit_when_stopped()
+    return check(
+        base=args.base,
+        plan_stage=args.plan_stage,
+        dependents=not args.without_dependents,
+        related_tests=args.related_tests,
+        quick=args.quick,
+        languages=language_filter(args),
+    )
 
 
 def main() -> int:
@@ -937,17 +953,7 @@ def main() -> int:
         hook.add_argument("agent", choices=("claude", "codex"))
     args = parser.parse_args()
     if args.command == "check":
-        from tool_setup import ensure_python_runtime
-
-        ensure_python_runtime()
-        return check(
-            base=args.base,
-            plan_stage=args.plan_stage,
-            dependents=not args.without_dependents,
-            related_tests=args.related_tests,
-            quick=args.quick,
-            languages=language_filter(args),
-        )
+        return check_command(args)
     if args.command == "impact":
         return impact(args.base, language_filter(args))
     if args.command == "mutation":

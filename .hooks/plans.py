@@ -124,13 +124,19 @@ def is_documentation(path: Path, owner_language: str | None = None) -> bool:
     return is_plan_path(path) or (markdown and not site)
 
 
-def report_stage(failed: bool, stage: str | None, gates: list[str]) -> None:
+def report_stage(
+    failed: bool, stage: str | None, gates: list[str], quick: bool = False
+) -> None:
     if failed:
         where = f" in {', '.join(sorted(gates))}" if gates else ""
         print(f"Hard Eng: verification failed{where}; the next stage is blocked.")
     elif stage == "Ready":
         print(
             "Hard Eng: planning checks passed — ready for build within the authorized scope."
+        )
+    elif stage == "Complete" and quick:
+        print(
+            "Hard Eng: quick checks passed; the full check runs the tests and the other gates."
         )
     elif stage == "Complete":
         print(
@@ -575,7 +581,13 @@ def _revision(root: Path, reference: str) -> str | None:
 
 def released_plans(root: Path, base: str | None) -> set[str]:
     """Plans changed since the release base, so a feature check sees what the release checks."""
-    tips = {_revision(root, reference) for reference in release_references(root)}
+    references = release_references(root)
+    revisions = {name: _revision(root, name) for name in references}
+    tips = set(revisions.values())
+    remote = {tip for name, tip in revisions.items() if name.startswith("origin/")}
+    if base is None and remote - {None}:
+        # A caller's base names what is released; without one, origin does.
+        tips = remote
     point = default_branch_point(root)
     if point is None or _revision(root, base or "HEAD") in tips:
         return set()
@@ -777,7 +789,9 @@ REQUIREMENT_FILES = (
     ".agents/skills/he/references/requirements.md",
     "docs/requirements.md",
 )
-REQUIREMENT_ID = re.compile(r"\b(?:HE|REQ)-[A-Z0-9]+(?:-[A-Z0-9]+)+\b")
+REQUIREMENT_ID = re.compile(
+    r"\b(?:HE-[A-Z0-9]+(?:-[A-Z0-9]+)*|REQ-[A-Z0-9]+(?:-[A-Z0-9]+)+)\b"
+)
 TEST_CALL = re.compile(r"""\b(?:test|it|testWidgets)\(\s*(['"])(.+?)\1""")
 PYTHON_TEST = re.compile(r"^\s*(?:async\s+)?def\s+(test\w*)")
 Reference = tuple[str, int, str]
@@ -794,6 +808,11 @@ def registry_entries(root: Path) -> tuple[dict[str, tuple[str, str]], list[str]]
             heading, _, body = chunk.partition("\n")
             requirement = heading.split(" — ", 1)[0].strip()
             if not REQUIREMENT_ID.fullmatch(requirement):
+                if requirement.startswith(("HE-", "REQ-")):
+                    errors.append(
+                        f"{name}: heading {requirement} is not a valid requirement ID; "
+                        "see the ID format at the top of the Hard Eng requirements"
+                    )
                 continue
             if requirement in entries:
                 errors.append(f"{requirement} is defined more than once")
@@ -827,7 +846,7 @@ def requirement_references(root: Path) -> list[tuple[str, int, str]]:
             "-n",
             "-z",
             "-E",
-            r"(HE|REQ)-[A-Z0-9]+(-[A-Z0-9]+)+",
+            r"(HE|REQ)-[A-Z0-9]",
         )
     except subprocess.CalledProcessError as error:
         if error.returncode == 1:
@@ -932,7 +951,8 @@ def validate_requirements(root: Path) -> None:
     for path, line, text in references:
         for requirement in REQUIREMENT_ID.findall(text):
             proof = entries.get(requirement, ("unknown", ""))[0]
-            if proof in {"unknown", "retired"}:
+            # A one-part token such as a codec name is an ID only when the registry holds it.
+            if proof == "retired" or proof == "unknown" and requirement.count("-") > 1:
                 errors.append(f"{path}:{line} names {proof} {requirement}")
     errors += unproven_requirements(root, entries, references)
     errors += copied_requirements(root, entries)

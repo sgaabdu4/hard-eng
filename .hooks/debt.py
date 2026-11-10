@@ -11,6 +11,8 @@ from gate_config import SOURCE_FILE, Gate, Group, JsonObject
 
 WORD_CHARACTER = re.compile(r"\w")
 DIGIT_RUN = re.compile(r"\d+")
+COUNTED_WORDS = re.compile(r"(?<!\w)N((?: \w+){1,2})")
+WORD = re.compile(r"\w+")
 
 DEBT_FILE = "hard-eng.debt.json"
 # Failing tests, broken installs and leaked secrets are never old findings to keep.
@@ -106,6 +108,36 @@ def fingerprints(root: Path, group: Group, gate: Gate, output: str) -> Counter[s
     return found
 
 
+def neutral(line: str) -> str:
+    """The line with the words after a count in one form, so 1 error and 2 errors match."""
+
+    def singular(word: re.Match[str]) -> str:
+        return word.group().removesuffix("s").removesuffix("e")
+
+    return COUNTED_WORDS.sub(
+        lambda counted: "N" + WORD.sub(singular, counted.group(1)), line
+    )
+
+
+def by_form(lines: Counter[str]) -> Counter[str]:
+    forms: Counter[str] = Counter()
+    for line, count in lines.items():
+        forms[neutral(line)] += count
+    return forms
+
+
+def still_found(old: Counter[str], current: Counter[str]) -> Counter[str]:
+    """Recorded lines whose form the current run still has, in their recorded spelling."""
+    available = by_form(current)
+    kept: Counter[str] = Counter()
+    for line, count in old.items():
+        taken = min(count, available[neutral(line)])
+        if taken:
+            kept[line] = taken
+            available[neutral(line)] -= taken
+    return kept
+
+
 def load(root: Path) -> dict[str, Counter[str]]:
     path = root / DEBT_FILE
     if not path.is_file():
@@ -133,20 +165,24 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     if debt is None or gate.get("role") in NEVER:
         return failed
     current = fingerprints(root, group, gate, output) if failed else Counter()
-    if new := current - debt:
-        print(f"FAIL {gate['name']}: findings beyond {DEBT_FILE}:")
-        shown = sorted(new.elements(), key=lambda line: not WORD_CHARACTER.search(line))
+    spelling = {neutral(line): line for line in current}
+    if new := by_form(current) - by_form(debt):
+        print(f"FAIL {gate['name']} @ {group['path']}: findings beyond {DEBT_FILE}:")
+        shown = sorted(
+            (spelling[form] for form in new.elements()),
+            key=lambda line: not WORD_CHARACTER.search(line),
+        )
         print("".join(f"  {line}\n" for line in shown[:20]), end="")
         return True
-    if fixed := debt - current:
+    if fixed := by_form(debt) - by_form(current):
         print(
             f"FAIL {gate['name']}: {fixed.total()} recorded lines are fixed; run "
             f"`python3 .hooks/hard-eng.py adopt` to drop them from {DEBT_FILE}"
         )
         return True
     print(
-        f"DEBT {gate['name']}: the failure above holds only the {debt.total()} lines "
-        f"recorded in {DEBT_FILE}; no new finding"
+        f"DEBT {gate['name']} @ {group['path']}: the failure above holds only the "
+        f"{debt.total()} lines recorded in {DEBT_FILE}; no new finding"
     )
     return False
 
@@ -188,7 +224,7 @@ def record(
                 refused.append(key)
                 continue
             if old is not None:
-                current &= old.get(key, Counter())
+                current = still_found(old.get(key, Counter()), current)
             if current:
                 gates[key] = dict(sorted(current.items()))
     if refused and old is None:

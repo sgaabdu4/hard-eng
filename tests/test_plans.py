@@ -539,12 +539,10 @@ def test_native_cli_plan_stage_and_missing_plan(
         '"command": ["' + sys.executable + '", "-c", "print(123)"]}]}'
     )
     command = [sys.executable, str(hooks / "hard-eng.py"), "check"]
-    assert (
-        subprocess.run(
-            command, cwd=tmp_path, capture_output=True, check=False
-        ).returncode
-        == 0
+    full = subprocess.run(
+        command, cwd=tmp_path, capture_output=True, text=True, check=False
     )
+    assert full.returncode == 0 and "ready for ship" in full.stdout
     subprocess.run(
         [
             "git",
@@ -568,7 +566,9 @@ def test_native_cli_plan_stage_and_missing_plan(
         text=True,
         check=True,
     )
-    assert "ready for ship" in json.loads(stopped.stdout)["systemMessage"]
+    notice = json.loads(stopped.stdout)["systemMessage"]
+    assert "quick checks passed; the full check runs the tests" in notice
+    assert "ready for ship" not in notice
     result = subprocess.run(
         command + ["--base", "missing-comparison-base"],
         cwd=tmp_path,

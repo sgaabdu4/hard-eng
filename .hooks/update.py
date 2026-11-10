@@ -715,25 +715,27 @@ def repair_installation(root: Path, previous: str) -> str:
         status += "; installed the missing pre-push hook"
     status += hook_chain.install_worktree_hook(root)
     names = sorted({*missing, *added})
-    clean = bool(names) and not local_state(root, names)
+    dirty = local_state(root, names) if names else []
     retire_local_generation(root)
     if not names:
         return status + "."
     write_changes(root, missing)
     write_links(root, added)
     return f"{status}; repaired {install_paths(names)}. " + commit_install(
-        root, names, clean, {**missing, **added}
+        root, names, dirty, {**missing, **added}
     )
 
 
 def commit_install(
     root: Path,
     names: list[str],
-    clean: bool,
+    dirty: list[str],
     expected: dict[str, str | None] | None = None,
 ) -> str:
-    reason = "these paths already had local changes"
-    if clean:
+    reason = "these paths already had local changes: " + install_paths(
+        [line[3:].strip('"') for line in dirty]
+    )
+    if not dirty:
         subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
         if not subprocess.run(
             ["git", "diff", "--cached", "--quiet", "--", *names], cwd=root, check=False
@@ -766,8 +768,8 @@ def commit_install(
             )
             reason = " | ".join(result.stdout.strip().splitlines()[-3:])
     return (
-        f"Installed files are not committed ({reason}). Commit them so updates and "
-        "worktrees include them: " + install_paths(names)
+        f"Installed files are not committed ({reason}). Commit all installed files so "
+        "updates and worktrees include them: " + install_paths(names)
     )
 
 

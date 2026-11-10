@@ -10,7 +10,13 @@ from types import ModuleType
 
 import pytest
 from conftest import git
-from gate_config import Gate, Group, JsonObject, validate_required_checks
+from gate_config import (
+    Gate,
+    Group,
+    JsonObject,
+    validate_performance,
+    validate_required_checks,
+)
 from plans import validate_plans
 from python_setup import python_roots
 from test_plans import edit, sized_branch
@@ -46,6 +52,12 @@ def test_missing_performance_suite_names_the_requirement(
     output = capsys.readouterr().out
     assert "HE-PERFORMANCE-SUITE: tests/performance does not exist" in output
     assert "performance_exception" in output
+
+
+def test_the_performance_suite_error_names_its_package() -> None:
+    group: Group = {"path": "services/api", "language": "python", "checks": []}
+    with pytest.raises(ValueError, match="^services/api: HE-PERFORMANCE-SUITE"):
+        validate_performance(group)
 
 
 @pytest.mark.parametrize(("rescanned", "failed"), [(1, False), (0, True)])
@@ -226,6 +238,81 @@ def test_python_code_added_after_setup_must_join_the_checked_sources(
         validate_required_checks(tmp_path, config)
     config["packages"][0]["sources"].append("calc.py")
     validate_required_checks(tmp_path, config)
+    config["packages"][0]["sources"] = ["."]
+    validate_required_checks(tmp_path, config)
+
+
+def test_the_missing_imports_message_gives_a_gate_and_a_block_that_pass(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    uv_project(tmp_path, PROJECT)
+    (tmp_path / "main.py").write_text("value = 1\n")
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg/__init__.py").write_text("")
+    (tmp_path / "pkg/mod.py").write_text("value = 1\n")
+    group = config["packages"][0]
+    group["sources"].append("pkg")
+    with pytest.raises(
+        ValueError, match="missing mandatory checks: imports"
+    ) as refusal:
+        validate_required_checks(tmp_path, config)
+    message = str(refusal.value)
+    gate: Gate = json.JSONDecoder().raw_decode(message[message.index("{") :])[0]
+    group["checks"].append(gate)
+    project = tmp_path / "pyproject.toml"
+    project.write_text(
+        project.read_text() + "\n" + message[message.index("[tool.importlinter]") :]
+    )
+    validate_required_checks(tmp_path, config)
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is False
+    assert "PASS imports" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("manifest", "lock", "first", "added"),
+    [
+        ("package.json", "bun.lock", "src/index.ts", "server/main.ts"),
+        ("pubspec.yaml", "pubspec.lock", "lib/main.dart", "tool/build.dart"),
+    ],
+)
+def test_javascript_and_dart_code_added_after_setup_must_join_the_checked_sources(
+    installer: ModuleType,
+    tmp_path: Path,
+    manifest: str,
+    lock: str,
+    first: str,
+    added: str,
+) -> None:
+    repository(tmp_path)
+    if manifest != "package.json":
+        (tmp_path / "package.json").unlink()
+        (tmp_path / "bun.lock").unlink()
+        (tmp_path / manifest).write_text("name: app_fixture\n")
+        (tmp_path / lock).touch()
+    for name in (first, added):
+        (tmp_path / name).parent.mkdir(exist_ok=True)
+    (tmp_path / first).write_text("export const a = 1;\n")
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
+    (tmp_path / added).write_text("export const b = 2;\n")
+    folder = Path(added).parts[0]
+    step = "`sources` list in hard-eng.gates.json; tests must then cover its files"
+    with pytest.raises(ValueError, match=f"outside its sources: {folder};.*{step}"):
+        validate_required_checks(tmp_path, config)
+    validate_required_checks(tmp_path, config, starting=True)
+    config["packages"][0]["sources"].append(folder)
+    validate_required_checks(tmp_path, config)
+    for listed in (["."], [first, added], [Path(first).parts[0], added]):
+        config["packages"][0]["sources"] = listed
+        validate_required_checks(tmp_path, config)
+    (tmp_path / added).with_stem("other").write_text("export const c = 3;\n")
+    with pytest.raises(ValueError, match=f"outside its sources: {folder};"):
+        validate_required_checks(tmp_path, config)
 
 
 @pytest.mark.parametrize("default", ["master", "trunk"])

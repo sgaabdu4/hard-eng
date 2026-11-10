@@ -646,6 +646,21 @@ def test_card_text_must_be_short_and_laid_out(project: Project, tmp_path: Path) 
     assert project.run("comment", "1", str(note)).code == 0
 
 
+def test_a_link_inside_a_sentence_is_not_read_for_technical_words(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    note = tmp_path / "note.txt"
+    note.write_text(
+        "Open the test site at https://staging.example.test/login and tap Log in."
+    )
+    assert project.run("comment", "1", str(note)).code == 0
+    note.write_text("Open https://staging.example.test and check the staging site.")
+    refused = project.run("comment", "1", str(note))
+    assert refused.code == 1
+    assert "staging" in str(refused.payload["error"])
+
+
 def test_comment_adds_the_needs_label_of_each_person_asked(
     project: Project, tmp_path: Path
 ) -> None:

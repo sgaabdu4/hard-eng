@@ -513,7 +513,7 @@ def gate_status(root: Path) -> str:
     from update import SOURCE_FILE, install_paths
 
     try:
-        load_groups(root)
+        load_groups(root, starting=True)
         status = "Gates: ok."
     except ModuleNotFoundError as error:
         if error.name != "yaml":
@@ -526,7 +526,9 @@ def gate_status(root: Path) -> str:
         KeyError,
         subprocess.SubprocessError,
     ) as error:
-        status = "Gates: not runnable — " + " ".join(str(error).split())
+        first, _, rest = str(error).strip().partition("\n")
+        more = " (`python3 .hooks/hard-eng.py check` prints the rest)" if rest else ""
+        status = "Gates: not runnable — " + " ".join(first.split()) + more
     try:
         pending: list[str] = [
             line[3:]
@@ -620,9 +622,7 @@ def completion_notice(agent: str | None, output: str) -> JsonObject:
     if agent not in {"claude", "codex"}:
         return {}
     lines = output.splitlines()
-    if lines and lines[-1].startswith(
-        ("Hard Eng: planning checks passed", "Hard Eng: build checks passed")
-    ):
+    if lines and lines[-1].startswith("Hard Eng: ") and " checks passed" in lines[-1]:
         return {"systemMessage": lines[-1]}
     return {}
 
@@ -673,7 +673,9 @@ def passed_notice(
 
 
 def bounded(text: str, *, tail: bool = False) -> str:
-    if len(text) <= GATE_OUTPUT_LIMIT:
+    from debt import ANSI
+
+    if len(text := ANSI.sub("", text)) <= GATE_OUTPUT_LIMIT:
         return text
     note = "\n[gate output cut; rerun check for the full log]\n"
     return note + text[-GATE_OUTPUT_LIMIT:] if tail else text[:GATE_OUTPUT_LIMIT] + note
@@ -682,6 +684,7 @@ def bounded(text: str, *, tail: bool = False) -> str:
 def failure_summary(log: str) -> str:
     """Failed gate names, then the first failing gate's output from its start."""
     failures = FAILED_COMMAND_LINE.findall(log)
+    failures = [f for f in failures if f"\nDEBT {f[0]} @ {f[1]}:" not in log]
     if not failures:
         return bounded(log, tail=True)
     heading = "Failed gates: " + ", ".join(dict.fromkeys(n for n, _ in failures)) + "\n"
@@ -694,7 +697,10 @@ def failure_summary(log: str) -> str:
     tail = f"[^\n]* @ {re.escape(package)}(?!\\S)" if package else ""
     finished = re.escape(name) + r"(?: \(exit|:)" + tail
     end = re.search(rf"(?m)^(?:CHECK|OUTPUT) \S*/\S+|(?:PASS|FAIL) {finished}", body)
-    return heading + bounded(body[: end.start() if end else None])
+    cut = end.start() if end else len(body)
+    where = f" @ {re.escape(package)}" if package else r"(?: @ \S+)?"
+    beyond = rf"(?m)^FAIL {re.escape(name)}{where}: findings beyond.*\n(?:  .*\n)*"
+    return heading + bounded(body[:cut]) + "".join(re.findall(beyond, body[cut:])[:1])
 
 
 def show_decisions(root: Path, names: list[str], state: Path | None) -> str:

@@ -11,7 +11,8 @@ import subprocess
 import sys
 import tempfile
 import time
-from contextlib import suppress
+from collections.abc import Callable, Generator
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TextIO
 
@@ -98,29 +99,66 @@ def stale_error(root: Path, revision: str) -> ValueError:
     )
 
 
-def revision_at(root: Path, ref: str) -> str | None:
+@contextmanager
+def source_reader(root: Path) -> Generator[Callable[[str], str | None]]:
+    """One Git process gives the source revision at each ref when it is asked."""
     from update import SOURCE_FILE
 
-    path = f"{ref}:{SOURCE_FILE}"
-    shown = subprocess.run(
-        ["git", "show", path],
+    git = subprocess.Popen(
+        ["git", "cat-file", "--batch"],
         cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
     )
-    try:
-        revision = json.loads(shown.stdout).get("revision")
-    except (ValueError, AttributeError):
+    stdin, stdout = git.stdin, git.stdout
+
+    def read(ref: str) -> str | None:
+        if stdin is None or stdout is None:
+            return None
+        name = f"{ref}:{SOURCE_FILE}\n".encode()
+        with suppress(OSError, ValueError, AttributeError):
+            stdin.write(name)
+            stdin.flush()
+            fields = stdout.readline().split()
+            if len(fields) == 3 and fields[2].isdigit():
+                revision = json.loads(stdout.read(int(fields[2]) + 1)).get("revision")
+                return revision if isinstance(revision, str) else None
         return None
-    return revision if isinstance(revision, str) else None
+
+    try:
+        yield read
+    finally:
+        git.communicate()
 
 
-def ready_revision(root: Path) -> str | None:
-    """The revision waiting on the update branch that this checkout does not hold yet."""
-    waiting = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
+def revision_at(root: Path, ref: str) -> str | None:
+    with source_reader(root) as read:
+        return read(ref)
+
+
+def shipping_base(root: Path) -> str:
+    try:
+        base = json.loads((root / "hard-eng.gates.json").read_text())["shipping"][
+            "base"
+        ]
+    except (OSError, ValueError, KeyError, TypeError):
+        return "main"
+    return base if isinstance(base, str) else "main"
+
+
+def waiting_note(root: Path) -> str | None:
+    # The base is read only when an update waits, so the usual Stop pays for one Git start alone.
+    with source_reader(root) as read:
+        waiting = read(f"refs/heads/{UPDATE_BRANCH}")
+        if waiting is None or waiting == installed_revision(root):
+            return None
+        base = shipping_base(root)
+        landed = read(f"refs/remotes/origin/{base}")
+    if landed != waiting:
+        return ready_message(waiting)
     return (
-        waiting if waiting is not None and waiting != installed_revision(root) else None
+        f"Hard Eng update {waiting} is already on origin/{base}; this checkout does not "
+        f"hold it yet. On {base}: `git pull`. On another branch: `git rebase origin/{base}`."
     )
 
 
@@ -142,8 +180,8 @@ def freshness_note(root: Path) -> str:
             return blocker
         if update_running(root):
             return f"Hard Eng update still running ({LOG_FILE}); scaffold may be stale."
-        if (ready := ready_revision(root)) is not None:
-            return ready_message(ready)
+        if (waiting := waiting_note(root)) is not None:
+            return waiting
         result = last_result(root)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return f"Hard Eng freshness unknown: {error}."
@@ -430,7 +468,15 @@ def locked_update(root: Path, repair: bool = False) -> str:
                 "wait for its result instead of starting another"
             )
         remove_stale_candidates(root)
-        return prepare_update(root, repair)
+        try:
+            outcome = prepare_update(root, repair)
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+            if repair:
+                record_result(root, failed_update(error))
+            raise
+        if repair:
+            record_result(root, outcome)
+        return outcome
 
 
 def update_attempt(head: str, revision: str) -> str:
@@ -496,6 +542,17 @@ def installed_revision(root: Path) -> object:
         return None
 
 
+def lookup_failure(
+    found: "subprocess.CompletedProcess[str]",
+) -> subprocess.SubprocessError:
+    lines = (found.stderr or "").strip().splitlines()
+    fatal = [line for line in lines if line.startswith("fatal:")]
+    reason = fatal[0] if fatal else "".join(lines[-1:])
+    return subprocess.SubprocessError(
+        f"git ls-remote exited {found.returncode}" + (f": {reason}" if reason else "")
+    )
+
+
 def update_base(root: Path) -> str:
     from shipping import load_policy
 
@@ -521,7 +578,7 @@ def update_base(root: Path) -> str:
         timeout=120,
     )
     if found.returncode != 0:
-        raise subprocess.SubprocessError(f"git ls-remote exited {found.returncode}")
+        raise lookup_failure(found)
     for line in found.stdout.splitlines():
         if line.startswith("ref: refs/heads/"):
             return line.partition("\t")[0].removeprefix("ref: refs/heads/")
@@ -592,11 +649,12 @@ def published(root: Path, base: str) -> bool:
         ["git", "ls-remote", "--exit-code", "--heads", "origin", base],
         cwd=root,
         capture_output=True,
+        text=True,
         check=False,
         timeout=120,
     )
     if found.returncode not in {0, 2}:
-        raise subprocess.SubprocessError(f"git ls-remote exited {found.returncode}")
+        raise lookup_failure(found)
     return found.returncode == 0
 
 
@@ -618,6 +676,15 @@ def prepare_update(root: Path, repair: bool = False) -> str:
     return outcome
 
 
+def free_step(root: Path, worktree: Path) -> str:
+    if worktree == Path(registered_worktrees(root)[0]["worktree"]):
+        return f"switch the main checkout to another branch with `git -C {worktree} switch <branch>`"
+    return (
+        f"free it with `git -C {worktree} switch --detach` or "
+        f"`git worktree remove {worktree}`"
+    )
+
+
 def build_update(root: Path, base: str, repair: bool) -> str:
     from hook_chain import use_own_hooks
     from update import update
@@ -635,8 +702,8 @@ def build_update(root: Path, base: str, repair: bool) -> str:
     if (worktree := branch_worktree(root)) is not None:
         raise ValueError(
             f"{UPDATE_BRANCH} is checked out in {worktree} with no unfinished work, so the "
-            f"update cannot move it; free it with `git -C {worktree} switch --detach` or "
-            f"`git worktree remove {worktree}`, then rerun `python3 .hooks/hard-eng.py update`"
+            f"update cannot move it; {free_step(root, worktree)}, then rerun "
+            "`python3 .hooks/hard-eng.py update`"
         )
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         candidate = Path(temporary) / "candidate"
@@ -709,10 +776,12 @@ def refuse_untracked_overlap(
         if line.startswith(("?? ", "!! "))
     ]
     if found:
+        from hook_chain import SETUP_COMMAND
+
         error = ValueError(
             "The update would replace local files that Git does not track: "
             + ", ".join(found)
-            + "; move them away or commit them, then run the published setup command to retry"
+            + f"; move or rename them, then rerun setup to retry: {SETUP_COMMAND}"
         )
         if not repair:
             remember_failure(root, update_attempt(tip, revision), error)

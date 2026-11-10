@@ -676,7 +676,7 @@ def validate_performance(group: Group) -> None:
     suites = [gate for gate in group["checks"] if gate.get("role") == "performance"]
     if group.get("language") and not suites and reason is None:
         raise ValueError(
-            "HE-PERFORMANCE-SUITE: Missing mandatory performance suite; configure a workload and budget "
+            f"{group['path']}: HE-PERFORMANCE-SUITE: Missing mandatory performance suite; configure a workload and budget "
             "or a reviewed performance_exception"
         )
     for gate in suites:
@@ -728,23 +728,19 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         "dart": {"format", "types", "tests", "dead-code-duplicates", "boundaries"},
         "swift": {"format-lint", "tests", "duplicates"},
     }.get(group.get("language", ""), set())
-    roles = {gate.get("role") for gate in group["checks"] if isinstance(gate, dict)}
+    roles = {gate.get("role", "") for gate in group["checks"] if isinstance(gate, dict)}
     if group.get("language") == "dart" and any(
         dart_scan_includes_boundaries(gate) for gate in group["checks"]
     ):
         roles.add("boundaries")
-    if required - roles:
-        raise ValueError(
-            f"{group['path']}: missing mandatory checks: {', '.join(sorted(required - roles))}"
-        )
+    require_roles(group["path"], required, roles)
     scripts: list[list[str]] = []
     if group.get("language") == "javascript":
-        from project_setup import javascript_manager, package_script_arguments
+        from project_setup import gate_script_arguments, javascript_manager
 
         javascript_manager(directory)
         scripts = [
-            package_script_arguments(gate["command"], directory, bun_only=True)
-            for gate in group["checks"]
+            gate_script_arguments(group, gate, directory) for gate in group["checks"]
         ]
     from tool_setup import require_role_tool
 
@@ -756,10 +752,20 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
     return len(group["checks"])
 
 
-def require_roles(directory: str, required: set[str], roles: set[str]) -> None:
+def require_roles(
+    directory: str, required: set[str], roles: set[str], step: str = ""
+) -> None:
     if missing := required - roles:
+        where = "the `shared` list" if directory == "shared" else f"package {directory}"
         raise ValueError(
-            f"{directory}: missing mandatory checks: {', '.join(sorted(missing))}"
+            f"{directory}: missing mandatory checks: {', '.join(sorted(missing))}; "
+            + (
+                step
+                or f"add a gate with each role to {where} in hard-eng.gates.json (package "
+                "and secret scan roles: the language template in "
+                ".agents/skills/he/templates/; other shared roles: "
+                ".agents/skills/he/references/gates.md)"
+            )
         )
 
 
@@ -803,48 +809,27 @@ def has_workflows(root: Path, files: list[Path]) -> bool:
 
 
 def validate_required_checks(
-    root: Path, config: GateConfig, listed: list[Path] | None = None
+    root: Path,
+    config: GateConfig,
+    listed: list[Path] | None = None,
+    starting: bool = False,
 ) -> None:
-    from project_setup import (
-        is_deployment_file,
-        is_shell_script,
-        require_listed_shell_scripts,
-    )
-
     files = listed or repository_files(root)
     manifests = package_manifests(root, files)
     validate_manifest_groups(root, config, manifests)
-    from python_setup import require_listed_python_sources
+    from coverage_sources import require_listed_sources
     from swift_setup import require_swift_groups
+    from tool_setup import require_shared_roles
 
     require_swift_groups(root, config, files)
-    require_listed_python_sources(root, config["packages"], files)
-    if not config["packages"] and not manifests:
-        return  # Ad-hoc command groups without a supported application manifest.
-    shared_roles = {gate.get("role", "") for gate in config["shared"]}
-    required = {"secrets-files"}
-    if config.get("scan_git_history", True):
-        required.add("secrets-history")
-    if has_workflows(root, files):
-        required.update({"workflows", "ci-security"})
-    if any(is_shell_script(path) for path in files):
-        required.add("shell")
-    if any(is_deployment_file(path) for path in files):
-        required.add("deployment")
-    from tool_setup import ROLE_TOOLS, require_role_tool
-
-    for gate in config["shared"]:
-        command = gate["command"]
-        require_role_tool("shared", gate, command)
-        shared_roles.update(
-            role
-            for role, tool in ROLE_TOOLS["shared"].items()
-            if Path(command[0]).name == tool[0]
-        )
-        if Path(command[0]).name == "trivy" and "config" in command[1:]:
-            shared_roles.add("deployment")
-    require_roles("shared", required, shared_roles)
-    require_listed_shell_scripts(root, files, config["shared"])
+    # Session start keeps its speed: `check` alone judges what this round added.
+    require_listed_sources(root, config["packages"], files, python_only=starting)
+    basic = not config["packages"] and not manifests
+    if basic and starting:
+        return
+    shared_roles = require_shared_roles(root, config, files, secrets=not basic)
+    if basic:
+        return
     workspace_languages = dict(manifests)
     by_directory = {
         (
@@ -909,8 +894,15 @@ def validate_package_services(
     if not group.get("language"):
         return
     require_roles(group["path"], {"security"}, roles | shared_roles)
-    if language == "python" and python_roots(directory, group):
-        require_roles(group["path"], {"imports"}, roles)
+    if (
+        language == "python"
+        and "imports" not in roles
+        and python_roots(directory, group)
+    ):
+        from python_setup import imports_step
+
+        step = imports_step(directory, group)
+        require_roles(group["path"], {"imports"}, roles, step)
     if language == "javascript":
         from fallow_report import owns_package_fallow
 
@@ -959,7 +951,11 @@ def parse_config(content: str, *, require_impact_review: bool = True) -> GateCon
 
 
 def load_groups(
-    root: Path, base: str | None = None, *, dependents: bool = True
+    root: Path,
+    base: str | None = None,
+    *,
+    dependents: bool = True,
+    starting: bool = False,
 ) -> list[Group]:
     from plans import validate_documents
 
@@ -985,7 +981,7 @@ def load_groups(
     count = sum(validate_group(root, group, report_paths) for group in groups)
     if not count:
         raise ValueError("No checks configured; verification cannot pass")
-    validate_required_checks(root, config, listed)
+    validate_required_checks(root, config, listed, starting)
     from gitleaks_scan import new_commits_command
 
     for gate in config["shared"]:

@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 
 from gate_config import Group
-from project_setup import dependency_command, owned_files, source_roots
+from project_setup import dependency_command
 
 
 def parallel_pytest(package: Group) -> None:
@@ -146,6 +146,28 @@ def import_configuration(directory: Path, package: Group, content: str) -> str:
     )
 
 
+def imports_step(directory: Path, package: Group) -> str:
+    """The whole step after a first module: the template gate as setup adapts it, and its contract."""
+    template = Path(__file__).resolve().parents[1] / (
+        ".agents/skills/he/templates/hard-eng.python.json"
+    )
+    gate = next(
+        check
+        for check in json.loads(template.read_text())["packages"][0]["checks"]
+        if check.get("role") == "imports"
+    )
+    manager = dependency_command(directory, "python")[0]
+    gate["command"] = python_gate_command(gate["command"], manager)
+    content = (directory / "pyproject.toml").read_text()
+    block = import_configuration(directory, package, content)[len(content) :]
+    where = Path(package["path"], "pyproject.toml")
+    return (
+        f"add this gate to package {package['path']} in hard-eng.gates.json: "
+        + json.dumps(gate)
+        + (f"; then add this to {where}:{block}" if block else "")
+    )
+
+
 def configure_python(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
@@ -251,26 +273,6 @@ def pytest_config(path: Path) -> str | list[str] | None:
     ):
         raise TypeError("pytest addopts must be text or a list of arguments")
     return value
-
-
-def require_listed_python_sources(
-    root: Path, packages: list[Group], files: list[Path]
-) -> None:
-    """Code added after setup is checked only once its package lists it."""
-    owned = owned_files(root, packages, files)
-    for group in packages:
-        if group.get("language") != "python":
-            continue
-        directory = root / group["path"]
-        listed = set(group.get("sources", []))
-        if missing := sorted(
-            source_roots(directory, "python", owned[directory]) - listed
-        ):
-            raise ValueError(
-                f"{group['path']}: Python code is outside its sources: {', '.join(missing)}; "
-                "add each to the package's sources and to every check that names them "
-                "(tests --cov=, annotations, dead-code, duplicates)"
-            )
 
 
 def locks_nothing(directory: Path) -> bool:
