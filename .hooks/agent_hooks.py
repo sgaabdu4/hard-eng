@@ -515,6 +515,10 @@ def gate_status(root: Path) -> str:
     try:
         load_groups(root)
         status = "Gates: ok."
+    except ModuleNotFoundError as error:
+        if error.name != "yaml":
+            raise
+        status = "Gates: not checked at session start — this python3 has no PyYAML; `check` installs it and runs them."
     except (
         OSError,
         ValueError,

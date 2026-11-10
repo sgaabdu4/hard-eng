@@ -4,9 +4,11 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
+import agent_hooks
 import coverage_sources
 import pytest
 import reports
@@ -956,3 +958,20 @@ def test_flutter_dependency_setup_runs_before_the_pods_gate(
         gate["name"] for _, gate in gate_order(checks) if gate["role"] == "lockfiles"
     ]
     assert setup == ["lockfile", "pods-locked"]
+
+
+def test_session_start_survives_a_python_without_the_yaml_module(
+    installer: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "app"
+    flutter_app(root, platforms=())
+    documents = {
+        name: (SOURCE / name).read_text() for name in ("PRODUCT.md", "DESIGN.md")
+    }
+    write(root, documents | {"test/performance/app_test.dart": "void main() {}\n"})
+    write(root, {"hard-eng.gates.json": json.dumps(app_config(installer, root))})
+    commit(root, "app")
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    status = agent_hooks.gate_status(root)
+    assert status.startswith("Gates: not checked at session start")
+    assert "PyYAML" in status
