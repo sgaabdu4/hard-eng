@@ -329,6 +329,17 @@ def test_added_switch_off_fails_naming_file_line_and_pattern(
     assert "fix the cause" in str(error.value)
 
 
+def test_an_external_diff_tool_does_not_hide_an_added_switch_off(
+    tmp_path: Path,
+) -> None:
+    root = switch_root(tmp_path, "app.py", "ok = 1\n")
+    git(root, "config", "diff.external", "true")
+    (root / "app.py").write_text("ok = 1\nx = 1  # no" + "qa\n")
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert "app.py:2 adds" in str(error.value)
+
+
 @pytest.mark.parametrize(("name", "text", "pattern"), SWITCHES)
 def test_switch_off_already_in_the_project_is_not_flagged(
     tmp_path: Path, name: str, text: str, pattern: str
