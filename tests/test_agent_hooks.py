@@ -6,6 +6,7 @@ import io
 import json
 import subprocess
 import sys
+import threading
 import urllib.request
 from pathlib import Path
 from types import ModuleType
@@ -538,6 +539,27 @@ def test_session_reports_stopped_codex_brokers(
     )
     context = agent_hooks.session_context(repository, {"session_id": "brokers"})
     assert "Stopped 2 idle Codex brokers (40 processes)." in context
+
+
+def test_session_start_reports_a_failed_process_scan(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(update_runner, "start_update", Mock(return_value="status"))
+    scanning = threading.Event()
+
+    def broken_scan() -> list[process_group.Process]:
+        scanning.set()
+        raise OSError("ps unavailable")
+
+    def gates(_root: Path) -> str:
+        assert scanning.wait(timeout=10), "the process scan waited for gate validation"
+        return "Gates: stubbed"
+
+    monkeypatch.setattr(process_group, "process_table", broken_scan)
+    monkeypatch.setattr(agent_hooks, "gate_status", gates)
+    context = agent_hooks.session_context(repository, {"session_id": "scan"})
+    assert "Gates: stubbed" in context
+    assert "Idle Codex broker cleanup failed: ps unavailable" in context
 
 
 def test_session_states_whether_gates_can_run(repository: Path) -> None:
