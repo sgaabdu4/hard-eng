@@ -21,6 +21,17 @@ def test_new_project_refuses_a_repository_that_holds_files(tmp_path: Path) -> No
     assert sorted(path.name for path in tmp_path.iterdir()) == [".git", "notes.txt"]
 
 
+def test_new_project_refuses_a_linked_ignore_file(tmp_path: Path) -> None:
+    root, outside = tmp_path / "repository", tmp_path / "shared-ignore"
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    outside.write_text("secret.env\n")
+    (root / ".gitignore").symlink_to(outside)
+    with pytest.raises(ValueError, match="needs an empty repository"):
+        new_project.create(root, "vite")
+    assert outside.read_text() == "secret.env\n"
+    assert (root / ".gitignore").is_symlink()
+
+
 def test_new_project_refuses_a_folder_inside_another_repository(
     tmp_path: Path,
 ) -> None:

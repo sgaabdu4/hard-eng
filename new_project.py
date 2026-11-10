@@ -120,7 +120,9 @@ def kept_files(root: Path) -> list[Path]:
     from basic_mode import trivial
 
     present = sorted(path for path in root.iterdir() if path.name != ".git")
-    if not all(path.is_file() and trivial(path) for path in present):
+    if not all(
+        path.is_file() and not path.is_symlink() and trivial(path) for path in present
+    ):
         names = ", ".join(path.name for path in present)
         raise ValueError(f"--new needs an empty repository; it holds {names}")
     return present
