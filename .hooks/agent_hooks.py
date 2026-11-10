@@ -698,7 +698,8 @@ def failure_summary(log: str) -> str:
     finished = re.escape(name) + r"(?: \(exit|:)" + tail
     end = re.search(rf"(?m)^(?:CHECK|OUTPUT) \S*/\S+|(?:PASS|FAIL) {finished}", body)
     cut = end.start() if end else len(body)
-    beyond = rf"(?m)^FAIL {re.escape(name)}: findings beyond.*\n(?:  .*\n)*"
+    where = f" @ {re.escape(package)}" if package else r"(?: @ \S+)?"
+    beyond = rf"(?m)^FAIL {re.escape(name)}{where}: findings beyond.*\n(?:  .*\n)*"
     return heading + bounded(body[:cut]) + "".join(re.findall(beyond, body[cut:])[:1])
 
 

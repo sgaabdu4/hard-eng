@@ -1,15 +1,17 @@
 """Ending a turn must not rerun a passing check or leave an interrupted one running."""
 
+import json
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 import agent_hooks
+import debt
 import failures
 import pytest
 from conftest import SOURCE, add_origin, commit, git, gone
-from gate_config import JsonObject
+from gate_config import Gate, Group, JsonObject
 
 
 def install_check(repository: Path, script: str) -> Path:
@@ -250,7 +252,7 @@ def test_stop_lists_only_gates_with_findings_beyond_the_debt(
         "print('OUTPUT ./types')\n"
         "print('types noise')\n"
         "print('FAIL types (exit 1; elapsed 1.0s) @ .')\n"
-        "print('FAIL types: findings beyond hard-eng.debt.json:')\n"
+        "print('FAIL types @ .: findings beyond hard-eng.debt.json:')\n"
         "print('  new.py:N bad type')\n"
         "raise SystemExit(1)\n",
     )
@@ -276,6 +278,27 @@ def test_stop_keeps_a_failed_gate_whose_name_another_package_had_forgiven(
     assert reason.startswith("Failed gates: types\n")
     assert "web finding" in reason
     assert "old api finding" not in reason
+
+
+def test_stop_shows_the_new_debt_findings_of_the_package_whose_output_it_shows(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lint: Gate = {"name": "lint", "role": "lint", "command": ["lint"]}
+    groups: list[Group] = [{"path": name, "checks": [lint]} for name in ("api", "web")]
+    recorded = {f"{name}/lint": {"old finding": 1} for name in ("api", "web")}
+    (tmp_path / debt.DEBT_FILE).write_text(
+        json.dumps({"version": 1, "gates": recorded})
+    )
+    log = "".join(
+        f"OUTPUT {name}/lint\nold finding\nFAIL lint (exit 1; elapsed 1.0s) @ {name}\n"
+        for name in ("api", "web")
+    )
+    for group in reversed(groups):
+        output = f"old finding\nnew in {group['path']}\n"
+        assert debt.judge(tmp_path, group, lint, True, output) is True
+    summary = agent_hooks.failure_summary(log + capsys.readouterr().out)
+    assert "  new in api\n" in summary
+    assert "new in web" not in summary
 
 
 def test_stop_text_has_no_colour_codes(repository: Path) -> None:

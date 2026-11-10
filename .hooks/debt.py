@@ -167,7 +167,7 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     current = fingerprints(root, group, gate, output) if failed else Counter()
     spelling = {neutral(line): line for line in current}
     if new := by_form(current) - by_form(debt):
-        print(f"FAIL {gate['name']}: findings beyond {DEBT_FILE}:")
+        print(f"FAIL {gate['name']} @ {group['path']}: findings beyond {DEBT_FILE}:")
         shown = sorted(
             (spelling[form] for form in new.elements()),
             key=lambda line: not WORD_CHARACTER.search(line),
