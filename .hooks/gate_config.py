@@ -299,7 +299,9 @@ def validate_dart_plugins(options: JsonObject) -> None:
         )
 
 
-def validate_file_sizes(root: Path, exceptions: dict[str, dict[str, str]]) -> None:
+def validate_file_sizes(
+    root: Path, exceptions: dict[str, dict[str, str]], listed: list[Path] | None = None
+) -> None:
     if not isinstance(exceptions, dict):
         raise TypeError("File-size exceptions must be an object")
     extensions = {
@@ -316,7 +318,8 @@ def validate_file_sizes(root: Path, exceptions: dict[str, dict[str, str]]) -> No
         ".sh",
         ".bash",
     }
-    files = [path for path in repository_files(root) if path.suffix in extensions]
+    listing = listed or repository_files(root)
+    files = [path for path in listing if path.suffix in extensions]
     names = [str(path.relative_to(root)) for path in files]
     for name, justification in exceptions.items():
         if (
@@ -799,14 +802,16 @@ def has_workflows(root: Path, files: list[Path]) -> bool:
     )
 
 
-def validate_required_checks(root: Path, config: GateConfig) -> None:
+def validate_required_checks(
+    root: Path, config: GateConfig, listed: list[Path] | None = None
+) -> None:
     from project_setup import (
         is_deployment_file,
         is_shell_script,
         require_listed_shell_scripts,
     )
 
-    files = repository_files(root)
+    files = listed or repository_files(root)
     manifests = package_manifests(root, files)
     validate_manifest_groups(root, config, manifests)
     from python_setup import require_listed_python_sources
@@ -966,7 +971,8 @@ def load_groups(
         from shipping import load_policy
 
         load_policy(root)
-    validate_file_sizes(root, config.get("file_size_exceptions", {}))
+    listed = repository_files(root)
+    validate_file_sizes(root, config.get("file_size_exceptions", {}), listed)
     if config.get("scan_git_history", True) is False:
         config["shared"] = [
             gate for gate in config["shared"] if gate.get("role") != "secrets-history"
@@ -979,7 +985,7 @@ def load_groups(
     count = sum(validate_group(root, group, report_paths) for group in groups)
     if not count:
         raise ValueError("No checks configured; verification cannot pass")
-    validate_required_checks(root, config)
+    validate_required_checks(root, config, listed)
     from gitleaks_scan import new_commits_command
 
     for gate in config["shared"]:

@@ -227,7 +227,7 @@ def test_scans_wait_for_a_parallel_generator_still_running(
     assert runner.check() == 0
 
 
-def no_requirements(_root: Path, _config: object) -> None:
+def no_requirements(_root: Path, _config: object, _listed: object = None) -> None:
     return None
 
 
