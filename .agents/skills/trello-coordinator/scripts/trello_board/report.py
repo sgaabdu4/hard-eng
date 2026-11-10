@@ -26,9 +26,17 @@ AWAKE = ("requests", "owner", "promises", "silent", "buried")
 WAKE_FIELDS = ("idle", "quietMinutes", "nextDue")
 REAL_CASE = "Waiting for real case"
 WORKING = r"\b(?:I am (?:fixing|building|changing)|I will fix|being built|waits for the #\d+ fix)\b"
-PROMISE = re.compile(rf"\bI will\b|\bI['’]ll\b|\bNext:|{WORKING}", re.IGNORECASE)
+INTENT = (
+    r"\bI(?: am|['’]m) (?:fixing|building|changing|adding|checking|making|watching|writing|looking"
+    r"|testing|updating|sending|posting|going to)\b"
+    r"|\bI (?:check|post|make|fix|send|add|update|tell|share|reply|look|watch|test)\b"
+    r"|\bbeing (?:built|fixed)\b"
+)
+PROMISE = re.compile(
+    rf"\bI will\b|\bI['’]ll\b|\bNext:|{WORKING}|{INTENT}", re.IGNORECASE
+)
 CONDITION = re.compile(
-    r"\b(?:when|once|after|until|before|if)\b[^.!?\n]*|[^.!?\n]*\bshould\b[^.!?\n]*\?",
+    r"\b(?:when|once|after|until|before|if)\b[^.!?\n]*|[^.!?\n,;]*\?",
     re.IGNORECASE,
 )
 FINISHED = re.compile(
