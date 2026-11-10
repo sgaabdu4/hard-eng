@@ -792,20 +792,6 @@ def commit_install(
     )
 
 
-def refuse_local_state(root: Path, names: list[str]) -> None:
-    status = local_state(root, names)
-    if status and all(line.startswith("?? ") for line in status):
-        raise ValueError(
-            "Installed Hard Eng files are not committed: "
-            + install_paths([line[3:].strip('"') for line in status])
-            + "; commit them, then rerun the update"
-        )
-    if status:
-        raise ValueError(
-            "The update overlaps local edits; preserve them and ask before updating"
-        )
-
-
 def update(root: Path, repair: bool = False, *, remember: Path | None = None) -> str:
     """The background run remembers a refusal under the given root; setup always retries."""
     if (blocker := update_blocker(root)) is not None:
@@ -834,8 +820,6 @@ def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
     if not changes and not links:
         install_planned_hook(root, hook)
         return "Hard Eng already matches the verified source."
-    names = sorted({*changes, *links})
-    refuse_local_state(root, names)
     local_settings(root)
     validate_gates(root, source, changes)
     commit_update(root, changes, links, revision)
