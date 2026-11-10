@@ -28,8 +28,8 @@ def widget_events(*, root: bool = True) -> list[dict[str, object]]:
             "message": "Expected: exactly one matching candidate",
         },
         {"type": "print", "testID": 8, "message": "from another test"},
-        {"type": "error", "testID": 7, "error": FLUTTER_LINE, "isFailure": True},
-        {"type": "testDone", "testID": 7, "result": "failure"},
+        {"type": "error", "testID": 7, "error": FLUTTER_LINE, "isFailure": False},
+        {"type": "testDone", "testID": 7, "result": "error"},
     ]
 
 
