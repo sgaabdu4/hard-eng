@@ -5,12 +5,12 @@ import os
 import re
 import shlex
 import subprocess
-import tomllib
 from collections.abc import Iterator
 from fnmatch import fnmatchcase
 from pathlib import Path
 
 from coverage_sources import owned_files, source_roots
+from dependency_graph import read_project_file
 from fallow_report import fallow_report_path, validate_scanner_command
 from gate_config import (
     LANGUAGES,
@@ -266,7 +266,7 @@ def package_script_invocation(
         if identity in scripts_seen:
             raise ValueError("Recursive package test script")
         scripts_seen.add(identity)
-        package = json.loads((directory / "package.json").read_text())
+        package = read_project_file(directory / "package.json")
         script = package.get("scripts", {}).get(arguments[2])
         if not isinstance(script, str):
             raise TypeError(
@@ -299,7 +299,7 @@ def native_typecheck(scripts: JsonObject, checks: list[Gate]) -> bool:
 def dependency_free(directory: Path) -> bool:
     """Bun deletes the lockfile of a package that declares nothing to install."""
     path = directory / "package.json"
-    manifest = json.loads(path.read_text()) if path.is_file() else None
+    manifest = read_project_file(path) if path.is_file() else None
     fields = (
         "dependencies",
         "devDependencies",
@@ -314,7 +314,7 @@ def dependency_free(directory: Path) -> bool:
 
 
 def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
-    manifest = json.loads((directory / "package.json").read_text())
+    manifest = read_project_file(directory / "package.json")
     declared = manifest.get("packageManager")
     legacy = [
         name
@@ -406,9 +406,7 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
             "declaring dependencies in pyproject.toml (`uv add -r requirements.txt` "
             "imports a requirements file), then review and commit the lockfile"
         )
-    import yaml
-
-    manifest = yaml.safe_load((directory / "pubspec.yaml").read_text())
+    manifest = read_project_file(directory / "pubspec.yaml", kind="yaml")
     dependencies = {
         **(manifest.get("dependencies") or {}),
         **(manifest.get("dev_dependencies") or {}),
@@ -487,7 +485,7 @@ def adapt_boundaries(package: Group, typescript: set[str]) -> None:
 
 def workspace_members(directory: Path, language: str) -> list[str]:
     if language == "python":
-        project = tomllib.loads((directory / "pyproject.toml").read_text())
+        project = read_project_file(directory / "pyproject.toml", kind="toml")
         workspace = project.get("tool", {}).get("uv", {}).get("workspace", {})
         return [
             *workspace.get("members", []),
@@ -496,17 +494,13 @@ def workspace_members(directory: Path, language: str) -> list[str]:
     if language == "javascript":
         if not (directory / "package.json").exists():
             return []
-        workspaces = json.loads((directory / "package.json").read_text()).get(
-            "workspaces", []
-        )
+        workspaces = read_project_file(directory / "package.json").get("workspaces", [])
         return (
             workspaces.get("packages", [])
             if isinstance(workspaces, dict)
             else workspaces
         )
-    import yaml
-
-    manifest = yaml.safe_load((directory / "pubspec.yaml").read_text())
+    manifest = read_project_file(directory / "pubspec.yaml", kind="yaml")
     return manifest.get("workspace", [])
 
 
@@ -932,7 +926,7 @@ def javascript_files(directory: Path, excluded: tuple[Path, ...] = ()) -> list[s
 
 
 def adapt_javascript(directory: Path, package: Group, manager: str) -> None:
-    manifest = json.loads((directory / "package.json").read_text())
+    manifest = read_project_file(directory / "package.json")
     if "check:fallow" in manifest.get("scripts", {}):
         for gate in package["checks"]:
             if gate.get("role") == "dead-code-duplicates":

@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import NamedTuple
 
+from dependency_graph import read_project_file
 from gate_config import (
     GateConfig,
     Group,
@@ -187,9 +188,7 @@ def swift_group(root: Path, path: str, project: SwiftProject) -> Group:
 
 def local_plugin_folders(root: Path, app: Path, path: str) -> list[str]:
     """Native folders of the path dependencies, whose Swift builds into the app."""
-    import yaml
-
-    manifest = yaml.safe_load((root / app / "pubspec.yaml").read_text()) or {}
+    manifest = read_project_file(root / app / "pubspec.yaml", root, "yaml") or {}
     folders: list[str] = []
     for section in ("dependencies", "dev_dependencies", "dependency_overrides"):
         for value in (manifest.get(section) or {}).values():

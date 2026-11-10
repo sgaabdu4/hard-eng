@@ -7,6 +7,7 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
+from dependency_graph import read_project_file
 from gate_config import SOURCE_FILE, Gate, Group, JsonObject
 
 WORD_CHARACTER = re.compile(r"\w")
@@ -146,10 +147,11 @@ def load(root: Path) -> dict[str, Counter[str]]:
     path = root / DEBT_FILE
     if not path.is_file():
         return {}
-    debt = json.loads(path.read_text())
+    debt = read_project_file(path, root)
     gates = debt.get("gates") if isinstance(debt, dict) else None
     if (
-        debt.get("version") != 1
+        not isinstance(debt, dict)
+        or debt.get("version") != 1
         or not isinstance(gates, dict)
         or not all(
             isinstance(lines, dict)
