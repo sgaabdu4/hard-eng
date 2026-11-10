@@ -5,6 +5,7 @@ from pathlib import Path
 
 import gap_issue
 import pytest
+from conftest import git
 
 
 class FakeGh:
@@ -89,6 +90,32 @@ def test_project_detail_is_refused_before_any_github_call(
     with pytest.raises(ValueError, match="Describe the missing check generically"):
         gap_issue.file_gap(project, text)
     assert gh.calls == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "no lint for acme-shop",
+        "Acme Shop has no dependency audit",
+        "missing audit in acme_shop",
+        "owner globex lacks secret scanning",
+        "storefront needs a license check",
+        "payments-api has no schema check",
+    ],
+)
+def test_text_that_names_the_project_is_refused_before_any_github_call(
+    project: Path, monkeypatch: pytest.MonkeyPatch, text: str
+) -> None:
+    git(project, "remote", "add", "origin", "https://github.com/globex/acme-shop.git")
+    (project / "hard-eng.gates.json").write_text(
+        '{"packages": [{"name": "payments-api", "path": "."}], "shared": []}'
+    )
+    named = project.rename(project.with_name("storefront"))
+    gh = fake(monkeypatch, [])
+    with pytest.raises(ValueError, match="Describe the missing check generically"):
+        gap_issue.file_gap(named, text)
+    assert gh.calls == []
+    assert gap_issue.file_gap(named, "Go dependency audit for shopping carts") == 0
 
 
 @pytest.mark.parametrize(
