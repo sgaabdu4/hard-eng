@@ -123,6 +123,27 @@ def test_text_that_names_the_project_is_refused_before_any_github_call(
 
 
 @pytest.mark.parametrize(
+    ("origin", "text"),
+    [
+        ("https://github.com/globex/acme-shop.git", "AcmeShop has no lint"),
+        ("https://github.com/globex/acme-shop.git", "acmeshop lacks audit"),
+        ("git@github-work:globex/acme-shop.git", "owner globex lacks scanning"),
+        ("git@github-work:globex/acme-shop.git", "acme shop lacks lint"),
+        ("https://gitlab.example.test/globex/acme-shop", "globex lacks lint"),
+        ("ssh://git@bitbucket.example.test/globex/acme-shop.git", "acme-shop lint"),
+    ],
+)
+def test_joined_spellings_and_any_remote_host_are_refused(
+    project: Path, monkeypatch: pytest.MonkeyPatch, origin: str, text: str
+) -> None:
+    git(project, "remote", "add", "origin", origin)
+    gh = fake(monkeypatch, [])
+    with pytest.raises(ValueError, match="Describe the missing check generically"):
+        gap_issue.file_gap(project, text)
+    assert gh.calls == []
+
+
+@pytest.mark.parametrize(
     "text",
     ["go.sum drift", "package.json scripts", "Dockerfile base image pinning"],
 )
