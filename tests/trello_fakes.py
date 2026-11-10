@@ -208,7 +208,7 @@ class FakeTrello:
             f"{board}/members": self.members,
             f"{board}/lists": self.lists,
             f"{board}/labels": self.labels,
-            f"{board}/cards/open": self.cards,
+            f"{board}/cards/open": [c for c in self.cards if not c.get("closed")],
             f"{board}/cards/all": self.cards,
             f"{board}/actions": self.page(self.actions, query),
         }

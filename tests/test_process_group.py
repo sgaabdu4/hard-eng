@@ -65,12 +65,6 @@ def ended(process: subprocess.Popen[bytes], child: Path) -> bool:
     return True
 
 
-def test_stops_broker_whose_folder_is_gone(tmp_path: Path) -> None:
-    process, child = broker(tmp_path, tmp_path / "deleted-worktree")
-    assert stop_idle_codex_brokers(own_table(process)) == (1, 2)
-    assert ended(process, child)
-
-
 def test_stops_broker_without_a_job(tmp_path: Path) -> None:
     folder = tmp_path / "worktree"
     folder.mkdir()

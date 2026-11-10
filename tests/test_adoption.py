@@ -310,20 +310,6 @@ def test_setup_rerun_restores_missing_installed_files(
     assert git(target, "status", "--porcelain") == ""
 
 
-def test_setup_rerun_retires_old_generation(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _, target, _ = release
-    project = write_old_generation(target)
-    git(target, "add", "--force", *OLD_FILES)
-    commit(target, "old generation wiring")
-    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
-    update.update(target, repair=True)
-    assert not set(OLD_FILES) & set(git(target, "ls-files").splitlines())
-    assert_old_generation_retired(target, project)
-    assert git(target, "status", "--porcelain") == ""
-
-
 @pytest.mark.parametrize(
     ("repair", "options", "edited"),
     [
@@ -367,6 +353,7 @@ def test_update_retires_old_generation(
     update.update(target, repair=repair)
     tracked = set(git(target, "ls-files").splitlines())
     assert edited or not set(OLD_FILES) & tracked
+    assert edited or git(target, "status", "--porcelain") == ""
     assert_old_generation_retired(target, project)
     assert ".hard-eng/" not in gates.read_text()
     assert "shellcheck" not in gates.read_text()

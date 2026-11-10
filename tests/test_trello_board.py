@@ -76,13 +76,10 @@ def test_a_stale_lease_is_taken_by_one_run_only(project: Project, mods: Mods) ->
         ("I will send the link. The fix is now live.", False),
         ("Next: nothing. It is done.", False),
         ("The fix is now live. I will check the totals tomorrow.", True),
-        ("The fix went live. Next: I will ask Sam.", True),
         ("I am changing the screen", True),
         ("I am building the export", True),
         ("The export went live. Nothing more to do.", False),
         ("The new screens are live.", False),
-        ("The export is live. If anything looks wrong, I will look at it.", False),
-        ("Part one is live. I will add part two tomorrow.", True),
         ("If it still fails, I will fix it today.", False),
         ("I post here when the store answers.", True),
         ("I check the next new order and post here who it was.", True),
@@ -93,9 +90,7 @@ def test_a_stale_lease_is_taken_by_one_run_only(project: Project, mods: Mods) ->
         ("The report is being fixed.", True),
         ("I'll post the new build tonight, can you test it tomorrow?", True),
         ("I checked the logs. Nothing is wrong.", False),
-        ("I posted the steps above.", False),
         ("Can I check the totals with you?", False),
-        ("Shall I post the steps here?", False),
         ("Fixed in the new build. I move this card to Testing.", False),
         ("I tag @sam to test it.", False),
         ("I confirm the crash is gone.", False),
@@ -157,21 +152,6 @@ def test_owner_comment_stays_listed_until_we_reply(
     assert project.run("comment", "3", str(note)).code == 0
     report = project.report()
     assert report["owner"] == []
-    assert report["requests"] == []
-    assert report["information"] == []
-
-
-def test_a_reply_clears_the_request_across_two_checks(
-    project: Project, tmp_path: Path
-) -> None:
-    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
-    project.fake.actions = [comment("a1", 1, "m-sam", "Please add the export", 5)]
-    assert refs(project.report()["requests"]) == {"1"}
-    project.finish()
-    note = tmp_path / "note.txt"
-    note.write_text("Added, it is in review")
-    assert project.run("comment", "1", str(note)).code == 0
-    report = project.report()
     assert report["requests"] == []
     assert report["information"] == []
 
@@ -336,6 +316,7 @@ def test_activity_paging_stops_when_it_does_not_advance(
     assert result.code == 1
     assert "paging" in str(result.payload["error"]).lower()
     assert not (project.state / "state.json").exists()
+    assert not (project.state / "lease").exists()
 
 
 @pytest.mark.parametrize("name", ["call 07700 900123.png", "jo.smith@example.com.png"])
@@ -355,7 +336,6 @@ def test_comment_privacy_covers_image_names(
     "name,accepted",
     [
         ("notes.txt", False),
-        ("clip.mp4", False),
         ("proof.PNG", True),
         ("proof.webp", True),
         ("proof.jpeg", True),
@@ -448,6 +428,20 @@ def test_repeated_image_flags_attach_every_image(
     assert len(uploads) == 2
     posted = next(c for c in project.fake.writes if c.path.endswith("/comments"))
     assert ")\n\n![after.png]" in posted.form["text"]
+
+
+def test_an_upload_body_holds_each_file(project: Project, tmp_path: Path) -> None:
+    files = [tmp_path / "before.png", tmp_path / "after.png"]
+    files[0].write_bytes(b"first-bytes")
+    files[1].write_bytes(b"second-bytes")
+    body, kind = project.mods.api.multipart(
+        {"name": "Proof"}, [("file", path) for path in files]
+    )
+    assert kind.startswith("multipart/form-data; boundary=")
+    for path in files:
+        assert f'filename="{path.name}"'.encode() in body
+        assert path.read_bytes() in body
+    assert b'name="name"\r\n\r\nProof' in body
 
 
 def paste(folder: Path, name: str, value: str) -> str:

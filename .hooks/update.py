@@ -21,6 +21,7 @@ from mcp_setup import retired_settings
 from release_history import StaleRelease, ordered
 from submodules import update_submodules
 from update_runner import (
+    REPAIR_SUBJECT,
     commit_update,
     current_head,
     known_failure,
@@ -741,7 +742,7 @@ def commit_install(
         staged = tree_entries(root, ["git", "ls-files", "-s"], 1, names)
         head = current_head(root)
         result = subprocess.run(
-            ["git", "commit", "--only", "-m", "Install Hard Eng", "--", *names],
+            ["git", "commit", "--only", "-m", REPAIR_SUBJECT, "--", *names],
             cwd=root,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -752,7 +753,7 @@ def commit_install(
         if result.returncode == 0 and expected:
             changed = undo_hooked_commit(root, head, staged, expected, names)
         if result.returncode == 0 and not changed:
-            rebase_sessions(root, head, "Install Hard Eng")
+            rebase_sessions(root, head)
             return "Committed the installed files locally without pushing."
         if changed:
             reason = (
@@ -862,7 +863,7 @@ def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
         ).splitlines()
     except (subprocess.CalledProcessError, ValueError, AttributeError):
         return None
-    repair = revision == previous and set(subjects) == {"Install Hard Eng"}
+    repair = revision == previous and set(subjects) == {REPAIR_SUBJECT}
     if (
         (SOURCE_FILE not in names or revision == previous)
         and not repair

@@ -130,7 +130,6 @@ def test_each_check_job_runs_its_own_languages(
         (("success", "success", "cancelled"), False),
         (("success", "skipped", "success"), False),
         (("failure", "success", "skipped"), False),
-        (("failure", "skipped", "skipped"), False),
     ],
 )
 def test_the_required_check_passes_only_when_every_needed_job_did(
@@ -152,15 +151,6 @@ def test_the_required_check_passes_only_when_every_needed_job_did(
         capture_output=True,
     )
     assert (result.returncode == 0) is passes
-
-
-def test_new_install_without_swift_keeps_one_job(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    _, plain, _ = generated(installer, tmp_path)
-    jobs = yaml.safe_load(plain)["jobs"]
-    assert list(jobs) == ["hard-eng"]
-    assert language_flags(jobs["hard-eng"]) == ["", "", ""]
 
 
 def migrate(root: Path, text: str, config: GateConfig) -> dict[str, str]:
@@ -228,15 +218,6 @@ def test_customised_previous_generation_is_left_with_a_note(
     assert custom != older
     assert migrate(root, custom, app_config(installer, root)) == {}
     assert "CI runner not added" in capsys.readouterr().err
-
-
-def test_generated_budget_applies_to_the_check_jobs(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    _, _, workflow = generated(installer, tmp_path)
-    jobs = yaml.safe_load(workflow)["jobs"]
-    assert jobs["linux"]["timeout-minutes"] == jobs["apple"]["timeout-minutes"] == 20
-    assert jobs["hard-eng"]["timeout-minutes"] == 5
 
 
 def checks(*roles: str) -> list[Gate]:

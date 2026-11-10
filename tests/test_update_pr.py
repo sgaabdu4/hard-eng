@@ -16,6 +16,7 @@ import update_pr
 import update_runner
 from conftest import add_origin, commit, default_policy, git
 from test_husky_setup import husky_project
+from test_update_runner import prefix_commit_messages
 from test_updates import select_release
 
 PULL = "https://github.com/fixture/project/pull/9"
@@ -26,6 +27,7 @@ class FakeGh:
     def __init__(self) -> None:
         self.pulls: list[dict[str, object]] = []
         self.calls: list[tuple[str, ...]] = []
+        self.shown_head: str | None = None
         self.merging = {
             "rebaseMergeAllowed": True,
             "squashMergeAllowed": True,
@@ -35,8 +37,9 @@ class FakeGh:
     def __call__(self, root: Path, *args: str) -> str:
         self.calls.append(args)
         if args[:2] == ("pr", "list"):
+            head = self.shown_head or git(root, "rev-parse", f"refs/heads/{BRANCH}")
             for pull in self.pulls:
-                pull["headRefOid"] = git(root, "rev-parse", f"refs/heads/{BRANCH}")
+                pull["headRefOid"] = head
             return json.dumps(self.pulls)
         if args[:2] == ("repo", "view"):
             return json.dumps(self.merging)
@@ -484,15 +487,20 @@ def test_update_pr_merges_only_after_every_check_on_the_pushed_head_passed(
     command = f"gh pr merge {PULL} --auto --rebase --match-head-commit {head}"
     assert command in capsys.readouterr().out
     assert publish(target, monkeypatch) == 0
-    assert (
-        "pr",
-        "merge",
-        PULL,
-        "--auto",
-        "--rebase",
-        "--match-head-commit",
-        head,
-    ) in gh.calls
+    assert ("pr", "merge", PULL, "--auto", "--rebase", "--match-head-commit", head) in (
+        gh.calls
+    )
+
+
+def test_update_pr_waits_while_github_shows_the_old_head(
+    opened: Path, gh: FakeGh, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gh.pulls[0]["statusCheckRollup"] = [
+        {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"}
+    ]
+    gh.shown_head = "0" * 40
+    assert publish(opened, monkeypatch) == 0
+    assert "pr merge" not in gh.verbs()
 
 
 @pytest.mark.parametrize(
@@ -561,15 +569,9 @@ def test_update_pr_uses_a_merge_method_the_repository_allows(
     ]
     assert publish(target, monkeypatch) == 0
     head = git(target, "rev-parse", BRANCH)
-    assert (
-        "pr",
-        "merge",
-        PULL,
-        "--auto",
-        flag,
-        "--match-head-commit",
-        head,
-    ) in gh.calls
+    assert ("pr", "merge", PULL, "--auto", flag, "--match-head-commit", head) in (
+        gh.calls
+    )
 
 
 def test_update_pr_waits_for_the_configured_shipping_checks(
@@ -618,7 +620,8 @@ def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
     other = other_checkout(target, remote)
     git(other, "switch", "-q", BRANCH)
     (other / "fix.txt").write_text("fix\n")
-    fix = commit(other, "fix the update")
+    generated = git(target, "log", "-1", "--format=%s", BRANCH)
+    fix = commit(other, generated)
     git(other, "push", "-q", "--no-verify", "origin", BRANCH)
     newer_release(source, monkeypatch, "second update")
     assert update_runner.apply_update(target) == 0
@@ -626,6 +629,21 @@ def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
     assert publish(target, monkeypatch) == 1
     assert git(remote, "rev-parse", BRANCH) == fix
     assert "not replaced" in capsys.readouterr().out
+
+
+def test_update_pr_replaces_a_generated_update_whose_subject_a_hook_changed(
+    feature: tuple[Path, Path, Path], gh: FakeGh, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, remote = feature
+    prefix_commit_messages(target)
+    apply_first_update(feature, monkeypatch)
+    assert publish(target, monkeypatch) == 0
+    first = git(remote, "rev-parse", BRANCH)
+    newer_release(source, monkeypatch, "second update")
+    assert update_runner.apply_update(target) == 0
+    assert publish(target, monkeypatch) == 0
+    assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
+    assert git(remote, "rev-parse", BRANCH) != first
 
 
 def test_update_pr_recreates_the_update_branch_after_the_remote_deleted_it(

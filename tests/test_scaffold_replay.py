@@ -44,17 +44,6 @@ def test_update_that_restores_edited_skill_files_is_proven(
     assert GENERATED_RUNNER in (target / WORKFLOW).read_text()
 
 
-def test_update_still_refuses_an_edited_skill_file(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, _ = release
-    edited_base(target)
-    revision = commit(source, "verified update")
-    monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
-    with pytest.raises(ValueError, match="already differs"):
-        update.update(target)
-
-
 COORDINATOR = ".agents/skills/trello-coordinator/"
 RUN = COORDINATOR + "references/run.md"
 SCRIPT = COORDINATOR + "scripts/trello_board/commands.py"

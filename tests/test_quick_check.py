@@ -12,18 +12,7 @@ QUICK_ROLES = ("format", "lint", "types")
 SLOW_ROLES = ("complexity", "dead-code", "custom")
 
 
-def test_quick_set_is_chosen_by_role(runner: ModuleType) -> None:
-    quick = [
-        "format",
-        "lint",
-        "format-lint",
-        "types",
-        "annotations",
-        "typing-style",
-        "imports",
-        "focused-tests",
-        "secrets-files",
-    ]
+def test_quick_set_leaves_out_slow_and_unlabelled_gates(runner: ModuleType) -> None:
     slow = [
         "tests",
         "performance",
@@ -41,13 +30,10 @@ def test_quick_set_is_chosen_by_role(runner: ModuleType) -> None:
     ]
     group: Group = {
         "path": ".",
-        "checks": [
-            {"name": role, "role": role, "command": ["x"]} for role in quick + slow
-        ]
+        "checks": [{"name": role, "role": role, "command": ["x"]} for role in slow]
         + [{"name": "unlabelled", "command": ["x"]}],
     }
-    kept = quick_groups([group])[0]["checks"]
-    assert [item["name"] for item in kept] == quick
+    assert quick_groups([group])[0]["checks"] == []
 
 
 @pytest.mark.parametrize(

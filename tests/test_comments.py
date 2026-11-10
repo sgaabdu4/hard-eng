@@ -340,7 +340,18 @@ def test_an_external_diff_tool_does_not_hide_an_added_switch_off(
     assert "app.py:2 adds" in str(error.value)
 
 
-@pytest.mark.parametrize(("name", "text", "pattern"), SWITCHES)
+ROUTE_FILES = (
+    "app.py",
+    "a.ts",
+    "test/a_test.dart",
+    "ios/RunnerTests/ATests.swift",
+    "config.yml",
+    ".gitleaksignore",
+)
+ROUTES = [next(row for row in SWITCHES if row[0] == name) for name in ROUTE_FILES]
+
+
+@pytest.mark.parametrize(("name", "text", "pattern"), ROUTES)
 def test_switch_off_already_in_the_project_is_not_flagged(
     tmp_path: Path, name: str, text: str, pattern: str
 ) -> None:

@@ -66,7 +66,10 @@ def test_a_later_adoption_only_drops_lines(tmp_path: Path) -> None:
     assert debt.load(tmp_path) == {"./lint": {"a.py:N x": 1}}
 
 
-@pytest.mark.parametrize("role", sorted(debt.NEVER))
+NEVER_DEBT = ["tests", "lockfiles", "secrets-files", "secrets-history"]
+
+
+@pytest.mark.parametrize("role", NEVER_DEBT)
 def test_tests_lockfiles_and_secrets_never_become_debt(
     tmp_path: Path, role: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -77,7 +80,7 @@ def test_tests_lockfiles_and_secrets_never_become_debt(
     assert "must pass before adoption" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("role", sorted(debt.NEVER))
+@pytest.mark.parametrize("role", NEVER_DEBT)
 def test_hand_written_debt_never_passes_tests_lockfiles_or_secrets(
     tmp_path: Path, role: str
 ) -> None:
@@ -119,6 +122,66 @@ def test_report_findings_count_beside_the_output(tmp_path: Path) -> None:
     group: Group = {"path": ".", "checks": [security]}
     found = debt.fingerprints(tmp_path, group, security, f"Ran 3 rules in {tmp_path}\n")
     assert found == {"rule a.py eval(x)": 2, "Ran N rules in .": 1}
+
+
+@pytest.mark.parametrize(
+    ("kind", "report", "expected"),
+    [
+        (
+            "osv",
+            {
+                "results": [
+                    {
+                        "packages": [
+                            {
+                                "package": {"name": "lib", "version": "1.0.2"},
+                                "vulnerabilities": [{"id": "GHSA-b"}, {"id": "GHSA-a"}],
+                            },
+                            {"package": {"name": "safe", "version": "2.0.0"}},
+                        ]
+                    }
+                ]
+            },
+            "lib 1.0.2 GHSA-a,GHSA-b",
+        ),
+        (
+            "jscpd",
+            {
+                "duplicates": [
+                    {
+                        "firstFile": {"name": "a.ts"},
+                        "secondFile": {"name": "b.ts"},
+                        "fragment": "const x = 1;",
+                    }
+                ]
+            },
+            "a.ts b.ts const x = 1;",
+        ),
+        (
+            "deptry",
+            [
+                {
+                    "error": {"code": "DEP001", "message": "missing"},
+                    "module": "requests",
+                    "location": {"file": "app.py", "line": 1, "column": 0},
+                }
+            ],
+            "DEP001 requests app.py",
+        ),
+    ],
+)
+def test_osv_jscpd_and_deptry_reports_become_debt_lines(
+    tmp_path: Path, kind: str, report: object, expected: str
+) -> None:
+    (tmp_path / "report.json").write_text(json.dumps(report))
+    check: Gate = {
+        "name": kind,
+        "role": "dependencies",
+        "command": [kind],
+        "report": {"type": kind, "path": "report.json"},
+    }
+    group: Group = {"path": ".", "checks": [check]}
+    assert debt.fingerprints(tmp_path, group, check, "") == {expected: 1}
 
 
 def test_an_unreadable_report_is_never_recorded_as_debt(

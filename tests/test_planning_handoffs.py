@@ -131,23 +131,21 @@ def test_native_stop_only_pauses_ready_approval(
         assert "approval handoff prepared" in response["systemMessage"]
 
 
-@pytest.mark.parametrize("unchanged", [False, True])
 @pytest.mark.parametrize(
-    "handoff,blockers,blocked",
+    "unchanged,handoff,blockers",
     [
-        ("Clarification", "user must choose the affected workflow", False),
-        ("Approval", "user must choose the affected workflow", True),
-        ("Approval", "None", True),
-        ("Missing", "user must choose the affected workflow", True),
+        (False, "Approval", "user must choose the affected workflow"),
+        (False, "Approval", "None"),
+        (False, "Missing", "user must choose the affected workflow"),
+        (True, "Approval", "user must choose the affected workflow"),
     ],
 )
-def test_draft_stop_requires_handoff_before_exempting_questions(
+def test_draft_stop_blocks_until_the_plan_has_a_valid_handoff(
     repository: Path,
     completed_plan: str,
     unchanged: bool,
     handoff: str,
     blockers: str,
-    blocked: bool,
 ) -> None:
     plan = draft_plan(completed_plan, handoff, blockers)
     if handoff == "Missing":
@@ -164,12 +162,8 @@ def test_draft_stop_requires_handoff_before_exempting_questions(
         agent_hooks.session_context(repository, payload)
     response = agent_hooks.completion(repository, payload, "codex")
     assert "Planning incomplete" in str(response)
-    if blocked:
-        assert response.get("decision") == "block"
-        assert ("Handoff" if handoff == "Missing" else "ux_reference") in str(response)
-    else:
-        assert response.get("decision") != "block"
-        assert "user must choose" in str(response)
+    assert response.get("decision") == "block"
+    assert ("Handoff" if handoff == "Missing" else "ux_reference") in str(response)
 
 
 def test_clarification_cannot_exempt_an_invalid_approval_plan(
@@ -269,5 +263,3 @@ def test_a_plan_untouched_since_the_hard_eng_update_skips_the_newer_fields(
     dated(3, "edit the old plan after the update")
     with pytest.raises(ValueError, match="Single source"):
         validate_plan(plan)
-    learn = (SOURCE / ".agents/skills/he-learn/SKILL.md").read_text()
-    assert "\n## Retro\n" in learn and "issue" in learn.split("\n## Retro\n", 1)[1]

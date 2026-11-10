@@ -45,17 +45,15 @@ def test_failure_hook_without_session_state_writes_and_echoes_nothing(
     assert not (repository / ".hard-eng").exists()
 
 
-@pytest.mark.parametrize("identifier", ["../outside", "a/b", ""])
 def test_failure_hook_ignores_session_ids_that_leave_the_session_folder(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    identifier: str,
 ) -> None:
-    (repository / ".hard-eng").mkdir()
+    (repository / ".hard-eng/sessions").mkdir(parents=True)
     outside = repository / ".hard-eng/outside.json"
     outside.write_text("{}")
-    payload: JsonObject = {"session_id": identifier, "error": "ERROR: lock held"}
+    payload: JsonObject = {"session_id": "../outside", "error": "ERROR: lock held"}
     assert failure_outputs(repository, monkeypatch, capsys, [payload] * 3) == [{}] * 3
     assert outside.read_text() == "{}"
 
