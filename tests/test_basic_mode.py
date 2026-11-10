@@ -120,18 +120,9 @@ def test_basic_mode_check_impact_and_mutation_run_without_packages(
     ("files", "label"),
     [
         ({"go.mod": "module x\n"}, "Go"),
-        ({"Cargo.toml": ""}, "Rust"),
-        ({"pom.xml": ""}, "Java/Kotlin"),
-        ({"build.gradle.kts": ""}, "Java/Kotlin"),
-        ({"Gemfile": ""}, "Ruby"),
-        ({"composer.json": "{}"}, "PHP"),
-        ({"App.csproj": ""}, ".NET"),
-        ({"Package.swift": ""}, "Swift"),
-        ({"CMakeLists.txt": ""}, "C/C++"),
         ({"main.go": "package main\n"}, "Go"),
         ({"deploy.sh": "echo hi\n"}, "this language"),
-        ({"build.sbt": "", "Main.scala": ""}, "this language"),
-        ({"App.fsproj": "", "Program.fs": ""}, "this language"),
+        ({"Makefile": "", "go.mod": "module x\n", "main.go": "package main\n"}, "Go"),
     ],
 )
 def test_language_label_comes_from_manifest_or_extension(

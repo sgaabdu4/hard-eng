@@ -500,7 +500,32 @@ def update_base(root: Path) -> str:
     from shipping import load_policy
 
     policy = load_policy(root, required=False)
-    return policy["base"] if policy else "main"
+    if policy:
+        return policy["base"]
+    if (
+        subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        ).returncode
+        != 0
+    ):
+        return "main"
+    found = subprocess.run(
+        ["git", "ls-remote", "--symref", "origin", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    if found.returncode != 0:
+        raise subprocess.SubprocessError(f"git ls-remote exited {found.returncode}")
+    for line in found.stdout.splitlines():
+        if line.startswith("ref: refs/heads/"):
+            return line.partition("\t")[0].removeprefix("ref: refs/heads/")
+    return "main"
 
 
 def fetch_base(root: Path, base: str) -> str:
@@ -671,9 +696,16 @@ def refuse_untracked_overlap(
     names = list(filter(None, changed.split("\0")))
     if not names:
         return
+    parents = {
+        str(parent)
+        for name in names
+        for parent in Path(name).parents
+        if parent != Path(".")
+        and ((root / parent).is_symlink() or (root / parent).is_file())
+    }
     found = [
         line[3:].strip('"')
-        for line in local_state(root, names)
+        for line in local_state(root, [*names, *sorted(parents)])
         if line.startswith(("?? ", "!! "))
     ]
     if found:

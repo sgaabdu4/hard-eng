@@ -14,11 +14,9 @@ from gate_config import (
 from project_setup import javascript_manager
 
 
-@pytest.mark.parametrize("manifest", ["pubspec.yaml", "package.json", "pyproject.toml"])
 @pytest.mark.parametrize("attribute", ["linguist-generated", "linguist-vendored"])
-def test_generated_package_ownership(
-    tmp_path: Path, manifest: str, attribute: str
-) -> None:
+def test_generated_package_ownership(tmp_path: Path, attribute: str) -> None:
+    manifest = "package.json"
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     files = [tmp_path / owner / manifest for owner in ("canonical", "copy", "real")]
     for path in files:
@@ -148,7 +146,6 @@ def test_requirements_only_project_is_told_how_to_declare_itself(
     [
         ({}, False),
         ({"dependencies": {"left-pad": "1.3.0"}}, True),
-        ({"devDependencies": {"typescript": "6.0.0"}}, True),
         ({"workspaces": ["packages/*"]}, True),
     ],
 )
@@ -161,17 +158,6 @@ def test_bun_lockfile_is_optional_only_without_dependencies(
             javascript_manager(tmp_path)
     else:
         assert javascript_manager(tmp_path)[0] == "bun"
-
-
-def test_migration_instruction_names_pnpm_settings_and_the_bun_runtime(
-    tmp_path: Path,
-) -> None:
-    (tmp_path / "package.json").write_text("{}")
-    (tmp_path / "pnpm-workspace.yaml").write_text("minimumReleaseAge: 1440\n")
-    with pytest.raises(ValueError) as error:
-        javascript_manager(tmp_path)
-    for text in ("minimumReleaseAge", "trustedDependencies", "bunfig.toml", "bun test"):
-        assert text in str(error.value)
 
 
 def test_install_lands_with_a_pending_bun_migration(

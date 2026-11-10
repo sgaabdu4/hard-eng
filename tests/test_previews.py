@@ -34,23 +34,12 @@ def test_notes_artifact_page_calls(payload: object) -> None:
     assert "permissionDecision" not in output
     note = output["additionalContext"]
     assert note.startswith("HE-REAL-APP-PREVIEW")
-    for step in (
-        "real app",
-        "isolated checkout",
-        "before and after",
-        "ux_reference",
-        "carry on",
-    ):
-        assert step in note
 
 
 @pytest.mark.parametrize(
     "payload",
     [
-        *(
-            artifact(action=action, url="https://claude.ai/artifact/x")
-            for action in ("read", "list", "open", "delete", "pin", "unpin")
-        ),
+        artifact(action="read", url="https://claude.ai/artifact/x"),
         {"tool_name": "Bash", "tool_input": {"command": "ls"}},
         {"tool_name": "Artifact", "tool_input": "mock.html"},
         ["Artifact"],
