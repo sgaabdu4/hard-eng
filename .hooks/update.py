@@ -22,8 +22,10 @@ from release_history import StaleRelease, ordered
 from submodules import update_submodules
 from update_runner import (
     commit_update,
+    committed_matches,
     current_head,
     known_failure,
+    landed_commit,
     rebase_sessions,
     remember_failure,
     stale_error,
@@ -723,6 +725,31 @@ def repair_installation(root: Path, previous: str) -> str:
     )
 
 
+def undo_hooked_commit(
+    root: Path, head: str, expected: dict[str, str | None], names: list[str]
+) -> list[str]:
+    """Undo the install commit when a project commit hook rewrote it; return the changed paths."""
+    landed = landed_commit(root, head, "Install Hard Eng")
+    if landed is None or committed_matches(root, landed[0], expected):
+        return []
+    changed = [
+        name
+        for name, content in expected.items()
+        if not committed_matches(root, landed[0], {name: content})
+    ]
+    if changed and current_head(root) == landed[0]:
+        undo = ["git", "reset", "--soft", head]
+        subprocess.run(
+            undo if head else ["git", "update-ref", "-d", "HEAD"], cwd=root, check=True
+        )
+        write_changes(
+            root,
+            {n: expected[n] for n in changed if not (root / n).is_symlink()},
+        )
+        subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
+    return changed
+
+
 def commit_install(
     root: Path,
     names: list[str],
@@ -745,11 +772,20 @@ def commit_install(
             text=True,
             check=False,
         )
-        if result.returncode == 0:
-            rebase_sessions(root, head, "Install Hard Eng", expected)
+        changed = undo_hooked_commit(root, head, expected, names) if expected else []
+        if result.returncode == 0 and not changed:
+            rebase_sessions(root, head, "Install Hard Eng")
             return "Committed the installed files locally without pushing."
-        subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
-        reason = " | ".join(result.stdout.strip().splitlines()[-3:])
+        if changed:
+            reason = (
+                f"a project commit hook changed {', '.join(changed)}; "
+                "leave Hard Eng's files out of that hook"
+            )
+        else:
+            subprocess.run(
+                ["git", "reset", "--quiet", "--", *names], cwd=root, check=False
+            )
+            reason = " | ".join(result.stdout.strip().splitlines()[-3:])
     return (
         f"Installed files are not committed ({reason}). Commit them so updates and "
         "worktrees include them: " + install_paths(names)
