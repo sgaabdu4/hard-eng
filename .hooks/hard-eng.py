@@ -20,6 +20,19 @@ if sys.version_info < PYTHON_FLOOR:
         sys.exit(refusal)
     sys.exit(0)
 
+if (
+    __name__ == "__main__"
+    and sys.argv[1:2] in (["session"], ["stop"])
+    and sys.argv[2:] in (["claude"], ["codex"])
+):
+    from pathlib import Path
+
+    from agent_hooks import handle_event
+
+    raise SystemExit(
+        handle_event(Path(__file__).resolve().parents[1], sys.argv[1], sys.argv[2])
+    )
+
 import fcntl
 import os
 import shlex
