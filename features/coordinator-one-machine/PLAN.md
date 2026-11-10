@@ -1,6 +1,6 @@
 # Coordinator runs on any one machine, never two
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -28,16 +28,16 @@ Decision: claim commits use a fixed author and committer, never the user's ident
 
 ## Acceptance + steps
 
-- [ ] Two clones of one remote: the first `check` takes the claim; the second prints `skipped` and its `comment` is refused → `tests/test_trello_coordinator.py::test_a_second_machine_is_skipped_and_cannot_write` (fails on `develop`: both clones run).
-- [ ] Two machines take an absent claim at once → exactly one wins → `tests/test_trello_board.py::test_one_machine_wins_an_open_claim`.
-- [ ] `takeover` on the user's order: the new machine holds the claim and gets the old machine's posted log and `handover.md` when `origin` is private; the old machine's `finish` reports the lost claim, its `check` prints `heldElsewhere` and its writes are refused → `tests/test_trello_coordinator.py::test_takeover_moves_the_claim_and_memory`.
-- [ ] A repository that is not private gets the holder line only; a takeover there leaves local memory untouched → `tests/test_trello_coordinator.py::test_a_public_remote_gets_no_memory`.
-- [ ] A memory file that holds the Trello key or token stops `finish` before any push; a full commit hash still travels → `tests/test_trello_coordinator.py::test_memory_with_a_key_is_never_pushed`.
-- [ ] Claim commits carry the fixed identity, not the repository's → `tests/test_trello_coordinator.py::test_a_second_machine_is_skipped_and_cannot_write`.
-- [ ] A `--dry-run` write works on a machine without the claim and sends nothing → `tests/test_trello_coordinator.py::test_a_second_machine_is_skipped_and_cannot_write`.
-- [ ] A failed private check never replaces the saved memory with a holder-only claim → `tests/test_trello_coordinator.py::test_a_failed_private_check_keeps_the_saved_memory`.
-- [ ] `takeover` prints when the old machine last saved, so the new one knows which cards to read again → `tests/test_trello_coordinator.py::test_takeover_moves_the_claim_and_memory`.
-- [ ] Reference rows match the commands → `tests/test_trello_coordinator.py::test_cli_matches_the_reference_contract`.
+- [x] Two clones of one remote: the first `check` takes the claim; the second prints `skipped` and its `comment` is refused → `tests/test_trello_coordinator.py::test_a_second_machine_is_skipped_and_cannot_write` (fails on `develop`: both clones run).
+- [x] Two machines take an absent claim at once → exactly one wins → `tests/test_trello_board.py::test_one_machine_wins_an_open_claim`.
+- [x] `takeover` on the user's order: the new machine holds the claim and gets the old machine's posted log and `handover.md` when `origin` is private; the old machine's `finish` reports the lost claim, its `check` prints `heldElsewhere` and its writes are refused → `tests/test_trello_coordinator.py::test_takeover_moves_the_claim_and_memory`.
+- [x] A repository that is not private gets the holder line only; a takeover there leaves local memory untouched → `tests/test_trello_coordinator.py::test_a_public_remote_gets_no_memory`.
+- [x] A memory file that holds the Trello key or token stops `finish` before any push; a full commit hash still travels → `tests/test_trello_coordinator.py::test_memory_with_a_key_is_never_pushed`.
+- [x] Claim commits carry the fixed identity, not the repository's → `tests/test_trello_coordinator.py::test_a_second_machine_is_skipped_and_cannot_write`.
+- [x] A `--dry-run` write works on a machine without the claim and sends nothing → `tests/test_trello_coordinator.py::test_a_second_machine_is_skipped_and_cannot_write`.
+- [x] A failed private check never replaces the saved memory with a holder-only claim → `tests/test_trello_coordinator.py::test_a_failed_private_check_keeps_the_saved_memory`.
+- [x] `takeover` prints when the old machine last saved, so the new one knows which cards to read again → `tests/test_trello_coordinator.py::test_takeover_moves_the_claim_and_memory`.
+- [x] Reference rows match the commands → `tests/test_trello_coordinator.py::test_cli_matches_the_reference_contract`.
 - [x] GitHub gives one winner and starts no workflow → N/A — tests cannot push to a real private repository; one-time proof on 2026-11-10 07:45Z: two pushers at once with `--force-with-lease=<ref>:` on a scratch ref, 3 rounds, one winner each; the loser got "cannot lock ref … reference already exists"; no workflow run after 07:45Z (`gh run list`); the scratch ref was deleted (`ls-remote` empty). Pushed from a repository with no hooks.
 - [x] The real claim code on GitHub, with a pre-push hook that always fails → N/A — tests cannot reach a real private repository; one-time proof on 2026-11-10 12:40Z from two fresh repositories with that private `origin` (`/tmp/trello-build/claim-live.py`): `is_private` True; A took the claim; B's check printed `heldElsewhere` and B's write was refused; A's save pushed memory and a second save pushed nothing; B's `takeover` restored A's `handover.md` and `posted.log`; then A's write was refused, A's save said another machine holds the claim and A's check printed `heldElsewhere`. The hook never ran; no workflow run after 12:28Z; the claim ref was deleted after (`ls-remote` empty). Each network step took 0.4 to 4 seconds.
 
@@ -59,10 +59,14 @@ N/A — no app screens; coordinator script and reference text only.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: On 2026-11-10 the new tests failed first on the unchanged code: 10 failed (no claim module, no claim at `origin`, an unreachable `origin` still passed, `takeover` missing). Review of the build found that `config.SECRET` refused any 32 hex characters, and one consumer's real worker note holds a full commit hash, so every `finish` would fail; the hash case failed first, then passed with a key-and-token-only check. Reader pass 1 found three code defects (a failed private check pushed a holder-only claim over saved memory; `--dry-run` needed the claim; nothing told the new machine which cards to read again) and ten text issues; the three code cases failed first, then passed. Reader pass 2 found three text-code mismatches and five unclear sentences, and no meaning changed by accident; `takeover` now prints `memoryRestored`, which failed first. After the fixes: `tests/test_trello_board.py`, `tests/test_trello_report.py`, `tests/test_trello_coordinator.py` 151 passed; ruff format and lint passed; pyrefly 0 diagnostics; `biome ci` on `.agents/skills` passed; `commands.md` is under 36,000 bytes. The two GitHub proofs are in Acceptance.
 E2E: N/A — the script has no user journey; the tests run the real `check`, `finish`, `takeover` and write commands against real git remotes and the fake board.
-Retro: Pending
+Retro: these items, each sorted by HE Learn's Retro rows.
+- The broad key pattern would have stopped every save on a real consumer → caught by review against real data; mechanical: the full-hash case in `tests/test_trello_coordinator.py::test_memory_with_a_key_is_never_pushed`. None new.
+- Reader pass 1 found three code defects in a reference-only review → caught by the Reader rule, which compares text with code; each fixed with a failing test first. None new.
+- The Ready check refused two Acceptance lines with no test reference, and the Stop hook's types gate refused an untyped lambda in a test → caught by the gates. None new.
+- User correction: "why in this mac … no 2 computers should be running coordinator at the same time" → judgement: a Mac-only rules file was proposed although the coordinator must move between machines; saved as a lasting decision in the maintainer's notes. None new in Hard Eng.
 
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with `hard-eng` and `canary` green, then release.
