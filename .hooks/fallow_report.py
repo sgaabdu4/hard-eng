@@ -380,15 +380,17 @@ def located(path: object, line: object) -> str:
 def finding_lines(path: Path) -> list[str]:
     try:
         report = json.loads(path.read_text())
+        audit = report.get("kind") == "audit"
         found = [
             f"{located(item['path'], item.get('line'))} {kind} "
             f"{item.get('export_name') or item.get('package_name') or ''}".rstrip()
-            for kind, items in report["check"].items()
-            if isinstance(items, list)
+            for kind, items in report["dead_code" if audit else "check"].items()
+            if isinstance(items, list) and kind != "workspace_diagnostics"
             for item in items
             if isinstance(item, dict) and "path" in item
         ]
-        for group in report.get("dupes", {}).get("clone_groups", []):
+        dupes = report.get("duplication" if audit else "dupes", {})
+        for group in dupes.get("clone_groups", []):
             copies = [
                 f"{copy['file']}:{copy['start_line']}-{copy['end_line']}"
                 for copy in group["instances"]
