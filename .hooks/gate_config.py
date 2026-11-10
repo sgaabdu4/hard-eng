@@ -758,7 +758,7 @@ def validate_manifest_groups(
                     "; declare a test-support package without language or sources,"
                     " with lockfile and vulnerability checks"
                     if test_support
-                    else ""
+                    else "; rerun setup to add its group"
                 )
             )
         if group.get("sources") or not (
