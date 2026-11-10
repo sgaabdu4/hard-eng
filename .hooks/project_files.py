@@ -1,38 +1,34 @@
 """Read a project file that a person edits; a syntax error names the file."""
 
 import json
+import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+
+KINDS = {".toml": "TOML", ".yaml": "YAML", ".yml": "YAML"}
 
 
-def parse_text(text: str, kind: str) -> Any:
-    if kind == "yaml":
-        import yaml
-
-        try:
-            return yaml.safe_load(text)
-        except yaml.YAMLError as error:
-            mark = getattr(error, "problem_mark", None)
-            where = f": line {mark.line + 1} column {mark.column + 1}" if mark else ""
-            reason = getattr(error, "problem", None) or str(error)
-            raise ValueError(reason + where) from error
-    if kind == "toml":
-        import tomllib
-
-        return tomllib.loads(text)
-    return json.loads(text)
+def syntax_errors() -> tuple[type[Exception], ...]:
+    """PyYAML's error is no ValueError, and PyYAML is loaded only when a caller parses YAML."""
+    yaml = sys.modules.get("yaml")
+    return (ValueError, yaml.YAMLError) if yaml else (ValueError,)
 
 
-def syntax_error(name: str, kind: str, error: ValueError) -> ValueError:
-    reason = (str(error).splitlines() or [""])[0]
-    return ValueError(f"{name} is not valid {kind.upper()}: {reason}")
+def syntax_error(name: str, error: Exception) -> ValueError:
+    mark = getattr(error, "problem_mark", None)
+    where = f": line {mark.line + 1} column {mark.column + 1}" if mark else ""
+    reason = getattr(error, "problem", None) or (str(error).splitlines() or [""])[0]
+    kind = KINDS.get(Path(name).suffix, "JSON")
+    return ValueError(f"{name} is not valid {kind}: {reason}{where}")
 
 
-def parse_project_text(text: str, name: str, kind: str = "json") -> Any:
+def parse_project_text[T](
+    text: str, name: str, parse: Callable[[str], T] = json.loads
+) -> T:
     try:
-        return parse_text(text, kind)
-    except ValueError as error:
-        raise syntax_error(name, kind, error) from error
+        return parse(text)
+    except syntax_errors() as error:
+        raise syntax_error(name, error) from error
 
 
 def repository_name(path: Path, root: Path | None) -> str:
@@ -49,8 +45,10 @@ def repository_name(path: Path, root: Path | None) -> str:
     return path.relative_to(root).as_posix()
 
 
-def read_project_file(path: Path, root: Path | None = None, kind: str = "json") -> Any:
+def read_project_file[T](
+    path: Path, root: Path | None = None, parse: Callable[[str], T] = json.loads
+) -> T:
     try:
-        return parse_text(path.read_text(), kind)
-    except ValueError as error:
-        raise syntax_error(repository_name(path, root), kind, error) from error
+        return parse(path.read_text())
+    except syntax_errors() as error:
+        raise syntax_error(repository_name(path, root), error) from error

@@ -11,6 +11,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tomllib
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -115,7 +116,8 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
 
     codex_config = root / ".codex/config.toml"
     if codex_config.exists():
-        features = read_project_file(codex_config, root, "toml").get("features", {})
+        config = read_project_file(codex_config, root, tomllib.loads)
+        features = config.get("features", {})
         setting = (
             "hooks"
             if isinstance(features, dict) and "hooks" in features
@@ -349,12 +351,13 @@ def arb_language(arb: Path) -> str | None:
 
 
 def localization_outputs(root: Path, directory: Path) -> list[str]:
+    import yaml
     from project_files import read_project_file
 
     localization = directory / "l10n.yaml"
     if not localization.is_file():
         return []
-    options = read_project_file(localization, root, "yaml") or {}
+    options = read_project_file(localization, root, yaml.safe_load) or {}
     if not isinstance(options, dict) or options.get("synthetic-package", False):
         return []
     arbs = directory / str(options.get("arb-dir", "lib/l10n"))

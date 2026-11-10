@@ -188,7 +188,11 @@ def swift_group(root: Path, path: str, project: SwiftProject) -> Group:
 
 def local_plugin_folders(root: Path, app: Path, path: str) -> list[str]:
     """Native folders of the path dependencies, whose Swift builds into the app."""
-    manifest = read_project_file(root / app / "pubspec.yaml", root, "yaml") or {}
+    import yaml
+
+    manifest = (
+        read_project_file(root / app / "pubspec.yaml", root, yaml.safe_load) or {}
+    )
     folders: list[str] = []
     for section in ("dependencies", "dev_dependencies", "dependency_overrides"):
         for value in (manifest.get(section) or {}).values():
