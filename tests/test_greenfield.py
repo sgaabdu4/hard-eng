@@ -372,3 +372,36 @@ def test_failed_vulnerability_scan_names_the_vulnerable_packages(
     monkeypatch.setattr(runner, "ROOT", tmp_path)
     assert runner.run_gate(group, gate, 30, threading.Lock()) is True
     assert "lib@1: GHSA-0001, GHSA-0002" in capsys.readouterr().out
+
+
+def test_a_src_layout_package_that_imports_itself_passes_the_dependencies_gate(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    build = '[build-system]\nrequires = ["uv_build"]\nbuild-backend = "uv_build"\n'
+    uv_project(tmp_path, PROJECT.replace("fixture", "mylib") + build)
+    library = tmp_path / "src/mylib"
+    library.mkdir(parents=True)
+    (library / "__init__.py").write_text("def hello() -> str:\n    return 'hi'\n")
+    (library / "cli.py").write_text("from mylib import hello\n\nvalue = hello()\n")
+    installer.install(tmp_path)
+    gates = tmp_path / "hard-eng.gates.json"
+    older = json.loads(gates.read_text())
+    command = next(
+        check["command"]
+        for check in older["packages"][0]["checks"]
+        if check["role"] == "dependencies"
+    )
+    assert command[-2:] == ["--known-first-party", "mylib"]
+    del command[-2:]
+    gates.write_text(json.dumps(older))
+    installer.install(tmp_path)
+    group = json.loads(gates.read_text())["packages"][0]
+    gate = next(check for check in group["checks"] if check["role"] == "dependencies")
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is False
+    assert "PASS dependencies" in capsys.readouterr().out
+    (tmp_path / "script.py").write_text("import yaml_missing_package\n")
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is True
+    assert "DEP001 'yaml_missing_package'" in capsys.readouterr().out
