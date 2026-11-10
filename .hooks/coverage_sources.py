@@ -1,6 +1,7 @@
 """Prove omitted TypeScript and Swift files have no runtime content without executing them."""
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -102,10 +103,17 @@ def owned_files(
 ) -> dict[Path, list[Path]]:
     """Each file belongs to the package nearest to it."""
     owned: dict[Path, list[Path]] = {root / package["path"]: [] for package in packages}
+    # Text prefixes, longest first: building each file's parents made large projects slow.
+    prefixes = sorted(
+        ((f"{directory}{os.sep}", paths) for directory, paths in owned.items()),
+        key=lambda item: -len(item[0]),
+    )
     for path in files:
-        owner = next((parent for parent in path.parents if parent in owned), None)
-        if owner is not None:
-            owned[owner].append(path)
+        text = str(path)
+        for prefix, paths in prefixes:
+            if text.startswith(prefix):
+                paths.append(path)
+                break
     return owned
 
 
@@ -113,17 +121,22 @@ def require_listed_sources(
     root: Path, packages: list[Group], files: list[Path], python_only: bool
 ) -> None:
     """Code added after setup is checked only once its package lists it."""
-    owned = owned_files(root, packages, files)
     languages = {"python"} if python_only else {"python", "javascript", "dart"}
-    for group in packages:
-        language = group.get("language", "")
-        if language not in languages:
-            continue
+    groups = [group for group in packages if group.get("language") in languages]
+    if not groups:
+        return
+    owned = owned_files(root, packages, files)
+    for group in groups:
+        language = group["language"]
         directory = root / group["path"]
-        if missing := sorted(
-            source_roots(directory, language, owned[directory])
-            - set(group.get("sources", []))
-        ):
+        listed = set(group.get("sources", []))
+        start = len(str(directory)) + 1
+        unlisted = [
+            path
+            for path in owned[directory]
+            if str(path)[start:].partition(os.sep)[0] not in listed
+        ]
+        if missing := sorted(source_roots(directory, language, unlisted)):
             label = {"javascript": "JavaScript"}.get(language, language.title())
             checks = (
                 " and to every check that names them (tests --cov=, annotations, dead-code, duplicates)"
