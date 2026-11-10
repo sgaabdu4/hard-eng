@@ -106,6 +106,8 @@ def quick_mode() -> bool:
 
 def ensure_python_runtime() -> None:
     """Run the installed CLI with its YAML dependency without changing host Python."""
+    # uv run sets VIRTUAL_ENV to its throwaway; Poetry would sync and run gates there.
+    os.environ.pop("VIRTUAL_ENV", None)
     if importlib.util.find_spec("yaml") is None:
         try:
             os.execvp(

@@ -38,6 +38,17 @@ def parallel_pytest(package: Group) -> None:
         ]
 
 
+POETRY_PREFIX = ["poetry", "run", "uv", "run", "--active", "--no-sync"]
+RETIRED_POETRY_PREFIX = ["poetry", "run", "uv", "run", "--no-project", "--active"]
+
+
+def current_poetry_prefix(package: Group) -> None:
+    """`--no-project` lets an interpreter path pinned for uv replace Poetry's environment."""
+    for gate in package["checks"]:
+        if gate["command"][:6] == RETIRED_POETRY_PREFIX:
+            gate["command"] = [*POETRY_PREFIX, *gate["command"][6:]]
+
+
 def python_gate_command(command: list[str], manager: str) -> list[str]:
     packages = {
         "pytest": ["pytest", "pytest-cov"],
@@ -47,7 +58,7 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
     }[command[0]]
     prefix = ["uv", "run", "--no-sync"]
     if manager == "poetry":
-        prefix = ["poetry", "run", "uv", "run", "--no-project", "--active"]
+        prefix = [*POETRY_PREFIX]
     for package in packages:
         prefix.extend(["--with", package, "--upgrade-package", package])
     return [*prefix, *command]
@@ -203,6 +214,7 @@ def configure_python(
 ) -> None:
     dependency_command(directory, "python")  # Existing configurations need a lock too.
     parallel_pytest(package)
+    current_poetry_prefix(package)
     known_first_party(directory, package)
     native = directory / "pyrefly.toml"
     project = directory / "pyproject.toml"
