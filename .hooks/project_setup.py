@@ -86,10 +86,18 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
         for root in FLUTTER_PLATFORM_ROOTS
         if flutter and (directory / root).is_dir()
     )
-    if not isinstance(values, list) or any(
-        not isinstance(value, str) or value not in allowed | native for value in values
-    ):
-        raise ValueError("Dart strict analysis cannot exclude project files")
+    entries = values if isinstance(values, list) else [values]
+    refused = [
+        value
+        for value in entries
+        if not isinstance(value, str) or value not in allowed | native
+    ]
+    if refused or not isinstance(values, list):
+        raise ValueError(
+            "Dart strict analysis cannot exclude project files: remove "
+            f"{', '.join(repr(value) for value in refused or entries)} from exclude in "
+            f"{directory / 'analysis_options.yaml'}"
+        )
     roots = {pattern.split("/", 1)[0] for pattern in set(values) & native}
     matches = {
         path
@@ -429,10 +437,17 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
     files = repository_files(root)
     owned = owned_files(root, config["packages"], files)
     typescript = typescript_packages(root, files)
+    tracked = set(files)
     for package in config["packages"]:
         directory = root / package["path"]
         adapt_sources(root, package, owned[directory])
-        adapt_package(directory, package)
+        lockfile = directory / adapt_package(directory, package)
+        if lockfile.is_file() and lockfile not in tracked:
+            relative = lockfile.relative_to(root)
+            raise ValueError(
+                f"{relative} is ignored by Git, so a fresh clone fails without "
+                f"it. Remove its entry from .gitignore, then commit {relative}"
+            )
         adapt_boundaries(package, typescript)
         for gate in package["checks"]:
             if gate.get("role") == "security":
@@ -631,7 +646,7 @@ def add_freshness(root: Path, source: Path, package: Group) -> None:
     checks.insert(anchor + 1, gate)
 
 
-def adapt_package(directory: Path, package: Group) -> None:
+def adapt_package(directory: Path, package: Group) -> str:
     from python_setup import python_gate_command, python_roots
 
     language = package["language"]
@@ -670,6 +685,7 @@ def adapt_package(directory: Path, package: Group) -> None:
             gate for gate in package["checks"] if gate.get("role") != "imports"
         ]
     adapt_performance(directory, package)
+    return lockfile
 
 
 def adapt_performance(directory: Path, package: Group) -> None:
