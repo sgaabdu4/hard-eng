@@ -300,7 +300,10 @@ COUNT_WORD_PAIRS = [
     ),
     ("3 files would be reformatted", "1 file would be reformatted"),
     ("INFO 3 diagnostics", "INFO 1 diagnostic"),
-    ("Checked 3 files in 5ms. No fixes applied.", "Checked 1 file in 5ms. No fixes applied."),
+    (
+        "Checked 3 files in 5ms. No fixes applied.",
+        "Checked 1 file in 5ms. No fixes applied.",
+    ),
     ("3 issues found.", "1 issue found."),
 ]
 
