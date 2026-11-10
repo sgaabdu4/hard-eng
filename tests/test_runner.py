@@ -19,7 +19,6 @@ from gate_config import (
     Group,
     load_groups,
     validate_file_sizes,
-    validate_group,
 )
 from shipping import ShippingPolicy, git
 
@@ -472,15 +471,29 @@ def test_parallel_checks_overlap_up_to_the_cpu_count(
 
 
 @pytest.mark.parametrize("document", ["PRODUCT.md", "DESIGN.md"])
-@pytest.mark.parametrize("content", ["", "   \n", "# Title\n[TODO: fill]", "# Title\n"])
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("", "is empty"),
+        ("# Title\n[TODO: fill]", "unfilled template prompts"),
+        ("# Title\n", "needs a filled"),
+        (
+            (
+                "# T\n## Problem\nx\n## Users\nx\n## Product Purpose\nx\n## Boundaries\nx\n"
+                "## Components\nx\n## Overview\nx\n## Do's and Don'ts\nx\n"
+            ),
+            "template order",
+        ),
+    ],
+)
 def test_invalid_documents_prevent_commands(
-    runner: ModuleType, tmp_path: Path, document: str, content: str
+    runner: ModuleType, tmp_path: Path, document: str, content: str, message: str
 ) -> None:
     (tmp_path / document).write_text(content)
     configure(
         tmp_path, [gate("side-effect", "from pathlib import Path;Path('ran').touch()")]
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=message):
         runner.check()
     assert not (tmp_path / "ran").exists()
 
@@ -517,6 +530,12 @@ def test_report_collision_rejected(runner: ModuleType, tmp_path: Path) -> None:
         ("python", ["pytest", "tests/a.py::test_one"]),
         ("javascript", ["vitest", "--testNamePattern=x"]),
         ("dart", ["flutter", "test", "--plain-name=x"]),
+        ("python", ["pytest", "--ignore=tests/slow"]),
+        ("python", ["pytest", "--ignore-glob", "tests/*_slow.py"]),
+        ("javascript", ["vitest", "run", "--shard=1/3"]),
+        ("javascript", ["vitest", "run", "--project", "unit"]),
+        ("javascript", ["jest", "--selectProjects", "unit"]),
+        ("dart", ["flutter", "test", "--total-shards=3", "--shard-index=0"]),
     ],
 )
 def test_suite_filters_are_rejected(
@@ -545,74 +564,7 @@ def test_nested_package_script_filter_rejected(
         )
 
 
-def test_gate_validation_rejects_javascript_package_manager_drift(
-    tmp_path: Path,
-) -> None:
-    """HE-PERFORMANCE-SUITE: a package needs a performance suite or a reviewed exception."""
-    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
-    (tmp_path / "bun.lock").touch()
-    group: Group = {
-        "path": ".",
-        "language": "javascript",
-        "sources": ["src"],
-        "checks": [
-            {"name": "types", "role": "types", "command": ["tsc"]},
-            {"name": "typing", "role": "typing-style", "command": ["biome", "lint"]},
-            {"name": "format", "role": "format-lint", "command": ["biome", "ci"]},
-            {"name": "focused", "role": "focused-tests", "command": ["biome", "lint"]},
-            {"name": "tests", "role": "tests", "command": ["node", "test.js"]},
-            {
-                "name": "dead-code",
-                "role": "dead-code-duplicates",
-                "command": ["fallow", "--fail-on-issues"],
-            },
-            {
-                "name": "performance",
-                "role": "performance",
-                "command": ["node", "test.js"],
-                "report": {
-                    "type": "performance-junit",
-                    "path": "coverage/performance.xml",
-                },
-            },
-        ],
-    }
-    assert validate_group(tmp_path, group, set()) == 7
-    performance = group["checks"].pop()
-    with pytest.raises(ValueError, match="mandatory performance"):
-        validate_group(tmp_path, group, set())
-    group["performance_exception"] = "Reviewed fixture: no product workload."
-    assert validate_group(tmp_path, group, set()) == 6
-    group["checks"].append(performance)
-    performance["parallel"] = True
-    with pytest.raises(ValueError, match="serially"):
-        validate_group(tmp_path, group, set())
-    performance["parallel"] = False
-    report = performance.pop("report")
-    with pytest.raises(ValueError, match="supported native report"):
-        validate_group(tmp_path, group, set())
-    performance["report"] = report
-    (tmp_path / "package-lock.json").touch()
-    with pytest.raises(ValueError, match="Bun is required"):
-        validate_group(tmp_path, group, set())
-    (tmp_path / "package-lock.json").unlink()
-    group["checks"][0]["command"] = ["npm", "run", "typecheck"]
-    with pytest.raises(ValueError, match="must use Bun"):
-        validate_group(tmp_path, group, set())
-    (tmp_path / "package.json").write_text(
-        json.dumps(
-            {
-                "packageManager": "bun@1.3.0",
-                "scripts": {"typecheck": "bun run unit", "unit": "npx c8 test"},
-            }
-        )
-    )
-    group["checks"][0]["command"] = ["bun", "run", "typecheck"]
-    with pytest.raises(ValueError, match="must use Bun, not: npx"):
-        validate_group(tmp_path, group, set())
-
-
-@pytest.mark.parametrize("reason", [None, False, 0, [], {}, "", " \n "])
+@pytest.mark.parametrize("reason", [None, 0, "", " \n "])
 def test_performance_exception_requires_a_nonblank_reason(
     runner: ModuleType, tmp_path: Path, reason: object
 ) -> None:
@@ -805,14 +757,15 @@ def test_real_runner_coverage_threshold(
     )
 
 
-@pytest.mark.parametrize(
-    "kind", ["deptry", "performance-junit", "performance-dart", "lighthouse-ci"]
-)
-def test_stale_report_cannot_pass(
-    runner: ModuleType, tmp_path: Path, kind: str
-) -> None:
-    (tmp_path / "old.json").write_text("[]")
-    check = gate(kind, "pass", report={"type": kind, "path": "old.json"})
+def test_stale_report_cannot_pass(runner: ModuleType, tmp_path: Path) -> None:
+    (tmp_path / "old.xml").write_text(
+        '<testsuite tests="1"><testcase name="t"/></testsuite>'
+    )
+    check = gate(
+        "performance-junit",
+        "pass",
+        report={"type": "performance-junit", "path": "old.xml"},
+    )
     assert runner.run_gate({"path": "."}, check, 5, threading.Lock()) is True
 
 

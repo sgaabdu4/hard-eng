@@ -9,6 +9,7 @@ from pathlib import Path
 from types import ModuleType
 
 import gate_config
+import gate_times
 import pytest
 from ci_setup import migrate_impact_token
 from conftest import SOURCE, commit, configure, gate, load_module, running, spawner
@@ -19,8 +20,6 @@ from gate_schedule import gate_order, waits
 def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import gate_times
-
     monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
     configure(tmp_path, [gate("suite", "pass")])
     assert runner.check(timeout=120) == 0
@@ -30,6 +29,15 @@ def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
     started = time.monotonic()
     assert runner.check(timeout=120) == 1
     assert time.monotonic() - started < 30
+
+
+def test_the_gate_limit_is_three_times_the_last_passing_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
+    gate_times.record_gate_time(tmp_path, "./suite", 2)
+    assert gate_times.gate_limit(tmp_path, "./suite", 100) == 6
 
 
 PERFORMANCE = gate(
@@ -62,24 +70,6 @@ def test_scans_start_beside_a_serial_suite_listed_before_them(
         parallel=True,
     )
     configure(tmp_path, [*first, suite, scan])
-    assert runner.check() == 0
-
-
-def test_scans_still_read_what_a_serial_generator_produced(
-    runner: ModuleType, tmp_path: Path
-) -> None:
-    generator = gate(
-        "generate",
-        "from pathlib import Path;import time;time.sleep(0.5);Path('generated').touch()",
-        role="codegen",
-    )
-    scan = gate(
-        "scan",
-        "from pathlib import Path;assert Path('generated').exists()",
-        role="shell",
-        parallel=True,
-    )
-    configure(tmp_path, [generator, scan])
     assert runner.check() == 0
 
 

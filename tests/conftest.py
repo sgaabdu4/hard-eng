@@ -1,5 +1,6 @@
 """Load the actual installed-script entry points without invoking their CLI."""
 
+import atexit
 import importlib.util
 import json
 import os
@@ -25,6 +26,15 @@ os.environ.pop("GITHUB_ACTIONS", None)
 os.environ.pop("GITHUB_EVENT_NAME", None)
 # Fixture repositories must not take signing, hooks or branch names from the developer.
 os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
+# Nor the developer's gh sign-in or default Git ignore file; bytecode is written as in CI.
+SEAL = Path(tempfile.mkdtemp(prefix="hard-eng-seal-"))
+atexit.register(shutil.rmtree, SEAL, ignore_errors=True)
+(SEAL / "gh").write_text("#!/bin/sh\nexit 1\n")
+(SEAL / "gh").chmod(0o755)
+(SEAL / "config").mkdir()
+os.environ["PATH"] = f"{SEAL}{os.pathsep}{os.environ.get('PATH', '')}"
+os.environ["XDG_CONFIG_HOME"] = str(SEAL / "config")
+os.environ.pop("PYTHONDONTWRITEBYTECODE", None)
 sys.path[:0] = [str(SOURCE / ".hooks"), str(SOURCE)]
 CODEBASE_MEMORY = {
     "command": "sh",
@@ -278,7 +288,7 @@ def release_template(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, st
         json.dumps({"packages": [], "shared": [], "shipping": shipping_policy})
     )
     subprocess.run(
-        ["python3", str(source / "setup.py"), str(target)],
+        [sys.executable, str(source / "setup.py"), str(target)],
         check=True,
         capture_output=True,
     )

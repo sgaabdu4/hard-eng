@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -531,7 +532,7 @@ def test_plain_dart_uses_native_coverage_tool(
         'name: fixture\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n'
     )
     result = subprocess.run(
-        ["python3", str(installer.SOURCE / "setup.py"), str(tmp_path)],
+        [sys.executable, str(installer.SOURCE / "setup.py"), str(tmp_path)],
         capture_output=True,
         text=True,
         check=False,

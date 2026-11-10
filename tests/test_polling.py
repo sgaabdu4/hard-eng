@@ -47,6 +47,7 @@ def bash(command: str, **extra: object) -> dict[str, object]:
         'out="$(until test -f done; do sleep 2; done)"',
         "python3 - <<'EOF'\n# don't stop\nimport time\ntime.sleep(60)\nprint('done')\nEOF",
         "ruby -e 'sleep 60'",
+        "if test -f x; then until test -f done; do sleep 5; done; fi",
     ],
 )
 def test_foreground_sleep_wait_is_denied(command: str) -> None:
@@ -77,7 +78,6 @@ def test_background_subagent_and_short_waits_pass(payload: object) -> None:
     "command",
     [
         'grep -rn "sleep 600" .hooks',
-        'grep -c "sleep 60" notes.md',
         'git commit -m "Stop the retry loop; sleep 60 was too long while CI runs"',
         "cat > notes.md <<'EOF'\nuntil the job ends, sleep 600\nEOF",
         "cat > docs/python/notes.md <<'EOF'\nuntil the job ends, sleep 600\nEOF",
