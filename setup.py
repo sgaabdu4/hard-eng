@@ -902,7 +902,7 @@ def install(root: Path, previous: Path | None = None) -> None:
             if chained:
                 names.append(str(hook_chain.project_copy(path).relative_to(root)))
     # Commit only paths without prior local state, so no project edit joins the commit.
-    clean = not local_state(root, names)
+    dirty = local_state(root, names)
     retire_local_generation(root)
     write_changes(root, {**changes, **dict.fromkeys(deleted)})
     for name, destination in links.items():
@@ -933,7 +933,7 @@ def install(root: Path, previous: Path | None = None) -> None:
         print("Removed old Hard Eng files: " + ", ".join(deleted))
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
     expected = {**changes, **dict.fromkeys(deleted)}
-    print(commit_install(root, names, clean, expected))
+    print(commit_install(root, names, dirty, expected))
     print("Follow HE Plan to adapt the gates and configure shipping before delivery.")
     print(
         "Integration setup: .agents/skills/he/references/integrations.md — reuse existing choices; resolve only missing service targets and verify relevant real calls."

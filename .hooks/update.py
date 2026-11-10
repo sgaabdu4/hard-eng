@@ -560,11 +560,8 @@ def exclude_block(root: Path) -> tuple[Path, str] | None:
     return exclude, "".join(line for line in lines if line.strip() not in {start, end})
 
 
-LOCAL_STATE: dict[tuple[Path, tuple[str, ...]], list[str]] = {}
-
-
 def local_state(root: Path, names: list[str]) -> list[str]:
-    lines = subprocess.check_output(
+    return subprocess.check_output(
         [
             "git",
             "status",
@@ -577,8 +574,6 @@ def local_state(root: Path, names: list[str]) -> list[str]:
         cwd=root,
         text=True,
     ).splitlines()
-    LOCAL_STATE[root, tuple(names)] = lines
-    return lines
 
 
 def write_changes(root: Path, changes: dict[str, str | None]) -> None:
@@ -720,25 +715,25 @@ def repair_installation(root: Path, previous: str) -> str:
         status += "; installed the missing pre-push hook"
     status += hook_chain.install_worktree_hook(root)
     names = sorted({*missing, *added})
-    clean = bool(names) and not local_state(root, names)
+    dirty = local_state(root, names) if names else []
     retire_local_generation(root)
     if not names:
         return status + "."
     write_changes(root, missing)
     write_links(root, added)
     return f"{status}; repaired {install_paths(names)}. " + commit_install(
-        root, names, clean, {**missing, **added}
+        root, names, dirty, {**missing, **added}
     )
 
 
 def commit_install(
     root: Path,
     names: list[str],
-    clean: bool,
+    dirty: list[str],
     expected: dict[str, str | None] | None = None,
 ) -> str:
     reason = "these paths already had local changes"
-    if clean:
+    if not dirty:
         subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
         if not subprocess.run(
             ["git", "diff", "--cached", "--quiet", "--", *names], cwd=root, check=False
@@ -770,11 +765,10 @@ def commit_install(
                 ["git", "reset", "--quiet", "--", *names], cwd=root, check=False
             )
             reason = " | ".join(result.stdout.strip().splitlines()[-3:])
-    dirty = [line[3:].strip('"') for line in LOCAL_STATE.get((root, tuple(names)), [])]
     return (
         f"Installed files are not committed ({reason}). Commit them so updates and "
         "worktrees include them: "
-        + install_paths(dirty if not clean and dirty else names)
+        + install_paths([line[3:].strip('"') for line in dirty] or names)
     )
 
 
