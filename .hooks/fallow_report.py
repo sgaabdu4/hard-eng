@@ -322,6 +322,16 @@ def drop_sdk_binaries(report: JsonObject, provided: set[str]) -> None:
         report["verdict"] = "pass"
 
 
+def reject_diagnostic_notes(diagnostics: list[object], optional: set[str]) -> None:
+    notes = [
+        f"{item.get('kind')}: {item.get('message')}"
+        for item in diagnostics
+        if isinstance(item, dict) and item.get("kind") not in optional
+    ]
+    if notes:
+        raise ValueError("Fallow reports analysis diagnostics: " + "; ".join(notes))
+
+
 def validate_fallow(path: Path, provided: set[str] | None = None) -> None:
     try:
         report = json.loads(path.read_text())
@@ -351,6 +361,7 @@ def validate_fallow(path: Path, provided: set[str] | None = None) -> None:
         diagnostics = report.get("workspace_diagnostics", [])
         if not isinstance(diagnostics, list):
             raise TypeError("Fallow diagnostics must be a list")
+        reject_diagnostic_notes(diagnostics, optional)
         if (
             any(isinstance(value, list) and value for value in check.values())
             or dupes["clone_groups"] != []
@@ -377,18 +388,37 @@ def located(path: object, line: object) -> str:
     return f"{path}:{line}" if type(line) is int else str(path)
 
 
+def own_place(item: JsonObject) -> tuple[str, str] | None:
+    """Where a finding without a path of its own sits, and what names it."""
+    if "path" in item:
+        return located(item["path"], item.get("line")), ""
+    for key in ("imported_from", "used_in"):
+        sites = item.get(key)
+        if isinstance(sites, list) and sites and isinstance(sites[0], dict):
+            return located(sites[0]["path"], sites[0].get("line")), ""
+    files = item.get("files")
+    if isinstance(files, list) and files:
+        return located(files[0], item.get("line")), " -> ".join(map(str, files))
+    return None
+
+
 def finding_lines(path: Path) -> list[str]:
     try:
         report = json.loads(path.read_text())
         audit = report.get("kind") == "audit"
-        found = [
-            f"{located(item['path'], item.get('line'))} {kind} "
-            f"{item.get('export_name') or item.get('package_name') or ''}".rstrip()
-            for kind, items in report["dead_code" if audit else "check"].items()
-            if isinstance(items, list) and kind != "workspace_diagnostics"
-            for item in items
-            if isinstance(item, dict) and "path" in item
-        ]
+        found: list[str] = []
+        for kind, items in report["dead_code" if audit else "check"].items():
+            if not isinstance(items, list) or kind == "workspace_diagnostics":
+                continue
+            for item in items:
+                if isinstance(item, dict) and (place := own_place(item)):
+                    name = (
+                        item.get("export_name")
+                        or item.get("package_name")
+                        or item.get("binary_name")
+                        or place[1]
+                    )
+                    found.append(f"{place[0]} {kind} {name}".rstrip())
         dupes = report.get("duplication" if audit else "dupes", {})
         for group in dupes.get("clone_groups", []):
             copies = [
