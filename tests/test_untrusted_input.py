@@ -376,6 +376,26 @@ def test_typescript_check_requires_the_untrusted_input_declarations(
             validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
 
 
+def test_the_declarations_message_names_the_configuration_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "web"
+    (package / "src").mkdir(parents=True)
+    (package / "src/app.ts").write_text("export {};\n")
+    files = ["src/app.ts"]
+    fake_tsc(monkeypatch, lambda _: {"compilerOptions": STRICT_JS, "files": files})
+    command = ["tsc", "-p", "tsconfig.test.json"]
+    expected = {package / "src/app.ts"}
+    with pytest.raises(ValueError, match="omits") as refused:
+        validate_typescript(tmp_path, command, package, expected, 10)
+    message = str(refused.value)
+    assert "web/tsconfig.test.json" in message
+    assert f'add "../{UNTRUSTED}" to its files list' in message
+    assert "rerun" not in message
+    files.append(f"../{UNTRUSTED}")
+    validate_typescript(tmp_path, command, package, expected, 10)
+
+
 @pytest.mark.parametrize(
     ("options", "files", "message"),
     [
