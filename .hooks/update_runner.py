@@ -682,6 +682,8 @@ def build_update(root: Path, base: str, repair: bool) -> str:
     from update_pr import branch_worktree, unfinished_update
 
     tip = fetch_base(root, base)
+    if update_blocker(root) is None and revision_at(root, tip) is None:
+        return NOT_PUBLISHED
     expected = update_branch_tip(root)
     if unfinished_update(root, tip):
         return (
