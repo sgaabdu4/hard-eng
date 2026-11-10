@@ -342,9 +342,7 @@ def test_update_commit_is_not_counted_as_session_work(
     agent_hooks.session_context(installed, after)
     (installed / "app.py").write_text("print('user work')\n")
     commit(installed, "user work")
-    assert update_runner.rebase_sessions(
-        installed, head, "Update Hard Eng to " + "b" * 40
-    )
+    assert update_runner.rebase_sessions(installed, head)
     assert json.loads(other.read_text())["base"] == "c" * 40
     assert agent_hooks.completion(installed, after)["decision"] == "block"
     git(installed, "reset", "-q", "--hard", "HEAD^")
@@ -611,3 +609,39 @@ def test_install_commit_rewritten_by_a_hook_is_found_when_the_message_changes(
     assert "AGENTS.md" in output.split("Installed files are not committed (")[1]
     assert git(project, "rev-parse", "HEAD") == head
     assert "<!-- formatted -->" not in (project / "AGENTS.md").read_text()
+
+
+def prefix_commit_messages(root: Path) -> None:
+    install_hook(
+        root,
+        "commit-msg",
+        'printf "chore: %s" "$(cat "$1")" > "$1.new"\nmv "$1.new" "$1"\n',
+    )
+
+
+def test_install_moves_session_bases_when_a_hook_changes_the_commit_message(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = project_with_commit_hook(tmp_path, "#!/bin/sh\nexit 0\n")
+    prefix_commit_messages(project)
+    head = git(project, "rev-parse", "HEAD")
+    session = project / ".hard-eng/sessions/work.json"
+    session.parent.mkdir(parents=True)
+    session.write_text(json.dumps({"base": head}))
+    installer.install(project)
+    assert "Committed the installed files locally without pushing." in (
+        capsys.readouterr().out
+    )
+    assert git(project, "log", "-1", "--format=%s") == "chore: Install Hard Eng"
+    assert json.loads(session.read_text())["base"] == git(project, "rev-parse", "HEAD")
+
+
+def test_an_update_lands_when_a_project_hook_changes_the_commit_message(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    prefix_commit_messages(target)
+    assert update_runner.apply_update(target) == 0
+    assert "ready on" in (target / update_runner.RESULT_FILE).read_text()
+    subject = git(target, "log", "-1", "--format=%s", update_runner.UPDATE_BRANCH)
+    assert subject.startswith("chore: Update Hard Eng to ")

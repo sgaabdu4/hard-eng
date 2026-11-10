@@ -618,7 +618,8 @@ def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
     other = other_checkout(target, remote)
     git(other, "switch", "-q", BRANCH)
     (other / "fix.txt").write_text("fix\n")
-    fix = commit(other, "fix the update")
+    generated = git(target, "log", "-1", "--format=%s", BRANCH)
+    fix = commit(other, generated)
     git(other, "push", "-q", "--no-verify", "origin", BRANCH)
     newer_release(source, monkeypatch, "second update")
     assert update_runner.apply_update(target) == 0
@@ -626,6 +627,25 @@ def test_update_pr_does_not_overwrite_a_fix_pushed_to_the_remote_branch(
     assert publish(target, monkeypatch) == 1
     assert git(remote, "rev-parse", BRANCH) == fix
     assert "not replaced" in capsys.readouterr().out
+
+
+def test_update_pr_replaces_a_generated_update_whose_subject_a_hook_changed(
+    feature: tuple[Path, Path, Path], gh: FakeGh, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, remote = feature
+    hook = target / ".git/hooks/commit-msg"
+    hook.write_text(
+        '#!/bin/sh\nprintf "chore: %s" "$(cat "$1")" > "$1.new"\nmv "$1.new" "$1"\n'
+    )
+    hook.chmod(0o755)
+    apply_first_update(feature, monkeypatch)
+    assert publish(target, monkeypatch) == 0
+    first = git(remote, "rev-parse", BRANCH)
+    newer_release(source, monkeypatch, "second update")
+    assert update_runner.apply_update(target) == 0
+    assert publish(target, monkeypatch) == 0
+    assert git(remote, "rev-parse", BRANCH) == git(target, "rev-parse", BRANCH)
+    assert git(remote, "rev-parse", BRANCH) != first
 
 
 def test_update_pr_recreates_the_update_branch_after_the_remote_deleted_it(

@@ -22,6 +22,7 @@ LOCAL_INPUTS = (".claude/settings.local.json", "CLAUDE.local.md")
 UPDATE_BRANCH = "hard-eng/update"
 UPDATE_REF = f"refs/heads/{UPDATE_BRANCH}"
 UPDATE_COMMAND = "python3 .hooks/hard-eng.py update-pr"
+REPAIR_SUBJECT = "Install Hard Eng"
 NOT_PUBLISHED = "Hard Eng updates start after the project is pushed to a remote with its base branch."
 HEX_REVISION = re.compile(r"[0-9a-f]{40}")
 OWNER = re.compile(r"hard-eng-update (\d+)")
@@ -166,22 +167,17 @@ def current_head(root: Path) -> str:
     return found.stdout.strip()
 
 
-def landed_commit(root: Path, head: str, message: str) -> tuple[str, str] | None:
-    """The updater's own commit since head, found by its message because the agent may commit too."""
-    span = head + "..HEAD" if head else "-1"
-    found = subprocess.run(
-        ["git", "log", "--format=%H %P%x1f%s", span],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
+def built_commit(candidate: Path, tip: str) -> str | None:
+    """The update worktree is private, so its new HEAD is the updater's commit; a repair keeps the revision and needs its subject."""
+    commit = current_head(candidate)
+    if not commit or commit == tip:
+        return None
+    if revision_at(candidate, commit) != revision_at(candidate, tip):
+        return commit
+    subject = subprocess.check_output(
+        ["git", "log", "-1", "--format=%s", commit], cwd=candidate, text=True
     )
-    for line in found.stdout.splitlines():
-        identities, _, subject = line.partition("\x1f")
-        commit, *parents = identities.split()
-        if subject in (message, "Install Hard Eng"):
-            return commit, parents[0] if parents else ""
-    return None
+    return commit if subject.strip() == REPAIR_SUBJECT else None
 
 
 def tree_entries(
@@ -243,18 +239,33 @@ def undo_hooked_commit(
     return changed
 
 
-def rebase_sessions(root: Path, head: str, message: str) -> bool:
-    """Sessions based on the update commit's parent must not count that commit as their work."""
-    landed = landed_commit(root, head, message)
-    if landed is None:
+def rebase_sessions(root: Path, head: str) -> bool:
+    """Sessions based on the install commit's parent must not count that commit as their work."""
+    if not head:
         return False
-    commit, parent = landed
+    found = subprocess.run(
+        [
+            "git",
+            "rev-list",
+            "--first-parent",
+            "--reverse",
+            "--parents",
+            head + "..HEAD",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.splitlines()
+    commit, *parents = found[0].split() if found else [""]
+    if not commit or parents[:1] != [head]:
+        return False
     for state in (root / ".hard-eng/sessions").glob("*.json"):
         try:
             saved = json.loads(state.read_text())
         except (OSError, ValueError):
             continue
-        if isinstance(saved, dict) and parent and saved.get("base") == parent:
+        if isinstance(saved, dict) and saved.get("base") == head:
             state.write_text(json.dumps({**saved, "base": commit}))
     return True
 
@@ -623,7 +634,7 @@ def build_update(root: Path, base: str, repair: bool) -> str:
                     (candidate / name).unlink()
             outcome = update(candidate, repair, remember=None if repair else root)
             revision = installed_revision(candidate)
-            landed = landed_commit(candidate, tip, f"Update Hard Eng to {revision}")
+            landed = built_commit(candidate, tip)
         finally:
             subprocess.run(
                 ["git", "worktree", "unlock", str(candidate)], cwd=root, check=False
@@ -636,9 +647,9 @@ def build_update(root: Path, base: str, repair: bool) -> str:
             )
     if landed is None or not isinstance(revision, str):
         return outcome
-    refuse_untracked_overlap(root, tip, landed[0], revision, repair)
+    refuse_untracked_overlap(root, tip, landed, revision, repair)
     # Work committed or checked out on the branch during the build stays.
-    if branch_worktree(root) or not set_update_branch(root, landed[0], expected):
+    if branch_worktree(root) or not set_update_branch(root, landed, expected):
         return (
             f"{UPDATE_BRANCH} changed while the update was prepared, so it was kept; "
             f"rerun `python3 .hooks/hard-eng.py update` once that work is finished."
