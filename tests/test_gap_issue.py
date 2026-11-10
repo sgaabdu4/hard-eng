@@ -135,6 +135,7 @@ def test_text_that_names_the_project_is_refused_before_any_github_call(
         ("https://gitlab.example.test/acme/team/shop", "acme has no audit"),
         ("https://github.com/globex/acme-shop.git/", "acme shop lacks lint"),
         ("https://git.example.test:8443/globex/acme-shop", "globex lacks lint"),
+        ("https://github.com/globex/AcmeShop.git", "acme shop lacks lint"),
     ],
 )
 def test_joined_spellings_and_any_remote_host_are_refused(

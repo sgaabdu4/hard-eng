@@ -1,6 +1,6 @@
 # Fix the confirmed daily-use bugs, speed up the hooks and remove code nothing reaches
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -43,48 +43,48 @@ Decided (9): an update is built from tracked content only. The candidate worktre
 
 ## Acceptance + steps
 
-- [ ] After a PR merges and a newer Hard Eng release appears, `ship --stage delivered` and `ship --stage cleanup` still pass → `tests/test_ship_actions.py::test_a_newer_release_after_the_merge_does_not_block_delivered_or_cleanup`.
-- [ ] `ship --stage ready` and `ship --stage merge` still refuse a stale install → `tests/test_ship_actions.py::test_shipping_a_stale_install_names_the_update_pr_step`.
-- [ ] `--new` in a repository that holds only a README, a license and Git ignore or attribute files builds the project and keeps those files; the user's ignore lines stay → `tests/test_new_project.py::test_new_project_keeps_a_readme_license_and_ignore_file`.
-- [ ] `--new` keeps the user's files in the Git folder during the scaffold, so a stop cannot strand them in a system temporary folder → `tests/test_new_project.py::test_kept_files_wait_in_the_git_folder_during_the_scaffold`.
-- [ ] An error while `--new` puts the files back deletes none of them → `tests/test_new_project.py::test_an_error_while_putting_files_back_leaves_the_rest_waiting`.
-- [ ] The next `--new` run after a stopped run puts the user's files back first → `tests/test_new_project.py::test_an_earlier_stopped_run_gets_its_files_back_first`.
-- [ ] That restore never replaces a file the repository now holds; it stops and names both copies → `tests/test_new_project.py::test_a_stopped_run_never_replaces_a_file_the_repository_now_holds`.
-- [ ] A kept ignore file with bytes that are not UTF-8 keeps them → `tests/test_new_project.py::test_a_kept_ignore_file_with_odd_bytes_keeps_them`.
-- [ ] `--new` refuses a repository whose ignore file is a link, and writes nothing through the link → `tests/test_new_project.py::test_new_project_refuses_a_linked_ignore_file`.
-- [ ] The Next.js scaffold installs no package before the age filter runs → `tests/test_new_project.py::test_nextjs_scaffold_installs_nothing_before_the_age_filter`.
-- [ ] A self-hosted job bills 0 minutes and is counted as self-hosted → `tests/test_ci_usage.py::test_self_hosted_jobs_are_not_billed`.
-- [ ] A project pre-push hook that is a link stays a link after setup, so later edits to the real hook run → `tests/test_hook_chain.py::test_a_linked_project_hook_stays_a_link`.
-- [ ] A linked project hook whose target is missing when setup runs again stays in the chain → `tests/test_hook_chain.py::test_a_linked_project_hook_stays_chained_while_its_target_is_missing`.
-- [ ] Gap issue text that holds the repository name, its owner, the folder name, a package name or the last folder of a package path is refused before any GitHub call → `tests/test_gap_issue.py::test_text_that_names_the_project_is_refused_before_any_github_call`.
-- [ ] Gap issue text with a joined or camelCase spelling of one of those names is refused, and the owner and repository names come from a remote on any host → `tests/test_gap_issue.py::test_joined_spellings_and_any_remote_host_are_refused`.
-- [ ] A word that comes from a remote address and is not a name, such as `git` or a parent folder, stays allowed in gap issue text → `tests/test_gap_issue.py::test_words_from_a_remote_that_are_not_names_are_accepted`.
-- [ ] A gap issue refusal says which name matched → `tests/test_gap_issue.py::test_the_refusal_says_which_name_matched`.
-- [ ] A `uvx` tool run and its version lookup skip a release that is under two days old → `tests/test_tool_execution.py::test_uvx_tools_wait_two_days_after_a_release`.
-- [ ] An install commit that a project commit hook changed is undone, the planned files are written again and the message names the changed paths → `tests/test_setup.py::test_install_commit_changed_by_a_project_hook_is_undone_and_reported`.
-- [ ] A correct install commit whose files Git stores with other line endings is kept → `tests/test_update_runner.py::test_install_commit_with_crlf_lines_kept_by_git_filters_is_not_undone`.
-- [ ] An install commit that a hook rewrote is still found when the hook also changed the commit message → `tests/test_update_runner.py::test_install_commit_rewritten_by_a_hook_is_found_when_the_message_changes`.
-- [ ] A failing project commit hook during an update leaves the live checkout, its branch and its worktree list unchanged, and the result names the hook → `tests/test_update_runner.py::test_a_failing_project_commit_hook_leaves_the_checkout_and_worktrees_unchanged`.
-- [ ] A background update still skips a remembered refusal until the base tip changes or 24 hours pass, after the inputs that cannot change are removed → `tests/test_update_runner.py::test_background_update_does_not_repeat_a_refusal_until_inputs_change`.
-- [ ] An update that would replace a local file Git does not track, ignored or untracked, is refused, names the file, leaves it unchanged, moves no branch and is remembered → `tests/test_update_runner.py::test_an_update_refuses_to_replace_a_local_file_git_does_not_track`.
-- [ ] A setup rerun with no newer release refuses the same way → `tests/test_update_runner.py::test_a_setup_rerun_refuses_to_replace_a_local_file_git_does_not_track`.
-- [ ] A linked local settings file that holds retired text does not block the update, and the file stays unchanged → `tests/test_update_runner.py::test_a_linked_local_settings_file_does_not_block_the_update`.
-- [ ] A Stop while another check runs in the same checkout blocks at once, saves no pass and tells the agent to read that check's result or start its own → `tests/test_agent_hooks.py::test_stop_does_not_wait_behind_a_running_check`.
-- [ ] `check --plan-stage Complete` on changed work with no plan of its own fails, and a clean tree keeps the old result → `tests/test_plan_acceptance.py::test_plan_stage_cannot_reuse_an_old_plan_for_changed_work`.
-- [ ] Setup replaces each old tool hook entry that is still as installed with the new one; an entry the user edited stays, as for every other installed hook → `tests/test_hook_setup.py::test_setup_replaces_the_old_tool_hook_commands`.
-- [ ] An update of an installed project replaces them the same way → `tests/test_update_runner.py::test_an_update_replaces_the_old_tool_hook_commands`.
-- [ ] Session start still reports a failed process scan with the same line → `tests/test_agent_hooks.py::test_session_start_reports_a_failed_process_scan`.
-- [ ] The scoped plan listing returns the same plans as the full listing for a root plan, a nested plan, an untracked plan, an ignored plan and a linked plan → `tests/test_plan_acceptance.py::test_plan_listing_matches_the_full_listing_filter`.
-- [ ] The quick secret scan lists a folder that two links reach once, and still copies it for both links → `tests/test_current_files_gitleaks.py::test_a_folder_reached_by_two_links_is_listed_once_and_copied_twice`.
-- [ ] The session and stop entries and the gate loader give the same results after their speed changes → N/A — the reviewer's old against new runs gave the same output and exit code; one difference stays: an error outside the hook handler prints a traceback, not the `Hard Eng:` line, with the same exit code 1. The existing hook and loader tests run the changed code, and the old and new medians go in Verification.
-- [ ] The local state refusal inside the update, which the throwaway worktree can no longer reach, is removed → N/A — no behavior on the real path; the update tests run the changed code, and the refusal for a local file that Git does not track now has its own test above.
-- [ ] No hook gets slower → N/A — no test can hold a budget this small and timing depends on the machine; old and new medians for each hook go in Verification.
-- [ ] The texts match the code: the review rule in the code review skill, the retro in the workflow reference and README, the wait rule and the update step in `AGENTS.md`, the hook entry points in `DESIGN.md`, the canary and tool age lines in `DECISION.md`, the Codex start line in the README, the release line in `AGENTS.override.md`, the freshness stages in the ship checks reference, and the plan the review prompt names → N/A — wording; the proof is the Reader check recorded in Verification, and `check` keeps the links, sizes and registry valid.
-- [ ] This repository's lint gate no longer repeats the three rules its complexity gate runs → N/A — configuration of this repository only; `check` runs both gates.
-- [ ] A uv dependency listed with an extra, or in two groups, is looked up once under its plain name → `tests/test_freshness.py::test_uv_reads_a_dependency_with_an_extra_once`.
-- [ ] A user's external diff tool does not hide an added switch-off comment → `tests/test_comments.py::test_an_external_diff_tool_does_not_hide_an_added_switch_off`.
-- [ ] The comment check asks Git once, not once for each changed file, whether the change installs Hard Eng → N/A — no behavior changes; `tests/test_comments.py::test_the_install_change_keeps_older_blocks_in_files_its_tools_fixed` and `tests/test_comments.py::test_the_install_change_compares_each_older_block_whole` run the changed code, and the old and new medians go in Verification.
-- [ ] A README change in this repository selects the tests that read the README → N/A — configuration of this repository only; the selection probe result goes in Verification.
+- [x] After a PR merges and a newer Hard Eng release appears, `ship --stage delivered` and `ship --stage cleanup` still pass → `tests/test_ship_actions.py::test_a_newer_release_after_the_merge_does_not_block_delivered_or_cleanup`.
+- [x] `ship --stage ready` and `ship --stage merge` still refuse a stale install → `tests/test_ship_actions.py::test_shipping_a_stale_install_names_the_update_pr_step`.
+- [x] `--new` in a repository that holds only a README, a license and Git ignore or attribute files builds the project and keeps those files; the user's ignore lines stay → `tests/test_new_project.py::test_new_project_keeps_a_readme_license_and_ignore_file`.
+- [x] `--new` keeps the user's files in the Git folder during the scaffold, so a stop cannot strand them in a system temporary folder → `tests/test_new_project.py::test_kept_files_wait_in_the_git_folder_during_the_scaffold`.
+- [x] An error while `--new` puts the files back deletes none of them → `tests/test_new_project.py::test_an_error_while_putting_files_back_leaves_the_rest_waiting`.
+- [x] The next `--new` run after a stopped run puts the user's files back first → `tests/test_new_project.py::test_an_earlier_stopped_run_gets_its_files_back_first`.
+- [x] That restore never replaces a file the repository now holds; it stops and names both copies → `tests/test_new_project.py::test_a_stopped_run_never_replaces_a_file_the_repository_now_holds`.
+- [x] A kept ignore file with bytes that are not UTF-8 keeps them → `tests/test_new_project.py::test_a_kept_ignore_file_with_odd_bytes_keeps_them`.
+- [x] `--new` refuses a repository whose ignore file is a link, and writes nothing through the link → `tests/test_new_project.py::test_new_project_refuses_a_linked_ignore_file`.
+- [x] The Next.js scaffold installs no package before the age filter runs → `tests/test_new_project.py::test_nextjs_scaffold_installs_nothing_before_the_age_filter`.
+- [x] A self-hosted job bills 0 minutes and is counted as self-hosted → `tests/test_ci_usage.py::test_self_hosted_jobs_are_not_billed`.
+- [x] A project pre-push hook that is a link stays a link after setup, so later edits to the real hook run → `tests/test_hook_chain.py::test_a_linked_project_hook_stays_a_link`.
+- [x] A linked project hook whose target is missing when setup runs again stays in the chain → `tests/test_hook_chain.py::test_a_linked_project_hook_stays_chained_while_its_target_is_missing`.
+- [x] Gap issue text that holds the repository name, its owner, the folder name, a package name or the last folder of a package path is refused before any GitHub call → `tests/test_gap_issue.py::test_text_that_names_the_project_is_refused_before_any_github_call`.
+- [x] Gap issue text with a joined or camelCase spelling of one of those names, or a camelCase name written as separate words, is refused, and the owner and repository names come from a remote on any host → `tests/test_gap_issue.py::test_joined_spellings_and_any_remote_host_are_refused`.
+- [x] A word that comes from a remote address and is not a name, such as `git` or a parent folder, stays allowed in gap issue text → `tests/test_gap_issue.py::test_words_from_a_remote_that_are_not_names_are_accepted`.
+- [x] A gap issue refusal says which name matched → `tests/test_gap_issue.py::test_the_refusal_says_which_name_matched`.
+- [x] A `uvx` tool run and its version lookup skip a release that is under two days old → `tests/test_tool_execution.py::test_uvx_tools_wait_two_days_after_a_release`.
+- [x] An install commit that a project commit hook changed is undone, the planned files are written again and the message names the changed paths → `tests/test_setup.py::test_install_commit_changed_by_a_project_hook_is_undone_and_reported`.
+- [x] A correct install commit whose files Git stores with other line endings is kept → `tests/test_update_runner.py::test_install_commit_with_crlf_lines_kept_by_git_filters_is_not_undone`.
+- [x] An install commit that a hook rewrote is still found when the hook also changed the commit message → `tests/test_update_runner.py::test_install_commit_rewritten_by_a_hook_is_found_when_the_message_changes`.
+- [x] A failing project commit hook during an update leaves the live checkout, its branch and its worktree list unchanged, and the result names the hook → `tests/test_update_runner.py::test_a_failing_project_commit_hook_leaves_the_checkout_and_worktrees_unchanged`.
+- [x] A background update still skips a remembered refusal until the base tip changes or 24 hours pass, after the inputs that cannot change are removed → `tests/test_update_runner.py::test_background_update_does_not_repeat_a_refusal_until_inputs_change`.
+- [x] An update that would replace a local file Git does not track, ignored or untracked, is refused, names the file, leaves it unchanged, moves no branch and is remembered → `tests/test_update_runner.py::test_an_update_refuses_to_replace_a_local_file_git_does_not_track`.
+- [x] A setup rerun with no newer release refuses the same way → `tests/test_update_runner.py::test_a_setup_rerun_refuses_to_replace_a_local_file_git_does_not_track`.
+- [x] A linked local settings file that holds retired text does not block the update, and the file stays unchanged → `tests/test_update_runner.py::test_a_linked_local_settings_file_does_not_block_the_update`.
+- [x] A Stop while another check runs in the same checkout blocks at once, saves no pass and tells the agent to read that check's result or start its own → `tests/test_agent_hooks.py::test_stop_does_not_wait_behind_a_running_check`.
+- [x] `check --plan-stage Complete` on changed work with no plan of its own fails, and a clean tree keeps the old result → `tests/test_plan_acceptance.py::test_plan_stage_cannot_reuse_an_old_plan_for_changed_work`.
+- [x] Setup replaces each old tool hook entry that is still as installed with the new one; an entry the user edited stays, as for every other installed hook → `tests/test_hook_setup.py::test_setup_replaces_the_old_tool_hook_commands`.
+- [x] An update of an installed project replaces them the same way → `tests/test_update_runner.py::test_an_update_replaces_the_old_tool_hook_commands`.
+- [x] Session start still reports a failed process scan with the same line → `tests/test_agent_hooks.py::test_session_start_reports_a_failed_process_scan`.
+- [x] The scoped plan listing returns the same plans as the full listing for a root plan, a nested plan, an untracked plan, an ignored plan and a linked plan → `tests/test_plan_acceptance.py::test_plan_listing_matches_the_full_listing_filter`.
+- [x] The quick secret scan lists a folder that two links reach once, and still copies it for both links → `tests/test_current_files_gitleaks.py::test_a_folder_reached_by_two_links_is_listed_once_and_copied_twice`.
+- [x] The session and stop entries and the gate loader give the same results after their speed changes → N/A — the reviewer's old against new runs gave the same output and exit code; one difference stays: an error outside the hook handler prints a traceback, not the `Hard Eng:` line, with the same exit code 1. The existing hook and loader tests run the changed code, and the old and new medians go in Verification.
+- [x] The local state refusal inside the update, which the throwaway worktree can no longer reach, is removed → N/A — no behavior on the real path; the update tests run the changed code, and the refusal for a local file that Git does not track now has its own test above.
+- [x] No hook gets slower → N/A — no test can hold a budget this small and timing depends on the machine; old and new medians for each hook go in Verification.
+- [x] The texts match the code: the review rule in the code review skill, the retro in the workflow reference and README, the wait rule and the update step in `AGENTS.md`, the hook entry points in `DESIGN.md`, the canary and tool age lines in `DECISION.md`, the Codex start line in the README, the release line in `AGENTS.override.md`, the freshness stages in the ship checks reference, and the plan the review prompt names → N/A — wording; the proof is the Reader check recorded in Verification, and `check` keeps the links, sizes and registry valid.
+- [x] This repository's lint gate no longer repeats the three rules its complexity gate runs → N/A — configuration of this repository only; `check` runs both gates.
+- [x] A uv dependency listed with an extra, or in two groups, is looked up once under its plain name → `tests/test_freshness.py::test_uv_reads_a_dependency_with_an_extra_once`.
+- [x] A user's external diff tool does not hide an added switch-off comment → `tests/test_comments.py::test_an_external_diff_tool_does_not_hide_an_added_switch_off`.
+- [x] The comment check asks Git once, not once for each changed file, whether the change installs Hard Eng → N/A — no behavior changes; `tests/test_comments.py::test_the_install_change_keeps_older_blocks_in_files_its_tools_fixed` and `tests/test_comments.py::test_the_install_change_compares_each_older_block_whole` run the changed code, and the old and new medians go in Verification.
+- [x] A README change in this repository selects the tests that read the README → N/A — configuration of this repository only; the selection probe result goes in Verification.
 
 ## Baseline + execution
 
@@ -100,6 +100,8 @@ Execution: four builders on Sonnet, each in its own worktree with its own files:
 - The session start process scan now runs beside gate validation, so the idle Codex broker stop reads a list that is a fraction of a second older. A Codex job that starts in that time can lose its broker, as it could before in a shorter time.
 - In a sparse checkout the quick secret scan now skips tracked files that are not on disk. Before, it stopped with an error. No file on disk is missed.
 - Left for the next round: an ignored local file that sits where an update needs a folder is still replaced by a later pull. The earlier in-place update did not check parent paths either.
+- Left for the next round: a project commit hook that changes the commit subject, such as a ticket prefix, hides the updater's own commit. After an install the session base does not move, and a built update does not reach the update branch although its result says updated. The released code does the same. Four places find that commit by its subject, so the fix is one change across them.
+- Left for the next round: an owner name that is part of the remote's host name passes the gap issue check.
 - A project whose pre-push hook is a link now runs the current version of that hook. A hook that was edited and now fails makes pushes fail, which is correct. Copies that an earlier install froze stay frozen.
 - `uvx` tools now lag two days behind a release, like the other tools. A `uvx` tool whose only releases are under two days old cannot run; the six managed tools all have older releases. Recovery: revert the commit.
 - The removed update guards change one rare message, which loses its note about kept edits. Recovery: revert that one commit.
@@ -111,10 +113,30 @@ N/A — hook, command and text behavior with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — filled at the end of the build.
+Result: Passed
+Evidence: each new test failed before its fix in its builder's run and passes after it, and the reviewers proved a part of them again by a revert. Focused runs on the joined branch: the update, setup, adoption, scaffold and Husky tests 260 passed; the hook, plan, runner, secret scan and performance tests 562; the gap issue, new project and basic mode tests 75; the freshness and comment tests 241; the skill link and requirement tests 26; after the last fixes, the update runner, requirement, hook, hook setup and plan acceptance tests 185.
+Speed, old code against new, each hook as its registered command, 40 alternating runs, medians in ms, with bytecode present and then absent: session start 488.4 to 354.1 and 566.1 to 413.2; Stop with nothing changed 230.5 to 171.1 and 282.0 to 206.3; Stop loop guard 83.6 to 62.7 and 113.9 to 78.8; a Bash command with no wait word 35.7 to 25.5 and 32.1 to 23.2; one that holds a wait word 36.7 to 26.2 and 35.0 to 25.7; an Artifact call 35.1 to 25.5 and 33.6 to 24.0; a tool failure 40.6 to 30.9 and 40.0 to 29.9. Both copies printed the same text. The lock probe in Stop costs 10.0 ms. Stop after a documents-only change, up to the start of the secret scan, 10 alternating runs: 2,326 to 2,084 ms. The comment check on 32 changed files: 1,047 to 296 ms. The builder's runs on a busy machine: the gate loader 634 to 485 ms and the quick secret scan copy 3,890 to 3,412 ms.
+Probes: with the old gate file a README-only change selected only the secret scan, and with the new one it selects the package checks with the tests. On Claude Code 2.1.321 the project folder that the host gives is the checkout the session starts in, a linked worktree included, and a session that enters a worktree later keeps the start folder. After a refusal over a local file, the file was moved away and setup then built the update.
+Reader check: a reader that did not write the texts compared old and new wording in three rounds. Round 2 quoted 16 sentences, two of them README claims that the code does not support. Round 3 read the wait rule twice: the first pass found that the new label made unchecked sentences read as checked and that five sentences did not match the hook, and the second pass quoted one sentence. Each was reworded.
+Review: fresh reviewers read the joined commits in four rounds and ran probes. Round 1 found seven faults in the first bug fixes, round 2 five in the update commits, round 3 the Stop note, and round 4 three older gaps and no fault in the new code. Fixed: the faults of rounds 1 and 2 but one, the Stop note, and a camelCase project name written as two words. Left for the next round, each with its reason: the items that Risks + recovery marks so, and a project hook that adds a commit on top of the install commit.
 E2E: N/A — no user journey changes; each behavior is a command or hook result that its test runs directly.
-Retro: Pending — written at task end.
+Retro: these items, each sorted by HE Learn's Retro rows.
+
+- Maintainer correction: the builder asked for a go-ahead before the next audit round → None — the workflow asks once, and this plan's Authority line records Autonomous for the loop.
+- Maintainer correction: the builder ended turns while its builders ran → rule: HE-NO-FOREGROUND-POLL now says that the agent does other ready work and never ends its turn only to wait.
+- Release #547 was merged by rebase against the release rule, which split `main` from `develop` → repaired by #548. None in code — only a branch setting can limit the merge method on `main`, and that is the maintainer's choice.
+- Review round 1, seven faults in the first bug fixes. A package folder name still passed into gap issue text → `tests/test_gap_issue.py::test_text_that_names_the_project_is_refused_before_any_github_call`. `--new` could delete or strand the user's files → `tests/test_new_project.py::test_an_error_while_putting_files_back_leaves_the_rest_waiting` and `tests/test_new_project.py::test_kept_files_wait_in_the_git_folder_during_the_scaffold`. A linked hook with a missing target left the chain → `tests/test_hook_chain.py::test_a_linked_project_hook_stays_chained_while_its_target_is_missing`. The two-day value had a second owner → `tests/test_tool_execution.py::test_release_age_has_one_value`. The other three were a wrong recovery text and test gaps → fixed in place. None further.
+- Review round 2, five faults in the update commits. A correct install commit was undone when Git filters change line endings → `tests/test_update_runner.py::test_install_commit_with_crlf_lines_kept_by_git_filters_is_not_undone`. A rewritten commit was not found when the hook changed the message → `tests/test_update_runner.py::test_install_commit_rewritten_by_a_hook_is_found_when_the_message_changes`. The `--new` restore replaced a file → `tests/test_new_project.py::test_a_stopped_run_never_replaces_a_file_the_repository_now_holds`. A remote address gave words that are not names → `tests/test_gap_issue.py::test_words_from_a_remote_that_are_not_names_are_accepted`. A project hook that adds a commit on top of the install commit → None — rare, left for the next round.
+- Review round 3: the Stop note let a turn end on code that no check passed → `tests/test_agent_hooks.py::test_stop_does_not_wait_behind_a_running_check`. Two plan lines named the wrong test file → None — the Complete check refuses such a line.
+- Review round 4: a camelCase project name written as two words passed the gap issue check → the new row in `tests/test_gap_issue.py::test_joined_spellings_and_any_remote_host_are_refused`. A project hook that changes the commit subject hides the updater's commit → None in this change — an older gap with four owners; it is the first item of the next round.
+- Shared cause in review rounds 1 and 2: a fix's test built its input by hand in a form that the real command never makes → step: each slice gets a fresh review that probes with the real command. None further — the testing reference already asks for the reported failing form.
+- Reader rounds: texts did not match the code, and one update message named a retry step that did not work → reworded, and `tests/test_update_runner.py::test_an_update_refuses_to_replace_a_local_file_git_does_not_track` holds the retry step. None further — the Reader step caught them.
+- One joined test run failed: the coordinator's own commit landed during the run, and setup reads the source checkout's HEAD → step: the coordinator makes no commit while a test run is going.
+- A builder put the tests of one fix into the commit of the next → joined as one commit; step: the builder brief says that each commit holds its own tests.
+- A builder added a test that only repeated a message text → removed; rule: the AGENTS.md Tests rule.
+- A builder's first timing runs went through the idle Codex broker stop on the build machine → step: a timing brief replaces that stop line in both copies before any session start run.
+- The documents-only Stop timing took three tries, because the two copies took different check paths → None — scratch setup; the recorded number is from copies on the same path.
+- The plan check read the moved root plan as edited → None — recorded as a non-goal above.
 
 Delivery target: Merge
-Delivery: Pending — PR into `develop` with the `hard-eng` CI check green, then the release PR from `develop` into `main`.
+Delivery: Pending — PR into `develop` with the `hard-eng` CI check green, then the release PR from `develop` into `main`, merged with a merge commit. Release #547 was merged by rebase, which split the two branches; #548 joined them again with a merge commit and no file changes, before this change reached `develop`.

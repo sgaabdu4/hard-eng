@@ -93,6 +93,7 @@ def package_names(root: Path) -> list[str]:
 
 def project_names(root: Path) -> set[str]:
     names = [root.resolve().name, *origin_names(root), *package_names(root)]
+    names += [CAMEL_BOUNDARY.sub(" ", name) for name in names]
     spoken = {name for name in map(words, names) if name}
     return spoken | {name.replace(" ", "") for name in spoken}
 
