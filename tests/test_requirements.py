@@ -159,12 +159,14 @@ def test_one_part_he_ids_are_checked(tmp_path: Path) -> None:
         registry=COVERAGE + STYLE + solo,
         **{
             ".agents/skills/he/SKILL.md": f"See {STYLE_ID} and {HE}-SOLO.\n",
-            "README.md": f"Also {HE}-SOLOO.\n",
+            "src/codec.ts": f'const codec = "{HE}-AAC";\n',
         },
     )
     assert f"{HE}-SOLO" in registry_entries(root)[0]
     assert registry_entries(SOURCE)[0][f"{HE}-YAGNI"][0] == "guidance"
-    with pytest.raises(ValueError, match=f"README.md:1 names unknown {HE}-SOLOO"):
+    validate_requirements(root)
+    (root / ".agents/skills/he/SKILL.md").write_text(f"See {STYLE_ID}.\n")
+    with pytest.raises(ValueError, match=f"{HE}-SOLO"):
         validate_requirements(root)
 
 

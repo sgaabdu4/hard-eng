@@ -950,7 +950,8 @@ def validate_requirements(root: Path) -> None:
     for path, line, text in references:
         for requirement in REQUIREMENT_ID.findall(text):
             proof = entries.get(requirement, ("unknown", ""))[0]
-            if proof in {"unknown", "retired"}:
+            # A one-part token such as a codec name is an ID only when the registry holds it.
+            if proof == "retired" or proof == "unknown" and requirement.count("-") > 1:
                 errors.append(f"{path}:{line} names {proof} {requirement}")
     errors += unproven_requirements(root, entries, references)
     errors += copied_requirements(root, entries)
