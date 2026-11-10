@@ -9,21 +9,6 @@ from pathlib import Path
 import pytest
 from conftest import SOURCE, gate, gone
 
-LAUNCHER = """
-import importlib.util, sys
-from pathlib import Path
-hooks = Path(sys.argv[1])
-sys.path.insert(0, str(hooks))
-import gate_config
-gate_config.validate_required_checks = lambda *arguments: None
-spec = importlib.util.spec_from_file_location("runner", hooks / "hard-eng.py")
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
-module.ROOT = hooks.parent
-sys.argv = ["hard-eng.py", "check"]
-raise SystemExit(module.main())
-"""
-
 SLOW_GATE = """
 import os, pathlib, time
 pathlib.Path(os.environ["MARKER"]).write_text(str(os.getpid()))
@@ -40,7 +25,6 @@ def test_a_stopped_check_stops_its_gates(
     hooks.mkdir(parents=True)
     for source in (SOURCE / ".hooks").glob("*.py"):
         (hooks / source.name).write_bytes(source.read_bytes())
-    (tmp_path / "launcher.py").write_text(LAUNCHER)
     subprocess.run(["git", "init", "-q", str(project)], check=True)
     (project / "PLAN.md").write_text(completed_plan)
     for name in ("PRODUCT.md", "DESIGN.md"):
@@ -50,7 +34,7 @@ def test_a_stopped_check_stops_its_gates(
         json.dumps({"packages": [], "shared": [slow]})
     )
     check = subprocess.Popen(
-        [sys.executable, str(tmp_path / "launcher.py"), str(hooks)],
+        [sys.executable, str(hooks / "hard-eng.py"), "check"],
         cwd=project,
         env={**os.environ, "MARKER": str(marker)},
         stdout=subprocess.DEVNULL,
