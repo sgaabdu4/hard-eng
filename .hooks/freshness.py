@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from gate_config import Gate, JsonObject
+from tool_setup import RELEASE_AGE_SECONDS
 
 VERSION_LINE = re.compile(r"\S+ v\S+")
 DIGIT_RUN = re.compile(r"\d+")
@@ -18,7 +19,7 @@ PUB_PIN = re.compile(
     r"\b([a-z][a-z0-9_]*) (\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.]*[0-9A-Za-z])?)"
 )
 
-WAIT = timedelta(days=2)
+WAIT = timedelta(seconds=RELEASE_AGE_SECONDS)
 MAX_HOLD_DAYS = 14
 HOLD_KEYS = {"package", "version", "reason", "until"}
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")

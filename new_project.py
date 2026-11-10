@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 import yaml
+from tool_setup import RELEASE_AGE_SECONDS
 
 SOURCE = Path(__file__).resolve().parent
 SCAFFOLDS = {
@@ -94,7 +95,8 @@ def titled_svgs(root: Path) -> None:
 
 
 def finish_web(root: Path) -> None:
-    run(root, ["bun", "update", "--latest", "--exact", "--minimum-release-age=172800"])
+    age = f"--minimum-release-age={RELEASE_AGE_SECONDS}"
+    run(root, ["bun", "update", "--latest", "--exact", age])
     if (root / "biome.json").is_file():
         titled_svgs(root)
         # The scaffold's config targets the Biome it shipped; the update installs a newer one.

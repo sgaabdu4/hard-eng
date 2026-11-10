@@ -116,7 +116,7 @@ def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
         command, cwd=package, capture_output=True, text=True, check=False
     )
 
-    assert not any(part.startswith("--exclude") for part in command)
+    assert not any(part.startswith("--exclude=") for part in command)
     assert not any("performance.yaml" in part for part in other)
     assert result.returncode == 1
     (found,) = json.loads(result.stdout)["results"]
@@ -363,13 +363,13 @@ def test_security_scans_skip_only_the_installed_hard_eng_files(
 
     command = runner.prepare_command(group, gate, 5)
 
-    excludes = [part for part in command if part.startswith("--exclude")]
+    excludes = [part for part in command if part.startswith("--exclude=")]
     assert excludes == ["--exclude=/.hooks/", "--exclude=/.agents/skills/he/"]
     marker.write_text('{"revision": "abc"}\n')
     older = runner.prepare_command(group, gate, 5)
-    assert [part for part in older if part.startswith("--exclude")] == [
+    assert [part for part in older if part.startswith("--exclude=")] == [
         "--exclude=/.hooks/"
     ]
     marker.unlink()
     source = runner.prepare_command(group, gate, 5)
-    assert not [part for part in source if part.startswith("--exclude")]
+    assert not [part for part in source if part.startswith("--exclude=")]

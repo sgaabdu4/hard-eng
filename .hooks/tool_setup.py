@@ -15,6 +15,7 @@ import tempfile
 import tomllib
 from collections.abc import Generator
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import IO
 
@@ -22,6 +23,7 @@ from fallow_report import native_scanner_command
 from gate_config import Gate, Group
 from project_setup import package_script_invocation
 
+RELEASE_AGE_SECONDS = 2 * 24 * 60 * 60
 DIGIT_RUN = re.compile(r"\d+")
 TOOL_VERSION = re.compile(r"\d[\w.+-]*")
 VERSION_NUMBER = re.compile(r"\d+(?:\.\d+)+")
@@ -169,7 +171,17 @@ def uvx_scanner(command: list[str]) -> list[str]:
     return command
 
 
-def managed_command(command: list[str], directory: Path | None = None) -> list[str]:
+def release_cutoff(now: datetime | None = None) -> str:
+    """Newest release time uvx may use, floored to the hour so uv's cache stays warm."""
+    moment = (now or datetime.now(UTC)) - timedelta(seconds=RELEASE_AGE_SECONDS)
+    return moment.replace(minute=0, second=0, microsecond=0).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+
+
+def managed_command(
+    command: list[str], directory: Path | None = None, now: datetime | None = None
+) -> list[str]:
     command = uvx_scanner(command)
     if directory is not None:
         command = with_entry_points(
@@ -179,7 +191,8 @@ def managed_command(command: list[str], directory: Path | None = None) -> list[s
         offline = ["--offline"] if quick_mode() else []
         version = SCANNER_VERSIONS.get(command[0])
         tool = f"{command[0]}@{version or 'latest'}"
-        return ["uvx", *offline, tool, *command[1:]]
+        wait = ["--exclude-newer", release_cutoff(now)]
+        return ["uvx", *offline, *wait, tool, *command[1:]]
     return command
 
 
@@ -235,11 +248,20 @@ def provision_tools(root: Path, groups: list[Group], timeout: float) -> None:
     pin_python_scanners(sorted(executables & MANAGED_PYTHON_SCANNERS), timeout)
 
 
-def scanner_version(name: str, offline: bool, timeout: float) -> str | None:
+def scanner_version(
+    name: str, offline: bool, timeout: float, now: datetime | None = None
+) -> str | None:
     """The scanner's latest version, or None when it cannot run."""
+    wait = ["--exclude-newer", release_cutoff(now)]
     try:
         done = subprocess.run(
-            ["uvx", *(["--offline"] if offline else []), name + "@latest", "--version"],
+            [
+                "uvx",
+                *(["--offline"] if offline else []),
+                *wait,
+                name + "@latest",
+                "--version",
+            ],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -278,7 +300,7 @@ def tool_name(tool: str) -> str:
 
 def provision_batch(batch: list[str], timeout: float) -> None:
     # Two days avoids newly broken releases.
-    batch = [bun_age(tool, 172800) for tool in batch]
+    batch = [bun_age(tool, RELEASE_AGE_SECONDS) for tool in batch]
     shared = Path(os.environ.get("RUNNER_TEMP") or temporary_root()) / "hard-eng-tools"
     # Checkouts on other Hard Eng revisions rewrite these files while this one runs.
     storage = shared if "RUNNER_TEMP" in os.environ else checkout_storage(shared)
@@ -471,7 +493,7 @@ def provision_latest(
             "MISE_NPM_PACKAGE_MANAGER=bun",
             "MISE_PREFER_OFFLINE=false",
             "MISE_USE_VERSIONS_HOST=false",
-            "MISE_MINIMUM_RELEASE_AGE=2d",
+            f"MISE_MINIMUM_RELEASE_AGE={RELEASE_AGE_SECONDS // 86400}d",
             "mise",
             "--no-config",
         ]
