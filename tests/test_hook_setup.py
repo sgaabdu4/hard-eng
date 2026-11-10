@@ -2,6 +2,7 @@
 
 import ast
 import json
+import os
 import subprocess
 import sys
 import tomllib
@@ -12,6 +13,7 @@ import agent_hooks
 import pytest
 import update
 from conftest import CODEBASE_MEMORY, SOURCE
+from gate_config import JsonObject
 from test_setup import repository, snapshot
 
 
@@ -193,6 +195,7 @@ def test_failure_hook_runs_its_own_script_and_replaces_the_old_entry(
         subprocess.run(
             ["sh", "-c", agent_hooks.FAILURE_COMMAND],
             cwd=root / ".hooks",
+            env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)},
             input=payload,
             check=True,
             capture_output=True,
@@ -202,6 +205,55 @@ def test_failure_hook_runs_its_own_script_and_replaces_the_old_entry(
     ]
     assert printed[:2] == ["", ""]
     assert "Same tool error 3 times" in printed[2]
+
+
+def test_setup_replaces_the_old_tool_hook_commands(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    repository(root)
+    old = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/{}.py" 2>/dev/null || true'
+
+    def entry(script: str, matcher: str | None) -> JsonObject:
+        handler: JsonObject = {
+            "type": "command",
+            "command": old.format(script),
+            "timeout": 5,
+        }
+        grouped: JsonObject = {"hooks": [handler]}
+        if matcher:
+            grouped["matcher"] = matcher
+        return grouped
+
+    own = {"hooks": [{"type": "command", "command": "project-guard"}]}
+    (root / ".claude").mkdir()
+    (root / ".claude/settings.json").write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        own,
+                        entry("polling", "Bash"),
+                        entry("previews", "Artifact"),
+                    ],
+                    "PostToolUseFailure": [entry("failures", None)],
+                }
+            }
+        )
+    )
+    installer.install(root)
+    installer.install(root)
+    hooks = json.loads((root / ".claude/settings.json").read_text())["hooks"]
+    assert hooks["PreToolUse"] == [own, *agent_hooks.CLAUDE_TOOL_HOOKS]
+    assert hooks["PostToolUseFailure"] == [agent_hooks.FAILURE_HOOK]
+    for command in (
+        agent_hooks.POLL_COMMAND,
+        agent_hooks.PREVIEW_COMMAND,
+        agent_hooks.FAILURE_COMMAND,
+    ):
+        assert command.startswith('python3 "$CLAUDE_PROJECT_DIR/.hooks/')
+        assert command.endswith('.py" 2>/dev/null || true')
 
 
 def test_malformed_project_codex_config_fails_before_writes(
