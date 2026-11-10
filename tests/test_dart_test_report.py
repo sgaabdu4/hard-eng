@@ -68,3 +68,16 @@ def test_a_plain_test_failure_keeps_its_own_text(tmp_path: Path) -> None:
     events[3]["error"] = "Expected: <5> Actual: <4>"
     summary = dart_test_report.failure_summary(write(tmp_path / "tests.jsonl", events))
     assert summary == "Dart test failure: shows hello: Expected: <5> Actual: <4>"
+
+
+def test_a_run_with_no_test_event_prints_the_reason(tmp_path: Path) -> None:
+    path = tmp_path / "tests.jsonl"
+    path.write_text(
+        "Could not find package `test` or file `test:test`\n"
+        "You need to add a dev_dependency on package:test.\n"
+    )
+    assert dart_test_report.failure_summary(path) == (
+        "Dart test run ended before its first test:\n"
+        "Could not find package `test` or file `test:test`\n"
+        "You need to add a dev_dependency on package:test."
+    )
