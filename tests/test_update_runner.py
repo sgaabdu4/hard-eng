@@ -693,3 +693,15 @@ def test_an_update_lands_when_a_project_hook_changes_the_commit_message(
     assert "ready on" in (target / update_runner.RESULT_FILE).read_text()
     subject = git(target, "log", "-1", "--format=%s", update_runner.UPDATE_BRANCH)
     assert subject.startswith("chore: Update Hard Eng to ")
+
+
+def test_the_note_says_pull_when_the_update_is_already_on_the_base(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    assert "update-pr" in update_runner.freshness_note(target)
+    git(target, "push", "-q", "--no-verify", "origin", f"{update_runner.UPDATE_BRANCH}:main")
+    note = update_runner.freshness_note(target)
+    assert "already on main" in note and "rebase" in note
+    assert "update-pr" not in note
