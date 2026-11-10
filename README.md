@@ -4,7 +4,7 @@
 
 **A workflow for one developer who builds with coding agents.**
 
-Hard Eng adds skills, hooks and checks to your repository. Your agent (Claude Code or Codex) then takes each task through four stages. A fifth stage, Learn, runs when a failure repeats or a decision must last.
+Hard Eng adds skills, hooks and checks to your repository. Your agent (Claude Code or Codex) then takes each task through four stages. A fifth stage, Learn, runs a retro at the end of each task, and again when a failure repeats or a decision must last.
 
 ```mermaid
 flowchart LR
@@ -200,7 +200,7 @@ flowchart LR
 
 ## 5. Learn
 
-[HE Learn](.agents/skills/he-learn/SKILL.md) runs when a failure repeats, a bug is found on main, or a decision must last. For a bug on main, the agent names the check that should have caught it. Before the fix, it adds a case at that check that fails on the merged code.
+[HE Learn](.agents/skills/he-learn/SKILL.md) runs a retro at the end of each task, and when a failure repeats, a bug is found on main, or a decision must last. For a bug on main, the agent names the check that should have caught it. Before the fix, it adds a case at that check that fails on the merged code.
 
 ```mermaid
 flowchart LR
