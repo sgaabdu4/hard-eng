@@ -1,6 +1,7 @@
 """Shrink-only adoption debt for findings that existing code had at install."""
 
 import json
+import re
 import sys
 import threading
 from pathlib import Path
@@ -309,10 +310,7 @@ COUNT_WORD_PAIRS = [
 ]
 
 
-@pytest.mark.parametrize(("recorded", "current"), COUNT_WORD_PAIRS)
-def test_a_count_word_for_one_or_many_is_the_same_debt_line(
-    repository: Path, recorded: str, current: str
-) -> None:
+def assert_same_debt_line(repository: Path, recorded: str, current: str) -> None:
     lint: Gate = {"name": "lint", "role": "lint", "command": ["ruff"]}
     group: Group = {"path": ".", "checks": [lint]}
     failed = {"./lint"}
@@ -323,3 +321,64 @@ def test_a_count_word_for_one_or_many_is_the_same_debt_line(
     assert debt.record(repository, [group], failed, {"./lint": current + "\n"}) == 0
     assert (repository / debt.DEBT_FILE).read_text() == written
     debt.require_shrink(repository, base)
+
+
+@pytest.mark.parametrize(("recorded", "current"), COUNT_WORD_PAIRS)
+def test_a_count_word_for_one_or_many_is_the_same_debt_line(
+    repository: Path, recorded: str, current: str
+) -> None:
+    assert_same_debt_line(repository, recorded, current)
+
+
+TIME_PAIRS = [
+    (
+        "Checked 3 files in 2ms. No fixes applied.",
+        "Checked 3 files in 1548\u00b5s. No fixes applied.",
+    ),
+    (
+        "Checked 3 files in 1548\u00b5s. No fixes applied.",
+        "Checked 3 files in 2ms. No fixes applied.",
+    ),
+    ("Finished in 1.5s", "Finished in 300ns"),
+    ("Finished in 12.25ms", "Finished in 2us"),
+]
+
+
+@pytest.mark.parametrize(("recorded", "current"), TIME_PAIRS)
+def test_a_time_in_another_unit_is_the_same_debt_line(
+    repository: Path, recorded: str, current: str
+) -> None:
+    assert_same_debt_line(repository, recorded, current)
+
+
+SAMPLES = Path(__file__).parent / "fixtures/debt"
+LINT: Gate = {"name": "lint", "role": "lint", "command": ["lint"]}
+LINT_GROUP: Group = {"path": ".", "checks": [LINT]}
+
+
+@pytest.mark.parametrize("tool", ["biome", "ruff"])
+def test_a_changed_source_line_in_a_code_frame_is_no_new_finding(
+    repository: Path, capsys: pytest.CaptureFixture[str], tool: str
+) -> None:
+    (repository / debt.DEBT_FILE).write_text(
+        (SAMPLES / f"{tool}-recorded-by-base.json").read_text()
+    )
+    after_fix = (SAMPLES / f"{tool}-one.txt").read_text()
+    assert debt.judge(repository, LINT_GROUP, LINT, True, after_fix) is True
+    printed = capsys.readouterr().out
+    assert "findings beyond" not in printed
+    assert "recorded lines are fixed" in printed
+    assert debt.record(repository, [LINT_GROUP], {"./lint"}, {"./lint": after_fix}) == 0
+    recorded = json.loads((repository / debt.DEBT_FILE).read_text())["gates"]["./lint"]
+    assert not [line for line in recorded if re.match(r"[> N]*[\u2502|]", line)]
+    assert debt.judge(repository, LINT_GROUP, LINT, True, after_fix) is False
+
+
+def test_a_debt_file_recorded_with_link_codes_still_matches(repository: Path) -> None:
+    (repository / debt.DEBT_FILE).write_text(
+        (SAMPLES / "biome-recorded-by-base.json").read_text()
+    )
+    recorded = (repository / debt.DEBT_FILE).read_text()
+    assert "\\u001b]N;;https://biomejs.dev" in recorded
+    again = (SAMPLES / "biome-two.txt").read_text()
+    assert debt.judge(repository, LINT_GROUP, LINT, True, again) is False

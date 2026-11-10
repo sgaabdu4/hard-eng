@@ -1,0 +1,51 @@
+a.js:1:1 ]8;;https://biomejs.dev/linter/rules/no-var\lint/suspicious/noVar]8;;\  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✖ Use let or const instead of var.
+  
+  > 1 │ var first = 1;
+      │ ^^^^^^^^^^^^^
+    2 │ var second = 2;
+    3 │ console.log(first, second);
+  
+  ℹ A variable declared with var is accessible in the whole module. Thus, the variable can be accessed before its initialization and outside the block where it is declared.
+  
+  ℹ See ]8;;https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/var\MDN web docs]8;;\ for more details.
+  
+  ℹ Unsafe fix: Use 'const' instead.
+  
+    1   │ - var·first·=·1;
+      1 │ + const·first·=·1;
+    2 2 │   var second = 2;
+    3 3 │   console.log(first, second);
+  
+
+a.js:2:1 ]8;;https://biomejs.dev/linter/rules/no-var\lint/suspicious/noVar]8;;\  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✖ Use let or const instead of var.
+  
+    1 │ var first = 1;
+  > 2 │ var second = 2;
+      │ ^^^^^^^^^^^^^^
+    3 │ console.log(first, second);
+    4 │ 
+  
+  ℹ A variable declared with var is accessible in the whole module. Thus, the variable can be accessed before its initialization and outside the block where it is declared.
+  
+  ℹ See ]8;;https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/var\MDN web docs]8;;\ for more details.
+  
+  ℹ Unsafe fix: Use 'const' instead.
+  
+    1 1 │   var first = 1;
+    2   │ - var·second·=·2;
+      2 │ + const·second·=·2;
+    3 3 │   console.log(first, second);
+    4 4 │   
+  
+
+Checked 3 files in 5ms. No fixes applied.
+Found 2 errors.
+ci ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✖ Some errors were emitted while running checks.
+  
+

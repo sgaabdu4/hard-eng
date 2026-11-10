@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "gates": {
+    "./lint": {
+      "- import os": 1,
+      "- import sys": 1,
+      "--> a.py:N:N": 2,
+      "FN [*] `os` imported but unused": 1,
+      "FN [*] `sys` imported but unused": 1,
+      "Found N errors.": 1,
+      "N |": 2,
+      "N | import os": 3,
+      "N | import sys": 3,
+      "N | print(N)": 1,
+      "[*] N fixable with `--fix`.": 1,
+      "help: Remove unused import: `os`": 1,
+      "help: Remove unused import: `sys`": 1,
+      "|": 8,
+      "|        ^^": 1,
+      "|        ^^^": 1
+    }
+  }
+}
