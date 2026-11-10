@@ -412,45 +412,6 @@ def dart_scan_includes_boundaries(gate: Gate) -> bool:
     )
 
 
-def validate_dart_boundaries(
-    command: list[str], directory: Path, timeout: float
-) -> None:
-    if command[:3] != ["dart-decimate", "check", "."]:
-        return
-    from tool_setup import managed_command
-
-    settings = json.loads(
-        subprocess.check_output(
-            managed_command(["dart-decimate", "config", ".", "--format", "json"]),
-            cwd=directory,
-            text=True,
-            timeout=timeout,
-        )
-    )["config"]
-    boundaries = settings.get("boundaries")
-    if (
-        not isinstance(boundaries, list)
-        or not boundaries
-        or any(
-            not isinstance(rule, dict)
-            or not all(
-                isinstance(rule.get(key), str)
-                and rule[key].strip()
-                and not any(mark in rule[key] for mark in "*?")
-                for key in ("from", "disallow")
-            )
-            for rule in boundaries
-        )
-    ):
-        raise ValueError(
-            "Dart boundaries are missing or not usable: each rule needs a `from` and a "
-            "`disallow` folder prefix of this project, with no `*` or `?`. Set "
-            '"boundaries": [{"from": "lib/domain", "disallow": "lib/ui"}] with your own '
-            "prefixes in the package's Dart Decimate settings file; if the package "
-            "has none, make .dart-decimaterc.json for it"
-        )
-
-
 def initial_base(root: Path) -> str:
     """A new branch compares with its shipping-base merge base, else the empty tree."""
     from shipping import git, load_policy

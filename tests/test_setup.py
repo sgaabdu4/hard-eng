@@ -8,6 +8,7 @@ from types import ModuleType
 
 import pytest
 from conftest import commit, git, init
+from dart_boundaries import validate_dart_boundaries
 from fallow_report import Report, validate_scanner_command
 from gate_config import (
     Gate,
@@ -15,7 +16,6 @@ from gate_config import (
     Group,
     json_file,
     parse_config,
-    validate_dart_boundaries,
     validate_group,
     validate_required_checks,
 )

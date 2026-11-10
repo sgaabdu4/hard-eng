@@ -56,6 +56,7 @@ from ci_jobs import (
     language_filter,
     language_groups,
 )
+from dart_boundaries import validate_dart_boundaries
 from debt import OUTPUTS, remember
 from gate_config import (
     Gate,
@@ -65,7 +66,6 @@ from gate_config import (
     dart_rule_settings,
     generated_sources,
     nonproduction_source,
-    validate_dart_boundaries,
 )
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
