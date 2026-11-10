@@ -118,6 +118,33 @@ def test_a_failed_fallow_gate_prints_its_findings(
     assert "package.json:9 unused_dependencies is-odd" in output
 
 
+def test_a_failed_fallow_audit_prints_its_findings_and_no_workspace_note(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    copies = [
+        {"file": "src/alpha.ts", "start_line": 1, "end_line": 33, "fragment": "x"},
+        {"file": "src/beta.ts", "start_line": 1, "end_line": 33, "fragment": "x"},
+    ]
+    report = {
+        "kind": "audit",
+        "command": "audit",
+        "verdict": "fail",
+        "dead_code": {
+            "unused_files": [{"path": "src/List.tsx", "introduced": True}],
+            "workspace_diagnostics": [
+                {"path": ".", "kind": "rule-packs-not-configured", "message": "note"}
+            ],
+        },
+        "duplication": {"clone_groups": [{"instances": copies}]},
+    }
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps(report))
+    assert failed("fallow", path, tmp_path, capsys).splitlines() == [
+        "scan: src/List.tsx unused_files",
+        "scan: copied code src/alpha.ts:1-33 src/beta.ts:1-33",
+    ]
+
+
 def test_a_failed_fallow_gate_names_every_copy_without_its_code(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
