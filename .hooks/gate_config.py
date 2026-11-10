@@ -875,7 +875,6 @@ def validate_package_services(
         workspace_matches,
         workspace_members,
     )
-    from python_setup import python_roots
     from swift_setup import parent_roles
 
     directory = (root / group["path"]).resolve()
@@ -899,15 +898,10 @@ def validate_package_services(
     if not group.get("language"):
         return
     require_roles(group["path"], {"security"}, roles | shared_roles)
-    if (
-        language == "python"
-        and "imports" not in roles
-        and python_roots(directory, group)
-    ):
-        from python_setup import imports_step
+    if language == "python":
+        from python_setup import require_imports
 
-        step = imports_step(directory, group)
-        require_roles(group["path"], {"imports"}, roles, step)
+        require_imports(directory, group, roles)
     if language == "javascript":
         from fallow_report import owns_package_fallow
 
