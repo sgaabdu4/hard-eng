@@ -582,8 +582,9 @@ def _revision(root: Path, reference: str) -> str | None:
 def released_plans(root: Path, base: str | None) -> set[str]:
     """Plans changed since the release base, so a feature check sees what the release checks."""
     references = release_references(root)
-    tips = {_revision(root, name) for name in references}
-    remote = {_revision(root, n) for n in references if n.startswith("origin/")}
+    revisions = {name: _revision(root, name) for name in references}
+    tips = set(revisions.values())
+    remote = {tip for name, tip in revisions.items() if name.startswith("origin/")}
     if base is None and remote - {None}:
         # A caller's base names what is released; without one, origin does.
         tips = remote
