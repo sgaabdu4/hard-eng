@@ -537,6 +537,18 @@ def test_an_update_without_a_shipping_policy_uses_the_remote_default_branch(
     assert update_runner.NOT_PUBLISHED not in result
 
 
+def test_a_setup_rerun_restores_the_pre_push_hook_when_origin_cannot_be_reached(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    git(target, "remote", "set-url", "origin", str(target.parent / "gone.git"))
+    hook = target / ".git/hooks/pre-push"
+    hook.unlink(missing_ok=True)
+    with pytest.raises(subprocess.SubprocessError):
+        update_runner.locked_update(target, repair=True)
+    assert hook.is_file()
+
+
 def test_a_setup_rerun_refuses_to_replace_a_local_file_git_does_not_track(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -212,7 +212,7 @@ def generated_commits(lines: list[str]) -> list[tuple[str, list[str]]]:
     commits = []
     for chunk in "\n".join(lines).split("\x01")[1:]:
         header, _, names = chunk.partition("\n")
-        commits.append((header.partition("\x1f")[2], names.split()))
+        commits.append((header.partition("\x1f")[2], names.splitlines()))
     return commits
 
 
