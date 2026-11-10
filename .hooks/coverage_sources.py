@@ -129,12 +129,15 @@ def require_listed_sources(
     for group in groups:
         language = group["language"]
         directory = root / group["path"]
-        listed = set(group.get("sources", []))
+        listed = tuple(group.get("sources", []))
+        if "." in listed:
+            continue
+        inside = tuple(f"{source}{os.sep}" for source in listed)
         start = len(str(directory)) + 1
         unlisted = [
             path
             for path in owned[directory]
-            if str(path)[start:].partition(os.sep)[0] not in listed
+            if (name := str(path)[start:]) not in listed and not name.startswith(inside)
         ]
         if missing := sorted(source_roots(directory, language, unlisted)):
             label = {"javascript": "JavaScript"}.get(language, language.title())

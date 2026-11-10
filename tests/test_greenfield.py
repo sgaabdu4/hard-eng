@@ -238,6 +238,8 @@ def test_python_code_added_after_setup_must_join_the_checked_sources(
         validate_required_checks(tmp_path, config)
     config["packages"][0]["sources"].append("calc.py")
     validate_required_checks(tmp_path, config)
+    config["packages"][0]["sources"] = ["."]
+    validate_required_checks(tmp_path, config)
 
 
 def test_the_missing_imports_message_gives_a_gate_and_a_block_that_pass(
@@ -305,6 +307,12 @@ def test_javascript_and_dart_code_added_after_setup_must_join_the_checked_source
     validate_required_checks(tmp_path, config, starting=True)
     config["packages"][0]["sources"].append(folder)
     validate_required_checks(tmp_path, config)
+    for listed in (["."], [first, added], [Path(first).parts[0], added]):
+        config["packages"][0]["sources"] = listed
+        validate_required_checks(tmp_path, config)
+    (tmp_path / added).with_stem("other").write_text("export const c = 3;\n")
+    with pytest.raises(ValueError, match=f"outside its sources: {folder};"):
+        validate_required_checks(tmp_path, config)
 
 
 @pytest.mark.parametrize("default", ["master", "trunk"])
