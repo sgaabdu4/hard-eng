@@ -106,23 +106,13 @@ def update_written(root: Path, point: str) -> set[str]:
     return installed | setup_written(root, point, names - installed, sources)
 
 
-def size_verdict(root: Path) -> tuple[bool, str]:
-    """Whether the whole branch change, not just this session's, is small, and the first reason."""
-    point = default_branch_point(root)
-    if point is None:
-        return False, "the branch point with the default branch cannot be found"
-    try:
-        status, counts, untracked = _branch_change(root, point)
-    except (subprocess.CalledProcessError, OSError):
-        return False, "the change cannot be measured"
-    names = {name for name in status[1::2] + untracked if name}
-    if not names:
-        return True, NO_CHANGE
-    names -= update_written(root, point)
-    if not names:
-        return True, "only files the verified Hard Eng update wrote"
-    packages = configured_packages(root)
-
+def _verdict(
+    status: list[str],
+    counts: list[str],
+    untracked: list[str],
+    names: set[str],
+    packages: dict[str, Group],
+) -> tuple[bool, str]:
     def documentation(name: str) -> bool:
         return is_documentation(Path(name), owner_language(packages, name))
 
@@ -155,6 +145,24 @@ def size_verdict(root: Path) -> tuple[bool, str]:
         return False, f"it changes {total} lines, more than {MAX_SMALL_LINES}"
     plural = "file" if len(names) == 1 else "files"
     return True, f"{len(names)} {plural}, {total} changed lines"
+
+
+def size_verdict(root: Path) -> tuple[bool, str]:
+    """Whether the whole branch change, not just this session's, is small, and the first reason."""
+    point = default_branch_point(root)
+    if point is None:
+        return False, "the branch point with the default branch cannot be found"
+    try:
+        status, counts, untracked = _branch_change(root, point)
+    except (subprocess.CalledProcessError, OSError):
+        return False, "the change cannot be measured"
+    names = {name for name in status[1::2] + untracked if name}
+    if not names:
+        return True, NO_CHANGE
+    names -= update_written(root, point)
+    if not names:
+        return True, "only files the verified Hard Eng update wrote"
+    return _verdict(status, counts, untracked, names, configured_packages(root))
 
 
 def plan_not_needed(root: Path) -> bool:
