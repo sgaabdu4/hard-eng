@@ -14,6 +14,8 @@ from dependency_graph import (
     expand_dependents,
     impact_inputs,
     is_workflow,
+    parse_project_text,
+    read_project_file,
     shared_only,
 )
 
@@ -442,7 +444,9 @@ def validate_dart_boundaries(
         )
     ):
         raise ValueError(
-            "Dart boundaries require nonempty project from/disallow prefixes, not globs"
+            "Dart boundaries require nonempty project from/disallow prefixes, not globs. "
+            'Add "boundaries": [{"from": "lib/domain", "disallow": "lib/ui"}] with your own '
+            "prefixes to .dart-decimaterc.json in the package folder"
         )
 
 
@@ -906,7 +910,7 @@ def validate_package_services(
     if language == "javascript":
         from fallow_report import owns_package_fallow
 
-        manifest = json.loads((directory / "package.json").read_text())
+        manifest = read_project_file(directory / "package.json")
         if "check:fallow" in manifest.get("scripts", {}) and not any(
             owns_package_fallow(group, gate, manifest["scripts"], package_groups)
             for gate in group["checks"]
@@ -934,7 +938,7 @@ def validate_package_services(
 
 
 def parse_config(content: str, *, require_impact_review: bool = True) -> GateConfig:
-    config = cast(GateConfig, json.loads(content))
+    config = cast(GateConfig, parse_project_text(content, "hard-eng.gates.json"))
     if (
         not isinstance(config, dict)
         or not isinstance(config.get("packages"), list)

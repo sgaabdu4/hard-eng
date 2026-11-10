@@ -14,6 +14,7 @@ from typing import TypedDict, cast
 from urllib.parse import urlparse
 
 from agent_hooks import reject_attribution
+from dependency_graph import read_project_file
 from gate_config import JsonValue
 from ship_evidence import attachment_urls
 
@@ -310,9 +311,9 @@ def load_policy(root: Path, required: bool = True) -> ShippingPolicy | None:
             raise ShippingError("hard-eng.gates.json is required for shipping")
         return None
     try:
-        payload = json.loads(path.read_text())
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ShippingError("hard-eng.gates.json is invalid") from error
+        payload = read_project_file(path, root)
+    except (OSError, ValueError) as error:
+        raise ShippingError(str(error)) from error
     if not isinstance(payload, dict):
         raise ShippingError("hard-eng.gates.json must be an object")
     if "shipping" not in payload:

@@ -265,7 +265,7 @@ def test_malformed_project_codex_config_fails_before_writes(
     config.write_text("[features\n")
     before = snapshot(root)
 
-    with pytest.raises(tomllib.TOMLDecodeError):
+    with pytest.raises(ValueError, match=r"^\.codex/config\.toml is not valid TOML"):
         installer.install(root)
 
     assert snapshot(root) == before

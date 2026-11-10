@@ -1,6 +1,7 @@
 """Resolve Dart package directories without bypassing included analysis rules."""
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -15,6 +16,7 @@ from gate_config import (
     JsonObject,
     dart_scan_includes_boundaries,
     generated_sources,
+    validate_dart_boundaries,
 )
 from project_setup import adapt_package, dependency_command, validate_dart_exclusions
 
@@ -612,3 +614,24 @@ def test_generated_sources_reads_paths_from_a_file_not_a_live_pipe(
     assert generated_sources(tmp_path, names) == set(names[1::2])
     assert "input" not in spy.call_args.kwargs
     assert hasattr(spy.call_args.kwargs["stdin"], "fileno")
+
+
+def test_the_missing_boundary_error_names_the_file_and_the_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def native_config(*_args: object, cwd: Path, **_kwargs: object) -> str:
+        """Dart Decimate's own discovery, for the one file name that the error gives."""
+        config: JsonObject = {}
+        for path in cwd.glob(".dart-decimaterc.json"):
+            config = json.loads(path.read_text())
+        return json.dumps({"config": config})
+
+    monkeypatch.setattr(subprocess, "check_output", native_config)
+    command = ["dart-decimate", "check", ".", "--strict"]
+    with pytest.raises(ValueError, match="nonempty project from/disallow") as caught:
+        validate_dart_boundaries(command, tmp_path, 5)
+    step = re.search(r'Add (".+?": \[.+?\]) .*?to (\S+)', str(caught.value))
+    assert step, str(caught.value)
+    key, name = step.groups()
+    (tmp_path / name).write_text("{" + key + "}")
+    validate_dart_boundaries(command, tmp_path, 5)

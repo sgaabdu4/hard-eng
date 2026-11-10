@@ -11,7 +11,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tomllib
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -111,11 +110,12 @@ def gate_config(root: Path) -> GateConfig:
 
 def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
     import agent_hooks
+    from dependency_graph import parse_project_text, read_project_file
     from gate_config import json_file
 
     codex_config = root / ".codex/config.toml"
     if codex_config.exists():
-        features = tomllib.loads(codex_config.read_text()).get("features", {})
+        features = read_project_file(codex_config, root, "toml").get("features", {})
         setting = (
             "hooks"
             if isinstance(features, dict) and "hooks" in features
@@ -146,7 +146,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
             hooks["PreToolUse"] = list(agent_hooks.CLAUDE_TOOL_HOOKS)
         target = root / name
         text = target.read_text() if target.exists() else "{}"
-        current: JsonObject = json.loads(text)
+        current: JsonObject = parse_project_text(text, name)
         if current.get("disableAllHooks"):
             raise ValueError(f"{agent} hooks are disabled; ask before changing that")
         agent_hooks.remove_routine_hooks(current, agent, command)
@@ -349,12 +349,12 @@ def arb_language(arb: Path) -> str | None:
 
 
 def localization_outputs(root: Path, directory: Path) -> list[str]:
-    import yaml
+    from dependency_graph import read_project_file
 
     localization = directory / "l10n.yaml"
     if not localization.is_file():
         return []
-    options = yaml.safe_load(localization.read_text()) or {}
+    options = read_project_file(localization, root, "yaml") or {}
     if not isinstance(options, dict) or options.get("synthetic-package", False):
         return []
     arbs = directory / str(options.get("arb-dir", "lib/l10n"))
@@ -428,6 +428,7 @@ def configure_dart_scanner(
 def configure_javascript(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
+    from dependency_graph import read_project_file
     from project_setup import javascript_manager, native_typecheck
     from untrusted_input import typescript_config
 
@@ -438,7 +439,7 @@ def configure_javascript(
         print(f"Bun migration pending: {error}", file=sys.stderr)
         manager = "bun"
     typescript_config(root, directory, package["sources"], changes)
-    scripts = json.loads((directory / "package.json").read_text()).get("scripts", {})
+    scripts = read_project_file(directory / "package.json", root).get("scripts", {})
     if native_typecheck(scripts, package["checks"]):
         wrapper = {"name": "project-typecheck", "role": "project-typecheck"}
         package["checks"] = [
@@ -710,9 +711,10 @@ def legacy_command_problem(root: Path, arguments: list[str]) -> str | None:
 
 def retired_config(root: Path) -> GateConfig | None:
     """Regenerate a pre-rebuild families configuration, keeping runnable commands."""
+    from dependency_graph import read_project_file
     from gate_config import validate_gate
 
-    legacy = json.loads((root / "hard-eng.gates.json").read_text())
+    legacy = read_project_file(root / "hard-eng.gates.json", root)
     if not isinstance(legacy, dict) or "families" not in legacy or "packages" in legacy:
         return None
     families: dict[str, object] = (
