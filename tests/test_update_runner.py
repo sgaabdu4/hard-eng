@@ -841,3 +841,27 @@ def test_an_update_at_session_start_does_not_touch_the_checkout(
     assert "This checkout" not in outcome
     assert (project / GATES_FILE).read_text() == before
     assert fetch.call_count == 0
+
+
+def test_an_install_that_is_not_on_the_base_branch_gets_the_pushed_line(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = release[0]
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    project = source.parent / "project"
+    init(project)
+    (project / "package.json").write_text('{"private":true}')
+    (project / "bun.lock").write_text('{"lockfileVersion": 1}\n')
+    commit(project, "baseline")
+    add_origin(project)
+    subprocess.run(
+        [sys.executable, str(source / "setup.py"), str(project)],
+        check=True,
+        capture_output=True,
+    )
+    for repair in (False, True):
+        outcome = update_runner.prepare_update(project, repair)
+        assert outcome.startswith(update_runner.NOT_PUBLISHED)
+    assert update_runner.apply_update(project) == 0
+    assert update_runner.freshness_note(project) == update_runner.NOT_PUBLISHED
