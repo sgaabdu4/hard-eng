@@ -703,6 +703,15 @@ def target_problem(target: str, delivery: list[Delivery]) -> str | None:
     return None
 
 
+def plan_target_problem(root: Path, verification: str) -> str | None:
+    """Why the delivery target in a plan's Verification does not fit the shipping policy."""
+    policy = load_policy(root)
+    target = DELIVERY_TARGET_LINE.search(verification)
+    if policy is None or not target:
+        return None
+    return target_problem(target[1], policy["delivery"])
+
+
 def _delivery_scope(
     root: Path, plan: Path | None, delivery: list[Delivery]
 ) -> tuple[Path | None, str]:

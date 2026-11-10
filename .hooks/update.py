@@ -1,6 +1,5 @@
 """Install a CI-verified upstream revision with an isolated local Git commit."""
 
-import http.client
 import json
 import os
 import re
@@ -8,8 +7,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import urllib.error
-import urllib.request
 from operator import itemgetter
 from pathlib import Path
 
@@ -56,6 +53,9 @@ def github_token() -> str | None:
 
 
 def github_response(endpoint: str, headers: dict[str, str]) -> bytes:
+    import http.client
+    import urllib.request
+
     auth = {"Authorization": f"Bearer {token}"} if (token := github_token()) else {}
     url = f"https://api.github.com/{endpoint}"
     request = urllib.request.Request(url, headers={**headers, **auth})
@@ -74,6 +74,8 @@ def github_json(endpoint: str) -> object:
 
 def upstream_moved(previous: str) -> bool:
     """One 40-byte request instead of a 100-commit page; an authenticated 304 is free."""
+    import urllib.error
+
     headers = {"Accept": "application/vnd.github.sha", "If-None-Match": f'"{previous}"'}
     try:
         head = github_response(f"repos/{UPSTREAM}/commits/main", headers)
