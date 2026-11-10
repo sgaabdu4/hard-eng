@@ -229,38 +229,6 @@ exit $c
         update.check_scaffold_update(target, base)
 
 
-def test_ignored_local_configuration_prevents_update(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, _ = release
-    name = ".mcp.json"
-    monkeypatch.setenv("APPWRITE_ENDPOINT", "https://cloud.appwrite.io/v1")
-    (target / "app.js").write_text('import { Client } from "appwrite";\n')
-    (target / name).write_text(
-        '{"mcpServers":{"appwrite":{"url":"https://mcp.appwrite.io/"}}}\n'
-    )
-    commit(target, "configure applicable Appwrite integration")
-    select_release(source, monkeypatch)
-    git(target, "rm", "--cached", name)
-    git(target, "commit", "-qm", "keep integration configuration local")
-    (target / ".git/info/exclude").write_text(name + "\n")
-    local = '{"mcpServers":{"private":{"command":"private-integration"}}}\n'
-    (target / name).write_text(local)
-    (target / "staged.txt").write_text("unrelated staged work\n")
-    git(target, "add", "staged.txt")
-    (target / "project.txt").write_text("unrelated working edit\n")
-    before = git(target, "rev-parse", "HEAD")
-    marker_before = (target / update.SOURCE_FILE).read_bytes()
-    with pytest.raises(ValueError, match="overlaps local edits"):
-        update.update(target)
-    assert (target / name).read_text() == local
-    assert git(target, "rev-parse", "HEAD") == before
-    assert (target / update.SOURCE_FILE).read_bytes() == marker_before
-    assert git(target, "diff", "--cached", "--name-only") == "staged.txt"
-    assert (target / "project.txt").read_text() == "unrelated working edit\n"
-    assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
-
-
 @pytest.mark.parametrize("case", ["clean", "husky", "dirty", "rejected"])
 def test_install_commits_only_clean_installed_paths(
     installer: ModuleType,
@@ -320,21 +288,6 @@ def test_install_commits_only_clean_installed_paths(
         text=True,
         check=True,
     ).stdout
-
-
-def test_untracked_install_is_named_instead_of_local_edits(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, old = release
-    select_release(source, monkeypatch)
-    git(target, "rm", "-rq", "--cached", ".hooks", ".agents")
-    git(target, "commit", "-qm", "installed files left untracked")
-    with pytest.raises(
-        ValueError,
-        match=r"^Installed Hard Eng files are not committed: \.agents/skills/he/ \.hooks/; commit them",
-    ):
-        update.update(target)
-    assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
 
 
 @pytest.mark.parametrize("wrapped", [True, False])

@@ -441,6 +441,72 @@ def test_setup_retries_a_remembered_refusal(
     assert fetch.call_count == 2
 
 
+def test_a_linked_local_settings_file_does_not_block_the_update(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    add_origin(target)
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    local = target / ".claude/settings.local.json"
+    local.write_text(
+        '{"permissions":{"allow":'
+        '["Bash(python3 .agents/hard-eng/current/.hooks/hard-eng.py check)"]}}\n'
+    )
+    before = local.read_bytes()
+    assert git(target, "status", "--porcelain", "--ignored", str(local)).startswith(
+        "!!"
+    )
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "ready on hard-eng/update" in result
+    assert local.read_bytes() == before
+
+
+PRIVATE_MCP = '{"mcpServers":{"private":{"command":"private-integration"}}}\n'
+
+
+def private_mcp_release(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, ignored: bool
+) -> Path:
+    source, target, _ = release
+    monkeypatch.setenv("APPWRITE_ENDPOINT", "https://cloud.appwrite.io/v1")
+    (target / "app.js").write_text('import { Client } from "appwrite";\n')
+    if ignored:
+        (target / ".gitignore").write_text(".mcp.json\n")
+    commit(target, "use Appwrite")
+    add_origin(target)
+    (target / ".mcp.json").write_text(PRIVATE_MCP)
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    return target
+
+
+@pytest.mark.parametrize("ignored", [True, False], ids=["ignored", "untracked"])
+def test_an_update_refuses_to_replace_a_local_file_git_does_not_track(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, ignored: bool
+) -> None:
+    target = private_mcp_release(release, monkeypatch, ignored)
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert ".mcp.json" in result and "ready on" not in result
+    assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
+    assert (target / ".mcp.json").read_text() == PRIVATE_MCP
+    assert update_runner.apply_update(target) == 0
+    assert "not retried" in (target / update_runner.RESULT_FILE).read_text()
+
+
+def test_a_setup_rerun_refuses_to_replace_a_local_file_git_does_not_track(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = private_mcp_release(release, monkeypatch, True)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    with pytest.raises(ValueError, match=r"\.mcp\.json"):
+        update_runner.locked_update(target, repair=True)
+    assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
+    assert (target / ".mcp.json").read_text() == PRIVATE_MCP
+
+
 def test_a_failing_project_commit_hook_leaves_the_checkout_and_worktrees_unchanged(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
