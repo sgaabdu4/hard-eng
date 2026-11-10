@@ -7,6 +7,7 @@ import tomllib
 from pathlib import Path
 
 from gate_config import Group
+from project_files import parse_project_text
 from project_setup import dependency_command
 
 
@@ -218,11 +219,13 @@ def configure_python(
     known_first_party(directory, package)
     native = directory / "pyrefly.toml"
     project = directory / "pyproject.toml"
+    name = str(project.relative_to(root))
     content = project.read_text()
+    settings = parse_project_text(content, name, tomllib.loads)
     options = (
         tomllib.loads(native.read_text())
         if native.exists()
-        else tomllib.loads(content).get("tool", {}).get("pyrefly")
+        else settings.get("tool", {}).get("pyrefly")
     )
     if options is not None:
         if (
@@ -233,11 +236,10 @@ def configure_python(
                 f"{package['path']}: existing Pyrefly settings need strict checking; preserve them and ask before changing them"
             )
     else:
-        changes[str(project.relative_to(root))] = (
+        changes[name] = (
             content
             + '\n[tool.pyrefly]\npreset = "strict"\ncheck-unannotated-defs = true\n'
         )
-    name = str(project.relative_to(root))
     current = test_import_path(directory, package, changes.get(name, content))
     updated = import_configuration(directory, package, current)
     if updated != content:
