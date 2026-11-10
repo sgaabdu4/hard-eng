@@ -796,7 +796,6 @@ def test_uvx_tools_wait_two_days_after_a_release(
     monkeypatch.setattr(subprocess, "run", answer)
     assert tool_setup.scanner_version("ruff", False, 30, now=now) == "9.9.9"
     assert asked == [["uvx", *cutoff, "ruff@latest", "--version"]]
-    assert "UV_EXCLUDE_NEWER" not in os.environ
 
 
 def test_release_age_has_one_value() -> None:

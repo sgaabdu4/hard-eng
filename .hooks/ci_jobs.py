@@ -124,7 +124,9 @@ def bootstrap_bun(
         return pinned
     if os.environ.get("GITHUB_ACTIONS") != "true":
         return None
-    cutoff = datetime.now(UTC) - timedelta(days=2)
+    from tool_setup import RELEASE_AGE_SECONDS
+
+    cutoff = datetime.now(UTC) - timedelta(seconds=RELEASE_AGE_SECONDS)
     try:
         versions = [
             released_bun(release, cutoff) for release in (releases or bun_releases)()
