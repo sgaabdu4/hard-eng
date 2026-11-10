@@ -83,11 +83,17 @@ def lease_holder(directory: Path) -> tuple[str, datetime] | None:
         return None
 
 
+def lease_is_live(directory: Path, every_minutes: float) -> bool:
+    held = lease_holder(directory)
+    return held is not None and utc_now() - held[1] < timedelta(
+        minutes=2 * every_minutes
+    )
+
+
 def take_lease(directory: Path, every_minutes: float) -> str | None:
     with lease_lock(directory):
         now = utc_now()
-        held = lease_holder(directory)
-        if held and now - held[1] < timedelta(minutes=2 * every_minutes):
+        if lease_is_live(directory, every_minutes):
             return None
         run_id = uuid.uuid4().hex
         lease = {"runId": run_id, "startedAt": stamp(now)}

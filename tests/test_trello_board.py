@@ -55,7 +55,7 @@ def test_finish_only_ends_its_own_lease(project: Project) -> None:
 
 
 def test_a_stale_lease_is_taken_by_one_run_only(project: Project, mods: Mods) -> None:
-    project.state.mkdir(parents=True)
+    project.state.mkdir(parents=True, exist_ok=True)
     write_lease(project, "old", 31)
     winners: list[str | None] = []
     start = threading.Barrier(8)
@@ -417,7 +417,7 @@ def test_detach_deletes_only_the_named_attachments(project: Project) -> None:
 def test_owner_reply_before_a_missing_first_check_is_kept(project: Project) -> None:
     project.fake.cards = [make_card(3, "#3 Owner", "l-doing")]
     project.fake.actions = [comment("o1", 3, "m-owner", "Yes, go ahead", 0.5)]
-    project.state.mkdir(parents=True)
+    project.state.mkdir(parents=True, exist_ok=True)
     read_at = datetime.now(UTC) - timedelta(hours=1)
     project.mods.state.save_state(project.state, {"checkedAt": read_at.isoformat()})
     assert refs(project.report()["owner"]) == {"3"}

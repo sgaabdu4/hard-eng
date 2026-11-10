@@ -67,6 +67,8 @@ def make_project(
     (main / ".env.trello.local").write_text(f"TRELLO_KEY={KEY}\nTRELLO_TOKEN={TOKEN}\n")
     commit(main, "fixture")
     add_origin(main)
+    place = importlib.import_module("trello_board.secrets").locate(main)
+    assert load_claim().hold(place, mods.api.Secrets(KEY, TOKEN)) is None
     fake = FakeTrello(mods.api)
     waits: list[float] = []
     real = mods.api.transport

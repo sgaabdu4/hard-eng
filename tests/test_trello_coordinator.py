@@ -607,10 +607,22 @@ def test_one_run_at_a_time(project: Project, mods: Mods) -> None:
     assert lease_owner(project) == project.run_id
 
 
+def private_remote(_place: object) -> bool:
+    return True
+
+
 def make_note(tmp_path: Path) -> Path:
     note = tmp_path / "claim-note.txt"
     note.write_text("Planned text")
     return note
+
+
+def run_and_remember(project: Project, tmp_path: Path) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    assert project.run("check").code == 0
+    assert project.run("comment", "1", str(make_note(tmp_path))).code == 0
+    (project.state / "handover.md").write_text("card 1: worker thread t1\n")
+    assert project.finish().payload == {"finished": True}
 
 
 def claim_commit(project: Project) -> str:
@@ -652,13 +664,9 @@ def test_a_second_machine_is_skipped_and_cannot_write(
 def test_takeover_moves_the_claim_and_memory(
     project: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(load_claim(), "is_private", lambda _place: True)
+    monkeypatch.setattr(load_claim(), "is_private", private_remote)
     drop_claim(project)
-    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
-    assert project.run("check").code == 0
-    assert project.run("comment", "1", str(make_note(tmp_path))).code == 0
-    (project.state / "handover.md").write_text("card 1: worker thread t1\n")
-    assert project.finish().payload == {"finished": True}
+    run_and_remember(project, tmp_path)
     names = git(origin_of(project), "ls-tree", "--name-only", CLAIM_REF).split()
     assert {"holder", "posted.log", "handover.md", "state.json"} <= set(names)
     other = enter(monkeypatch, second_machine(project))
@@ -682,18 +690,14 @@ def test_takeover_moves_the_claim_and_memory(
     (old.state / "handover.md").write_text("late note\n")
     lost = old.run("finish", "late")
     assert lost.code == 1
-    assert "another machine" in str(lost.payload["error"])
+    assert "another machine holds" in str(lost.payload["error"]).lower()
 
 
 def test_a_public_remote_gets_no_memory(
     project: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     drop_claim(project)
-    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
-    assert project.run("check").code == 0
-    assert project.run("comment", "1", str(make_note(tmp_path))).code == 0
-    (project.state / "handover.md").write_text("card 1: worker thread t1\n")
-    assert project.finish().payload == {"finished": True}
+    run_and_remember(project, tmp_path)
     assert git(origin_of(project), "ls-tree", "--name-only", CLAIM_REF) == "holder"
     other = enter(monkeypatch, second_machine(project))
     (other.state).mkdir(parents=True)
@@ -708,7 +712,7 @@ def test_a_public_remote_gets_no_memory(
 def test_memory_with_a_key_is_never_pushed(
     project: Project, monkeypatch: pytest.MonkeyPatch, leak: str
 ) -> None:
-    monkeypatch.setattr(load_claim(), "is_private", lambda _place: True)
+    monkeypatch.setattr(load_claim(), "is_private", private_remote)
     drop_claim(project)
     project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
     assert project.run("check").code == 0

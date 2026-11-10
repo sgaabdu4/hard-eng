@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from . import board, report, state
+from . import board, claim, report, state
 from .api import Client, Secrets, TokenRefused, TrelloError, redact
 from .config import (
     OPTIONAL_LISTS,
@@ -663,7 +663,7 @@ def build_parser() -> tuple[
     dry = argparse.ArgumentParser(add_help=False)
     dry.add_argument("--dry-run", action="store_true")
     subs: dict[str, argparse.ArgumentParser] = {}
-    for name in ("probe", "check", "finish"):
+    for name in ("probe", "check", "finish", "takeover"):
         subs[name] = commands.add_parser(name)
     for name in WRITE_COMMANDS:
         subs[name] = commands.add_parser(name, parents=[dry])
@@ -757,13 +757,23 @@ def refusal_aware(
 def guarded(args: argparse.Namespace, place: Place, secrets: Secrets) -> Obj:
     config = load_config(place.root)
     if args.command == "finish":
-        return {"finished": state.end_lease(place.state, args.run_id)}
+        ended = state.end_lease(place.state, args.run_id)
+        claim.save(place, secrets)
+        return {"finished": ended}
+    if args.command == "takeover":
+        return claim.takeover(place, secrets, config.every_minutes)
     if args.command != "check":
+        if args.command in WRITE_COMMANDS:
+            claim.require(place)
         return refusal_aware(args, place, secrets, config, "")
     run_id = state.take_lease(place.state, config.every_minutes)
     if run_id is None:
         return {"skipped": True}
     try:
+        elsewhere = claim.hold(place, secrets)
+        if elsewhere:
+            state.end_lease(place.state, run_id)
+            return elsewhere
         payload = refusal_aware(args, place, secrets, config, run_id)
     except TrelloError:
         state.end_lease(place.state, run_id)
