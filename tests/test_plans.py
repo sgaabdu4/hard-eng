@@ -992,3 +992,12 @@ def test_a_check_with_no_base_judges_the_size_of_the_whole_branch(
     (repository / "PLAN.md").write_text(completed_plan)
     commit(repository, "plan")
     assert validate_plans(repository) == "Complete"
+
+
+def test_a_plan_stage_check_passes_a_small_change_with_no_plan(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    edit(repository, "a.py", 2)
+    assert validate_plans(repository, stage="Complete") == "Complete"
+    assert "Size: small (1 file, 4 changed lines)" in capsys.readouterr().out
