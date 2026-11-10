@@ -124,6 +124,9 @@ def link_local_files(root: Path, checkout: Path) -> None:
             target.symlink_to(source)
 
 
+COMPILED_HOOKS = "!! .hooks/__pycache__/"
+
+
 def placed_by_hard_eng(root: Path, checkout: Path) -> set[str]:
     """Status lines for what link_local_files put in this worktree."""
     return {
@@ -374,7 +377,7 @@ def unchanged_checkout(shipment: Shipment) -> None:
     kept = [
         line[3:]
         for line in status.splitlines()
-        if line not in own and not line.startswith(folders)
+        if line not in own | {COMPILED_HOOKS} and not line.startswith(folders)
     ]
     for folder in folders:
         kept += changed_copies(main, target, folder[3:])
