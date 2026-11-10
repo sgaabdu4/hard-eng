@@ -14,17 +14,15 @@ SETTINGS_FILES = (
 
 
 def has_dart_file(directory: Path, prefix: str) -> bool:
-    head, slash, _ = prefix.partition("/")
-    starts = [
-        path
-        for path in directory.iterdir()
-        if (path.name == head if slash else path.name.startswith(head))
-    ]
-    return any(
-        file.relative_to(directory).as_posix().startswith(prefix)
-        for start in starts
-        for file in ([start] if start.is_file() else start.rglob("*.dart"))
-        if file.suffix == ".dart"
+    """Looks only below the prefix: this runs in every check, and a walk of all of lib/ is slow."""
+    parent, _, start = prefix.rpartition("/")
+    folder = directory / parent
+    return folder.is_dir() and any(
+        entry.suffix == ".dart"
+        if entry.is_file()
+        else next(entry.rglob("*.dart"), None) is not None
+        for entry in folder.iterdir()
+        if entry.name.startswith(start)
     )
 
 
