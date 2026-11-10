@@ -1,5 +1,6 @@
 """Native context/completion responses; Git records scope, never gate results."""
 
+import fcntl
 import hashlib
 import json
 import os
@@ -695,6 +696,18 @@ def show_decisions(root: Path, names: list[str], state: Path | None) -> str:
     )
 
 
+def check_is_running(root: Path) -> bool:
+    name = subprocess.check_output(
+        ["git", "rev-parse", "--git-path", "hard-eng-check.lock"], cwd=root, text=True
+    ).strip()
+    with (root / name).open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+    return False
+
+
 def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
     with tempfile.TemporaryFile() as log:
         check: subprocess.Popen[bytes] | None = None
@@ -900,6 +913,13 @@ def checked_changes(
             root,
             {
                 "systemMessage": "Hard Eng: unchanged since last passing check; not rerun."
+            },
+        )
+    if check_is_running(root):
+        return with_freshness(
+            root,
+            {
+                "systemMessage": "Hard Eng: another Hard Eng check is running in this checkout; its result decides. Not rerun."
             },
         )
     returncode, output = run_check(root, base, building)
