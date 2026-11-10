@@ -11,6 +11,7 @@ import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import Mock
 
 import agent_hooks
@@ -20,6 +21,7 @@ import update_pr
 import update_runner
 from conftest import SOURCE, add_origin, commit, git
 from gate_config import JsonObject
+from test_setup import project_with_commit_hook
 from test_updates import select_release
 
 
@@ -357,32 +359,6 @@ def install_hook(root: Path, name: str, script: str) -> None:
     hook.chmod(0o755)
 
 
-def test_sessions_still_count_an_unplanned_file_under_a_planned_path(
-    installed: Path,
-) -> None:
-    (installed / "skills/he").mkdir(parents=True)
-    (installed / "skills/he/SKILL.md").write_text("planned")
-    (installed / "skills/he/agent.py").write_text("print('agent')\n")
-    commit(installed, "update with an extra file")
-    commit_id = git(installed, "rev-parse", "HEAD")
-    planned: dict[str, str | None] = {"skills/he/SKILL.md": "planned", "skills": None}
-    assert not update_runner.committed_matches(installed, commit_id, planned)
-    del planned["skills"]
-    assert update_runner.committed_matches(installed, commit_id, planned)
-
-
-def test_committed_matches_reads_an_update_larger_than_a_pipe(installed: Path) -> None:
-    planned: dict[str, str | None] = {
-        f"skills/s{index}/SKILL.md": f"{index}" * 2000 for index in range(400)
-    }
-    for name, content in planned.items():
-        (installed / name).parent.mkdir(parents=True)
-        (installed / name).write_text(content or "")
-    commit(installed, "a large update")
-    commit_id = git(installed, "rev-parse", "HEAD")
-    assert update_runner.committed_matches(installed, commit_id, planned)
-
-
 def refused_release(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, Mock]:
@@ -576,3 +552,38 @@ def test_interrupted_write_keeps_the_original_file(
         "hard-eng-source.json",
         "update.py",
     ]
+
+
+def test_install_commit_with_crlf_lines_kept_by_git_filters_is_not_undone(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = project_with_commit_hook(tmp_path, "#!/bin/sh\nexit 0\n")
+    (project / ".gitattributes").write_text("*.md text eol=crlf\n")
+    (project / "AGENTS.md").write_bytes(b"# Project rules\r\n\r\nKeep this.\r\n")
+    commit(project, "windows line endings")
+    head = git(project, "rev-parse", "HEAD")
+    installer.install(project)
+    output = capsys.readouterr().out
+    assert "Committed the installed files locally without pushing." in output
+    assert git(project, "rev-parse", "HEAD") != head
+
+
+def test_install_commit_rewritten_by_a_hook_is_found_when_the_message_changes(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = project_with_commit_hook(
+        tmp_path,
+        "#!/bin/sh\necho '<!-- formatted -->' >> AGENTS.md\ngit add AGENTS.md\n",
+    )
+    message = project / ".git/hooks/commit-msg"
+    message.write_text(
+        '#!/bin/sh\nprintf "chore: %s" "$(cat "$1")" > "$1.new"\nmv "$1.new" "$1"\n'
+    )
+    message.chmod(0o755)
+    head = git(project, "rev-parse", "HEAD")
+    installer.install(project)
+    output = capsys.readouterr().out
+    assert "Committed the installed files locally without pushing." not in output
+    assert "AGENTS.md" in output.split("Installed files are not committed (")[1]
+    assert git(project, "rev-parse", "HEAD") == head
+    assert "<!-- formatted -->" not in (project / "AGENTS.md").read_text()

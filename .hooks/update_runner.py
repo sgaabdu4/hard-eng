@@ -184,41 +184,63 @@ def landed_commit(root: Path, head: str, message: str) -> tuple[str, str] | None
     return None
 
 
-def committed_matches(root: Path, commit: str, expected: dict[str, str | None]) -> bool:
-    """Whether the commit holds exactly the planned files and link targets, so no other edit rode along."""
-    listing = subprocess.run(
-        ["git", "ls-tree", "-r", "-z", "--name-only", commit, "--", *expected],
+def tree_entries(
+    root: Path, command: list[str], column: int, names: list[str]
+) -> dict[str, tuple[str, str]]:
+    listing = subprocess.check_output(
+        [*command, "-z", "--", *names], cwd=root, text=True
+    )
+    return {
+        path: (fields[0], fields[column])
+        for entry in listing.split("\0")
+        if entry
+        for meta, _, path in [entry.partition("\t")]
+        for fields in [meta.split()]
+    }
+
+
+def undo_hooked_commit(
+    root: Path,
+    head: str,
+    staged: dict[str, tuple[str, str]],
+    expected: dict[str, str | None],
+    names: list[str],
+) -> list[str]:
+    """Undo the install commit when a project commit hook rewrote it; return the changed paths."""
+    from update import write_changes
+
+    commit = current_head(root)
+    parent = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", "HEAD^"],
         cwd=root,
         capture_output=True,
         text=True,
-        check=True,
-    ).stdout
-    planned = {name for name, content in expected.items() if content is not None}
-    if set(filter(None, listing.split("\0"))) - planned:
-        return False
-    # Stdin from a file: writing and reading git's pipes in one call deadlocked on macOS.
-    with tempfile.TemporaryFile() as request:
-        request.write("".join(f"{commit}:{name}\n" for name in expected).encode())
-        request.seek(0)
-        output = subprocess.run(
-            ["git", "cat-file", "--batch"],
-            stdin=request,
-            cwd=root,
-            capture_output=True,
-            check=True,
-        ).stdout
-    for content in expected.values():
-        header, _, output = output.partition(b"\n")
-        fields = header.split()
-        found = None
-        if len(fields) == 3:
-            size = int(fields[2])
-            if fields[1] == b"blob":
-                found = output[:size]
-            output = output[size + 1 :]
-        if found != (None if content is None else content.encode()):
-            return False
-    return True
+        check=False,
+    ).stdout.strip()
+    if not commit or commit == head or parent != head:
+        return []
+    committed = tree_entries(root, ["git", "ls-tree", "-r", commit], 2, names)
+    changed = sorted(
+        path
+        for path in {*staged, *committed}
+        if staged.get(path) != committed.get(path)
+    )
+    if not changed:
+        return []
+    undo = ["git", "reset", "--soft", head]
+    subprocess.run(
+        undo if head else ["git", "update-ref", "-d", "HEAD"], cwd=root, check=True
+    )
+    write_changes(
+        root,
+        {
+            n: expected[n]
+            for n in changed
+            if n in expected and not (root / n).is_symlink()
+        },
+    )
+    subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
+    return changed
 
 
 def rebase_sessions(root: Path, head: str, message: str) -> bool:
