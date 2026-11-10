@@ -373,6 +373,27 @@ def validate_fallow(path: Path, provided: set[str] | None = None) -> None:
         raise ValueError("Fallow report is incomplete") from error
 
 
+def finding_lines(path: Path) -> list[str]:
+    try:
+        report = json.loads(path.read_text())
+        check = report.get("check") or report["dead_code"]
+        return [
+            " ".join(
+                [
+                    item["path"],
+                    kind,
+                    item.get("export_name") or item.get("package_name") or "",
+                ]
+            ).rstrip()
+            for kind, items in check.items()
+            if isinstance(items, list)
+            for item in items
+            if isinstance(item, dict) and "path" in item
+        ]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return []
+
+
 def lcov_counts(
     lcov: Path, directory: Path
 ) -> tuple[dict[Path, dict[int, int]], dict[Path, int]]:

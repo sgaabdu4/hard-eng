@@ -14,6 +14,7 @@ from typing import TextIO, cast
 from coverage_sources import erased_swift, erased_typescript
 from dart_coverage import erased_dart
 from dart_test_report import dart_events, failure_summary
+from fallow_report import finding_lines as fallow_findings
 from fallow_report import sdk_binaries, validate_fallow, write_istanbul
 from gate_config import Gate, Group, JsonObject
 from gate_schedule import QUICK_ROLES
@@ -21,6 +22,7 @@ from project_setup import (
     dependency_free,
     package_script_invocation,
 )
+from react_report import finding_lines as react_findings
 from react_report import incomplete_reason
 
 SHELL_OPERATOR = re.compile(r"[;&|]")
@@ -62,7 +64,7 @@ def emit_dart_test_failure(
 
 
 def parallel_hint(code: int, tests: bool, command: list[str]) -> str:
-    if code == 0 or not tests or "-n auto" not in " ".join(command):
+    if code in {0, 5} or not tests or "-n auto" not in " ".join(command):
         return ""
     return (
         "\nThese tests ran in parallel (-n auto). If they pass serially, isolate "
@@ -827,7 +829,7 @@ def scanner_result(
     directory: Path,
     timeout: float,
 ) -> None:
-    """OSV writes findings only to its report, so a failed scan shows them from there."""
+    """A failed scan shows its findings from its report, as the tool prints none."""
     if passed:
         validate_scanner_report(scanner, gate, path, command, directory, timeout)
     elif scanner == "osv" and path.is_file():
@@ -835,6 +837,22 @@ def scanner_result(
             validate_scanner_report(scanner, gate, path, command, directory, timeout)
         except ValueError as error:
             print(error)
+    elif scanner in FINDING_READERS:
+        for line in FINDING_READERS[scanner](path)[:FINDING_LIMIT]:
+            print(line)
+
+
+def gitleaks_findings(path: Path) -> list[str]:
+    try:
+        results = json.loads(path.read_text())["runs"][0]["results"]
+        return [
+            f"{item['ruleId']} {place['artifactLocation']['uri']} "
+            f"{place['region']['startLine']}"
+            for item in results
+            for place in [item["locations"][0]["physicalLocation"]]
+        ]
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        return []
 
 
 def validate_gitleaks(path: Path) -> None:
@@ -926,4 +944,10 @@ SCANNERS = {
     "jscpd": validate_jscpd,
 }
 
+FINDING_LIMIT = 20
+FINDING_READERS = {
+    "gitleaks": gitleaks_findings,
+    "react-doctor": react_findings,
+    "fallow": fallow_findings,
+}
 SCANNER_LOGS = {"deptry": validate_deptry_log, "trivy": validate_trivy_log}
