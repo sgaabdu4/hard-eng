@@ -110,8 +110,8 @@ def gate_config(root: Path) -> GateConfig:
 
 def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
     import agent_hooks
-    from dependency_graph import parse_project_text, read_project_file
     from gate_config import json_file
+    from project_files import parse_project_text, read_project_file
 
     codex_config = root / ".codex/config.toml"
     if codex_config.exists():
@@ -349,7 +349,7 @@ def arb_language(arb: Path) -> str | None:
 
 
 def localization_outputs(root: Path, directory: Path) -> list[str]:
-    from dependency_graph import read_project_file
+    from project_files import read_project_file
 
     localization = directory / "l10n.yaml"
     if not localization.is_file():
@@ -428,7 +428,7 @@ def configure_dart_scanner(
 def configure_javascript(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
-    from dependency_graph import read_project_file
+    from project_files import read_project_file
     from project_setup import javascript_manager, native_typecheck
     from untrusted_input import typescript_config
 
@@ -711,8 +711,8 @@ def legacy_command_problem(root: Path, arguments: list[str]) -> str | None:
 
 def retired_config(root: Path) -> GateConfig | None:
     """Regenerate a pre-rebuild families configuration, keeping runnable commands."""
-    from dependency_graph import read_project_file
     from gate_config import validate_gate
+    from project_files import read_project_file
 
     legacy = read_project_file(root / "hard-eng.gates.json", root)
     if not isinstance(legacy, dict) or "families" not in legacy or "packages" in legacy:

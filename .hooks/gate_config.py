@@ -14,10 +14,9 @@ from dependency_graph import (
     expand_dependents,
     impact_inputs,
     is_workflow,
-    parse_project_text,
-    read_project_file,
     shared_only,
 )
+from project_files import parse_project_text, read_project_file
 
 type JsonValue = (
     str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]

@@ -7,8 +7,8 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
-from dependency_graph import read_project_file
 from gate_config import SOURCE_FILE, Gate, Group, JsonObject
+from project_files import read_project_file
 
 WORD_CHARACTER = re.compile(r"\w")
 DIGIT_RUN = re.compile(r"\d+")

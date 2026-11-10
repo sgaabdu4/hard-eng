@@ -10,7 +10,6 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 
 from coverage_sources import owned_files, source_roots
-from dependency_graph import read_project_file
 from fallow_report import fallow_report_path, validate_scanner_command
 from gate_config import (
     LANGUAGES,
@@ -26,6 +25,7 @@ from gate_config import (
     typescript_packages,
 )
 from hook_chain import is_own
+from project_files import read_project_file
 
 CARET_VERSION = re.compile(r"\^?(\d+)\.(\d+)\.(\d+)")
 REGEX_SPECIAL_CHARACTER = re.compile(r"([.\[\]()*+?{}|^$\\])")
