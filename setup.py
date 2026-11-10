@@ -936,7 +936,8 @@ def install(root: Path, previous: Path | None = None) -> None:
     if deleted:
         print("Removed old Hard Eng files: " + ", ".join(deleted))
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
-    print(commit_install(root, names, clean))
+    expected = {**changes, **dict.fromkeys(deleted)}
+    print(commit_install(root, names, clean, expected))
     print("Follow HE Plan to adapt the gates and configure shipping before delivery.")
     print(
         "Integration setup: .agents/skills/he/references/integrations.md — reuse existing choices; resolve only missing service targets and verify relevant real calls."

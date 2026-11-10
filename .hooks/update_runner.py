@@ -221,16 +221,12 @@ def committed_matches(root: Path, commit: str, expected: dict[str, str | None]) 
     return True
 
 
-def rebase_sessions(
-    root: Path, head: str, message: str, expected: dict[str, str | None] | None = None
-) -> bool:
+def rebase_sessions(root: Path, head: str, message: str) -> bool:
     """Sessions based on the update commit's parent must not count that commit as their work."""
     landed = landed_commit(root, head, message)
     if landed is None:
         return False
     commit, parent = landed
-    if expected is not None and not committed_matches(root, commit, expected):
-        return True
     for state in (root / ".hard-eng/sessions").glob("*.json"):
         try:
             saved = json.loads(state.read_text())

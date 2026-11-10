@@ -6,6 +6,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from conftest import commit, git, init
 from fallow_report import Report, validate_scanner_command
 from gate_config import (
     Gate,
@@ -930,3 +931,45 @@ def test_flutter_browser_library_coverage_comes_from_browser_tests(
     assert line_coverage(
         coverage, "dart-tests", tmp_path.resolve(), {web.resolve()}
     ) == (1, 1)
+
+
+def project_with_commit_hook(tmp_path: Path, hook: str) -> Path:
+    project = tmp_path / "project"
+    init(project)
+    (project / "package.json").write_text('{"private":true}')
+    (project / "bun.lock").write_text('{"lockfileVersion": 1}\n')
+    commit(project, "project")
+    pre_commit = project / ".git/hooks/pre-commit"
+    pre_commit.write_text(hook)
+    pre_commit.chmod(0o755)
+    return project
+
+
+def test_install_commit_changed_by_a_project_hook_is_undone_and_reported(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = project_with_commit_hook(
+        tmp_path,
+        "#!/bin/sh\necho '<!-- formatted -->' >> AGENTS.md\ngit add AGENTS.md\n",
+    )
+    head = git(project, "rev-parse", "HEAD")
+    installer.install(project)
+    output = capsys.readouterr().out
+    assert "Committed the installed files locally without pushing." not in output
+    reason = output.split("Installed files are not committed (")[1].split(")")[0]
+    assert "AGENTS.md" in reason
+    assert git(project, "rev-parse", "HEAD") == head
+    assert "<!-- formatted -->" not in (project / "AGENTS.md").read_text()
+    assert git(project, "diff", "--cached", "--name-only") == ""
+    assert (project / ".hooks/hard-eng.py").is_file()
+
+
+def test_install_commit_unchanged_by_a_project_hook_is_kept(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = project_with_commit_hook(tmp_path, "#!/bin/sh\nexit 0\n")
+    head = git(project, "rev-parse", "HEAD")
+    installer.install(project)
+    output = capsys.readouterr().out
+    assert "Committed the installed files locally without pushing." in output
+    assert git(project, "rev-parse", "HEAD") != head
