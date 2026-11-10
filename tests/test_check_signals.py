@@ -43,7 +43,7 @@ time.sleep(60)
 def start_check(
     tmp_path: Path,
     completed_plan: str,
-    config: object,
+    shared: list[dict[str, object]],
     stdout: int | IO[str],
     driver: str | None = None,
 ) -> tuple[subprocess.Popen[bytes], Path]:
@@ -57,7 +57,9 @@ def start_check(
     for name in ("PRODUCT.md", "DESIGN.md"):
         (project / name).write_text((SOURCE / name).read_text())
     (project / "main.py").write_text("")
-    (project / "hard-eng.gates.json").write_text(json.dumps(config))
+    (project / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": shared})
+    )
     arguments = ["-c", driver] if driver else [str(hooks / "hard-eng.py"), "check"]
     check = subprocess.Popen(
         [sys.executable, "-c", DEFAULT_SIGHUP, *arguments],
@@ -80,8 +82,7 @@ def test_a_stopped_check_stops_its_gates(
     tmp_path: Path, completed_plan: str, signal_number: int
 ) -> None:
     slow = gate("slow", SLOW_GATE, role="custom", parallel=True)
-    config = {"packages": [], "shared": [slow]}
-    check, marker = start_check(tmp_path, completed_plan, config, subprocess.DEVNULL)
+    check, marker = start_check(tmp_path, completed_plan, [slow], subprocess.DEVNULL)
     stopped = False
     try:
         check.send_signal(signal_number)
@@ -107,11 +108,10 @@ def test_a_stopped_check_says_that_it_was_stopped(
             "coverage": "coverage/coverage.json",
         },
     }
-    config = {"packages": [], "shared": []}
     log = tmp_path / "check.log"
     with log.open("w") as stdout:
         check, marker = start_check(
-            tmp_path, completed_plan, config, stdout, TESTS_DRIVER.format(gate=slow)
+            tmp_path, completed_plan, [], stdout, TESTS_DRIVER.format(gate=slow)
         )
         try:
             check.send_signal(signal.SIGTERM)
