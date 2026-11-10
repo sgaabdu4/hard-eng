@@ -40,6 +40,10 @@ def failure_summary(path: Path) -> str | None:
         return None
     if not any(event.get("type") in {"testStart", "testDone"} for event in events):
         return unstructured_reason(path)
+    return test_failure(events)
+
+
+def test_failure(events: list[JsonObject]) -> str | None:
     names: dict[int, str] = {}
     places: dict[int, str] = {}
     prints: dict[int, list[str]] = {}
