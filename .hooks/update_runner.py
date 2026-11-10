@@ -634,19 +634,11 @@ def locked_update(root: Path, repair: bool = False) -> str:
 
 
 def update_attempt(root: Path, revision: str) -> str:
-    """What a refused update would see again: any commit or local edit changes it."""
-    digest = hashlib.sha256()
-    for command in (["rev-parse", "HEAD"], ["diff", "HEAD", "--binary"]):
-        digest.update(subprocess.check_output(["git", *command], cwd=root))
-    listing = subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=root
+    """What a refused update would see again: the base tip it builds on and the local inputs."""
+    digest = hashlib.sha256(
+        subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root)
     )
-    names = [
-        os.fsdecode(name)
-        for name in listing.split(b"\0")
-        if name and not name.startswith(b".hard-eng/")
-    ]
-    for name in [*names, *LOCAL_INPUTS]:
+    for name in LOCAL_INPUTS:
         path = root / name
         if path.is_file():
             digest.update(name.encode() + b"\0" + path.read_bytes())
