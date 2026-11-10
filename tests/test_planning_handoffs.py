@@ -140,7 +140,7 @@ def test_native_stop_only_pauses_ready_approval(
         (True, "Approval", "user must choose the affected workflow"),
     ],
 )
-def test_draft_stop_requires_handoff_before_exempting_questions(
+def test_draft_stop_blocks_until_the_plan_has_a_valid_handoff(
     repository: Path,
     completed_plan: str,
     unchanged: bool,

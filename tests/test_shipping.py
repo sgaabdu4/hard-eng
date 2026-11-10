@@ -532,7 +532,7 @@ def test_ready_rejects_changed_pr_head_during_final_recheck(
         {"status": "failed", "revision": "1" * 40},
     ],
 )
-def test_a_delivery_check_that_passes_with_the_old_revision_is_refused(
+def test_a_delivery_check_must_report_passed_for_the_new_revision(
     tmp_path: Path, answer: dict[str, str]
 ) -> None:
     command = [
@@ -769,6 +769,21 @@ def _check_failed(push: MergedPush) -> None:
     ]
 
 
+def _check_missing(push: MergedPush) -> None:
+    push.responses[f"commits/{push.head}/check-runs?per_page=100&filter=all"] = [
+        {"total_count": 0, "check_runs": []}
+    ]
+
+
+def _check_pending(push: MergedPush) -> None:
+    push.responses[f"commits/{push.head}/check-runs?per_page=100&filter=all"] = [
+        {
+            "total_count": 1,
+            "check_runs": [_check(push.head, status="in_progress", conclusion=None)],
+        }
+    ]
+
+
 def _query_failure(push: MergedPush) -> None:
     del push.responses[f"commits/{_native(push.root, 'rev-parse', 'HEAD')}/pulls"]
 
@@ -795,6 +810,8 @@ def _uncommitted_change(push: MergedPush) -> None:
         _different_tree,
         _base_not_contained,
         _check_failed,
+        _check_missing,
+        _check_pending,
         _query_failure,
         _no_merged_pull_request,
         _pull_request_into_another_base,

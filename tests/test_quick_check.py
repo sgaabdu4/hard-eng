@@ -12,7 +12,7 @@ QUICK_ROLES = ("format", "lint", "types")
 SLOW_ROLES = ("complexity", "dead-code", "custom")
 
 
-def test_quick_set_is_chosen_by_role(runner: ModuleType) -> None:
+def test_quick_set_leaves_out_slow_and_unlabelled_gates(runner: ModuleType) -> None:
     slow = [
         "tests",
         "performance",

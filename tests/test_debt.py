@@ -66,10 +66,13 @@ def test_a_later_adoption_only_drops_lines(tmp_path: Path) -> None:
     assert debt.load(tmp_path) == {"./lint": {"a.py:N x": 1}}
 
 
+NEVER_DEBT = ["tests", "lockfiles", "secrets-files", "secrets-history"]
+
+
+@pytest.mark.parametrize("role", NEVER_DEBT)
 def test_tests_lockfiles_and_secrets_never_become_debt(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, role: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    role = "lockfiles"
     check: Gate = {"name": role, "role": role, "command": ["tool"]}
     group: Group = {"path": ".", "checks": [check]}
     assert debt.record(tmp_path, [group], {f"./{role}"}, {f"./{role}": "failed\n"}) == 1
@@ -77,11 +80,11 @@ def test_tests_lockfiles_and_secrets_never_become_debt(
     assert "must pass before adoption" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("role", NEVER_DEBT)
 def test_hand_written_debt_never_passes_tests_lockfiles_or_secrets(
-    tmp_path: Path,
+    tmp_path: Path, role: str
 ) -> None:
     """HE-DEBT-SHRINK-ONLY: an entry written by hand for one of these gates changes nothing."""
-    role = "tests"
     check: Gate = {"name": role, "role": role, "command": ["tool"]}
     group: Group = {"path": ".", "checks": [check]}
     written = {"version": 1, "gates": {f"./{role}": {"failed": 1}}}
