@@ -4,7 +4,7 @@
 
 **A workflow for one developer who builds with coding agents.**
 
-Hard Eng adds skills, hooks and checks to your repository. Your agent (Claude Code or Codex) then takes each task through four stages. A fifth stage, Learn, runs a retro at the end of each task, and again when a failure repeats or a decision must last.
+Hard Eng adds skills, hooks and checks to your repository. Your agent (Claude Code or Codex) then takes each task through four stages. A fifth stage, Learn, runs a retro at the end of each task. It also runs when a failure repeats or a decision must last.
 
 ```mermaid
 flowchart LR
@@ -204,7 +204,8 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  A[Failure or decision] --> B{What kind?}
+  A[Task end, failure or decision] --> B{What kind?}
+  B -->|Task end| R[Retro: sort each failed check and correction]
   B -->|One-off| C[Continue]
   B -->|Repeated failure| D[Fix the cause; add a check that catches it]
   B -->|Lasting decision| E[Write a short decision record]
@@ -269,7 +270,7 @@ Skills guide the agent. Hooks and checks enforce. Plan checks validate the plan'
 | CI | Runs every configured check. Fails the job on any failure. |
 | Every `check` | Enforces [HE-NO-SWITCH-OFF](.agents/skills/he/references/requirements.md#he-no-switch-off), [HE-COMMENT-LINES](.agents/skills/he/references/requirements.md#he-comment-lines) and the [requirement registry](.agents/skills/he/references/requirements.md). |
 
-Shipping blocks when the installed Hard Eng is out of date or its version cannot be confirmed. It names the next step: run `update-pr`, fix the failing update PR, wait for it, or rebase after it merges.
+Before the merge, shipping blocks when the installed Hard Eng is out of date or its version cannot be confirmed. It names the next step: run `update-pr`, fix the failing update PR, wait for it, or rebase after it merges.
 
 ```mermaid
 flowchart LR
