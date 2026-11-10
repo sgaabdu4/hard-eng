@@ -29,9 +29,10 @@ Load in every run, for the schedule check and the pause check, and to start a wo
 
 ### Another machine holds the claim
 
-`check` printed `heldElsewhere` → the coordinator runs on another machine now. Delete this host's `timer` and `wake` (T3 Code: `delete_scheduled_task`; other hosts: remove the OS timer), end the run, and tell the owner once, with the `heldSince` time. This host stays off until the owner orders a move back.
+`check` printed `heldElsewhere` → the coordinator runs on another machine now. Delete this host's `timer`, `wake` and `alarm` (T3 Code: `delete_scheduled_task`; other hosts: remove the OS timer), end the run, and tell the owner once, with the `heldSince` time. This host stays off until the owner orders a move back.
 
 Move to a new machine = only on the owner's order, on the new machine, in this order:
+
 1. Save the key and token there ([missing key or token](#missing-key-or-token)).
 2. Run `takeover`; it prints `tookOver`.
 3. Run the skill; the host's schedule check creates `timer` and `wake` there.

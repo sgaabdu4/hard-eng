@@ -708,7 +708,7 @@ def test_a_public_remote_gets_no_memory(
     assert other.run("check").code == 0
 
 
-@pytest.mark.parametrize("leak", [KEY, TOKEN, "0123456789abcdef0123456789abcdef"])
+@pytest.mark.parametrize("leak", [KEY, TOKEN, "ab" * 16])
 def test_memory_with_a_key_is_never_pushed(
     project: Project, monkeypatch: pytest.MonkeyPatch, leak: str
 ) -> None:
@@ -723,6 +723,34 @@ def test_memory_with_a_key_is_never_pushed(
     assert "notes.md" in str(refused.payload["error"])
     assert leak not in refused.text
     assert claim_commit(project) == before
+
+
+def test_a_lost_local_record_is_rebuilt_from_the_claim(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    (project.state / "claim-record").unlink()
+    note = make_note(tmp_path)
+    assert project.run("comment", "1", str(note)).code == 1
+    held = claim_commit(project)
+    again = project.run("check")
+    assert again.code == 0 and "skipped" not in again.payload
+    assert claim_commit(project) == held
+    assert project.run("comment", "1", str(note)).code == 0
+
+
+def test_unchanged_memory_pushes_nothing(
+    project: Project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(load_claim(), "is_private", private_remote)
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    assert project.run("check").code == 0
+    taken = claim_commit(project)
+    assert project.finish().payload == {"finished": True}
+    saved = claim_commit(project)
+    assert saved != taken
+    assert project.run("finish", "again").payload == {"finished": False}
+    assert claim_commit(project) == saved
 
 
 def test_an_unreachable_origin_stops_the_run(project: Project) -> None:

@@ -138,7 +138,7 @@ def fetch_commit(place: Place, sha: str) -> None:
 
     if present():
         return
-    network(place, "fetch", "--no-tags", "--no-write-fetch-head", "origin", REF)
+    network(place, "fetch", "--no-tags", "origin", REF)
     if not present():
         raise TrelloError("The claim could not be read from origin; run it again")
 
