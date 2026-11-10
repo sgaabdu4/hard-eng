@@ -49,12 +49,63 @@ def decimate_findings(path: Path) -> list[str]:
         return []
 
 
+def repository_root(path: Path) -> Path | None:
+    return next(
+        (
+            parent
+            for parent in path.resolve().parents
+            if (parent / "hard-eng.gates.json").is_file()
+        ),
+        None,
+    )
+
+
+def scanned_by(path: Path, root: Path) -> tuple[Path, list[str]] | None:
+    config = json.loads((root / "hard-eng.gates.json").read_text())
+    for group in config["packages"]:
+        folder = root / group["path"]
+        for gate in group["checks"]:
+            command = gate["command"]
+            report = gate.get("report")
+            if (
+                command[:1] == ["jscpd"]
+                and report
+                and (folder / report["path"]).resolve() == path.resolve()
+            ):
+                scanned = command[1:]
+                end = next(
+                    (i for i, argument in enumerate(scanned) if argument[:1] == "-"),
+                    len(scanned),
+                )
+                return folder, scanned[:end]
+    return None
+
+
+def named_from_root(name: str, root: Path, folder: Path, scanned: list[str]) -> str:
+    found = [
+        (folder / entry / name) if (folder / entry / name).is_file() else folder / entry
+        for entry in scanned
+        if (folder / entry / name).is_file()
+        or ((folder / entry).is_file() and Path(entry).name == name)
+    ]
+    return " or ".join(str(item.relative_to(root)) for item in found) or name
+
+
 def jscpd_findings(path: Path) -> list[str]:
+    root = repository_root(path)
+    try:
+        place = scanned_by(path, root) if root else None
+    except READ_ERRORS:
+        place = None
+
+    def shown(name: str) -> str:
+        return named_from_root(name, root, *place) if root and place else name
+
     try:
         return [
             "copied code "
             + " ".join(
-                f"{copy['name']}:{copy['start']}-{copy['end']}"
+                f"{shown(copy['name'])}:{copy['start']}-{copy['end']}"
                 for copy in (clone["firstFile"], clone["secondFile"])
             )
             for clone in json.loads(path.read_text())["duplicates"]

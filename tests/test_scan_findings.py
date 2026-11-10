@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 import reports
+import scan_findings
 from test_report_findings import failed
 
 IMPORT_LINTER_BROKEN = """
@@ -156,6 +157,52 @@ def test_a_failed_jscpd_gate_names_every_copy_without_its_code(
     output = failed("jscpd", path, tmp_path, capsys)
     assert output.splitlines() == ["scan: copied code a.py:1-10 b.py:1-10"]
     assert "def total" not in output
+
+
+def clone_between(first: tuple[str, int], second: tuple[str, int]) -> dict[str, object]:
+    def copy(name: str, start: int) -> dict[str, object]:
+        return {"name": name, "start": start, "end": start + 15}
+
+    return {"firstFile": copy(*first), "secondFile": copy(*second)}
+
+
+def scanned_tree(root: Path, group: str) -> Path:
+    command = ["jscpd", "src", "tests", "--format", "python", "--reporters", "json"]
+    gate = {
+        "name": "duplicates",
+        "command": [*command, "--output", "coverage/jscpd"],
+        "report": {"type": "jscpd", "path": "coverage/jscpd/jscpd-report.json"},
+    }
+    folder = root / group
+    for name in ("src/pkg/a.py", "src/pkg/b.py", "tests/pkg/a.py"):
+        (folder / name).parent.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_text("x = 1\n")
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"shared": [], "packages": [{"path": group, "checks": [gate]}]})
+    )
+    clones = [
+        clone_between(("pkg/a.py", 1), ("pkg/b.py", 3)),
+        clone_between(("pkg/a.py", 1), ("pkg/a.py", 1)),
+    ]
+    (folder / "coverage/jscpd").mkdir(parents=True)
+    output = folder / "coverage/jscpd"
+    return report_file(output, "jscpd-report.json", {"duplicates": clones})
+
+
+@pytest.mark.parametrize(("group", "prefix"), [("shop", "shop/"), (".", "")])
+def test_copied_code_lines_name_paths_from_the_repository_root(
+    tmp_path: Path, group: str, prefix: str
+) -> None:
+    path = scanned_tree(tmp_path, group)
+    both = f"{prefix}src/pkg/a.py or {prefix}tests/pkg/a.py"
+    assert scan_findings.jscpd_findings(path) == [
+        f"copied code {both}:1-16 {prefix}src/pkg/b.py:3-18",
+        f"copied code {both}:1-16 {both}:1-16",
+    ]
+    (tmp_path / "hard-eng.gates.json").unlink()
+    assert scan_findings.jscpd_findings(path)[0] == (
+        "copied code pkg/a.py:1-16 pkg/b.py:3-18"
+    )
 
 
 def test_a_failed_import_linter_gate_prints_its_broken_contracts(
