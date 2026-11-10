@@ -73,12 +73,33 @@ def is_plan_path(path: Path) -> bool:
 CAPTURES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".mp4", ".mov", ".webm"}
 
 
+def plan_files(root: Path) -> list[Path]:
+    names = subprocess.check_output(
+        [
+            "git",
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            ":(icase)plan.md",
+            ":(icase,glob)features/**/plan.md",
+        ],
+        cwd=root,
+        text=True,
+    )
+    return [
+        root / name
+        for name in sorted(set(names.split("\0")) - {""})
+        if is_plan_path(Path(name))
+        and (root / name).is_file()
+        and not (root / name).is_symlink()
+    ]
+
+
 def plan_folders(root: Path) -> set[Path]:
-    return {
-        path.parent.relative_to(root)
-        for path in repository_files(root)
-        if is_plan_path(path.relative_to(root))
-    } - {Path(".")}
+    return {path.parent.relative_to(root) for path in plan_files(root)} - {Path(".")}
 
 
 def is_plan_capture(name: str, folders: set[Path]) -> bool:
@@ -274,9 +295,7 @@ def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, lis
 
 
 def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
-    paths = [
-        path for path in repository_files(root) if is_plan_path(path.relative_to(root))
-    ]
+    paths = plan_files(root)
     selected = [path for path in paths if str(path.relative_to(root)) in changed]
     messages = []
     unfinished = False
@@ -315,9 +334,7 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
 
 def build_in_progress(root: Path, changed: set[str]) -> bool:
     """Ready plans with pending verification are mid-build, not finished."""
-    paths = [
-        path for path in repository_files(root) if is_plan_path(path.relative_to(root))
-    ]
+    paths = plan_files(root)
     selected = [path for path in paths if str(path.relative_to(root)) in changed]
     try:
         contents = [path.read_text() for path in selected or paths]
@@ -572,9 +589,7 @@ def plan_tests(root: Path, base: str | None) -> set[str]:
     changed = (changed_files(root, base or "HEAD") or set()) | released_plans(
         root, base
     )
-    paths = [
-        path for path in repository_files(root) if is_plan_path(path.relative_to(root))
-    ]
+    paths = plan_files(root)
     names = set()
     for path in applicable_plans(root, paths, changed):
         content = path.read_text()
@@ -618,11 +633,9 @@ def validate_plans(
             )
             return stage
     changed |= released_plans(root, base)
-    paths = [
-        path for path in repository_files(root) if is_plan_path(path.relative_to(root))
-    ]
+    paths = plan_files(root)
     applicable = applicable_plans(root, paths, changed)
-    if not applicable and explicit_stage:
+    if not applicable and explicit_stage and not changed:
         applicable = paths
     if (
         (changed != set() or explicit_stage)

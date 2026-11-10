@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/failures.py\" 2>/dev/null || true",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.hooks/failures.py\" 2>/dev/null || true",
             "timeout": 5
           }
         ]
@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/polling.py\" 2>/dev/null || true",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.hooks/polling.py\" 2>/dev/null || true",
             "timeout": 5
           }
         ]
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/previews.py\" 2>/dev/null || true",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.hooks/previews.py\" 2>/dev/null || true",
             "timeout": 5
           }
         ]

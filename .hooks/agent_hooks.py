@@ -239,19 +239,21 @@ def owned_hook_entry(
 
 
 HOOK_TIMEOUTS = {"session": 60, "stop": 3600}
-POLL_COMMAND = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/polling.py" 2>/dev/null || true'
+OLD_TOOL_COMMAND = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/{}.py" 2>/dev/null || true'
+TOOL_COMMAND = 'python3 "$CLAUDE_PROJECT_DIR/.hooks/{}.py" 2>/dev/null || true'
+POLL_COMMAND = TOOL_COMMAND.format("polling")
 POLL_HOOK: JsonObject = {
     "matcher": "Bash",
     "hooks": [{"type": "command", "command": POLL_COMMAND, "timeout": 5}],
 }
-PREVIEW_COMMAND = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/previews.py" 2>/dev/null || true'
+PREVIEW_COMMAND = TOOL_COMMAND.format("previews")
 PREVIEW_HOOK: JsonObject = {
     "matcher": "Artifact",
     "hooks": [{"type": "command", "command": PREVIEW_COMMAND, "timeout": 5}],
 }
 CLAUDE_TOOL_HOOKS = [POLL_HOOK, PREVIEW_HOOK]
 # Its own script: the hard-eng.py entry point loads every gate module first.
-FAILURE_COMMAND = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.hooks/failures.py" 2>/dev/null || true'
+FAILURE_COMMAND = TOOL_COMMAND.format("failures")
 FAILURE_HOOK: JsonObject = {
     "hooks": [{"type": "command", "command": FAILURE_COMMAND, "timeout": 5}]
 }
@@ -259,6 +261,15 @@ CODEX_HOOK_STATUS = {
     "session": "Hard Eng: updating project setup",
     "stop": "Hard Eng: verifying changes",
 }
+
+
+def _old_tool_entry(script: str, matcher: str | None) -> JsonObject:
+    handler: JsonObject = {
+        "type": "command",
+        "command": OLD_TOOL_COMMAND.format(script),
+        "timeout": 5,
+    }
+    return {"matcher": matcher, "hooks": [handler]} if matcher else {"hooks": [handler]}
 
 
 def _remove_owned_entry(hooks: JsonObject, native: str, owned: JsonObject) -> None:
@@ -286,6 +297,13 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
             "hooks": [{"type": "command", "command": call, "timeout": 10}]
         }
         _remove_owned_entry(hooks, native, owned)
+    if agent == "claude":
+        for native, script, matcher in (
+            ("PreToolUse", "polling", "Bash"),
+            ("PreToolUse", "previews", "Artifact"),
+            ("PostToolUseFailure", "failures", None),
+        ):
+            _remove_owned_entry(hooks, native, _old_tool_entry(script, matcher))
     if agent == "codex":
         for event in CODEX_HOOK_STATUS:
             _remove_owned_entry(
@@ -565,12 +583,14 @@ def session_context(root: Path, payload: JsonObject) -> str:
 
     if note := restore_note(root):
         messages.append(note)
+    if os.name == "posix":
+        from process_group import start_process_scan, stop_idle_codex_brokers
+
+        scan = start_process_scan()
     messages.append(gate_status(root))
     if os.name == "posix":
-        from process_group import stop_idle_codex_brokers
-
         try:
-            brokers, processes = stop_idle_codex_brokers()
+            brokers, processes = stop_idle_codex_brokers(scan())
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             messages.append(f"Idle Codex broker cleanup failed: {error}")
             brokers = processes = 0
@@ -693,6 +713,13 @@ def show_decisions(root: Path, names: list[str], state: Path | None) -> str:
         "\nAccepted decisions below apply to changed files; confirm each, fix if not.\n\n"
         + "\n\n".join(pending.values())
     )
+
+
+def check_is_running(root: Path) -> bool:
+    from process_group import check_lock_file
+
+    with check_lock_file(root) as (_, held):
+        return held
 
 
 def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
@@ -902,6 +929,11 @@ def checked_changes(
                 "systemMessage": "Hard Eng: unchanged since last passing check; not rerun."
             },
         )
+    if check_is_running(root):
+        return {
+            "decision": "block",
+            "reason": "Hard Eng: another Hard Eng check holds this checkout's lock, so this turn's changes are not checked; that check may predate your last edits. You started it after your last edit → read its exit notice + fix its findings. Else → start `python3 .hooks/hard-eng.py check` in the background (it waits its turn) + read its exit notice. Don't claim done.",
+        }
     returncode, output = run_check(root, base, building)
     decisions = show_decisions(root, changed.splitlines(), state)
     if returncode == 0:

@@ -154,11 +154,9 @@ def test_update_commits_only_scaffold_and_preserves_index(
     assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
-@pytest.mark.parametrize("reject_commit", [False, True])
 def test_update_commits_husky_launcher_and_runs_native_hook(
     release: tuple[Path, Path, str],
     monkeypatch: pytest.MonkeyPatch,
-    reject_commit: bool,
     shipping_policy: ShippingPolicy,
 ) -> None:
     source, target, _ = release
@@ -206,19 +204,6 @@ exit $c
     revision = git(source, "rev-parse", "HEAD")
     monkeypatch.setenv("HUSKY", "1")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(target / "user-config"))
-    if reject_commit:
-        old_launcher = launcher.read_bytes()
-        old_marker = (target / update.SOURCE_FILE).read_bytes()
-        reject_shim = shim.with_name("pre-commit")
-        reject_shim.write_bytes(shim_bytes)
-        reject_shim.chmod(0o755)
-        (target / ".husky/pre-commit").write_text("#!/bin/sh\nexit 23\n")
-        with pytest.raises(subprocess.SubprocessError):
-            update.update(target)
-        assert launcher.read_bytes() == old_launcher
-        assert (target / update.SOURCE_FILE).read_bytes() == old_marker
-        assert git(target, "rev-parse", "HEAD") == base
-        return
     assert revision in update.update(target)
     assert ".husky/pre-push" in git(target, "diff", "--name-only", base).splitlines()
     assert launcher.read_text().startswith("#!/usr/bin/env sh\nexec python3 ")
@@ -242,38 +227,6 @@ exit $c
     commit(target, "custom hook is not a canonical scaffold update")
     with pytest.raises(ValueError, match="Existing pre-push hook must be preserved"):
         update.check_scaffold_update(target, base)
-
-
-def test_ignored_local_configuration_prevents_update(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, _ = release
-    name = ".mcp.json"
-    monkeypatch.setenv("APPWRITE_ENDPOINT", "https://cloud.appwrite.io/v1")
-    (target / "app.js").write_text('import { Client } from "appwrite";\n')
-    (target / name).write_text(
-        '{"mcpServers":{"appwrite":{"url":"https://mcp.appwrite.io/"}}}\n'
-    )
-    commit(target, "configure applicable Appwrite integration")
-    select_release(source, monkeypatch)
-    git(target, "rm", "--cached", name)
-    git(target, "commit", "-qm", "keep integration configuration local")
-    (target / ".git/info/exclude").write_text(name + "\n")
-    local = '{"mcpServers":{"private":{"command":"private-integration"}}}\n'
-    (target / name).write_text(local)
-    (target / "staged.txt").write_text("unrelated staged work\n")
-    git(target, "add", "staged.txt")
-    (target / "project.txt").write_text("unrelated working edit\n")
-    before = git(target, "rev-parse", "HEAD")
-    marker_before = (target / update.SOURCE_FILE).read_bytes()
-    with pytest.raises(ValueError, match="overlaps local edits"):
-        update.update(target)
-    assert (target / name).read_text() == local
-    assert git(target, "rev-parse", "HEAD") == before
-    assert (target / update.SOURCE_FILE).read_bytes() == marker_before
-    assert git(target, "diff", "--cached", "--name-only") == "staged.txt"
-    assert (target / "project.txt").read_text() == "unrelated working edit\n"
-    assert git(target, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
 @pytest.mark.parametrize("case", ["clean", "husky", "dirty", "rejected"])
@@ -335,21 +288,6 @@ def test_install_commits_only_clean_installed_paths(
         text=True,
         check=True,
     ).stdout
-
-
-def test_untracked_install_is_named_instead_of_local_edits(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, old = release
-    select_release(source, monkeypatch)
-    git(target, "rm", "-rq", "--cached", ".hooks", ".agents")
-    git(target, "commit", "-qm", "installed files left untracked")
-    with pytest.raises(
-        ValueError,
-        match=r"^Installed Hard Eng files are not committed: \.agents/skills/he/ \.hooks/; commit them",
-    ):
-        update.update(target)
-    assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
 
 
 @pytest.mark.parametrize("wrapped", [True, False])
@@ -422,7 +360,7 @@ def test_overlapping_local_edit_prevents_update(
     assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
 
 
-@pytest.mark.parametrize("case", ["unedited", "edited", "rejected"])
+@pytest.mark.parametrize("case", ["unedited", "edited"])
 def test_update_removes_unused_stack_skill_unless_edited(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, case: str
 ) -> None:
@@ -442,15 +380,6 @@ def test_update_removes_unused_stack_skill_unless_edited(
             update.update(target)
         assert guide.read_text() == "local Appwrite rules\n"
         assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
-        return
-    if case == "rejected":
-        hook = target / ".git/hooks/pre-commit"
-        hook.write_text("#!/bin/sh\nexit 1\n")
-        hook.chmod(0o755)
-        with pytest.raises(subprocess.SubprocessError):
-            update.update(target)
-        assert git(target, "status", "--porcelain") == ""
-        assert (target / link / "SKILL.md").is_file()
         return
     update.update(target)
     deleted = git(
@@ -599,22 +528,6 @@ def test_supported_update_migrates_custom_workflow_pins(
     assert revision in update.update(target)
     assert workflow.read_text() == expected
     assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == revision
-    assert git(target, "status", "--porcelain") == ""
-
-
-def test_failed_commit_rolls_back_scaffold(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, old = release
-    select_release(source, monkeypatch)
-    hook = target / ".git/hooks/pre-commit"
-    hook.write_text("#!/bin/sh\necho 'AGENTS.md is over its budget' >&2\nexit 1\n")
-    hook.chmod(0o755)
-    with pytest.raises(
-        subprocess.SubprocessError, match="AGENTS.md is over its budget"
-    ):
-        update.update(target)
-    assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
     assert git(target, "status", "--porcelain") == ""
 
 

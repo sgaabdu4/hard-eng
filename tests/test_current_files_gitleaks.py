@@ -423,6 +423,45 @@ def test_current_files_omits_a_normal_unstaged_tracked_deletion(
     assert "deleted.txt" not in scanned(tmp_path, project, monkeypatch)
 
 
+def test_a_folder_reached_by_two_links_is_listed_once_and_copied_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = repository(tmp_path)
+    (project / "real").mkdir()
+    (project / "real/data.txt").write_text("linked content\n")
+    os.symlink("real", project / "first-link")
+    os.symlink("real", project / "second-link")
+    os.symlink("tracked.txt", project / "tracked-link")
+    os.symlink("tracked.txt", project / "other-tracked-link")
+    git(project, "add", ".")
+    git(project, "commit", "-qm", "links")
+    (project / "generated").mkdir()
+    (project / "generated/secret.txt").write_text("local secret\n")
+    os.symlink("generated/secret.txt", project / "ignored-target-link")
+    listings: list[Path] = []
+    real_run = subprocess.run
+
+    def spy(
+        command: list[str], *, cwd: Path, check: bool, capture_output: bool, text: bool
+    ) -> subprocess.CompletedProcess[str]:
+        if command[:2] == ["git", "ls-files"]:
+            listings.append(cwd)
+        return real_run(
+            command, cwd=cwd, check=check, capture_output=capture_output, text=text
+        )
+
+    monkeypatch.setattr(gitleaks_scan.subprocess, "run", spy)
+    copy = tmp_path / "copy"
+    gitleaks_scan.copy_scan_tree(project, copy)
+    for folder in ("real", "first-link", "second-link"):
+        assert (copy / folder / "data.txt").read_text() == "linked content\n"
+    assert (copy / "tracked-link").read_text() == "committed\n"
+    assert (copy / "other-tracked-link").read_text() == "committed\n"
+    assert not (copy / "ignored-target-link").exists()
+    assert listings.count((project / "real").resolve()) == 1
+    assert listings.count(project.resolve()) <= 2
+
+
 def test_current_files_rejects_an_absolute_report_path_through_a_symlink(
     tmp_path: Path,
 ) -> None:

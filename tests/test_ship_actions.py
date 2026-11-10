@@ -608,9 +608,11 @@ def update_pull(*checks: dict[str, str]) -> str:
     ],
     ids=["no-pr", "failing-pr", "pending-pr", "merged"],
 )
+@pytest.mark.parametrize("stage", ["ready", "merge"])
 def test_shipping_a_stale_install_names_the_update_pr_step(
     delivered_worktree: tuple[Path, Shipment],
     monkeypatch: pytest.MonkeyPatch,
+    stage: str,
     answer: str,
     instruction: str,
 ) -> None:
@@ -629,10 +631,27 @@ def test_shipping_a_stale_install_names_the_update_pr_step(
     remote = Mock()
     monkeypatch.setattr(ship_actions, "gh", remote)
     with pytest.raises(ValueError, match="freshness") as blocked:
-        ship_actions.run(root, "PLAN.md", shipment.pr_url, "merge", None, "rebase")
+        ship_actions.run(root, "PLAN.md", shipment.pr_url, stage, None, "rebase")
     assert instruction in str(blocked.value)
     assert "Shipping stays blocked" in str(blocked.value)
     remote.assert_not_called()
+
+
+def test_a_newer_release_after_the_merge_does_not_block_delivered_or_cleanup(
+    delivered_worktree: tuple[Path, Shipment], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, shipment = delivered_worktree
+    marker = root / ".hooks/hard-eng-source.json"
+    marker.parent.mkdir()
+    marker.write_text(json.dumps({"revision": "a" * 40}))
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value="b" * 40))
+    monkeypatch.setattr(update_pr, "gh", Mock(return_value="[]"))
+    monkeypatch.setattr(ship_actions, "verify", Mock(return_value=shipment))
+    for stage in ("delivered", "cleanup"):
+        assert (
+            ship_actions.run(root, "PLAN.md", shipment.pr_url, stage, None, None) == 0
+        )
+    assert not shipment.root.exists()
 
 
 @pytest.mark.parametrize(

@@ -85,6 +85,27 @@ def test_ci_usage_bills_started_jobs_in_whole_minutes(
     assert "queued" not in output and "deploy" not in output
 
 
+def test_self_hosted_jobs_are_not_billed(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output = _usage(
+        monkeypatch,
+        capsys,
+        [
+            (
+                "push",
+                [
+                    _job("own", 210, labels=["Self-Hosted", "macOS", "ARM64"]),
+                    _job("hosted", 61, labels=["macos-15"]),
+                ],
+            )
+        ],
+    )
+    assert "Billed 20 min" in output
+    assert "1 self-hosted jobs are not billed" in output
+    assert "     0     1       210    210  CI / push / own" in output
+
+
 def test_ci_usage_reports_jobs_repeated_on_push_and_pull_request(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

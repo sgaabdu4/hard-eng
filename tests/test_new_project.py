@@ -1,7 +1,9 @@
 """`setup.sh --new STACK`: official scaffold, Hard Eng starter files, exact pins, one commit."""
 
 import json
+import shutil
 import subprocess
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -15,10 +17,22 @@ def test_new_project_refuses_a_repository_that_holds_files(tmp_path: Path) -> No
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "notes.txt").write_text("keep\n")
     with pytest.raises(
-        ValueError, match="needs an empty repository; it holds notes.txt"
+        ValueError,
+        match=r"or one with only plain README, license and ignore files \(no links\); it holds notes.txt",
     ):
         new_project.create(tmp_path, "vite")
     assert sorted(path.name for path in tmp_path.iterdir()) == [".git", "notes.txt"]
+
+
+def test_new_project_refuses_a_linked_ignore_file(tmp_path: Path) -> None:
+    root, outside = tmp_path / "repository", tmp_path / "shared-ignore"
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    outside.write_text("secret.env\n")
+    (root / ".gitignore").symlink_to(outside)
+    with pytest.raises(ValueError, match="needs an empty repository"):
+        new_project.create(root, "vite")
+    assert outside.read_text() == "secret.env\n"
+    assert (root / ".gitignore").is_symlink()
 
 
 def test_new_project_refuses_a_folder_inside_another_repository(
@@ -96,15 +110,24 @@ def test_flutter_pins_each_any_constraint_to_the_resolved_version() -> None:
 
 
 def created(
-    root: Path, monkeypatch: pytest.MonkeyPatch, stack: str, files: dict[str, str]
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stack: str,
+    files: dict[str, str],
+    existing: Mapping[str, str | bytes] | None = None,
+    inside: Callable[[Path], None] | None = None,
 ) -> list[list[str]]:
     """Create the stack with a fake scaffold that writes these files; the commands run."""
     subprocess.run(["git", "init", "-q", str(root)], check=True)
+    for name, text in (existing or {}).items():
+        (root / name).write_bytes(text if isinstance(text, bytes) else text.encode())
     ran: list[list[str]] = []
 
     def run(target: Path, command: list[str]) -> None:
         ran.append(command)
         if command == new_project.SCAFFOLDS[stack]:
+            if inside is not None:
+                inside(target)
             for name, text in files.items():
                 (target / name).parent.mkdir(parents=True, exist_ok=True)
                 (target / name).write_text(text)
@@ -141,6 +164,116 @@ def test_nextjs_moves_the_scaffold_to_the_installed_biome(
     assert (tmp_path / "public/next.svg").read_text() == (
         '<svg viewBox="0 0 1 1"><title>next</title><path/></svg>'
     )
+
+
+def test_new_project_keeps_a_readme_license_and_ignore_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    existing = {
+        "README.md": "# Acme Shop\n",
+        "LICENSE": "MIT\n",
+        ".gitignore": "node_modules\nsecret.env\n",
+    }
+    files = {
+        "package.json": "{}",
+        ".oxlintrc.json": "{}",
+        "README.md": "# scaffold\n",
+        ".gitignore": "node_modules\ndist\n",
+    }
+    created(tmp_path, monkeypatch, "vite", files, existing)
+    assert (tmp_path / "README.md").read_text() == "# Acme Shop\n"
+    assert (tmp_path / "LICENSE").read_text() == "MIT\n"
+    assert (tmp_path / ".gitignore").read_text() == "node_modules\ndist\nsecret.env\n"
+    assert (tmp_path / "package.json").exists()
+
+
+def test_kept_files_wait_in_the_git_folder_during_the_scaffold(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    waiting: list[list[str]] = []
+
+    def look(target: Path) -> None:
+        folder = target / ".git" / new_project.ASIDE
+        waiting.append(sorted(path.name for path in folder.iterdir()))
+
+    created(
+        tmp_path,
+        monkeypatch,
+        "vite",
+        {"package.json": "{}", ".oxlintrc.json": ""},
+        {"README.md": "mine"},
+        look,
+    )
+    assert waiting == [["README.md"]]
+    assert not (tmp_path / ".git" / new_project.ASIDE).exists()
+
+
+def test_an_error_while_putting_files_back_leaves_the_rest_waiting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    move = shutil.move
+
+    def failing(source: Path, destination: Path) -> object:
+        if (
+            Path(source).name == "README.md"
+            and Path(destination) == tmp_path / "README.md"
+        ):
+            raise OSError("disk full")
+        return move(source, destination)
+
+    existing: dict[str, str | bytes] = {"README.md": "mine", "LICENSE": "MIT\n"}
+    files = {"package.json": "{}", ".oxlintrc.json": ""}
+    monkeypatch.setattr(shutil, "move", failing)
+    with pytest.raises(OSError, match="disk full"):
+        created(tmp_path, monkeypatch, "vite", files, existing)
+    waiting = tmp_path / ".git" / new_project.ASIDE
+    assert (waiting / "README.md").read_text() == "mine"
+
+
+def test_an_earlier_stopped_run_gets_its_files_back_first(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    waiting = tmp_path / ".git" / new_project.ASIDE
+    waiting.mkdir()
+    (waiting / "README.md").write_text("mine")
+    (tmp_path / "scaffold-leftover.txt").write_text("x")
+    with pytest.raises(ValueError, match="needs an empty repository"):
+        new_project.create(tmp_path, "vite")
+    assert (tmp_path / "README.md").read_text() == "mine"
+    assert not waiting.exists()
+
+
+def test_a_stopped_run_never_replaces_a_file_the_repository_now_holds(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    waiting = tmp_path / ".git" / new_project.ASIDE
+    waiting.mkdir()
+    (waiting / "README.md").write_text("old")
+    (waiting / "LICENSE").write_text("MIT\n")
+    (tmp_path / "README.md").write_text("new")
+    with pytest.raises(ValueError, match=r"README\.md.*remove the other"):
+        new_project.create(tmp_path, "vite")
+    assert (tmp_path / "README.md").read_text() == "new"
+    assert (waiting / "README.md").read_text() == "old"
+    assert (tmp_path / "LICENSE").read_text() == "MIT\n"
+    assert not (waiting / "LICENSE").exists()
+
+
+def test_a_kept_ignore_file_with_odd_bytes_keeps_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    files = {"package.json": "{}", ".oxlintrc.json": "", ".gitignore": "dist\n"}
+    created(tmp_path, monkeypatch, "vite", files, {".gitignore": b"caf\xe9\n"})
+    assert (tmp_path / ".gitignore").read_bytes() == b"dist\ncaf\xe9\n"
+
+
+def test_nextjs_scaffold_installs_nothing_before_the_age_filter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ran = created(tmp_path, monkeypatch, "nextjs", {"package.json": "{}"})
+    assert ran[0] == new_project.SCAFFOLDS["nextjs"]
+    assert "--skip-install" in ran[0]
+    assert ran[1] == UPGRADE
 
 
 def test_opennext_replaces_the_vulnerable_glob_its_minifier_pins() -> None:

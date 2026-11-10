@@ -10,7 +10,6 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from collections.abc import Callable
 from operator import itemgetter
 from pathlib import Path
 
@@ -25,16 +24,13 @@ from update_runner import (
     commit_update,
     current_head,
     known_failure,
-    link_state,
     rebase_sessions,
-    relink_verified,
     remember_failure,
-    roll_back,
-    snapshot,
     stale_error,
+    tree_entries,
+    undo_hooked_commit,
     update_attempt,
     update_blocker,
-    write_verified,
 )
 
 COMMIT_ID = re.compile(r"[0-9a-f]{40}")
@@ -592,27 +588,20 @@ def write_changes(root: Path, changes: dict[str, str | None]) -> None:
             replace_file(target, content.encode())
 
 
-def replace_file(
-    target: Path, content: bytes, ready: Callable[[], bool] = lambda: True
-) -> bool:
-    """Swap in the whole file if `ready` holds just before, so a write is never partial."""
+def replace_file(target: Path, content: bytes) -> None:
+    """Swap in the whole file, so a write is never partial."""
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.is_symlink():
-        if not ready():
-            return False
         target.write_bytes(content)
-        return True
+        return
     pending = target.with_name(target.name + ".hard-eng-pending")
     try:
         pending.write_bytes(content)
         if target.exists():
             shutil.copymode(target, pending)
-        if not ready():
-            return False
         pending.replace(target)
     finally:
         pending.unlink(missing_ok=True)
-    return True
 
 
 def write_links(root: Path, links: dict[str, str | None]) -> None:
@@ -726,26 +715,11 @@ def repair_installation(root: Path, previous: str) -> str:
     status += hook_chain.install_worktree_hook(root)
     names = sorted({*missing, *added})
     clean = bool(names) and not local_state(root, names)
-    moved = {name for name in missing if retired_parent(root, name)}
     retire_local_generation(root)
     if not names:
         return status + "."
-    # Files beneath a retired link must still be absent when the repair writes them.
-    before = {
-        name: None if name in moved else content
-        for name, content in snapshot(root, missing).items()
-    }
-    before_links = link_state(root, added)
-    applied: list[str] = []
-    try:
-        write_verified(root, missing, before, (), applied)
-        relink_verified(root, added, before_links, applied)
-    except (OSError, ValueError) as error:
-        if kept := roll_back(root, missing, added, before, before_links, applied):
-            raise ValueError(
-                f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"
-            ) from error
-        raise
+    write_changes(root, missing)
+    write_links(root, added)
     return f"{status}; repaired {install_paths(names)}. " + commit_install(
         root, names, clean, {**missing, **added}
     )
@@ -764,6 +738,7 @@ def commit_install(
             ["git", "diff", "--cached", "--quiet", "--", *names], cwd=root, check=False
         ).returncode:
             return "Installed files already match the current commit."
+        staged = tree_entries(root, ["git", "ls-files", "-s"], 1, names)
         head = current_head(root)
         result = subprocess.run(
             ["git", "commit", "--only", "-m", "Install Hard Eng", "--", *names],
@@ -773,29 +748,26 @@ def commit_install(
             text=True,
             check=False,
         )
-        if result.returncode == 0:
-            rebase_sessions(root, head, "Install Hard Eng", expected)
+        changed: list[str] = []
+        if result.returncode == 0 and expected:
+            changed = undo_hooked_commit(root, head, staged, expected, names)
+        if result.returncode == 0 and not changed:
+            rebase_sessions(root, head, "Install Hard Eng")
             return "Committed the installed files locally without pushing."
-        subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
-        reason = " | ".join(result.stdout.strip().splitlines()[-3:])
+        if changed:
+            reason = (
+                f"a project commit hook changed {', '.join(changed)}; "
+                "leave Hard Eng's files out of that hook"
+            )
+        else:
+            subprocess.run(
+                ["git", "reset", "--quiet", "--", *names], cwd=root, check=False
+            )
+            reason = " | ".join(result.stdout.strip().splitlines()[-3:])
     return (
         f"Installed files are not committed ({reason}). Commit them so updates and "
         "worktrees include them: " + install_paths(names)
     )
-
-
-def refuse_local_state(root: Path, names: list[str]) -> None:
-    status = local_state(root, names)
-    if status and all(line.startswith("?? ") for line in status):
-        raise ValueError(
-            "Installed Hard Eng files are not committed: "
-            + install_paths([line[3:].strip('"') for line in status])
-            + "; commit them, then rerun the update"
-        )
-    if status:
-        raise ValueError(
-            "The update overlaps local edits; preserve them and ask before updating"
-        )
 
 
 def update(root: Path, repair: bool = False, *, remember: Path | None = None) -> str:
@@ -808,7 +780,7 @@ def update(root: Path, repair: bool = False, *, remember: Path | None = None) ->
         if repair or local_generation(root):
             return repair_installation(root, previous)
         return repair_current_hook(root, previous)
-    attempt = update_attempt(root, revision) if remember else None
+    attempt = update_attempt(current_head(root), revision) if remember else None
     if attempt is not None and remember and (known := known_failure(remember, attempt)):
         return known
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
@@ -826,32 +798,9 @@ def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
     if not changes and not links:
         install_planned_hook(root, hook)
         return "Hard Eng already matches the verified source."
-    names = sorted({*changes, *links})
-    refuse_local_state(root, names)
     local_settings(root)
-    before = snapshot(root, changes)
     validate_gates(root, source, changes)
-    if snapshot(root, changes) != before:
-        raise ValueError(
-            "Files changed during verification; the update was not applied"
-        )
-    if subprocess.check_output(
-        [
-            "git",
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-            "--ignored",
-            "--",
-            *names,
-        ],
-        cwd=root,
-        text=True,
-    ):
-        raise ValueError(
-            "The update paths changed during verification; nothing was applied"
-        )
-    commit_update(root, changes, links, revision, before)
+    commit_update(root, changes, links, revision)
     retire_local_generation(root)
     if hook[0] not in changes:
         install_planned_hook(root, hook)

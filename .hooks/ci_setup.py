@@ -13,6 +13,7 @@ from ci_cache import TOOL_DIRECTORIES, report_cache_problems
 from ci_jobs import migrate_bun_version, migrate_runner_variable, migrate_swift_runner
 from gate_config import GateConfig, Group
 from project_setup import dependency_command
+from tool_setup import RELEASE_AGE_SECONDS
 
 MISE_INSTALL_EXEC_LINE = re.compile(
     r"(?m)^(?P<indent> +)(?P<launcher>bun x (?:\S+ )+?mise --no-config) "
@@ -709,7 +710,8 @@ def adapt_ci(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
             )
         migrated = migrated.replace(
-            "MISE_MINIMUM_RELEASE_AGE: 0s\n", "MISE_MINIMUM_RELEASE_AGE: 2d\n"
+            "MISE_MINIMUM_RELEASE_AGE: 0s\n",
+            f"MISE_MINIMUM_RELEASE_AGE: {RELEASE_AGE_SECONDS // 86400}d\n",
         )
         if migrated != original:
             changes[name] = migrated

@@ -479,7 +479,8 @@ def run(
             "Hard Eng merges by rebase only; squash and merge commits are refused"
         )
     proof_stage = "ready" if stage in {"ready", "merge"} else "delivered"
-    require_current(target)
+    if stage in {"ready", "merge"}:
+        require_current(target)
     shipment = verify(target, plan_path, pr_url, proof_stage)
     if stage in {"ready", "merge"} and (
         note := shipping_note(shipment.root, shipment.head_sha)

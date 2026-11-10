@@ -5,6 +5,7 @@ from pathlib import Path
 
 import gap_issue
 import pytest
+from conftest import git
 
 
 class FakeGh:
@@ -89,6 +90,93 @@ def test_project_detail_is_refused_before_any_github_call(
     with pytest.raises(ValueError, match="Describe the missing check generically"):
         gap_issue.file_gap(project, text)
     assert gh.calls == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "no lint for acme-shop",
+        "Acme Shop has no dependency audit",
+        "missing audit in acme_shop",
+        "owner globex lacks secret scanning",
+        "shop-checkout needs a license check",
+        "apps/storefront has no lint",
+        "storefront lacks a license check",
+        "billing has no schema check",
+    ],
+)
+def test_text_that_names_the_project_is_refused_before_any_github_call(
+    project: Path, monkeypatch: pytest.MonkeyPatch, text: str
+) -> None:
+    git(project, "remote", "add", "origin", "https://github.com/globex/acme-shop.git")
+    (project / "hard-eng.gates.json").write_text(
+        '{"packages": [{"name": ".", "path": "."},'
+        ' {"name": "apps/storefront", "path": "apps/storefront"},'
+        ' {"name": "services/billing", "path": "services/billing"}], "shared": []}'
+    )
+    named = project.rename(project.with_name("shop-checkout"))
+    gh = fake(monkeypatch, [])
+    with pytest.raises(ValueError, match="Describe the missing check generically"):
+        gap_issue.file_gap(named, text)
+    assert gh.calls == []
+    assert gap_issue.file_gap(named, "Go dependency audit for shopping carts") == 0
+
+
+@pytest.mark.parametrize(
+    ("origin", "text"),
+    [
+        ("https://github.com/globex/acme-shop.git", "AcmeShop has no lint"),
+        ("https://github.com/globex/acme-shop.git", "acmeshop lacks audit"),
+        ("git@github-work:globex/acme-shop.git", "owner globex lacks scanning"),
+        ("git@github-work:globex/acme-shop.git", "acme shop lacks lint"),
+        ("https://gitlab.example.test/globex/acme-shop", "globex lacks lint"),
+        ("ssh://git@bitbucket.example.test/globex/acme-shop.git", "acme-shop lint"),
+        ("https://dev.azure.com/contoso/shop/_git/storefront", "contoso lacks lint"),
+        ("https://gitlab.example.test/acme/team/shop", "acme has no audit"),
+        ("https://github.com/globex/acme-shop.git/", "acme shop lacks lint"),
+        ("https://git.example.test:8443/globex/acme-shop", "globex lacks lint"),
+        ("https://github.com/globex/AcmeShop.git", "acme shop lacks lint"),
+    ],
+)
+def test_joined_spellings_and_any_remote_host_are_refused(
+    project: Path, monkeypatch: pytest.MonkeyPatch, origin: str, text: str
+) -> None:
+    git(project, "remote", "add", "origin", origin)
+    gh = fake(monkeypatch, [])
+    with pytest.raises(ValueError, match="Describe the missing check generically"):
+        gap_issue.file_gap(project, text)
+    assert gh.calls == []
+
+
+@pytest.mark.parametrize(
+    ("origin", "text"),
+    [
+        (
+            "https://dev.azure.com/contoso/shop/_git/storefront",
+            "git hooks have no lint check",
+        ),
+        ("/srv/git/x.git", "git hooks have no lint check"),
+        ("/Users/me/projects/x", "projects lack a license check"),
+        ("https://git.example.test:8443/globex/acme-shop", "8443 has no lint check"),
+    ],
+)
+def test_words_from_a_remote_that_are_not_names_are_accepted(
+    project: Path, monkeypatch: pytest.MonkeyPatch, origin: str, text: str
+) -> None:
+    git(project, "remote", "add", "origin", origin)
+    fake(monkeypatch, [])
+    assert gap_issue.file_gap(project, text) == 0
+
+
+def test_the_refusal_says_which_name_matched(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (project / "hard-eng.gates.json").write_text(
+        '{"packages": [{"name": "web", "path": "web"}], "shared": []}'
+    )
+    fake(monkeypatch, [])
+    with pytest.raises(ValueError, match="one of its packages: web"):
+        gap_issue.file_gap(project, "web has no lint check")
 
 
 @pytest.mark.parametrize(

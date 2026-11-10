@@ -11,9 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Generator, Iterable
-from contextlib import contextmanager, suppress
-from functools import partial
+from contextlib import suppress
 from pathlib import Path
 from typing import TextIO
 
@@ -186,53 +184,71 @@ def landed_commit(root: Path, head: str, message: str) -> tuple[str, str] | None
     return None
 
 
-def committed_matches(root: Path, commit: str, expected: dict[str, str | None]) -> bool:
-    """Whether the commit holds exactly the planned files and link targets, so no other edit rode along."""
-    listing = subprocess.run(
-        ["git", "ls-tree", "-r", "-z", "--name-only", commit, "--", *expected],
+def tree_entries(
+    root: Path, command: list[str], column: int, names: list[str]
+) -> dict[str, tuple[str, str]]:
+    listing = subprocess.check_output(
+        [*command, "-z", "--", *names], cwd=root, text=True
+    )
+    return {
+        path: (fields[0], fields[column])
+        for entry in listing.split("\0")
+        if entry
+        for meta, _, path in [entry.partition("\t")]
+        for fields in [meta.split()]
+    }
+
+
+def undo_hooked_commit(
+    root: Path,
+    head: str,
+    staged: dict[str, tuple[str, str]],
+    expected: dict[str, str | None],
+    names: list[str],
+) -> list[str]:
+    """Undo the install commit when a project commit hook rewrote it; return the changed paths."""
+    from update import write_changes
+
+    commit = current_head(root)
+    parent = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", "HEAD^"],
         cwd=root,
         capture_output=True,
         text=True,
-        check=True,
-    ).stdout
-    planned = {name for name, content in expected.items() if content is not None}
-    if set(filter(None, listing.split("\0"))) - planned:
-        return False
-    # Stdin from a file: writing and reading git's pipes in one call deadlocked on macOS.
-    with tempfile.TemporaryFile() as request:
-        request.write("".join(f"{commit}:{name}\n" for name in expected).encode())
-        request.seek(0)
-        output = subprocess.run(
-            ["git", "cat-file", "--batch"],
-            stdin=request,
-            cwd=root,
-            capture_output=True,
-            check=True,
-        ).stdout
-    for content in expected.values():
-        header, _, output = output.partition(b"\n")
-        fields = header.split()
-        found = None
-        if len(fields) == 3:
-            size = int(fields[2])
-            if fields[1] == b"blob":
-                found = output[:size]
-            output = output[size + 1 :]
-        if found != (None if content is None else content.encode()):
-            return False
-    return True
+        check=False,
+    ).stdout.strip()
+    if not commit or commit == head or parent != head:
+        return []
+    committed = tree_entries(root, ["git", "ls-tree", "-r", commit], 2, names)
+    changed = sorted(
+        path
+        for path in {*staged, *committed}
+        if staged.get(path) != committed.get(path)
+    )
+    if not changed:
+        return []
+    undo = ["git", "reset", "--soft", head]
+    subprocess.run(
+        undo if head else ["git", "update-ref", "-d", "HEAD"], cwd=root, check=True
+    )
+    write_changes(
+        root,
+        {
+            n: expected[n]
+            for n in changed
+            if n in expected and not (root / n).is_symlink()
+        },
+    )
+    subprocess.run(["git", "reset", "--quiet", "--", *names], cwd=root, check=False)
+    return changed
 
 
-def rebase_sessions(
-    root: Path, head: str, message: str, expected: dict[str, str | None] | None = None
-) -> bool:
+def rebase_sessions(root: Path, head: str, message: str) -> bool:
     """Sessions based on the update commit's parent must not count that commit as their work."""
     landed = landed_commit(root, head, message)
     if landed is None:
         return False
     commit, parent = landed
-    if expected is not None and not committed_matches(root, commit, expected):
-        return True
     for state in (root / ".hard-eng/sessions").glob("*.json"):
         try:
             saved = json.loads(state.read_text())
@@ -241,176 +257,6 @@ def rebase_sessions(
         if isinstance(saved, dict) and parent and saved.get("base") == parent:
             state.write_text(json.dumps({**saved, "base": commit}))
     return True
-
-
-def written(root: Path, name: str, content: str | None, link: bool) -> bool:
-    """Whether a path still holds what the updater wrote, so rollback cannot erase a later edit."""
-    target = root / name
-    if content is None:
-        return not target.exists() and not target.is_symlink()
-    if link:
-        return target.is_symlink() and str(target.readlink()) == content
-    return (
-        target.is_file()
-        and not target.is_symlink()
-        and target.read_text(errors="replace") == content
-    )
-
-
-def snapshot(root: Path, names: Iterable[str]) -> dict[str, bytes | None]:
-    return {
-        name: (root / name).read_bytes() if (root / name).exists() else None
-        for name in names
-    }
-
-
-def holds(root: Path, name: str, content: bytes | None) -> bool:
-    return snapshot(root, [name])[name] == content
-
-
-def link_state(root: Path, names: Iterable[str]) -> dict[str, str | None]:
-    return {
-        name: str((root / name).readlink()) if (root / name).is_symlink() else None
-        for name in names
-    }
-
-
-def prune(directory: Path) -> None:
-    """Remove the empty directories left beneath a path, deepest first."""
-    for path in [*sorted(directory.rglob("*"), reverse=True), directory]:
-        with suppress(OSError):
-            path.rmdir()
-
-
-def roll_back(
-    root: Path,
-    changes: dict[str, str | None],
-    links: dict[str, str | None],
-    before: dict[str, bytes | None],
-    before_links: dict[str, str | None],
-    applied: list[str],
-) -> list[str]:
-    """Restore each applied path only while it still holds the updater's write, checked just before."""
-    from update import replace_file
-
-    kept = []
-    for name in applied:
-        if name not in changes:
-            continue
-        content = before[name]
-        unchanged = partial(written, root, name, changes[name], False)
-        if content is None and unchanged():
-            (root / name).unlink(missing_ok=True)
-        elif content is None or not replace_file(root / name, content, unchanged):
-            kept.append(name)
-    for name in applied:
-        if name not in links:
-            continue
-        if links[name] is None and not (root / name).is_symlink():
-            prune(root / name)
-        if not written(root, name, links[name], True):
-            kept.append(name)
-            continue
-        (root / name).unlink(missing_ok=True)
-        if (target := before_links[name]) is not None:
-            (root / name).symlink_to(target, target_is_directory=True)
-    return kept
-
-
-def index_entries(root: Path, names: list[str]) -> dict[str, str]:
-    listing = subprocess.check_output(
-        ["git", "ls-files", "--stage", "-z", "--", *names], cwd=root, text=True
-    )
-    return {
-        path: entry
-        for entry, _, path in (
-            line.partition("\t") for line in listing.split("\0") if line
-        )
-    }
-
-
-def unstage_own(
-    root: Path, names: list[str], staging: tuple[dict[str, str], dict[str, str]]
-) -> None:
-    """Restore only index entries the updater changed and that still hold its staging."""
-    before, staged = staging
-    current = index_entries(root, names)
-    own = [
-        path
-        for path in {*before, *staged, *current}
-        if current.get(path) == staged.get(path) != before.get(path)
-    ]
-    if restored := "".join(
-        f"{before[path]}\t{path}\0" for path in own if path in before
-    ):
-        subprocess.run(
-            ["git", "update-index", "-z", "--index-info"],
-            input=restored,
-            cwd=root,
-            text=True,
-            check=True,
-        )
-    if added := [path for path in own if path not in before]:
-        subprocess.run(
-            ["git", "update-index", "--force-remove", "--", *added],
-            cwd=root,
-            check=True,
-        )
-
-
-@contextmanager
-def deferred_sigterm() -> Generator[None]:
-    """Hold SIGTERM, whichever thread receives it, and keep it from child git commands until the block ends."""
-    received: list[int] = []
-    previous = signal.signal(
-        signal.SIGTERM, lambda signum, _frame: received.append(signum)
-    )
-    mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
-    try:
-        yield
-    finally:
-        signal.pthread_sigmask(signal.SIG_SETMASK, mask)
-        signal.signal(signal.SIGTERM, previous)
-        if received:
-            signal.raise_signal(signal.SIGTERM)
-
-
-def relink_verified(
-    root: Path,
-    links: dict[str, str | None],
-    before_links: dict[str, str | None],
-    applied: list[str],
-) -> None:
-    """Replace each link only while it still holds its verified state, checked just before."""
-    from update import write_links
-
-    for name, target in links.items():
-        if link_state(root, [name])[name] != before_links[name]:
-            raise ValueError(f"{name} changed while the update was being applied")
-        applied.append(name)
-        write_links(root, {name: target})
-
-
-def write_verified(
-    root: Path,
-    changes: dict[str, str | None],
-    before: dict[str, bytes | None],
-    relinked: tuple[str, ...],
-    applied: list[str],
-) -> None:
-    """Write each file only while it still holds its verified content, checked just before."""
-    from update import replace_file, write_changes
-
-    for name, content in changes.items():
-        verified = partial(holds, root, name, before[name])
-        applied.append(name)
-        if name.startswith(relinked) or (content is None and verified()):
-            write_changes(root, {name: content})
-        elif content is None or not replace_file(
-            root / name, content.encode(), verified
-        ):
-            applied.pop()
-            raise ValueError(f"{name} changed while the update was being applied")
 
 
 def git_commit(
@@ -448,76 +294,19 @@ def git_commit(
         )
 
 
-def unwritten(
-    root: Path,
-    changes: dict[str, str | None],
-    links: dict[str, str | None],
-    applied: list[str],
-) -> list[str]:
-    """Applied paths that no longer hold the updater's write; a retired link's planned folder is checked by its files."""
-    return [
-        name
-        for name in applied
-        if (name in changes and not written(root, name, changes[name], False))
-        or (
-            name in links
-            and not any(other.startswith(f"{name}/") for other in changes)
-            and not written(root, name, links[name], True)
-        )
-    ]
-
-
 def commit_update(
     root: Path,
     changes: dict[str, str | None],
     links: dict[str, str | None],
     revision: str,
-    before: dict[str, bytes | None],
 ) -> None:
+    from update import write_changes, write_links
+
     names = sorted({*changes, *links})
-    before_links = link_state(root, links)
-    retired = tuple(
-        f"{name}/"
-        for name, target in links.items()
-        if target is None and before_links[name] is not None
-    )
-    # Files beneath a retired link must still be absent when the update writes them.
-    expected = {
-        name: None if name.startswith(retired) else content
-        for name, content in before.items()
-    }
-    head = current_head(root)
-    message = f"Update Hard Eng to {revision}"
-    staging: tuple[dict[str, str], dict[str, str]] | None = None
-    applied: list[str] = []
-    try:
-        relink_verified(root, links, before_links, applied)
-        # Paths under a link the update repointed no longer show their verified content.
-        relinked = tuple(f"{name}/" for name, target in links.items() if target)
-        write_verified(root, changes, expected, relinked, applied)
-        with deferred_sigterm():
-            index = index_entries(root, names)
-            subprocess.run(
-                ["git", "add", "--force", "--", *names], cwd=root, check=True
-            )
-            staging = (index, index_entries(root, names))
-        if moved := unwritten(root, changes, links, applied):
-            raise ValueError(
-                f"{', '.join(moved)} changed while the update was being applied"
-            )
-        git_commit(root, names, changes, message)
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
-        if rebase_sessions(root, head, message, {**changes, **links}):
-            raise
-        kept = roll_back(root, changes, links, expected, before_links, applied)
-        if staging is not None:
-            unstage_own(root, names, staging)
-        if kept:
-            raise subprocess.SubprocessError(
-                f"{error}; kept later edits to {', '.join(kept)} instead of rolling them back"
-            ) from error
-        raise
-    rebase_sessions(root, head, message, {**changes, **links})
+    write_links(root, links)
+    write_changes(root, changes)
+    subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
+    git_commit(root, names, changes, f"Update Hard Eng to {revision}")
 
 
 def alive(process: int) -> bool:
@@ -633,24 +422,9 @@ def locked_update(root: Path, repair: bool = False) -> str:
         return prepare_update(root, repair)
 
 
-def update_attempt(root: Path, revision: str) -> str:
-    """What a refused update would see again: any commit or local edit changes it."""
-    digest = hashlib.sha256()
-    for command in (["rev-parse", "HEAD"], ["diff", "HEAD", "--binary"]):
-        digest.update(subprocess.check_output(["git", *command], cwd=root))
-    listing = subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=root
-    )
-    names = [
-        os.fsdecode(name)
-        for name in listing.split(b"\0")
-        if name and not name.startswith(b".hard-eng/")
-    ]
-    for name in [*names, *LOCAL_INPUTS]:
-        path = root / name
-        if path.is_file():
-            digest.update(name.encode() + b"\0" + path.read_bytes())
-    return f"{revision} {digest.hexdigest()}"
+def update_attempt(head: str, revision: str) -> str:
+    """What a refused update would see again: the release and the base tip it builds on."""
+    return f"{revision} {hashlib.sha256(head.encode()).hexdigest()}"
 
 
 def known_failure(root: Path, attempt: str) -> str | None:
@@ -667,8 +441,9 @@ def known_failure(root: Path, attempt: str) -> str | None:
         return None
     failed = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(saved["at"]))
     return failed_update(
-        f"{saved.get('error')} (at {failed}; nothing changed since, so it was not "
-        "retried; fix the cause or run the published setup command to retry now)"
+        f"{saved.get('error')} (at {failed}; it is not retried before 24 hours unless "
+        "a new release or a new base-branch commit appears; run the published setup "
+        "command to retry now)"
     )
 
 
@@ -682,8 +457,9 @@ def remember_failure(root: Path, attempt: str, error: Exception) -> None:
 
 def failed_update(error: Exception | str) -> str:
     return (
-        f"Hard Eng update failed: {error}. Fix its cause first as its own commit; "
-        "cause outside repo → tell user. Installed gates still apply."
+        f"Hard Eng update failed: {error}. Fix that cause first. A fix in tracked files "
+        "goes on the base branch as its own commit, since the update is built from it. "
+        "Cause outside repo → tell user. Installed gates still apply."
     )
 
 
@@ -842,6 +618,9 @@ def build_update(root: Path, base: str, repair: bool) -> str:
         )
         try:
             use_own_hooks(root, candidate)
+            for name in LOCAL_INPUTS:
+                if (candidate / name).is_symlink():
+                    (candidate / name).unlink()
             outcome = update(candidate, repair, remember=None if repair else root)
             revision = installed_revision(candidate)
             landed = landed_commit(candidate, tip, f"Update Hard Eng to {revision}")
@@ -857,6 +636,7 @@ def build_update(root: Path, base: str, repair: bool) -> str:
             )
     if landed is None or not isinstance(revision, str):
         return outcome
+    refuse_untracked_overlap(root, tip, landed[0], revision, repair)
     # Work committed or checked out on the branch during the build stays.
     if branch_worktree(root) or not set_update_branch(root, landed[0], expected):
         return (
@@ -864,6 +644,36 @@ def build_update(root: Path, base: str, repair: bool) -> str:
             f"rerun `python3 .hooks/hard-eng.py update` once that work is finished."
         )
     return ready_message(revision)
+
+
+def refuse_untracked_overlap(
+    root: Path, tip: str, landed: str, revision: str, repair: bool
+) -> None:
+    """The candidate never held this checkout's ignored or untracked files, so a pull could replace them."""
+    from update import local_state
+
+    changed = subprocess.check_output(
+        ["git", "diff", "--name-only", "--no-renames", "-z", tip, landed],
+        cwd=root,
+        text=True,
+    )
+    names = list(filter(None, changed.split("\0")))
+    if not names:
+        return
+    found = [
+        line[3:].strip('"')
+        for line in local_state(root, names)
+        if line.startswith(("?? ", "!! "))
+    ]
+    if found:
+        error = ValueError(
+            "The update would replace local files that Git does not track: "
+            + ", ".join(found)
+            + "; move them away or commit them, then run the published setup command to retry"
+        )
+        if not repair:
+            remember_failure(root, update_attempt(tip, revision), error)
+        raise error
 
 
 def branch_current(root: Path, tip: str) -> bool:

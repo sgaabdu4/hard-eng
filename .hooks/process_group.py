@@ -1,11 +1,13 @@
 """Run a command in its own process group so a timeout stops every process it started."""
 
+import fcntl
 import os
 import re
 import signal
 import subprocess
 import threading
-from contextlib import suppress
+from collections.abc import Callable, Generator
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import IO, NamedTuple
 
@@ -86,6 +88,44 @@ def process_table() -> list[Process]:
         pid, parent, command = (line.split(None, 2) + [""])[:3]
         rows.append(Process(int(pid), int(parent), command))
     return rows
+
+
+def start_process_scan() -> Callable[[], list[Process]]:
+    found: list[list[Process] | Exception] = []
+
+    def scan() -> None:
+        try:
+            found.append(process_table())
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            found.append(error)
+
+    thread = threading.Thread(target=scan)
+    thread.start()
+
+    def result() -> list[Process]:
+        thread.join()
+        outcome = found[0] if found else OSError("process scan stopped")
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    return result
+
+
+@contextmanager
+def check_lock_file(root: Path) -> Generator[tuple[IO[str], bool]]:
+    """Open this checkout's check lock and try to take it; the flag says another check holds it."""
+    name = subprocess.check_output(
+        ["git", "rev-parse", "--git-path", "hard-eng-check.lock"], cwd=root, text=True
+    ).strip()
+    with (root / name).open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            held = True
+        else:
+            held = False
+        yield lock, held
 
 
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:

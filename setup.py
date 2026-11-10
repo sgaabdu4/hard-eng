@@ -465,10 +465,7 @@ def prepare_hook(root: Path) -> tuple[Path, str]:
     hook, target = hook_chain.locate(root)
     shell = target != hook
     hook_chain.check_free(root, target)
-    chained = (
-        hook_chain.foreign_hook(root, target)
-        or hook_chain.project_copy(target).exists()
-    )
+    chained = hook_chain.foreign_hook(root, target) or hook_chain.keeps_copy(target)
     if shell:
         launcher = (
             hook_chain.HUSKY_CHAINED_LAUNCHER if chained else hook_chain.SHELL_LAUNCHER
@@ -895,8 +892,7 @@ def install(root: Path, previous: Path | None = None) -> None:
         ),
         (
             worktree,
-            hook_chain.foreign_hook(root, worktree)
-            or hook_chain.project_copy(worktree).exists(),
+            hook_chain.foreign_hook(root, worktree) or hook_chain.keeps_copy(worktree),
         ),
     ):
         if path.is_relative_to(root) and ".git" not in path.relative_to(root).parts:
@@ -936,7 +932,8 @@ def install(root: Path, previous: Path | None = None) -> None:
     if deleted:
         print("Removed old Hard Eng files: " + ", ".join(deleted))
     print(f"Installed Hard Eng files in {root}; setup is not yet verified.")
-    print(commit_install(root, names, clean))
+    expected = {**changes, **dict.fromkeys(deleted)}
+    print(commit_install(root, names, clean, expected))
     print("Follow HE Plan to adapt the gates and configure shipping before delivery.")
     print(
         "Integration setup: .agents/skills/he/references/integrations.md — reuse existing choices; resolve only missing service targets and verify relevant real calls."

@@ -1,10 +1,12 @@
 """Completion must block failed checks without trapping honest reports."""
 
+import fcntl
 import http.client
 import io
 import json
 import subprocess
 import sys
+import threading
 import urllib.request
 from pathlib import Path
 from types import ModuleType
@@ -343,6 +345,25 @@ def test_work_from_before_the_session_is_not_session_work(repository: Path) -> N
     assert agent_hooks.completion(repository, payload)["decision"] == "block"
 
 
+def test_stop_does_not_wait_behind_a_running_check(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    check = Mock(return_value=(0, "Hard Eng: checks passed"))
+    monkeypatch.setattr(agent_hooks, "run_check", check)
+    payload: JsonObject = {"session_id": "busy"}
+    with (repository / ".git/hard-eng-check.lock").open("w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        output = agent_hooks.completion(repository, payload)
+    assert output["decision"] == "block"
+    assert "may predate your last edits" in str(output["reason"])
+    assert "passed" not in str(output)
+    check.assert_not_called()
+    assert agent_hooks.completion(repository, payload).get("decision") != "block"
+    check.assert_called_once()
+    check.assert_called_once()
+
+
 def test_missing_session_baseline_cannot_skip_verification(repository: Path) -> None:
     result = agent_hooks.completion(repository, {"session_id": "missing"})
     assert result["decision"] == "block"
@@ -519,6 +540,27 @@ def test_session_reports_stopped_codex_brokers(
     )
     context = agent_hooks.session_context(repository, {"session_id": "brokers"})
     assert "Stopped 2 idle Codex brokers (40 processes)." in context
+
+
+def test_session_start_reports_a_failed_process_scan(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(update_runner, "start_update", Mock(return_value="status"))
+    scanning = threading.Event()
+
+    def broken_scan() -> list[process_group.Process]:
+        scanning.set()
+        raise OSError("ps unavailable")
+
+    def gates(_root: Path) -> str:
+        assert scanning.wait(timeout=10), "the process scan waited for gate validation"
+        return "Gates: stubbed"
+
+    monkeypatch.setattr(process_group, "process_table", broken_scan)
+    monkeypatch.setattr(agent_hooks, "gate_status", gates)
+    context = agent_hooks.session_context(repository, {"session_id": "scan"})
+    assert "Gates: stubbed" in context
+    assert "Idle Codex broker cleanup failed: ps unavailable" in context
 
 
 def test_session_states_whether_gates_can_run(repository: Path) -> None:

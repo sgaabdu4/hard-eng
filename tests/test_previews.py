@@ -62,7 +62,7 @@ def test_ignores_artifact_reads_and_other_tools(payload: object) -> None:
 
 
 def test_installed_command_adds_the_note(tmp_path: Path) -> None:
-    """The registered command finds the hook from the project root and never fails outside one."""
+    """The registered command finds the hook from the host's project folder and never fails outside one."""
     environment = {"PATH": os.environ["PATH"]}
     inside = subprocess.run(
         ["sh", "-c", agent_hooks.PREVIEW_COMMAND],
@@ -70,7 +70,7 @@ def test_installed_command_adds_the_note(tmp_path: Path) -> None:
         input=json.dumps(artifact(file_path="mock.html")),
         capture_output=True,
         text=True,
-        env=environment,
+        env={**environment, "CLAUDE_PROJECT_DIR": str(SOURCE)},
         check=True,
     )
     assert (
@@ -83,7 +83,7 @@ def test_installed_command_adds_the_note(tmp_path: Path) -> None:
         input=json.dumps(artifact(file_path="mock.html")),
         capture_output=True,
         text=True,
-        env={**environment, "GIT_CEILING_DIRECTORIES": str(tmp_path)},
+        env={**environment, "CLAUDE_PROJECT_DIR": str(tmp_path)},
         check=False,
     )
     assert (outside.returncode, outside.stdout, outside.stderr) == (0, "", "")

@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import yaml
+from tool_setup import RELEASE_AGE_SECONDS
 
 SOURCE = Path(__file__).resolve().parent
 SCAFFOLDS = {
@@ -14,7 +15,7 @@ SCAFFOLDS = {
     "nextjs": [
         *("bun", "x", "create-next-app@16.4.0", ".", "--ts", "--app", "--use-bun"),
         *("--biome", "--tailwind", "--no-src-dir", "--import-alias", "@/*"),
-        *("--disable-git", "--no-agent-feedback", "--yes"),
+        *("--disable-git", "--no-agent-feedback", "--skip-install", "--yes"),
     ],
     "opennext": [
         *("bun", "x", "create-cloudflare@2.73.3", "."),
@@ -25,6 +26,8 @@ SCAFFOLDS = {
     # uv 0.12 builds apps as packages; the starter needs a root main.py on the test path.
     "python": ["uv", "init", "--quiet", "--app", "--no-package"],
 }
+MERGED = {".gitignore", ".gitattributes"}
+ASIDE = "hard-eng-new-kept"
 REMOVED = {"opennext": ["eslint.config.mjs"], "vite": [".oxlintrc.json"]}
 ANY_CONSTRAINT = re.compile(r"^(  ([a-z0-9_]+)): any$", re.MULTILINE)
 SDK_CONSTRAINT = re.compile(r"^  sdk: (\S+)$", re.MULTILINE)
@@ -36,8 +39,8 @@ EMPTY_REPOSITORY = (
     "search ranking or fast first load, and React + Vite for apps behind a login, internal "
     "tools and apps with a separate backend. Then rerun the setup command with "
     "`sh -s -- --new STACK` (flutter, nextjs, opennext, vite or python): it creates the project with "
-    "the official scaffold, adds starter tests and checks, pins each package to the newest "
-    "release minimumReleaseAge allows, commits, and installs Hard Eng."
+    "the official scaffold, adds starter tests and checks, pins each package to an exact "
+    "version, commits, and installs Hard Eng."
 )
 
 
@@ -92,7 +95,8 @@ def titled_svgs(root: Path) -> None:
 
 
 def finish_web(root: Path) -> None:
-    run(root, ["bun", "update", "--latest", "--exact", "--minimum-release-age=172800"])
+    age = f"--minimum-release-age={RELEASE_AGE_SECONDS}"
+    run(root, ["bun", "update", "--latest", "--exact", age])
     if (root / "biome.json").is_file():
         titled_svgs(root)
         # The scaffold's config targets the Biome it shipped; the update installs a newer one.
@@ -112,14 +116,76 @@ def finish_flutter(root: Path) -> None:
     run(root, ["dart", "format", "lib", "test"])
 
 
+def kept_files(root: Path) -> list[Path]:
+    from basic_mode import trivial
+
+    present = sorted(path for path in root.iterdir() if path.name != ".git")
+    if not all(
+        path.is_file() and not path.is_symlink() and trivial(path) for path in present
+    ):
+        names = ", ".join(path.name for path in present)
+        raise ValueError(
+            "--new needs an empty repository, or one with only plain README, "
+            f"license and ignore files (no links); it holds {names}"
+        )
+    return present
+
+
+def put_back(root: Path, aside: Path) -> None:
+    if not aside.is_dir():
+        return
+    for kept in sorted(aside.iterdir()):
+        target = root / kept.name
+        if kept.name in MERGED and target.is_file():
+            lines = target.read_bytes().splitlines()
+            extra = [
+                line
+                for line in kept.read_bytes().splitlines()
+                if line.strip() and line not in lines
+            ]
+            kept.write_bytes(b"\n".join([*lines, *extra]) + b"\n")
+        shutil.move(kept, target)
+    aside.rmdir()
+
+
+def restore_stopped_run(root: Path, aside: Path) -> None:
+    if not aside.is_dir():
+        return
+    for kept in sorted(aside.iterdir()):
+        target = root / kept.name
+        if not (target.exists() or target.is_symlink()):
+            shutil.move(kept, target)
+    if waiting := sorted(path.name for path in aside.iterdir()):
+        raise ValueError(
+            f"A stopped --new run left {', '.join(waiting)} in {aside}, and the "
+            "repository holds a file of the same name. Keep the copy you want, "
+            "remove the other, then rerun."
+        )
+    aside.rmdir()
+
+
 def create(root: Path, stack: str) -> None:
     if not (root / ".git").exists():
         raise ValueError(f"--new must run at the Git repository root, not {root}")
-    present = sorted(path.name for path in root.iterdir() if path.name != ".git")
-    if present:
-        raise ValueError(
-            f"--new needs an empty repository; it holds {', '.join(present)}"
-        )
+    git_folder = subprocess.check_output(
+        ["git", "rev-parse", "--absolute-git-dir"], cwd=root, text=True
+    )
+    aside = Path(git_folder.strip()) / ASIDE
+    restore_stopped_run(root, aside)
+    kept = kept_files(root)
+    if kept:
+        aside.mkdir()
+    for path in kept:
+        shutil.move(path, aside / path.name)
+    try:
+        build(root, stack)
+    finally:
+        put_back(root, aside)
+    run(root, ["git", "add", "--all"])
+    run(root, ["git", "commit", "--quiet", "-m", f"Create the {stack} project"])
+
+
+def build(root: Path, stack: str) -> None:
     run(root, SCAFFOLDS[stack])
     for name in REMOVED.get(stack, []):
         (root / name).unlink()
@@ -132,5 +198,3 @@ def create(root: Path, stack: str) -> None:
         finish_web(root)
     for command in GENERATED.get(stack, []):
         run(root, command)
-    run(root, ["git", "add", "--all"])
-    run(root, ["git", "commit", "--quiet", "-m", f"Create the {stack} project"])

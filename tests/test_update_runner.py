@@ -4,14 +4,14 @@ import fcntl
 import json
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Generator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import Mock
 
 import agent_hooks
@@ -21,7 +21,7 @@ import update_pr
 import update_runner
 from conftest import SOURCE, add_origin, commit, git
 from gate_config import JsonObject
-from test_adoption import link_skill_into_old_copy
+from test_setup import project_with_commit_hook
 from test_updates import select_release
 
 
@@ -353,259 +353,20 @@ def test_update_commit_is_not_counted_as_session_work(
     assert agent_hooks.completion(installed, before)["decision"] == "block"
 
 
-def commit_changes(root: Path, changes: dict[str, str | None]) -> None:
-    update_runner.commit_update(
-        root, changes, {}, "b" * 40, update_runner.snapshot(root, changes)
-    )
-
-
 def install_hook(root: Path, name: str, script: str) -> None:
     hook = root / ".git/hooks" / name
     hook.write_text("#!/bin/sh\n" + script)
     hook.chmod(0o755)
 
 
-def test_failed_update_commit_keeps_edits_made_while_it_ran(installed: Path) -> None:
-    (installed / "AGENTS.md").write_text("original rules\n")
-    (installed / ".hooks/update.py").write_text("old = True\n")
-    head = commit(installed, "managed files")
-    install_hook(installed, "pre-commit", "echo 'agent edit' > AGENTS.md\nexit 1\n")
-    changes: dict[str, str | None] = {
-        "AGENTS.md": "updated rules\n",
-        ".hooks/update.py": "new = True\n",
-    }
-    with pytest.raises(
-        subprocess.SubprocessError, match="kept later edits to AGENTS.md"
-    ):
-        commit_changes(installed, changes)
-    assert (installed / "AGENTS.md").read_text() == "agent edit\n"
-    assert (installed / ".hooks/update.py").read_text() == "old = True\n"
-    assert git(installed, "rev-parse", "HEAD") == head
-    assert git(installed, "diff", "--cached", "--name-only") == ""
-
-
-def test_update_keeps_an_edit_made_before_it_reached_that_path(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (installed / "AGENTS.md").write_text("original rules\n")
-    (installed / ".hooks/update.py").write_text("old = True\n")
-    (installed / "README.md").write_text("original readme\n")
-    head = commit(installed, "managed files")
-    changes: dict[str, str | None] = {
-        "AGENTS.md": "updated rules\n",
-        ".hooks/update.py": "new = True\n",
-        "README.md": "updated readme\n",
-    }
-    before = update_runner.snapshot(installed, changes)
-    install = update.replace_file
-
-    def agent_edits_next_path(
-        target: Path, content: bytes, ready: Callable[[], bool]
-    ) -> bool:
-        if target.name == "AGENTS.md":
-            (installed / ".hooks/update.py").write_text("agent = True\n")
-        return install(target, content, ready)
-
-    monkeypatch.setattr(update, "replace_file", agent_edits_next_path)
-    with pytest.raises(
-        ValueError,
-        match=r"^\.hooks/update\.py changed while the update was being applied$",
-    ):
-        update_runner.commit_update(installed, changes, {}, "b" * 40, before)
-    assert (installed / ".hooks/update.py").read_text() == "agent = True\n"
-    assert (installed / "AGENTS.md").read_text() == "original rules\n"
-    assert (installed / "README.md").read_text() == "original readme\n"
-    assert git(installed, "rev-parse", "HEAD") == head
-    assert git(installed, "diff", "--cached", "--name-only") == ""
-
-
-def test_rollback_leaves_paths_the_update_never_reached(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (installed / "AGENTS.md").write_text("original rules\n")
-    (installed / "old.md").write_text("retired\n")
-    commit(installed, "managed files")
-    changes: dict[str, str | None] = {
-        "AGENTS.md": "updated rules\n",
-        "new.md": "planned\n",
-        "old.md": None,
-    }
-    before = update_runner.snapshot(installed, changes)
-    head = update_runner.current_head
-
-    def agent_works_first(root: Path) -> str | None:
-        (root / "AGENTS.md").write_text("agent edit\n")
-        (root / "new.md").write_text("planned\n")
-        (root / "old.md").unlink()
-        return head(root)
-
-    monkeypatch.setattr(update_runner, "current_head", agent_works_first)
-    with pytest.raises(ValueError, match="^AGENTS.md changed"):
-        update_runner.commit_update(installed, changes, {}, "b" * 40, before)
-    assert (installed / "AGENTS.md").read_text() == "agent edit\n"
-    assert (installed / "new.md").read_text() == "planned\n"
-    assert not (installed / "old.md").exists()
-
-
-def test_failed_update_commit_restores_staging_made_before_it(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (installed / "AGENTS.md").write_text("original rules\n")
-    commit(installed, "managed files")
-    install_hook(installed, "pre-commit", "exit 1\n")
-    snapshot = update_runner.index_entries
-    calls: list[int] = []
-
-    def agent_stages_first(root: Path, names: list[str]) -> dict[str, str]:
-        calls.append(len(calls))
-        if len(calls) == 1:
-            (root / "AGENTS.md").write_text("staged by agent\n")
-            git(root, "add", "AGENTS.md")
-            (root / "AGENTS.md").write_text("still editing\n")
-        return snapshot(root, names)
-
-    monkeypatch.setattr(update_runner, "index_entries", agent_stages_first)
-    with pytest.raises(subprocess.SubprocessError, match="kept later edits"):
-        commit_changes(installed, {"AGENTS.md": "updated rules\n"})
-    assert git(installed, "show", ":AGENTS.md") == "staged by agent"
-    assert (installed / "AGENTS.md").read_text() == "still editing\n"
-
-
-def test_update_commit_never_takes_an_edit_made_after_its_writes(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (installed / "AGENTS.md").write_text("original rules\n")
-    head = commit(installed, "managed files")
-    snapshot = update_runner.index_entries
-
-    def agent_edits_after_writes(root: Path, names: list[str]) -> dict[str, str]:
-        (root / "AGENTS.md").write_text("agent edit\n")
-        return snapshot(root, names)
-
-    monkeypatch.setattr(update_runner, "index_entries", agent_edits_after_writes)
-    with pytest.raises(subprocess.SubprocessError, match="kept later edits to AGENTS"):
-        commit_changes(installed, {"AGENTS.md": "updated rules\n"})
-    assert (installed / "AGENTS.md").read_text() == "agent edit\n"
-    assert git(installed, "rev-parse", "HEAD") == head
-    assert git(installed, "diff", "--cached", "--name-only") == ""
-
-
-def test_update_commit_never_takes_a_link_repointed_after_its_writes(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    for name in ("a", "b", "c"):
-        (installed / "skills" / name).mkdir(parents=True)
-        (installed / "skills" / name / "SKILL.md").write_text(name)
-    link = installed / ".claude/skills/he"
-    link.parent.mkdir(parents=True)
-    link.symlink_to("../../skills/a", target_is_directory=True)
-    head = commit(installed, "linked skill")
-    snapshot = update_runner.index_entries
-
-    def agent_repoints_after_writes(root: Path, names: list[str]) -> dict[str, str]:
-        link.unlink()
-        link.symlink_to("../../skills/c", target_is_directory=True)
-        return snapshot(root, names)
-
-    monkeypatch.setattr(update_runner, "index_entries", agent_repoints_after_writes)
-    links: dict[str, str | None] = {".claude/skills/he": "../../skills/b"}
-    with pytest.raises(subprocess.SubprocessError, match="kept later edits to .claude"):
-        update_runner.commit_update(installed, {}, links, "b" * 40, {})
-    assert str(link.readlink()) == "../../skills/c"
-    assert git(installed, "rev-parse", "HEAD") == head
-
-
-def test_retiring_a_link_never_commits_a_folder_created_in_its_place(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (installed / "skills/old").mkdir(parents=True)
-    (installed / "skills/old/SKILL.md").write_text("old")
-    link = installed / ".claude/skills/old"
-    link.parent.mkdir(parents=True)
-    link.symlink_to("../../skills/old", target_is_directory=True)
-    head = commit(installed, "linked skill")
-    snapshot = update_runner.index_entries
-
-    def agent_fills_the_path(root: Path, names: list[str]) -> dict[str, str]:
-        (link / "agent.py").parent.mkdir(exist_ok=True)
-        (link / "agent.py").write_text("print('agent')\n")
-        return snapshot(root, names)
-
-    monkeypatch.setattr(update_runner, "index_entries", agent_fills_the_path)
-    links: dict[str, str | None] = {".claude/skills/old": None}
-    with pytest.raises(
-        subprocess.SubprocessError,
-        match="old changed while the update was being applied",
-    ):
-        update_runner.commit_update(installed, {}, links, "b" * 40, {})
-    assert (link / "agent.py").read_text() == "print('agent')\n"
-    assert git(installed, "rev-parse", "HEAD") == head
-
-
-def test_sessions_still_count_an_unplanned_file_under_a_planned_path(
-    installed: Path,
-) -> None:
-    (installed / "skills/he").mkdir(parents=True)
-    (installed / "skills/he/SKILL.md").write_text("planned")
-    (installed / "skills/he/agent.py").write_text("print('agent')\n")
-    commit(installed, "update with an extra file")
-    commit_id = git(installed, "rev-parse", "HEAD")
-    planned: dict[str, str | None] = {"skills/he/SKILL.md": "planned", "skills": None}
-    assert not update_runner.committed_matches(installed, commit_id, planned)
-    del planned["skills"]
-    assert update_runner.committed_matches(installed, commit_id, planned)
-
-
-def test_committed_matches_reads_an_update_larger_than_a_pipe(installed: Path) -> None:
-    planned: dict[str, str | None] = {
-        f"skills/s{index}/SKILL.md": f"{index}" * 2000 for index in range(400)
-    }
-    for name, content in planned.items():
-        (installed / name).parent.mkdir(parents=True)
-        (installed / name).write_text(content or "")
-    commit(installed, "a large update")
-    commit_id = git(installed, "rev-parse", "HEAD")
-    assert update_runner.committed_matches(installed, commit_id, planned)
-
-
-def test_sessions_still_count_an_update_commit_holding_other_content(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (installed / "AGENTS.md").write_text("original rules\n")
-    head = commit(installed, "managed files")
-    state = installed / ".hard-eng/sessions/known.json"
-    state.parent.mkdir(parents=True)
-    state.write_text(json.dumps({"base": head, "dirty": {}}))
-    check = update_runner.written
-
-    def agent_edits_after_check(
-        root: Path, name: str, content: str | None, link: bool
-    ) -> bool:
-        found = check(root, name, content, link)
-        (root / name).write_text("agent edit\n")
-        return found
-
-    monkeypatch.setattr(update_runner, "written", agent_edits_after_check)
-    commit_changes(installed, {"AGENTS.md": "updated rules\n"})
-    assert git(installed, "show", "HEAD:AGENTS.md") == "agent edit"
-    assert json.loads(state.read_text())["base"] == head
-
-
-def test_interrupt_after_the_update_commit_keeps_the_update(installed: Path) -> None:
-    (installed / ".hooks/update.py").write_text("old = True\n")
-    head = commit(installed, "managed files")
-    state = installed / ".hard-eng/sessions/known.json"
-    state.parent.mkdir(parents=True)
-    state.write_text(json.dumps({"base": head, "dirty": {}}))
-    install_hook(installed, "post-commit", "kill -TERM $PPID\n")
-    with pytest.raises(subprocess.SubprocessError, match="git commit exited"):
-        commit_changes(installed, {".hooks/update.py": "new = True\n"})
-    assert (installed / ".hooks/update.py").read_text() == "new = True\n"
-    assert (
-        git(installed, "log", "-1", "--format=%s") == f"Update Hard Eng to {'b' * 40}"
-    )
-    assert git(installed, "status", "--porcelain") == ""
-    assert json.loads(state.read_text())["base"] == git(installed, "rev-parse", "HEAD")
+def pushed_release(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    source, target, _ = release
+    add_origin(target)
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    return target
 
 
 def refused_release(
@@ -635,8 +396,11 @@ def test_background_update_does_not_repeat_a_refusal_until_inputs_change(
     result = target / update_runner.RESULT_FILE
     assert update_runner.apply_update(target) == 0
     assert "secrets-files requires native" in result.read_text()
+    assert "A fix in tracked files goes on the base branch" in result.read_text()
     assert update_runner.apply_update(target) == 0
-    assert "nothing changed since, so it was not retried" in result.read_text()
+    assert "it is not retried before 24 hours unless a new release" in (
+        result.read_text()
+    )
     assert fetch.call_count == 1
     with pytest.raises(ValueError, match="secrets-files requires native"):
         update.update(target, repair=True)
@@ -666,6 +430,122 @@ def test_setup_retries_a_remembered_refusal(
     assert fetch.call_count == 2
 
 
+def test_an_update_replaces_the_old_tool_hook_commands(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = release[1]
+    settings = target / ".claude/settings.json"
+    old = "$(git rev-parse --show-toplevel 2>/dev/null)"
+    settings.write_text(settings.read_text().replace("$CLAUDE_PROJECT_DIR", old))
+    assert settings.read_text().count(old) == 3
+    commit(target, "old tool hooks")
+    pushed_release(release, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    updated = git(
+        target, "show", f"{update_runner.UPDATE_BRANCH}:.claude/settings.json"
+    )
+    assert old not in updated
+    assert updated.count("$CLAUDE_PROJECT_DIR/.hooks/") == 3
+
+
+def test_a_linked_local_settings_file_does_not_block_the_update(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    with (target / ".git/info/exclude").open("a") as exclude:
+        exclude.write(".claude/settings.local.json\n")
+    local = target / ".claude/settings.local.json"
+    local.write_text(
+        '{"permissions":{"allow":'
+        '["Bash(python3 .agents/hard-eng/current/.hooks/hard-eng.py check)"]}}\n'
+    )
+    before = local.read_bytes()
+    assert git(target, "status", "--porcelain", "--ignored", str(local)).startswith(
+        "!!"
+    )
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "ready on hard-eng/update" in result
+    assert local.read_bytes() == before
+
+
+PRIVATE_MCP = '{"mcpServers":{"private":{"command":"private-integration"}}}\n'
+
+
+def private_mcp_release(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, ignored: bool
+) -> Path:
+    source, target, _ = release
+    monkeypatch.setenv("APPWRITE_ENDPOINT", "https://cloud.appwrite.io/v1")
+    (target / "app.js").write_text('import { Client } from "appwrite";\n')
+    if ignored:
+        (target / ".gitignore").write_text(".mcp.json\n")
+    commit(target, "use Appwrite")
+    add_origin(target)
+    (target / ".mcp.json").write_text(PRIVATE_MCP)
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    return target
+
+
+@pytest.mark.parametrize("ignored", [True, False], ids=["ignored", "untracked"])
+def test_an_update_refuses_to_replace_a_local_file_git_does_not_track(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, ignored: bool
+) -> None:
+    target = private_mcp_release(release, monkeypatch, ignored)
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert ".mcp.json" in result and "ready on" not in result
+    assert "then run the published setup command to retry" in result
+    assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
+    assert (target / ".mcp.json").read_text() == PRIVATE_MCP
+    assert update_runner.apply_update(target) == 0
+    assert "not retried" in (target / update_runner.RESULT_FILE).read_text()
+
+
+def test_a_setup_rerun_refuses_to_replace_a_local_file_git_does_not_track(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = private_mcp_release(release, monkeypatch, True)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    with pytest.raises(ValueError, match=r"\.mcp\.json"):
+        update_runner.locked_update(target, repair=True)
+    assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
+    assert (target / ".mcp.json").read_text() == PRIVATE_MCP
+
+
+def test_a_failing_project_commit_hook_leaves_the_checkout_and_worktrees_unchanged(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    install_hook(target, "pre-commit", "echo rejected by project hook\nexit 1\n")
+
+    def files() -> dict[Path, bytes]:
+        return {
+            path.relative_to(target): path.read_bytes()
+            for path in target.rglob("*")
+            if path.is_file()
+            and not {".git", ".hard-eng", "__pycache__"} & set(path.parts)
+        }
+
+    before = files()
+    head, branch = (
+        git(target, "rev-parse", "HEAD"),
+        git(target, "branch", "--show-current"),
+    )
+    worktrees = git(target, "worktree", "list", "--porcelain")
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "git commit exited 1" in result and "rejected by project hook" in result
+    assert "project commit hook" in result
+    assert git(target, "rev-parse", "HEAD") == head
+    assert git(target, "branch", "--show-current") == branch
+    assert git(target, "worktree", "list", "--porcelain") == worktrees
+    assert git(target, "status", "--porcelain") == ""
+    assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
+    assert files() == before
+
+
 def test_background_update_retries_after_a_network_failure(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -677,75 +557,6 @@ def test_background_update_retries_after_a_network_failure(
     assert update_runner.apply_update(target) == 0
     assert fetch.call_count == 2
     assert "not retried" not in (target / update_runner.RESULT_FILE).read_text()
-
-
-def test_update_commit_landing_after_an_agent_commit_is_kept(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (installed / ".hooks/update.py").write_text("old = True\n")
-    commit(installed, "managed files")
-    install = update.replace_file
-
-    def install_while_agent_commits(
-        target: Path, content: bytes, ready: Callable[[], bool]
-    ) -> bool:
-        git(installed, "commit", "-qm", "agent work", "--allow-empty")
-        install_hook(installed, "post-commit", "kill -TERM $PPID\n")
-        return install(target, content, ready)
-
-    monkeypatch.setattr(update, "replace_file", install_while_agent_commits)
-    with pytest.raises(subprocess.SubprocessError, match="git commit exited"):
-        commit_changes(installed, {".hooks/update.py": "new = True\n"})
-    assert (installed / ".hooks/update.py").read_text() == "new = True\n"
-    assert git(installed, "log", "-2", "--format=%s").splitlines() == [
-        f"Update Hard Eng to {'b' * 40}",
-        "agent work",
-    ]
-    assert git(installed, "status", "--porcelain") == ""
-
-
-def test_rollback_keeps_an_edit_made_to_an_already_checked_path(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    for name in ("first.md", "second.md"):
-        (installed / name).write_text("original\n")
-    changes: dict[str, str | None] = {"first.md": "new\n", "second.md": "new\n"}
-    update.write_changes(installed, changes)
-    check = update_runner.written
-
-    def edit_first_while_checking_second(
-        root: Path, name: str, content: str | None, link: bool
-    ) -> bool:
-        if name == "second.md":
-            (root / "first.md").write_text("agent edit\n")
-        return check(root, name, content, link)
-
-    monkeypatch.setattr(update_runner, "written", edit_first_while_checking_second)
-    before: dict[str, bytes | None] = dict.fromkeys(changes, b"original\n")
-    assert update_runner.roll_back(installed, changes, {}, before, {}, [*changes]) == []
-    assert (installed / "first.md").read_text() == "agent edit\n"
-    assert (installed / "second.md").read_text() == "original\n"
-
-
-def test_rollback_keeps_an_edit_made_while_restoring_that_path(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    target = installed / "first.md"
-    target.write_text("original\n")
-    changes: dict[str, str | None] = {"first.md": "new\n"}
-    update.write_changes(installed, changes)
-    copy = shutil.copymode
-
-    def edit_while_preparing(source: Path, destination: Path) -> None:
-        target.write_text("agent edit\n")
-        copy(source, destination)
-
-    monkeypatch.setattr(shutil, "copymode", edit_while_preparing)
-    before: dict[str, bytes | None] = {"first.md": b"original\n"}
-    assert update_runner.roll_back(installed, changes, {}, before, {}, [*changes]) == [
-        "first.md"
-    ]
-    assert target.read_text() == "agent edit\n"
 
 
 def test_interrupted_write_keeps_the_original_file(
@@ -767,107 +578,36 @@ def test_interrupted_write_keeps_the_original_file(
     ]
 
 
-def test_failed_update_commit_keeps_staging_made_while_it_ran(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
+def test_install_commit_with_crlf_lines_kept_by_git_filters_is_not_undone(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (installed / "AGENTS.md").write_text("original rules\n")
-    (installed / ".hooks/update.py").write_text("old = True\n")
-    commit(installed, "managed files")
-    install_hook(installed, "pre-commit", "exit 1\n")
-    unstage = update_runner.unstage_own
-
-    def agent_stages_then_unstage(
-        root: Path, names: list[str], staging: tuple[dict[str, str], dict[str, str]]
-    ) -> None:
-        (root / "AGENTS.md").write_text("staged by agent\n")
-        git(root, "add", "AGENTS.md")
-        (root / "AGENTS.md").write_text("still editing\n")
-        unstage(root, names, staging)
-
-    monkeypatch.setattr(update_runner, "unstage_own", agent_stages_then_unstage)
-    changes: dict[str, str | None] = {
-        "AGENTS.md": "updated rules\n",
-        ".hooks/update.py": "new = True\n",
-    }
-    with pytest.raises(subprocess.SubprocessError, match="git commit exited 1"):
-        commit_changes(installed, changes)
-    assert git(installed, "show", ":AGENTS.md") == "staged by agent"
-    assert (installed / "AGENTS.md").read_text() == "still editing\n"
-    assert (installed / ".hooks/update.py").read_text() == "old = True\n"
-    assert git(installed, "diff", "--cached", "--name-only") == "AGENTS.md"
+    project = project_with_commit_hook(tmp_path, "#!/bin/sh\nexit 0\n")
+    (project / ".gitattributes").write_text("*.md text eol=crlf\n")
+    (project / "AGENTS.md").write_bytes(b"# Project rules\r\n\r\nKeep this.\r\n")
+    commit(project, "windows line endings")
+    head = git(project, "rev-parse", "HEAD")
+    installer.install(project)
+    output = capsys.readouterr().out
+    assert "Committed the installed files locally without pushing." in output
+    assert git(project, "rev-parse", "HEAD") != head
 
 
-def test_interrupt_right_after_staging_still_unstages_the_update(
-    installed: Path, monkeypatch: pytest.MonkeyPatch
+def test_install_commit_rewritten_by_a_hook_is_found_when_the_message_changes(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (installed / ".hooks/update.py").write_text("old = True\n")
-    commit(installed, "managed files")
-    snapshot = update_runner.index_entries
-    calls: list[int] = []
-
-    def interrupted_after_add(root: Path, names: list[str]) -> dict[str, str]:
-        calls.append(len(calls))
-        if len(calls) == 2:
-            os.kill(os.getpid(), signal.SIGTERM)
-        return snapshot(root, names)
-
-    monkeypatch.setattr(update_runner, "index_entries", interrupted_after_add)
-    previous = signal.signal(signal.SIGTERM, update_runner.interrupt_update)
-    try:
-        with pytest.raises(subprocess.SubprocessError, match="signal 15"):
-            commit_changes(installed, {".hooks/update.py": "new = True\n"})
-    finally:
-        signal.signal(signal.SIGTERM, previous)
-    assert git(installed, "diff", "--cached", "--name-only") == ""
-    assert (installed / ".hooks/update.py").read_text() == "old = True\n"
-
-
-def test_failed_update_restores_the_skill_folder_link(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, _ = release
-    skill = link_skill_into_old_copy(target)
-    select_release(source, monkeypatch)
-    hook = target / ".git/hooks/pre-commit"
-    hook.write_text("#!/bin/sh\nexit 1\n")
-    hook.chmod(0o755)
-    with pytest.raises(
-        subprocess.SubprocessError,
-        match="git commit exited 1.*fix that hook in the project, not Hard Eng",
-    ):
-        update.update(target)
-    assert skill.is_symlink()
-    assert git(target, "status", "--porcelain") == ""
-
-
-@pytest.mark.parametrize("newer", [True, False], ids=["update", "repair"])
-def test_migrating_a_skill_link_keeps_a_file_created_during_it(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, newer: bool
-) -> None:
-    source, target, _ = release
-    skill = link_skill_into_old_copy(target)
-    if newer:
-        select_release(source, monkeypatch)
-    else:
-        monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
-    head = git(target, "rev-parse", "HEAD")
-    install = update.replace_file
-    created: list[Path] = []
-
-    def agent_creates_a_planned_file(
-        path: Path, content: bytes, ready: Callable[[], bool] = lambda: True
-    ) -> bool:
-        if not created and path.is_relative_to(skill):
-            other = skill / "references/workflow.md"
-            other.parent.mkdir(parents=True, exist_ok=True)
-            other.write_text("agent edit\n")
-            created.append(other)
-        return install(path, content, ready)
-
-    monkeypatch.setattr(update, "replace_file", agent_creates_a_planned_file)
-    with pytest.raises(
-        (ValueError, subprocess.SubprocessError), match="workflow.md changed while"
-    ):
-        update.update(target)
-    assert created[0].read_text() == "agent edit\n"
-    assert git(target, "rev-parse", "HEAD") == head
+    project = project_with_commit_hook(
+        tmp_path,
+        "#!/bin/sh\necho '<!-- formatted -->' >> AGENTS.md\ngit add AGENTS.md\n",
+    )
+    message = project / ".git/hooks/commit-msg"
+    message.write_text(
+        '#!/bin/sh\nprintf "chore: %s" "$(cat "$1")" > "$1.new"\nmv "$1.new" "$1"\n'
+    )
+    message.chmod(0o755)
+    head = git(project, "rev-parse", "HEAD")
+    installer.install(project)
+    output = capsys.readouterr().out
+    assert "Committed the installed files locally without pushing." not in output
+    assert "AGENTS.md" in output.split("Installed files are not committed (")[1]
+    assert git(project, "rev-parse", "HEAD") == head
+    assert "<!-- formatted -->" not in (project / "AGENTS.md").read_text()

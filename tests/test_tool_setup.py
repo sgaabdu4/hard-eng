@@ -5,11 +5,22 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 SOURCE = Path(__file__).resolve().parents[1]
+NOW = datetime(2026, 11, 10, 13, 45, tzinfo=UTC)
+WAIT = ["--exclude-newer", "2026-11-08T13:00:00Z"]
+
+
+def fixed_cutoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    import tool_setup
+
+    monkeypatch.setattr(tool_setup, "release_cutoff", lambda now=None: WAIT[1])
+
+
 BUN = """#!{python}
 import json, os, sys, time
 from pathlib import Path
@@ -235,15 +246,16 @@ def test_dead_code_gate_treats_console_script_targets_as_used(tmp_path: Path) ->
         'other = "demo.cli:run_app"\n'
     )
     command = ["vulture", "src", "--min-confidence", "60"]
-    assert tool_setup.managed_command(command, tmp_path) == [
+    assert tool_setup.managed_command(command, tmp_path, NOW) == [
         "uvx",
+        *WAIT,
         "vulture@latest",
         *command[1:],
         "--ignore-names",
         "main,run_app",
     ]
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
-    assert tool_setup.managed_command(command, tmp_path)[2:] == command[1:]
+    assert tool_setup.managed_command(command, tmp_path, NOW)[4:] == command[1:]
 
 
 def test_quick_check_uses_installed_tools_while_offline(
@@ -283,12 +295,12 @@ def test_quick_check_runs_python_scanners_from_the_cache(
 
     command = ["ruff", "check"]
     monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check"])
-    assert tool_setup.managed_command(command)[:2] == ["uvx", "ruff@latest"]
+    assert tool_setup.managed_command(command, now=NOW)[:3] == ["uvx", *WAIT]
     monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
-    assert tool_setup.managed_command(command)[:3] == [
+    assert tool_setup.managed_command(command, now=NOW)[:4] == [
         "uvx",
         "--offline",
-        "ruff@latest",
+        *WAIT,
     ]
 
 
@@ -309,12 +321,13 @@ def test_parallel_scanners_run_the_version_found_once_before_them(
     monkeypatch.setenv("PATH", f"{uvx.parent}:{os.environ['PATH']}")
     monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check"])
     monkeypatch.setattr(tool_setup, "SCANNER_VERSIONS", {})
+    fixed_cutoff(monkeypatch)
     tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
     assert calls.read_text().splitlines() == [
-        "ruff@latest --version",
-        "semgrep@latest --version",
+        f"--exclude-newer {WAIT[1]} ruff@latest --version",
+        f"--exclude-newer {WAIT[1]} semgrep@latest --version",
     ]
-    assert tool_setup.managed_command(["ruff", "check"])[:2] == ["uvx", "ruff@9.9.9"]
+    assert tool_setup.managed_command(["ruff", "check"])[3:5] == ["ruff@9.9.9", "check"]
 
 
 def test_configured_uvx_scanners_are_pinned_like_bare_ones(
@@ -340,7 +353,7 @@ def test_configured_uvx_scanners_are_pinned_like_bare_ones(
     group: Group = {"path": ".", "checks": [{"name": "lint", "command": command}]}
     tool_setup.provision_tools(tmp_path, [group], 30)
     assert pinned == ["ruff"]
-    assert tool_setup.managed_command(command) == ["uvx", "ruff@9.9.9", "check", "src"]
+    assert tool_setup.managed_command(command)[3:] == ["ruff@9.9.9", "check", "src"]
 
 
 @pytest.mark.parametrize(
