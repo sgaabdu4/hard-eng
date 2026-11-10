@@ -334,7 +334,10 @@ def publish(root: Path, merge: bool = True) -> int:
             and not branch_current(root, tip)
         )
     ):
-        print(locked_update(root))
+        outcome = locked_update(root)
+        print(outcome)
+        if outcome.startswith("Hard Eng update failed"):
+            return 1
         revision = revision_at(root, f"refs/heads/{UPDATE_BRANCH}")
         if revision is not None and not (
             unfinished_update(root, tip) or branch_current(root, tip)

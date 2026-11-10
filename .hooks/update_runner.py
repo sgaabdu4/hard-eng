@@ -124,6 +124,20 @@ def ready_revision(root: Path) -> str | None:
     )
 
 
+def pulled_message(root: Path, revision: str) -> str | None:
+    """The local origin/<base> already holds the waiting update, as after its PR merged."""
+    from shipping import load_policy
+
+    policy = load_policy(root, required=False)
+    base = policy["base"] if policy else "main"
+    if revision_at(root, f"refs/remotes/origin/{base}") != revision:
+        return None
+    return (
+        f"Hard Eng update {revision} is already on {base}: run `git fetch origin {base}` "
+        f"and rebase this branch on origin/{base}, or pull {base}."
+    )
+
+
 def ready_message(revision: str) -> str:
     return (
         f"Hard Eng update {revision} ready on {UPDATE_BRANCH} → `{UPDATE_COMMAND}` "
@@ -143,7 +157,7 @@ def freshness_note(root: Path) -> str:
         if update_running(root):
             return f"Hard Eng update still running ({LOG_FILE}); scaffold may be stale."
         if (ready := ready_revision(root)) is not None:
-            return ready_message(ready)
+            return pulled_message(root, ready) or ready_message(ready)
         result = last_result(root)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         return f"Hard Eng freshness unknown: {error}."
