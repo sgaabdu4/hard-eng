@@ -42,7 +42,7 @@ Proof: check
 
 ## HE-NO-SWITCH-OFF
 
-A change fails when its added lines hold a Python, JavaScript, TypeScript, Dart or Swift suppression or a skipped or focused test, a Semgrep or Gitleaks inline marker in any file, or an entry in `.gitleaksignore` or `.semgrepignore`. It also fails when it removes more `assert` or `expect(` lines from test files than it adds. Paths under `.hooks/`, `.agents/` and `.claude/` are exempt, lines that existed before the change are not flagged, and there is no allow-list.
+A change fails when its added lines hold any of these: a Python, JavaScript, TypeScript, Dart or Swift suppression; a skipped or focused test; in any file, an inline ignore marker of Semgrep, Gitleaks, jscpd, Fallow, ShellCheck, zizmor or Dart coverage (`coverage:ignore`); a line that is not a comment in `.gitleaksignore`, `.gitleaks.toml` or `.semgrepignore`. A test argument that skips or focuses (Dart `skip:` or `solo:` with any value but `false`; JavaScript or TypeScript `skip:` set to `true` or a text reason, or `only: true`) is flagged only in a test file. It also fails when it removes more `assert` or `expect(` lines from test files than it adds. Paths under `.hooks/`, `.agents/` and `.claude/` are exempt, lines that existed before the change are not flagged, and there is no allow-list.
 
 Proof: check
 
