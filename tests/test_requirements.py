@@ -112,15 +112,18 @@ def test_copied_rule_sentence_fails(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "marker",
-    [".hooks/hard-eng-source.json", "pyproject.toml"],
-    ids=["marker", "no-setup"],
+    "installed",
+    [
+        {".hooks/hard-eng-source.json": "{}\n", "setup.py": ""},
+        {"pyproject.toml": "{}\n"},
+    ],
+    ids=["marker-with-setup", "no-setup"],
 )
 def test_installed_project_does_not_need_hard_eng_tests(
-    tmp_path: Path, marker: str
+    tmp_path: Path, installed: dict[str, str]
 ) -> None:
     files = {REGISTRY: COVERAGE + STYLE, "AGENTS.md": f"Coverage: {COVERAGE_ID}.\n"}
-    validate_requirements(project(tmp_path, {**files, marker: "{}\n"}))
+    validate_requirements(project(tmp_path, {**files, **installed}))
 
 
 def test_project_rule_needs_its_own_test(tmp_path: Path) -> None:

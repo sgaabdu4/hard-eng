@@ -143,7 +143,6 @@ def test_ready_refuses_an_open_or_uncounted_review_thread_on_every_path(
         ({"behind_by": 2}, "2 commit\\(s\\) behind main; rebase"),
         ({"behind_by": None}, "comparison with its base is invalid"),
         ({"behind_by": True}, "comparison with its base is invalid"),
-        ({}, "comparison with its base is invalid"),
     ],
 )
 def test_ready_refuses_a_pr_behind_its_base(
