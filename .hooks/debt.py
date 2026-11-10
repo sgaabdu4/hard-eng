@@ -130,7 +130,7 @@ def load(root: Path) -> dict[str, Counter[str]]:
 def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bool:
     """A gate with debt fails only on findings beyond it, or when listed ones are fixed."""
     debt = load(root).get(f"{group['path']}/{gate['name']}")
-    if debt is None:
+    if debt is None or gate.get("role") in NEVER:
         return failed
     current = fingerprints(root, group, gate, output) if failed else Counter()
     if new := current - debt:
