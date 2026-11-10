@@ -813,11 +813,11 @@ def validate_required_checks(
     files = listed or repository_files(root)
     manifests = package_manifests(root, files)
     validate_manifest_groups(root, config, manifests)
-    from python_setup import require_listed_python_sources
+    from coverage_sources import require_listed_sources
     from swift_setup import require_swift_groups
 
     require_swift_groups(root, config, files)
-    require_listed_python_sources(root, config["packages"], files)
+    require_listed_sources(root, config["packages"], files)
     basic = not config["packages"] and not manifests
     shared_roles = {gate.get("role", "") for gate in config["shared"]}
     required = set() if basic else {"secrets-files"}

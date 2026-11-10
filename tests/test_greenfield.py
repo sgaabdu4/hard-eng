@@ -273,6 +273,40 @@ def test_an_imports_gate_without_a_contract_prints_the_block_to_add(
     assert "PASS imports" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("manifest", "lock", "first", "added"),
+    [
+        ("package.json", "bun.lock", "src/index.ts", "server/main.ts"),
+        ("pubspec.yaml", "pubspec.lock", "lib/main.dart", "tool/build.dart"),
+    ],
+)
+def test_javascript_and_dart_code_added_after_setup_must_join_the_checked_sources(
+    installer: ModuleType,
+    tmp_path: Path,
+    manifest: str,
+    lock: str,
+    first: str,
+    added: str,
+) -> None:
+    repository(tmp_path)
+    if manifest != "package.json":
+        (tmp_path / "package.json").unlink()
+        (tmp_path / "bun.lock").unlink()
+        (tmp_path / manifest).write_text("name: app_fixture\n")
+        (tmp_path / lock).touch()
+    for name in (first, added):
+        (tmp_path / name).parent.mkdir(exist_ok=True)
+    (tmp_path / first).write_text("export const a = 1;\n")
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
+    (tmp_path / added).write_text("export const b = 2;\n")
+    folder = Path(added).parts[0]
+    with pytest.raises(ValueError, match=f"outside its sources: {folder};.*`sources`"):
+        validate_required_checks(tmp_path, config)
+    config["packages"][0]["sources"].append(folder)
+    validate_required_checks(tmp_path, config)
+
+
 @pytest.mark.parametrize("default", ["master", "trunk"])
 def test_small_change_without_a_remote_compares_with_the_local_default_branch(
     repository: Path,
