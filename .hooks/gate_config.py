@@ -819,11 +819,10 @@ def validate_required_checks(
 
     require_swift_groups(root, config, files)
     require_listed_python_sources(root, config["packages"], files)
-    if not config["packages"] and not manifests:
-        return  # Ad-hoc command groups without a supported application manifest.
+    basic = not config["packages"] and not manifests
     shared_roles = {gate.get("role", "") for gate in config["shared"]}
-    required = {"secrets-files"}
-    if config.get("scan_git_history", True):
+    required = set() if basic else {"secrets-files"}
+    if config.get("scan_git_history", True) and not basic:
         required.add("secrets-history")
     if has_workflows(root, files):
         required.update({"workflows", "ci-security"})
@@ -845,6 +844,8 @@ def validate_required_checks(
             shared_roles.add("deployment")
     require_roles("shared", required, shared_roles)
     require_listed_shell_scripts(root, files, config["shared"])
+    if basic:
+        return
     workspace_languages = dict(manifests)
     by_directory = {
         (
