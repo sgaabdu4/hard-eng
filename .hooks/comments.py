@@ -240,11 +240,6 @@ def comment_blocks(path: Path, text: str | None = None) -> list[tuple[int, int, 
 
 def installed_blocks(root: Path, base: str, name: str) -> set[tuple[str, ...]]:
     """Blocks a file held before the change that installs Hard Eng: old code its tools may touch."""
-    if (
-        not (root / ".hooks/hard-eng.py").is_file()
-        or git_file(root, base, ".hooks/hard-eng.py") is not None
-    ):
-        return set()
     text = git_file(root, base, name)
     if text is None:
         return set()
@@ -271,11 +266,14 @@ def validate_comments(root: Path, base: str | None) -> None:
         and not (root / name).is_symlink()
     )
     skipped = generated_sources(root, sources)
+    installing = (root / ".hooks/hard-eng.py").is_file() and (
+        git_file(root, base, ".hooks/hard-eng.py") is None
+    )
     found: list[str] = []
     for name in sources:
         if name in skipped:
             continue
-        older = installed_blocks(root, base, name)
+        older = installed_blocks(root, base, name) if installing else set()
         lines = (root / name).read_text(errors="replace").splitlines()
         found += [
             f"{name}:{start} holds a {length}-line comment block"
@@ -381,9 +379,9 @@ def diff_lines(
             "-c",
             "core.quotepath=off",
             "diff",
-            "--no-ext-diff",
             "-U0",
             "--no-color",
+            "--no-ext-diff",
             "--src-prefix=a/",
             "--dst-prefix=b/",
             diff_base(root, base),
