@@ -797,3 +797,17 @@ def test_uvx_tools_wait_two_days_after_a_release(
     assert tool_setup.scanner_version("ruff", False, 30, now=now) == "9.9.9"
     assert asked == [["uvx", *cutoff, "ruff@latest", "--version"]]
     assert "UV_EXCLUDE_NEWER" not in os.environ
+
+
+def test_release_age_has_one_value() -> None:
+    seconds = tool_setup.RELEASE_AGE_SECONDS
+    template = SOURCE / ".agents/skills/he/templates/hard-eng.javascript.json"
+    ages = [
+        argument
+        for argument in template.read_text().split('"')
+        if argument.startswith("--minimum-release-age=")
+    ]
+    assert ages == [f"--minimum-release-age={seconds}"]
+    for workflow in ("hard-eng.yml", "canary.yml"):
+        text = (SOURCE / ".github/workflows" / workflow).read_text()
+        assert f"MISE_MINIMUM_RELEASE_AGE: {seconds // 86400}d\n" in text
