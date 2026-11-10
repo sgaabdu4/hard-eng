@@ -207,6 +207,7 @@ def test_basic_mode_requires_checks_for_scripts_and_workflows_added_later(
     (repository / "run.sh").write_text("#!/bin/sh\necho run\n")
     with pytest.raises(ValueError, match="shared: missing mandatory checks: shell"):
         validate_required_checks(repository, installed)
+    validate_required_checks(repository, installed, starting=True)
     installed["shared"].append(
         {
             "name": "shellcheck",

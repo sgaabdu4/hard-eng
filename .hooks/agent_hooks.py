@@ -513,7 +513,7 @@ def gate_status(root: Path) -> str:
     from update import SOURCE_FILE, install_paths
 
     try:
-        load_groups(root)
+        load_groups(root, starting=True)
         status = "Gates: ok."
     except ModuleNotFoundError as error:
         if error.name != "yaml":
