@@ -59,10 +59,42 @@ def test_the_check_drops_the_environment_that_its_launcher_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assert importlib.util.find_spec("yaml"), "a rerun would replace this process"
+    monkeypatch.setenv(tool_setup.RESTARTED, "1")
     monkeypatch.setenv("VIRTUAL_ENV", "/nonexistent/throwaway")
     tool_setup.ensure_python_runtime()
     left = os.environ.get("VIRTUAL_ENV")
+    mark = os.environ.get(tool_setup.RESTARTED)
     assert left is None
+    assert mark is None
+
+
+def test_the_check_keeps_an_environment_that_the_developer_activated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert importlib.util.find_spec("yaml"), "a rerun would replace this process"
+    monkeypatch.setenv(tool_setup.RESTARTED, "")
+    monkeypatch.setenv("VIRTUAL_ENV", "/nonexistent/activated")
+    tool_setup.ensure_python_runtime()
+    kept = os.environ.get("VIRTUAL_ENV")
+    assert kept == "/nonexistent/activated"
+
+
+def test_the_check_marks_the_process_that_it_starts_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[tuple[str | None, list[str]]] = []
+
+    def restart(_program: str, arguments: list[str]) -> None:
+        seen.append((os.environ.get(tool_setup.RESTARTED), arguments[:5]))
+
+    def no_module(_name: str) -> None:
+        return None
+
+    monkeypatch.setenv(tool_setup.RESTARTED, "")
+    monkeypatch.setattr(importlib.util, "find_spec", no_module)
+    monkeypatch.setattr(os, "execvp", restart)
+    tool_setup.ensure_python_runtime()
+    assert seen == [("1", ["uv", "run", "--no-project", "--with", "pyyaml"])]
 
 
 def test_setup_gives_an_installed_poetry_gate_the_prefix_that_works(

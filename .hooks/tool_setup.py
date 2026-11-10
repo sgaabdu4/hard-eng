@@ -92,6 +92,7 @@ MISE_LATEST = MISE_PACKAGE + "@latest"
 MISE_BINARY = Path("node_modules", MISE_PACKAGE, "bin/mise")
 CHECKOUT = Path(__file__).resolve().parents[1]
 TOOL_OWNER = "HARD_ENG_TOOL_OWNER"
+RESTARTED = "HARD_ENG_RESTARTED"
 VISIBLE_TEMP = Path("/tmp")
 HELD: list[IO[str]] = []
 NOT_INSTALLED = (
@@ -106,9 +107,11 @@ def quick_mode() -> bool:
 
 def ensure_python_runtime() -> None:
     """Run the installed CLI with its YAML dependency without changing host Python."""
-    # uv run sets VIRTUAL_ENV to its throwaway; Poetry would sync and run gates there.
-    os.environ.pop("VIRTUAL_ENV", None)
+    if os.environ.pop(RESTARTED, None):
+        # uv run set VIRTUAL_ENV to its throwaway; Poetry would sync and run gates there.
+        os.environ.pop("VIRTUAL_ENV", None)
     if importlib.util.find_spec("yaml") is None:
+        os.environ[RESTARTED] = "1"
         try:
             os.execvp(
                 "uv",
