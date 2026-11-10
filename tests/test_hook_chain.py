@@ -124,6 +124,23 @@ def test_a_linked_project_hook_stays_a_link(
     assert (repository / "edited.flag").exists()
 
 
+def test_a_relinked_project_hook_replaces_the_frozen_copy(
+    installer: ModuleType, repository: Path, shipping_policy: ShippingPolicy
+) -> None:
+    hook = install_over(installer, repository, shipping_policy, PROJECT_HOOK)
+    kept = hook_chain.project_copy(hook)
+    assert not kept.is_symlink()
+    real = repository / "tools/pre-push.sh"
+    real.parent.mkdir()
+    real.write_text(PROJECT_HOOK)
+    real.chmod(0o755)
+    hook.unlink()
+    hook.symlink_to("../../tools/pre-push.sh")
+    installer.install(repository)
+    assert kept.is_symlink() and real.read_text() == PROJECT_HOOK
+    assert hook.read_text() == hook_chain.CHAINED_LAUNCHER
+
+
 def test_setup_chains_a_husky_projects_own_pre_push_script(
     installer: ModuleType,
     repository: Path,
