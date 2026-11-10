@@ -12,7 +12,7 @@ This file holds the scaffold's purpose, its current status and the requirements 
 
 ## Current status
 
-- Branches: feature PRs merge into `develop` after the `hard-eng` CI check passes. A release from `develop` to `main` runs the release canary once. `main` requires the `hard-eng` check, including for administrators; force pushes and deletion stay disabled.
+- Branches: feature PRs merge into `develop` after the `hard-eng` CI check passes. A release is a `develop` → `main` PR; the Mac canary is optional. `main` requires the `hard-eng` check, including for administrators; force pushes and deletion stay disabled.
 - Cloud sessions in this repository load the same hooks, skill links and attribution settings that setup writes into a project.
 - Learning: session checkpoints and failed checks request HE Learn; Claude's failure hook warns only on a tool error repeated three times in a session; terse decisions live in `docs/adr/`. Hooks prompt judgment and cannot guarantee that a failure never recurs.
 - Plans: Draft, Ready and Complete checks validate structure and declarations. They do not authenticate approval, evidence truth or delivery order. Each acceptance line names a test, a requirement ID or `N/A — reason`.
@@ -35,7 +35,7 @@ Each item is agreed but not yet fully implemented or proven. Tick work happens i
 - [ ] Integration scope: change only the repository where setup runs, with project-local Claude and Codex MCP and hook configuration and no user-wide plugin activation.
 - [ ] Gate results: findings, crashes and incomplete scans fail; an unrun check is never reported as passed; each scanner's result is verified.
 - [ ] Test quality: tests assert independently expected outcomes and relevant failures; a regression test catches the original defect. Coverage and mock-call checks alone do not prove behavior.
-- [ ] Tool versions: gates use the latest tool on every run, updated independently of Hard Eng.
+- [ ] Tool versions: gates use the newest tool release that is at least two days old on every run, updated independently of Hard Eng.
 - [ ] Updates: check at every session start and install the newest `main` commit whose required checks passed.
 - [ ] Secret scanning: Gitleaks scans current files and Git history in every language, fully redacts secrets and fails on findings or errors.
 - [ ] Source security: Semgrep scans JavaScript, TypeScript, Python, Dart and Flutter with applicable rules and fails on findings or scan errors.
