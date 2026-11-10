@@ -666,6 +666,41 @@ def test_setup_retries_a_remembered_refusal(
     assert fetch.call_count == 2
 
 
+def test_a_failing_project_commit_hook_leaves_the_checkout_and_worktrees_unchanged(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    add_origin(target)
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    install_hook(target, "pre-commit", "echo rejected by project hook\nexit 1\n")
+
+    def files() -> dict[Path, bytes]:
+        return {
+            path.relative_to(target): path.read_bytes()
+            for path in target.rglob("*")
+            if path.is_file()
+            and ".git" not in path.parts
+            and ".hard-eng" not in path.parts
+        }
+
+    before = files()
+    head, branch = (
+        git(target, "rev-parse", "HEAD"),
+        git(target, "branch", "--show-current"),
+    )
+    worktrees = git(target, "worktree", "list", "--porcelain")
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "git commit exited 1" in result and "project commit hook" in result
+    assert git(target, "rev-parse", "HEAD") == head
+    assert git(target, "branch", "--show-current") == branch
+    assert git(target, "worktree", "list", "--porcelain") == worktrees
+    assert git(target, "status", "--porcelain") == ""
+    assert not git(target, "branch", "--list", update_runner.UPDATE_BRANCH)
+    assert files() == before
+
+
 def test_background_update_retries_after_a_network_failure(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
