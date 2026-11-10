@@ -74,17 +74,26 @@ def test_a_new_finding_beyond_the_debt_prints_its_real_line(
     )
     assert debt.judge(tmp_path, group, lint, True, old) is False
     capsys.readouterr()
-    new = f"{tmp_path}/app/price-list.tsx:41:9 lint/style/useConst\n"
-    assert debt.judge(tmp_path, group, lint, True, old + new) is True
-    shown = capsys.readouterr().out
-    assert "  ./app/price-list.tsx:41:9 lint/style/useConst" in shown
-    assert (
-        debt.judge(tmp_path, group, lint, True, old + old.splitlines(keepends=True)[0])
-        is True
-    )
-    mixed = capsys.readouterr().out
-    assert "  src/f07.ts:7:5 " + kind in mixed
-    assert "New lines among these: 1." in mixed
+    price = f"{tmp_path}/app/price-list.tsx:41:9 lint/style/useConst\n"
+    assert debt.judge(tmp_path, group, lint, True, price) is True
+    assert capsys.readouterr().out.splitlines()[1:] == [
+        "  ./app/price-list.tsx:41:9 lint/style/useConst"
+    ]
+    extra = old.splitlines(keepends=True)[0]
+    assert debt.judge(tmp_path, group, lint, True, old + extra) is True
+    printed = capsys.readouterr().out.splitlines()
+    assert printed[1] == "  1 of the next 26 lines are new; the others are recorded:"
+    assert len(printed) == 2 + 20 + 1
+    assert printed[-1] == "  6 more lines not shown"
+    two = price + f"{tmp_path}/app/cart.tsx:3:1 lint/style/useConst\n"
+    assert debt.judge(tmp_path, group, lint, True, old + extra + two) is True
+    mixed = capsys.readouterr().out.splitlines()
+    assert mixed[1:3] == [
+        "  ./app/price-list.tsx:41:9 lint/style/useConst",
+        "  ./app/cart.tsx:3:1 lint/style/useConst",
+    ]
+    assert mixed[3] == "  1 of the next 26 lines are new; the others are recorded:"
+    assert mixed[-1] == "  8 more lines not shown"
 
 
 def test_a_later_adoption_only_drops_lines(tmp_path: Path) -> None:

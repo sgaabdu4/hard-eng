@@ -179,6 +179,31 @@ def load(root: Path) -> dict[str, Counter[str]]:
     return {key: Counter(lines) for key, lines in gates.items()}
 
 
+def print_new(
+    new: Counter[str], recorded: Counter[str], spelling: dict[str, list[str]]
+) -> None:
+    """Lines of forms with no recorded line first, then the doubtful ones; 20 lines in all."""
+
+    def ordered(forms: list[str]) -> list[str]:
+        return sorted(
+            (line for form in forms for line in spelling[form]),
+            key=lambda line: not WORD_CHARACTER.search(line),
+        )
+
+    surely = ordered([form for form in new if not recorded[form]])
+    doubtful = [form for form in new if recorded[form]]
+    candidates = ordered(doubtful)
+    lines = [f"  {line}" for line in surely[:20]]
+    if candidates and len(lines) < 20:
+        sure_new = sum(new[form] for form in doubtful)
+        lines.append(
+            f"  {sure_new} of the next {len(candidates)} lines are new; the others are recorded:"
+        )
+        lines += [f"  {line}" for line in candidates[: 20 - len(surely)]]
+    cut = len(surely) + len(candidates) - 20
+    print("\n".join(lines + ([f"  {cut} more lines not shown"] if cut > 0 else [])))
+
+
 def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bool:
     """A gate with debt fails only on findings beyond it, or when listed ones are fixed."""
     debt = load(root).get(f"{group['path']}/{gate['name']}")
@@ -189,14 +214,7 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
         print(f"FAIL {gate['name']} @ {group['path']}: findings beyond {DEBT_FILE}:")
         spelling = {neutral(line): [line] for line in current}
         spelling.update(real_forms(real_lines(root, group, gate, output)))
-        recorded = by_form(debt)
-        if unsure := sum(count for form, count in new.items() if recorded[form]):
-            print(f"  New lines among these: {unsure}. The rest were recorded.")
-        shown = sorted(
-            (line for form in new for line in spelling[form]),
-            key=lambda line: not WORD_CHARACTER.search(line),
-        )
-        print("".join(f"  {line}\n" for line in shown[:20]), end="")
+        print_new(new, by_form(debt), spelling)
         return True
     if fixed := by_form(debt) - by_form(current):
         print(
