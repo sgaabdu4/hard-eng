@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -238,8 +239,9 @@ def test_python_code_added_after_setup_must_join_the_checked_sources(
         validate_required_checks(tmp_path, config)
     config["packages"][0]["sources"].append("calc.py")
     validate_required_checks(tmp_path, config)
-    config["packages"][0]["sources"] = ["."]
-    validate_required_checks(tmp_path, config)
+    for listed in (["."], ["./main.py", "./calc.py"], ["./"]):
+        config["packages"][0]["sources"] = listed
+        validate_required_checks(tmp_path, config)
 
 
 def test_the_missing_imports_message_gives_a_gate_and_a_block_that_pass(
@@ -307,7 +309,13 @@ def test_javascript_and_dart_code_added_after_setup_must_join_the_checked_source
     validate_required_checks(tmp_path, config, starting=True)
     config["packages"][0]["sources"].append(folder)
     validate_required_checks(tmp_path, config)
-    for listed in (["."], [first, added], [Path(first).parts[0], added]):
+    top = Path(first).parts[0]
+    for listed in (
+        ["."],
+        [f"./{top}", f"{folder}/"],
+        [first, added],
+        [top, added],
+    ):
         config["packages"][0]["sources"] = listed
         validate_required_checks(tmp_path, config)
     (tmp_path / added).with_stem("other").write_text("export const c = 3;\n")
@@ -405,3 +413,27 @@ def test_a_src_layout_package_that_imports_itself_passes_the_dependencies_gate(
     (tmp_path / "script.py").write_text("import yaml_missing_package\n")
     assert runner.run_gate(group, gate, 300, threading.Lock()) is True
     assert "DEP001 'yaml_missing_package'" in capsys.readouterr().out
+
+
+def test_the_dart_sources_message_gives_a_step_that_passes(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "bun.lock").unlink()
+    (tmp_path / "pubspec.yaml").write_text("name: app_fixture\n")
+    (tmp_path / "pubspec.lock").touch()
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib/main.dart").write_text("void main() {}\n")
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
+    (tmp_path / "tool").mkdir()
+    (tmp_path / "tool/build.dart").write_text("void build() {}\n")
+    with pytest.raises(ValueError, match="outside its sources: tool;") as refusal:
+        validate_required_checks(tmp_path, config)
+    step = re.search(
+        r"move each under lib/ \(for example (\w+) to (lib/\1)\)", str(refusal.value)
+    )
+    assert step is not None
+    (tmp_path / step[1]).rename(tmp_path / step[2])
+    validate_required_checks(tmp_path, config)
