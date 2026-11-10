@@ -601,10 +601,6 @@ def run_limited_gate(
         if scanner and report_path is not None:
             report_args = (gate, report_path, command, directory, timeout)
             scanner_result(result.returncode == 0, scanner, *report_args)
-        if result.returncode and scanner == "import-linter":
-            from python_setup import print_import_contract
-
-            print_import_contract(directory, group)
         from reports import completed_tests, line_coverage, parallel_hint
 
         if (
@@ -838,6 +834,22 @@ def adopt() -> int:
         return record(ROOT, groups, set(FAILED_GATES), OUTPUTS)
 
 
+def check_command(args: "Namespace") -> int:
+    from process_group import exit_when_stopped
+    from tool_setup import ensure_python_runtime
+
+    ensure_python_runtime()
+    exit_when_stopped()
+    return check(
+        base=args.base,
+        plan_stage=args.plan_stage,
+        dependents=not args.without_dependents,
+        related_tests=args.related_tests,
+        quick=args.quick,
+        languages=language_filter(args),
+    )
+
+
 def main() -> int:
     import argparse
 
@@ -941,19 +953,7 @@ def main() -> int:
         hook.add_argument("agent", choices=("claude", "codex"))
     args = parser.parse_args()
     if args.command == "check":
-        from process_group import exit_when_stopped
-        from tool_setup import ensure_python_runtime
-
-        ensure_python_runtime()
-        exit_when_stopped()
-        return check(
-            base=args.base,
-            plan_stage=args.plan_stage,
-            dependents=not args.without_dependents,
-            related_tests=args.related_tests,
-            quick=args.quick,
-            languages=language_filter(args),
-        )
+        return check_command(args)
     if args.command == "impact":
         return impact(args.base, language_filter(args))
     if args.command == "mutation":

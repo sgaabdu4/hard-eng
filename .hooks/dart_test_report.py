@@ -66,13 +66,16 @@ def failure_summary(path: Path) -> str | None:
         return None
     identifier = failures[0]
     name = names.get(identifier, f"test {identifier}")
-    if (error := errors.get(identifier)) is None:
-        return f"Dart test failure: {name}"
-    detail = WHITESPACE_RUN.sub(" ", error).strip()
+    printed = " ".join(prints.get(identifier, []))
+    place = places.get(identifier, "no file")
+    detail = failure_detail(errors.get(identifier), printed, place)
+    return f"Dart test failure: {name}{detail}"
+
+
+def failure_detail(error: str | None, printed: str, place: str) -> str:
+    if error is None:
+        return ""
     if error.startswith(FLUTTER_FAILURE):
-        printed = WHITESPACE_RUN.sub(" ", " ".join(prints.get(identifier, []))).strip()
-        detail = (
-            f"{printed[:PRINT_LIMIT]} ({places.get(identifier, 'no file')})".strip()
-        )
-        return f"Dart test failure: {name}: {detail}"
-    return f"Dart test failure: {name}: {detail[:300]}"
+        text = WHITESPACE_RUN.sub(" ", printed).strip()
+        return ": " + f"{text[:PRINT_LIMIT]} ({place})".strip()
+    return ": " + WHITESPACE_RUN.sub(" ", error).strip()[:300]
