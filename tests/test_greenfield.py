@@ -19,7 +19,7 @@ from gate_config import (
     validate_required_checks,
 )
 from plans import validate_plans
-from python_setup import python_roots
+from python_setup import known_first_party, python_roots
 from test_plans import edit, sized_branch
 from test_setup import repository
 
@@ -382,6 +382,36 @@ def test_failed_vulnerability_scan_names_the_vulnerable_packages(
     assert "lib@1: GHSA-0001, GHSA-0002" in capsys.readouterr().out
 
 
+FIRST_PARTY = "--known-first-party"
+
+
+def dependencies_gate(group: Group) -> Gate:
+    return next(gate for gate in group["checks"] if gate["role"] == "dependencies")
+
+
+@pytest.mark.parametrize("entry", ["src/", "./src"])
+def test_python_setup_reads_a_src_entry_with_a_slash_or_a_dot_as_src(
+    tmp_path: Path, entry: str
+) -> None:
+    library = tmp_path / "src/mylib"
+    library.mkdir(parents=True)
+    (library / "__init__.py").write_text("")
+    (library / "core.py").write_text("")
+    command = ["uv", "run", "--no-sync", "--with", "deptry", "deptry", "."]
+    gate: Gate = {"name": "dependencies", "role": "dependencies", "command": command}
+    package: Group = {
+        "path": ".",
+        "language": "python",
+        "sources": [entry],
+        "checks": [gate],
+    }
+    assert python_roots(tmp_path, package) == ["mylib"]
+    known_first_party(tmp_path, package)
+    assert dependencies_gate(package)["command"] == [*command, FIRST_PARTY, "mylib"]
+    known_first_party(tmp_path, package)
+    assert dependencies_gate(package)["command"] == [*command, FIRST_PARTY, "mylib"]
+
+
 def test_a_src_layout_package_that_imports_itself_passes_the_dependencies_gate(
     installer: ModuleType,
     runner: ModuleType,
@@ -397,17 +427,13 @@ def test_a_src_layout_package_that_imports_itself_passes_the_dependencies_gate(
     installer.install(tmp_path)
     gates = tmp_path / "hard-eng.gates.json"
     older = json.loads(gates.read_text())
-    command = next(
-        check["command"]
-        for check in older["packages"][0]["checks"]
-        if check["role"] == "dependencies"
-    )
+    command = dependencies_gate(older["packages"][0])["command"]
     assert command[-2:] == ["--known-first-party", "mylib"]
     del command[-2:]
     gates.write_text(json.dumps(older))
     installer.install(tmp_path)
     group = json.loads(gates.read_text())["packages"][0]
-    gate = next(check for check in group["checks"] if check["role"] == "dependencies")
+    gate = dependencies_gate(group)
     assert runner.run_gate(group, gate, 300, threading.Lock()) is False
     assert "PASS dependencies" in capsys.readouterr().out
     (tmp_path / "script.py").write_text("import yaml_missing_package\n")
