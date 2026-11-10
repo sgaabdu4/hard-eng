@@ -745,3 +745,14 @@ def test_the_refusal_for_a_main_checkout_names_a_step_that_works(
     assert "checked out" in result
     assert "switch this checkout to another branch" in result
     assert "git worktree remove" not in result
+
+
+def test_a_setup_rerun_records_its_result(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    update_runner.record_result(target, update_runner.failed_update("old refusal"))
+    outcome = update_runner.locked_update(target, repair=True)
+    recorded = (target / update_runner.RESULT_FILE).read_text()
+    assert outcome in recorded
+    assert "old refusal" not in recorded

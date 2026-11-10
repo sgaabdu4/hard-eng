@@ -444,7 +444,10 @@ def locked_update(root: Path, repair: bool = False) -> str:
                 "wait for its result instead of starting another"
             )
         remove_stale_candidates(root)
-        return prepare_update(root, repair)
+        outcome = prepare_update(root, repair)
+        if repair:
+            record_result(root, outcome)
+        return outcome
 
 
 def update_attempt(head: str, revision: str) -> str:
