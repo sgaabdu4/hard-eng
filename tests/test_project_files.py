@@ -19,6 +19,9 @@ PARSERS: dict[str, Callable[[str], object]] = {
     "YAML": yaml.safe_load,
 }
 DART_PUBSPEC = 'name: fixture\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n'
+PYTHON_PROJECT = (
+    '[project]\nname = "x"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n'
+)
 JAVASCRIPT_MANIFEST = '{"name":"x","scripts":{"test:coverage":"node t.js","test:performance":"node p.js"}}'
 
 
@@ -62,6 +65,15 @@ def printed(result: subprocess.CompletedProcess[str]) -> str:
     assert "Traceback" not in result.stderr
     (line,) = result.stderr.splitlines()
     return line
+
+
+def install(project: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SOURCE / "setup.py"), str(project)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def named(name: str, kind: str, text: str) -> str:
@@ -169,13 +181,15 @@ def test_setup_names_a_project_file_that_does_not_parse(
         (project / "package.json").write_text('{"private":true}')
     (project / name).parent.mkdir(exist_ok=True)
     (project / name).write_text(text)
-    result = subprocess.run(
-        [sys.executable, str(SOURCE / "setup.py"), str(project)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 1
-    assert "Traceback" not in result.stderr
-    (line,) = result.stderr.splitlines()
-    assert line.startswith(named(name, kind, text))
+    assert printed(install(project)).startswith(named(name, kind, text))
+
+
+def test_a_setup_rerun_names_a_python_project_file_that_does_not_parse(
+    installer: ModuleType, tmp_path: Path, completed_plan: str
+) -> None:
+    project = hooks_project(tmp_path, completed_plan)
+    files = {"pyproject.toml": PYTHON_PROJECT, "src/x/__init__.py": ""}
+    gated_project(installer, project, files | {"uv.lock": "", "bun.lock": ""})
+    text = '[project\nname = "x"\n'
+    (project / "pyproject.toml").write_text(text)
+    assert printed(install(project)).startswith(named("pyproject.toml", "TOML", text))
