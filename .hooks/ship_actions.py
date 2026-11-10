@@ -359,14 +359,8 @@ def common_directory(root: Path) -> Path:
 
 
 def kept_groups(kept: list[str]) -> list[str]:
-    counts: dict[str, int] = {}
-    for name in kept:
-        top, slash, _ = name.partition("/")
-        counts[top + slash] = counts.get(top + slash, 0) + 1
-    return [
-        f"{name} ({count} file{'s' * (count != 1)})" if name.endswith("/") else name
-        for name, count in counts.items()
-    ]
+    """Each kept top-level path once; Git lists an ignored folder as one entry, so a file count would mislead."""
+    return list(dict.fromkeys("".join(name.partition("/")[:2]) for name in kept))
 
 
 def unchanged_checkout(shipment: Shipment) -> None:
