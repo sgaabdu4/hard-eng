@@ -355,11 +355,12 @@ def test_stop_does_not_wait_behind_a_running_check(
     with (repository / ".git/hard-eng-check.lock").open("w") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
         output = agent_hooks.completion(repository, payload)
-    assert output.get("decision") != "block"
-    assert "another Hard Eng check is running" in str(output["systemMessage"])
+    assert output["decision"] == "block"
+    assert "may predate your last edits" in str(output["reason"])
     assert "passed" not in str(output)
     check.assert_not_called()
     assert agent_hooks.completion(repository, payload).get("decision") != "block"
+    check.assert_called_once()
     check.assert_called_once()
 
 

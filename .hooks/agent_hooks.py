@@ -936,12 +936,10 @@ def checked_changes(
             },
         )
     if check_is_running(root):
-        return with_freshness(
-            root,
-            {
-                "systemMessage": "Hard Eng: another Hard Eng check is running in this checkout; its result decides. Not rerun."
-            },
-        )
+        return {
+            "decision": "block",
+            "reason": "Hard Eng: another Hard Eng check holds this checkout's lock, so this turn's changes are not checked; that check may predate your last edits. You started it after your last edit → read its exit notice + fix its findings. Else → start `python3 .hooks/hard-eng.py check` in the background (it waits its turn) + read its exit notice. Don't claim done.",
+        }
     returncode, output = run_check(root, base, building)
     decisions = show_decisions(root, changed.splitlines(), state)
     if returncode == 0:
