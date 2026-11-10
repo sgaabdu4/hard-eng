@@ -4,11 +4,17 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
 from conftest import SOURCE, gate, gone
 
+# A test run under nohup hands down an ignored SIGHUP, which `check` keeps on purpose.
+DEFAULT_SIGHUP = (
+    "import os, signal, sys; signal.signal(signal.SIGHUP, signal.SIG_DFL); "
+    "os.execv(sys.executable, [sys.executable, *sys.argv[1:]])"
+)
 SLOW_GATE = """
 import os, pathlib, time
 pathlib.Path(os.environ["MARKER"]).write_text(str(os.getpid()))
@@ -34,19 +40,24 @@ def test_a_stopped_check_stops_its_gates(
         json.dumps({"packages": [], "shared": [slow]})
     )
     check = subprocess.Popen(
-        [sys.executable, str(hooks / "hard-eng.py"), "check"],
+        [sys.executable, "-c", DEFAULT_SIGHUP, str(hooks / "hard-eng.py"), "check"],
         cwd=project,
         env={**os.environ, "MARKER": str(marker)},
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    deadline = time.monotonic() + 60
-    while not (marker.exists() and marker.read_text()):
-        assert time.monotonic() < deadline, "gate did not start"
-        time.sleep(0.05)
-    check.send_signal(signal_number)
-    check.wait(timeout=30)
-    stopped = gone(marker)
-    if not stopped:
-        os.kill(int(marker.read_text()), signal.SIGKILL)
+    stopped = False
+    try:
+        deadline = time.monotonic() + 60
+        while not (marker.exists() and marker.read_text()):
+            assert time.monotonic() < deadline, "gate did not start"
+            time.sleep(0.05)
+        check.send_signal(signal_number)
+        check.wait(timeout=30)
+        stopped = gone(marker)
+    finally:
+        check.kill()
+        if not stopped and marker.exists() and marker.read_text():
+            with suppress(ProcessLookupError):
+                os.kill(int(marker.read_text()), signal.SIGKILL)
     assert stopped, "the gate kept running after the check was stopped"

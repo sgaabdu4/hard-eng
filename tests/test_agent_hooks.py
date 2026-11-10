@@ -435,20 +435,28 @@ def test_completion_runs_real_command_and_bounds_failure_log(
 
 @pytest.mark.parametrize("agent", ["claude", "codex"])
 @pytest.mark.parametrize(
-    "line",
+    ("line", "relayed"),
     [
-        "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check.",
-        "Hard Eng: quick checks passed; the full check runs the tests and the other gates.",
+        (
+            "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check.",
+            True,
+        ),
+        (
+            "Hard Eng: quick checks passed; the full check runs the tests and the other gates.",
+            True,
+        ),
+        ("PASS fixture (exit 0; elapsed 1.0s) @ .", False),
+        ("Hard Eng warning: pre-push checks passed in 9s", False),
     ],
 )
 def test_completion_surfaces_only_authoritative_stage_handoffs(
-    repository: Path, agent: str, line: str
+    repository: Path, agent: str, line: str, relayed: bool
 ) -> None:
     hooks = repository / ".hooks"
     hooks.mkdir()
     (hooks / "hard-eng.py").write_text(f"print({line!r})\n")
     result = agent_hooks.completion(repository, {}, agent)
-    assert result == {"systemMessage": line}
+    assert result == ({"systemMessage": line} if relayed else {})
 
 
 def test_stop_retry_allows_honest_blocker_without_rerunning(repository: Path) -> None:

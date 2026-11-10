@@ -47,5 +47,12 @@ def test_cleanup_ignores_only_what_hard_eng_put_in_the_worktree(
     with pytest.raises(ValueError, match="modified, untracked or ignored"):
         ship_actions.cleanup(root, shipment)
     (task / "notes.private").unlink()
+    link = task / ".env.local"
+    link.unlink()
+    link.write_text("KEY=changed in the task\n")
+    with pytest.raises(ValueError, match="modified, untracked or ignored"):
+        ship_actions.cleanup(root, shipment)
+    link.unlink()
+    link.symlink_to(root / ".env.local")
     ship_actions.cleanup(root, shipment)
     assert not task.exists()

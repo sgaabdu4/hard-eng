@@ -300,7 +300,7 @@ COUNT_WORD_PAIRS = [
         "1 hidden fix can be enabled with the `--unsafe-fixes` option.",
     ),
     ("3 files would be reformatted", "1 file would be reformatted"),
-    ("INFO 3 diagnostics", "INFO 1 diagnostic"),
+    (" INFO 2 errors", " INFO 1 error"),
     (
         "Checked 3 files in 5ms. No fixes applied.",
         "Checked 1 file in 5ms. No fixes applied.",
