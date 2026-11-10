@@ -35,7 +35,7 @@ Decision: claim commits use a fixed author and committer, never the user's ident
 - [ ] A memory file that holds the Trello key, the token or a key-like value stops `finish` before any push → `tests/test_trello_coordinator.py::test_memory_with_a_key_is_never_pushed`.
 - [ ] Claim commits carry the fixed identity, not the repository's → `tests/test_trello_coordinator.py::test_a_second_machine_is_skipped_and_cannot_write`.
 - [ ] Reference rows match the commands → `tests/test_trello_coordinator.py::test_cli_matches_the_reference_contract`.
-- [x] Real GitHub, private repository, 2026-11-10 07:45Z: two pushers at once with `--force-with-lease=<ref>:` on a scratch ref, 3 rounds, one winner each; the loser got "cannot lock ref … reference already exists"; no workflow run after 07:45Z (`gh run list`); the scratch ref was deleted (`ls-remote` empty). Pushed from a repository with no hooks.
+- [x] GitHub gives one winner and starts no workflow → N/A — tests cannot push to a real private repository; one-time proof on 2026-11-10 07:45Z: two pushers at once with `--force-with-lease=<ref>:` on a scratch ref, 3 rounds, one winner each; the loser got "cannot lock ref … reference already exists"; no workflow run after 07:45Z (`gh run list`); the scratch ref was deleted (`ls-remote` empty). Pushed from a repository with no hooks.
 
 ## Baseline + execution
 
