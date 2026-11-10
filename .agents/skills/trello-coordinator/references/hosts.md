@@ -52,7 +52,7 @@ Ask with `request_secret`, `delivery: "file"`, one value at a time, key first. T
 - Unattended = an OS timer (launchd or cron) runs `claude -p "Run the trello-coordinator skill."` from the repository root; each run is a new session, so workers continue from their handover notes.
 - Workers = subagents with the role's `model` in their own worktree; follow-ups = message the same subagent while the session lives. Claude models only.
 
-- Missing key or token = no popup here: stop and tell the person the list above for each missing value (Key, Token), key first. In each list, the paste in step 4 becomes: save the value alone in its own file outside the repository, do not paste it into the chat, and give the file's path. For each path the person gives: `save-secret <name> <file>`. Once no value is missing: `probe`. After `probe` passes, the person deletes each such file. `save-secret` refuses → tell the person what its message says; a message about the value or its file → ask for a new file.
+- Missing key or token = no popup here: stop and tell the person the list above for each missing value (Key, Token), key first. In each list, the paste in step 4 becomes: save the value alone in its own file outside the repository, do not paste it into the chat, and give the file's path. For each path the person gives: `save-secret TRELLO_KEY <file>` or `save-secret TRELLO_TOKEN <file>`. Once no value is missing: `probe`. After `probe` passes, the person deletes each such file. `save-secret` refuses → tell the person what its message says. Ask for a new file only when that message is about the value or its file.
 
 ## Codex
 

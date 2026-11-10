@@ -146,7 +146,7 @@ def require_listed_sources(
             first = missing[0]
             steps = {
                 "python": f"{add} and to every check that names them (tests --cov=, annotations, dead-code, duplicates)",
-                "javascript": f"{add}. Tests must then cover that code. {tests} TypeScript also needs each in the `include` list of the package's TypeScript configuration.",
+                "javascript": f"{add}. TypeScript also needs each in the `include` list of the package's TypeScript configuration. Tests must then cover that code. {tests}",
                 "dart": f"move each under lib/ (for example {first} to lib/{first}) and test it there. Or {add}. Tests must then cover that code, and those tests need `test` as a dev dependency and a setup rerun. {tests}",
             }[language]
             raise ValueError(
