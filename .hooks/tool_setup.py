@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import IO
 
 from fallow_report import native_scanner_command
-from gate_config import Group
+from gate_config import Gate, Group
 from project_setup import package_script_invocation
 
 DIGIT_RUN = re.compile(r"\d+")
@@ -50,6 +50,29 @@ PACKAGES = {
     "k6": "aqua:grafana/k6",
 }
 MANAGED_PYTHON_SCANNERS = {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "poetry"}
+ROLE_TOOLS: dict[str, dict[str, tuple[str, ...]]] = {
+    "python": {
+        "format": ("ruff", "format"),
+        "lint": ("ruff", "check"),
+        "complexity": ("ruff", "check"),
+        "annotations": ("ruff", "check"),
+        "types": ("pyrefly", "check"),
+        "dead-code": ("vulture",),
+    },
+    "javascript": {
+        "format-lint": ("biome", "ci"),
+        "focused-tests": ("biome", "lint"),
+        "typing-style": ("biome", "lint"),
+        "types": ("tsc",),
+    },
+    "dart": {"format": ("dart", "format"), "types": ("dart", "analyze")},
+    "swift": {"format-lint": ("swift", "format", "lint")},
+    "shared": {
+        "workflows": ("actionlint",),
+        "ci-security": ("zizmor",),
+        "shell": ("shellcheck",),
+    },
+}
 SCANNER_VERSIONS: dict[str, str] = {}
 # The platform package installs without the npm-only preinstall of @jdxcode/mise.
 MISE_PACKAGE = "@jdxcode/mise-{}-{}".format(
@@ -119,6 +142,22 @@ def with_entry_points(command: list[str], directory: Path) -> list[str]:
     if command[0] != "vulture" or not names:
         return command
     return [*command, "--ignore-names", ",".join(names)]
+
+
+def require_role_tool(language: str, gate: Gate, command: list[str]) -> None:
+    """A required check that writes no report proves itself only by the tool it names."""
+    tool = ROLE_TOOLS.get(language, {}).get(str(gate.get("role")))
+    if tool is None or gate.get("report"):
+        return
+    words = [
+        Path(word.strip("'\"();")).name.split("@", 1)[0]
+        for word in " ".join(command).split()
+    ]
+    if not any(tuple(words[at : at + len(tool)]) == tool for at in range(len(words))):
+        raise ValueError(
+            f"{gate['name']}: the {gate['role']} check must run `{' '.join(tool)}`; "
+            f"this command does not name it: {' '.join(gate['command'])}"
+        )
 
 
 def uvx_scanner(command: list[str]) -> list[str]:

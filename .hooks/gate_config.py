@@ -734,14 +734,21 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
         raise ValueError(
             f"{group['path']}: missing mandatory checks: {', '.join(sorted(required - roles))}"
         )
+    scripts: list[list[str]] = []
     if group.get("language") == "javascript":
         from project_setup import javascript_manager, package_script_arguments
 
         javascript_manager(directory)
-        for gate in group["checks"]:
+        scripts = [
             package_script_arguments(gate["command"], directory, bun_only=True)
-    for gate in group["checks"]:
+            for gate in group["checks"]
+        ]
+    from tool_setup import require_role_tool
+
+    for index, gate in enumerate(group["checks"]):
         validate_gate(gate, directory, report_paths)
+        command = scripts[index] if scripts else gate["command"]
+        require_role_tool(group.get("language", ""), gate, command)
     validate_performance(group)
     return len(group["checks"])
 
@@ -819,14 +826,15 @@ def validate_required_checks(root: Path, config: GateConfig) -> None:
         required.add("shell")
     if any(is_deployment_file(path) for path in files):
         required.add("deployment")
+    from tool_setup import ROLE_TOOLS, require_role_tool
+
     for gate in config["shared"]:
         command = gate["command"]
+        require_role_tool("shared", gate, command)
         shared_roles.update(
-            {
-                "actionlint": {"workflows"},
-                "zizmor": {"ci-security"},
-                "shellcheck": {"shell"},
-            }.get(Path(command[0]).name, set())
+            role
+            for role, tool in ROLE_TOOLS["shared"].items()
+            if Path(command[0]).name == tool[0]
         )
         if Path(command[0]).name == "trivy" and "config" in command[1:]:
             shared_roles.add("deployment")
