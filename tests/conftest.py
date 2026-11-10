@@ -51,11 +51,21 @@ import update
 stop_listed_brokers = process_group.stop_idle_codex_brokers
 
 
+def below(
+    rows: list[process_group.Process], roots: set[int]
+) -> list[process_group.Process]:
+    """The rows of these processes and of each process that they started."""
+    mine = set(roots)
+    while more := {row.pid for row in rows if row.parent in mine} - mine:
+        mine |= more
+    return [row for row in rows if row.pid in mine]
+
+
 def keep_machine_brokers(
     table: list[process_group.Process] | None = None,
 ) -> tuple[int, int]:
-    """Session start tests must not stop the developer's own Codex brokers."""
-    return (0, 0) if table is None else stop_listed_brokers(table)
+    """A test stops only brokers that it started: not the developer's, not another test's."""
+    return stop_listed_brokers(below(table or [], {os.getpid()}))
 
 
 process_group.stop_idle_codex_brokers = keep_machine_brokers
