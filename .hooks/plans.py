@@ -650,7 +650,7 @@ def validate_plans(
     if (
         (changed != set() or explicit_stage or base is None)
         and not applicable
-        and (explicit_stage or not plan_not_needed(root))
+        and not plan_not_needed(root)
     ):
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"
