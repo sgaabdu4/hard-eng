@@ -15,7 +15,6 @@ MAX_LENGTH = 120
 LABELS = sorted({*MANIFEST_LABELS.values(), *SUFFIX_LABELS.values()}, key=len)
 LOOKS_LIKE_DETAIL = re.compile(r"[/\\@]|://|\bwww\.|[\w-]\.[A-Za-z][A-Za-z0-9]{0,4}\b")
 NAME_SEPARATORS = re.compile(r"[\W_]+")
-URL_SEPARATORS = re.compile(r"[:/]")
 CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 COMMON_FILES = (
     "go.mod",
@@ -65,10 +64,17 @@ def words(value: str) -> str:
 
 def origin_names(root: Path) -> list[str]:
     try:
-        url = git(root, "remote", "get-url", "origin").strip().removesuffix(".git")
+        url = git(root, "remote", "get-url", "origin").strip()
     except ValueError:
         return []
-    return [part for part in URL_SEPARATORS.split(url) if part][-2:]
+    url = url.rstrip("/").removesuffix(".git")
+    if url.startswith(("/", ".", "~", "file://")) or ":" not in url:
+        return [url.rsplit("/", 1)[-1]]
+    if "://" in url:
+        path = url.split("://", 1)[1].partition("/")[2]
+    else:
+        path = url.partition(":")[2]
+    return [part for part in path.split("/") if part and part != "_git"]
 
 
 def package_names(root: Path) -> list[str]:

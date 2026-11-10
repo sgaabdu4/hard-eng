@@ -131,6 +131,10 @@ def test_text_that_names_the_project_is_refused_before_any_github_call(
         ("git@github-work:globex/acme-shop.git", "acme shop lacks lint"),
         ("https://gitlab.example.test/globex/acme-shop", "globex lacks lint"),
         ("ssh://git@bitbucket.example.test/globex/acme-shop.git", "acme-shop lint"),
+        ("https://dev.azure.com/contoso/shop/_git/storefront", "contoso lacks lint"),
+        ("https://gitlab.example.test/acme/team/shop", "acme has no audit"),
+        ("https://github.com/globex/acme-shop.git/", "acme shop lacks lint"),
+        ("https://git.example.test:8443/globex/acme-shop", "globex lacks lint"),
     ],
 )
 def test_joined_spellings_and_any_remote_host_are_refused(
@@ -141,6 +145,26 @@ def test_joined_spellings_and_any_remote_host_are_refused(
     with pytest.raises(ValueError, match="Describe the missing check generically"):
         gap_issue.file_gap(project, text)
     assert gh.calls == []
+
+
+@pytest.mark.parametrize(
+    ("origin", "text"),
+    [
+        (
+            "https://dev.azure.com/contoso/shop/_git/storefront",
+            "git hooks have no lint check",
+        ),
+        ("/srv/git/x.git", "git hooks have no lint check"),
+        ("/Users/me/projects/x", "projects lack a license check"),
+        ("https://git.example.test:8443/globex/acme-shop", "8443 has no lint check"),
+    ],
+)
+def test_words_from_a_remote_that_are_not_names_are_accepted(
+    project: Path, monkeypatch: pytest.MonkeyPatch, origin: str, text: str
+) -> None:
+    git(project, "remote", "add", "origin", origin)
+    fake(monkeypatch, [])
+    assert gap_issue.file_gap(project, text) == 0
 
 
 @pytest.mark.parametrize(
