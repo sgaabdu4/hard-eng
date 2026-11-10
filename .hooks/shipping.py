@@ -317,7 +317,11 @@ def load_policy(root: Path, required: bool = True) -> ShippingPolicy | None:
         raise ShippingError("hard-eng.gates.json must be an object")
     if "shipping" not in payload:
         if required:
-            raise ShippingError("shipping policy is required")
+            raise ShippingError(
+                "shipping policy is required. Add a `shipping` block to "
+                "hard-eng.gates.json; the block is described in "
+                ".agents/skills/he-ship/references/checks.md"
+            )
         return None
     raw = payload["shipping"]
     if not isinstance(raw, dict):
