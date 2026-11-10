@@ -141,19 +141,14 @@ def require_listed_sources(
         ]
         if missing := sorted(source_roots(directory, language, unlisted)):
             label = {"javascript": "JavaScript"}.get(language, language.title())
-            cover = "; tests must then cover its files"
-            checks = {
-                "python": " and to every check that names them (tests --cov=, annotations, dead-code, duplicates)",
-                "javascript": f"{cover}, test-only code belongs in test/, tests/ or __tests__/, and TypeScript needs each folder in the `include` list of the package's TypeScript configuration too",
-                "dart": f"{cover} (that needs `test` as a dev dependency and a setup rerun), and test-only code belongs in test/, tests/ or __tests__/",
-            }[language]
+            add = "add each to that package's `sources` list in hard-eng.gates.json"
+            tests = "Test-only code belongs in test/, tests/ or __tests__/."
             first = missing[0]
-            move = (
-                f"move each under lib/ (for example {first} to lib/{first}) and test it there, or "
-                if language == "dart"
-                else ""
-            )
+            steps = {
+                "python": f"{add} and to every check that names them (tests --cov=, annotations, dead-code, duplicates)",
+                "javascript": f"{add}. Tests must then cover its files. {tests} TypeScript also needs each folder in the `include` list of the package's TypeScript configuration.",
+                "dart": f"move each under lib/ (for example {first} to lib/{first}) and test it there. Or {add}. Tests must then cover its files, and those tests need `test` as a dev dependency and a setup rerun. {tests}",
+            }[language]
             raise ValueError(
-                f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; "
-                f"{move}add each to that package's `sources` list in hard-eng.gates.json{checks}"
+                f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; {steps}"
             )

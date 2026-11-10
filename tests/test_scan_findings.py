@@ -163,7 +163,7 @@ def test_a_failed_import_linter_gate_prints_its_broken_contracts(
 ) -> None:
     path = report_file(tmp_path, "import-linter.txt", IMPORT_LINTER_BROKEN)
     assert failed("import-linter", path, tmp_path, capsys).splitlines() == [
-        "scan: No sibling dependency cycles",
+        "scan: broken contract: No sibling dependency cycles",
         "scan: No cycles are allowed in greeter.",
         "scan: It could be made acyclic by removing 1 dependency:",
         "scan: - .quiet -> .loud (1 import)",
