@@ -671,7 +671,9 @@ def passed_notice(
 
 
 def bounded(text: str, *, tail: bool = False) -> str:
-    if len(text) <= GATE_OUTPUT_LIMIT:
+    from debt import ANSI
+
+    if len(text := ANSI.sub("", text)) <= GATE_OUTPUT_LIMIT:
         return text
     note = "\n[gate output cut; rerun check for the full log]\n"
     return note + text[-GATE_OUTPUT_LIMIT:] if tail else text[:GATE_OUTPUT_LIMIT] + note
@@ -680,6 +682,7 @@ def bounded(text: str, *, tail: bool = False) -> str:
 def failure_summary(log: str) -> str:
     """Failed gate names, then the first failing gate's output from its start."""
     failures = FAILED_COMMAND_LINE.findall(log)
+    failures = [f for f in failures if f"\nDEBT {f[0]}:" not in log]
     if not failures:
         return bounded(log, tail=True)
     heading = "Failed gates: " + ", ".join(dict.fromkeys(n for n, _ in failures)) + "\n"
@@ -692,7 +695,9 @@ def failure_summary(log: str) -> str:
     tail = f"[^\n]* @ {re.escape(package)}(?!\\S)" if package else ""
     finished = re.escape(name) + r"(?: \(exit|:)" + tail
     end = re.search(rf"(?m)^(?:CHECK|OUTPUT) \S*/\S+|(?:PASS|FAIL) {finished}", body)
-    return heading + bounded(body[: end.start() if end else None])
+    cut = end.start() if end else len(body)
+    beyond = rf"(?m)^FAIL {re.escape(name)}: findings beyond.*\n(?:  .*\n)*"
+    return heading + bounded(body[:cut]) + "".join(re.findall(beyond, body[cut:])[:1])
 
 
 def show_decisions(root: Path, names: list[str], state: Path | None) -> str:

@@ -230,6 +230,47 @@ def test_failure_reason_shows_the_failing_packages_output_not_a_passing_one_of_t
     assert "a is clean" not in reason
 
 
+def stop_reason(repository: Path, script: str) -> str:
+    install_check(repository, script)
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "work.py").write_text("value = 1\n")
+    return str(agent_hooks.completion(repository, payload)["reason"])
+
+
+def test_stop_lists_only_gates_with_findings_beyond_the_debt(
+    repository: Path,
+) -> None:
+    reason = stop_reason(
+        repository,
+        "print('OUTPUT ./lint')\n"
+        "print('old lint finding')\n"
+        "print('FAIL lint (exit 1; elapsed 1.0s) @ .')\n"
+        "print('DEBT lint: the failure above holds only the 1 lines recorded')\n"
+        "print('OUTPUT ./types')\n"
+        "print('types noise')\n"
+        "print('FAIL types (exit 1; elapsed 1.0s) @ .')\n"
+        "print('FAIL types: findings beyond hard-eng.debt.json:')\n"
+        "print('  new.py:N bad type')\n"
+        "raise SystemExit(1)\n",
+    )
+    assert reason.startswith("Failed gates: types\n")
+    assert "old lint finding" not in reason
+    assert "findings beyond hard-eng.debt.json:\n  new.py:N bad type" in reason
+
+
+def test_stop_text_has_no_colour_codes(repository: Path) -> None:
+    reason = stop_reason(
+        repository,
+        "print('OUTPUT ./lint')\n"
+        "print('\\x1b[31ma\\x1b[0m' * 8500)\n"
+        "print('FAIL lint (exit 1; elapsed 1.0s) @ .')\n"
+        "raise SystemExit(1)\n",
+    )
+    assert "\x1b" not in reason
+    assert "a" * 8000 in reason
+
+
 def decision_record(repository: Path, status: str, applies: str = "") -> None:
     (repository / "docs/adr").mkdir(parents=True)
     (repository / "docs/adr/0001-pay.md").write_text(
