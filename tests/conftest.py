@@ -229,9 +229,9 @@ def ux_rules_block(**verdicts: str) -> str:
     from plans import usability_rules
 
     lines = ["Rules: Judged the proposed image at 375 and 1280 px."]
-    for label, counted in usability_rules():
+    for label, units in usability_rules():
         key = label.replace(" ", "_").replace("-", "_")
-        default = "Pass — 4 kept, 2 removed" if counted else "Pass — checked"
+        default = "Pass — " + (", ".join(f"4 {unit}" for unit in units) or "checked")
         lines.append(f"- {label}: {verdicts.get(key, default)}")
     return "\n".join(lines)
 

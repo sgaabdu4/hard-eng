@@ -293,10 +293,10 @@ def test_the_rule_labels_come_from_the_ux_reference() -> None:
     reference = (SOURCE / ".agents/skills/he-plan/references/ux.md").read_text()
     assert len(rules) == 13
     assert {"No clutter", "Hierarchy", "Observe"} <= set(labels)
-    assert [label for label, counted in rules if counted] == [
-        "Least effort",
-        "No clutter",
-    ]
+    assert {label: units for label, units in rules if units} == {
+        "Least effort": ["clicks"],
+        "No clutter": ["kept", "removed"],
+    }
     assert all(f"  - {label}" in reference for label in labels)
 
 
@@ -322,7 +322,7 @@ def test_a_ux_record_that_skips_a_rule_names_the_rule(
     )
     with pytest.raises(ValueError) as error:
         validate_plan(path)
-    assert str(error.value) == (
+    assert str(error.value).removeprefix("ux_reference: ") == (
         "UX Rules needs exactly one line for each Usability rule; no line: Observe; "
         "two lines: Widths; add a line for each rule of references/ux.md"
     )
@@ -337,13 +337,48 @@ def test_a_ux_record_with_a_fail_cannot_be_passed(
         validate_plan(path)
 
 
-def test_a_count_rule_needs_its_number(tmp_path: Path, visual_plan: str) -> None:
+@pytest.mark.parametrize(
+    ("rule", "verdict", "message"),
+    [
+        ("No_clutter", "Pass — checked at 375 px", "No clutter needs.*kept.*removed"),
+        ("No_clutter", "Pass — 7 kept", "No clutter needs.*removed.*3 kept, 3 removed"),
+        ("Least_effort", "Pass — 2 steps to save", "Least effort needs.*clicks"),
+        ("Least_effort", "Pass — clicks counted", "Least effort needs.*clicks"),
+    ],
+    ids=["no-numbers", "one-unit-missing", "wrong-unit", "no-number"],
+)
+def test_a_count_rule_needs_its_counts(
+    tmp_path: Path, visual_plan: str, rule: str, verdict: str, message: str
+) -> None:
     path = tmp_path / "PLAN.md"
-    path.write_text(rules_plan(visual_plan, No_clutter="Pass — nothing was missed"))
-    with pytest.raises(ValueError, match="UX Rules: No clutter needs its number"):
+    path.write_text(rules_plan(visual_plan, **{rule: verdict}))
+    with pytest.raises(ValueError, match=f"UX Rules: {message}"):
         validate_plan(path)
-    path.write_text(rules_plan(visual_plan, No_clutter="N/A — no new elements"))
+
+
+@pytest.mark.parametrize(
+    ("rule", "verdict"),
+    [
+        ("Least_effort", "Pass — 2 clicks to save a note"),
+        ("Least_effort", "Pass — 1 click to save a note"),
+        ("No_clutter", "Pass — 7 KEPT, 3 Removed"),
+        ("No_clutter", "N/A — no new elements"),
+        ("Least_effort", "N/A — no journey changes"),
+    ],
+)
+def test_a_count_rule_passes_with_its_counts_or_a_reason(
+    tmp_path: Path, visual_plan: str, rule: str, verdict: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(rules_plan(visual_plan, **{rule: verdict}))
     assert validate_plan(path) == "Complete"
+
+
+def test_a_failed_count_rule_needs_no_count(tmp_path: Path, visual_plan: str) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(rules_plan(visual_plan, No_clutter="Fail — a helper sentence"))
+    with pytest.raises(ValueError, match="UX Rules: No clutter is Fail"):
+        validate_plan(path)
 
 
 @pytest.mark.parametrize(
@@ -411,3 +446,42 @@ def test_a_missing_ux_reference_names_the_step(
     with pytest.raises(ValueError, match="gone/ux.md.*rerun Hard Eng setup") as error:
         validate_plan(path)
     assert "restore the file" in str(error.value)
+
+
+def test_a_ready_plan_from_before_the_update_passes_without_rules(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    text = visual_plan.replace(ux_rules_block(), "").replace(
+        "Status: Complete", "Status: Ready"
+    )
+    assert (
+        validate_plan(finished_before_the_update(tmp_path / "project", text)) == "Ready"
+    )
+
+
+def test_a_ready_plan_edited_after_the_update_needs_rules(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    root = tmp_path / "project"
+    text = visual_plan.replace(ux_rules_block(), "").replace(
+        "Status: Complete", "Status: Ready"
+    )
+    plan = finished_before_the_update(root, text)
+    plan.write_text(text + "\nReopened for new work.\n")
+    dated(root, 3, "edit the plan after the update")
+    with pytest.raises(ValueError, match="UX Rules is missing"):
+        validate_plan(plan)
+
+
+def test_a_new_ready_plan_needs_rules(tmp_path: Path, visual_plan: str) -> None:
+    root = tmp_path / "project"
+    finished_before_the_update(root, visual_plan)
+    plan = root / "features/new/PLAN.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text(
+        visual_plan.replace(ux_rules_block(), "").replace(
+            "Status: Complete", "Status: Ready"
+        )
+    )
+    with pytest.raises(ValueError, match="UX Rules is missing"):
+        validate_plan(plan)
