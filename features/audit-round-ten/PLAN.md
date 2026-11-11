@@ -46,6 +46,7 @@ Decided:
 Slice 1, commit cap (`.hooks/change_size.py`, `.hooks/shipping.py`, `.hooks/hard-eng.py`, `.agents/skills/he/references/requirements.md`):
 
 - [ ] The ready stage passes a PR with 100 commits and refuses 101 with the two ways out → `tests/test_ship_commits.py::test_ready_refuses_a_pr_over_the_commit_cap`
+- [ ] The ready stage refuses a PR whose commit count is missing or is not a whole number → `tests/test_ship_commits.py::test_ready_refuses_a_pr_with_no_usable_commit_count`
 - [ ] A full check prints the warning at 80 and at 101 commits, prints none at 79, on the base branch and with no base, and never fails for it → `tests/test_change_size.py::test_a_full_check_warns_from_80_commits_and_never_refuses`
 - [ ] A full check starts one Git command for the count and a quick check starts none → `tests/test_gate_speed.py::test_only_a_full_check_counts_the_branch_commits`
 - [ ] A new requirement entry for the commit cap states the cap, the warning, the two ways out and the exempt PRs → N/A — rule text; the registry check refuses an entry with no test that names its ID
@@ -54,6 +55,7 @@ Slice 2, a step when GitHub cannot rebase (`.hooks/shipping.py`, `.hooks/ship_ac
 
 - [ ] The ready stage refuses a PR that GitHub reports as not rebaseable, with the step → `tests/test_ship_commits.py::test_ready_refuses_a_pr_github_cannot_rebase`
 - [ ] A failed merge of such a PR prints "nothing was merged" and the step, and names no push to the base → `tests/test_ship_commits.py::test_merge_names_a_step_when_github_cannot_rebase`
+- [ ] A rebase answer that GitHub gives between the two reads of the PR does not count as a changed PR → `tests/test_ship_commits.py::test_a_rebaseable_value_that_arrives_late_is_no_change_in_the_pr`
 
 Slice 3, a CI run reuses a pass on the same files (`.hooks/ci_usage.py`, `.hooks/shipping.py`, `.hooks/hard-eng.py`):
 
@@ -61,17 +63,21 @@ Slice 3, a CI run reuses a pass on the same files (`.hooks/ci_usage.py`, `.hooks
 - [ ] A push to a branch other than the shipping base reuses the pass of its one merged PR on the same tree → `tests/test_ci_usage.py::test_a_push_to_another_branch_reuses_the_merged_pr_checks`
 - [ ] A release PR reuses the passed checks of its head commit, also with its own run in progress and with an earlier cancelled run → `tests/test_ci_usage.py::test_a_release_pr_reuses_the_passed_checks_of_the_base_commit`
 - [ ] A release PR runs the checks when a required check has no completed run, when the newest completed run failed, when the merge tree differs, and when the head comes from a fork → `tests/test_ci_usage.py::test_a_release_pr_runs_the_checks_when_no_pass_covers_it`
+- [ ] An ordinary PR prints no line, starts no Git command and makes no API call for the reuse rule → `tests/test_ci_usage.py::test_an_ordinary_pr_prints_nothing_and_asks_nothing`
 
 Slice 4, the new-project jobs of this repository (`release_canary.py`, `.github/workflows/canary.yml`):
 
-- [ ] A commit with no new-project runs of its own is proven by the head of its merged PR when both hold the same files and each job passed there → `tests/test_release_canary.py::test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr`
-- [ ] The jobs still run when the PR head has no runs, has a failed job or holds other files → `tests/test_release_canary.py::test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them`
-- [ ] The release gate passes for a `develop` commit that reused the jobs of its PR → `tests/test_release_canary.py::test_the_release_gate_follows_a_reused_push_to_the_pr_head`
+- [ ] A commit with no new-project runs of its own is proven by the head of its merged PR when both hold the same files and each job passed there → `tests/test_canary_reuse.py::test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr`
+- [ ] The jobs still run when the PR head has no runs, has a failed job or holds other files, when no merged PR is found, and when the lookup fails (one line on stderr, none on stdout) → `tests/test_canary_reuse.py::test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them`
+- [ ] The release gate passes for a `develop` commit that reused the jobs of its PR → `tests/test_canary_reuse.py::test_the_release_gate_follows_a_reused_push_to_the_pr_head`
+- [ ] A new JavaScript project in CI runs its own lint script after its full check, and a project with no lint script gets no such step → `tests/test_release_canary.py::test_a_new_javascript_project_in_ci_also_runs_its_own_lint_script`
 - [ ] The `targets` job writes an empty list and names the PR head on such a push → N/A — workflow wiring; the proof is the first push run on `develop` after this PR merges, recorded in Verification
 
-Slice 5, issue 572 (`.hooks/untrusted_input.py`, `.github/workflows/hard-eng.yml`, `.hooks/ci_setup.py`, `hard-eng.gates.json`):
+Slice 5, issue 572 (`.hooks/untrusted_input.py`, `setup.py`, `.github/workflows/hard-eng.yml`, `.hooks/ci_setup.py`, `hard-eng.gates.json`):
 
 - [ ] Setup makes `!.hooks` the last entry of `files.includes` in a root `biome.json` or `biome.jsonc`, keeps comments and other `includes` keys, and changes nothing when the entry is there → `tests/test_untrusted_input.py::test_setup_keeps_the_project_biome_run_away_from_the_hooks_folder`
+- [ ] Setup adds the entry in a project with no TypeScript package at its root → `tests/test_untrusted_input.py::test_setup_adds_the_biome_entry_when_no_typescript_package_is_at_the_root`
+- [ ] Setup changes nothing in a project with no Biome settings → `tests/test_untrusted_input.py::test_setup_leaves_a_project_without_biome_settings_alone`
 - [ ] Setup prints the step and goes on when it cannot edit the settings safely → `tests/test_untrusted_input.py::test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings`
 - [ ] The format gate of the shipped files covers each installed workflow → `tests/test_gate_tools.py::test_the_shipped_format_gate_covers_each_installed_workflow`
 - [ ] The two workflow lines use double quotes → N/A — the gate `shipped-format` fails on the base and passes on this change
