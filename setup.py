@@ -8,7 +8,6 @@ import os
 import re
 import runpy
 import shlex
-import shutil
 import subprocess
 import sys
 import tomllib
@@ -100,9 +99,9 @@ def add_package_groups(root: Path, config: GateConfig) -> None:
 
 def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
     import agent_hooks
-    from settings_merge import merge
     from gate_config import json_file
     from project_files import parse_project_text, read_project_file
+    from settings_merge import merge
 
     codex_config = root / ".codex/config.toml"
     if codex_config.exists():

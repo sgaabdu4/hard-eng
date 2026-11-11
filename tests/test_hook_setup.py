@@ -3,6 +3,7 @@
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -214,18 +215,16 @@ def test_a_changed_timeout_keeps_one_hook_entry(
     root.mkdir()
     repository(root)
     installer.install(root)
-    kept: dict[str, JsonObject] = {}
+    kept: dict[str, str] = {}
     for name in agent_hooks.HOOK_FILES.values():
-        settings: JsonObject = json.loads((root / name).read_text())
-        for items in settings["hooks"].values():
-            for item in items:
-                for handler in item["hooks"]:
-                    handler["timeout"] += 1
-        (root / name).write_text(json.dumps(settings))
-        kept[name] = settings
+        settings = (root / name).read_text()
+        changed = re.sub(r'"timeout": (\d+)', r'"timeout": \g<1>1', settings)
+        assert changed != settings
+        (root / name).write_text(changed)
+        kept[name] = changed
     installer.install(root)
-    for name, settings in kept.items():
-        assert json.loads((root / name).read_text()) == settings
+    for name, changed in kept.items():
+        assert json.loads((root / name).read_text()) == json.loads(changed)
 
 
 def test_setup_replaces_the_old_tool_hook_commands(

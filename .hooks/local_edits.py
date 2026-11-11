@@ -24,7 +24,9 @@ def conflict_blocks(merged: str) -> str:
 def refusal_reason(stderr: str) -> str:
     """The last lines of a refusal; a conflict message keeps its blocks, one per line."""
     lines = stderr.strip().splitlines()
-    heading = next((n for n, line in enumerate(lines) if CONFLICT_HEADING in line), None)
+    heading = next(
+        (n for n, line in enumerate(lines) if CONFLICT_HEADING in line), None
+    )
     if heading is None:
         return " | ".join(lines[-5:])
     return "\n".join(lines[heading:])
