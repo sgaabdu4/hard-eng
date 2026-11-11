@@ -53,11 +53,12 @@ def merge_local_edits(name: str, target: Path, old: Path, content: str) -> str:
         )
     if merged.returncode != 0:
         raise ValueError(
-            f"{name} {CONFLICT_HEADING} "
-            "Each conflict block shows the local lines, then the update's lines. "
-            f"In {name}, put the update's lines in place of those local lines and "
-            "commit. To keep your own change, add it again after the update, on "
-            f"lines that the update does not change.\n{conflict_blocks(merged.stdout)}"
+            f"{name} {CONFLICT_HEADING}\n"
+            "Each block below shows the local lines, then the update's lines:\n"
+            f"{conflict_blocks(merged.stdout)}\n"
+            f"In {name}, put the update's lines in place of those local lines. "
+            "To keep your own change, add it again after this update is in, on "
+            "lines that it does not change"
         )
     if name.endswith(".py"):
         try:
