@@ -612,6 +612,19 @@ def untested_requirements(root: Path, requirements: set[str]) -> list[str]:
     )
 
 
+HASH_COMMENT_SUFFIXES = {".py", ".rb", ".sh", ".bash", ".zsh", ".pl", ".ex", ".exs"}
+
+
+def uncommented(file: Path) -> str:
+    """The file's text without whole-line comments, which cannot define a test."""
+    marker = "#" if file.suffix in HASH_COMMENT_SUFFIXES else "//"
+    return "\n".join(
+        line
+        for line in file.read_text().splitlines()
+        if not line.lstrip().startswith(marker)
+    )
+
+
 def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
     missing = []
     for path, name in references:
@@ -625,7 +638,7 @@ def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
             file.is_relative_to(root.resolve())
             and _is_test(PurePosixPath(path))
             and file.is_file()
-            and re.search(definition, file.read_text())
+            and re.search(definition, uncommented(file))
         ):
             missing.append(f"{path}::{name}")
     return missing
