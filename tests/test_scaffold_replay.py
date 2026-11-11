@@ -1,5 +1,6 @@
 """A verified update is proven from its tree, even when the base held edited scaffold files."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -149,3 +150,46 @@ def test_merged_coordinator_script_must_compile(
     with pytest.raises(ValueError, match=f"{SCRIPT} does not compile"):
         update.update(target)
     assert git(target, "rev-parse", "HEAD") == head
+
+
+def update_beside_code_outside_the_sources(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, str]:
+    source, target, _ = release
+    for name in ("src/index.ts", "scripts/build.mjs"):
+        (target / name).parent.mkdir(exist_ok=True)
+        (target / name).write_text("export const a = 1;\n")
+    commit(target, "code outside the listed sources")
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    assert '"sources": ["src"]' in (target / "hard-eng.gates.json").read_text()
+    base = git(target, "rev-parse", "HEAD")
+    release_now(source, monkeypatch, "release two")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    return target, base
+
+
+def after_the_gate_check(spy: Mock) -> list[str]:
+    """The Git commands started after the last start that is not Git."""
+    words = [call.args[0] for call in spy.call_args_list]
+    last = max(
+        (n for n, command in enumerate(words) if command[0] != "git"), default=-1
+    )
+    return [command[1] for command in words[last + 1 :]]
+
+
+def test_scaffold_update_check_refuses_code_outside_the_sources(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target, base = update_beside_code_outside_the_sources(release, monkeypatch)
+    spy = Mock(side_effect=subprocess.Popen)
+    monkeypatch.setattr(subprocess, "Popen", spy)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    assert update.check_scaffold_update(target, base)
+    assert after_the_gate_check(spy) == []
+    spy.reset_mock()
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    with pytest.raises(ValueError, match="outside its sources: scripts"):
+        update.check_scaffold_update(target, base)
+    assert after_the_gate_check(spy) == ["ls-files"]
