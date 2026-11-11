@@ -556,8 +556,8 @@ def proven_elsewhere(base: str | None) -> bool:
         return False
     if head := reused_pull_request(ROOT, base):
         print(
-            f"PR head {head} passed the required checks on this exact tree; "
-            "not repeating them on the base branch.",
+            f"Commit {head} passed the required checks on this exact tree; "
+            "not repeating them.",
             flush=True,
         )
         return True

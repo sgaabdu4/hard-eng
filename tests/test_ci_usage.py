@@ -3,6 +3,7 @@
 import json
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
@@ -419,7 +420,7 @@ def test_push_runs_checks_when_pull_request_proof_is_missing(
     ("name", "value"),
     [
         ("GITHUB_ACTIONS", None),
-        ("GITHUB_EVENT_NAME", "pull_request"),
+        ("GITHUB_EVENT_NAME", "schedule"),
         ("GITHUB_REF", "refs/tags/v1"),
     ],
 )
@@ -459,7 +460,7 @@ def test_reused_pull_request_result_skips_gates(
     monkeypatch.setattr("ci_usage.reused_pull_request", reused)
     assert runner.check(base="a" * 40) == 0
     output = capsys.readouterr().out
-    assert f"PR head {'a' * 40} passed the required checks" in output
+    assert f"Commit {'a' * 40} passed the required checks" in output
     assert "fails" not in output
 
 
@@ -470,3 +471,107 @@ def test_a_push_to_another_branch_reuses_the_merged_pr_checks(
     push.pulls[0]["base"] = {"ref": "release/1"}
     monkeypatch.setenv("GITHUB_REF", "refs/heads/release/1")
     assert reused_pull_request(push.root, push.base) == push.head
+
+
+@dataclass
+class ReleasePR:
+    root: Path
+    head: str
+    pull: dict[str, dict[str, object]]
+    runs: list[dict[str, object]]
+    event_path: Path
+
+    def reused(self) -> str | None:
+        self.event_path.write_text(json.dumps({"pull_request": self.pull}))
+        return reused_pull_request(self.root, self.head)
+
+
+def _release_pr(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReleasePR:
+    root = _fixture(tmp_path).root
+    head = _native(root, "rev-parse", "HEAD")
+    _native(
+        root, "commit", "-q", "--allow-empty", "-m", "Merge the PR into the release"
+    )
+    runs = [_check(head)]
+    pull: dict[str, dict[str, object]] = {
+        "head": {"ref": "main", "sha": head, "repo": {"full_name": "acme/widget"}},
+        "base": {"ref": "release", "repo": {"full_name": "acme/widget"}},
+    }
+
+    def github(_root: Path, *args: str) -> str:
+        endpoint = args[-1]
+        assert endpoint == (
+            f"repos/acme/widget/commits/{head}/check-runs?per_page=100&filter=all"
+        )
+        return json.dumps([{"total_count": len(runs), "check_runs": runs}])
+
+    monkeypatch.setattr(shipping, "gh", github)
+    event_path = tmp_path / "event.json"
+    for name, value in {
+        "GITHUB_ACTIONS": "true",
+        "GITHUB_EVENT_NAME": "pull_request",
+        "GITHUB_EVENT_PATH": str(event_path),
+        "GITHUB_REPOSITORY": "acme/widget",
+    }.items():
+        monkeypatch.setenv(name, value)
+    return ReleasePR(root, head, pull, runs, event_path)
+
+
+def test_a_release_pr_reuses_the_passed_checks_of_the_base_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pr = _release_pr(tmp_path, monkeypatch)
+    pr.runs[:] = [
+        _check(pr.head, id=1),
+        _check(pr.head, id=2, conclusion="cancelled"),
+        _check(pr.head, id=3, status="in_progress", conclusion=None),
+    ]
+    assert pr.reused() == pr.head
+    assert capsys.readouterr().out == ""
+
+
+def _no_completed_run(pr: ReleasePR) -> None:
+    pr.runs[:] = [_check(pr.head, status="in_progress", conclusion=None)]
+
+
+def _newest_completed_run_failed(pr: ReleasePR) -> None:
+    pr.runs[:] = [_check(pr.head, id=1), _check(pr.head, id=2, conclusion="failure")]
+
+
+def _merge_tree_differs(pr: ReleasePR) -> None:
+    (pr.root / "source.txt").write_text("changed by the merge\n")
+    _native(pr.root, "commit", "-qam", "Change the tree")
+
+
+def _head_from_a_fork(pr: ReleasePR) -> None:
+    pr.pull["head"]["repo"] = {"full_name": "someone/widget"}
+
+
+def _head_is_not_the_base(pr: ReleasePR) -> None:
+    pr.pull["head"]["ref"] = "feature/shipping"
+
+
+@pytest.mark.parametrize(
+    "break_proof",
+    [
+        _no_completed_run,
+        _newest_completed_run_failed,
+        _merge_tree_differs,
+        _head_from_a_fork,
+        _head_is_not_the_base,
+    ],
+)
+def test_a_release_pr_runs_the_checks_when_no_pass_covers_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    break_proof: Callable[[ReleasePR], None],
+) -> None:
+    pr = _release_pr(tmp_path, monkeypatch)
+    break_proof(pr)
+    assert pr.reused() is None
+    reason = capsys.readouterr().out
+    assert reason.startswith("Running the checks again; ")
+    assert reason.strip().removeprefix("Running the checks again;").strip()
