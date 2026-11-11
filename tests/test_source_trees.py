@@ -39,7 +39,9 @@ def test_every_round_of_one_run_takes_the_trees_from_the_first_fetch(
     assert update.check_scaffold_update(target, base)
     installed = update.installed_update_paths(target, base)
     assert installed
-    assert change_size.update_written(target, base) >= installed
+    found = update.update_in_diff(target, base)
+    assert found is not None
+    assert change_size.update_written(target, base, found[2]) >= installed
     assert update.installed_update_paths(target, base) == installed
     assert fetch.call_count == 1
     revision, previous = revisions(target, base)

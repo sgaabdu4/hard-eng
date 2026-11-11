@@ -846,16 +846,10 @@ def maybe_installed(name: str) -> bool:
     )
 
 
-def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
-    """The installed and previous revisions and changed paths of a committed update."""
-    marker = root / SOURCE_FILE
-    if not marker.is_file():
-        return None
-    # Only a clean, committed installation update may narrow the application checks.
-    if subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True):
-        return None
+def recorded_revisions(root: Path, base: str) -> tuple[str, str] | None:
+    """The installed revision and the revision at the base, when both are commit ids."""
     try:
-        revision = json.loads(marker.read_text()).get("revision")
+        revision = json.loads((root / SOURCE_FILE).read_text()).get("revision")
         previous = json.loads(
             subprocess.check_output(
                 ["git", "show", f"{base}:{SOURCE_FILE}"],
@@ -864,6 +858,35 @@ def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
                 stderr=subprocess.DEVNULL,
             )
         ).get("revision")
+    except (OSError, subprocess.CalledProcessError, ValueError, AttributeError):
+        return None
+    if (
+        isinstance(revision, str)
+        and isinstance(previous, str)
+        and COMMIT_ID.fullmatch(revision)
+        and COMMIT_ID.fullmatch(previous)
+    ):
+        return revision, previous
+    return None
+
+
+def commit_subjects(root: Path, base: str) -> list[str]:
+    return subprocess.check_output(
+        ["git", "log", "--format=%s", f"{base}..HEAD"], cwd=root, text=True
+    ).splitlines()
+
+
+def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
+    """The installed and previous revisions and changed paths of a committed update."""
+    # Only a clean, committed installation update may narrow the application checks.
+    if not (root / SOURCE_FILE).is_file() or subprocess.check_output(
+        ["git", "status", "--porcelain"], cwd=root, text=True
+    ):
+        return None
+    if (found := recorded_revisions(root, base)) is None:
+        return None
+    revision, previous = found
+    try:
         names = set(
             subprocess.check_output(
                 ["git", "diff", "--name-only", "--no-renames", "-z", base, "--"],
@@ -871,22 +894,24 @@ def update_in_diff(root: Path, base: str) -> tuple[str, str, set[str]] | None:
                 text=True,
             ).split("\0")
         ) - {""}
-        subjects = subprocess.check_output(
-            ["git", "log", "--format=%s", f"{base}..HEAD"], cwd=root, text=True
-        ).splitlines()
-    except (subprocess.CalledProcessError, ValueError, AttributeError):
+        subjects = commit_subjects(root, base)
+    except subprocess.CalledProcessError:
         return None
     repair = revision == previous and set(subjects) == {REPAIR_SUBJECT}
-    if (
-        (SOURCE_FILE not in names or revision == previous)
-        and not repair
-        or not isinstance(previous, str)
-        or not isinstance(revision, str)
-        or not COMMIT_ID.fullmatch(previous)
-        or not COMMIT_ID.fullmatch(revision)
-    ):
+    if (SOURCE_FILE not in names or revision == previous) and not repair:
         return None
     return revision, previous, names
+
+
+def update_since(root: Path, base: str) -> tuple[str, str] | None:
+    """The revisions of a real update or a repair in this branch, with fixes beside it allowed."""
+    if (found := recorded_revisions(root, base)) is None:
+        return None
+    try:
+        repair = REPAIR_SUBJECT in commit_subjects(root, base)
+    except subprocess.CalledProcessError:
+        return None
+    return found if found[0] != found[1] or repair else None
 
 
 def release_installed(
@@ -950,6 +975,13 @@ def installed_update_paths(root: Path, base: str) -> set[str]:
     if found is None:
         return set()
     revision, previous, names = found
+    return proven_installed(root, base, names, revision, previous)
+
+
+def proven_installed(
+    root: Path, base: str, names: set[str], revision: str, previous: str
+) -> set[str]:
+    """The installed paths among these names, when the verified release installs them exactly."""
     installed = {name for name in names if maybe_installed(name)}
     try:
         proven = verified_revision(revision) and release_installed(

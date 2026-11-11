@@ -99,17 +99,24 @@ def configured_packages(root: Path) -> dict[str, Group]:
     return {group["path"]: group for group in config["packages"]}
 
 
-def update_written(root: Path, point: str) -> set[str]:
+def update_written(root: Path, point: str, names: set[str]) -> set[str]:
     """Paths a verified Hard Eng update in this branch wrote, scaffold and setup edits alike."""
     from ci_setup import setup_written
-    from update import installed_update_paths, shared_sources, update_in_diff
+    from update import (
+        maybe_installed,
+        proven_installed,
+        shared_sources,
+        update_since,
+    )
 
-    installed = installed_update_paths(root, point)
-    found = update_in_diff(root, point)
-    if not installed or found is None:
+    if not any(maybe_installed(name) for name in names):
         return set()
-    revision, previous, names = found
-    sources = shared_sources(revision, previous)
+    if (found := update_since(root, point)) is None:
+        return set()
+    installed = proven_installed(root, point, names, *found)
+    if not installed:
+        return set()
+    sources = shared_sources(*found)
     return installed | setup_written(root, point, names - installed, sources)
 
 
@@ -187,7 +194,7 @@ def size_verdict(root: Path) -> tuple[bool, str]:
     names = {name for name in status[1::2] + untracked if name}
     if not names:
         return True, NO_CHANGE
-    names -= update_written(root, point)
+    names -= update_written(root, point, names)
     if not names:
         return True, "only files the verified Hard Eng update wrote"
     return _verdict(status, counts, untracked, names, configured_packages(root))

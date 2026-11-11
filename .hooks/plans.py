@@ -616,7 +616,7 @@ def validate_plans(
         from change_size import update_written
 
         # Unrelated open plans must not block a verified Hard Eng update branch.
-        if not changed - update_written(root, base):
+        if not changed - update_written(root, base, changed):
             print(
                 "Plan: only files the verified Hard Eng update wrote; no plan needed."
             )
