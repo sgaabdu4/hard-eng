@@ -603,7 +603,7 @@ def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) 
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
-    from change_size import judged_point, plan_not_needed, released_plans
+    from change_size import judged_point, moved_plans, plan_not_needed, released_plans
 
     explicit_stage = stage is not None
     base = base or judged_point(root)
@@ -622,6 +622,7 @@ def validate_plans(
             )
             return stage
     changed |= released_plans(root, base)
+    changed -= moved_plans(root, base, changed)
     paths = plan_files(root)
     applicable = applicable_plans(root, paths, changed)
     if not applicable and explicit_stage and not changed:
