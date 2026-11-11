@@ -666,3 +666,26 @@ def test_the_brownfield_upgrade_drops_the_ended_python(tmp_path: Path) -> None:
     assert 'requires-python = ">=3.11"' in pyproject.read_text()
     with pytest.raises(RuntimeError, match="requires-python"):
         release_canary.drop_ended_python(tmp_path)
+
+
+def test_the_brownfield_adoption_adds_a_performance_suite_before_adopt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`adopt` refuses a project with no performance suite, so the canary adds one as a real adoption does."""
+    suites: list[list[Path]] = []
+
+    def must(cwd: Path, _log: object, _failure: str, *commands: list[str]) -> None:
+        if any(command[-1] == "adopt" for command in commands):
+            suites.append(sorted((cwd / "tests/performance").glob("test_*.py")))
+
+    def keep_python(_work: Path) -> None:
+        pass
+
+    monkeypatch.setattr(release_canary, "must", must)
+    monkeypatch.setattr(release_canary, "drop_ended_python", keep_python)
+    work = tmp_path / "work"
+    work.mkdir()
+    with (tmp_path / "log").open("w") as log:
+        release_canary.install_new("brownfield", "itsdangerous", tmp_path, work, log)
+    assert [len(found) for found in suites] == [1]
+    compile(suites[0][0].read_text(), "suite", "exec")
