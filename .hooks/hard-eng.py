@@ -40,7 +40,6 @@ import subprocess
 import tempfile
 import threading
 import time
-import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
@@ -70,7 +69,12 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
-from python_setup import leave_out_children, pytest_options, require_import_contract
+from python_setup import (
+    leave_out_children,
+    pytest_options,
+    require_import_contract,
+    validate_pyrefly,
+)
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -197,29 +201,7 @@ def validate_typing(
     package_root: Path | None = None,
 ) -> None:
     if language == "python":
-        native = directory / "pyrefly.toml"
-        options = (
-            tomllib.loads(native.read_text())
-            if native.exists()
-            else tomllib.loads((directory / "pyproject.toml").read_text())
-            .get("tool", {})
-            .get("pyrefly", {})
-        )
-        if (
-            options.get("preset") not in {"strict", "all"}
-            or options.get("check-unannotated-defs", True) is not True
-            or any(
-                value in (False, "ignore")
-                for value in options.get("errors", {}).values()
-            )
-            or options.get("ignore-missing-imports")
-            or options.get("replace-imports-with-any")
-            or options.get("replace-untyped-imports-with-any")
-            or options.get("sub-config")
-        ):
-            raise ValueError(
-                "Pyrefly requires strict checking without disabled diagnostics or Any import substitutions"
-            )
+        validate_pyrefly(directory, ROOT)
     elif language == "dart":
         validate_dart_typing(directory, sources, package_root)
 
