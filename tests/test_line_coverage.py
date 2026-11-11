@@ -79,6 +79,34 @@ def test_a_missing_python_coverage_report_names_the_cov_step(tmp_path: Path) -> 
     assert "rerun setup" not in text
 
 
+@pytest.mark.parametrize(
+    ("name", "content"),
+    [
+        (".coveragerc", "[run]\nomit = app/_compat.py,\n"),
+        ("pyproject.toml", '[tool.coverage.run]\nomit = ["app/_compat.py"]\n'),
+        ("setup.cfg", "[coverage:run]\nomit =\n    app/_compat.py\n"),
+    ],
+)
+def test_a_python_file_that_an_omit_setting_hides_names_that_setting(
+    tmp_path: Path, name: str, content: str
+) -> None:
+    """Tests cannot cover a file that the project's own coverage settings leave out."""
+    report = tmp_path / "coverage.json"
+    summary = {"covered_lines": 1, "num_statements": 1}
+    report.write_text(json.dumps({"files": {"app/main.py": {"summary": summary}}}))
+    expected = {tmp_path / "app/main.py", tmp_path / "app/_compat.py"}
+    with pytest.raises(ValueError, match="omits production files") as plain:
+        reports.line_coverage(report, "python-tests", tmp_path, expected)
+    assert "omit" not in str(plain.value).split("omits production files")[1]
+    (tmp_path / name).write_text(content)
+    with pytest.raises(ValueError, match="omits production files") as refusal:
+        reports.line_coverage(report, "python-tests", tmp_path, expected)
+    assert (
+        f"{name} has a coverage `omit` setting: remove its entries for these files"
+        in str(refusal.value)
+    )
+
+
 def test_a_setup_rerun_keeps_the_old_name_in_sources_and_the_cov_value(
     installer: ModuleType, tmp_path: Path
 ) -> None:
