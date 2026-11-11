@@ -16,7 +16,6 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TextIO
 
-from ci_setup import GATES_FILE, without_workflow_gates
 from gate_config import SOURCE_FILE
 
 RESULT_FILE = ".hard-eng/update-result.txt"
@@ -659,6 +658,7 @@ def repair_checkout(root: Path, previous: str) -> str:
     """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
     import hook_chain
     import update
+    from ci_setup import GATES_FILE, without_workflow_gates
 
     hook_chain.install_worktree_hook(root)
     needs_hook = update.pre_push_missing(root) or hook_chain.foreign_hook(
