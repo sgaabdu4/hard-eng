@@ -405,6 +405,11 @@ def dart_scan_includes_boundaries(gate: Gate) -> bool:
 
 def initial_base(root: Path) -> str:
     """A new branch compares with its shipping-base merge base, else the empty tree."""
+    return initial_point(root)[0]
+
+
+def initial_point(root: Path) -> tuple[str, bool]:
+    """The comparison base of a new branch and whether it is the empty tree."""
     from shipping import git, load_policy
 
     try:
@@ -412,10 +417,10 @@ def initial_base(root: Path) -> str:
         branch = f"refs/remotes/origin/{policy['base']}" if policy else "HEAD"
         merged = git(root, "merge-base", branch, "HEAD").strip()
         if merged != git(root, "rev-parse", "HEAD").strip():
-            return merged
+            return merged, False
     except ValueError:
         pass
-    return git(root, "hash-object", "-w", "-t", "tree", os.devnull).strip()
+    return git(root, "hash-object", "-w", "-t", "tree", os.devnull).strip(), True
 
 
 def changed_files(root: Path, base: str) -> set[str] | None:

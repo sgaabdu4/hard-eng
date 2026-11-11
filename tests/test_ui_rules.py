@@ -296,16 +296,29 @@ def test_lines_from_before_the_install_are_not_judged(tmp_path: Path) -> None:
     (root / "AGENTS.md").write_text("rules\n")
     commit(root, "Install Hard Eng")
     validate_suppressions(root, None)
+    validate_suppressions(unborn(tmp_path / "fresh", "a.tsx", old), None)
+    with pytest.raises(ValueError, match="HE-NO-SWITCH-OFF"):
+        validate_suppressions(
+            unborn(tmp_path / "other", "old.py", "x = 1  # no" + "qa\n"), None
+        )
 
-    fresh = tmp_path / "fresh"
-    fresh.mkdir()
-    for name, text, rule in (
-        ("a.tsx", old, RULE),
-        ("old.py", "x = 1  # no" + "qa\n", "HE-NO-SWITCH-OFF"),
-    ):
-        isolated = fresh / name
-        isolated.mkdir()
-        init(isolated / "repo")
-        (isolated / "repo" / name).write_text(text)
-        with pytest.raises(ValueError, match=rule):
-            validate_suppressions(isolated / "repo", None)
+
+def unborn(parent: Path, name: str, text: str) -> Path:
+    parent.mkdir()
+    root = parent / "repo"
+    init(root)
+    (root / name).write_text(text)
+    return root
+
+
+def test_the_starting_state_of_a_new_repository_is_not_judged(tmp_path: Path) -> None:
+    """HE-UI-SOURCE: when the guard compares with the empty tree, the starting files are not judged."""
+    line = '<a className="hover:bg-[#383838]">Docs</a>\n'
+    validate_suppressions(unborn(tmp_path / "a", "page.tsx", line), None)
+    with pytest.raises(ValueError, match="HE-NO-SWITCH-OFF"):
+        mixed = unborn(tmp_path / "b", "page.tsx", line)
+        (mixed / "old.py").write_text("x = 1  # no" + "qa\n")
+        validate_suppressions(mixed, None)
+    first = unborn(tmp_path / "c", "page.tsx", line)
+    commit(first, "first commit")
+    validate_suppressions(first, "0" * 40)

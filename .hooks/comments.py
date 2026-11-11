@@ -15,7 +15,7 @@ from gate_config import (
     ALL_ZERO_OBJECT_ID,
     changed_files,
     generated_sources,
-    initial_base,
+    initial_point,
 )
 from plans import _is_test as is_test_path
 from plans import default_branch_point
@@ -387,7 +387,7 @@ def switch_off_pattern(name: str) -> re.Pattern[str] | None:
     return SCRIPT_OFF if suffix in JAVASCRIPT else None
 
 
-def diff_base(root: Path, base: str) -> str:
+def diff_base(root: Path, base: str) -> tuple[str, bool]:
     head = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
         cwd=root,
@@ -395,7 +395,9 @@ def diff_base(root: Path, base: str) -> str:
         check=False,
     )
     unborn = base == "HEAD" and head.returncode == 1
-    return initial_base(root) if unborn or ALL_ZERO_OBJECT_ID.fullmatch(base) else base
+    if unborn or ALL_ZERO_OBJECT_ID.fullmatch(base):
+        return initial_point(root)
+    return base, False
 
 
 def header_path(text: str) -> str:
@@ -421,7 +423,7 @@ def diff_lines(
             "--no-ext-diff",
             "--src-prefix=a/",
             "--dst-prefix=b/",
-            diff_base(root, base),
+            base,
             "--",
         ],
         cwd=root,
@@ -649,7 +651,8 @@ def ui_source_check(root: Path, added: dict[str, list[tuple[int, str]]]) -> None
 
 def validate_suppressions(root: Path, base: str | None) -> None:
     try:
-        added, removed = diff_lines(root, base or default_branch_point(root) or "HEAD")
+        point, empty = diff_base(root, base or default_branch_point(root) or "HEAD")
+        added, removed = diff_lines(root, point)
     except subprocess.CalledProcessError as error:
         raise ValueError(
             "Cannot verify suppression scope; fetch or supply a valid Git --base"
@@ -702,4 +705,5 @@ def validate_suppressions(root: Path, base: str | None) -> None:
             "HE-NO-SWITCH-OFF: A change must not switch a check off: fix the cause instead of "
             "suppressing, skipping or deleting the check. " + "; ".join(found)
         )
-    ui_source_check(root, added)
+    if not empty:
+        ui_source_check(root, added)
