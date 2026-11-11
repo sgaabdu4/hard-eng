@@ -403,6 +403,15 @@ def disabled_classes(root: Path, name: str, added: list[tuple[int, str]]) -> lis
     return found
 
 
+def off_hit(pattern: re.Pattern[str], text: str, in_test: bool) -> re.Match[str] | None:
+    """The first match, leaving out a skip name used as a bare value outside a test file."""
+    for hit in pattern.finditer(text):
+        bare = pattern is SCRIPT_OFF and hit[2] and hit[0][-1:] not in "(."
+        if in_test or not bare:
+            return hit
+    return None
+
+
 def marks_in_file(root: Path, name: str, added: list[tuple[int, str]]) -> list[str]:
     """Switch-offs that only the whole file shows: Swift traits and Python test classes."""
     if name.endswith(".py"):
@@ -533,7 +542,9 @@ IMPORT = re.compile(r"^\s*(import|from|export|use)\b|\brequire\(")
 
 
 def import_or_empty(text: str) -> bool:
-    """A line with no text, or an import line (a Swift `@testable` prefix aside)."""
+    """A line with no text, or an import line that names no test (a Swift `@testable` prefix aside)."""
+    if any(mark in text for mark in (".spec", ".test", "_test", " test_", "Test")):
+        return not text.strip()
     return not text.strip() or bool(IMPORT.search(text.replace("@testable ", "", 1)))
 
 
@@ -733,11 +744,15 @@ def validate_suppressions(root: Path, base: str | None) -> None:
         pattern = switch_off_pattern(name)
         if name in skipped or pattern is None:
             continue
-        tested = is_test_path(PurePosixPath(name)) and TEST_OFF.get(Path(name).suffix)
+        in_test = is_test_path(PurePosixPath(name))
+        tested = in_test and TEST_OFF.get(Path(name).suffix)
         found += [
             f"{name}:{number} adds {hit[0].strip()!r}"
             for number, text in added.get(name, [])
-            if (hit := pattern.search(text) or (tested and re.search(tested, text)))
+            if (
+                hit := off_hit(pattern, text, in_test)
+                or (tested and re.search(tested, text))
+            )
         ]
         found += marks_in_file(root, name, added.get(name, []))
         if is_test_path(PurePosixPath(name)):

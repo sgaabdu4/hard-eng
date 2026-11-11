@@ -627,6 +627,17 @@ IMPORT_EDITS = [
         "@testable import AppCore",
     ),
     ("tests/test_e.py", "import os\n\nx = 1\n", ""),
+    ("tests/test_f.py", "import pytest\nx = 1\n", "import pytest, os"),
+    (
+        "tests/test_g.py",
+        "from app.models import User\nx = 1\n",
+        "from app.models import Role",
+    ),
+    (
+        "src/a.test.ts",
+        'import { x } from "./helpers";\nx();\n',
+        'import { x, y } from "./helpers";',
+    ),
 ]
 
 
@@ -657,6 +668,10 @@ REMOVED_CHECKS = [
     ("AppTests/ATests.swift", "import Testing\n#expect(f() == 1)\n"),
     ("AppTests/ATests.swift", "import Testing\nfunc testA() {}\n"),
     ("tests/test a.py", "import os\nassert f()\n"),
+    ("tests/test_a.py", "import os\nfrom tests.shared import TestContract\n"),
+    ("tests/test_a.py", "import os\nfrom .test_base import *\n"),
+    ("src/a.test.ts", 'import { f } from "./a";\nimport "./auth.test";\n'),
+    ("test/a_test.dart", "import 'a.dart';\nimport 'auth_test.dart';\n"),
 ]
 
 
