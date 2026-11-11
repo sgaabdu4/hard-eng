@@ -461,6 +461,21 @@ def test_a_quick_check_reuses_the_scanner_versions_of_its_cutoff_hour(
     assert len(calls.read_text().splitlines()) == 1
 
 
+def test_a_stored_value_that_is_no_version_is_dropped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    calls = fake_uvx(tmp_path, monkeypatch, "check")
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
+    tool_setup.scanner_store().parent.mkdir(parents=True)
+    broken = {"cutoff": WAIT[1], "versions": {"ruff": "latest; rm -rf"}}
+    tool_setup.scanner_store().write_text(json.dumps(broken))
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    assert tool_setup.SCANNER_VERSIONS == {"ruff": "9.9.9"}
+    assert len(calls.read_text().splitlines()) == 1
+
+
 def test_a_new_cutoff_hour_ends_the_stored_scanner_versions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
