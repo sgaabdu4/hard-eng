@@ -345,12 +345,15 @@ def pyrefly_gap(file: str, options: Mapping[str, object]) -> str:
             if value in (False, "ignore")
         ]
     steps = []
-    if (
-        options.get("preset") not in {"strict", "all"}
-        or options.get("check-unannotated-defs", True) is not True
-    ):
+    wrong = []
+    if options.get("preset") not in {"strict", "all"}:
+        wrong.append('preset = "strict"')
+    if options.get("check-unannotated-defs", True) is not True:
+        wrong.append("check-unannotated-defs = true")
+    if wrong:
         steps.append(
-            'add these lines under [tool.pyrefly] (at the top of a pyrefly.toml): preset = "strict" and check-unannotated-defs = true'
+            f"set {' and '.join(wrong)} under [tool.pyrefly] (at the top of a pyrefly.toml), "
+            "one line for each key"
         )
     if refused:
         steps.append(f"remove {', '.join(refused)}")
