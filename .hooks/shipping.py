@@ -7,7 +7,7 @@ import math
 import os
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TypedDict, cast
@@ -108,6 +108,16 @@ class _PullRequest:
     merged_at: str | None
     merge_commit_sha: str | None
     commits: int
+    rebaseable: bool | None = field(compare=False)
+
+
+def rebase_step(base: str) -> str:
+    return (
+        f"GitHub cannot rebase this PR onto {base}, so nothing was merged. "
+        f"Rebase the branch on origin/{base} and push it with --force-with-lease. "
+        "If GitHub still cannot rebase it, cut its commits (HE-PR-COMMITS). "
+        "Then wait for the checks and run ship again."
+    )
 
 
 def _run(
@@ -386,6 +396,9 @@ def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:
     commits = data.get("commits")
     if not isinstance(commits, int) or isinstance(commits, bool):
         raise ShippingError("PR commit count is invalid")
+    rebaseable = data.get("rebaseable")
+    if rebaseable is not None and not isinstance(rebaseable, bool):
+        raise ShippingError("PR rebaseability is invalid")
     return _PullRequest(
         state=_text(data, "state", "PR"),
         draft=draft,
@@ -411,6 +424,7 @@ def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:
             else _sha(data.get("merge_commit_sha"), "PR merge")
         ),
         commits=commits,
+        rebaseable=rebaseable,
     )
 
 
@@ -828,7 +842,11 @@ def _ready_state(
     from change_size import commits_problem
     from pr_text import body_problem
 
-    if problem := body_problem(pull.body) or commits_problem(pull.commits):
+    if problem := (
+        body_problem(pull.body)
+        or commits_problem(pull.commits)
+        or (rebase_step(pull.base_ref) if pull.rebaseable is False else None)
+    ):
         raise ShippingError(problem)
     _current_with_base(root, identity, pull.base_ref, pull.head_sha)
     if pull.mergeable is not True or pull.mergeable_state != "clean":
