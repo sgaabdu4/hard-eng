@@ -78,6 +78,7 @@ Slice 5, issue 572 (`.hooks/untrusted_input.py`, `setup.py`, `.github/workflows/
 - [ ] Setup makes `!.hooks` the last entry of `files.includes` in a root `biome.json` or `biome.jsonc`, keeps comments and other `includes` keys, and changes nothing when the entry is there → `tests/test_untrusted_input.py::test_setup_keeps_the_project_biome_run_away_from_the_hooks_folder`
 - [ ] Setup adds the entry in a project with no TypeScript package at its root → `tests/test_untrusted_input.py::test_setup_adds_the_biome_entry_when_no_typescript_package_is_at_the_root`
 - [ ] Setup changes nothing in a project with no Biome settings → `tests/test_untrusted_input.py::test_setup_leaves_a_project_without_biome_settings_alone`
+- [ ] An update adds the entry to a root `biome.json`, and the size rule still counts the change as only files that the update wrote → `tests/test_scaffold_replay.py::test_an_update_adds_the_biome_entry_and_stays_an_update`
 - [ ] Setup prints the step and goes on when it cannot edit the settings safely → `tests/test_untrusted_input.py::test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings`
 - [ ] The format gate of the shipped files covers each installed workflow → `tests/test_gate_tools.py::test_the_shipped_format_gate_covers_each_installed_workflow`
 - [ ] The two workflow lines use double quotes → N/A — the gate `shipped-format` fails on the base and passes on this change
@@ -96,8 +97,9 @@ Slice 7, issue 573 (`.hooks/coverage_sources.py`, `.hooks/update.py`, `.agents/s
 - [ ] Setup of a package with `src` and root tool configuration files lists only `src`, and the check passes → `tests/test_greenfield.py::test_setup_and_check_leave_root_tool_configs_out_of_the_sources`
 - [ ] A build script folder, a runtime file with a dot in its tool part, `middleware.ts` and a configuration file in a subfolder still need listing → `tests/test_greenfield.py::test_runtime_files_beside_tool_configs_still_need_listing`
 - [ ] A listed root tool configuration file stays a production file → `tests/test_runner.py::test_a_listed_root_tool_config_keeps_its_coverage_demand`
-- [ ] An update leaves a listed root tool configuration file in `sources` → N/A — an update does not compute `sources` again for a package that the gate file holds (`adapt_packages` runs only when setup makes a new gate file), so no update path can remove the entry
+- [ ] An update leaves a listed root tool configuration file in `sources` → N/A — an update does not compute `sources` again for a package that the gate file holds (setup computes the list only for a group that it makes: a first install, a new package, or the old families format), so no update path can remove the entry
 - [ ] The CI check of an update PR refuses code outside the listed sources, and a local check of the same update does no added work → `tests/test_scaffold_replay.py::test_scaffold_update_check_refuses_code_outside_the_sources`
+- [ ] The printed step of that refusal, done on the update branch, ends the refusal and meets the rule → `tests/test_scaffold_replay.py::test_the_step_of_the_update_refusal_works_on_the_update_branch`
 
 ## Baseline + execution
 
