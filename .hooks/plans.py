@@ -333,7 +333,7 @@ def ux_rules(content: str) -> None:
             + "; ".join(wrong)
             + f"; add a line for each rule of {UX_REFERENCE}"
             + (
-                "; the rule lines stand in one block directly below `Rules:` with no empty line"
+                "; the rule lines stand in one block below `Rules:` with no empty line between them"
                 if any(w.startswith("no line") for w in wrong)
                 else ""
             )
