@@ -38,6 +38,9 @@ jobs:
     name: pr text
     runs-on: ${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}
     timeout-minutes: 2
+    concurrency:
+      group: pr-text-check-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       contents: read # Read the PR text rules from .hooks.
     steps:

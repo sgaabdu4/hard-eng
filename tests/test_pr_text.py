@@ -304,12 +304,15 @@ def test_pr_text_check_runs_on_each_push_and_edit_and_the_footer_job_skips_pushe
     assert "github.event.action != 'synchronize'" in footer
 
 
-def test_only_the_footer_job_holds_the_concurrency_group_so_a_push_cannot_cancel_it() -> (
+def test_each_job_holds_its_own_concurrency_group_so_a_push_cannot_cancel_the_footer() -> (
     None
 ):
     workflow = yaml.safe_load(_workflow_text())
     assert "concurrency" not in workflow
-    assert "concurrency" not in workflow["jobs"]["pr-text"]
+    assert workflow["jobs"]["pr-text"]["concurrency"] == {
+        "group": "pr-text-check-${{ github.event.pull_request.number }}",
+        "cancel-in-progress": True,
+    }
     assert workflow["jobs"]["remove-claude-footer"]["concurrency"] == {
         "group": (
             "pr-text-${{ github.event.pull_request.number }}-"
