@@ -9,7 +9,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from conftest import SOURCE, commit, git
+from conftest import SOURCE, commit, git, install_ux_reference, ux_rules_block
 from gate_config import GateConfig
 from plans import planning_feedback, ux_proof, validate_plan, validate_plans
 from shipping import ShippingPolicy
@@ -532,6 +532,7 @@ def test_native_cli_plan_stage_and_missing_plan(
     hooks.mkdir()
     for path in (source / ".hooks").glob("*.py"):
         (hooks / path.name).write_bytes(path.read_bytes())
+    install_ux_reference(tmp_path)
     (tmp_path / "hard-eng.gates.json").write_text(
         '{"packages": [], "shared": [{"name": "fixture", '
         '"command": ["' + sys.executable + '", "-c", "print(123)"]}]}'
@@ -626,7 +627,8 @@ def test_native_cli_plan_stage_and_missing_plan(
         "Before: N/A — design-system mock has no app capture.\n"
         "Proposed: ![Mock](https://example.test/account-mock.png)\n"
         "Capture: Storybook account-card story rendered at the target viewport.\n"
-        "Review: Inspected the mock with the affected controls and states.",
+        "Review: Inspected the mock with the affected controls and states.\n"
+        + ux_rules_block(),
     )
     plan.write_text(mock)
     assert (
