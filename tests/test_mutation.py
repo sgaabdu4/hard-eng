@@ -206,7 +206,7 @@ def test_a_mutant_that_no_test_ran_is_not_reported_as_passing_tests(
     mutation.summary("python", tested, survivors, Path("."))
     lines = capsys.readouterr().out.splitlines()
     passing = lines.index("the tests still pass with these changes:")
-    unreached = lines.index("no test ran the code of these changes:")
+    unreached = lines.index("no test ran the code where these changes are:")
     assert "if total >= 100 and member: → " in lines[passing + 1]
     assert "if total >= 100" not in "".join(lines[unreached:])
     assert "return total * 0.9 → " in lines[unreached + 1]
@@ -340,7 +340,7 @@ def test_a_stryker_mutant_without_coverage_is_listed_as_not_run(
     mutation.summary("javascript", tested, survivors, Path("."))
     lines = capsys.readouterr().out.splitlines()
     passing = lines.index("the tests still pass with these changes:")
-    unreached = lines.index("no test ran the code of these changes:")
+    unreached = lines.index("no test ran the code where these changes are:")
     assert passing < unreached
     assert "src/f.ts:2" in lines[passing + 1]
     assert "src/f.ts:3" in lines[unreached + 1]

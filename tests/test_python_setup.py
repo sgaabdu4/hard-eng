@@ -294,11 +294,15 @@ def test_the_pyrefly_step_sets_only_the_keys_that_are_wrong(
     section: str, named: list[str], native: bool
 ) -> None:
     head = "" if native else '[project]\nname = "cli"\n\n[tool.pyrefly]\n'
-    text = head + section
+    text = head + section + ('[errors]\nbad-return = "error"\n' if native else "")
     file = "pyrefly.toml" if native else "pyproject.toml"
     parsed = tomllib.loads(text)
     step = pyrefly_gap(file, parsed if native else parsed["tool"]["pyrefly"])
-    place = "at the top level" if native else "under [tool.pyrefly]"
+    place = (
+        "at the top of the file, before any [table] line"
+        if native
+        else "under [tool.pyrefly]"
+    )
     assert step.endswith(place)
     change = re.compile(r'change (preset|check-unannotated-defs) to ("strict"|true)')
     add = re.compile(r'add (preset|check-unannotated-defs) = ("strict"|true)')
@@ -309,6 +313,7 @@ def test_the_pyrefly_step_sets_only_the_keys_that_are_wrong(
         text = re.sub(rf"(?m)^{key} = .*$", f"{key} = {value}", text)
     for key, value in add.findall(step):
         assert not re.search(rf"(?m)^{key} = ", text)
-        text = text.replace(head, f"{head}{key} = {value}\n", 1)
+        line = f"{key} = {value}\n"
+        text = line + text if native else text.replace(head, head + line, 1)
     fixed = tomllib.loads(text)
     assert pyrefly_gap(file, fixed if native else fixed["tool"]["pyrefly"]) == ""
