@@ -4,7 +4,9 @@ import json
 from pathlib import Path
 
 import pytest
+import project_setup
 import reports
+from gate_config import Group
 
 
 def test_coverage_requires_unexecuted_files_and_merges_lcov(tmp_path: Path) -> None:
@@ -69,5 +71,26 @@ def test_branch_coverage_is_reported_separately_from_lines(
 
 def test_a_missing_python_coverage_report_names_the_cov_step(tmp_path: Path) -> None:
     report = tmp_path / "coverage.json"
-    with pytest.raises(ValueError, match="--cov="):
+    with pytest.raises(ValueError, match="rerun setup") as refusal:
         reports.line_coverage(report, "python-tests", tmp_path, {tmp_path / "a.py"})
+    assert "--cov=" in str(refusal.value)
+    assert "`sources`" in str(refusal.value)
+
+
+def test_a_setup_rerun_replaces_the_old_name_in_sources_and_the_cov_value(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "newname").mkdir()
+    module = tmp_path / "newname/__init__.py"
+    module.write_text("")
+    group: Group = {
+        "path": ".",
+        "language": "python",
+        "sources": ["oldname"],
+        "checks": [
+            {"name": "tests", "role": "tests", "command": ["pytest", "--cov=oldname"]}
+        ],
+    }
+    project_setup.adapt_sources(tmp_path, group, [module])
+    assert group["sources"] == ["newname"]
+    assert group["checks"][0]["command"] == ["pytest", "--cov=newname"]

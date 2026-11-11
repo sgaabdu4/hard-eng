@@ -213,3 +213,19 @@ def test_a_rerun_with_no_shipping_block_names_the_ci_step_once(
     shown = capsys.readouterr().err + outcome
     assert shown.count("CI setup pending") == 1
     assert "merge it to the base branch, then rerun setup" in outcome
+
+
+def test_a_refused_checkout_plan_with_no_shipping_block_names_the_ci_step_once(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    skill = project / ".agents/skills/he/SKILL.md"
+    skill.write_text(skill.read_text() + "\nA local line.\n")
+    capsys.readouterr()
+    outcome = update_runner.locked_update(project, repair=True)
+    shown = capsys.readouterr().err + outcome
+    assert "This checkout is unchanged: setup refused the update: " in outcome
+    assert shown.count("CI setup pending") == 1
+    assert outcome.endswith(f"{CI_STEP}.")
