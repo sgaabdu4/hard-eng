@@ -729,6 +729,8 @@ def adapt_ci(
             "MISE_MINIMUM_RELEASE_AGE: 0s\n",
             f"MISE_MINIMUM_RELEASE_AGE: {RELEASE_AGE_SECONDS // 86400}d\n",
         )
+        for switch in ("MISE_PREFER_OFFLINE", "MISE_USE_VERSIONS_HOST"):
+            migrated = migrated.replace(f"{switch}: 'false'\n", f'{switch}: "false"\n')
         if migrated != original:
             changes[name] = migrated
         integrated(workflows)
