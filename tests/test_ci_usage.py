@@ -9,6 +9,7 @@ import plans
 import pytest
 import shipping
 from ci_usage import ci_usage
+from test_review_bypass import required_rule, rules_answer
 from test_shipping import (
     _PR_URL,
     FakeGitHub,
@@ -203,6 +204,7 @@ def _queued(
     queued = _check(fixture.head, status="queued", conclusion=None, completed_at=None)
     fake = FakeGitHub(_pull(fixture), [queued])
     fake.job = job
+    fake.rules = rules_answer(required_rule("build"))
     _patch_gh(monkeypatch, fake)
     return fixture, fake
 
