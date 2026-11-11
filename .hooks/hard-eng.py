@@ -755,7 +755,7 @@ def check(
         return 0
 
     with check_lock(ROOT) as lock:
-        installed = read_installed(lock)
+        installed = read_installed(lock, ROOT)
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(language_groups(groups, languages), quick, installed)
         from debt import require_shrink
@@ -773,7 +773,7 @@ def check(
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
-        save_installed(lock, installed)
+        save_installed(lock, installed, ROOT)
         failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
         return int(failed)

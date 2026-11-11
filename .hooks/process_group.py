@@ -152,16 +152,31 @@ def check_lock_file(root: Path) -> Generator[tuple[IO[str], bool]]:
         yield lock, held
 
 
-def read_installed(lock: IO[str]) -> frozenset[str]:
-    """Packages whose install passed in this checkout; a bad state file counts as none."""
+def lock_stamp(root: Path, key: str) -> str:
+    """Size and change time of a package group's lock files; its install mark holds only while they stay the same."""
+    from gate_config import LOCKFILES
+
+    language, _, path = key.partition(":")
+    found = []
+    for name in LOCKFILES.get(language, ()):
+        with suppress(OSError):
+            status = (root / path / name).stat()
+            found.append(f"{name} {status.st_size} {status.st_mtime_ns}")
+    return "; ".join(found)
+
+
+def read_installed(lock: IO[str], root: Path) -> frozenset[str]:
+    """Package groups whose install passed in this checkout with the lock files of now; a bad state file counts as none."""
     INSTALLS.clear()
     try:
-        names = json.loads(Path(lock.name).with_name(INSTALLED_FILE).read_text())
+        saved = json.loads(Path(lock.name).with_name(INSTALLED_FILE).read_text())
     except (OSError, ValueError):
         return frozenset()
-    if not isinstance(names, list):
+    if not isinstance(saved, dict):
         return frozenset()
-    return frozenset(name for name in names if isinstance(name, str))
+    return frozenset(
+        key for key, stamp in saved.items() if stamp == lock_stamp(root, key)
+    )
 
 
 def install_key(group: Mapping[str, object]) -> str:
@@ -174,13 +189,13 @@ def note_install(key: str, role: object, failed: bool) -> None:
         INSTALLS[key] = INSTALLS.get(key, True) and not failed
 
 
-def save_installed(lock: IO[str], before: frozenset[str]) -> None:
+def save_installed(lock: IO[str], before: frozenset[str], root: Path) -> None:
     passed = {key for key, ok in INSTALLS.items() if ok}
     after = (before | passed) - (INSTALLS.keys() - passed)
     if after != before:
         with suppress(OSError):
             Path(lock.name).with_name(INSTALLED_FILE).write_text(
-                json.dumps(sorted(after))
+                json.dumps({key: lock_stamp(root, key) for key in sorted(after)})
             )
 
 
