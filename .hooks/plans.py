@@ -288,6 +288,9 @@ def ux_rules(content: str) -> None:
     rules = dict(usability_rules())
     given: dict[str, list[tuple[str, str]]] = {}
     for line in rule_lines(content):
+        head, marked, tail = line.partition("): ")
+        if marked and "(count" in head:
+            line = head.partition(" (count")[0] + ": " + tail
         label, _, verdict = line.partition(": ")
         given.setdefault(label, []).append(partition_verdict(label, verdict))
     unknown = [label for label in given if label not in rules]
