@@ -5,7 +5,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 ## Order
 
 1. Running in a worktree (`git rev-parse --path-format=absolute --git-dir --git-common-dir` prints two different paths) → stop; tell the owner to start the coordinator from the main checkout, because a worktree branch keeps old skill text after updates. Then the schedule check for this host in [hosts](hosts.md). Then `probe` if it has not passed in this session, or if the skill or `trello.json` changed since it last ran; wrong account or missing list → stop and report.
-2. `check`; `heldElsewhere` → [stop this host](hosts.md#another-machine-holds-the-claim), then end the run. Other `skipped` → end the run. Read `handover.md` from the same folder. Act on every item in every list before anything else.
+2. `check`; `heldElsewhere` → [stop this host](hosts.md#another-machine-holds-the-claim), then end the run. Other `skipped` → end the run. Read `handover.md` from the same folder. Act on every item in every list before anything else, except `idle` cards, which wait for step 4.
 3. Project health: error tracker, CI, release state, background jobs (below).
 4. Workers: start, follow up, review (below).
 5. Update `handover.md`, report (below), then `finish <runId>`.
@@ -26,6 +26,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 | `testQueue`             | Tell the owner each tester's count and oldest card. Never chase on the cards.                                                                                                      |
 | `unnumbered`, `overdue` | Number it with `update --renumber`; a duplicate of another card → `archive <it> --into <original>`; overdue → act, or post the blocker and set a new date with `update`.           |
 | `realCases`             | Run its `handover.md` check since its last checked time. Worked → post the example, remove the label, testing. Failed → `doing`.                                                   |
+| `idle`                  | Act on it in step 4, per the `idle` card rule in Workers.                                                                                                                          |
 
 ## Project health
 
@@ -55,7 +56,8 @@ Load at the start of every run. Commands = [commands](commands.md).
 - Keep the project's test and demo accounts in `handover.md`. A finding that names one = our test data, never a task for staff.
 - Change touching sign-in, permissions, payments or personal data → a security review worker before the testing move.
 - Proven checklist item → `tick`; a person to add to or drop from a card → `member`.
-- Idle capacity + an unblocked card → start it. Never archive a worker you still wait on.
+- Free worker capacity + an unblocked card → start it. Never archive a worker you still wait on.
+- `idle` card already acted on in step 2 of this run → skip it. Its worker in `handover.md` has not reported since its last brief or follow-up → only the long-run and stall rule above applies. Else find what the card waits for. It waits on a person → ask in one tagged comment, unless our own question to them is already open; either way `silent` chases ours, and no worker starts. It waits on anything else, such as another card or a release → record that in `handover.md`; post no comment. It meets the Done rule above → `done`. Else work can go on: send it to the card's worker in `handover.md` per the follow-up rule above; no worker → start one as above.
 
 ## Simplify
 
