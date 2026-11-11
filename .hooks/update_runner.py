@@ -511,10 +511,13 @@ def remember_failure(root: Path, attempt: str, error: Exception) -> None:
 
 
 def failed_update(error: Exception | str) -> str:
+    """The step stays on the first line; the Stop note prints only that line."""
+    first, _, rest = str(error).partition("\n")
     return (
-        f"Hard Eng update failed: {error}. Fix that cause first. A fix in tracked files "
-        "goes on the base branch as its own commit, since the update is built from it. "
-        "Cause outside repo → tell user. Installed gates still apply."
+        f"Hard Eng update failed: {first.rstrip('.')}. Fix that cause first. A fix in "
+        "tracked files goes on the base branch as its own commit, since the update is "
+        "built from it. Cause outside repo → tell user. Installed gates still apply."
+        + (f"\n{rest}" if rest else "")
     )
 
 
