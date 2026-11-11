@@ -258,7 +258,7 @@ def usability_rules() -> list[tuple[str, list[str]]]:
         if marker:
             units = rest.partition("):")[0].split(", ")
         else:
-            name, units = name.partition(":")[0], []
+            name, units = name.partition(":")[0], list[str]()
         rules.append((name, units))
     return rules
 
@@ -343,6 +343,15 @@ def partition_verdict(label: str, verdict: str) -> tuple[str, str]:
     return name, text
 
 
+def judged_rules(content: str, path: Path | None) -> None:
+    """A plan untouched since the last Hard Eng update may predate the Rules field."""
+    try:
+        ux_rules(content)
+    except ValueError:
+        if path is None or touched_since_update(path):
+            raise
+
+
 def ux_proof(content: str, *, legacy: bool = False, path: Path | None = None) -> None:
     if NOT_APPLICABLE_WITH_REASON.fullmatch(content.strip()):
         return
@@ -377,13 +386,8 @@ def ux_proof(content: str, *, legacy: bool = False, path: Path | None = None) ->
         )
     for name in ("Capture", "Review"):
         evidence_field(content, name)
-    if legacy:
-        return
-    try:
-        ux_rules(content)
-    except ValueError:
-        if path is None or touched_since_update(path):
-            raise
+    if not legacy:
+        judged_rules(content, path)
 
 
 def readiness_errors(

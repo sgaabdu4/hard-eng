@@ -12,7 +12,7 @@ from unittest.mock import Mock
 import agent_hooks
 import plans
 import pytest
-from conftest import SOURCE, commit, git, init, ux_rules_block
+from conftest import SOURCE, add_origin, commit, git, init, ux_rules_block
 from gate_config import JsonObject
 from plans import usability_rules, validate_plan
 
@@ -486,3 +486,39 @@ def test_a_new_ready_plan_needs_rules(tmp_path: Path, visual_plan: str) -> None:
     )
     with pytest.raises(ValueError, match="UX Rules is missing"):
         validate_plan(plan)
+
+
+def test_the_step_named_by_a_missing_ux_reference_repairs_the_checkout(
+    release: tuple[Path, Path, str],
+    visual_plan: str,
+) -> None:
+    _, target, _ = release
+    add_origin(target)
+    git(target, "switch", "-qc", "feature/work")
+    (target / "PLAN.md").write_text(
+        visual_plan.replace("Status: Complete", "Status: Ready")
+    )
+    git(target, "add", "PLAN.md")
+    git(target, "commit", "-qm", "plan")
+    reference = target / ".agents/skills/he-plan/references/ux.md"
+    reference.unlink()
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import sys; sys.path.insert(0, '.hooks'); from plans import validate_plan; "
+            "from pathlib import Path; print(validate_plan(Path('PLAN.md')))"
+        ),
+    ]
+    refused = subprocess.run(
+        command, cwd=target, capture_output=True, text=True, check=False
+    )
+    assert refused.returncode == 1
+    step = refused.stderr.split("`")[1]
+    subprocess.run(step.split(), cwd=target, check=True)
+    assert reference.is_file()
+    assert (
+        subprocess.run(command, cwd=target, capture_output=True, check=False).returncode
+        == 0
+    )
+    assert git(target, "branch", "--show-current").strip() == "feature/work"

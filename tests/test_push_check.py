@@ -298,6 +298,7 @@ def test_a_full_check_that_passed_on_the_pushed_commit_spares_the_push_check(
 MISSES = [
     "tracked-edit",
     "untracked-file",
+    "untracked-hidden",
     "gate-leaves-file",
     "submodule-moved",
     "submodule-edited",
@@ -337,7 +338,9 @@ def test_the_push_check_runs_when_the_pass_does_not_cover_the_pushed_commit(
         old, revision = revision, pushed.task("second")
     if row == "tracked-edit":
         (pushed.root / "task.txt").write_text("edited after the commit")
-    if row == "untracked-file":
+    if row == "untracked-hidden":
+        git(pushed.root, "config", "status.showUntrackedFiles", "no")
+    if row in {"untracked-file", "untracked-hidden"}:
         (pushed.root / "scratch.txt").write_text("scratch")
     if row == "submodule-moved":
         assert component
