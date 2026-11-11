@@ -1,6 +1,7 @@
 """Known slow patterns fail the security gate, old code included."""
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -373,3 +374,40 @@ def test_security_scans_skip_only_the_installed_hard_eng_files(
     marker.unlink()
     source = runner.prepare_command(group, gate, 5)
     assert not [part for part in source if part.startswith("--exclude=")]
+
+
+def fake_uvx(folder: Path, text: str) -> dict[str, str]:
+    folder.mkdir()
+    script = folder / "uvx"
+    script.write_text(f"#!/bin/sh\necho '{text}' >&2\nexit 2\n")
+    script.chmod(0o755)
+    return {"PATH": f"{folder}:{os.environ['PATH']}"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        None,
+        "error: Failed to fetch: `https://pypi.org/simple/semgrep/`",
+        "Traceback (most recent call last):",
+    ],
+    ids=["cache", "network", "crash"],
+)
+def test_a_scan_with_no_semgrep_report_names_the_step_outside_the_sandbox(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str | None
+) -> None:
+    """HE-HOT-PATH: a scan that gets no report says where to run it again."""
+    (tmp_path / "app.py").write_text("x = 1\n")
+    if text is None:
+        (tmp_path / "plain").write_text("file")
+        monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "plain/cache"))
+        text = "Failed to initialize cache"
+    else:
+        for name, value in fake_uvx(tmp_path / "bin", text).items():
+            monkeypatch.setenv(name, value)
+    with pytest.raises(
+        ValueError, match="ask approval to run it outside the sandbox"
+    ) as error:
+        findings(tmp_path, ["app.py"], 120)
+    assert text in str(error.value)
+    assert "python3 .hooks/hard-eng.py hot-paths" in str(error.value)

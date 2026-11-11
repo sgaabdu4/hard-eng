@@ -540,6 +540,13 @@ TEST_START = re.compile(
 PYTHON_FUNCTION = re.compile(r"^\s*(?:async\s+)?def\s")
 PYTHON_BLOCK = re.compile(r"^\s*(?:(?:async\s+)?def|class)\s")
 IMPORT = re.compile(r"^\s*(import|from|export|use)\b|\brequire\(")
+
+
+def import_or_empty(text: str) -> bool:
+    """A line with no text, or an import line (a Swift `@testable` prefix aside)."""
+    return not text.strip() or bool(IMPORT.search(text.replace("@testable ", "", 1)))
+
+
 SYNTAX = {"import", "from", "as", "export", "use", "require", "const", "let", "var"}
 DEFINITION = re.compile(
     r"\b(?:def|class|function|fn|struct|enum|trait|interface|mixin|extension)\s+(\w+)"

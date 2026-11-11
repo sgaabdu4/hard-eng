@@ -59,8 +59,6 @@ def _file_reason(name: str, added: str, removed: str) -> str | None:
         return f"it changes the binary file {name}"
     if _is_protected(path):
         return f"it changes {name}, which always needs a plan"
-    if _is_test(path) and int(removed):
-        return f"it removes lines from the test file {name}"
     return None
 
 
@@ -82,9 +80,9 @@ def _branch_change(root: Path, point: str) -> tuple[list[str], list[str], list[s
     return status, counts, untracked
 
 
-def _counted_lines(counts: list[str], names: set[str]) -> int | str:
-    """Changed lines in the counted files, or the first reason one of them needs a plan."""
-    total = 0
+def _counted_lines(counts: list[str], names: set[str]) -> tuple[int, list[str]] | str:
+    """Changed lines, the test files that lose lines, or the first reason a file needs a plan."""
+    total, losing = 0, []
     for entry in filter(None, counts):
         added, removed, name = entry.split("\t", 2)
         if name not in names:
@@ -92,7 +90,32 @@ def _counted_lines(counts: list[str], names: set[str]) -> int | str:
         if reason := _file_reason(name, added, removed):
             return reason
         total += int(added) + int(removed)
-    return total
+        if int(removed) and _is_test(PurePosixPath(name)):
+            losing.append(name)
+    return total, sorted(losing)
+
+
+def _removed_check(root: Path, point: str, names: list[str]) -> str | None:
+    """The reason a test file loses more than import lines and empty lines, or None."""
+    from comments import DIFF, HASH, SLASH, changed_lines, import_or_empty
+
+    for name in names:
+        if Path(name).suffix not in HASH | SLASH:
+            return f"it removes lines from the test file {name}"
+    try:
+        diff = subprocess.check_output(
+            [*DIFF, point, "--", *(f":(literal){name}" for name in names)],
+            cwd=root,
+            text=True,
+            errors="replace",
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return "the change cannot be measured"
+    removed = changed_lines(diff)[1]
+    for name in names:
+        if not all(import_or_empty(text) for _, text in removed.get(name, [])):
+            return f"it removes lines from the test file {name}"
+    return None
 
 
 def configured_packages(root: Path) -> dict[str, Group]:
@@ -145,6 +168,8 @@ def update_only(root: Path, base: str, changed: set[str]) -> bool:
 
 
 def _verdict(
+    root: Path,
+    point: str,
     status: list[str],
     counts: list[str],
     untracked: list[str],
@@ -178,11 +203,13 @@ def _verdict(
     counted = _counted_lines(counts, names)
     if isinstance(counted, str):
         return False, counted
-    total = counted
+    total, losing = counted
     if len(names) > MAX_SMALL_FILES:
         return False, f"it changes {len(names)} files, more than {MAX_SMALL_FILES}"
     if total > MAX_SMALL_LINES:
         return False, f"it changes {total} lines, more than {MAX_SMALL_LINES}"
+    if losing and (reason := _removed_check(root, point, losing)):
+        return False, reason
     plural = "file" if len(names) == 1 else "files"
     return True, f"{len(names)} {plural}, {total} changed lines"
 
@@ -221,7 +248,8 @@ def size_verdict(root: Path) -> tuple[bool, str]:
     names -= update_written(root, point, names)
     if not names:
         return True, "only files the verified Hard Eng update wrote"
-    return _verdict(status, counts, untracked, names, configured_packages(root))
+    packages = configured_packages(root)
+    return _verdict(root, point, status, counts, untracked, names, packages)
 
 
 def judged_point(root: Path) -> str | None:
