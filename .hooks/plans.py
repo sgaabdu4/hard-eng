@@ -13,6 +13,7 @@ from gate_config import (
 )
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
+SMALL_SIZE = "Size: small ("
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
 NOT_APPLICABLE_WORD = re.compile(r"(?i)\bN/A\b")
 TITLE_LINE = re.compile(r"(?m)^# \S.+$")
@@ -564,11 +565,9 @@ def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
     from change_size import (
-        applicable_plans,
+        judged_plans,
         judged_point,
-        moved_plans,
         plan_not_needed,
-        released_plans,
         update_only,
     )
 
@@ -589,16 +588,18 @@ def validate_plans(
     ):
         print("Plan: only files the verified Hard Eng update wrote; no plan needed.")
         return stage
-    changed |= released_plans(root, base)
-    changed -= moved_plans(root, base, changed)
-    paths = plan_files(root)
-    applicable = applicable_plans(root, paths, changed)
+    changed, paths, applicable = judged_plans(root, base, changed)
+    asks_size = bool(changed) and not any(
+        str(path.relative_to(root)) in changed for path in paths
+    )
+    if asks_size and plan_not_needed(root):
+        return stage
     if not applicable and explicit_stage and not changed:
         applicable = paths
     if (
         (changed != set() or explicit_stage)
         and not applicable
-        and not plan_not_needed(root)
+        and (asks_size or not plan_not_needed(root))
     ):
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"

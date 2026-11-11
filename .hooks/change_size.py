@@ -6,6 +6,7 @@ from pathlib import Path, PurePosixPath
 from dependency_graph import owner_language
 from gate_config import SOURCE_FILE, Group, changed_files, parse_config
 from plans import (
+    SMALL_SIZE,
     _git_output,
     _is_test,
     acceptance_tests,
@@ -297,29 +298,39 @@ def plan_not_needed(root: Path) -> bool:
     if reason == NO_CHANGE:
         return True
     if small:
-        print(f"Size: small ({reason}); no plan needed.")
+        print(f"{SMALL_SIZE}{reason}); no plan needed.")
     else:
         print(f"Size: big, because {reason}; a plan is needed.")
     return small
 
 
-def applicable_plans(root: Path, paths: list[Path], changed: set[str]) -> list[Path]:
+def judged_plans(
+    root: Path, base: str | None, changed: set[str]
+) -> tuple[set[str], list[Path], list[Path]]:
+    """The changed files with released plans added and moved plans out, every plan file, and the plans that judge the change."""
+    changed = changed | released_plans(root, base)
+    changed -= moved_plans(root, base, changed)
+    paths = plan_files(root)
     applicable = [path for path in paths if str(path.relative_to(root)) in changed]
-    return applicable or [
-        path
-        for path in paths
-        if plan_status(path.read_text()) not in {None, "Complete"}
-    ]
+    return (
+        changed,
+        paths,
+        applicable
+        or [
+            path
+            for path in paths
+            if plan_status(path.read_text()) not in {None, "Complete"}
+        ],
+    )
 
 
 def plan_tests(root: Path, base: str | None) -> set[str]:
     """Test names that the active plans' acceptance lines depend on."""
-    changed = (changed_files(root, base or "HEAD") or set()) | released_plans(
-        root, base
+    _, _, applicable = judged_plans(
+        root, base, changed_files(root, base or "HEAD") or set()
     )
-    paths = plan_files(root)
     names = set()
-    for path in applicable_plans(root, paths, changed):
+    for path in applicable:
         content = path.read_text()
         if plan_status(content) in {"Ready", "Complete"}:
             sections = plan_sections(content, allow_placeholders=True)

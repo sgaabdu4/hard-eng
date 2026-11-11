@@ -914,7 +914,7 @@ def checked_changes(
     scope: tuple[str, dict[str, str], str, str],
 ) -> JsonObject:
     """Run the check on the session's changes; a split keeps Semgrep's taint analysis bounded."""
-    from plans import build_in_progress
+    from plans import SMALL_SIZE, build_in_progress
 
     base, current, changed, notice = scope
     claim = str(
@@ -943,6 +943,8 @@ def checked_changes(
             "reason": f"Hard Eng: another Hard Eng check holds this checkout's lock, so this turn's changes are not checked; that check may predate your last edits. You started it after your last edit → read its exit notice + fix its findings. Else → start `python3 .hooks/hard-eng.py {step}` in the background (it waits its turn) + read its exit notice. Don't claim done.",
         }
     returncode, output = run_check(root, base, building)
+    if SMALL_SIZE in output:
+        building, notice = False, ""
     decisions = show_decisions(root, changed.splitlines(), state)
     if returncode == 0:
         if state is not None and not state.exists():

@@ -1,6 +1,7 @@
 """Ending a turn must not rerun a passing check or leave an interrupted one running."""
 
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -10,7 +11,7 @@ import agent_hooks
 import debt
 import failures
 import pytest
-from conftest import SOURCE, add_origin, commit, git, gone
+from conftest import SOURCE, add_origin, commit, git, gone, plan_document
 from gate_config import Gate, Group, JsonObject
 
 
@@ -507,3 +508,42 @@ def test_failures_with_no_output_are_not_counted_as_repeats(tmp_path: Path) -> N
     for output in ("", "\n  \n", ""):
         assert failures.repeat_note(tmp_path, output) == ""
     assert not (tmp_path / ".hard-eng/failures.json").exists()
+
+
+@pytest.mark.parametrize("status", ["Draft", "Ready"])
+def test_stop_passes_a_small_change_when_the_base_holds_an_open_plan(
+    repository: Path, status: str
+) -> None:
+    shutil.copytree(
+        SOURCE / ".hooks",
+        repository / ".hooks",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        shutil.copyfile(SOURCE / name, repository / name)
+    gate = {"name": "fixture-check", "command": [sys.executable, "-c", ""]}
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [gate]})
+    )
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n__pycache__/\n")
+    (repository / "a.py").write_text("".join(f"line {n}\n" for n in range(30)))
+    (repository / "PLAN.md").write_text(
+        plan_document()
+        .replace("Status: Complete", f"Status: {status}")
+        .replace("## Verification\nResult: Passed", "## Verification\nResult: Pending")
+    )
+    commit(repository, "open plan on the base")
+    add_origin(repository)
+    git(repository, "fetch", "-q", "origin")
+    git(repository, "switch", "-qc", "work")
+    payload: JsonObject = {"session_id": "small"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "a.py").write_text(
+        "".join(f"changed {n}\n" for n in range(3))
+        + "".join(f"line {n}\n" for n in range(3, 30))
+    )
+    response = agent_hooks.completion(repository, payload)
+    message = str(response)
+    assert "decision" not in response
+    assert "build in progress" not in message
+    assert "Planning incomplete" not in message
