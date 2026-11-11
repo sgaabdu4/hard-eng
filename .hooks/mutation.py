@@ -291,7 +291,9 @@ def configure_mutmut(directory: Path, files: Iterable[str]) -> None:
 
 
 def mutmut(manager: str, *arguments: str) -> list[str]:
-    return python_gate_command(["mutmut", *arguments], manager)
+    from tool_setup import managed_command
+
+    return managed_command(python_gate_command(["mutmut", *arguments], manager))
 
 
 def python(
