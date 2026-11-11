@@ -1,6 +1,6 @@
 # Trello mockups follow one standard, and picture posts need a proof file
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -21,11 +21,11 @@ Decision: one reference, `mockups.md`, loaded for design work and picture posts.
 
 ## Acceptance + steps
 
-- [ ] A picture with no proof file, a proof older than the picture, a proof without `change`, `shows` and `showsChange: true`, or a proof missing a rule line of at least 20 characters is refused before any upload, dry run included; the error names the file and the missing keys → `tests/test_trello_pictures.py::test_a_picture_needs_a_current_proof_file`.
-- [ ] A proof with all nine rule lines, or with a `notNewUi` reason, passes; a file that is not a picture needs no proof → `tests/test_trello_pictures.py::test_a_picture_needs_a_current_proof_file`.
-- [ ] A comment with a new-screen picture ends with the bold closing line after the pictures; a comment whose pictures are `notNewUi` does not → `tests/test_trello_pictures.py::test_a_new_screen_post_ends_with_the_closing_line`.
-- [ ] The rule names and the closing line in `mockups.md` match the tool, and each planning UX rule name it quotes exists in `ux.md` → `tests/test_trello_pictures.py::test_mockup_rules_match_the_proof_gate`.
-- [ ] Our comment with the closing line and a tag but no question is not chased: not in `silent`, `buried`, `badTags` or `labels` → `tests/test_trello_report.py::test_the_closing_line_does_not_make_our_comment_a_question`.
+- [x] A picture with no proof file, a proof older than the picture, a proof without `change`, `shows` and `showsChange: true`, or a proof missing a rule line of at least 20 characters is refused before any upload, dry run included; the error names the file and the missing keys → `tests/test_trello_pictures.py::test_a_picture_needs_a_current_proof_file`.
+- [x] A proof with all nine rule lines, or with a `notNewUi` reason, passes; a file that is not a picture needs no proof → `tests/test_trello_pictures.py::test_a_picture_needs_a_current_proof_file`.
+- [x] A comment with a new-screen picture ends with the bold closing line after the pictures; a comment whose pictures are `notNewUi` does not → `tests/test_trello_pictures.py::test_a_new_screen_post_ends_with_the_closing_line`.
+- [x] The rule names and the closing line in `mockups.md` match the tool, and each planning UX rule name it quotes exists in `ux.md` → `tests/test_trello_pictures.py::test_mockup_rules_match_the_proof_gate`.
+- [x] Our comment with the closing line and a tag but no question is not chased: not in `silent`, `buried`, `badTags` or `labels` → `tests/test_trello_report.py::test_the_closing_line_does_not_make_our_comment_a_question`.
 - [x] Real board: on a test card, a picture with no proof is refused; with a proof it posts with the closing line; both are then removed → N/A — a test cannot post to a real board. Manual check on 2026-11-11 with the fixed tool: refused with "No proof file", then posted with the closing line after the picture; comment and picture removed.
 
 ## Baseline + execution
@@ -44,10 +44,17 @@ N/A — no app screens change; this changes the coordinator's rules and its boar
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
+Result: Passed
+Evidence: On 2026-11-11 each new test failed first (no rule list, no `mockups.md`; the closing-line comment listed as `silent`), then passed. The Trello tests passed (141: `tests/test_trello_pictures.py`, `tests/test_trello_report.py`, `tests/test_trello_coordinator.py`, `tests/test_trello_board.py`). The Ready check ran 4 times: each of the first 3 stopped on one named finding, fixed below; the 4th had all steps passing except one types finding, fixed and rechecked (0 diagnostics). The real-board check passed as recorded in Acceptance. Three reader passes checked the new text; each real finding is fixed. The independent review at ae635388 found one item: testing posts with a new design get no closing line. Skipped: the standard names mockup posts only, and `mockups.md` ties the line to `comment`. `check --plan-stage Complete --base origin/develop` result is recorded in the pull request.
 E2E: N/A — no user journey; the tests run the real script against a fake Trello, and one real-board check covers the live path.
-Retro: Pending.
+Retro: these items, each sorted by HE Learn's Retro rows.
+- The Ready check refused the coordinator test file at 1,006 lines → mechanical: the existing file-length check caught it before push; the new tests moved to `tests/test_trello_pictures.py`. None new.
+- The Ready check refused the real-board acceptance line with no test or N/A reason → mechanical: the existing plan check caught it. None new.
+- The types check refused an empty list in a new test → mechanical: the existing types check caught it. None new.
+- Reader pass 1 found rule names copied from the planning UX guide, which had changed on develop → single source: the proof rules now point to `ux.md`, and `tests/test_trello_pictures.py::test_mockup_rules_match_the_proof_gate` fails when a quoted rule name is not in `ux.md`.
+- Reader passes 2 and 3 found rules that could not reach the worker, proofs that forced a false claim for evidence pictures, and a worker that could write proof files → judgement: fixed in `mockups.md` before push; the Writing Great Skills Reader rule is the existing owner. None new.
+- The advisor found that the closing line made our tagged comment count as a question → `tests/test_trello_report.py::test_the_closing_line_does_not_make_our_comment_a_question`.
+- The independent review asked for the closing line on testing posts → skipped as outside the standard, reason above. None new.
 
 Delivery target: PR
 Delivery: Pending — PR into develop, then the release to main.
