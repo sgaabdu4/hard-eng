@@ -30,7 +30,7 @@ Escaped bug: every item is on the base branch and passed each gate on its PR. Th
 Blockers: None.
 Handoff: Approval
 Authority: Autonomous. On 2026-11-10 the maintainer told the builder to run the audit and fix rounds autonomously and to follow Hard Eng and Learn.
-Decided (1): with no `--base`, a clean tree and no applicable plan, `check` asks the size rule about the whole branch. A big branch with no plan fails with the size line, as pre-push does. A branch with no change prints no size line. The set of changed files that the other plan rules read stays as it is.
+Decided (1): with no `--base`, a clean tree and no applicable plan, `check` asks the size rule about the whole branch. A big branch with no plan fails with the size line, as pre-push does. A branch with no change prints no size line. The set of changed files that the other plan rules read stays as it is. One result of this, seen in the joined proof: the first `check` after an install that is committed and not yet pushed asks for a plan, as the push check did before; `adopt` in that state still runs each gate with no plan.
 Decided (2): with `--plan-stage` and no plan, a change that the size rule calls small passes and prints the size line. A big change still fails.
 Decided (3): a Draft plan with code edits gets a line that names the step: get approval, set the plan Ready, then build.
 Decided (4): `ship --stage cleanup` with no `--worktree` stops first and names the option. The cleanup refusal for kept files names each top-level path once (no file count: Git lists an ignored folder as one entry) and names the step: remove the generated files that nobody needs, keep the rest, then run cleanup again. The clean checkout refusal names the first files.
