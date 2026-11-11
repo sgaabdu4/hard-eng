@@ -222,6 +222,22 @@ def test_a_failed_import_linter_gate_prints_its_broken_contracts(
     ]
 
 
+def test_the_imports_gate_names_the_build_system_step(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    error = "Could not find package 'greeter' in your Python path.\n"
+    path = report_file(tmp_path, "no-package.txt", error)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "greeter"\n')
+    printed = failed("import-linter", path, tmp_path, capsys).splitlines()
+    assert printed[1:] == [
+        "scan: Add a [build-system] table to pyproject.toml and run `uv sync`."
+    ]
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "greeter"\n[build-system]\nrequires = ["hatchling"]\n'
+    )
+    assert len(failed("import-linter", path, tmp_path, capsys).splitlines()) == 1
+
+
 def test_a_failed_dart_performance_gate_prints_its_failing_test(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

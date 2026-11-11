@@ -68,7 +68,11 @@ def _fixture(
 
 
 _DIAGRAM = '```mermaid\nflowchart TD\n    A["old"] --> B["new"]\n```\n'
-_UNDO = "Undo: revert the PR's commits on main.\n" + _DIAGRAM * 2
+_UNDO = (
+    "Undo: revert the PR's commits on main.\n"
+    + _DIAGRAM * 2
+    + "Not checked: None \u2014 fixture.\n"
+)
 
 
 def _pull(fixture: Fixture, **changes: object) -> dict[str, object]:
@@ -142,6 +146,8 @@ class FakeGitHub:
         ]
         self.file_payload: object = [files or []]
         self.review: object = _review("0" * 40, viewerDidAuthor=False)
+        self.rules: object = None
+        self.job: object = None
         self.collaborators: object = [[_OWNER]]
         self.codeowners: dict[str, str] = {}
         self.comparison: object = {"behind_by": 0}
@@ -156,7 +162,7 @@ class FakeGitHub:
         if args[0] != "api":
             raise AssertionError(args)
         if args[1] == "graphql":
-            return json.dumps(self.review)
+            return json.dumps(self.rules if "Administer" in args[-1] else self.review)
         if "--method" in args:
             if "HEAD" in args:
                 raise shipping.ShippingError("gh query failed")
@@ -172,6 +178,7 @@ class FakeGitHub:
             "/check-runs?": self.check_payload,
             "/collaborators?": self.collaborators,
             "/compare/": self.comparison,
+            "/actions/jobs/": self.job,
         }
         for marker, payload in payloads.items():
             if marker in endpoint:
@@ -239,7 +246,10 @@ def test_ready_refuses_a_pr_body_with_no_before_and_after_diagrams(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, diagrams: int, passes: bool
 ) -> None:
     fixture = _fixture(tmp_path)
-    body = "Undo: revert the commits.\n" + _DIAGRAM * diagrams
+    body = (
+        "Undo: revert the commits.\nNot checked: None \u2014 fixture.\n"
+        + _DIAGRAM * diagrams
+    )
     fake = FakeGitHub(_pull(fixture, body=body), [_check(fixture.head)])
     message = None if passes else "Before and after"
     _ready_outcome(fixture, fake, monkeypatch, message)

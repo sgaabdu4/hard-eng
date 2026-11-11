@@ -106,14 +106,39 @@ def group_locks(root: Path, groups: Iterable["Group"]) -> Generator[Path]:
                 yield root / group["path"] / name
 
 
+def ignored_text(relative: object, step: str) -> str:
+    return (
+        f"{relative} is ignored by Git, so the install fails in a fresh clone. "
+        f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
+        f"remove that rule, {step}then commit {relative}"
+    )
+
+
+def missing_lock_error(directory: Path, name: str, message: str) -> ValueError:
+    """The missing-lockfile message; when Git ignores the file, which need not exist, it names the rule to remove too."""
+    ignored = not subprocess.run(
+        ["git", "check-ignore", "-q", name], cwd=directory, check=False
+    ).returncode
+    if not ignored:
+        return ValueError(message)
+    prefix = subprocess.run(
+        ["git", "rev-parse", "--show-prefix"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    return ValueError(f"{message}. {ignored_text(prefix + name, '')}")
+
+
 def refuse_ignored_locks(
     root: Path, locks: Iterable[Path], listed: Container[str], *, ask_git: bool
 ) -> None:
-    """A lock file that Git ignores is missing from a fresh clone; ask Git when the file is not on disk yet."""
+    """A lock file that Git ignores is missing from a fresh clone; ask Git when the file is not on disk yet or is a link at setup."""
     for lockfile in locks:
         relative = lockfile.relative_to(root)
         written = lockfile.is_file()
-        if written:
+        if written and not (ask_git and lockfile.is_symlink()):
             ignored = str(relative) not in listed
         else:
             ignored = (
@@ -123,11 +148,24 @@ def refuse_ignored_locks(
                 ).returncode
             )
         if ignored:
-            raise ValueError(
-                f"{relative} is ignored by Git, so the install fails in a fresh clone. "
-                f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
-                f"remove that rule, {'' if written else INSTALL_STEP}then commit {relative}"
-            )
+            raise ValueError(ignored_text(relative, "" if written else INSTALL_STEP))
+
+
+def dependency_free(directory: Path) -> bool:
+    """Bun deletes the lockfile of a package that declares nothing to install."""
+    path = directory / "package.json"
+    manifest = read_project_file(path) if path.is_file() else None
+    fields = (
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies",
+    )
+    return (
+        isinstance(manifest, dict)
+        and not manifest.get("workspaces")
+        and not any(manifest.get(key) for key in fields)
+    )
 
 
 def expanded(value: object) -> bool:

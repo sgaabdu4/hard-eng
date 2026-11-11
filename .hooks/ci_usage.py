@@ -62,6 +62,40 @@ def phases(job: dict[str, JsonValue]) -> tuple[float, float, float] | None:
     return max(started - created, 0.0), total - work, work
 
 
+def queue_note(
+    root: Path, repository: str, run: dict[str, JsonValue], budget: float
+) -> str:
+    """Text to add to a queued check's message when no runner took it past the budget."""
+    from datetime import UTC, datetime
+
+    from shipping import ShippingError, _json, _object, _timestamp, gh
+
+    try:
+        job = _object(
+            _json(
+                gh(root, "api", f"repos/{repository}/actions/jobs/{run.get('id')}"),
+                "job",
+            ),
+            "job",
+        )
+        waited = datetime.now(UTC).timestamp() - _timestamp(
+            job.get("created_at"), "job"
+        )
+    except ShippingError:
+        return ""
+    labels = job.get("labels")
+    names = ", ".join(map(str, labels)) if isinstance(labels, list) else ""
+    if job.get("status") != "queued" or "self-hosted" not in names:
+        return ""
+    if job.get("runner_name") or waited <= budget:
+        return ""
+    return (
+        f"; no runner has taken it for {int(waited // 60)} min (labels: {names}). "
+        "Start a runner with those labels, or ask its owner whether it serves this "
+        "PR's author. GitHub fails a job queued over 24 hours."
+    )
+
+
 def recent_runs(
     root: Path, repository: str, days: int, limit: int | None
 ) -> list[dict[str, JsonValue]]:

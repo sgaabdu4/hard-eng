@@ -61,9 +61,30 @@ SWITCHES = [
     ("t.py", "__test__ " + "= False\n", "__test__ " + "= False"),
     ("t.py", "    raise unittest" + ".SkipTest('x')\n", "unittest" + ".SkipTest"),
     ("t.py", "@sk" + "ip('x')\ndef t(): ...\n", "@sk" + "ip("),
+    ("t.py", "    raise Ski" + "pTest('x')\n", "raise Ski" + "pTest"),
+    (
+        "t.py",
+        "from pytest import fixture, ski" + "p\n",
+        "from pytest import fixture, ski" + "p",
+    ),
+    ("t.py", "from pytest import xf" + "ail\n", "from pytest import xf" + "ail"),
+    (
+        "t.py",
+        "from pytest import import" + "orskip\n",
+        "from pytest import import" + "orskip",
+    ),
+    ("a.test.ts", "const slow = ci ? test : test." + "skip;\n", "test." + "skip"),
+    ("a.test.ts", "const slow = ci ? it : it." + "skip;\n", "it." + "skip"),
+    (
+        "a.test.ts",
+        "const d = ci ? describe : describe." + "skip;\n",
+        "describe." + "skip",
+    ),
     ("a.test.ts", "it." + "skip.each([1])('s', () => {});\n", "it." + "skip."),
     ("a.test.ts", "test." + "skipIf(ci)('s', () => {});\n", "test." + "skipIf("),
     ("a.spec.ts", "test." + "fixme('s', () => {});\n", "test." + "fixme("),
+    ("a.spec.ts", "test." + "fail();\n", "test." + "fail("),
+    ("a.spec.ts", "test." + "fail('s', async () => {});\n", "test." + "fail("),
     ("a.test.js", "x" + "test('s', () => {});\n", "x" + "test("),
     ("a.test.js", "test('s', { ski" + "p: true }, () => {});\n", "ski" + "p: true"),
     ("a.test.js", "test('s', { ski" + "p: 'later' }, () => {});\n", "ski" + "p: '"),
@@ -108,4 +129,150 @@ RUFF_FORMS = [
     ("# fmt: o" + "ff", "# fmt: o" + "ff"),
     ("# fmt: sk" + "ip", "# fmt: sk" + "ip"),
     ("# yapf: dis" + "able", "# yapf: dis" + "able"),
+]
+
+RETRY_FORMS = [
+    ("tests/api.test.ts", "}, { re" + "try: 3 });\n", "re" + "try:"),
+    (
+        "tests/test_api.py",
+        "@pytest.mark.fl" + "aky(reruns=5)\ndef t(): ...\n",
+        "mark.fl" + "aky",
+    ),
+    ("test/api_test.dart", "@Re" + "try(3)\nvoid main() {}\n", "@Re" + "try("),
+    ("test/api_test.dart", "}, re" + "try: 2);\n", "re" + "try:"),
+    ("test/api_test.dart", "test('x', () async {}, re" + "try: 2);\n", "re" + "try:"),
+    ("test/api_test.dart", "  re" + "try: 2,\n", "re" + "try:"),
+    (
+        "test/api_test.dart",
+        'test("works", () => expect(value, isTrue), re' + "try: 2);\n",
+        "re" + "try:",
+    ),
+    (
+        "src/sum.test.ts",
+        "it('x', () => expect(a).toBe(1), { re" + "try: 2 })\n",
+        "re" + "try:",
+    ),
+    (
+        "test/api_test.dart",
+        "test('x', () => expect(find.text(label(1)), findsOneWidget), re"
+        + "try: 2);\n",
+        "re" + "try:",
+    ),
+    (
+        "test/api_test.dart",
+        "testWidgets('x', (t) async => expect(find.byType(A), findsOneWidget), re"
+        + "try: 3);\n",
+        "re" + "try:",
+    ),
+    (
+        "src/sum.test.ts",
+        "it('x', async () => { expect(await load()).toBe(1) }, { re" + "tries: 2 })\n",
+        "re" + "tries:",
+    ),
+    (
+        "test/api_test.dart",
+        "test('x', () { foo(re" + "try: 1); }, re" + "try: 2);\n",
+        "re" + "try:",
+    ),
+    (
+        "test/api_test.dart",
+        "testWidgets('x', (tester) async {}, re" + "try: 3);\n",
+        "re" + "try:",
+    ),
+    (
+        "src/sum.test.ts",
+        "describe('x', { re" + "tries: 2 }, () => {});\n",
+        "re" + "tries:",
+    ),
+    (
+        "src/sum.test.ts",
+        "test('x', { re" + "try: 3 }, async () => {});\n",
+        "re" + "try:",
+    ),
+    (
+        "src/sum.test.ts",
+        "test('adds', { re" + "try: 3 }, () => {});\n",
+        "re" + "try:",
+    ),
+    (
+        "e2e/login.spec.ts",
+        "test.describe.configure({ re" + "tries: 2 });\n",
+        "re" + "tries:",
+    ),
+    ("src/sum.test.js", "jest.re" + "tryTimes(3);\n", "jest.re" + "tryTimes("),
+    (
+        "playwright.config.ts",
+        "  re" + "tries: process.env.CI ? 2 : 0,\n",
+        "re" + "tries:",
+    ),
+    ("bunfig.toml", "re" + "try = 3\n", "re" + "try"),
+    ("pyproject.toml", 'addopts = "--re' + 'runs 3"\n', "--re" + "runs"),
+    ("pytest.ini", "re" + "runs = 2\n", "re" + "runs"),
+    ("packages/web/vitest.config.ts", "  re" + "try: 2,\n", "re" + "try:"),
+    ("pkgs/a/dart_test.yaml", "re" + "try: 3\n", "re" + "try"),
+    (
+        "conftest.py",
+        "metafunc.add_marker(pytest.mark.fl" + "aky(reruns=1))\n",
+        "mark.fl" + "aky",
+    ),
+    ("hard-eng.gates.json", '"--re' + 'try",\n', "--re" + "try"),
+    ("hard-eng.gates.json", '"--re' + 'runs=3",\n', "--re" + "runs"),
+    ("package.json", '"--re' + 'tries=2",\n', "--re" + "tries"),
+    (
+        "src/sum.test.ts",
+        "test.describe.configure({ re" + "tries: process.env.CI ? 2 : 0 });\n",
+        "re" + "tries:",
+    ),
+    ("vitest.e2e.config.ts", "  re" + "try: 2,\n", "re" + "try:"),
+    ("vitest.unit.config.mts", "  re" + "try: 2,\n", "re" + "try:"),
+    ("playwright.ct.config.ts", "  re" + "tries: 2,\n", "re" + "tries:"),
+    ("jest.e2e.config.js", "  re" + "tries: 2,\n", "re" + "tries:"),
+    ("package.json", '"test": "vitest run --re' + 'try 3"\n', "--re" + "try"),
+    ("ios/App.xctestplan", '"re' + 'tryOnFailure"\n', "re" + "tryOnFailure"),
+]
+
+RETRY_PASSES = [
+    ("src/api.ts", "const c = ky.create({ re" + "try: 3 });\n"),
+    ("src/app.py", "re" + "tries = 3\n"),
+    ("tests/stream.test.ts", "const s = sse({ re" + "try: 1000 });\n"),
+    ("tests/api.test.ts", "}, { re" + "try: 0 });\n"),
+    ("tests/api.test.ts", "const c = makeClient({ re" + "try: false });\n"),
+    ("tests/api.test.ts", "const c = makeClient({ re" + "try: () => null });\n"),
+    ("test/state_test.dart", "  re" + "try: (_, _) => null,\n"),
+    ("test/handler_test.dart", "  re" + "try: true,\n"),
+    ("test/plan_test.dart", "  'allocation, re" + "try: $retry, state: $state',\n"),
+    ("test/plan_test.dart", "  re" + "try: 0,\n"),
+    (
+        "test/drain_test.dart",
+        "  expect((await harness.drain()).data, _drained(sent: 1, re" + "try: 1));\n",
+    ),
+    (
+        "test/drain_test.dart",
+        "  expect((await harness.drain()).data, _drained(re" + "try: 1));\n",
+    ),
+    ("test/result_test.dart", "final r = Result(sent: 1, re" + "try: 2);\n"),
+    ("test/result_test.dart", "final a = foo(1); bar(re" + "try: 1);\n"),
+    ("test/result_test.dart", "expect(policy(re" + "try: 2).count, 2);\n"),
+    ("tests/client.test.ts", "const client = makeClient({ re" + "try: 3 });\n"),
+    ("tests/send.test.ts", "await send(job, { re" + "tries: 2 });\n"),
+    ("tests/api.test.ts", "test('x', { re" + "try: false }, () => {});\n"),
+    ("playwright.config.ts", "  re" + "tries: 0,\n"),
+    ("vite.config.ts", "  plugins: [],\n  re" + "tries: 0,\n"),
+    ("hard-eng.gates.json", '"--re' + 'tries=0",\n'),
+    ("pyproject.toml", "[tool.other]\nre" + "tries = 3\n"),
+    ("package.json", '"fetch": "curl --re' + 'try 3"\n'),
+    ("docs/guide.md", "Set the re" + "try count and mark the fl" + "aky tests.\n"),
+    ("tests/test_api.py", "name = 'fl" + "aky'\n"),
+]
+
+TEST_FLAGS = [
+    ("class TestDouble:\n    __test__ " + "= False\n", None),
+    ("class TestA:\n    __test__ " + "= False\n\n    def test_a(self): ...\n", 2),
+    ("class TestA:\n    def test_a(self): ...\n\n    __test__ " + "= False\n", 4),
+    (
+        "class TestDouble:\n    __test__ "
+        + "= False\n\n\nclass TestB:\n    def test_b(self): ...\n",
+        None,
+    ),
+    ("def test_a(): ...\n\n\nclass Helper:\n    __test__ " + "= False\n", None),
 ]

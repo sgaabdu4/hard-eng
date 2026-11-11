@@ -44,8 +44,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, TypedDict, cast
-from urllib.parse import unquote, urljoin, urlparse
+from typing import IO, TYPE_CHECKING
 
 import swift_setup
 from ci_jobs import (
@@ -55,21 +54,18 @@ from ci_jobs import (
     language_filter,
     language_groups,
 )
-from dart_boundaries import validate_dart_boundaries
+from dart_boundaries import validate_dart_boundaries, validate_dart_typing
 from debt import OUTPUTS, remember
 from dependency_graph import SOURCE_SUFFIXES, child_groups
 from gate_config import (
     Gate,
     Group,
-    JsonObject,
     Report,
-    dart_rule_settings,
     generated_sources,
     nonproduction_source,
 )
 from project_files import keeping, stop_keeping
 from project_setup import package_script_arguments as test_arguments
-from project_setup import validate_dart_exclusions
 from python_setup import (
     leave_out_children,
     pytest_options,
@@ -88,21 +84,6 @@ from untrusted_input import (
 if TYPE_CHECKING:
     from argparse import Namespace
 
-DartAnalyzer = TypedDict(
-    "DartAnalyzer",
-    {"exclude": list[str], "errors": dict[str, str], "language": dict[str, bool]},
-    total=False,
-)
-DartLinter = TypedDict(
-    "DartLinter", {"rules": dict[str, bool] | list[str]}, total=False
-)
-DartOptions = TypedDict(
-    "DartOptions",
-    {"include": str | list[str], "analyzer": DartAnalyzer, "linter": DartLinter},
-    total=False,
-)
-
-
 ROOT = Path(__file__).resolve().parents[1]
 FAILED_GATES: list[str] = []
 RECORDING = threading.Event()
@@ -115,84 +96,6 @@ SUITE_FILTERS = {
     "--shard --project --selectProjects",
     "dart": "--name --plain-name --tags --exclude-tags --total-shards --shard-index",
 }
-DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
-    "analyzer": {
-        "exclude": [],
-        "language": {
-            "strict-inference": True,
-        },
-    },
-    "linter": {
-        "rules": {
-            "no_dynamic_casts": True,
-            "no_raw_types": True,
-            "avoid_annotating_with_dynamic": True,
-            "avoid_dynamic_calls": True,
-            "strict_top_level_inference": True,
-            "unawaited_futures": True,
-        }
-    },
-}
-
-
-def dart_options(path: Path) -> DartOptions:
-    try:
-        import yaml
-    except ImportError as error:
-        raise ValueError(
-            "Dart configuration checks require PyYAML in the Python environment"
-        ) from error
-    try:
-        options = yaml.safe_load(path.read_text())
-    except yaml.YAMLError as error:
-        raise ValueError(f"Invalid Dart analysis settings: {path}") from error
-    if not isinstance(options, dict):
-        raise TypeError(f"Dart analysis settings must be a mapping: {path}")
-    return cast(DartOptions, options)
-
-
-def validate_dart_includes(
-    path: Path, directory: Path, seen: set[Path] | None = None
-) -> None:
-    seen = set() if seen is None else seen
-    path = path.resolve()
-    if path in seen:
-        raise ValueError(f"Recursive Dart analysis include: {path}")
-    seen.add(path)
-    options = dart_options(path)
-    from gate_config import validate_dart_plugins
-
-    validate_dart_plugins(cast(JsonObject, options))
-    analyzer = options.get("analyzer", {})
-    if {"strict-casts", "strict-raw-types"} & analyzer.get("language", {}).keys():
-        raise ValueError(
-            f"Remove obsolete Dart language flags; use no_dynamic_casts and no_raw_types: {path}"
-        )
-    validate_dart_exclusions(directory, analyzer.get("exclude", []))
-    if any(value == "ignore" for value in analyzer.get("errors", {}).values()):
-        raise ValueError(
-            f"Dart strict analysis cannot exclude files or ignore diagnostics: {path}"
-        )
-    includes = options.get("include", [])
-    for include in [includes] if isinstance(includes, str) else includes:
-        if include.startswith("package:"):
-            name, relative = include.removeprefix("package:").split("/", 1)
-            registry = directory / ".dart_tool/package_config.json"
-            packages = json.loads(registry.read_text())["packages"]
-            package = next((item for item in packages if item["name"] == name), None)
-            if package is None:
-                raise ValueError(f"Unresolved Dart analysis include: {include}")
-            uri = urljoin(
-                urljoin(registry.as_uri(), package["rootUri"]).rstrip("/") + "/",
-                package.get("packageUri", "lib/"),
-            )
-            uri = urlparse(urljoin(uri, relative))
-            if uri.scheme != "file":
-                raise ValueError(f"Unsupported Dart analysis include: {include}")
-            included = Path(unquote(uri.path))
-        else:
-            included = path.parent / include
-        validate_dart_includes(included, directory, seen.copy())
 
 
 def validate_typing(
@@ -205,36 +108,6 @@ def validate_typing(
         validate_pyrefly(directory, ROOT)
     elif language == "dart":
         validate_dart_typing(directory, sources, package_root)
-
-
-def validate_dart_typing(
-    directory: Path, sources: list[str] | tuple[str, ...], package_root: Path | None
-) -> None:
-    options = dart_options(directory / "analysis_options.yaml")
-    for section, groups in DART_TYPING.items():
-        for group, settings in groups.items():
-            section_options = cast(JsonObject, options).get(section)
-            if not isinstance(section_options, dict):
-                raise TypeError(f"Dart requires {section} settings")
-            actual = section_options.get(group)
-            if group == "rules":
-                actual = dart_rule_settings(actual)
-            if isinstance(settings, list):
-                validate_dart_exclusions(directory, section_options.get(group, []))
-                continue
-            if not isinstance(actual, dict) or any(
-                actual.get(key) != value for key, value in settings.items()
-            ):
-                raise ValueError(f"Dart requires strict {section}.{group} settings")
-    validate_dart_includes(
-        directory / "analysis_options.yaml", package_root or directory
-    )
-    for source in {*sources, "test", "tests"}:
-        for nested in (directory / source).rglob("analysis_options.yaml"):
-            if nested.parent != directory:
-                validate_typing(
-                    nested.parent, "dart", package_root=package_root or directory
-                )
 
 
 def reject_test_filters(
@@ -736,7 +609,7 @@ def check(
 ) -> int:
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
-    from process_group import read_installed, save_installed
+    from process_group import clean_start, read_installed, record_pass, save_installed
     from reports import quick_groups
     from shipping import gate_budget
 
@@ -748,6 +621,8 @@ def check(
 
     with check_lock(ROOT) as lock:
         installed = read_installed(lock, ROOT)
+        partial = quick or languages != NO_LANGUAGES or not dependents or related_tests
+        start = clean_start(lock, ROOT, base, plan_stage, partial)
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(language_groups(groups, languages), quick, installed)
         from debt import require_shrink
@@ -772,6 +647,7 @@ def check(
             ROOT, base, groups, int(started)
         )
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
+        record_pass(lock, ROOT, start, failed)
         return int(failed)
 
 

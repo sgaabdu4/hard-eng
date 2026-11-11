@@ -11,6 +11,7 @@ import change_size
 import pytest
 import update
 import update_runner
+from agent_fixtures import REPORT, REPORT_TESTS
 from conftest import commit, git
 from gate_config import changed_files
 from plans import validate_plans
@@ -581,3 +582,216 @@ def test_the_update_proof_decides_whether_the_open_plan_of_the_base_judges_a_sma
         return
     with pytest.raises(ValueError, match="PLAN.md: plan needs"):
         plans.validate_plans(target, "main")
+
+
+def on_base(root: Path, name: str, text: str) -> None:
+    sized_branch(root)
+    git(root, "switch", "-q", "main")
+    (root / name).parent.mkdir(parents=True, exist_ok=True)
+    (root / name).write_text(text)
+    commit(root, f"add {name}")
+    git(root, "switch", "-q", "work")
+    git(root, "rebase", "-q", "main")
+
+
+def replace_line(root: Path, name: str, number: int, text: str) -> None:
+    lines = (root / name).read_text().splitlines()
+    lines[number - 1] = text
+    (root / name).write_text("\n".join(lines) + "\n")
+
+
+IMPORT_EDITS = [
+    (
+        "tests/test_x.py",
+        "from helpers import assert_ok\nassert_ok(1)\n",
+        "from helpers import assert_ok, more",
+    ),
+    (
+        "test_y.py",
+        "from helpers import assert_ok\nassert_ok(1)\n",
+        "from helpers import assert_ok, more",
+    ),
+    (
+        "packages/web/src/a.test.ts",
+        'import { f } from "./a";\nexpect(f()).toBe(1);\n',
+        'import { f, g } from "./a";',
+    ),
+    (
+        "test/a_test.dart",
+        "import 'package:a/a.dart' show f;\nvoid main() {}\n",
+        "import 'package:a/a.dart' show f, g;",
+    ),
+    (
+        "AppTests/ATests.swift",
+        "@testable import App\nfunc testA() {}\n",
+        "@testable import AppCore",
+    ),
+    ("tests/test_e.py", "import os\n\nx = 1\n", ""),
+    ("tests/test_f.py", "import pytest\nx = 1\n", "import pytest, os"),
+    (
+        "tests/test_g.py",
+        "from app.models import User\nx = 1\n",
+        "from app.models import Role",
+    ),
+    (
+        "src/a.test.ts",
+        'import { x } from "./helpers";\nx();\n',
+        'import { x, y } from "./helpers";',
+    ),
+]
+
+
+@pytest.mark.parametrize(("name", "text", "edited"), IMPORT_EDITS)
+def test_a_changed_import_line_of_a_test_file_keeps_a_change_small(
+    repository: Path, name: str, text: str, edited: str
+) -> None:
+    on_base(repository, name, text)
+    if edited:
+        replace_line(repository, name, 1, edited)
+    else:
+        (repository / name).write_text(text.replace("\n\n", "\n"))
+    small, reason = change_size.size_verdict(repository)
+    assert (small, reason.split(",")[0]) == (True, "1 file")
+
+
+REMOVED_CHECKS = [
+    ("tests/test_a.py", "import os\nassert f() == 1\n"),
+    ("tests/test_a.py", "import os\ndef test_a():\n"),
+    ("tests/test_a.py", "import os\n    with pytest.raises(ValueError):\n"),
+    ("tests/test_a.py", "import os\n    (1, 2),\n"),
+    ("tests/test_a.py", "import os\n    expected = [1, 2]\n"),
+    ("src/a.test.ts", "import { f } from './a';\nexpect(f()).toBe(1);\n"),
+    ("src/a.test.ts", "import { f } from './a';\nit('a', () => {});\n"),
+    ("test/a_test.dart", "import 'a.dart';\ntest('a', () {});\n"),
+    ("test/a_test.dart", "import 'a.dart';\nexpect(f(), 1);\n"),
+    ("AppTests/ATests.swift", "import XCTest\nXCTAssertEqual(f(), 1)\n"),
+    ("AppTests/ATests.swift", "import Testing\n#expect(f() == 1)\n"),
+    ("AppTests/ATests.swift", "import Testing\nfunc testA() {}\n"),
+    ("tests/test a.py", "import os\nassert f()\n"),
+    ("tests/test_a.py", "import os\nfrom tests.shared import TestContract\n"),
+    ("tests/test_a.py", "import os\nfrom .test_base import *\n"),
+    ("src/a.test.ts", 'import { f } from "./a";\nimport "./auth.test";\n'),
+    ("test/a_test.dart", "import 'a.dart';\nimport 'auth_test.dart';\n"),
+]
+
+
+@pytest.mark.parametrize(("name", "text"), REMOVED_CHECKS)
+def test_a_removed_test_or_assertion_keeps_a_change_big(
+    repository: Path, name: str, text: str
+) -> None:
+    on_base(repository, name, text)
+    replace_line(repository, name, 2, "x = 1")
+    assert change_size.size_verdict(repository) == (
+        False,
+        f"it removes lines from the test file {name}",
+    )
+
+
+def test_a_removed_line_of_a_test_data_file_keeps_a_change_big(
+    repository: Path,
+) -> None:
+    on_base(repository, "tests/data.json", "[1,\n2]\n")
+    replace_line(repository, "tests/data.json", 2, "3]")
+    assert change_size.size_verdict(repository) == (
+        False,
+        "it removes lines from the test file tests/data.json",
+    )
+
+
+def test_removed_import_lines_of_a_test_file_count_toward_the_line_limit(
+    repository: Path,
+) -> None:
+    on_base(repository, "tests/test_i.py", "".join(f"import m{n}\n" for n in range(11)))
+    (repository / "tests/test_i.py").write_text(
+        "".join(f"import n{n}\n" for n in range(11))
+    )
+    assert change_size.size_verdict(repository) == (
+        False,
+        "it changes 22 lines, more than 20",
+    )
+
+
+def test_a_line_diff_that_fails_leaves_the_change_unmeasured(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    on_base(repository, "tests/test_x.py", "import os\nx = 1\n")
+    replace_line(repository, "tests/test_x.py", 1, "import sys")
+    real = subprocess.check_output
+
+    def refuse(command: list[str], cwd: Path, **_options: object) -> str:
+        if "-U0" in command:
+            raise subprocess.CalledProcessError(1, command)
+        return real(command, cwd=cwd, text=True)
+
+    monkeypatch.setattr(subprocess, "check_output", refuse)
+    assert change_size.size_verdict(repository) == (
+        False,
+        "the change cannot be measured",
+    )
+
+
+def line_diffs(spy: Mock) -> int:
+    return sum("-U0" in call.args[0] for call in spy.call_args_list)
+
+
+def test_only_a_test_file_that_loses_lines_starts_a_line_diff(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    on_base(repository, "tests/test_x.py", "import os\nx = 1\n")
+    git(repository, "switch", "-q", "main")
+    (repository / "tests/data.json").write_text("[1,\n2]\n")
+    commit(repository, "data")
+    git(repository, "switch", "-q", "work")
+    git(repository, "rebase", "-q", "main")
+    spy = Mock(side_effect=subprocess.check_output)
+    monkeypatch.setattr(subprocess, "check_output", spy)
+    edit(repository, "a.py", 2)
+    with (repository / "tests/test_x.py").open("a") as extra:
+        extra.write("y = 2\n")
+    assert change_size.size_verdict(repository)[0] is True
+    assert line_diffs(spy) == 0
+    replace_line(repository, "tests/test_x.py", 1, "import sys")
+    spy.reset_mock()
+    change_size.size_verdict(repository)
+    assert line_diffs(spy) == 1
+    git(repository, "checkout", "-q", "HEAD", "--", "tests/test_x.py", "a.py")
+    replace_line(repository, "tests/data.json", 2, "3]")
+    spy.reset_mock()
+    assert change_size.size_verdict(repository)[0] is False
+    assert line_diffs(spy) == 0
+
+
+def test_the_repeated_block_task_with_its_merge_needs_no_plan(
+    repository: Path,
+) -> None:
+    sized_branch(repository)
+    git(repository, "switch", "-q", "main")
+    (repository / "report.py").write_text(REPORT)
+    (repository / "test_report.py").write_text(REPORT_TESTS)
+    commit(repository, "report")
+    git(repository, "switch", "-q", "work")
+    git(repository, "rebase", "-q", "main")
+    merged = REPORT.replace(
+        '    values = [int(part) for part in text.split(",") if part.strip()]\n', ""
+    )
+    merged = merged.replace("sum(values)", "sum(numbers(text))")
+    merged = merged.replace("average(values)", "average(numbers(text))")
+    merged = merged.replace(
+        "def total_line",
+        "def numbers(text: str) -> list[int]:\n"
+        '    return [int(part) for part in text.split(",") if part.strip()]\n\n\n'
+        "def total_line",
+    )
+    merged += (
+        '\n\ndef max_line(text: str) -> str:\n    return f"max: {max(numbers(text))}"\n'
+    )
+    (repository / "report.py").write_text(merged)
+    tests = REPORT_TESTS.replace(
+        "from report import mean_line, total_line",
+        "from report import max_line, mean_line, total_line",
+    ).replace(
+        "\n\nif __name__",
+        '    def test_max_line(self) -> None:\n        self.assertEqual(max_line("3, 9,,4"), "max: 9")\n\n\nif __name__',
+    )
+    (repository / "test_report.py").write_text(tests)
+    assert change_size.size_verdict(repository)[0] is True

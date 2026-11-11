@@ -10,7 +10,11 @@ from unittest.mock import Mock
 import pytest
 import yaml
 from conftest import git
-from dart_boundaries import validate_dart_boundaries
+from dart_boundaries import (
+    DART_TYPING,
+    validate_dart_boundaries,
+    validate_dart_includes,
+)
 from gate_config import (
     Gate,
     Group,
@@ -53,16 +57,16 @@ def test_package_include_root_is_a_directory(
     (library / "recommended.yaml").write_text("include: baseline.yaml\n")
     baseline = library / "baseline.yaml"
     baseline.write_text("{}\n")
-    runner.validate_dart_includes(options, tmp_path)
+    validate_dart_includes(options, tmp_path)
     baseline.write_text("analyzer:\n  errors:\n    avoid_dynamic_calls: ignore\n")
     with pytest.raises(ValueError, match="cannot exclude files or ignore"):
-        runner.validate_dart_includes(options, tmp_path)
+        validate_dart_includes(options, tmp_path)
     baseline.write_text("analyzer:\n  exclude: ['**/*.dart']\n")
     with pytest.raises(ValueError, match="cannot exclude project files"):
-        runner.validate_dart_includes(options, tmp_path)
+        validate_dart_includes(options, tmp_path)
     baseline.write_text("analyzer:\n  language:\n    strict-casts: false\n")
     with pytest.raises(ValueError, match="obsolete Dart language"):
-        runner.validate_dart_includes(options, tmp_path)
+        validate_dart_includes(options, tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -97,7 +101,7 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
         "**/*.gr.dart",
         "**/*.arb",
     ]
-    options = json.loads(json.dumps(runner.DART_TYPING))
+    options = json.loads(json.dumps(DART_TYPING))
     options["analyzer"]["language"] = {"strict-inference": True}
     options["linter"]["rules"].update({"no_dynamic_casts": True, "no_raw_types": True})
     options["analyzer"]["exclude"] = excludes
@@ -248,7 +252,7 @@ def test_dart_setup_migrates_known_plugin_with_rules(
 def test_dart_without_exclusion_key_needs_no_rewrite(
     installer: ModuleType, runner: ModuleType, tmp_path: Path
 ) -> None:
-    options = json.loads(json.dumps(runner.DART_TYPING))
+    options = json.loads(json.dumps(DART_TYPING))
     del options["analyzer"]["exclude"]
     content = "# Keep the project's comments\n" + yaml.safe_dump(options)
     path = tmp_path / "analysis_options.yaml"
@@ -706,7 +710,7 @@ def test_a_boundary_rule_with_a_missing_folder_is_refused(
 def test_a_linter_rule_set_to_false_is_refused_by_name(
     runner: ModuleType, tmp_path: Path
 ) -> None:
-    options = json.loads(json.dumps(runner.DART_TYPING))
+    options = json.loads(json.dumps(DART_TYPING))
     options["linter"]["rules"]["avoid_print"] = False
     path = tmp_path / "analysis_options.yaml"
     path.write_text(yaml.safe_dump(options))

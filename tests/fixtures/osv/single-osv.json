@@ -1,0 +1,11 @@
+{
+  "results": [
+    {
+      "source": {"path": "uv.lock", "type": "lockfile"},
+      "packages": [
+        {"package": {"name": "attrs", "version": "26.1.0", "ecosystem": "PyPI", "purl": "pkg:pypi/attrs@26.1.0"}},
+        {"package": {"name": "demo", "version": "", "ecosystem": "PyPI", "purl": "pkg:pypi/demo"}}
+      ]
+    }
+  ]
+}

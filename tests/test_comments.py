@@ -3,14 +3,15 @@
 import json
 import re
 import subprocess
+import time
 from pathlib import Path
 from types import ModuleType
 
 import pytest
-from comments import validate_comments, validate_suppressions
+from comments import RETRY_WORDS, validate_comments, validate_suppressions
 from conftest import SOURCE, commit, git, init
 from shipping import ShippingPolicy
-from switch_off_forms import RUFF_FORMS, SWITCHES
+from switch_off_forms import RETRY_FORMS, RETRY_PASSES, RUFF_FORMS, SWITCHES, TEST_FLAGS
 
 BLOCK = "Code comments are none by default"
 
@@ -227,18 +228,23 @@ def switch_root(tmp_path: Path, name: str, before: str) -> Path:
     return root
 
 
-@pytest.mark.parametrize(("name", "text", "pattern"), SWITCHES)
-def test_added_switch_off_fails_naming_file_line_and_pattern(
-    tmp_path: Path, name: str, text: str, pattern: str
-) -> None:
-    """HE-NO-SWITCH-OFF: an added suppression, skip or focus fails."""
+def refusal(tmp_path: Path, name: str, text: str) -> tuple[Path, str]:
     root = switch_root(tmp_path, name, "")
     (root / name).parent.mkdir(parents=True, exist_ok=True)
     (root / name).write_text("ok = 1\n" + text)
     with pytest.raises(ValueError, match=OFF) as error:
         validate_suppressions(root, "HEAD")
-    assert f"{name}:2 adds {pattern!r}" in str(error.value)
-    assert "fix the cause" in str(error.value)
+    return root, str(error.value)
+
+
+@pytest.mark.parametrize(("name", "text", "pattern"), SWITCHES)
+def test_added_switch_off_fails_naming_file_line_and_pattern(
+    tmp_path: Path, name: str, text: str, pattern: str
+) -> None:
+    """HE-NO-SWITCH-OFF: an added suppression, skip or focus fails."""
+    message = refusal(tmp_path, name, text)[1]
+    assert f"{name}:2 adds {pattern!r}" in message
+    assert "fix the cause" in message
 
 
 @pytest.mark.parametrize(("text", "pattern"), RUFF_FORMS)
@@ -285,6 +291,7 @@ ROUTE_FILES = (
     ".gitleaksignore",
 )
 ROUTES = [next(row for row in SWITCHES if row[0] == name) for name in ROUTE_FILES]
+ROUTES += [row for row in RETRY_FORMS if row[0] == "playwright.config.ts"]
 
 
 @pytest.mark.parametrize(("name", "text", "pattern"), ROUTES)
@@ -293,6 +300,27 @@ def test_switch_off_already_in_the_project_is_not_flagged(
 ) -> None:
     root = switch_root(tmp_path, name, text)
     (root / name).write_text(text + "\n")
+    validate_suppressions(root, "HEAD")
+
+
+@pytest.mark.parametrize(("name", "text", "form"), RETRY_FORMS)
+def test_an_added_retry_fails_naming_file_line_and_form(
+    tmp_path: Path, name: str, text: str, form: str
+) -> None:
+    """HE-NO-SWITCH-OFF: an added test retry fails and passes again once it is gone."""
+    root, message = refusal(tmp_path, name, text)
+    assert f"{name}:2 adds {form!r}" in message
+    (root / name).write_text("ok = 1\n")
+    validate_suppressions(root, "HEAD")
+
+
+@pytest.mark.parametrize(("name", "text"), RETRY_PASSES)
+def test_retry_words_outside_tests_and_test_config_pass(
+    tmp_path: Path, name: str, text: str
+) -> None:
+    root = switch_root(tmp_path, name, "")
+    (root / name).parent.mkdir(parents=True, exist_ok=True)
+    (root / name).write_text(text)
     validate_suppressions(root, "HEAD")
 
 
@@ -308,6 +336,92 @@ def test_scaffold_paths_and_ordinary_words_are_not_flagged(tmp_path: Path) -> No
     validate_suppressions(root, "HEAD")
 
 
+def test_the_word_for_a_skipped_test_outside_a_raise_passes(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a class, a catch and a prose line that name the skip error stay allowed."""
+    root = switch_root(tmp_path, "app.py", "")
+    for name, text in (
+        ("src/app.py", "class Ski" + "pTest(Exception):\n    pass\n"),
+        ("src/errors.py", "try:\n    run()\nexcept Ski" + "pTest:\n    pass\n"),
+        ("notes.md", "A raise Ski" + "pTest is prose here.\n"),
+    ):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    validate_suppressions(root, "HEAD")
+
+
+@pytest.mark.parametrize(("text", "line"), TEST_FLAGS)
+def test_a_class_mark_is_refused_only_when_the_class_holds_a_test(
+    tmp_path: Path, text: str, line: int | None
+) -> None:
+    """HE-NO-SWITCH-OFF: a helper class may stay out of collection; a class with a test may not."""
+    root = switch_root(tmp_path, "tests/doubles.py", "")
+    (root / "tests").mkdir()
+    (root / "tests/doubles.py").write_text(text)
+    if line is None:
+        validate_suppressions(root, "HEAD")
+        return
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"tests/doubles.py:{line} adds '__test__ " + "= False'" in str(error.value)
+
+
+@pytest.mark.parametrize(("name", "text", "form"), RETRY_FORMS)
+def test_every_refused_retry_form_holds_a_word_that_loads_the_rules(
+    name: str, text: str, form: str
+) -> None:
+    assert any(word in text for word in RETRY_WORDS), (name, form)
+
+
+@pytest.mark.parametrize("name", ["test/a_test.dart", "src/a.test.ts"])
+def test_a_long_line_of_open_brackets_ends_fast(name: str) -> None:
+    from retry_forms import retry_form
+
+    line = "test('x', " + "f(" * 1000 + ", re" + "try: 2)"
+    started = time.perf_counter()
+    retry_form(name, line)
+    assert time.perf_counter() - started < 1
+
+
+def test_a_skip_name_used_as_a_value_is_refused_only_in_a_test_file(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-SWITCH-OFF: a callback argument named it is data; a skip call is not."""
+    root = switch_root(tmp_path, "app.py", "")
+    (root / "src").mkdir()
+    (root / "src/list.ts").write_text(
+        "const a = items.filter((it) => it.sk" + "ip);\n"
+        "if (it.on" + "ly) return;\n"
+        "const b = todos.map(it => it.to" + "do);\n"
+    )
+    validate_suppressions(root, "HEAD")
+    for name, text in (
+        ("src/list.test.ts", "const run = flag ? it.sk" + "ip : it;\n"),
+        ("src/list.ts", "it.sk" + "ip('x', () => {});\n"),
+    ):
+        (root / name).write_text(text)
+        with pytest.raises(ValueError, match=f"{name}:1 adds") as error:
+            validate_suppressions(root, "HEAD")
+        assert OFF in str(error.value)
+        (root / name).unlink()
+
+
+def test_names_close_to_a_skip_form_pass(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a helper, a longer name and an ordinary pytest import stay allowed."""
+    root = switch_root(tmp_path, "app.py", "")
+    for name, text in (
+        (
+            "tests/test_rows.py",
+            "rows = ski" + "p_rows(data)\nfrom pytest import fixture\n",
+        ),
+        ("src/page.ts", "const slow = ski" + "p ? 1 : 2;\n"),
+        ("src/page.test.ts", "const testSki" + "p = 1;\nconst it_ski" + "p = 2;\n"),
+        ("src/guard.test.ts", "expect.fa" + "il('x');\nassert.fa" + "il('y');\n"),
+    ):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    validate_suppressions(root, "HEAD")
+
+
 def test_skip_argument_counts_only_in_test_files(tmp_path: Path) -> None:
     """HE-NO-SWITCH-OFF: a paging value named skip is data; a skipped test is not."""
     root = switch_root(tmp_path, "app.py", "")
@@ -318,7 +432,6 @@ def test_skip_argument_counts_only_in_test_files(tmp_path: Path) -> None:
             "src/page.test.ts",
             "const rows = find({ ski" + "p: 10, on" + "ly: 'admin' });\n",
         ),
-        ("tests/doubles.py", "class TestDouble:\n    __test__ " + "= False\n"),
     ):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_text(text)

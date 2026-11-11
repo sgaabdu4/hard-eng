@@ -16,7 +16,7 @@ from xml.parsers.expat import ExpatError
 
 from challenge import shipping_note
 from gate_config import Group
-from process_group import exit_when_stopped
+from process_group import exit_when_stopped, passed_minutes
 from shipping import (
     PendingCheck,
     Shipment,
@@ -24,6 +24,7 @@ from shipping import (
     gh,
     git,
     load_policy,
+    pushed_policy,
     verify,
 )
 from submodules import update_submodules
@@ -78,8 +79,10 @@ def run_hard_eng(
 
 def snapshot_environment(root: Path) -> dict[str, str]:
     environment = os.environ.copy()
+    kept = {"GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT"}
     for name in git(root, "rev-parse", "--local-env-vars").splitlines():
-        environment.pop(name, None)
+        if name not in kept:
+            environment.pop(name, None)
     return environment
 
 
@@ -268,18 +271,50 @@ def push_base(
     return base
 
 
+def spared(root: Path, revision: str, base: str | None) -> bool:
+    """Say so when a full check passed on this exact commit and base."""
+    minutes = None if base is None else passed_minutes(root, revision, base)
+    if minutes is not None:
+        print(
+            f"Hard Eng: the full check passed on this exact commit and base {minutes} min "
+            "ago; not repeating it.",
+            flush=True,
+        )
+    return minutes is not None
+
+
+def push_check(runner: str, base: str | None, quick: bool) -> list[str]:
+    """The check for a push; a pass that stands in for the full check leaves a quick one."""
+    if quick:
+        return ["check", "--base", str(base), "--quick"]
+    # A pushed revision older than these options runs its full check.
+    narrow = [
+        option
+        for option in ("--without-dependents", "--related-tests")
+        if option in runner
+    ]
+    return ["check", *(["--base", base, *narrow] if base else [])]
+
+
 def pre_push(root: Path) -> int:
     exit_when_stopped()
-    policy = load_policy(root)
-    assert policy is not None
     started, mutating = time.monotonic(), 0.0
     for line in sys.stdin:
         fields = line.split()
         if len(fields) != 4:
             raise ValueError("Invalid pre-push input")
         revision = fields[1]
+        policy = (
+            load_policy(root)
+            if set(revision) == {"0"}
+            else pushed_policy(root, revision)
+        )
+        assert policy is not None
         base = push_base(root, policy["base"], fields[2], fields[3], revision)
         if set(revision) == {"0"}:
+            continue
+        passed = spared(root, revision, base)
+        if passed and not policy["pre_push_mutation_seconds"]:
             continue
         with suppress(ShippingError):
             if GITHUB_SSH_PREFIX.match(
@@ -294,13 +329,7 @@ def pre_push(root: Path) -> int:
         environment = snapshot_environment(root)
         with snapshot(root, revision, environment) as checkout:
             runner = (checkout / ".hooks/hard-eng.py").read_text()
-            # A pushed revision older than these options runs its full check.
-            narrow = [
-                option
-                for option in ("--without-dependents", "--related-tests")
-                if option in runner
-            ]
-            check = ["check", *(["--base", base, *narrow] if base else [])]
+            check = push_check(runner, base, passed)
             if returncode := run_hard_eng(checkout, check, environment):
                 return returncode
             changed = subprocess.run(
@@ -558,6 +587,8 @@ def run(
         note := shipping_note(shipment.root, shipment.head_sha)
     ):
         print(note)
+    if shipment.rule_note:
+        print(shipment.rule_note)
     bypassed = shipment.review_bypass
     if stage == "merge":
         shipment = merge(target, plan_path, shipment, str(merge_method))

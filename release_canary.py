@@ -57,6 +57,17 @@ except ImportError:
     locked_update = update.update
 print(locked_update(Path(".").resolve()))
 """
+# Runs the full check, told that this release is verified, so no step asks a Hard Eng host.
+CHECK = """
+import runpy
+import sys
+sys.path.insert(0, ".hooks")
+import update
+verified = sys.argv[1]
+update.verified_revision = lambda revision: revision == verified
+sys.argv = [".hooks/hard-eng.py", "check"]
+runpy.run_path(".hooks/hard-eng.py", run_name="__main__")
+"""
 STACKS = ("flutter", "nextjs", "opennext", "vite")
 # A public project keeps the brownfield target reproducible and free of private names.
 BROWNFIELD = (
@@ -90,6 +101,9 @@ NEW_TARGETS = (
     ("greenfield", "python"),
     ("brownfield", "itsdangerous"),
 )
+UPDATE_TARGET = ("update", "python")
+CI_TARGETS = (*NEW_TARGETS, UPDATE_TARGET)
+CI_KINDS = (*AGENT_KINDS, "update")
 # The public CI job (.github/workflows/canary.yml) that checks each new project.
 NOT_FOLDER_NAME = re.compile(r"[^a-z0-9]+")
 CI_JOB = re.compile(r"new project \(([a-z0-9-]+), [\w.-]+\)")
@@ -250,6 +264,12 @@ def update_installed(name: str, revision: str, work: Path, log: IO[str]) -> str:
         ["git", "submodule", "update", "-q", "--init", "--recursive"],
     )
     must(work, log, "update failed", [sys.executable, "-c", UPDATE, revision])
+    on_update_branch(work, revision, log)
+    return output(["git", "rev-parse", "origin/HEAD"], work)
+
+
+def on_update_branch(work: Path, revision: str, log: IO[str]) -> None:
+    """Switch to the update branch and check that the marker holds the revision."""
     # Older updaters commit on the checked-out branch instead of hard-eng/update.
     if output(["git", "branch", "--list", "hard-eng/update"], work):
         must(
@@ -263,7 +283,50 @@ def update_installed(name: str, revision: str, work: Path, log: IO[str]) -> str:
     marker = json.loads((work / SOURCE_FILE).read_text())
     if marker.get("revision") != revision:
         raise Failed("update did not apply")
-    return output(["git", "rev-parse", "origin/HEAD"], work)
+
+
+def local_source(source: Path) -> list[str]:
+    """The environment that sends Hard Eng's own address to a local copy."""
+    return [
+        "env",
+        "GIT_CONFIG_COUNT=1",
+        f"GIT_CONFIG_KEY_0=url.{source.as_uri()}.insteadOf",
+        f"GIT_CONFIG_VALUE_0=https://github.com/{UPSTREAM}.git",
+    ]
+
+
+def update_to(revision: str, source: Path, work: Path, log: IO[str]) -> None:
+    """Update with the project's own updater, from a local copy of Hard Eng and a local origin."""
+    origin = work.with_name(f"{work.name}.origin.git")
+    must(
+        work,
+        log,
+        "origin setup failed",
+        ["git", "branch", "-M", "main"],
+        ["git", "clone", "-q", "--bare", ".", str(origin)],
+        ["git", "remote", "add", "origin", str(origin)],
+        ["git", "fetch", "-q", "origin"],
+    )
+    try:
+        done = subprocess.run(
+            [*local_source(source), sys.executable, "-c", UPDATE, revision],
+            check=False,
+            cwd=work,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise Failed(f"update failed: {error}") from error
+    printed = done.stdout.strip()
+    log.write(f"\n{printed}\n{done.stderr}\n")
+    if done.returncode:
+        raise Failed(
+            f"update failed with exit {done.returncode}: {done.stderr.strip()}"
+        )
+    if revision not in printed or "hard-eng/update" not in printed:
+        raise Failed(f"update printed no ready step for this revision: {printed}")
+    on_update_branch(work, revision, log)
 
 
 def add_documents(work: Path) -> None:
@@ -322,6 +385,30 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
     )
 
 
+def install_last_release(
+    value: str,
+    revision: str,
+    source: Path,
+    work: Path,
+    log: IO[str],
+    checkout: Path = SOURCE,
+) -> None:
+    """Install the release users have: the candidate's merge base with main."""
+    old = work.with_name(f"{work.name}.release")
+    released = output(["git", "merge-base", revision, "origin/main"], checkout)
+    must(
+        work.parent, log, "clone failed", ["git", "clone", "-q", str(source), str(old)]
+    )
+    must(
+        old,
+        log,
+        "clone failed",
+        ["git", "checkout", "-q", "--detach", released],
+        ["git", "submodule", "update", "-q", "--init", "--recursive"],
+    )
+    install_new("greenfield", value, old, work, log)
+
+
 def prepare(
     target: tuple[str, str],
     revision: str,
@@ -336,6 +423,11 @@ def prepare(
         base = update_installed(value, revision, work, log)
         # The update PR's check can skip gates for a proven update, so every gate runs after it.
         return [("update PR check", [*check, "--base", base]), ("full check", check)]
+    if kind == "update":
+        install_last_release(value, revision, source, work, log)
+        update_to(revision, source, work, log)
+        local = [*local_source(source), sys.executable, "-c", CHECK, revision]
+        return [("full check", local)]
     install_new(kind, value, source, work, log)
     # Public CI proves a new project's first full check; on the Mac the agents' Stop check runs it.
     return [("full check", check)] if check_new else []
@@ -527,7 +619,7 @@ def ci_failures(revision: str) -> list[str]:
         if found := CI_JOB.fullmatch(name):
             label = found[1]
             passed[label] = passed.get(label, True) and conclusion == "success"
-    labels = [folder(" ".join(target)) for target in NEW_TARGETS]
+    labels = [folder(" ".join(target)) for target in CI_TARGETS]
     return [label for label in labels if not passed.get(label)]
 
 
@@ -575,7 +667,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument(
         "--target",
         action="append",
-        choices=[folder(" ".join(target)) for target in NEW_TARGETS],
+        choices=[folder(" ".join(target)) for target in CI_TARGETS],
         help="rerun only these new projects",
     )
     parser.add_argument("--jobs", type=int, default=3)
@@ -610,8 +702,8 @@ def main() -> int:
 
 def targets(args: argparse.Namespace, projects: list[str]) -> list[tuple[str, str]]:
     found = [("installed", name) for name in args.project or projects]
-    found += NEW_TARGETS
-    kinds = args.kind or (AGENT_KINDS if args.ci or args.target else KINDS)
+    found += CI_TARGETS
+    kinds = args.kind or (CI_KINDS if args.ci or args.target else KINDS)
     return [
         target
         for target in found

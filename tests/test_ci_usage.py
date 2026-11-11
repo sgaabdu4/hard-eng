@@ -1,10 +1,26 @@
 """Billed Actions minutes from GitHub's run and job records."""
 
 import json
+import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import Mock
 
+import plans
 import pytest
+import shipping
 from ci_usage import ci_usage
+from test_review_bypass import required_rule, rules_answer
+from test_shipping import (
+    _PR_URL,
+    FakeGitHub,
+    Fixture,
+    _check,
+    _fixture,
+    _merged_push,
+    _patch_gh,
+    _pull,
+)
 
 SOURCE = Path(__file__).resolve().parents[1]
 
@@ -177,3 +193,125 @@ def test_ci_usage_reads_only_the_newest_runs_across_pages(
     output = capsys.readouterr().out
     assert len(pages) == 2
     assert "last 150 runs: 150 runs, 150 jobs." in output
+
+
+def _ago(minutes: int) -> str:
+    return (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
+
+
+def _queued(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: object
+) -> tuple[Fixture, FakeGitHub]:
+    fixture = _fixture(tmp_path)
+    queued = _check(fixture.head, status="queued", conclusion=None, completed_at=None)
+    fake = FakeGitHub(_pull(fixture), [queued])
+    fake.job = job
+    fake.rules = rules_answer(required_rule("build"))
+    _patch_gh(monkeypatch, fake)
+    return fixture, fake
+
+
+_WAITING = {
+    "status": "queued",
+    "runner_name": None,
+    "labels": ["self-hosted", "linux"],
+}
+
+
+def test_ready_names_a_required_check_that_no_runner_took(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, fake = _queued(tmp_path, monkeypatch, _WAITING | {"created_at": _ago(120)})
+    with pytest.raises(shipping.PendingCheck) as pending:
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert str(pending.value) == (
+        "required check has not completed: build; no runner has taken it for "
+        "120 min (labels: self-hosted, linux). Start a runner with those labels, "
+        "or ask its owner whether it serves this PR's author. GitHub fails a job "
+        "queued over 24 hours."
+    )
+    assert [call[-1] for call in fake.calls if "/actions/jobs/" in call[-1]] == [
+        "repos/acme/widget/actions/jobs/1"
+    ]
+
+
+@pytest.mark.parametrize(
+    "job",
+    [
+        _WAITING | {"created_at": _ago(1)},
+        _WAITING | {"created_at": _ago(120), "runner_name": "runner-1"},
+        _WAITING | {"created_at": _ago(120), "labels": []},
+        _WAITING | {"created_at": _ago(120), "status": "waiting"},
+        _WAITING | {"created_at": _ago(120), "labels": ["ubuntu-latest"]},
+        _WAITING | {"created_at": "yesterday"},
+        _WAITING,
+        ["not", "a", "job"],
+        None,
+    ],
+)
+def test_a_fresh_or_unreadable_queued_job_keeps_the_plain_pending_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: object
+) -> None:
+    fixture, _ = _queued(tmp_path, monkeypatch, job)
+    with pytest.raises(shipping.PendingCheck) as pending:
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert str(pending.value) == "required check has not completed: build"
+
+
+def test_a_running_check_makes_no_job_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    running = _check(fixture.head, status="in_progress", conclusion=None)
+    fake = FakeGitHub(_pull(fixture), [running])
+    fake.rules = rules_answer(required_rule("build"))
+    fake.job = _WAITING | {"created_at": _ago(120)}
+    _patch_gh(monkeypatch, fake)
+    with pytest.raises(shipping.PendingCheck) as pending:
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert str(pending.value) == "required check has not completed: build"
+    assert not [call for call in fake.calls if "/actions/jobs/" in call[-1]]
+
+
+def test_completed_checks_make_no_job_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture), [_check(fixture.head)])
+    _patch_gh(monkeypatch, fake)
+    shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert not [call for call in fake.calls if "/actions/jobs/" in call[-1]]
+
+
+def test_branch_point_never_looks_up_jobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, fake = _queued(tmp_path, monkeypatch, _WAITING | {"created_at": _ago(120)})
+    monkeypatch.setattr(plans, "default_branch_point", Mock(return_value=fixture.head))
+    monkeypatch.delitem(sys.modules, "ci_usage")
+    assert shipping.passed_branch_point(fixture.root) is None
+    assert [call for call in fake.calls if "check-runs" in call[-1]]
+    assert not [call for call in fake.calls if "/actions/jobs/" in call[-1]]
+    imported = "ci_usage" in sys.modules
+    assert not imported
+
+
+def test_push_reuse_never_looks_up_jobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    push = _merged_push(tmp_path, monkeypatch)
+    check = _check(push.head, status="queued", conclusion=None)
+    push.responses[f"commits/{push.head}/check-runs?per_page=100&filter=all"] = [
+        {"total_count": 1, "check_runs": [check]}
+    ]
+    push.responses["actions/jobs/1"] = _WAITING | {"created_at": _ago(120)}
+    spy = Mock(side_effect=shipping.gh)
+    monkeypatch.setattr(shipping, "gh", spy)
+    monkeypatch.delitem(sys.modules, "ci_usage")
+    assert shipping.reused_pull_request(push.root, push.base) is None
+    assert [call for call in spy.call_args_list if "check-runs" in call.args[-1]]
+    assert not [
+        call for call in spy.call_args_list if "/actions/jobs/" in call.args[-1]
+    ]
+    imported = "ci_usage" in sys.modules
+    assert not imported

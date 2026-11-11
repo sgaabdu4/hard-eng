@@ -22,12 +22,14 @@ from freshness import (
 from gate_config import Gate, Group, JsonObject, validate_gate, validate_required_checks
 from gitleaks_scan import run_gate_command
 from project_setup import add_freshness
+from reports import validate_scanner_report
 from shipping import ShippingPolicy
 from test_setup import repository
 
 FIXTURES = Path(__file__).parent / "fixtures/freshness"
 PUB = "https://pub.dev/api/packages/"
 PYPI = "https://pypi.org/pypi/"
+POETRY_ADD = "POETRY_SOLVER_MIN_RELEASE_AGE=2 uvx poetry add "
 
 
 def fixture(name: str) -> str:
@@ -74,7 +76,11 @@ def check(
     path = tmp_path / "freshness.report"
     path.write_text(report)
     validate_freshness(
-        path, freshness_gate(tool, holds), registry or Registry({}), moment(now)
+        path,
+        freshness_gate(tool, holds),
+        registry or Registry({}),
+        moment(now),
+        directory=tmp_path,
     )
 
 
@@ -86,6 +92,23 @@ def test_bun_fails_on_release_older_than_two_days(tmp_path: Path) -> None:
     check(tmp_path, "bun", fixture("bun-up-to-date.txt"))
     with pytest.raises(ValueError, match="bun output is unreadable"):
         check(tmp_path, "bun", "")
+
+
+def test_bun_skips_peer_rows_and_keeps_the_dev_row_of_the_same_name() -> None:
+    stale = stale_dependencies(
+        "bun",
+        fixture("bun-outdated-peers.txt"),
+        Registry({}),
+        moment("2026-10-26T00:00:00+00:00"),
+    )
+    assert stale == [
+        ("exact-mirror", "0.2.9", "1.2.7"),
+        ("typescript", "5.9.3", "7.0.2"),
+    ]
+
+
+def test_the_gate_passes_on_the_report_its_bun_step_leaves(tmp_path: Path) -> None:
+    check(tmp_path, "bun", fixture("bun-after-update.txt"))
 
 
 def dart_registry() -> Registry:
@@ -227,7 +250,314 @@ def test_uv_reads_a_dependency_with_an_extra_once() -> None:
     assert stale == [("httpx", "0.27.0", "0.28.1")]
 
 
-def test_poetry_reads_outdated_with_wait(tmp_path: Path) -> None:
+POETRY_SECTIONS = [
+    pytest.param(
+        '[project]\ndependencies = ["httpx>=0.27"]\n',
+        ["httpx"],
+        ["'httpx>=0.28.1'"],
+        id="project-dependency",
+    ),
+    pytest.param(
+        '[project.optional-dependencies]\ncli = ["httpx>=0.27"]\n',
+        ["httpx"],
+        ["--optional cli 'httpx>=0.28.1'"],
+        id="optional-extra",
+    ),
+    pytest.param(
+        '[dependency-groups]\ntest = ["coverage>=7"]\n'
+        'dev = [{include-group = "test"}, "httpx>=0.27", "pytest>=7"]\n',
+        ["httpx", "pytest"],
+        ["--group dev 'httpx>=0.28.1' 'pytest>=9.1.1'"],
+        id="dependency-group-beside-include-group",
+    ),
+    pytest.param(
+        '[tool.poetry.dependencies]\npython = "^3.9"\nhttpx = "^0.27"\n',
+        ["httpx"],
+        ["'httpx>=0.28.1'"],
+        id="poetry-string",
+    ),
+    pytest.param(
+        '[tool.poetry.group.test.dependencies]\npytest = "^7.2"\n',
+        ["pytest"],
+        ["--group test 'pytest>=9.1.1'"],
+        id="poetry-group-table",
+    ),
+    pytest.param(
+        '[tool.poetry.dependencies]\nhttpx = {version = "^0.27", python = "<3.11"}\n'
+        'pytest = "^7.2"\n',
+        ["httpx", "pytest"],
+        ["--python '<3.11' 'httpx>=0.28.1'", "'pytest>=9.1.1'"],
+        id="poetry-table-with-python",
+    ),
+    pytest.param(
+        "[project]\ndependencies = ['httpx[http2]>=0.27; python_version < \"3.13\"']\n",
+        ["httpx"],
+        ["'httpx[http2]>=0.28.1; python_version < \"3.13\"'"],
+        id="pep508-marker-and-extras",
+    ),
+    pytest.param(
+        '[project]\ndependencies = ["HTTPX>=0.27"]\n',
+        ["httpx"],
+        ["'HTTPX>=0.28.1'"],
+        id="canonical-name",
+    ),
+    pytest.param(
+        '[project]\ndependencies = ["httpx>=0.27"]\n'
+        '[dependency-groups]\ndev = ["httpx>=0.27"]\n',
+        ["httpx"],
+        ["'httpx>=0.28.1'", "--group dev 'httpx>=0.28.1'"],
+        id="two-sections",
+    ),
+]
+
+
+@pytest.mark.parametrize(("pyproject", "names", "lines"), POETRY_SECTIONS)
+def test_the_poetry_step_raises_each_entry_where_the_project_declares_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    pyproject: str,
+    names: list[str],
+    lines: list[str],
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(pyproject)
+    latest = {"httpx": ("0.27.0", "0.28.1"), "pytest": ("7.4.4", "9.1.1")}
+    poetry_dry_run(tmp_path, monkeypatch, moves(*((n, *latest[n]) for n in names)))
+    report = [
+        {"name": name, "version": latest[name][0], "latest_version": latest[name][1]}
+        for name in names
+    ]
+    with pytest.raises(ValueError, match="baseline repair") as failure:
+        check(tmp_path, "poetry", json.dumps(report))
+    route = "`, then `".join(POETRY_ADD + line for line in lines)
+    assert f"Run `{route}` in a separate PR first" in str(failure.value)
+
+
+def poetry_dry_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str, status: int = 0
+) -> Path:
+    log = tmp_path / "uvx.log"
+    answer = tmp_path / "dry-run.txt"
+    answer.write_text(output)
+    tool = tmp_path / "bin/uvx"
+    tool.parent.mkdir(exist_ok=True)
+    tool.write_text(
+        f"#!/bin/sh\necho \"$* age=$POETRY_SOLVER_MIN_RELEASE_AGE cwd=$(pwd)\" >> '{log}'\n"
+        f"cat '{answer}'\nexit {status}\n"
+    )
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool.parent}:{os.environ['PATH']}")
+    return log
+
+
+def moves(*rows: tuple[str, str, str]) -> str:
+    return "\n".join(f"  - Updating {n} ({c} -> {t})" for n, c, t in rows)
+
+
+DEV_GROUP = (
+    '[dependency-groups]\ndev = ["pytest~=7.2", "pytest-cov~=4.0", "mypy>=1.0"]\n'
+)
+
+
+def stale_poetry_project(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(DEV_GROUP)
+
+
+def pytest_rows() -> str:
+    rows = json.loads(fixture("poetry-show-python-bound.json"))
+    return json.dumps([row for row in rows if row["name"] != "mypy"])
+
+
+def test_poetry_names_the_newest_release_its_solver_can_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stale_poetry_project(tmp_path)
+    poetry_dry_run(tmp_path, monkeypatch, fixture("poetry-add-dry-run.txt"))
+    with pytest.raises(ValueError, match=r"pytest-cov 4\.1\.0 → 7\.1\.0") as failure:
+        check(tmp_path, "poetry", fixture("poetry-show-python-bound.json"))
+    assert "pytest 7.4.4 → 9.2.0" not in str(failure.value)
+    assert "mypy 1.19.1 → 2.4.1" not in str(failure.value)
+    assert f"`{POETRY_ADD}--group dev 'pytest-cov>=7.1.0'`" in str(failure.value)
+    out = capsys.readouterr().out
+    assert "pytest stays at 7.4.4: 9.2.0 does not install" in out
+    assert "`uvx poetry add --dry-run --group dev 'mypy==2.4.1'` shows why" in out
+
+
+def test_poetry_names_a_target_between_the_current_and_the_latest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stale_poetry_project(tmp_path)
+    poetry_dry_run(
+        tmp_path, monkeypatch, fixture("poetry-add-dry-run-stepped-back.txt")
+    )
+    with pytest.raises(ValueError, match=r"pytest 7\.4\.4 → 8\.4\.2") as failure:
+        check(tmp_path, "poetry", pytest_rows())
+    assert "pytest-cov 4.1.0 → 7.1.0" in str(failure.value)
+    assert "9.2.0" not in str(failure.value)
+
+
+def test_poetry_passes_when_no_dependency_can_move(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stale_poetry_project(tmp_path)
+    moving = "Updating pytest-cov (4.1.0 -> 7.1.0)"
+    still = "Installing pytest-cov (4.1.0): Skipped for the following reason: Already installed"
+    poetry_dry_run(
+        tmp_path, monkeypatch, fixture("poetry-add-dry-run.txt").replace(moving, still)
+    )
+    check(tmp_path, "poetry", fixture("poetry-show-python-bound.json"))
+    out = capsys.readouterr().out
+    assert "pytest-cov stays at 4.1.0: 7.1.0 does not install" in out
+    assert "Every direct dependency is on its newest release" in out
+
+
+def test_the_poetry_dry_run_carries_the_release_wait_and_the_section(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stale_poetry_project(tmp_path)
+    log = poetry_dry_run(tmp_path, monkeypatch, fixture("poetry-add-dry-run.txt"))
+    with pytest.raises(ValueError, match="baseline repair"):
+        check(tmp_path, "poetry", fixture("poetry-show-python-bound.json"))
+    call = log.read_text().splitlines()
+    assert len(call) == 1
+    assert "add --dry-run --no-ansi -n --group dev" in call[0]
+    assert "mypy>=1.19.1 pytest>=7.4.4 pytest-cov>=4.1.0" in call[0]
+    assert " age=2 " in call[0]
+
+
+def test_the_poetry_dry_run_runs_in_the_directory_of_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "service"
+    package.mkdir()
+    stale_poetry_project(package)
+    log = poetry_dry_run(tmp_path, monkeypatch, fixture("poetry-add-dry-run.txt"))
+    report = tmp_path / "freshness.report"
+    report.write_text(fixture("poetry-show-python-bound.json"))
+    gate = freshness_gate("poetry")
+    with pytest.raises(ValueError, match="baseline repair"):
+        validate_scanner_report("freshness", gate, report, gate["command"], package, 60)
+    assert log.read_text().strip().endswith(f"cwd={package.resolve()}")
+
+
+def test_a_failed_poetry_dry_run_names_its_command_and_the_tool_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stale_poetry_project(tmp_path)
+    reason = (
+        "pyproject.toml changed significantly since poetry.lock was last generated."
+    )
+    poetry_dry_run(tmp_path, monkeypatch, reason, status=1)
+    with pytest.raises(ValueError, match="uvx poetry add --dry-run") as failure:
+        check(tmp_path, "poetry", fixture("poetry-show-python-bound.json"))
+    assert reason in str(failure.value)
+
+
+def test_a_poetry_git_entry_is_named_and_not_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.poetry.dependencies]\nhttpx = {git = "https://example.com/httpx.git"}\n'
+    )
+    log = poetry_dry_run(tmp_path, monkeypatch, "")
+    row = {"name": "httpx", "version": "0.27.0", "latest_version": "0.28.1"}
+    check(tmp_path, "poetry", json.dumps([row]))
+    assert "httpx 0.28.1: Hard Eng cannot raise a git entry; update it by hand" in (
+        capsys.readouterr().out
+    )
+    assert not log.exists()
+
+
+def test_a_hold_matches_the_version_the_solver_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stale_poetry_project(tmp_path)
+    poetry_dry_run(
+        tmp_path, monkeypatch, fixture("poetry-add-dry-run-stepped-back.txt")
+    )
+    report = pytest_rows()
+    with pytest.raises(ValueError, match=r"pytest 7\.4\.4 → 8\.4\.2"):
+        check(
+            tmp_path, "poetry", report, holds=[hold(package="pytest", version="9.2.0")]
+        )
+    with pytest.raises(ValueError, match=r"pytest-cov 4\.1\.0 → 7\.1\.0") as failure:
+        check(
+            tmp_path, "poetry", report, holds=[hold(package="pytest", version="8.4.2")]
+        )
+    assert "pytest 7.4.4" not in str(failure.value)
+
+
+def test_a_poetry_dev_dependencies_entry_fails_with_the_move_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old = '[tool.poetry.dev-dependencies]\npytest = "^7.2"\n'
+    (tmp_path / "pyproject.toml").write_text(old)
+    log = poetry_dry_run(tmp_path, monkeypatch, moves(("pytest", "7.4.4", "8.4.2")))
+    with pytest.raises(ValueError, match=r"pytest 7\.4\.4 → 9\.2\.0") as failure:
+        check(tmp_path, "poetry", pytest_rows())
+    assert "Move the entries of [tool.poetry.dev-dependencies] to " in str(
+        failure.value
+    )
+    assert "[tool.poetry.group.dev.dependencies]" in str(failure.value)
+    assert not log.exists()
+    moved = old.replace("dev-dependencies", "group.dev.dependencies")
+    (tmp_path / "pyproject.toml").write_text(moved)
+    with pytest.raises(ValueError, match=r"pytest 7\.4\.4 → 8\.4\.2") as failure:
+        check(tmp_path, "poetry", pytest_rows())
+    assert f"`{POETRY_ADD}--group dev 'pytest>=8.4.2'`" in str(failure.value)
+
+
+def test_a_stale_name_without_a_declaration_fails_with_the_hand_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "pyproject.toml").write_text('[project]\ndependencies = ["httpx"]\n')
+    log = poetry_dry_run(tmp_path, monkeypatch, "")
+    with pytest.raises(ValueError, match=r"pytest 7\.4\.4 → 9\.2\.0") as failure:
+        check(tmp_path, "poetry", json.dumps(json.loads(pytest_rows())[:1]))
+    assert "Raise pytest by hand in pyproject.toml" in str(failure.value)
+    assert "stays at" not in str(failure.value)
+    assert not log.exists()
+
+
+def test_a_dry_run_with_no_line_for_a_name_falls_back_to_the_latest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stale_poetry_project(tmp_path)
+    poetry_dry_run(tmp_path, monkeypatch, moves(("pytest-cov", "4.1.0", "7.1.0")))
+    with pytest.raises(ValueError, match=r"pytest 7\.4\.4 → 9\.2\.0") as failure:
+        check(tmp_path, "poetry", pytest_rows())
+    assert "named no version" not in str(failure.value)
+    assert f"{POETRY_ADD}--group dev 'pytest>=9.2.0' 'pytest-cov>=7.1.0'" in str(
+        failure.value
+    )
+    holds = [
+        hold(package="pytest", version="9.2.0"),
+        hold(package="pytest-cov", version="7.1.0"),
+    ]
+    check(tmp_path, "poetry", pytest_rows(), holds=holds)
+
+
+def test_an_entry_poetry_cannot_raise_is_not_named_beside_one_it_can(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["httpx>=0.27"]\n'
+        '[tool.poetry.dependencies]\nhttpx = {source = "internal"}\n'
+    )
+    poetry_dry_run(tmp_path, monkeypatch, moves(("httpx", "0.27.0", "0.28.1")))
+    row = {"name": "httpx", "version": "0.27.0", "latest_version": "0.28.1"}
+    with pytest.raises(ValueError, match=r"httpx 0\.27\.0 → 0\.28\.1"):
+        check(tmp_path, "poetry", json.dumps([row]))
+    assert "cannot raise" not in capsys.readouterr().out
+
+
+def test_poetry_reads_outdated_with_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    poetry_dry_run(
+        tmp_path,
+        monkeypatch,
+        moves(("httpx", "0.27.0", "0.28.1"), ("pytest", "8.0.0", "9.1.1")),
+    )
     with pytest.raises(ValueError, match=r"httpx 0\.27\.0 → 0\.28\.1") as failure:
         check(tmp_path, "poetry", fixture("poetry-show.json"))
     assert "pytest 8.0.0 → 9.1.1" in str(failure.value)
@@ -299,18 +629,38 @@ def test_hold_expires_and_needs_reason(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("tool", "report", "command"),
     [
-        ("bun", "bun-outdated.txt", "bun update --latest is-odd left-pad"),
+        (
+            "bun",
+            "bun-outdated.txt",
+            "bun update --latest --minimum-release-age=172800 is-odd left-pad",
+        ),
         (
             "uv",
             "uv-tree.txt",
             "uv add [--group <group>] 'httpx>=0.28.0' 'pytest>=8.3.4'",
         ),
-        ("poetry", "poetry-show.json", "poetry add httpx@latest pytest@latest"),
+        (
+            "poetry",
+            "poetry-show.json",
+            POETRY_ADD + "'httpx>=0.28.1' 'pytest>=9.1.1'",
+        ),
     ],
 )
 def test_failure_names_upgrade_route(
-    tmp_path: Path, tool: str, report: str, command: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tool: str,
+    report: str,
+    command: str,
 ) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["httpx>=0.27", "pytest>=8"]\n'
+    )
+    poetry_dry_run(
+        tmp_path,
+        monkeypatch,
+        moves(("httpx", "0.27.0", "0.28.1"), ("pytest", "8.0.0", "9.1.1")),
+    )
     records = {
         PYPI + "httpx/json": fixture("pypi-httpx.json"),
         PYPI + "pytest/json": fixture("pypi-pytest.json"),
@@ -559,7 +909,10 @@ def test_the_bun_repair_command_covers_a_workspace_once(tmp_path: Path) -> None:
         validate_freshness(
             path, gate, Registry({}), moment("2026-10-26T00:00:00+00:00")
         )
-    assert "`bun update -r --latest typescript left-pad`" in str(failure.value)
+    assert (
+        "`bun update -r --latest --minimum-release-age=172800 typescript left-pad`"
+        in str(failure.value)
+    )
 
 
 def test_the_bun_release_age_check_runs_in_the_gates_workspace_mode(

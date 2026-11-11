@@ -27,6 +27,7 @@ UPDATE_REF = f"refs/heads/{UPDATE_BRANCH}"
 UPDATE_COMMAND = "python3 .hooks/hard-eng.py update-pr"
 REPAIR_SUBJECT = "Install Hard Eng"
 NOT_PUBLISHED = "Hard Eng updates start after the Hard Eng install is on the base branch of a remote."
+CI_STEP = "CI setup pending: add a `shipping` block with the project's checks and a measured ci_seconds budget to hard-eng.gates.json and merge it to the base branch, then rerun setup"
 HEX_REVISION = re.compile(r"[0-9a-f]{40}")
 OWNER = re.compile(r"hard-eng-update (\d+)")
 TEMPORARY = re.compile(
@@ -656,6 +657,15 @@ def published(root: Path, base: str) -> bool:
     return found.returncode == 0
 
 
+def ci_step_notes(root: Path) -> list[str]:
+    """The CI step that a project without a shipping block still owes."""
+    try:
+        gates = json.loads((root / "hard-eng.gates.json").read_text())
+    except (OSError, ValueError):
+        return []
+    return [] if "shipping" in gates else [CI_STEP]
+
+
 def repair_checkout(root: Path, previous: str) -> str:
     """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
     import hook_chain
@@ -675,7 +685,8 @@ def repair_checkout(root: Path, previous: str) -> str:
                 raise
             refused = isinstance(error, ValueError)
             reason = "" if refused else "the installed release could not be fetched: "
-            return f"This checkout is unchanged: {reason}{str(error).rstrip('.')}."
+            parts = [str(error).rstrip("."), *(ci_step_notes(root) if refused else [])]
+            return f"This checkout is unchanged: {reason}{'; '.join(parts)}."
     notes = []
     if needs_hook:
         update.install_planned_hook(root, hook)
@@ -700,6 +711,7 @@ def repair_checkout(root: Path, previous: str) -> str:
             f"setup wrote {', '.join(written)}; "
             f"review and commit {'it' if len(written) == 1 else 'them'}"
         )
+    notes.extend(ci_step_notes(root))
     if waits is not None and waits != planned:
         notes.append(
             "the update brings the workflow files and their gates when the `shipping` block of hard-eng.gates.json is on the base branch"
@@ -866,7 +878,8 @@ def branch_current(root: Path, tip: str) -> bool:
         and waiting
         and HEX_REVISION.fullmatch(current)
         and based.returncode == 0
-        and waiting == latest_verified(current)
+        and waiting == (latest_verified(current) or current)
+        and (waiting != current or update_branch_tip(root) != tip)
     )
 
 

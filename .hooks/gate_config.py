@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -154,17 +155,25 @@ def fixture_manifest(root: Path, manifest: Path, manifests: list[Path]) -> bool:
     )
 
 
-def repository_files(root: Path) -> list[Path]:
+def listed_names(root: Path) -> list[str]:
     names = subprocess.check_output(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         cwd=root,
         text=True,
     )
-    return [
-        root / name
-        for name in sorted(set(names.split("\0")) - {""})
-        if (root / name).is_file() and not (root / name).is_symlink()
-    ]
+    return sorted(set(names.split("\0")) - {""})
+
+
+def regular_file(path: Path) -> bool:
+    try:
+        return stat.S_ISREG(os.lstat(path).st_mode)
+    except OSError:
+        return False
+
+
+def repository_files(root: Path, names: list[str] | None = None) -> list[Path]:
+    paths = [root / name for name in (listed_names(root) if names is None else names)]
+    return [path for path in paths if regular_file(path)]
 
 
 def nonproduction_source(relative: Path) -> bool:
@@ -381,9 +390,19 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     from gitleaks_scan import validate_current_files_gate
 
     validate_current_files_gate(gate.get("role"), command)
+    validate_named_output(gate, command, directory, report)
+
+
+def validate_named_output(
+    gate: Gate, command: list[str], directory: Path, report: Report
+) -> None:
     from project_setup import validate_command_output
 
-    validate_command_output(command, directory, report)
+    try:
+        validate_command_output(command, directory, report)
+    except ValueError as error:
+        message = f"gate {gate['name']} (`{' '.join(command)}`): {error}"
+        raise ValueError(message) from error
 
 
 def dart_scan_includes_boundaries(gate: Gate) -> bool:
@@ -405,6 +424,11 @@ def dart_scan_includes_boundaries(gate: Gate) -> bool:
 
 def initial_base(root: Path) -> str:
     """A new branch compares with its shipping-base merge base, else the empty tree."""
+    return initial_point(root)[0]
+
+
+def initial_point(root: Path) -> tuple[str, bool]:
+    """The comparison base of a new branch and whether it is the empty tree."""
     from shipping import git, load_policy
 
     try:
@@ -412,10 +436,10 @@ def initial_base(root: Path) -> str:
         branch = f"refs/remotes/origin/{policy['base']}" if policy else "HEAD"
         merged = git(root, "merge-base", branch, "HEAD").strip()
         if merged != git(root, "rev-parse", "HEAD").strip():
-            return merged
+            return merged, False
     except ValueError:
         pass
-    return git(root, "hash-object", "-w", "-t", "tree", os.devnull).strip()
+    return git(root, "hash-object", "-w", "-t", "tree", os.devnull).strip(), True
 
 
 def changed_files(root: Path, base: str) -> set[str] | None:
@@ -924,10 +948,11 @@ def load_groups(
         from shipping import load_policy
 
         load_policy(root)
-    listed = repository_files(root)
+    raw = listed_names(root)
+    listed = repository_files(root, raw)
     start = len(str(root)) + 1
     names = [str(path)[start:] for path in listed]
-    LISTED[root] = frozenset(names), generated_sources(root, names)
+    LISTED[root] = frozenset(raw), generated_sources(root, names)
     try:
         return checked_groups(root, config, listed, base, dependents, starting)
     finally:

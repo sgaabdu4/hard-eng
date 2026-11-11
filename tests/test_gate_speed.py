@@ -622,6 +622,24 @@ def generated_repository(tmp_path: Path) -> Path:
     return repository
 
 
+def test_the_file_list_holds_only_regular_files(tmp_path: Path) -> None:
+    root = tmp_path / "repository"
+    init(root)
+    (root / "folder").mkdir()
+    for name in ("kept.py", "gone.py", "folder/inner.py"):
+        (root / name).write_text("")
+    (root / "link.py").symlink_to("kept.py")
+    (root / "broken.py").symlink_to("missing.py")
+    commit(root, "Add files")
+    (root / "gone.py").unlink()
+    names = [*gate_config.listed_names(root), "folder"]
+    assert {"broken.py", "gone.py", "link.py"} < set(names)
+    assert gate_config.repository_files(root, names) == [
+        root / "folder/inner.py",
+        root / "kept.py",
+    ]
+
+
 def test_a_config_load_reads_the_git_attributes_one_time(tmp_path: Path) -> None:
     repository = generated_repository(tmp_path)
     ATTRIBUTE_STARTS.clear()
@@ -783,3 +801,43 @@ def test_stop_after_a_source_edit_starts_few_git_processes(
     with counted_git() as starts:
         assert runner.check(base=base, quick=True) == 0
     assert len(starts) == 31, starts
+
+
+LOAD_AFTER_CHECK = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import comments
+try:
+    comments.validate_suppressions(Path(sys.argv[2]), "HEAD")
+except ValueError:
+    pass
+print("retry_forms" in sys.modules)
+"""
+
+
+@pytest.mark.parametrize(
+    ("name", "text", "loaded"),
+    [
+        ("app.py", "value = 2\n", "False"),
+        ("app.py", "value = store.retrieve(1)\n", "False"),
+        ("app.py", "value = Retrofit(1)\n", "False"),
+        ("tests/api.test.ts", "}, { re" + "try: 3 });\n", "True"),
+    ],
+)
+def test_only_a_change_with_a_retry_word_loads_the_retry_rules(
+    tmp_path: Path, name: str, text: str, loaded: str
+) -> None:
+    root = tmp_path / "repo"
+    init(root)
+    (root / "README.md").write_text("fixture\n")
+    commit(root, "baseline")
+    (root / name).parent.mkdir(parents=True, exist_ok=True)
+    (root / name).write_text(text)
+    result = subprocess.run(
+        [sys.executable, "-c", LOAD_AFTER_CHECK, str(SOURCE / ".hooks"), str(root)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == loaded

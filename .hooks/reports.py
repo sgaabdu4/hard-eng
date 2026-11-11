@@ -266,17 +266,23 @@ def expected_coverage(
         outside_lib = kind == "dart-tests" and any(
             path.parts[0] != "lib" for path in relative
         )
+        from dart_boundaries import flutter_without_test
+
         raise ValueError(
             f"Coverage report omits production files: {', '.join(map(str, relative))}. "
             "Cover them, or mark generator output with "
             "`<pattern> linguist-generated=true` in .gitattributes"
             + (
-                ". For Dart code outside lib/: move it under lib/ and test it there."
-                " Or leave it in place and write tests under test/ that import it by a"
+                ". For Dart code outside lib/: move it under lib/ and test it there"
+                if outside_lib
+                else ""
+            )
+            + (
+                ". Or leave it in place and write tests under test/ that import it by a"
                 " relative path and use package:test/test.dart (not flutter_test). The"
                 " second way needs `test` as a dev dependency and a setup rerun, which adds"
                 " the VM test run"
-                if outside_lib
+                if outside_lib and not flutter_without_test(directory)
                 else ""
             )
         )
@@ -366,7 +372,9 @@ def validate_osv_package(
         isinstance(package.get(key), str) and package[key]
         for key in ("name", "version", "ecosystem")
     ):
-        raise ValueError("OSV report is missing package identity")
+        from python_setup import osv_identity
+
+        osv_identity(package, source["path"])
     if item.get("vulnerabilities", []) != [] or item.get("groups", []) != []:
         found = item.get("vulnerabilities")
         entries = found if isinstance(found, list) else []
@@ -484,9 +492,14 @@ def validate_semgrep(path: Path) -> None:
                 raise ValueError(
                     "Semgrep requires scanned files and executed rules (--time)"
                 )
-        if timing.get("fixpoint_timeouts", []) != []:
+        if timeouts := timing.get("fixpoint_timeouts", []):
+            paths = {(t.get("location") or {}).get("path") for t in timeouts}
+            named = ", ".join(sorted(p for p in paths if p))
             raise ValueError(
-                f"Semgrep reports analysis timeouts: {timing['fixpoint_timeouts']}"
+                f"Semgrep ran out of time on {named}. If a file holds big tables of "
+                "text constants, move them to a data module, then run the same check again"
+                if named
+                else "Semgrep ran out of time and named no file; run the same check again"
             )
         targets = timing["targets"]
         if not isinstance(targets, list) or {t["path"] for t in targets} != set(
@@ -806,7 +819,8 @@ def validate_scanner_report(
     elif scanner == "freshness":
         from freshness import freshness_waiting, validate_freshness
 
-        validate_freshness(path, gate, waiting=freshness_waiting(gate, directory))
+        waiting = freshness_waiting(gate, directory)
+        validate_freshness(path, gate, waiting=waiting, directory=directory)
     elif scanner == "fallow":
         validate_fallow(path, sdk_binaries(directory), directory)
     else:
@@ -836,6 +850,20 @@ def scanner_result(
             lines[FINDING_LIMIT:] = [f"{more} more findings in {path}"]
         for line in lines:
             print(f"{gate['name']}: {line}")
+        if scanner == "import-linter" and missing_build_system(lines, directory):
+            print(
+                f"{gate['name']}: Add a [build-system] table to pyproject.toml and run `uv sync`."
+            )
+
+
+def missing_build_system(lines: list[str], directory: Path) -> bool:
+    """Import Linter cannot find the package when uv has no build system to install it with."""
+    project = directory / "pyproject.toml"
+    return (
+        any(line.startswith("Could not find package") for line in lines)
+        and project.is_file()
+        and "[build-system]" not in project.read_text()
+    )
 
 
 def commit_sha(item: JsonObject) -> str:

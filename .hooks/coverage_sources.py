@@ -156,7 +156,13 @@ def require_listed_sources(
 
 def python_coverage(path: Path, directory: Path) -> dict[Path, tuple[int, int]]:
     files = {}
-    report = json.loads(path.read_text())
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        raise ValueError(
+            f"The test run wrote no Python coverage report ({path.name}). A --cov= value that names no module of the sources writes none. After a rename, replace the old name in the `sources` list of the package and in each --cov= value of its tests command in hard-eng.gates.json."
+        ) from None
+    report = json.loads(text)
     entries = report.get("files") if isinstance(report, dict) else None
     if not isinstance(entries, dict):
         raise TypeError("Invalid Python coverage files")

@@ -4,9 +4,11 @@ import io
 import urllib.error
 import urllib.request
 from email.message import Message
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+import source_trees
 import update
 
 
@@ -103,3 +105,42 @@ def test_freshness_walks_commits_only_after_upstream_moves(
     monkeypatch.setattr(update, "github_json", walk)
     assert update.latest_verified("a" * 40) is None
     assert walk.called is walks
+
+
+def test_a_failed_update_proof_names_its_reason_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_trees.forget_all()
+    monkeypatch.setattr(
+        update, "verified_revision", Mock(side_effect=OSError("no route to host"))
+    )
+    for _ in range(3):
+        assert (
+            update.proven_installed(
+                tmp_path, "main", {".hooks/update.py"}, "a" * 40, "b" * 40
+            )
+            == set()
+        )
+    printed = capsys.readouterr().err
+    assert printed.count("could not prove the update") == 1
+    assert "no route to host" in printed
+    source_trees.forget_all()
+
+
+def test_a_failed_update_proof_line_ends_with_one_period(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_trees.forget_all()
+    cause = "Command 'git clone' returned non-zero exit status 128."
+    monkeypatch.setattr(
+        update, "verified_revision", Mock(side_effect=ValueError(cause))
+    )
+    update.proven_installed(tmp_path, "main", {".hooks/update.py"}, "a" * 40, "b" * 40)
+    printed = capsys.readouterr().err
+    assert f"update: {cause} Its files" in printed
+    assert ".." not in printed
+    source_trees.forget_all()

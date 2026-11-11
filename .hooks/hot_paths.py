@@ -45,7 +45,12 @@ def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, o
     try:
         report = json.loads(result.stdout)
     except json.JSONDecodeError as error:
-        raise ValueError(f"HE-HOT-PATH scan failed: {result.stderr[-500:]}") from error
+        raise ValueError(
+            "HE-HOT-PATH scan failed: Semgrep gave no report. If the text below says uv "
+            "cannot write its cache or reach the package index, run the same "
+            "`python3 .hooks/hard-eng.py hot-paths` command where it can; in an agent "
+            f"sandbox, ask approval to run it outside the sandbox. Output: {result.stderr[-500:]}"
+        ) from error
     require_parsed(report.get("errors", []))
     return report["results"]
 

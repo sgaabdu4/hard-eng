@@ -333,7 +333,8 @@ def update_plan(
         timeout=60,
         check=False,
     )
-    sys.stderr.write(planned.stderr)
+    before, _, pending = planned.stderr.partition("CI setup pending:")
+    sys.stderr.write(before + pending.partition("\n")[2])
     if planned.returncode != 0:
         reason = refusal_reason(planned.stderr)
         raise ValueError(f"setup refused the update: {reason or 'no reason printed'}")
@@ -989,6 +990,7 @@ def proven_installed(
         proven = keep(
             "references", ("verified", revision), lambda: verified_revision(revision)
         ) and release_installed(root, base, installed, revision, previous)
-    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        source_trees.tell_unproven(error)
         return set()
     return installed if proven else set()

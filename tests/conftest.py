@@ -217,6 +217,25 @@ def completed_plan() -> str:
     return plan_document()
 
 
+def install_ux_reference(root: Path) -> None:
+    """Put the UX reference where an installed project holds it, for the plan check that reads its rule labels."""
+    path = ".agents/skills/he-plan/references/ux.md"
+    (root / path).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(SOURCE / path, root / path)
+
+
+def ux_rules_block(**verdicts: str) -> str:
+    """A UX Rules field with one line for each Usability rule; a keyword replaces the rule's `Verdict — text`."""
+    from plans import usability_rules
+
+    lines = ["Rules: Judged the proposed image at 375 and 1280 px."]
+    for label, units in usability_rules():
+        key = label.replace(" ", "_").replace("-", "_")
+        default = "Pass — " + (", ".join(f"4 {unit}" for unit in units) or "checked")
+        lines.append(f"- {label}: {verdicts.get(key, default)}")
+    return "\n".join(lines)
+
+
 @pytest.fixture
 def visual_plan(completed_plan: str) -> str:
     return completed_plan.replace(
@@ -227,7 +246,8 @@ def visual_plan(completed_plan: str) -> str:
         "Before: ![Before](https://example.test/account-before.png)\n"
         "Proposed: ![Proposed](https://example.test/account-proposed.png)\n"
         "Capture: Native browser test account.spec.ts passed the route and screen assertions.\n"
-        "Review: Inspected both account captures at the same viewport; only the proposed label differs.",
+        "Review: Inspected both account captures at the same viewport; only the proposed label differs.\n"
+        + ux_rules_block(),
     )
 
 

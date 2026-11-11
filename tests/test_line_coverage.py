@@ -2,9 +2,11 @@
 
 import json
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import reports
+from test_setup import repository
 
 
 def test_coverage_requires_unexecuted_files_and_merges_lcov(tmp_path: Path) -> None:
@@ -65,3 +67,31 @@ def test_branch_coverage_is_reported_separately_from_lines(
         path, "python-tests", tmp_path, {tmp_path / "app.py"}
     ) == (7, 10)
     assert "Branch coverage: 1/4 (25.00%; informational)" in capsys.readouterr().out
+
+
+def test_a_missing_python_coverage_report_names_the_cov_step(tmp_path: Path) -> None:
+    report = tmp_path / "coverage.json"
+    with pytest.raises(ValueError, match="replace the old name") as refusal:
+        reports.line_coverage(report, "python-tests", tmp_path, {tmp_path / "a.py"})
+    text = str(refusal.value)
+    assert "`sources` list of the package" in text
+    assert "each --cov= value of its tests command in hard-eng.gates.json" in text
+    assert "rerun setup" not in text
+
+
+def test_a_setup_rerun_keeps_the_old_name_in_sources_and_the_cov_value(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "uv.lock").touch()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
+    (tmp_path / "oldname").mkdir()
+    (tmp_path / "oldname/__init__.py").write_text("value = 1\n")
+    installer.install(tmp_path)
+    (tmp_path / "oldname").rename(tmp_path / "newname")
+    installer.install(tmp_path)
+    package = json.loads((tmp_path / "hard-eng.gates.json").read_text())["packages"][0]
+    tests = next(gate for gate in package["checks"] if gate["role"] == "tests")
+    assert package["sources"] == ["oldname"]
+    assert "--cov=oldname" in tests["command"]

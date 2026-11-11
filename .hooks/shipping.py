@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 from agent_hooks import reject_attribution
 from gate_config import JsonValue
-from project_files import read_project_file
+from project_files import parse_project_text, read_project_file
 from ship_evidence import attachment_urls
 
 REPOSITORY_NAME_PART = re.compile(r"[A-Za-z0-9_.-]+")
@@ -56,6 +56,7 @@ class Shipment:
     merged_sha: str | None
     delivery_target: str
     review_bypass: bool = False
+    rule_note: str | None = None
 
 
 class ShippingError(ValueError):
@@ -314,6 +315,10 @@ def load_policy(root: Path, required: bool = True) -> ShippingPolicy | None:
         payload = read_project_file(path, root)
     except (OSError, ValueError) as error:
         raise ShippingError(str(error)) from error
+    return _policy_block(payload, required)
+
+
+def _policy_block(payload: object, required: bool) -> ShippingPolicy | None:
     if not isinstance(payload, dict):
         raise ShippingError("hard-eng.gates.json must be an object")
     if "shipping" not in payload:
@@ -328,6 +333,33 @@ def load_policy(root: Path, required: bool = True) -> ShippingPolicy | None:
     if not isinstance(raw, dict):
         raise ShippingError("shipping policy must be an object")
     return _policy(cast(dict[str, JsonValue], raw))
+
+
+def pushed_policy(root: Path, revision: str) -> ShippingPolicy:
+    """The shipping policy that the pushed commit holds, not the one in the working tree."""
+    short = revision[:12]
+    try:
+        text = git(root, "cat-file", "blob", f"{revision}:hard-eng.gates.json")
+    except ShippingError:
+        text = None
+    policy = None
+    if text is not None:
+        try:
+            policy = _policy_block(
+                parse_project_text(text, "hard-eng.gates.json"), False
+            )
+        except ValueError as error:
+            raise ShippingError(
+                f"Pushed commit {short} has an invalid hard-eng.gates.json: {error}; "
+                "fix it, commit it and push again."
+            ) from error
+    if policy is None:
+        raise ShippingError(
+            f"Pushed commit {short} has no shipping policy in hard-eng.gates.json; "
+            "add the shipping block (.agents/skills/he-ship/references/checks.md), "
+            "commit it and push again."
+        )
+    return policy
 
 
 def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:
@@ -452,7 +484,20 @@ def _check_revision(run: dict[str, JsonValue], revision: str) -> None:
         raise ShippingError("required check is stale")
 
 
-def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) -> None:
+def _pending(
+    root: Path, repository: str, run: dict[str, JsonValue], budget: float, explain: bool
+) -> PendingCheck:
+    note = ""
+    if explain and run.get("status") == "queued":
+        from ci_usage import queue_note
+
+        note = queue_note(root, repository, run, budget)
+    return PendingCheck(f"required check has not completed: {run['name']}{note}")
+
+
+def _checks(
+    root: Path, repository: str, revision: str, policy: ShippingPolicy, explain: bool
+) -> None:
     endpoint = (
         f"repos/{repository}/commits/{revision}/check-runs?per_page=100&filter=all"
     )
@@ -475,7 +520,7 @@ def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) 
             raise ShippingError(f"required check truncated: {name}")
         _check_revision(run, revision)
         if run.get("status") != "completed":
-            raise PendingCheck(f"required check has not completed: {name}")
+            raise _pending(root, repository, run, policy["ci_seconds"], explain)
         if run.get("conclusion") == "skipped":
             raise ShippingError(
                 f"required check was skipped; gate its steps, not the job: {name}"
@@ -540,7 +585,7 @@ def reused_pull_request(root: Path, base: str) -> str | None:
         )
         if tree != git(root, "rev-parse", "HEAD^{tree}").strip():
             raise ShippingError("the merged PR tested a different tree")
-        _checks(root, repository, head, policy)
+        _checks(root, repository, head, policy, False)
     except ShippingError as error:
         print(
             f"Running the checks again; the merged PR's checks do not cover this push: {error}",
@@ -560,7 +605,7 @@ def passed_branch_point(root: Path) -> str | None:
         if policy is None or point is None:
             return None
         remote = git(root, "remote", "get-url", "origin").strip()
-        _checks(root, origin_repository(remote), point, policy)
+        _checks(root, origin_repository(remote), point, policy, False)
     except ShippingError:
         return None
     return point
@@ -788,10 +833,6 @@ def _graphql_pull(
     return data, _object(repository.get("pullRequest"), "review PR")
 
 
-_UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
-_MERMAID_BLOCK = re.compile(r"^[ \t]*```[ \t]*mermaid\b", re.MULTILINE)
-
-
 def _current_with_base(
     root: Path, identity: tuple[str, str, int], base: str, head: str
 ) -> None:
@@ -804,20 +845,6 @@ def _current_with_base(
     if behind:
         raise ShippingError(
             f"PR is {behind} commit(s) behind {base}; rebase on it, push and rerun the checks"
-        )
-
-
-def _body_problem(body: str) -> None:
-    """Refuse a PR body with no undo line or fewer than two Mermaid diagrams."""
-    if not _UNDO_LINE.search(body):
-        raise ShippingError(
-            "PR body needs a line that starts `Undo:` and lists the undo steps"
-        )
-    if len(_MERMAID_BLOCK.findall(body)) < 2:
-        raise ShippingError(
-            "PR body needs a `Before and after` part with two or more Mermaid diagrams: "
-            "one of the old flow and one of the new flow for each main change, "
-            "or two or more of the new flows when no old flow exists"
         )
 
 
@@ -841,10 +868,13 @@ def _ready_state(
     )
     if threads is None or any(node.get("isResolved") is not True for node in threads):
         raise ShippingError("a review conversation is unresolved or uncounted")
-    _body_problem(pull.body)
+    from pr_text import body_problem
+
+    if problem := body_problem(pull.body):
+        raise ShippingError(problem)
     _current_with_base(root, identity, pull.base_ref, pull.head_sha)
     if pull.mergeable is not True or pull.mergeable_state != "clean":
-        _checks(root, "/".join(identity[:2]), pull.head_sha, policy)
+        _checks(root, "/".join(identity[:2]), pull.head_sha, policy, True)
     bypass = pull.mergeable is True and pull.mergeable_state == "blocked"
     if bypass:
         from review_bypass import bypass_problem
@@ -897,24 +927,30 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         raise ShippingError("PR base branch does not match shipping policy")
     if pull.base_repository != repository or pull.head_repository != repository:
         raise ShippingError("PR repository or head repository does not match origin")
-    review_bypass = False
-    if stage == "ready":
-        review_bypass = _ready_state(
-            resolved_root, pull, policy, branch, local_head, (owner, name, number)
-        )
-        revision, merged_sha = pull.head_sha, None
-    else:
-        revision = _delivered(resolved_root, pull, policy["base"], origin_url)
-        merged_sha = revision
-    if policy["ui_paths"]:
-        paths = _changed_paths(resolved_root, owner, name, number)
-        _ui_evidence(resolved_root, pull, paths, policy)
-    _checks(resolved_root, repository, revision, policy)
-    if stage == "delivered" and target == "Deploy":
-        _delivery(resolved_root, policy, revision, url)
-    current = _pull(resolved_root, owner, name, number)
-    if current != pull:
-        raise ShippingError("PR changed during shipping verification")
+    from review_bypass import Noted, branch_rule_note
+
+    review_bypass, identity = False, (owner, name, number)
+    rule_note = (
+        branch_rule_note(resolved_root, policy, identity) if stage == "ready" else None
+    )
+    with Noted(rule_note):
+        if stage == "ready":
+            review_bypass = _ready_state(
+                resolved_root, pull, policy, branch, local_head, identity
+            )
+            revision, merged_sha = pull.head_sha, None
+        else:
+            revision = _delivered(resolved_root, pull, policy["base"], origin_url)
+            merged_sha = revision
+        if policy["ui_paths"]:
+            paths = _changed_paths(resolved_root, owner, name, number)
+            _ui_evidence(resolved_root, pull, paths, policy)
+        _checks(resolved_root, repository, revision, policy, True)
+        if stage == "delivered" and target == "Deploy":
+            _delivery(resolved_root, policy, revision, url)
+        current = _pull(resolved_root, owner, name, number)
+        if current != pull:
+            raise ShippingError("PR changed during shipping verification")
     return Shipment(
         root=resolved_root,
         plan=resolved_plan,
@@ -928,4 +964,5 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         merged_sha=merged_sha,
         delivery_target=target,
         review_bypass=review_bypass,
+        rule_note=rule_note,
     )

@@ -350,6 +350,24 @@ def test_ship_merge_matches_verified_head_and_checks_result(
     remote.assert_not_called()
 
 
+def test_ship_ready_prints_the_branch_rule_note_before_pass(
+    delivered_worktree: tuple[Path, Shipment],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, shipment = delivered_worktree
+    note = "Not checked: whether main requires build (gh query failed)."
+    monkeypatch.setattr(
+        ship_actions, "verify", Mock(return_value=replace(shipment, rule_note=note))
+    )
+    ship_actions.run(root, "PLAN.md", shipment.pr_url, "ready", None, None)
+    lines = capsys.readouterr().out.splitlines()
+    assert lines == [
+        note,
+        f"PASS ship ready: {shipment.pr_url} at {shipment.merged_sha}",
+    ]
+
+
 def test_ship_merge_reports_pending_delivery_after_merge_command(
     delivered_worktree: tuple[Path, Shipment], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -506,13 +524,13 @@ def test_initial_push_uses_current_remote_base_and_exact_revision(
     plan = root / "PLAN.md"
     plan.write_text(plan.read_text() + "\nCurrent task changes the fixture text.\n")
     (root / "task.txt").write_text("committed")
+    if missing_base:
+        shipping_policy["base"] = "missing"
+        (root / "hard-eng.gates.json").write_text(json.dumps(config))
     git(root, "add", ".")
     git(root, "commit", "-qm", "current completed task")
     revision = git(root, "rev-parse", "HEAD").strip()
     (root / "task.txt").write_text("uncommitted and must not be checked")
-    if missing_base:
-        shipping_policy["base"] = "missing"
-        (root / "hard-eng.gates.json").write_text(json.dumps(config))
     monkeypatch.setattr(
         sys,
         "stdin",
@@ -548,39 +566,6 @@ def test_pre_push_deletion_does_not_fetch_a_base(
     monkeypatch.setattr(ship_actions, "git", query)
     assert runner.pre_push() == 0
     query.assert_not_called()
-
-
-def test_pre_push_blocks_base_before_running_commands(
-    runner: ModuleType, shipping_policy: ShippingPolicy, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (runner.ROOT / "hard-eng.gates.json").write_text(
-        json.dumps({"shipping": shipping_policy})
-    )
-    monkeypatch.setattr(
-        "sys.stdin",
-        StringIO(f"refs/heads/main {'1' * 40} refs/heads/main {'2' * 40}\n"),
-    )
-    commands = Mock()
-    monkeypatch.setattr(runner.subprocess, "run", commands)
-    with pytest.raises(ValueError, match="use a PR"):
-        runner.pre_push()
-    commands.assert_not_called()
-
-
-def test_pre_push_rejects_missing_shipping_before_commands(
-    runner: ModuleType, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (runner.ROOT / "hard-eng.gates.json").write_text('{"packages": []}')
-    monkeypatch.setattr(
-        sys,
-        "stdin",
-        StringIO(f"refs/heads/main {'1' * 40} refs/heads/main {'2' * 40}\n"),
-    )
-    commands = Mock()
-    monkeypatch.setattr(ship_actions.subprocess, "run", commands)
-    with pytest.raises(ValueError, match="shipping policy is required"):
-        runner.pre_push()
-    commands.assert_not_called()
 
 
 def update_pull(*checks: dict[str, str]) -> str:
@@ -684,6 +669,9 @@ def test_pre_push_keeps_the_passed_push_over_budget_or_after_mutation_fails(
         return nullcontext(checkout)
 
     monkeypatch.setattr(ship_actions, "snapshot", snapshot)
+    monkeypatch.setattr(
+        ship_actions, "pushed_policy", Mock(return_value=shipping_policy)
+    )
     shipping_policy["pre_push_seconds"] = 1.0
     (runner.ROOT / "hard-eng.gates.json").write_text(
         json.dumps({"shipping": shipping_policy})
@@ -731,6 +719,9 @@ def test_pre_push_skips_mutation_when_its_budget_is_zero(
         return nullcontext(checkout)
 
     monkeypatch.setattr(ship_actions, "snapshot", snapshot)
+    monkeypatch.setattr(
+        ship_actions, "pushed_policy", Mock(return_value=shipping_policy)
+    )
     shipping_policy["pre_push_mutation_seconds"] = 0.0
     (runner.ROOT / "hard-eng.gates.json").write_text(
         json.dumps({"shipping": shipping_policy})

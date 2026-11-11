@@ -6,14 +6,13 @@ import argparse
 import json
 import os
 import re
-import runpy
 import shlex
 import subprocess
 import sys
 import tomllib
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from gate_config import Gate, GateConfig, Group, JsonObject
@@ -298,12 +297,13 @@ def configure_dart(
 
     outside_lib_coverage(package)
     target = directory / "analysis_options.yaml"
-    typing = runpy.run_path(str(SOURCE / ".hooks/hard-eng.py"))
-    options: JsonObject = typing["dart_options"](target) if target.exists() else {}
+    from dart_boundaries import DART_TYPING, dart_options
+
+    options = cast("JsonObject", dart_options(target)) if target.exists() else {}
     original = deepcopy(options)
     existing = target.read_bytes().decode("utf-8") if target.exists() else ""
     migrate_dart_plugins(options, SOURCE)
-    apply_dart_typing(options, typing["DART_TYPING"], directory)
+    apply_dart_typing(options, cast("dict[str, JsonObject]", DART_TYPING), directory)
     content = (
         existing
         if target.exists() and options == original
@@ -700,7 +700,8 @@ def retired_config(root: Path) -> GateConfig | None:
             try:
                 validate_gate(gate, root, set())
             except (OSError, ValueError, TypeError) as error:
-                reason = str(error)
+                label = f"gate {gate['name']} (`{' '.join(arguments)}`): "
+                reason = str(error).removeprefix(label)
         if reason is not None:
             dropped.append(f"{name} ({reason}): {command}")
         elif arguments not in covered:

@@ -22,6 +22,8 @@ STOP_SIGNAL: list[int] = []
 STARTING = threading.Lock()
 INSTALLS: dict[str, bool] = {}
 INSTALLED_FILE = "hard-eng-installed"
+PASSED_FILE = "hard-eng-passed"
+PASSED_SECONDS = 1800
 INSTALL_FOLDERS = (".venv", "node_modules", ".dart_tool")
 
 
@@ -137,13 +139,20 @@ def start_process_scan() -> Callable[[], list[Process]]:
     return result
 
 
+def state_path(root: Path, name: str) -> Path:
+    """A file in this checkout's own Git folder, so a linked worktree keeps its own."""
+    return (
+        root
+        / subprocess.check_output(
+            ["git", "rev-parse", "--git-path", name], cwd=root, text=True
+        ).strip()
+    )
+
+
 @contextmanager
 def check_lock_file(root: Path) -> Generator[tuple[IO[str], bool]]:
     """Open this checkout's check lock and try to take it; the flag says another check holds it."""
-    name = subprocess.check_output(
-        ["git", "rev-parse", "--git-path", "hard-eng-check.lock"], cwd=root, text=True
-    ).strip()
-    with (root / name).open("w") as lock:
+    with state_path(root, "hard-eng-check.lock").open("w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -201,6 +210,93 @@ def save_installed(lock: IO[str], before: frozenset[str], root: Path) -> None:
             Path(lock.name).with_name(INSTALLED_FILE).write_text(
                 json.dumps({key: lock_stamp(root, key) for key in sorted(after)})
             )
+
+
+def clean_tree(root: Path) -> tuple[str, bool] | None:
+    """The commit that HEAD names and whether Git sees no change, submodules included."""
+    status = subprocess.run(
+        [
+            "git",
+            "--no-optional-locks",
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "--no-ahead-behind",
+            "--ignore-submodules=none",
+            "--untracked-files=normal",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    lines = status.stdout.splitlines()
+    heads = [line.split()[2] for line in lines if line.startswith("# branch.oid ")]
+    if status.returncode or len(heads) != 1 or not heads[0].isalnum():
+        return None
+    return heads[0], all(line.startswith("# ") for line in lines)
+
+
+def clean_start(
+    lock: IO[str], root: Path, base: str | None, plan_stage: str | None, partial: bool
+) -> tuple[str, str, float] | None:
+    """Remove the old pass record; give the start of a full check that may write a new one; a partial check or one in CI does no record work."""
+    import time
+
+    if (
+        base is None
+        or partial
+        or os.environ.get("CI")
+        or plan_stage not in (None, "Complete")
+    ):
+        return None
+    with suppress(OSError):
+        Path(lock.name).with_name(PASSED_FILE).unlink()
+    commit = subprocess.run(
+        ["git", "rev-parse", "--verify", "-q", base + "^{commit}"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    state = clean_tree(root)
+    if commit.returncode or state is None or not state[1]:
+        return None
+    return state[0], commit.stdout.strip(), time.time()
+
+
+def record_pass(
+    lock: IO[str], root: Path, start: tuple[str, str, float] | None, failed: bool
+) -> None:
+    """A full check that passed on a clean tree and left it clean is a pass of its commit and base."""
+    if start is None or failed or clean_tree(root) != (start[0], True):
+        return
+    record = Path(lock.name).with_name(PASSED_FILE)
+    with suppress(OSError):
+        temporary = record.with_name(f"{PASSED_FILE}.tmp")
+        temporary.write_text(
+            json.dumps({"head": start[0], "base": start[1], "time": start[2]})
+        )
+        temporary.replace(record)
+
+
+def passed_minutes(root: Path, revision: str, base: str) -> int | None:
+    """Minutes since a full check passed on this commit and base; any doubt is None."""
+    import time
+
+    try:
+        saved = json.loads(state_path(root, PASSED_FILE).read_text())
+        age = time.time() - saved["time"]
+        if (
+            saved["head"] == revision
+            and saved["base"] == base
+            and not isinstance(saved["time"], bool)
+            and 0 <= age <= PASSED_SECONDS
+        ):
+            return int(age // 60)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        pass
+    return None
 
 
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:

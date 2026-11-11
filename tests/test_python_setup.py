@@ -203,6 +203,45 @@ def test_a_python_parent_leaves_out_child_groups_that_have_the_same_gate(
     assert leave_out_children(tmp_path, ["ruff"], parent, other) == ["ruff"]
 
 
+def docs_project(
+    root: Path, config: str | None, sources: list[str]
+) -> tuple[Group, Gate]:
+    (root / "docs").mkdir()
+    if config:
+        (root / "docs" / config).parent.mkdir(exist_ok=True)
+        (root / "docs" / config).write_text("project = 'fixture'\n")
+    gate: Gate = {"name": "deptry", "role": "dependencies", "command": ["deptry", "."]}
+    group: Group = {
+        "path": ".",
+        "language": "python",
+        "sources": sources,
+        "checks": [gate],
+    }
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [group], "shared": []})
+    )
+    return group, gate
+
+
+@pytest.mark.parametrize(
+    ("config", "sources", "left_out"),
+    [
+        ("conf.py", ["src/mylib"], True),
+        ("source/conf.py", ["src/mylib"], True),
+        (None, ["src/mylib"], False),
+        ("conf.py", ["docs"], False),
+    ],
+)
+def test_the_dependency_gate_leaves_out_a_sphinx_docs_folder_that_is_no_source(
+    tmp_path: Path, config: str | None, sources: list[str], left_out: bool
+) -> None:
+    group, gate = docs_project(tmp_path, config, sources)
+    expected = ["deptry", "."] + (
+        ["--extend-exclude", "^docs(/|$)"] if left_out else []
+    )
+    assert leave_out_children(tmp_path, ["deptry", "."], group, gate) == expected
+
+
 def pyrefly_package(root: Path, files: dict[str, str]) -> Path:
     directory = root / "tools/cli"
     directory.mkdir(parents=True)

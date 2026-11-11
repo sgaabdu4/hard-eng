@@ -262,3 +262,197 @@ def test_author_only_review_block_reads_the_open_pull_request(
         assert problem is None
     else:
         assert problem is not None and message in problem
+
+
+_RULES_URL = "https://github.com/acme/widget/settings/rules"
+_NO_RULE: JsonValue = {"branchProtectionRule": None, "rules": EMPTY}
+_UNREADABLE = (
+    "Not checked: whether main requires build (the base branch rules are "
+    "unreadable or incomplete)."
+)
+
+
+def update_rule(*contexts: str, rules: JsonValue = EMPTY) -> JsonValue:
+    seen: JsonValue = {"requiredStatusCheckContexts": list(contexts)}
+    return {"branchProtectionRule": None, "refUpdateRule": seen, "rules": rules}
+
+
+def rules_answer(base: JsonValue, admin: bool = True) -> JsonValue:
+    pull: JsonValue = {"baseRef": base}
+    repository: JsonValue = {"viewerCanAdminister": admin, "pullRequest": pull}
+    return {"data": {"repository": repository}}
+
+
+def _rule_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answer: JsonValue
+) -> tuple[str | None, FakeGitHub]:
+    fixture, fake = _ready_fixture(tmp_path, monkeypatch)
+    fake.rules = answer
+    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    return shipment.rule_note, fake
+
+
+@pytest.mark.parametrize(
+    "base",
+    [_NO_RULE, protection(requiredStatusCheckContexts=[]), required_rule("lint")],
+)
+def test_ship_ready_warns_when_the_base_branch_does_not_require_a_shipping_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, base: JsonValue
+) -> None:
+    note, _ = _rule_note(tmp_path, monkeypatch, rules_answer(base))
+    assert note == (
+        "Warning: main does not require build, so a PR can merge while that check "
+        f"is missing or failed. A repository admin adds it at {_RULES_URL} "
+        "(branch ruleset for main, Require status checks to pass, add build)."
+    )
+
+
+@pytest.mark.parametrize(
+    ("base", "admin"),
+    [
+        (protection(requiredStatusCheckContexts=["build"]), True),
+        (required_rule("build"), True),
+        (required_rule("build"), False),
+    ],
+)
+def test_ship_ready_is_silent_when_protection_or_a_ruleset_requires_the_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, base: JsonValue, admin: bool
+) -> None:
+    note, _ = _rule_note(tmp_path, monkeypatch, rules_answer(base, admin))
+    assert note is None
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        (
+            rules_answer(_NO_RULE, admin=False),
+            _UNREADABLE,
+        ),
+        (
+            rules_answer(
+                {"branchProtectionRule": None, "rules": {"totalCount": 2, "nodes": []}}
+            ),
+            (
+                "Not checked: whether main requires build (the base branch rules "
+                "are unreadable or incomplete)."
+            ),
+        ),
+        (
+            rules_answer(None),
+            (
+                "Not checked: whether main requires build (the base branch rules "
+                "are unreadable or incomplete)."
+            ),
+        ),
+        (
+            {"errors": [{"message": "denied"}]},
+            "Not checked: whether main requires build (review data must be an object).",
+        ),
+    ],
+)
+def test_ship_ready_says_not_checked_for_a_non_admin_or_incomplete_rules(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    answer: JsonValue,
+    expected: str,
+) -> None:
+    note, _ = _rule_note(tmp_path, monkeypatch, answer)
+    assert note == expected
+
+
+def test_ship_ready_adds_exactly_one_branch_rule_query(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, fake = _rule_note(tmp_path, monkeypatch, rules_answer(required_rule("build")))
+    queries = [call[-1] for call in fake.calls if call[1] == "graphql"]
+    assert len(queries) == 2
+    assert sum("viewerCanAdminister" in query for query in queries) == 1
+
+
+def _refused_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, base: JsonValue
+) -> tuple[str, FakeGitHub]:
+    fixture = _fixture(tmp_path)
+    queued = _check(fixture.head, status="queued", conclusion=None, completed_at=None)
+    fake = FakeGitHub(_pull(fixture), [queued])
+    fake.rules = rules_answer(base)
+    _patch_gh(monkeypatch, fake)
+    with pytest.raises(shipping.PendingCheck) as refused:
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    return str(refused.value), fake
+
+
+def test_a_refused_ready_run_shows_the_branch_rule_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    message, fake = _refused_run(tmp_path, monkeypatch, _NO_RULE)
+    refusal, _, warning = message.partition("\n")
+    assert refusal == "required check has not completed: build"
+    assert warning.startswith("Warning: main does not require build, so")
+    queries = [call[-1] for call in fake.calls if call[1] == "graphql"]
+    assert sum("viewerCanAdminister" in query for query in queries) == 1
+
+
+def test_a_refused_ready_run_shows_only_the_refusal_when_the_base_requires_the_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    message, _ = _refused_run(tmp_path, monkeypatch, required_rule("build"))
+    assert message == "required check has not completed: build"
+
+
+_ASK = (
+    "Warning: main does not require build, so a PR can merge while that check is "
+    f"missing or failed. Ask a repository admin to add it at {_RULES_URL} "
+    "(branch ruleset for main, Require status checks to pass, add build)."
+)
+
+
+@pytest.mark.parametrize(
+    ("base", "expected"),
+    [
+        (update_rule("build"), None),
+        (update_rule("lint"), _ASK),
+        (update_rule(), _ASK),
+        (_NO_RULE, _UNREADABLE),
+        (update_rule(rules={"totalCount": 2, "nodes": []}), _UNREADABLE),
+        (None, _UNREADABLE),
+    ],
+)
+def test_ship_ready_decides_for_a_non_admin_from_the_rules_it_can_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    base: JsonValue,
+    expected: str | None,
+) -> None:
+    note, _ = _rule_note(tmp_path, monkeypatch, rules_answer(base, admin=False))
+    assert note == expected
+
+
+@pytest.mark.parametrize(
+    ("base", "expected"),
+    [
+        (
+            {"branchProtectionRule": None, "rules": nodes({"type": "WORKFLOWS"})},
+            (
+                "Not checked: whether main requires build "
+                "(a required workflow rule may enforce it)."
+            ),
+        ),
+        (
+            {
+                "branchProtectionRule": {"requiredStatusCheckContexts": ["build"]},
+                "rules": nodes({"type": "WORKFLOWS"}),
+            },
+            None,
+        ),
+    ],
+)
+def test_ship_ready_does_not_warn_when_a_required_workflow_rule_may_enforce_the_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    base: JsonValue,
+    expected: str | None,
+) -> None:
+    note, _ = _rule_note(tmp_path, monkeypatch, rules_answer(base))
+    assert note == expected

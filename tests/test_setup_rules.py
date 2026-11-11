@@ -13,6 +13,27 @@ from project_setup import (
 )
 
 
+def ignored_lock_package(
+    tmp_path: Path, language: str, manifest: str, text: str, lock: str, on_disk: bool
+) -> tuple[Path, GateConfig]:
+    root = tmp_path / "project"
+    init(root)
+    package = root / "app"
+    package.mkdir()
+    (package / manifest).write_text(text)
+    if on_disk:
+        (root / "app" / lock).write_text("# lock\n")
+    (root / ".gitignore").write_text(f"{lock}\n")
+    commit(root, "start")
+    config: GateConfig = {
+        "shared": [],
+        "packages": [
+            {"path": "app", "language": language, "sources": ["lib"], "checks": []}
+        ],
+    }
+    return root, config
+
+
 @pytest.mark.parametrize(
     ("language", "manifest", "text", "lock"),
     [
@@ -24,20 +45,7 @@ from project_setup import (
 def test_an_ignored_lock_file_is_refused(
     tmp_path: Path, language: str, manifest: str, text: str, lock: str
 ) -> None:
-    root = tmp_path / "project"
-    init(root)
-    package = root / "app"
-    package.mkdir()
-    (package / manifest).write_text(text)
-    (package / lock).write_text("# lock\n")
-    (root / ".gitignore").write_text(f"{lock}\n")
-    commit(root, "start")
-    config: GateConfig = {
-        "shared": [],
-        "packages": [
-            {"path": "app", "language": language, "sources": ["lib"], "checks": []}
-        ],
-    }
+    root, config = ignored_lock_package(tmp_path, language, manifest, text, lock, True)
     with pytest.raises(ValueError, match=rf"app/{lock} is ignored by Git") as refused:
         adapt_packages(root, config)
     assert ".gitignore" in str(refused.value)
@@ -275,3 +283,109 @@ def test_check_refuses_a_lockfile_that_git_ignores(tmp_path: Path) -> None:
     assert "git check-ignore -v uv.lock" in str(refused.value)
     (root / ".gitignore").write_text("")
     assert gate_config.load_groups(root)
+
+
+def lock_rule_project(tmp_path: Path, caller: str, kind: str, tracked: bool) -> Path:
+    root = tmp_path / "project"
+    init(root)
+    configure(
+        root,
+        [
+            gate(
+                "lockfile", "pass", role="lockfiles", command=["uv", "sync", "--locked"]
+            )
+        ],
+    )
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        (root / name).write_text((SOURCE / name).read_text())
+    if caller == "setup":
+        (root / "pyproject.toml").write_text('[project]\nname = "app"\n')
+    (root / "shared").mkdir()
+    (root / "shared/uv.lock").write_text("# lock\n")
+    if not tracked:
+        (root / ".gitignore").write_text("/uv.lock\n")
+    if kind == "link":
+        (root / "uv.lock").symlink_to("shared/uv.lock")
+    else:
+        (root / "uv.lock").write_text("# lock\n")
+    commit(root, "start")
+    return root
+
+
+def run_lock_rule(root: Path, caller: str) -> None:
+    if caller == "load":
+        gate_config.load_groups(root)
+        return
+    config: GateConfig = {
+        "shared": [],
+        "packages": [
+            {"path": ".", "language": "python", "sources": ["lib"], "checks": []}
+        ],
+    }
+    adapt_packages(root, config)
+
+
+@pytest.mark.parametrize("caller", ["setup", "load"])
+def test_a_tracked_lockfile_link_passes_setup_and_the_config_load(
+    tmp_path: Path, caller: str
+) -> None:
+    root = lock_rule_project(tmp_path, caller, "link", tracked=True)
+    assert (root / "uv.lock").is_symlink()
+    run_lock_rule(root, caller)
+
+
+@pytest.mark.parametrize("caller", ["setup", "load"])
+@pytest.mark.parametrize(
+    ("kind", "tracked"),
+    [("file", True), ("file", False), ("link", True), ("link", False)],
+)
+def test_the_lockfile_rule_follows_git_for_files_and_links(
+    tmp_path: Path, caller: str, kind: str, tracked: bool
+) -> None:
+    root = lock_rule_project(tmp_path, caller, kind, tracked)
+    if tracked:
+        run_lock_rule(root, caller)
+        return
+    with pytest.raises(ValueError, match=r"uv.lock is ignored by Git"):
+        run_lock_rule(root, caller)
+
+
+def test_an_ignored_lockfile_link_on_disk_is_refused_without_the_install_step(
+    tmp_path: Path,
+) -> None:
+    root = lock_rule_project(tmp_path, "setup", "link", tracked=False)
+    with pytest.raises(ValueError, match=r"uv.lock is ignored by Git") as refused:
+        run_lock_rule(root, "setup")
+    message = str(refused.value)
+    assert "remove that rule, then commit uv.lock" in message
+    assert "run the project's install" not in message
+
+
+@pytest.mark.parametrize(
+    ("language", "manifest", "text", "lock"),
+    [
+        (
+            "javascript",
+            "package.json",
+            '{"name": "app", "dependencies": {"left-pad": "1.3.0"}}\n',
+            "bun.lock",
+        ),
+        (
+            "python",
+            "pyproject.toml",
+            '[project]\nname = "app"\ndependencies = ["requests"]\n',
+            "uv.lock",
+        ),
+    ],
+)
+def test_a_missing_lockfile_that_git_ignores_names_the_rule_to_remove_the_first_time(
+    tmp_path: Path, language: str, manifest: str, text: str, lock: str
+) -> None:
+    root, config = ignored_lock_package(tmp_path, language, manifest, text, lock, False)
+    with pytest.raises(ValueError, match=rf"app/{lock} is ignored by Git") as refused:
+        adapt_packages(root, config)
+    assert "remove that rule" in str(refused.value)
+    (root / ".gitignore").write_text("")
+    (root / "app" / lock).write_text("# lock\n")
+    commit(root, "track the lock file")
+    adapt_packages(root, config)

@@ -81,7 +81,7 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
 def leave_out_children(
     root: Path, command: list[str], group: Group, gate: Gate
 ) -> list[str]:
-    """Keep a Python parent's test and dependency commands out of the folders of its child groups."""
+    """Keep a Python parent's test and dependency commands out of the folders of its child groups, and the dependency gate out of a Sphinx docs folder."""
     role = gate.get("role")
     if group.get("language") != "python" or role not in {"tests", "dependencies"}:
         return command
@@ -93,11 +93,17 @@ def leave_out_children(
         for child in child_groups(group, role, list(configured_packages(root).values()))
     ]
     if role == "dependencies":
+        sphinx = any(
+            (root / below / f"docs/{place}conf.py").is_file()
+            for place in ("", "source/")
+        ) and not any(
+            Path(source).parts[:1] == ("docs",) for source in group.get("sources", [])
+        )
         return [
             *command,
             *(
                 argument
-                for child in children
+                for child in [*children, *([Path("docs")] if sphinx else [])]
                 for argument in ("--extend-exclude", f"^{re.escape(str(child))}(/|$)")
             ),
         ]
@@ -508,4 +514,39 @@ def locks_nothing(directory: Path) -> bool:
     return all(
         not {"registry", "git", "url"} & set(package.get("source", {}))
         for package in packages
+    )
+
+
+def osv_identity(package: Mapping[str, object], lockfile: object) -> None:
+    """Pass a local uv package that has no version; refuse any other package without identity."""
+    name = package.get("name")
+    if not (isinstance(name, str) and name):
+        raise ValueError(
+            f"OSV report lists a package with no name, from {lockfile}. Run the scan again."
+        )
+    path = Path(str(lockfile))
+    if package.get("version") == "" and package.get("ecosystem") == "PyPI":
+        if path.name == "uv.lock" and path.is_file():
+            wanted = name.lower().replace("_", "-").replace(".", "-")
+            entries = tomllib.loads(path.read_text()).get("package", [])
+            if any(
+                entry.get("name", "").lower().replace("_", "-").replace(".", "-")
+                == wanted
+                and {"editable", "virtual", "directory"} & set(entry.get("source", {}))
+                for entry in entries
+            ):
+                return
+        if path.name == "uv.lock":
+            raise ValueError(
+                f"OSV report lists {name} with no version, from {lockfile}. "
+                "Only a local uv package may have none. Run `uv lock`, then run the scan again."
+            )
+    if not (isinstance(package.get("ecosystem"), str) and package["ecosystem"]):
+        raise ValueError(
+            f"OSV report lists {name} with no ecosystem, from {lockfile}. Run the scan again."
+        )
+    raise ValueError(
+        f"OSV report lists {name} with no version, from {lockfile}. "
+        "Update the lockfile with its package manager so that it holds a version, "
+        "then run the scan again."
     )

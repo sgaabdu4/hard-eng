@@ -15,6 +15,10 @@ from project_setup import (
 )
 from reports import completed_tests, lcov_coverage, line_coverage
 
+FLUTTER_PUBSPEC = (
+    "name: app\ndependencies:\n  flutter:\n    sdk: flutter\ndev_dependencies:\n"
+)
+
 
 def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
     sources = {
@@ -282,6 +286,7 @@ def test_flutter_dart_outside_lib_is_measured_on_the_dart_vm(tmp_path: Path) -> 
     """Flutter's LCOV keeps only package: URIs, so scripts/ needs dart test's."""
     for directory in ("lib", "scripts", "test/scripts", "coverage/vm", "bin"):
         (tmp_path / directory).mkdir(parents=True)
+    (tmp_path / "pubspec.yaml").write_text(FLUTTER_PUBSPEC)
     (tmp_path / "lib/app.dart").write_text("int one() => 1;\n")
     script = tmp_path / "scripts/check.dart"
     script.write_text("int two() => 2;\n")
@@ -339,11 +344,34 @@ def test_flutter_dart_outside_lib_is_measured_on_the_dart_vm(tmp_path: Path) -> 
     assert "relative" not in result.stderr
     with pytest.raises(
         ValueError,
-        match="omits production files: scripts/check.dart.*import it by a relative path",
-    ):
+        match="omits production files: scripts/check.dart.*move it under lib/",
+    ) as omitted:
         line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected)
+    assert "relative path" not in str(omitted.value)
     script.write_text("export '../lib/app.dart';\n")
     assert line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected) == (1, 1)
+
+
+@pytest.mark.parametrize(
+    ("pubspec", "both_ways"),
+    [
+        (FLUTTER_PUBSPEC, False),
+        (FLUTTER_PUBSPEC + "  test: ^1.25.0\n", True),
+        ("name: tool\n", True),
+    ],
+)
+def test_a_flutter_project_is_not_told_to_use_package_test(
+    tmp_path: Path, pubspec: str, both_ways: bool
+) -> None:
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts/check.dart").write_text("int two() => 2;\n")
+    coverage = tmp_path / "lcov.info"
+    coverage.write_text("SF:lib/app.dart\nDA:1,1\nend_of_record\n")
+    (tmp_path / "pubspec.yaml").write_text(pubspec)
+    expected = {(tmp_path / "scripts/check.dart").resolve()}
+    with pytest.raises(ValueError, match="move it under lib/") as omitted:
+        line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected)
+    assert ("package:test/test.dart" in str(omitted.value)) is both_ways
 
 
 def test_update_regenerates_an_installed_dart_vm_coverage_command() -> None:

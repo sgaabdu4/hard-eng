@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 import change_size
 import pytest
+import source_trees
 import update
 from conftest import git
 from test_updates import select_release
@@ -76,3 +77,16 @@ def test_different_revisions_are_not_merged(
     assert fetch.call_count == 2
     assert first[0] != second[0]
     assert git(second[0], "rev-parse", "HEAD") == previous
+
+
+def test_a_failed_fetch_is_tried_once_per_run() -> None:
+    source_trees.forget_all()
+    fetch = Mock(side_effect=ValueError("clone refused"))
+    for _ in range(3):
+        with pytest.raises(ValueError, match="clone refused"):
+            source_trees.shared("repository", "a" * 40, "b" * 40, fetch)
+    assert fetch.call_count == 1
+    source_trees.forget_all()
+    with pytest.raises(ValueError, match="clone refused"):
+        source_trees.shared("repository", "a" * 40, "b" * 40, fetch)
+    assert fetch.call_count == 2
