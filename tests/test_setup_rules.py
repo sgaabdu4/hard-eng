@@ -50,4 +50,6 @@ def test_the_exclusion_refusal_names_the_file_and_the_entry(tmp_path: Path) -> N
     assert str(tmp_path / "analysis_options.yaml") in message
     assert "'lib/**', 'test/**'" in message
     assert "g.dart" not in message
+    with pytest.raises(TypeError, match="must be a list of patterns"):
+        validate_dart_exclusions(tmp_path, "**/*.g.dart")
     validate_dart_exclusions(tmp_path, ["**/*.g.dart"])

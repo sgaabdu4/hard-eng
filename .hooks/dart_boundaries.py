@@ -78,5 +78,5 @@ def validate_dart_boundaries(
             if not has_dart_file(directory, prefix):
                 raise ValueError(
                     f"{directory.name}: the boundary prefix {prefix} in {settings_file} "
-                    "matches no .dart file; fix the folder name or remove the rule"
+                    "matches no .dart file; correct the prefix or remove the rule"
                 )

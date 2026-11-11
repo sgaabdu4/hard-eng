@@ -971,8 +971,9 @@ def test_a_draft_plan_with_code_edits_names_the_ready_step(
         ValueError, match="plan is Draft; this check requires Complete"
     ) as error:
         validate_plans(repository)
-    assert "get approval for the plan, set its Status to Ready, then build" in str(
-        error.value
+    assert (
+        "get approval for the plan and set its Status to Ready before you build"
+        in str(error.value)
     )
     with pytest.raises(ValueError, match="requires Ready") as explicit:
         validate_plans(repository, stage="Ready")

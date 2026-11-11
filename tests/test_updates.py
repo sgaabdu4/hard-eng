@@ -973,7 +973,7 @@ def test_a_conflicting_local_edit_shows_both_texts_and_the_step(
     message = str(refused.value)
     assert "line 10 with my wording" in message
     assert "line 10 as the update words it" in message
-    assert "put the update's lines in place of the local lines" in message
+    assert "In skill.md, put the update's lines in place of those local" in message
     target.write_text(content)
     assert merge_local_edits("skill.md", target, old, content) == content
     target.write_text(content + "my own addition\n")

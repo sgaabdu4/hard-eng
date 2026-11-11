@@ -306,7 +306,7 @@ def check_coverage(path: Path, kind: str, directory: Path, expected: set[Path]) 
     )
     if covered * 100 < total * 70:
         raise ValueError(
-            "HE-COVERAGE-MIN: Line coverage is below 70%. Most uncovered lines: "
+            "HE-COVERAGE-MIN: Line coverage is below 70%. Files with the most uncovered lines: "
             + most_uncovered(files, directory)
         )
 

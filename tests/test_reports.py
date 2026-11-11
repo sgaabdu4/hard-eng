@@ -668,7 +668,8 @@ def test_a_coverage_failure_names_the_least_covered_files(
     assert "Line coverage: 6/27 (22.22%; minimum 70%)\n" in capsys.readouterr().out
     named = [f"f{n}{suffix} {n + 1} of {n + 2} uncovered" for n in (5, 4, 3, 2, 1)]
     assert str(error.value).endswith(
-        "Line coverage is below 70%. Most uncovered lines: " + ", ".join(named)
+        "Line coverage is below 70%. Files with the most uncovered lines: "
+        + ", ".join(named)
     )
 
 

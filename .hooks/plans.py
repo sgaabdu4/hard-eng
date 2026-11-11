@@ -57,7 +57,7 @@ SECTIONS = (
     "Verification",
 )
 STAGES = ("Draft", "Ready", "Complete")
-DRAFT_STEP = "; files outside the plan changed, so get approval for the plan, set its Status to Ready, then build"
+DRAFT_STEP = "; files other than plans changed, so get approval for the plan and set its Status to Ready before you build. During the build, run this check with --plan-stage Ready"
 HANDOFFS = ("Clarification", "Approval")
 PLACEHOLDERS = re.compile(
     r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"

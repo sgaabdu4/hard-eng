@@ -82,7 +82,7 @@ def test_a_new_finding_beyond_the_debt_prints_its_real_line(
     extra = old.splitlines(keepends=True)[0]
     assert debt.judge(tmp_path, group, lint, True, old + extra) is True
     printed = capsys.readouterr().out.splitlines()
-    assert printed[1] == "  1 of the next 26 lines are new; the others are recorded:"
+    assert printed[1] == "  1 of these 26 lines are new; the others are recorded:"
     assert len(printed) == 2 + 20 + 1
     assert printed[-1] == "  6 more lines not shown"
     two = price + f"{tmp_path}/app/cart.tsx:3:1 lint/style/useConst\n"
@@ -92,7 +92,7 @@ def test_a_new_finding_beyond_the_debt_prints_its_real_line(
         "  ./app/price-list.tsx:41:9 lint/style/useConst",
         "  ./app/cart.tsx:3:1 lint/style/useConst",
     ]
-    assert mixed[3] == "  1 of the next 26 lines are new; the others are recorded:"
+    assert mixed[3] == "  1 of these 26 lines are new; the others are recorded:"
     assert mixed[-1] == "  8 more lines not shown"
 
 
@@ -111,13 +111,14 @@ def test_adopt_says_how_many_new_findings_it_left_out(
     lint: Gate = {"name": "lint", "role": "lint", "command": ["ruff"]}
     group: Group = {"path": ".", "checks": [lint]}
     assert debt.record(tmp_path, [group], {"./lint"}, {"./lint": "a.py:1 x\n"}) == 0
-    assert "Left out" not in capsys.readouterr().out
+    assert "Did not record" not in capsys.readouterr().out
     more = {"./lint": "a.py:1 x\nb.py:1 y\nc.py:1 z\n"}
     assert debt.record(tmp_path, [group], {"./lint"}, more) == 0
     said = capsys.readouterr().out
     assert "Recorded 1 checks with old findings in hard-eng.debt.json" in said
     assert (
-        "Left out 2 new findings in ./lint; check fails until they are fixed." in said
+        "Did not record 2 new findings in ./lint; `check` fails until they are fixed."
+        in said
     )
 
 

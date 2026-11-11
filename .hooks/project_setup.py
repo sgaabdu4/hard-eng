@@ -86,17 +86,18 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
         for root in FLUTTER_PLATFORM_ROOTS
         if flutter and (directory / root).is_dir()
     )
-    entries = values if isinstance(values, list) else [values]
+    options = directory / "analysis_options.yaml"
+    if not isinstance(values, list):
+        raise TypeError(f"exclude in {options} must be a list of patterns")
     refused = [
         value
-        for value in entries
+        for value in values
         if not isinstance(value, str) or value not in allowed | native
     ]
-    if refused or not isinstance(values, list):
+    if refused:
         raise ValueError(
             "Dart strict analysis cannot exclude project files: remove "
-            f"{', '.join(repr(value) for value in refused or entries)} from exclude in "
-            f"{directory / 'analysis_options.yaml'}"
+            f"{', '.join(repr(value) for value in refused)} from exclude in {options}"
         )
     roots = {pattern.split("/", 1)[0] for pattern in set(values) & native}
     matches = {
@@ -445,8 +446,9 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
         if lockfile.is_file() and lockfile not in tracked:
             relative = lockfile.relative_to(root)
             raise ValueError(
-                f"{relative} is ignored by Git, so a fresh clone fails without "
-                f"it. Remove its entry from .gitignore, then commit {relative}"
+                f"{relative} is ignored by Git, so the install fails in a fresh clone. "
+                f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
+                f"remove that rule, then commit {relative}"
             )
         adapt_boundaries(package, typescript)
         for gate in package["checks"]:

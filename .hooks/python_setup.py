@@ -231,10 +231,11 @@ def import_contract_gap(directory: Path, package: Group) -> str | None:
             + "".join(f"\n    {value}" for value in ancestors)
             + "\ndepth = 0\n"
         )
+    table = "tool.importlinter" if kind == "toml" else "importlinter"
     return (
-        f"{owner.name} has no import contract for {', '.join(missing)}, so an import "
-        f"cycle in it passes; in {Path(package['path'], owner.name)} set {edit} "
-        f"and add this contract:\n{block}"
+        f"{owner.name} has no import contract for {', '.join(missing)}, so the imports "
+        f"gate cannot find an import cycle there. In {Path(package['path'], owner.name)}, "
+        f"under [{table}], set this:\n{edit}\nThen add this contract:\n{block}"
     )
 
 
