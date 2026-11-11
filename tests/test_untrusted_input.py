@@ -326,8 +326,10 @@ def test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings(
     biome_ignores_hooks(tmp_path, changes)
     assert changes == {}
     assert capsys.readouterr().err == (
-        'biome.json: add "!.hooks" as the last entry of files.includes, '
-        "so that your own Biome runs leave the Hard Eng files\n"
+        "biome.json: it extends another configuration, and a local files.includes "
+        "list replaces the inherited one. Copy the inherited list into "
+        'files.includes (use "**" when there is none) and add "!.hooks" as its '
+        "last entry, so that your own Biome runs leave the Hard Eng files\n"
     )
 
 
