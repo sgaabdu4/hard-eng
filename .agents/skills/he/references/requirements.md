@@ -93,3 +93,9 @@ Proof: check
 Add a file, dependency, abstraction, configuration or stored state only for a current agreed requirement that existing code or a direct command cannot meet.
 
 Proof: guidance
+
+## HE-PR-COMMITS
+
+A PR holds at most 100 commits; GitHub can refuse to rebase a longer one. `ship` refuses a PR above the cap, and a full `check` warns from 80. Above the cap, ship the finished part in its own PR and continue on a new branch. Or join neighbour commits in a task-branch rebase; an empty `git diff <old head> <new head>` is the proof. The Hard Eng update PR and a PR into another base are exempt.
+
+Proof: check
