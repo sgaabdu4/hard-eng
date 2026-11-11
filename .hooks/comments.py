@@ -632,8 +632,10 @@ def validate_suppressions(root: Path, base: str | None) -> None:
         found.append(
             f"tests lose {len(lost) - gained} assertion lines net "
             f"({len(lost)} removed, {gained} added); removed at {', '.join(lost)}. "
-            "To remove an unneeded test, add `Removed test: <path> :: <test name> :: "
-            "<what still proves it or why it is unneeded>` to the plan"
+            "To remove a whole test, add `Removed test: <path> :: <test name> :: "
+            "<what still proves it or why it is unneeded>` to the plan; the test name "
+            "is the function name alone. An assertion removed from a test that stays "
+            "must stay or get an equal check"
         )
     if found:
         raise ValueError(
