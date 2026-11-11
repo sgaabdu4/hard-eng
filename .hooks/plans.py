@@ -334,7 +334,6 @@ def _draft_errors(content: str) -> tuple[list[str], bool]:
 
 
 def _held_by_base(root: Path, path: Path) -> bool:
-    """Whether the branch left this plan as the base holds it."""
     from change_size import released_plans
 
     return str(path.relative_to(root)) not in released_plans(root, None)
