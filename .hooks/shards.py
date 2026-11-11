@@ -1,9 +1,15 @@
 """Split a pytest tests gate over CI shards; only a shard run or a full check loads this."""
 
+import re
+import subprocess
 from collections.abc import Callable
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from gate_config import Gate, Group
+from process_group import run_in_group
+
+COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
+KEPT = "coverage/shards"
 
 
 def split(sizes: dict[str, int], count: int) -> list[list[str]]:
@@ -70,3 +76,73 @@ def shard_groups(groups: list[Group], shard: str) -> list[Group]:
         return gate if above and gate.get("role") == "lockfiles" else None
 
     return pick(groups, keep)
+
+
+def shard_folder(root: Path, part: str, group: Group) -> Path:
+    return root / KEPT / part / group["path"]
+
+
+def runner_arguments(command: list[str]) -> list[str]:
+    return command[len(command) - command[::-1].index("pytest") :]
+
+
+def collected(
+    root: Path, group: Group, gate: Gate, command: list[str], timeout: float
+) -> tuple[Path, dict[str, int]]:
+    """The folder pytest reports from and the size of each file the gate command collects."""
+    parallel = any(
+        argument.startswith(("-n", "--numprocesses"))
+        for argument in runner_arguments(command)
+    )
+    listing = [*command, "--collect-only", "-qq", *(["-n", "0"] if parallel else [])]
+    result = run_in_group(
+        listing,
+        cwd=root / group["path"],
+        timeout=timeout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    names = COLLECTED_FILE.findall(result.stdout)
+    bases = [
+        base
+        for base in (root / group["path"], *(root / group["path"]).parents)
+        if all((base / name).is_file() for name in names)
+    ]
+    if result.returncode not in (0, 5) or not bases:
+        raise ValueError(
+            f"{group['path']}/{gate['name']}: pytest could not list the tests of this "
+            "shard, so the shard did not start. Run the tests command with "
+            "--collect-only -qq to see the cause.\n" + result.stdout
+        )
+    return bases[0], {name: (bases[0] / name).stat().st_size for name in names}
+
+
+def part_command(
+    root: Path,
+    group: Group,
+    gate: Gate,
+    command: list[str],
+    coverage: Path | None,
+    timeout: float,
+) -> tuple[list[str], Path | None]:
+    """The command of one shard: the gate command and the files of that shard."""
+    base, sizes = collected(root, group, gate, command, timeout)
+    names = split(sizes, gate["shards"])[int(gate["part"]) - 1]
+    folder = shard_folder(root, gate["part"], group)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "shard-files.txt").write_text("".join(f"{name}\n" for name in names))
+    for name in (gate["report"]["tests"], gate["report"]["coverage"]):
+        (root / group["path"] / name).unlink(missing_ok=True)
+    return ([*command, *(str(base / name) for name in names)] if names else []), None
+
+
+def keep_reports(root: Path, group: Group, gate: Gate) -> None:
+    """Move the reports of a numbered shard beside its file list, away from the normal paths."""
+    if not gate["part"].isdecimal():
+        return
+    folder = shard_folder(root, gate["part"], group)
+    for name in (gate["report"]["tests"], gate["report"]["coverage"]):
+        source = root / group["path"] / name
+        if source.is_file():
+            (folder / name).parent.mkdir(parents=True, exist_ok=True)
+            source.replace(folder / name)

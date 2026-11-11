@@ -324,6 +324,8 @@ def run_gate(
     from process_group import install_key, note_install
 
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
+    if part := gate.get("part"):
+        key += "@shard" if part.isdecimal() else "@merge"
     started = time.monotonic()
     limit = gate_limit(ROOT, key, timeout)
     name = f"{group['path']}/{gate['name']}"
@@ -354,6 +356,8 @@ def run_projects(
     stderr: IO[str],
 ) -> subprocess.CompletedProcess[bytes]:
     """Run the gate once, or a TypeScript types gate once per referenced config."""
+    if not command:
+        return subprocess.CompletedProcess(command, 0)
     from gitleaks_scan import run_gate_command
 
     projects: list[list[str]] = [[]]
@@ -392,6 +396,28 @@ def gate_scanner(group: Group, gate: Gate, scanner: str | None) -> str | None:
         ("dart", "dead-code-duplicates"): "dart-decimate",
         ("javascript", "dead-code-duplicates"): "fallow",
     }.get((group.get("language", ""), gate.get("role", "")), scanner)
+
+
+def shard_command(
+    group: Group,
+    gate: Gate,
+    command: list[str],
+    coverage: Path | None,
+    timeout: float,
+) -> tuple[list[str], Path | None]:
+    """A shard gate runs its own files and skips the coverage minimum; others pass through."""
+    if not gate.get("part"):
+        return command, coverage
+    from shards import part_command
+
+    return part_command(ROOT, group, gate, command, coverage, timeout)
+
+
+def shard_reports(group: Group, gate: Gate) -> None:
+    if gate.get("part"):
+        from shards import keep_reports
+
+        keep_reports(ROOT, group, gate)
 
 
 def run_limited_gate(
@@ -439,6 +465,9 @@ def run_limited_gate(
         command, coverage_path = related_command(
             command, coverage_path, gate, groups or [group], directory, related_base
         )
+        command, coverage_path = shard_command(
+            group, gate, command, coverage_path, timeout
+        )
         capture = (tests and kind == "dart-tests" and report.get("stdout", True)) or (
             scanner and report.get("stdout") is True
         )
@@ -468,6 +497,7 @@ def run_limited_gate(
                     sys.stdout.write(remember(group, gate, log.read()))
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
+        shard_reports(group, gate)
         if scanner and report_path is not None:
             report_args = (gate, report_path, command, directory, timeout)
             scanner_result(result.returncode == 0, scanner, *report_args)
