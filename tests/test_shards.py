@@ -507,6 +507,21 @@ def test_the_gate_job_fails_skipped_plan_acceptance_tests(
     assert "skipped: test_value" in capsys.readouterr().out
 
 
+def test_the_gate_job_without_a_shard_proof_still_needs_each_report(
+    runner: ModuleType,
+    merge_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reports = (junit_text("one"), cov_json({1, 2, 3, 4, 5, 6, 7, 8}))
+    keep_shard(merge_project, 1, ".", ["a"], reports)
+    (merge_project / "coverage/shards/1/ran.txt").write_text("ok\n")
+    configure(merge_project, [])
+    monkeypatch.setattr(gate_config, "load_groups", serve(merge_group(".", 2)))
+    assert runner.check(base="0" * 40, plan_stage="Complete", shard="merge") == 1
+    assert "Shard 2 of 2 for ./tests sent no reports" in capsys.readouterr().out
+
+
 PICK = "def pick(flag):\n    if flag:\n        return 1\n    return 2\n"
 
 

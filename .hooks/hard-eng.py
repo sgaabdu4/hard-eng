@@ -650,7 +650,16 @@ def check(
     require_ci_base(base)
     base = push_base(ROOT, base)
     parse_config((ROOT / "hard-eng.gates.json").read_text())
-    if proven_elsewhere(base):
+    if shard == "merge":
+        from shards import proven_shard
+
+        if proven_shard(ROOT):
+            return 0
+    elif proven_elsewhere(base):
+        if shard:
+            from shards import mark_shard
+
+            mark_shard(ROOT, shard, True)
         return 0
 
     with check_lock(ROOT) as lock:
@@ -689,6 +698,10 @@ def check(
         )
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
         record_pass(lock, ROOT, start, failed)
+        if shard:
+            from shards import mark_shard
+
+            mark_shard(ROOT, shard, False)
         return int(failed)
 
 
