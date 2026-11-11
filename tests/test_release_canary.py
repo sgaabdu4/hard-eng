@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import commit, git, init
+from conftest import commit, git, init, remove_application
 from plans import validate_documents
 
 import release_canary
@@ -802,3 +802,73 @@ def test_the_update_target_ends_with_the_full_check_on_the_update_branch(
         checks = release_canary.prepare(*args)
     assert calls == ["install", "update"]
     assert [name for name, _ in checks] == ["full check"]
+    command = checks[0][1]
+    assert command[0] == "env" and command[-1] == "a" * 40
+    assert f"GIT_CONFIG_KEY_0=url.{tmp_path.as_uri()}.insteadOf" in command
+    assert "check" in command[command.index("-c") + 1]
+
+
+def test_the_update_targets_full_check_passes_its_plan_step_with_no_call_to_a_hard_eng_host(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source, target, _ = release
+    remove_application(target)
+    gates = json.loads((target / "hard-eng.gates.json").read_text())
+    gates["shared"] = [
+        {"name": "actionlint", "role": "workflows", "command": ["echo", "actionlint"]},
+        {"name": "zizmor", "role": "ci-security", "command": ["echo", "zizmor"]},
+    ]
+    (target / "hard-eng.gates.json").write_text(json.dumps(gates))
+    commit(target, "no application")
+    for name in ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"):
+        monkeypatch.delenv(name)
+    guard = tmp_path / "guard"
+    guard.mkdir()
+    reached = tmp_path / "reached"
+    (guard / "sitecustomize.py").write_text(
+        "import os, socket\n"
+        "def refuse(host, *rest, **named):\n"
+        "    if 'github' in str(host):\n"
+        "        open(os.environ['REACHED'], 'a').write(str(host) + '\\n')\n"
+        "        raise OSError('no real host in a test')\n"
+        "    return real(host, *rest, **named)\n"
+        "real = socket.getaddrinfo\n"
+        "socket.getaddrinfo = refuse\n"
+    )
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
+    monkeypatch.setenv("PYTHONPATH", str(guard))
+    monkeypatch.setenv("REACHED", str(reached))
+    candidate = commit(source, "candidate")
+    monkeypatch.setattr(release_canary, "install_last_release", lambda *_: None)
+    with (tmp_path / "log").open("w") as log:
+        ((_, command),) = release_canary.prepare(
+            release_canary.UPDATE_TARGET, candidate, source, target, log
+        )
+        done = subprocess.run(
+            command, cwd=target, capture_output=True, text=True, timeout=900
+        )
+    refusal = done.stdout + done.stderr
+    assert "PLAN REFUSED" not in refusal and "applicable PLAN.md" not in refusal
+    assert not reached.exists()
+
+
+def test_a_crash_of_the_old_updater_shows_its_error_text_in_the_failure_and_the_log(
+    tmp_path: Path,
+) -> None:
+    work = tmp_path / "work"
+    init(work)
+    (work / ".hooks").mkdir()
+    (work / ".hooks/update.py").write_text(
+        "def latest_verified(previous):\n    return None\n\n\n"
+        "def update(root):\n    raise RuntimeError('the old updater broke here')\n"
+    )
+    commit(work, "installed")
+    log_path = tmp_path / "log"
+    with (
+        log_path.open("w") as log,
+        pytest.raises(release_canary.Failed, match="the old updater broke here"),
+    ):
+        release_canary.update_to("a" * 40, tmp_path / "source", work, log)
+    assert "the old updater broke here" in log_path.read_text()
