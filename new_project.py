@@ -193,6 +193,19 @@ def build(root: Path, stack: str) -> None:
     if stack == "flutter":
         finish_flutter(root)
     elif stack == "python":
+        run(
+            root,
+            [
+                "uv",
+                "add",
+                "--quiet",
+                "--dev",
+                "--bounds",
+                "exact",
+                "--no-sync",
+                "pytest",
+            ],
+        )
         run(root, ["uv", "lock", "--quiet"])
     else:
         finish_web(root)
