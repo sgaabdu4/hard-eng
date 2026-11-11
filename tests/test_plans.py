@@ -990,7 +990,9 @@ def test_a_branch_that_only_moves_a_plan_passes(
     repository: Path, completed_plan: str
 ) -> None:
     moved_plan_branch(repository, completed_plan)
-    validate_plans(repository)
+    assert validate_plans(repository) == "Draft"
+    for stage in ("Ready", "Complete"):
+        assert validate_plans(repository, stage=stage) == stage
     (repository / "features/moved/PLAN.md").write_text(completed_plan + "\nmore\n")
     commit(repository, "edit the moved plan")
     assert validate_plans(repository) == "Complete"
