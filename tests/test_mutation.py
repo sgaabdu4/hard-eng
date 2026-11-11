@@ -206,7 +206,7 @@ def test_a_mutant_that_no_test_ran_is_not_reported_as_passing_tests(
     mutation.summary("python", tested, survivors, Path("."))
     lines = capsys.readouterr().out.splitlines()
     passing = lines.index("the tests still pass with these changes:")
-    unreached = lines.index("no test reached this function:")
+    unreached = lines.index("no test ran the code of these changes:")
     assert "if total >= 100 and member: → " in lines[passing + 1]
     assert "if total >= 100" not in "".join(lines[unreached:])
     assert "return total * 0.9 → " in lines[unreached + 1]
@@ -317,6 +317,33 @@ def test_stryker_patterns_match_route_files_literally(
     assert lines == "2-2"
     assert fnmatch.fnmatchcase(route, path)
     assert not fnmatch.fnmatchcase("app/(shop)/s/route.ts", path)
+
+
+def test_a_stryker_mutant_without_coverage_is_listed_as_not_run(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    first = {"start": {"line": 2, "column": 7}, "end": {"line": 2, "column": 19}}
+    second = {"start": {"line": 3, "column": 3}, "end": {"line": 3, "column": 9}}
+    source = "function f() {\n  if (total >= 100) {\n  return a;\n"
+    report = {
+        "files": {
+            "src/f.ts": {
+                "source": source,
+                "mutants": [
+                    {"status": "Survived", "location": first, "replacement": "true"},
+                    {"status": "NoCoverage", "location": second, "replacement": "b"},
+                ],
+            }
+        }
+    }
+    tested, survivors = mutation.stryker_survivors(report)
+    mutation.summary("javascript", tested, survivors, Path("."))
+    lines = capsys.readouterr().out.splitlines()
+    passing = lines.index("the tests still pass with these changes:")
+    unreached = lines.index("no test ran the code of these changes:")
+    assert passing < unreached
+    assert "src/f.ts:2" in lines[passing + 1]
+    assert "src/f.ts:3" in lines[unreached + 1]
 
 
 def test_stryker_and_mutation_test_reports_list_what_survived() -> None:

@@ -113,7 +113,12 @@ def stryker_survivors(report: object) -> Result:
             if status in {"Survived", "NoCoverage"}:
                 line = mutant["location"]["start"]["line"]
                 survivors.append(
-                    (name, line, mutated_line(file["source"], mutant), False)
+                    (
+                        name,
+                        line,
+                        mutated_line(file["source"], mutant),
+                        status == "NoCoverage",
+                    )
                 )
     return tested, survivors
 
@@ -440,7 +445,7 @@ def summary(name: str, tested: int, survivors: list[Survivor], directory: Path) 
         )
         for unreached, heading in (
             (False, "the tests still pass with these changes:"),
-            (True, "no test reached this function:"),
+            (True, "no test ran the code of these changes:"),
         ):
             listed = [found for found in survivors if found[3] is unreached]
             if listed:
