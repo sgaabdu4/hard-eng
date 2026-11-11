@@ -342,17 +342,17 @@ def local_base_branch(root: Path) -> str:
 
 
 def lone_install_step(root: Path, base: str) -> str:
-    """The step that lets `adopt` pass when the install commit is the base: only a repository with no remote."""
+    """The step that lets `adopt` pass when a local base branch that no remote holds is the install commit."""
     from plans import _git_output
 
     if (
-        _git_output(root, "remote").strip()
-        or _git_output(root, "rev-parse", "HEAD").strip() != base
+        _git_output(root, "rev-parse", "HEAD").strip() != base
         or git_file(root, "HEAD~1", SOURCE_FILE) is not None
         or not (target := local_base_branch(root))
+        or _git_output(root, "for-each-ref", f"refs/remotes/*/{target}").strip()
     ):
         return ""
-    start = "; this repository has no remote, so the install commit is the base"
+    start = f"; the base branch `{target}` is not on a remote yet, so the install commit is the base"
     if _git_output(root, "rev-list", "--parents", "-n1", "HEAD").split()[1:]:
         undo = "git reset --soft HEAD~1"
     elif _git_output(root, "branch", "--show-current").strip() == target:
@@ -366,6 +366,7 @@ def refuse_new_debt(root: Path, base: str | None) -> str | None:
     """HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add the debt file."""
     from plans import default_branch_point
 
+    given = base is not None
     base = base or default_branch_point(root)
     if (
         base is not None
@@ -374,7 +375,7 @@ def refuse_new_debt(root: Path, base: str | None) -> str | None:
     ):
         raise ValueError(
             f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings that `check` prints instead"
-            + lone_install_step(root, base)
+            + ("" if given else lone_install_step(root, base))
         )
     return base
 

@@ -388,15 +388,35 @@ def refused(runner: ModuleType) -> str:
     return str(caught.value)
 
 
+def installed_repository(
+    tmp_path: Path, only_commit: bool, remote: str | None = None
+) -> None:
+    adoptable(tmp_path, "print('a.py:1:1: F1 bad'); raise SystemExit(1)", only_commit)
+    git(tmp_path, "switch", "-q", "main")
+    if not only_commit:
+        (tmp_path / ".hooks").mkdir()
+        (tmp_path / ".hooks/hard-eng-source.json").write_text("{}")
+        commit(tmp_path, "install")
+    if remote:
+        bare = tmp_path.with_name(tmp_path.name + "-remote.git")
+        git(tmp_path, "clone", "-q", "--bare", ".", str(bare))
+        if remote == "empty":
+            git(tmp_path, "-C", str(bare), "update-ref", "-d", "refs/heads/main")
+        git(tmp_path, "remote", "add", "hosted", str(bare))
+        git(tmp_path, "fetch", "-q", "hosted")
+
+
 @pytest.mark.parametrize(
-    ("only_commit", "position"),
+    ("only_commit", "position", "remote"),
     [
-        (False, "base"),
-        (False, "other"),
-        (False, "detached"),
-        (True, "base"),
-        (True, "other"),
-        (True, "detached"),
+        (False, "base", None),
+        (False, "other", None),
+        (False, "detached", None),
+        (True, "base", None),
+        (True, "other", None),
+        (True, "detached", None),
+        (False, "base", "empty"),
+        (True, "base", "empty"),
     ],
 )
 def test_the_step_for_adopt_with_no_remote_can_be_done(
@@ -405,13 +425,9 @@ def test_the_step_for_adopt_with_no_remote_can_be_done(
     monkeypatch: pytest.MonkeyPatch,
     only_commit: bool,
     position: str,
+    remote: str | None,
 ) -> None:
-    adoptable(tmp_path, "print('a.py:1:1: F1 bad'); raise SystemExit(1)", only_commit)
-    git(tmp_path, "switch", "-q", "main")
-    if not only_commit:
-        (tmp_path / ".hooks").mkdir()
-        (tmp_path / ".hooks/hard-eng-source.json").write_text("{}")
-        commit(tmp_path, "install")
+    installed_repository(tmp_path, only_commit, remote)
     if position != "base":
         git(
             tmp_path,
@@ -435,6 +451,23 @@ def test_the_step_for_adopt_with_no_remote_can_be_done(
     git(tmp_path, "merge", "-q", "--no-edit", head)
     assert git(tmp_path, "ls-files", debt.DEBT_FILE) == debt.DEBT_FILE
     assert len(git(tmp_path, "rev-list", "--max-parents=0", "main").split()) == 1
+
+
+def test_the_adopt_step_stays_out_when_the_remote_has_the_base_branch(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed_repository(tmp_path, False, "pushed")
+    monkeypatch.setattr(runner, "provision_tools", no_provisioning)
+    assert refused(runner).endswith("instead")
+
+
+def test_the_adopt_step_stays_out_when_the_base_is_given_by_hand(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    installed_repository(tmp_path, False)
+    with pytest.raises(ValueError, match="only the change that installs") as caught:
+        debt.refuse_new_debt(tmp_path, git(tmp_path, "rev-parse", "HEAD"))
+    assert str(caught.value).endswith("instead")
 
 
 COUNT_WORD_PAIRS = [
