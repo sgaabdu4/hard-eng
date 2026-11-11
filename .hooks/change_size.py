@@ -19,7 +19,7 @@ from plans import (
     release_references,
     requirement_tests,
 )
-from project_files import keep
+from project_files import keep, keeping
 
 NO_CHANGE = "no change"
 MAX_SMALL_LINES = 20
@@ -267,6 +267,17 @@ def released_plans(root: Path, base: str | None) -> set[str]:
     return {
         name for name in changed_files(root, point) or () if is_plan_path(Path(name))
     }
+
+
+def held_by_base(root: Path, path: Path) -> bool:
+    """A remote base holds the plan and the branch did not change it; with no remote base each plan is the branch's own."""
+    with keeping("references"):
+        remote = any(
+            _revision(root, name)
+            for name in release_references(root)
+            if name.startswith("origin/")
+        )
+        return remote and str(path.relative_to(root)) not in released_plans(root, None)
 
 
 def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
