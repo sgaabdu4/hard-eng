@@ -3,13 +3,16 @@
 import json
 import shutil
 from pathlib import Path
+from types import ModuleType
 
+import gate_config
 import pytest
 import yaml
 from ci_setup import configure_ci
-from conftest import SOURCE, WORKFLOW_TEMPLATE
+from conftest import SOURCE, WORKFLOW_TEMPLATE, configure
 from gate_config import Gate, GateConfig
 from shards import split_test_shards
+from test_shards import serve
 
 OLD_PATH = ".github/workflows/hard-eng.yml"
 
@@ -99,6 +102,8 @@ def test_shards_split_the_ci_job_into_checks_tests_and_the_gate_job(
     upload = jobs["tests"]["steps"][-1]
     assert upload["with"]["name"] == "hard-eng-shard-${{ matrix.shard }}"
     assert upload["with"]["path"] == "coverage/shards"
+    assert upload["with"]["if-no-files-found"] == "ignore"
+    assert "if" not in upload
     download = jobs["hard-eng"]["steps"][1]
     assert download["with"] == {
         "pattern": "hard-eng-shard-*",
@@ -165,3 +170,32 @@ def test_setup_refuses_shards_on_a_gate_that_does_not_run_pytest(
     config["packages"][0]["checks"][0]["command"] = ["sh", "-c", "pytest -q"]
     with pytest.raises(ValueError, match="shards split pytest suites only"):
         generated(tmp_path, SOURCE, config)
+
+
+def provisioned_nothing(*_arguments: object) -> None:
+    return None
+
+
+def test_a_run_that_selects_no_package_passes_in_the_gate_job_with_no_download(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    jobs = yaml.safe_load(generated(tmp_path, SOURCE, suite_config(2)))["jobs"]
+    upload = next(
+        s for s in jobs["tests"]["steps"] if "upload-artifact" in s.get("uses", "")
+    )
+    download = next(
+        s for s in jobs["hard-eng"]["steps"] if "download-artifact" in s.get("uses", "")
+    )
+    assert "if" not in upload
+    assert "if" not in download
+    configure(runner.ROOT, [])
+    monkeypatch.setattr(gate_config, "load_groups", serve([]))
+    monkeypatch.setattr(runner, "provision_tools", provisioned_nothing)
+    for shard in ("1", "2", "merge"):
+        assert runner.check(base="0" * 40, shard=shard) == 0
+    kept = sorted(
+        path.relative_to(runner.ROOT).as_posix()
+        for path in (runner.ROOT / "coverage/shards").rglob("*")
+        if path.is_file()
+    )
+    assert kept == ["coverage/shards/1/ran.txt", "coverage/shards/2/ran.txt"]

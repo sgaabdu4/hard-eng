@@ -16,6 +16,8 @@ from reports import junit_root
 
 COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
 KEPT = "coverage/shards"
+PROVEN = "proven.txt"
+RAN = "ran.txt"
 CHECK_LINE = re.compile(r'(\.hooks/hard-eng\.py check --base "\$BASE_SHA")')
 JOB_NAME = re.compile(r"(?m)^  ([\w-]+):\n")
 SHARD_LIST = re.compile(r"(?m)^(        shard: \[)[^\]]*\]$")
@@ -23,13 +25,13 @@ UPLOAD = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.
 DOWNLOAD = "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1"
 HEADER = "  hard-eng:\n    name: hard-eng\n"
 UPLOAD_STEP = f"""      - name: Keep the shard reports
-        if: steps.impact.outputs.docs_only != 'true'
         uses: {UPLOAD}
         with:
           name: hard-eng-shard-${{{{ matrix.shard }}}}
           path: {KEPT}
           retention-days: 1
           overwrite: true
+          if-no-files-found: ignore
 """
 GATE_JOB = (
     HEADER
@@ -133,6 +135,26 @@ def shard_groups(groups: list[Group], shard: str) -> list[Group]:
         return gate if above and gate.get("role") == "lockfiles" else None
 
     return pick(groups, keep)
+
+
+def mark_shard(root: Path, part: str, proven: bool) -> None:
+    """Leave one file in the folder of a numbered shard, so that its upload is never empty."""
+    if part.isdecimal():
+        folder = root / KEPT / part
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / (PROVEN if proven else RAN)).write_text("ok\n")
+
+
+def proven_shard(root: Path) -> bool:
+    """A numbered shard whose own job proved this tree elsewhere covers the gate job."""
+    found = sorted((root / KEPT).glob(f"*/{PROVEN}"))
+    if found:
+        print(
+            f"Shard {found[0].parent.name} proved this tree in its own job; "
+            "not merging the shard reports.",
+            flush=True,
+        )
+    return bool(found)
 
 
 def shard_folder(root: Path, part: str, group: Group) -> Path:

@@ -440,6 +440,16 @@ def test_only_ci_branch_pushes_reuse_pull_request_checks(
     assert capsys.readouterr().out == ""
 
 
+def reuse_every_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stand in for a CI run whose base commit already passed on this exact tree."""
+
+    def reused(_root: Path, base: str) -> str:
+        return base
+
+    monkeypatch.setattr("ci_usage.reused_pull_request", reused)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+
 def test_reused_pull_request_result_skips_gates(
     runner: ModuleType,
     tmp_path: Path,
@@ -454,15 +464,60 @@ def test_reused_pull_request_result_skips_gates(
         json.dumps({"packages": [], "shared": [failing]})
     )
 
-    def reused(_root: Path, base: str) -> str:
-        return base
-
-    monkeypatch.setattr("ci_usage.reused_pull_request", reused)
-    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    reuse_every_commit(monkeypatch)
     assert runner.check(base="a" * 40) == 0
     output = capsys.readouterr().out
     assert f"Commit {'a' * 40} passed the required checks" in output
     assert "fails" not in output
+
+
+def sharded_project(root: Path) -> None:
+    tests = {
+        "name": "tests",
+        "role": "tests",
+        "shards": 2,
+        "command": ["pytest", "--junitxml=j.xml"],
+        "report": {"type": "python-tests", "tests": "j.xml", "coverage": "c.json"},
+    }
+    package = {"path": ".", "language": "python", "sources": ["."], "checks": [tests]}
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [package], "shared": []})
+    )
+
+
+@pytest.mark.parametrize(("shard", "marked"), [("rest", False), ("2", True)])
+def test_a_shard_job_that_reuses_a_passed_commit_marks_its_shard(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    shard: str,
+    marked: bool,
+) -> None:
+    sharded_project(tmp_path)
+    reuse_every_commit(monkeypatch)
+    assert runner.check(base="a" * 40, shard=shard) == 0
+    assert f"Commit {'a' * 40} passed the required checks" in capsys.readouterr().out
+    assert (tmp_path / "coverage/shards/2/proven.txt").is_file() is marked
+    assert not (tmp_path / "coverage/shards/rest").exists()
+
+
+def test_the_gate_job_takes_a_shard_proof_and_runs_none_itself(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sharded_project(tmp_path)
+
+    def proof_without_uv(_base: str | None) -> bool:
+        raise FileNotFoundError("uv")
+
+    monkeypatch.setattr(runner, "proven_elsewhere", proof_without_uv)
+    (tmp_path / "coverage/shards/2").mkdir(parents=True)
+    (tmp_path / "coverage/shards/2/proven.txt").write_text("ok\n")
+    assert runner.check(base="a" * 40, shard="merge") == 0
+    assert "Shard 2 proved this tree in its own job" in capsys.readouterr().out
 
 
 def _diverged(push: MergedPush, base_tree: str, merge_base_tree: str) -> None:
