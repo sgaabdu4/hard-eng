@@ -288,6 +288,30 @@ def test_setup_keeps_the_project_biome_run_away_from_the_hooks_folder(
     assert rerun == {}
 
 
+@pytest.mark.parametrize("language", ["workspace", "python"])
+def test_setup_adds_the_biome_entry_when_no_typescript_package_is_at_the_root(
+    installer: ModuleType, tmp_path: Path, language: str
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "biome.json").write_text('{"files": {"includes": ["**"]}}')
+    if language == "python":
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+        (tmp_path / "uv.lock").write_text("version = 1\n")
+    else:
+        (tmp_path / "package.json").write_text(
+            '{"private": true, "workspaces": ["web"]}'
+        )
+        (tmp_path / "bun.lock").write_text('{"lockfileVersion": 1}\n')
+        (tmp_path / "web/src").mkdir(parents=True)
+        (tmp_path / "web/package.json").write_text('{"name": "web"}')
+        (tmp_path / "web/tsconfig.json").write_text('{"include": ["src"]}')
+        (tmp_path / "web/src/main.ts").write_text("export {};\n")
+    changes = installer.plan_install(tmp_path.resolve())[0]
+    includes = jsonc_config("biome.json", changes["biome.json"])["files"]
+    assert isinstance(includes, dict)
+    assert includes["includes"] == ["**", "!.hooks"]
+
+
 def test_setup_leaves_a_project_without_biome_settings_alone(tmp_path: Path) -> None:
     changes: dict[str, str] = {}
     biome_ignores_hooks(tmp_path, changes)

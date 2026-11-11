@@ -610,4 +610,3 @@ def typescript_config(
         changes[name] = json_file(root, config)
     if directory == root:
         fallow_ignores_hooks(root, changes)
-        biome_ignores_hooks(root, changes)
