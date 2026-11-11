@@ -451,7 +451,7 @@ def count_listings(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
     def spy(
         command: list[str], *, cwd: Path, check: bool, capture_output: bool, text: bool
     ) -> subprocess.CompletedProcess[str]:
-        if command[:3] == ["git", "ls-files", "-z"] and "--others" in command:
+        if command[:3] == ["git", "ls-files", "-z"]:
             listings.append(cwd)
         return real_run(
             command, cwd=cwd, check=check, capture_output=capture_output, text=text
@@ -484,7 +484,9 @@ def test_a_folder_reached_by_two_links_is_listed_once_and_copied_twice(
     assert (copy / "tracked-link").read_text() == "committed\n"
     assert (copy / "other-tracked-link").read_text() == "committed\n"
     assert not (copy / "ignored-target-link").exists()
-    assert listings == [project.resolve()]
+    assert listings.count(project.resolve()) == 2
+    assert listings.count((project / "generated").resolve()) == 1
+    assert len(listings) == 3
 
 
 def copied_files(copy: Path) -> set[str]:
