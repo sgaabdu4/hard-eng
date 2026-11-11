@@ -6,6 +6,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from types import ModuleType
@@ -52,9 +53,9 @@ def test_the_gate_limit_is_three_times_the_last_passing_time(
     assert gate_times.gate_limit(tmp_path, "./suite", 100) == 6
 
 
-def test_gate_times_ask_git_for_the_common_folder_one_time(
+def watch_common_folder_asks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> tuple[Path, Path, list[Path]]:
     first, second = tmp_path / "first", tmp_path / "second"
     for root in (first, second):
         subprocess.run(["git", "init", "-q", str(root)], check=True)
@@ -63,14 +64,42 @@ def test_gate_times_ask_git_for_the_common_folder_one_time(
 
     def counting(command: list[str], *, cwd: Path, text: bool) -> str:
         asked.append(cwd)
+        time.sleep(0.2)
         return real(command, cwd=cwd, text=text)
 
     monkeypatch.setattr(gate_times.subprocess, "check_output", counting)
+    return first, second, asked
+
+
+def test_gate_times_ask_git_for_the_common_folder_one_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second, asked = watch_common_folder_asks(tmp_path, monkeypatch)
     for key in ("./one", "./two", "./three"):
         gate_times.record_gate_time(first, key, 1)
         gate_times.gate_limit(first, key, 100)
     assert asked == [first]
     gate_times.gate_limit(second, "./one", 100)
+    assert asked == [first, second]
+
+
+def test_parallel_gates_ask_git_for_the_common_folder_one_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second, asked = watch_common_folder_asks(tmp_path, monkeypatch)
+    meeting = threading.Barrier(5)
+
+    def gate() -> None:
+        meeting.wait()
+        gate_times.gate_limit(first, "./suite", 100)
+
+    threads = [threading.Thread(target=gate) for _ in range(5)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert asked == [first]
+    gate_times.gate_limit(second, "./suite", 100)
     assert asked == [first, second]
 
 
