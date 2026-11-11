@@ -512,3 +512,27 @@ def locks_nothing(directory: Path) -> bool:
         not {"registry", "git", "url"} & set(package.get("source", {}))
         for package in packages
     )
+
+
+def osv_identity(package: Mapping[str, object], lockfile: object) -> None:
+    """Pass a local uv package that has no version; refuse any other package without identity."""
+    name = package.get("name")
+    if not (isinstance(name, str) and name):
+        raise ValueError(
+            f"OSV report lists a package with no name, from {lockfile}. Run the scan again."
+        )
+    local = package.get("version") == "" and package.get("ecosystem") == "PyPI"
+    path = Path(str(lockfile))
+    if local and path.name == "uv.lock" and path.is_file():
+        wanted = name.lower().replace("_", "-").replace(".", "-")
+        entries = tomllib.loads(path.read_text()).get("package", [])
+        if any(
+            entry.get("name", "").lower().replace("_", "-").replace(".", "-") == wanted
+            and {"editable", "virtual", "directory"} & set(entry.get("source", {}))
+            for entry in entries
+        ):
+            return
+    raise ValueError(
+        f"OSV report lists {name} with no usable version, from {lockfile}. "
+        "Only a local uv package may have none. Run `uv lock`, then run the scan again."
+    )

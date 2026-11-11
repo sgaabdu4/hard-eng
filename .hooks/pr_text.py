@@ -9,7 +9,7 @@ from pathlib import Path
 UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
 MERMAID_BLOCK = re.compile(r"^[ \t]*```[ \t]*mermaid\b", re.MULTILINE)
 NOT_CHECKED_LINE = re.compile(r"^[ \t]*Not checked:(.*)$", re.MULTILINE)
-EMPTY_ANSWERS = frozenset({"", "none", "nothing"})
+EMPTY_ANSWER = re.compile(r"(?:none|nothing|n/a)?[ \t]*[-—–]*", re.IGNORECASE)
 
 
 def body_problem(body: str) -> str | None:
@@ -23,7 +23,7 @@ def body_problem(body: str) -> str | None:
             "or two or more of the new flows when no old flow exists"
         )
     for found in NOT_CHECKED_LINE.findall(body):
-        if found.strip().rstrip(".").lower() not in EMPTY_ANSWERS:
+        if not EMPTY_ANSWER.fullmatch(found.strip().rstrip(".")):
             return None
     return (
         "PR body needs a line `Not checked: <what no check covered>`, "
