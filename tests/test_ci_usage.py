@@ -17,6 +17,7 @@ from test_shipping import (
     Fixture,
     _check,
     _fixture,
+    _merged_push,
     _patch_gh,
     _pull,
 )
@@ -282,22 +283,35 @@ def test_completed_checks_make_no_job_lookup(
     assert not [call for call in fake.calls if "/actions/jobs/" in call[-1]]
 
 
-@pytest.mark.parametrize("path", ["checks", "branch_point"])
-def test_branch_point_and_push_reuse_never_look_up_jobs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, path: str
+def test_branch_point_never_looks_up_jobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture, fake = _queued(tmp_path, monkeypatch, _WAITING | {"created_at": _ago(120)})
     monkeypatch.setattr(plans, "default_branch_point", Mock(return_value=fixture.head))
-    policy = shipping.load_policy(fixture.root)
-    assert policy is not None
     monkeypatch.delitem(sys.modules, "ci_usage")
-    if path == "branch_point":
-        assert shipping.passed_branch_point(fixture.root) is None
-    else:
-        with pytest.raises(shipping.PendingCheck) as pending:
-            shipping._checks(fixture.root, "acme/widget", fixture.head, policy, False)
-        assert str(pending.value) == "required check has not completed: build"
+    assert shipping.passed_branch_point(fixture.root) is None
     assert [call for call in fake.calls if "check-runs" in call[-1]]
     assert not [call for call in fake.calls if "/actions/jobs/" in call[-1]]
+    imported = "ci_usage" in sys.modules
+    assert not imported
+
+
+def test_push_reuse_never_looks_up_jobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    push = _merged_push(tmp_path, monkeypatch)
+    check = _check(push.head, status="queued", conclusion=None)
+    push.responses[f"commits/{push.head}/check-runs?per_page=100&filter=all"] = [
+        {"total_count": 1, "check_runs": [check]}
+    ]
+    push.responses["actions/jobs/1"] = _WAITING | {"created_at": _ago(120)}
+    spy = Mock(side_effect=shipping.gh)
+    monkeypatch.setattr(shipping, "gh", spy)
+    monkeypatch.delitem(sys.modules, "ci_usage")
+    assert shipping.reused_pull_request(push.root, push.base) is None
+    assert spy.call_args_list
+    assert not [
+        call for call in spy.call_args_list if "/actions/jobs/" in call.args[-1]
+    ]
     imported = "ci_usage" in sys.modules
     assert not imported
