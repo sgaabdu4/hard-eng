@@ -346,15 +346,25 @@ def pyrefly_gap(file: str, options: Mapping[str, object]) -> str:
         ]
     steps = []
     wrong = []
-    if options.get("preset") not in {"strict", "all"}:
-        wrong.append('preset = "strict"')
-    if options.get("check-unannotated-defs", True) is not True:
-        wrong.append("check-unannotated-defs = true")
+    for key, value, bad in (
+        ("preset", '"strict"', options.get("preset") not in {"strict", "all"}),
+        (
+            "check-unannotated-defs",
+            "true",
+            options.get("check-unannotated-defs", True) is not True,
+        ),
+    ):
+        if bad:
+            wrong.append(
+                f"change {key} to {value}" if key in options else f"add {key} = {value}"
+            )
     if wrong:
-        steps.append(
-            f"set {' and '.join(wrong)} under [tool.pyrefly] (at the top of a pyrefly.toml), "
-            "one line for each key"
+        place = (
+            "under [tool.pyrefly]"
+            if file.endswith("pyproject.toml")
+            else "at the top level"
         )
+        steps.append(f"{' and '.join(wrong)} {place}")
     if refused:
         steps.append(f"remove {', '.join(refused)}")
     return f"{file}: {'; '.join(steps)}" if steps else ""
@@ -404,7 +414,7 @@ def configure_python(
         )
         if gap:
             raise ValueError(
-                f"{package['path']}: existing Pyrefly settings need strict checking; preserve them and ask before changing them. {gap}"
+                f"{package['path']}: existing Pyrefly settings need strict checking; ask the user before this change: {gap}"
             )
     else:
         changes[name] = (

@@ -268,12 +268,13 @@ def test_setup_refuses_the_pyrefly_settings_that_the_types_gate_refuses(
             f'[tool.pyrefly]\npreset = "strict"\n{setting}\n',
         },
     )
-    with pytest.raises(ValueError, match="ask before changing them") as error:
+    with pytest.raises(ValueError, match="ask the user before this change") as error:
         configure_python(tmp_path, directory, package, {})
     assert "tools/cli/pyproject.toml" in str(error.value)
     assert key in str(error.value)
 
 
+@pytest.mark.parametrize("native", [False, True], ids=["pyproject", "pyrefly-toml"])
 @pytest.mark.parametrize(
     ("section", "named"),
     [
@@ -290,18 +291,24 @@ def test_setup_refuses_the_pyrefly_settings_that_the_types_gate_refuses(
     ],
 )
 def test_the_pyrefly_step_sets_only_the_keys_that_are_wrong(
-    section: str, named: list[str]
+    section: str, named: list[str], native: bool
 ) -> None:
-    text = '[project]\nname = "cli"\n\n[tool.pyrefly]\n' + section
-    options = tomllib.loads(text)["tool"]["pyrefly"]
-    step = pyrefly_gap("pyproject.toml", options)
-    setting = re.compile(r'(preset|check-unannotated-defs) = ("strict"|true)')
-    assert sorted(key for key, _ in setting.findall(step)) == sorted(named)
-    for key, value in setting.findall(step):
-        line = f"{key} = {value}"
-        if re.search(rf"(?m)^{key} = ", text):
-            text = re.sub(rf"(?m)^{key} = .*$", line, text)
-        else:
-            text = text.replace("[tool.pyrefly]\n", f"[tool.pyrefly]\n{line}\n")
-    fixed = tomllib.loads(text)["tool"]["pyrefly"]
-    assert pyrefly_gap("pyproject.toml", fixed) == ""
+    head = "" if native else '[project]\nname = "cli"\n\n[tool.pyrefly]\n'
+    text = head + section
+    file = "pyrefly.toml" if native else "pyproject.toml"
+    parsed = tomllib.loads(text)
+    step = pyrefly_gap(file, parsed if native else parsed["tool"]["pyrefly"])
+    place = "at the top level" if native else "under [tool.pyrefly]"
+    assert step.endswith(place)
+    change = re.compile(r'change (preset|check-unannotated-defs) to ("strict"|true)')
+    add = re.compile(r'add (preset|check-unannotated-defs) = ("strict"|true)')
+    found = [key for key, _ in change.findall(step) + add.findall(step)]
+    assert sorted(found) == sorted(named)
+    for key, value in change.findall(step):
+        assert re.search(rf"(?m)^{key} = ", text)
+        text = re.sub(rf"(?m)^{key} = .*$", f"{key} = {value}", text)
+    for key, value in add.findall(step):
+        assert not re.search(rf"(?m)^{key} = ", text)
+        text = text.replace(head, f"{head}{key} = {value}\n", 1)
+    fixed = tomllib.loads(text)
+    assert pyrefly_gap(file, fixed if native else fixed["tool"]["pyrefly"]) == ""

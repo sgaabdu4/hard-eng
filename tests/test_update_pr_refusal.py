@@ -112,7 +112,8 @@ def test_the_update_brings_the_workflow_files_once_the_base_holds_the_shipping_b
     git(project, "merge", "-q", "main")
     outcome = update_runner.locked_update(project, repair=True)
     assert (
-        "come with the update once the shipping block is on the base branch" in outcome
+        "come with the update, which needs the `shipping` block of hard-eng.gates.json on the base branch"
+        in outcome
     )
     tree = git(project, "ls-tree", "-r", "--name-only", update_runner.UPDATE_BRANCH)
     assert ".github/workflows/hard-eng.yml" in tree.splitlines()

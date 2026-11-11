@@ -847,14 +847,14 @@ def test_a_rerun_leaves_the_workflow_gates_to_the_update_when_the_checkout_has_n
     assert "actionlint" not in shared_names(project)
     assert "zizmor" not in shared_names(project)
     assert (
-        "the workflow files and their gates come with the update once the shipping block is on the base branch"
+        "the workflow files and their gates come with the update, which needs the `shipping` block of hard-eng.gates.json on the base branch"
         in outcome
     )
     assert git(project, "status", "--porcelain") == f"M {GATES_FILE}"
     commit(project, "the packages")
     outcome = update_runner.locked_update(project, repair=True)
     assert (
-        "the workflow files and their gates come with the update once the shipping block is on the base branch"
+        "the workflow files and their gates come with the update, which needs the `shipping` block of hard-eng.gates.json on the base branch"
         in outcome
     )
     assert "setup wrote" not in outcome

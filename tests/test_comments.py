@@ -467,7 +467,7 @@ def test_the_lost_assertion_message_says_what_the_record_covers(
     message = str(error.value)
     assert "To remove a whole test, add `Removed test:" in message
     assert "the test name is the function name for a Python test" in message
-    assert "An assertion removed from a test that stays must stay" in message
+    assert "An assertion in a test that stays must stay" in message
     assert "get an equal check" in message
 
 

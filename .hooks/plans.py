@@ -652,7 +652,7 @@ def validate_plans(
             # A Draft plan claims no implementation, so it may ride along with finished work.
             if status == "Draft" and reached:
                 continue
-            steps = {"Draft": DRAFT_STEP, "Ready": f"; {BUILD_STEP}" * typed}
+            steps = {"Draft": DRAFT_STEP, "Ready": f". {BUILD_STEP}" * typed}
             step = steps[status] if stage == "Complete" and not explicit_stage else ""
             raise ValueError(
                 f"{path.relative_to(root)}: plan is {status}; this check requires {stage}{step}"
