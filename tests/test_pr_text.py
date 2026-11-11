@@ -209,6 +209,9 @@ def test_only_the_footer_job_holds_the_concurrency_group_so_a_push_cannot_cancel
     assert "concurrency" not in workflow
     assert "concurrency" not in workflow["jobs"]["pr-text"]
     assert workflow["jobs"]["remove-claude-footer"]["concurrency"] == {
-        "group": "pr-text-${{ github.event.pull_request.number }}",
+        "group": (
+            "pr-text-${{ github.event.pull_request.number }}-"
+            "${{ github.event.action == 'synchronize' && github.run_id || 'footer' }}"
+        ),
         "cancel-in-progress": False,
     }
