@@ -96,6 +96,6 @@ Proof: guidance
 
 ## HE-PR-COMMITS
 
-A PR holds at most 100 commits; GitHub can refuse to rebase a longer one. `ship` refuses a PR above the cap, and a full `check` warns from 80. Above the cap, ship the finished part in its own PR and continue on a new branch. Or join neighbour commits in a task-branch rebase; an empty `git diff <old head> <new head>` is the proof. The Hard Eng update PR and a PR into another base are exempt.
+A PR holds at most 100 commits; GitHub can refuse to rebase a longer one. `ship` refuses a PR above the cap, and every `check` except `--quick` warns from 80. Above the cap, move the finished commits to a branch and PR of their own, merge it, then rebase the rest onto the base. Or join neighbour commits without moving the base; `git diff <old head> <new head>` must then print nothing. Only `ship` applies the cap: the Hard Eng update PR and a PR into a branch other than `shipping.base` never reach it.
 
 Proof: check
