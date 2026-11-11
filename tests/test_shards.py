@@ -710,3 +710,16 @@ def test_an_option_value_that_names_a_folder_gets_the_equals_form_in_the_refusal
         require_no_path(
             shard_project, group, group["checks"][0], [*command, "--cov", "src"]
         )
+
+
+def test_a_worker_count_in_the_pytest_settings_leaves_the_shard_files_exact(
+    runner: ModuleType, shard_project: Path
+) -> None:
+    settings = shard_project / "pyproject.toml"
+    settings.write_text(settings.read_text() + 'addopts = "-n 2"\n')
+    assert run_part(runner, "1") is False
+    assert {line for line in log_lines(shard_project) if line.startswith("ran ")} == {
+        "ran tests/test_a.py"
+    }
+    kept = shard_project / "coverage/shards/1/shard-files.txt"
+    assert kept.read_text() == "tests/test_a.py\n"
