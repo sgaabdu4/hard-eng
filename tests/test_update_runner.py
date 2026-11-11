@@ -859,6 +859,7 @@ def test_a_rerun_with_no_remote_keeps_the_pushed_line_when_the_fetch_fails(
     outcome = update_runner.locked_update(project, repair=True)
     assert outcome.startswith(update_runner.NOT_PUBLISHED)
     assert "This checkout is unchanged: the installed release could not be" in outcome
+    assert outcome.endswith("exit status 128.")
 
 
 def test_a_rerun_the_plan_refuses_writes_nothing(
