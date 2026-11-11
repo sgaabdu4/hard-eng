@@ -3,7 +3,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from .board import QUESTION, TAG, Event, Snapshot, questions_in
+from .board import TAG, Event, Snapshot, asks, questions_in
 from .config import Config
 from .shapes import Obj, parse_time, stamp, text
 
@@ -217,7 +217,7 @@ def answered(view: View, person: str) -> bool:
 def our_questions(ctx: Context, view: View) -> list[tuple[Event, str]]:
     found = [(e, person) for e, person in view.questions if e.id in ctx.posted]
     ours = view.last_ours
-    if ours and QUESTION.search(ours.text):
+    if ours and asks(ours.text):
         found += [
             (ours, person)
             for person in label_people(ctx, view)
@@ -438,7 +438,7 @@ def view_of(ctx: Context, card: Obj) -> View:
         frozenset(names),
         events[last] if last >= 0 else None,
         tuple(events[last + 1 :]),
-        tuple((e, p) for _, e, p in found if QUESTION.search(e.text)),
+        tuple((e, p) for _, e, p in found if asks(e.text)),
         frozenset(p for _, e, p in found if e.id in ctx.posted),
     )
 

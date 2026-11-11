@@ -56,6 +56,6 @@ Open each picture, then write `<picture>.json` beside it (`home.png` → `home.p
 
 ## Post
 
-`comment <card> <text-file> --image <staff image>` with one tagged question, recommendation first. When a picture's proof has `uiRules`, `comment` ends the post with this line; do not write it yourself:
+`comment <card> <text-file> --image <staff image>` with one tagged question, recommendation first: "Reply yes, or say what to change." Post the image itself, never a file path or link. When a picture's proof has `uiRules`, `comment` ends the post with this line; do not write it yourself:
 
 **IF YOU NEED ANY CHANGES, PLEASE SEND SCREENSHOTS AND PUT ALL OF YOUR ISSUES IN ONE COMMENT.**

@@ -75,8 +75,8 @@ Routine task a person should know → give the steps and fix the screen; do not 
 
 Every new or changed screen, before any build:
 
-1. Brief a worker per [design brief](mockups.md#design-brief); it makes the mockup per [mockups](mockups.md). Check its output and each picture against the proof rules, then write each proof file; a fail goes back to the worker.
-2. `comment <card> <text-file> --image …` with the staff image and one tagged question, recommendation first: "Reply yes, or say what to change." No file paths or links instead of images.
+1. Brief a worker per [design brief](mockups.md#design-brief). Check its output and each picture against the proof rules, then write the proof files; a fail goes back to the worker.
+2. Post the staff image per [post](mockups.md#post).
 3. Build only after a plain yes on the card from the person who decides. "Yes, but …" = change request → new version.
 4. New version → `detach` the old images, so only the current design stays on the card.
 5. Before the testing move, compare the built screen with the approved images; any difference goes back to the worker.
