@@ -132,6 +132,10 @@ def test_an_added_swift_colour_literal_is_refused(tmp_path: Path, line: str) -> 
         ("tailwind.config.ts", "export const a = 'bg-[#FAFAFA]';"),
         ("Sources/App/Palette.swift", "let c = Color(red: 1, green: 0, blue: 0)"),
         ("src/Colour/page.css", "a { color: #fff; } .x { @apply bg-[#fff]; }"),
+        ("Sources/App/AppTheme.swift", "let c = Color(red: 1, green: 0, blue: 0)"),
+        ("src/colorPalette.ts", "export const a = 'bg-[#FAFAFA]';"),
+        ("lib/app_colors.dart", "const c = Color(0xFF112233);"),
+        ("src/design/themes/dark.css", "a { color: #fff; } .x { @apply bg-[#fff]; }"),
     ],
 )
 def test_a_colour_in_a_theme_or_token_file_passes(
@@ -139,6 +143,34 @@ def test_a_colour_in_a_theme_or_token_file_passes(
 ) -> None:
     root = change(tmp_path, name, "// base\n", f"// base\n{line}\n")
     validate_suppressions(root, "HEAD")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "src/auth/TokenInput.tsx",
+        "src/components/ThemeToggle.tsx",
+        "src/colorful/Hero.tsx",
+    ],
+)
+def test_a_name_that_only_holds_a_theme_word_is_still_judged(
+    tmp_path: Path, name: str
+) -> None:
+    """HE-UI-SOURCE: the theme path rule matches whole words, so a word inside a longer name gains no pass."""
+    root = change(tmp_path, name, "// base\n", '// base\n<i className="bg-[#fff]" />\n')
+    assert f"{name}:2:" in refused(root)
+
+
+def test_the_colour_step_names_the_paths_that_pass_as_the_code_does(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: the step text names the folder, file and config forms that the path rule accepts."""
+    root = change(
+        tmp_path, "src/a.tsx", "// base\n", '// base\n<i className="bg-[#fff]" />\n'
+    )
+    message = refused(root)
+    assert "named theme, token, color, colour or palette" in message
+    assert "tailwind.config" in message
 
 
 @pytest.mark.parametrize(
@@ -157,6 +189,9 @@ def test_a_colour_in_a_theme_or_token_file_passes(
         ("src/a.tsx", 'const c = <i className="text-all-caps my-transition-all" />;'),
         ("src/a.tsx", 'const c = <i className="transition-all-foo" />;'),
         ("src/a.css", "* { transition: none; }"),
+        ("src/a.tsx", 'const c = <i className="bg-[hsl(var(--background))]" />;'),
+        ("src/a.tsx", 'const c = <i className="bg-[rgb(var(--primary)/0.5)]" />;'),
+        ("src/a.tsx", 'const c = <i className="text-[oklch(var(--x))]" />;'),
     ],
 )
 def test_allowed_lines_pass(tmp_path: Path, name: str, line: str) -> None:
