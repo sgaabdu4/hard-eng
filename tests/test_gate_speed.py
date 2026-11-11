@@ -542,7 +542,7 @@ def test_stop_with_nothing_changed_loads_no_network_module(repository: Path) -> 
     loaded = {line.rpartition("|")[2].strip() for line in trace.splitlines()}
     assert "agent_hooks" in loaded
     unused = {"socket", "ssl", "http.client", "urllib.request", "update", "shipping"}
-    assert not loaded & unused
+    assert not loaded & (unused | {"change_size"})
 
 
 def test_stop_with_nothing_changed_starts_no_more_git_commands_than_before(

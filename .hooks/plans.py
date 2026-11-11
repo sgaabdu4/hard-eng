@@ -335,8 +335,6 @@ def _draft_errors(content: str) -> tuple[list[str], bool]:
 
 
 def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
-    from change_size import held_by_base
-
     paths = plan_files(root)
     selected = [path for path in paths if str(path.relative_to(root)) in changed]
     messages = []
@@ -346,8 +344,11 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
         if plan_status(content) != "Draft":
             continue
         errors, stuck = _draft_errors(content)
-        if stuck and not selected and held_by_base(root, path):
-            continue
+        if stuck and not selected:
+            from change_size import held_by_base
+
+            if held_by_base(root, path):
+                continue
         unfinished |= stuck
         messages.append(f"{path.relative_to(root)}: " + "; ".join(errors))
     notice = (
