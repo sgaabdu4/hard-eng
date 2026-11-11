@@ -375,6 +375,29 @@ def test_a_long_line_of_open_brackets_ends_fast(name: str) -> None:
     assert time.perf_counter() - started < 1
 
 
+def test_a_skip_name_used_as_a_value_is_refused_only_in_a_test_file(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-SWITCH-OFF: a callback argument named it is data; a skip call is not."""
+    root = switch_root(tmp_path, "app.py", "")
+    (root / "src").mkdir()
+    (root / "src/list.ts").write_text(
+        "const a = items.filter((it) => it.sk" + "ip);\n"
+        "if (it.on" + "ly) return;\n"
+        "const b = todos.map(it => it.to" + "do);\n"
+    )
+    validate_suppressions(root, "HEAD")
+    for name, text in (
+        ("src/list.test.ts", "const run = flag ? it.sk" + "ip : it;\n"),
+        ("src/list.ts", "it.sk" + "ip('x', () => {});\n"),
+    ):
+        (root / name).write_text(text)
+        with pytest.raises(ValueError, match=f"{name}:1 adds") as error:
+            validate_suppressions(root, "HEAD")
+        assert OFF in str(error.value)
+        (root / name).unlink()
+
+
 def test_names_close_to_a_skip_form_pass(tmp_path: Path) -> None:
     """HE-NO-SWITCH-OFF: a helper, a longer name and an ordinary pytest import stay allowed."""
     root = switch_root(tmp_path, "app.py", "")
