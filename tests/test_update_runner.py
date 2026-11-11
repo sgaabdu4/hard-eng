@@ -20,7 +20,13 @@ import update
 import update_pr
 import update_runner
 from conftest import SOURCE, add_origin, commit, git, init
-from gate_config import JsonObject
+from gate_config import (
+    JsonObject,
+    package_manifests,
+    parse_config,
+    repository_files,
+    validate_manifest_groups,
+)
 from test_setup import project_with_commit_hook
 from test_updates import select_release
 
@@ -824,16 +830,28 @@ def test_a_rerun_writes_each_project_file_that_setup_plans_and_no_scaffold_file(
     (project / "web/package.json").write_text('{"name": "web", "private": true}\n')
     (project / "web/src/index.ts").write_text("export const value = 1;\n")
     commit(project, "a web package")
+
+    def check_groups() -> None:
+        gates = (project / GATES_FILE).read_text()
+        config = parse_config(gates, require_impact_review=False)
+        manifests = package_manifests(project, repository_files(project))
+        validate_manifest_groups(project, config, manifests)
+
+    with pytest.raises(ValueError, match="web; rerun setup to add its group"):
+        check_groups()
+    installed = ".agents/skills/he-learn/references/decisions.md"
+    (project / installed).unlink()
     outcome = update_runner.locked_update(project, repair=True)
     written = f"{GATES_FILE}, web/.semgrepignore, web/tsconfig.json"
     assert f"This checkout: setup wrote {written} for the project" in outcome
     assert "review and commit them" in outcome
     assert git(project, "status", "--porcelain", "-uall").splitlines() == [
-        f"M {GATES_FILE}",
+        f"D {installed}",
+        f" M {GATES_FILE}",
         "?? web/.semgrepignore",
         "?? web/tsconfig.json",
     ]
-    assert '"web"' in (project / GATES_FILE).read_text()
+    check_groups()
 
 
 def test_a_rerun_goes_on_when_setup_refuses_the_checkout(
@@ -849,6 +867,9 @@ def test_a_rerun_goes_on_when_setup_refuses_the_checkout(
     assert ".agents/skills/he/SKILL.md already differs" in outcome
     assert (project / GATES_FILE).read_text() == before
     assert skill.read_text().endswith("\nA local line.\n")
+    (project / git(project, "rev-parse", "--git-path", "hooks/pre-push")).unlink()
+    with pytest.raises(ValueError, match="setup refused the update"):
+        update_runner.locked_update(project, repair=True)
 
 
 def test_a_rerun_with_no_remote_keeps_the_pushed_line_when_the_fetch_fails(
@@ -861,20 +882,6 @@ def test_a_rerun_with_no_remote_keeps_the_pushed_line_when_the_fetch_fails(
     assert outcome.startswith(update_runner.NOT_PUBLISHED)
     assert "This checkout is unchanged: the installed release could not be" in outcome
     assert outcome.endswith("exit status 128.")
-
-
-def test_a_rerun_the_plan_refuses_writes_nothing(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    project = installed_python_project(release, monkeypatch, True)
-    before = (project / GATES_FILE).read_text()
-    (project / "AGENTS.md").write_text("# Project rules\n")
-    monkeypatch.setattr(
-        update, "update_plan", Mock(side_effect=ValueError("setup refused the update"))
-    )
-    with pytest.raises(ValueError, match="setup refused"):
-        update_runner.locked_update(project, repair=True)
-    assert (project / GATES_FILE).read_text() == before
 
 
 def test_an_update_at_session_start_does_not_touch_the_checkout(
