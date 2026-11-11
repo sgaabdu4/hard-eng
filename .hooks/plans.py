@@ -364,7 +364,8 @@ def judged_rules(content: str, path: Path | None) -> None:
     try:
         ux_rules(content)
     except ValueError:
-        if path is None or touched_since_update(path):
+        held = "\nRules:" in f"\n{content}"
+        if held or path is None or touched_since_update(path):
             raise
 
 

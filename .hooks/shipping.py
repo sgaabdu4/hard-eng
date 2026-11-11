@@ -484,6 +484,17 @@ def _check_revision(run: dict[str, JsonValue], revision: str) -> None:
         raise ShippingError("required check is stale")
 
 
+def _pending(
+    root: Path, repository: str, run: dict[str, JsonValue], budget: float, explain: bool
+) -> PendingCheck:
+    note = ""
+    if explain and run.get("status") == "queued":
+        from ci_usage import queue_note
+
+        note = queue_note(root, repository, run, budget)
+    return PendingCheck(f"required check has not completed: {run['name']}{note}")
+
+
 def _checks(
     root: Path, repository: str, revision: str, policy: ShippingPolicy, explain: bool
 ) -> None:
@@ -509,12 +520,7 @@ def _checks(
             raise ShippingError(f"required check truncated: {name}")
         _check_revision(run, revision)
         if run.get("status") != "completed":
-            note = ""
-            if explain and run.get("status") == "queued":
-                from ci_usage import queue_note
-
-                note = queue_note(root, repository, run, policy["ci_seconds"])
-            raise PendingCheck(f"required check has not completed: {name}{note}")
+            raise _pending(root, repository, run, policy["ci_seconds"], explain)
         if run.get("conclusion") == "skipped":
             raise ShippingError(
                 f"required check was skipped; gate its steps, not the job: {name}"
@@ -921,15 +927,16 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         raise ShippingError("PR base branch does not match shipping policy")
     if pull.base_repository != repository or pull.head_repository != repository:
         raise ShippingError("PR repository or head repository does not match origin")
-    review_bypass, rule_note = False, None
-    if stage == "ready":
-        from review_bypass import branch_rule_note
+    from review_bypass import Noted, branch_rule_note
 
-        rule_note = branch_rule_note(resolved_root, policy, (owner, name, number))
-    try:
+    review_bypass, identity = False, (owner, name, number)
+    rule_note = (
+        branch_rule_note(resolved_root, policy, identity) if stage == "ready" else None
+    )
+    with Noted(rule_note):
         if stage == "ready":
             review_bypass = _ready_state(
-                resolved_root, pull, policy, branch, local_head, (owner, name, number)
+                resolved_root, pull, policy, branch, local_head, identity
             )
             revision, merged_sha = pull.head_sha, None
         else:
@@ -944,10 +951,6 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         current = _pull(resolved_root, owner, name, number)
         if current != pull:
             raise ShippingError("PR changed during shipping verification")
-    except ShippingError as error:
-        if rule_note:
-            raise type(error)(f"{error}\n{rule_note}") from error
-        raise
     return Shipment(
         root=resolved_root,
         plan=resolved_plan,

@@ -74,6 +74,22 @@ def _required_checks(
     return {name for name in names if isinstance(name, str)}
 
 
+class Noted:
+    """Add a note line to any shipping refusal raised inside the block."""
+
+    def __init__(self, note: str | None) -> None:
+        self.note = note
+
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(
+        self, kind: object, error: BaseException | None, trace: object
+    ) -> None:
+        if isinstance(error, ShippingError) and self.note:
+            raise type(error)(f"{error}\n{self.note}") from error
+
+
 def _dict(value: JsonValue) -> dict[str, JsonValue]:
     return value if isinstance(value, dict) else {}
 

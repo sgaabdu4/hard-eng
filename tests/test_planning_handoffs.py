@@ -519,6 +519,15 @@ def test_a_ready_plan_from_before_the_update_passes_without_rules(
     )
 
 
+def test_a_plan_from_before_the_update_that_holds_rules_is_still_judged(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    text = rules_plan(visual_plan, Hierarchy="Fail — two strong buttons")
+    plan = finished_before_the_update(tmp_path / "project", text)
+    with pytest.raises(ValueError, match="UX Rules: Hierarchy is Fail; fix the design"):
+        validate_plan(plan)
+
+
 def test_a_ready_plan_edited_after_the_update_needs_rules(
     tmp_path: Path, visual_plan: str
 ) -> None:
