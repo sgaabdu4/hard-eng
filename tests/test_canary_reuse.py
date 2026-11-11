@@ -25,17 +25,18 @@ def merged_pr_world(
     head_rows: list[str],
     pulls: list[str] | None = None,
     head_tree: str = "t1",
+    breaks: tuple[str, Exception] | None = None,
 ) -> None:
     def output(command: list[str]) -> str:
         text = " ".join(command)
+        if breaks and breaks[0] in text:
+            raise breaks[1]
         if command[0] == "git" and command[1] == "diff":
             return "setup.py"
         if command[0] == "git":
             return "t1"
         if "check-runs" in text:
             return "\n".join(head_rows) if MERGED_HEAD in text else ""
-        if pulls == ["fail"]:
-            raise subprocess.CalledProcessError(1, command)
         if text.endswith("/pulls") or "/pulls " in text:
             return "\n".join([MERGED_HEAD] if pulls is None else pulls)
         assert f"git/commits/{MERGED_HEAD}" in text
@@ -77,6 +78,8 @@ def test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr(
         "other files",
         "no merged pull request",
         "a failed lookup",
+        "a failed check-runs lookup",
+        "a lookup that timed out",
     ],
 )
 def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
@@ -84,17 +87,29 @@ def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
 ) -> None:
     failed = [*all_passed()[1:], all_passed()[0][:-7] + "failure"]
     rows = {"no runs at the head": [], "a failed job": failed}.get(case, all_passed())
+    fault = subprocess.CalledProcessError(1, "gh")
+    breaks = {
+        "a failed lookup": ("/pulls", fault),
+        "a failed check-runs lookup": (f"{MERGED_HEAD}/check-runs", fault),
+        "a lookup that timed out": (
+            f"{PUSHED}/check-runs",
+            subprocess.TimeoutExpired("gh", 60),
+        ),
+    }
     merged_pr_world(
         monkeypatch,
         rows,
-        pulls={"a failed lookup": ["fail"], "no merged pull request": []}.get(case),
+        pulls=[] if case == "no merged pull request" else None,
         head_tree="t2" if case == "other files" else "t1",
+        breaks=breaks.get(case),
     )
     listed = [release_canary.folder(" ".join(t)) for t in release_canary.CI_TARGETS]
     got = release_canary.push_outputs(["setup.py"], PUSHED)
     seen = capsys.readouterr()
-    assert got == "targets=" + json.dumps(listed) and release_canary.ci_failures(PUSHED)
-    assert (seen.out, "merged PR failed" in seen.err) == ("", case == "a failed lookup")
+    assert got == "targets=" + json.dumps(listed)
+    assert (seen.out, "merged PR failed" in seen.err) == ("", case in breaks)
+    if case not in breaks or case == "a failed lookup":
+        assert release_canary.ci_failures(PUSHED)
 
 
 def test_the_release_gate_follows_a_reused_push_to_the_pr_head(

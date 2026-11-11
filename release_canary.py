@@ -673,9 +673,14 @@ def push_outputs(names: list[str], revision: str) -> str:
     listed = [folder(" ".join(target)) for target in CI_TARGETS]
     if not needs_canary(names):
         return "targets=[]"
-    proven = proven_revision(revision)
-    if proven != revision and not unproven(proven):
-        return f"targets=[]\ncovered={proven}"
+    try:
+        proven = proven_revision(revision)
+        if proven != revision and not unproven(proven):
+            return f"targets=[]\ncovered={proven}"
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        print(
+            "The lookup of the merged PR failed; the new projects run.", file=sys.stderr
+        )
     return "targets=" + json.dumps(listed)
 
 
