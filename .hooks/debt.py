@@ -89,6 +89,10 @@ def remember(group: Group, gate: Gate, text: str) -> str:
     return text
 
 
+def lacks_suite(gate: Gate, output: str) -> bool:
+    return gate.get("role") == "performance" and MISSING_SUITE in output
+
+
 def recordable(gate: Gate) -> bool:
     kind = gate.get("report", {}).get("type")
     return gate.get("role") not in NEVER and (
@@ -220,7 +224,7 @@ def print_new(
 def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bool:
     """A gate with debt fails only on findings beyond it, or when listed ones are fixed."""
     debt = load(root).get(f"{group['path']}/{gate['name']}")
-    if debt is None or gate.get("role") in NEVER or MISSING_SUITE in output:
+    if debt is None or gate.get("role") in NEVER or lacks_suite(gate, output):
         return failed
     current = fingerprints(root, group, gate, output) if failed else Counter()
     if new := by_form(current) - by_form(debt):
@@ -281,7 +285,7 @@ def record(
                 not recordable(gate)
                 or not current
                 or UNREADABLE in current
-                or MISSING_SUITE in outputs.get(key, "")
+                or lacks_suite(gate, outputs.get(key, ""))
             ):
                 refused.append(key)
                 continue
