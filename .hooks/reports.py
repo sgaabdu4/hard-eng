@@ -266,17 +266,26 @@ def expected_coverage(
         outside_lib = kind == "dart-tests" and any(
             path.parts[0] != "lib" for path in relative
         )
+        pubspec = directory / "pubspec.yaml"
+        flutter = pubspec.is_file() and any(
+            line.split() == ["sdk:", "flutter"]
+            for line in pubspec.read_text().splitlines()
+        )
         raise ValueError(
             f"Coverage report omits production files: {', '.join(map(str, relative))}. "
             "Cover them, or mark generator output with "
             "`<pattern> linguist-generated=true` in .gitattributes"
             + (
-                ". For Dart code outside lib/: move it under lib/ and test it there."
-                " Or leave it in place and write tests under test/ that import it by a"
+                ". For Dart code outside lib/: move it under lib/ and test it there"
+                if outside_lib
+                else ""
+            )
+            + (
+                ". Or leave it in place and write tests under test/ that import it by a"
                 " relative path and use package:test/test.dart (not flutter_test). The"
                 " second way needs `test` as a dev dependency and a setup rerun, which adds"
                 " the VM test run"
-                if outside_lib
+                if outside_lib and not flutter
                 else ""
             )
         )

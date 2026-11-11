@@ -346,6 +346,22 @@ def test_flutter_dart_outside_lib_is_measured_on_the_dart_vm(tmp_path: Path) -> 
     assert line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected) == (1, 1)
 
 
+def test_a_flutter_project_is_not_told_to_use_package_test(tmp_path: Path) -> None:
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts/check.dart").write_text("int two() => 2;\n")
+    coverage = tmp_path / "lcov.info"
+    coverage.write_text("SF:lib/app.dart\nDA:1,1\nend_of_record\n")
+    expected = {(tmp_path / "scripts/check.dart").resolve()}
+    pubspec = tmp_path / "pubspec.yaml"
+    pubspec.write_text("dependencies:\n  flutter:\n    sdk: flutter\n")
+    with pytest.raises(ValueError, match="move it under lib/") as flutter:
+        line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected)
+    assert "package:test" not in str(flutter.value)
+    pubspec.write_text("name: tool\n")
+    with pytest.raises(ValueError, match="package:test/test.dart"):
+        line_coverage(coverage, "dart-tests", tmp_path.resolve(), expected)
+
+
 def test_update_regenerates_an_installed_dart_vm_coverage_command() -> None:
     """Installed gate files keep the generated command, so updates must rewrite it."""
     installed = (
