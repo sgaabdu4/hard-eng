@@ -553,15 +553,13 @@ def _head_is_not_the_base(pr: ReleasePR) -> None:
     pr.pull["head"]["ref"] = "feature/shipping"
 
 
+def _base_is_the_base(pr: ReleasePR) -> None:
+    pr.pull["base"]["ref"] = "main"
+
+
 @pytest.mark.parametrize(
     "break_proof",
-    [
-        _no_completed_run,
-        _newest_completed_run_failed,
-        _merge_tree_differs,
-        _head_from_a_fork,
-        _head_is_not_the_base,
-    ],
+    [_no_completed_run, _newest_completed_run_failed, _merge_tree_differs],
 )
 def test_a_release_pr_runs_the_checks_when_no_pass_covers_it(
     tmp_path: Path,
@@ -575,3 +573,22 @@ def test_a_release_pr_runs_the_checks_when_no_pass_covers_it(
     reason = capsys.readouterr().out
     assert reason.startswith("Running the checks again; ")
     assert reason.strip().removeprefix("Running the checks again;").strip()
+
+
+@pytest.mark.parametrize(
+    "change", [_head_from_a_fork, _head_is_not_the_base, _base_is_the_base]
+)
+def test_an_ordinary_pr_prints_nothing_and_asks_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    change: Callable[[ReleasePR], None],
+) -> None:
+    pr = _release_pr(tmp_path, monkeypatch)
+    change(pr)
+    spy = Mock(side_effect=AssertionError("no query expected"))
+    monkeypatch.setattr(shipping, "gh", spy)
+    monkeypatch.setattr(shipping, "git", spy)
+    assert pr.reused() is None
+    assert capsys.readouterr().out == ""
+    assert not spy.called
