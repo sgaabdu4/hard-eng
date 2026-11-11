@@ -126,3 +126,28 @@ def test_a_changed_lock_file_drops_the_install_mark(tmp_path: Path) -> None:
         assert process_group.read_installed(lock, tmp_path) == {key}
         (package / "uv.lock").write_text("one\ntwo\n")
         assert process_group.read_installed(lock, tmp_path) == frozenset()
+
+
+def test_a_quick_check_installs_again_after_the_lock_file_of_a_group_with_no_language_changes(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    """A workspace root that holds only its members has the install and no language."""
+    configure(
+        tmp_path,
+        [
+            gate("install", "open('trace', 'a').write('x')", role="lockfiles"),
+            gate("format", "pass", role="format", parallel=True),
+        ],
+    )
+    lock = tmp_path / "bun.lock"
+    lock.write_text("one\n")
+
+    def installs() -> int:
+        assert runner.check(quick=True) == 0
+        return len((tmp_path / "trace").read_text())
+
+    assert installs() == 1
+    assert installs() == 1
+    lock.write_text("one\ntwo\n")
+    assert installs() == 2
+    assert installs() == 2

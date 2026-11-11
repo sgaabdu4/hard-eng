@@ -153,14 +153,16 @@ def check_lock_file(root: Path) -> Generator[tuple[IO[str], bool]]:
 
 
 def lock_stamp(root: Path, key: str) -> str:
-    """Size and change time of a package group's lock files; its install mark holds only while they stay the same."""
+    """Size and change time of each lock file in a package group's folder; its install mark holds only while they stay the same.
+
+    A workspace root can hold the install and have no language, so the language does not pick the names."""
     from gate_config import LOCKFILES
 
-    language, _, path = key.partition(":")
+    folder = root / key.partition(":")[2]
     found = []
-    for name in LOCKFILES.get(language, ()):
+    for name in sorted({name for names in LOCKFILES.values() for name in names}):
         with suppress(OSError):
-            status = (root / path / name).stat()
+            status = (folder / name).stat()
             found.append(f"{name} {status.st_size} {status.st_mtime_ns}")
     return "; ".join(found)
 
