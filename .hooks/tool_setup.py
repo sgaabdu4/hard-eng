@@ -317,9 +317,14 @@ def scanner_version(
     return found[0] if found else ""
 
 
+def shared_tool_folder() -> Path:
+    """The tool folder that every checkout on this machine shares."""
+    return Path(os.environ.get("RUNNER_TEMP") or temporary_root()) / "hard-eng-tools"
+
+
 def scanner_store() -> Path:
     """The file, shared by every checkout, that holds the versions of one cutoff hour."""
-    shared = Path(os.environ.get("RUNNER_TEMP") or temporary_root()) / "hard-eng-tools"
+    shared = shared_tool_folder()
     return shared / "scanner-versions.json"
 
 
@@ -382,7 +387,7 @@ def tool_name(tool: str) -> str:
 def provision_batch(batch: list[str], timeout: float) -> None:
     # Two days avoids newly broken releases.
     batch = [bun_age(tool, RELEASE_AGE_SECONDS) for tool in batch]
-    shared = Path(os.environ.get("RUNNER_TEMP") or temporary_root()) / "hard-eng-tools"
+    shared = shared_tool_folder()
     # Checkouts on other Hard Eng revisions rewrite these files while this one runs.
     storage = shared if "RUNNER_TEMP" in os.environ else checkout_storage(shared)
     environment = os.environ.copy()
