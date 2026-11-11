@@ -408,6 +408,7 @@ def test_names_close_to_a_skip_form_pass(tmp_path: Path) -> None:
         ),
         ("src/page.ts", "const slow = ski" + "p ? 1 : 2;\n"),
         ("src/page.test.ts", "const testSki" + "p = 1;\nconst it_ski" + "p = 2;\n"),
+        ("src/guard.test.ts", "expect.fa" + "il('x');\nassert.fa" + "il('y');\n"),
     ):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_text(text)
