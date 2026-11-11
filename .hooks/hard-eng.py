@@ -638,6 +638,8 @@ def check(
         validate_comments(ROOT, base)
         validate_suppressions(ROOT, base)
         plans.validate_records(ROOT, base)
+        if not quick:
+            change_size.commit_note(ROOT)
         stop_keeping("listings")
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None

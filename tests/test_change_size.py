@@ -795,3 +795,39 @@ def test_the_repeated_block_task_with_its_merge_needs_no_plan(
     )
     (repository / "test_report.py").write_text(tests)
     assert change_size.size_verdict(repository)[0] is True
+
+
+def add_commits(root: Path, count: int) -> None:
+    for number in range(count):
+        git(root, "commit", "--allow-empty", "-qm", f"step {number}")
+
+
+def test_a_full_check_warns_from_80_commits_and_never_refuses(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-PR-COMMITS: 79 commits are silent; 80 and 101 warn; the base and no base stay silent."""
+    git(repository, "branch", "-M", "main")
+    git(repository, "switch", "-qc", "work")
+    add_commits(repository, 79)
+    assert change_size.commit_note(repository) is None
+    assert capsys.readouterr().out == ""
+    add_commits(repository, 1)
+    change_size.commit_note(repository)
+    assert capsys.readouterr().out == (
+        "Hard Eng warning: this branch has 80 commits; ship refuses a PR with more "
+        "than 100 (HE-PR-COMMITS). Ship this work soon, then continue on a new branch.\n"
+    )
+    add_commits(repository, 21)
+    change_size.commit_note(repository)
+    assert capsys.readouterr().out == (
+        "Hard Eng warning: this branch has 101 commits; ship refuses a PR with more "
+        "than 100 (HE-PR-COMMITS). Ship the finished part in its own PR, or join "
+        "neighbour commits.\n"
+    )
+    git(repository, "switch", "-q", "main")
+    git(repository, "merge", "-q", "--ff-only", "work")
+    change_size.commit_note(repository)
+    assert capsys.readouterr().out == ""
+    git(repository, "branch", "-M", "odd-name")
+    change_size.commit_note(repository)
+    assert capsys.readouterr().out == ""
