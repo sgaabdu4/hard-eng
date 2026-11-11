@@ -679,7 +679,8 @@ def check(
         if not quick:
             change_size.commit_note(ROOT)
         stop_keeping("listings")
-        provision_tools(ROOT, groups, timeout)
+        if shard != "merge":
+            provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         save_installed(lock, installed, ROOT)
@@ -752,7 +753,8 @@ def check_command(args: "Namespace") -> int:
     from process_group import exit_when_stopped
     from tool_setup import ensure_python_runtime
 
-    ensure_python_runtime()
+    if args.shard != "merge":
+        ensure_python_runtime()
     exit_when_stopped()
     return check(
         base=args.base,

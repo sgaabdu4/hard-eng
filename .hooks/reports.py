@@ -163,6 +163,12 @@ def validate_scanner_log(scanner: str | None, log: TextIO) -> None:
         SCANNER_LOGS[scanner](log)
 
 
+def junit_root(path: Path) -> ET.Element:
+    # Local JUnit only; ElementTree rejects external entities (test_junit_rejects_entities).
+    # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse
+    return ET.parse(path).getroot()
+
+
 def completed_tests(path: Path, kind: str) -> int:
     if kind == "dart-tests":
         if (
@@ -188,10 +194,8 @@ def completed_tests(path: Path, kind: str) -> int:
         ):
             raise ValueError("Test report does not contain a successful completed run")
         return passed
-    # Local JUnit only; ElementTree rejects external entities (test_junit_rejects_entities).
-    # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse
-    tree = ET.parse(path)
-    if tree.getroot().tag not in {"testsuites", "testsuite"}:
+    tree = junit_root(path)
+    if tree.tag not in {"testsuites", "testsuite"}:
         raise ValueError("Expected a JUnit test report")
     if tree.findall(".//failure") or tree.findall(".//error"):
         raise ValueError("Test report contains failures or errors")
@@ -214,8 +218,7 @@ def reported_skips(path: Path, kind: str) -> set[str]:
         }
     if kind == "xcode-tests":
         return set()
-    # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse
-    tree = ET.parse(path)
+    tree = junit_root(path)
     return {
         test.get("name", "").split("[", 1)[0]
         for test in tree.iter("testcase")
