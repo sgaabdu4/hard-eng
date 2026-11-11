@@ -822,7 +822,9 @@ def test_a_full_check_warns_from_80_commits_and_never_refuses(
     assert capsys.readouterr().out == (
         "Hard Eng warning: this branch has 101 commits; ship refuses a PR with more "
         "than 100 (HE-PR-COMMITS). Move the oldest finished commits to a PR of their own "
-        "and merge it first, or join neighbour commits.\n"
+        "and merge it first. Or join neighbour commits on the same base commit: "
+        "`git diff <old head> <new head>` must then print nothing; push with "
+        "`--force-with-lease` and never pull the old commits back in.\n"
     )
     git(repository, "switch", "-q", "main")
     git(repository, "merge", "-q", "--ff-only", "work")
