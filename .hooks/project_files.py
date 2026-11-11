@@ -112,8 +112,8 @@ def refuse_ignored_locks(
     """A lock file that Git ignores is missing from a fresh clone; ask Git when the file is not on disk yet or is a link at setup."""
     for lockfile in locks:
         relative = lockfile.relative_to(root)
-        written = lockfile.is_file() and not (ask_git and lockfile.is_symlink())
-        if written:
+        written = lockfile.is_file()
+        if written and not (ask_git and lockfile.is_symlink()):
             ignored = str(relative) not in listed
         else:
             ignored = (
@@ -128,6 +128,23 @@ def refuse_ignored_locks(
                 f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
                 f"remove that rule, {'' if written else INSTALL_STEP}then commit {relative}"
             )
+
+
+def dependency_free(directory: Path) -> bool:
+    """Bun deletes the lockfile of a package that declares nothing to install."""
+    path = directory / "package.json"
+    manifest = read_project_file(path) if path.is_file() else None
+    fields = (
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies",
+    )
+    return (
+        isinstance(manifest, dict)
+        and not manifest.get("workspaces")
+        and not any(manifest.get(key) for key in fields)
+    )
 
 
 def expanded(value: object) -> bool:
