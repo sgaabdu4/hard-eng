@@ -107,6 +107,7 @@ CI_KINDS = (*AGENT_KINDS, "update")
 # The public CI job (.github/workflows/canary.yml) that checks each new project.
 NOT_FOLDER_NAME = re.compile(r"[^a-z0-9]+")
 CI_JOB = re.compile(r"new project \(([a-z0-9-]+), [\w.-]+\)")
+CI_SYSTEMS = ("ubuntu-latest", "macos-latest")
 AGENTS = ("claude", "codex")
 TASK = (
     "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
@@ -652,15 +653,22 @@ def merged_heads(revision: str) -> list[str]:
     ).split()
 
 
+def ci_jobs(label: str) -> list[str]:
+    """The public CI job names of one new project; the update project runs on Linux only."""
+    update = folder(" ".join(UPDATE_TARGET))
+    systems = CI_SYSTEMS[:1] if label == update else CI_SYSTEMS
+    return [f"new project ({label}, {system})" for system in systems]
+
+
 def unproven(revision: str) -> list[str]:
-    """New projects without a passing public CI job for this revision; the newest try counts."""
-    passed: dict[str, bool] = {}
-    for name, conclusion in new_project_runs(revision):
-        if found := CI_JOB.fullmatch(name):
-            label = found[1]
-            passed[label] = passed.get(label, True) and conclusion == "success"
+    """New projects without a passing public CI job on each system for this revision; the newest try counts."""
+    passed = {
+        name
+        for name, conclusion in new_project_runs(revision)
+        if conclusion == "success"
+    }
     labels = [folder(" ".join(target)) for target in CI_TARGETS]
-    return [label for label in labels if not passed.get(label)]
+    return [label for label in labels if not passed.issuperset(ci_jobs(label))]
 
 
 def ci_failures(revision: str) -> list[str]:
