@@ -10,6 +10,7 @@ UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
 MERMAID_BLOCK = re.compile(r"^[ \t]*(?:```|~~~)[ \t]*mermaid\b", re.MULTILINE)
 NOT_CHECKED_LINE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?Not checked:(.*)$", re.MULTILINE)
 EMPTY_ANSWER = re.compile(r"(?:none|nothing|n/a)?[ \t]*[-—–]*", re.IGNORECASE)
+DEPENDENCY_BOTS = frozenset({"dependabot[bot]", "renovate[bot]"})
 MAX_VISIBLE_CHARACTERS = 6000
 MAX_LINE_CHARACTERS = 600
 CODE_FENCE = re.compile(
@@ -102,6 +103,8 @@ def event_problem(event_path: str, root: Path = Path()) -> str | None:
     head_repo = (pull["head"].get("repo") or {}).get("full_name")
     base_repo = (pull["base"].get("repo") or {}).get("full_name")
     if pull["head"]["ref"] == UPDATE_BRANCH and head_repo and head_repo == base_repo:
+        return None
+    if (pull.get("user") or {}).get("login") in DEPENDENCY_BOTS:
         return None
     try:
         policy = load_policy(root, required=False)

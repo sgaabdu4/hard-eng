@@ -161,10 +161,12 @@ def _event(
     head: str = "task",
     base: str = "main",
     repo: str = "acme/widget",
+    author: str = "pat",
 ) -> str:
     event = {
         "pull_request": {
             "body": body,
+            "user": {"login": author},
             "head": {"ref": head, "repo": {"full_name": repo}},
             "base": {"ref": base, "repo": {"full_name": "acme/widget"}},
         }
@@ -214,6 +216,23 @@ def test_event_problem_exempts_only_the_update_pr_and_other_bases(
     assert (problem is not None) is refused
     if problem:
         assert "Edit the PR text" in problem
+
+
+@pytest.mark.parametrize(
+    ("author", "refused"),
+    [
+        ("dependabot[bot]", False),
+        ("renovate[bot]", False),
+        ("pat", True),
+        ("helper[bot]", True),
+    ],
+)
+def test_event_problem_skips_a_dependency_bot_pr_and_checks_each_other_author(
+    tmp_path: Path, author: str, refused: bool
+) -> None:
+    root = _project(tmp_path)
+    problem = event_problem(_event(tmp_path, "", author=author), root)
+    assert (problem is not None) is refused
 
 
 def test_event_problem_checks_a_fork_pr_even_on_the_update_branch_name(
