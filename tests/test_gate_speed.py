@@ -556,6 +556,42 @@ def test_stop_with_nothing_changed_starts_no_more_git_commands_than_before(
     assert len(starts) <= 6, len(starts)
 
 
+SESSION_START_MODULES = (
+    "agent_hooks coverage_sources dependency_graph fallow_report freshness "
+    "gate_config gitleaks_scan hook_chain local_edits mcp_setup plans process_group "
+    "project_files project_setup python_setup release_history source_trees submodules "
+    "swift_setup tool_setup update update_runner"
+)
+COUNT_PATTERNS = """
+import re, sys
+hooks, own, real = sys.argv[1], [], re.compile
+sys.path.insert(0, hooks)
+def counted(pattern, flags=0):
+    own.append(sys._getframe(1).f_code.co_filename.startswith(hooks))
+    return real(pattern, flags)
+re.compile = counted
+for name in sys.argv[2:]:
+    __import__(name)
+print(sum(own))
+"""
+
+
+def test_the_session_start_modules_compile_no_more_patterns_at_import() -> None:
+    counted = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            COUNT_PATTERNS,
+            str(SOURCE / ".hooks"),
+            *SESSION_START_MODULES.split(),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert int(counted.stdout) <= 76, counted.stdout
+
+
 ATTRIBUTE_STARTS: list[str] = []
 READING: list[bool] = []
 
