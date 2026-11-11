@@ -323,6 +323,16 @@ def test_javascript_and_dart_code_added_after_setup_must_join_the_checked_source
         validate_required_checks(tmp_path, config)
 
 
+def dart_project(root: Path) -> None:
+    """A Dart package in a repository that `repository` made for JavaScript."""
+    (root / "package.json").unlink()
+    (root / "bun.lock").unlink()
+    (root / "pubspec.yaml").write_text("name: app_fixture\n")
+    (root / "pubspec.lock").touch()
+    (root / "lib").mkdir()
+    (root / "lib/main.dart").write_text("void main() {}\n")
+
+
 def test_setup_and_check_leave_root_tool_configs_out_of_the_sources(
     installer: ModuleType, tmp_path: Path
 ) -> None:
@@ -353,12 +363,7 @@ def test_runtime_files_beside_tool_configs_still_need_listing(
 ) -> None:
     repository(tmp_path)
     if added.endswith(".dart"):
-        (tmp_path / "package.json").unlink()
-        (tmp_path / "bun.lock").unlink()
-        (tmp_path / "pubspec.yaml").write_text("name: app_fixture\n")
-        (tmp_path / "pubspec.lock").touch()
-        (tmp_path / "lib").mkdir()
-        (tmp_path / "lib/main.dart").write_text("void main() {}\n")
+        dart_project(tmp_path)
     elif added.endswith(".py"):
         uv_project(tmp_path, PROJECT)
         (tmp_path / "main.py").write_text("value = 1\n")
@@ -514,12 +519,7 @@ def test_the_dart_sources_message_gives_a_step_that_passes(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     repository(tmp_path)
-    (tmp_path / "package.json").unlink()
-    (tmp_path / "bun.lock").unlink()
-    (tmp_path / "pubspec.yaml").write_text("name: app_fixture\n")
-    (tmp_path / "pubspec.lock").touch()
-    (tmp_path / "lib").mkdir()
-    (tmp_path / "lib/main.dart").write_text("void main() {}\n")
+    dart_project(tmp_path)
     config = installer.gate_config(tmp_path)
     validate_required_checks(tmp_path, config)
     (tmp_path / "tool").mkdir()
