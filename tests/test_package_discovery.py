@@ -214,3 +214,9 @@ def test_the_moved_source_message_names_the_replace_step(
     with pytest.raises(ValueError, match="outside its sources: moved.py;") as refused:
         validate_required_checks(tmp_path, config)
     assert "replace its old name in that list" in str(refused.value)
+    group = config["packages"][0]
+    assert "main.py" in group["sources"]
+    group["sources"] = [
+        "moved.py" if source == "main.py" else source for source in group["sources"]
+    ]
+    validate_required_checks(tmp_path, config)
