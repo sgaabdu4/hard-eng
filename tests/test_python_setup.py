@@ -1,12 +1,19 @@
 """Python projects get the import contract, parallel tests and typing checks they need."""
 
 import json
+import re
+import tomllib
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 from gate_config import Gate, GateConfig, Group, parse_config
-from python_setup import import_configuration, import_contract_gap, leave_out_children
+from python_setup import (
+    import_configuration,
+    import_contract_gap,
+    leave_out_children,
+    pyrefly_gap,
+)
 from reports import parallel_hint
 from test_setup import repository
 
@@ -215,7 +222,7 @@ def test_the_strict_pyrefly_refusal_names_the_file_and_the_lines(
     assert "tools/cli/pyproject.toml" in text
     assert "[tool.pyrefly]" in text
     assert 'preset = "strict"' in text
-    assert "check-unannotated-defs = true" in text
+    assert "check-unannotated-defs" not in text
     (directory / "pyrefly.toml").write_text(
         'preset = "strict"\nreplace-imports-with-any = ["a"]\n'
     )
@@ -265,3 +272,36 @@ def test_setup_refuses_the_pyrefly_settings_that_the_types_gate_refuses(
         configure_python(tmp_path, directory, package, {})
     assert "tools/cli/pyproject.toml" in str(error.value)
     assert key in str(error.value)
+
+
+@pytest.mark.parametrize(
+    ("section", "named"),
+    [
+        ('preset = "basic"\ncheck-unannotated-defs = true\n', ["preset"]),
+        (
+            'preset = "strict"\ncheck-unannotated-defs = false\n',
+            ["check-unannotated-defs"],
+        ),
+        (
+            'preset = "basic"\ncheck-unannotated-defs = false\n',
+            ["preset", "check-unannotated-defs"],
+        ),
+        ("", ["preset"]),
+    ],
+)
+def test_the_pyrefly_step_sets_only_the_keys_that_are_wrong(
+    section: str, named: list[str]
+) -> None:
+    text = '[project]\nname = "cli"\n\n[tool.pyrefly]\n' + section
+    options = tomllib.loads(text)["tool"]["pyrefly"]
+    step = pyrefly_gap("pyproject.toml", options)
+    setting = re.compile(r'(preset|check-unannotated-defs) = ("strict"|true)')
+    assert sorted(key for key, _ in setting.findall(step)) == sorted(named)
+    for key, value in setting.findall(step):
+        line = f"{key} = {value}"
+        if re.search(rf"(?m)^{key} = ", text):
+            text = re.sub(rf"(?m)^{key} = .*$", line, text)
+        else:
+            text = text.replace("[tool.pyrefly]\n", f"[tool.pyrefly]\n{line}\n")
+    fixed = tomllib.loads(text)["tool"]["pyrefly"]
+    assert pyrefly_gap("pyproject.toml", fixed) == ""
