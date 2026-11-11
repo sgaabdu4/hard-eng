@@ -26,7 +26,7 @@ from gate_config import (
     typescript_packages,
 )
 from hook_chain import is_own
-from project_files import read_project_file, refuse_ignored_locks
+from project_files import INSTALL_LOCKS, read_project_file, refuse_ignored_locks
 
 CARET_VERSION = re.compile(r"\^?(\d+)\.(\d+)\.(\d+)")
 REGEX_SPECIAL_CHARACTER = re.compile(r"([.\[\]()*+?{}|^$\\])")
@@ -353,7 +353,7 @@ def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
             "Vitest, Jest or `node --test`. "
             "Then delete: " + ", ".join(legacy or ["the old packageManager value"])
         )
-    lockfile = "bun.lock"
+    lockfile = INSTALL_LOCKS["bun"]
     if not (directory / lockfile).exists() and not (directory / ".git").exists():
         for parent in directory.parents:
             if (parent / "package.json").exists() and workspace_matches(
@@ -395,8 +395,8 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
         return javascript_manager(directory)
     if language == "python":
         if (directory / "poetry.lock").exists():
-            return "poetry", ["poetry", "sync"], "poetry.lock"
-        uv = ("uv", ["uv", "sync", "--locked"], "uv.lock")
+            return "poetry", ["poetry", "sync"], INSTALL_LOCKS["poetry"]
+        uv = ("uv", ["uv", "sync", "--locked"], INSTALL_LOCKS["uv"])
         if (directory / "uv.lock").exists():
             return uv
         for parent in [] if (directory / ".git").exists() else directory.parents:
@@ -431,7 +431,8 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
         )
         else "dart"
     )
-    return manager, [manager, "pub", "get", "--enforce-lockfile"], "pubspec.lock"
+    install = [manager, "pub", "get", "--enforce-lockfile"]
+    return manager, install, INSTALL_LOCKS[manager]
 
 
 def adapt_packages(root: Path, config: GateConfig) -> None:
