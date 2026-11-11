@@ -38,7 +38,9 @@ def event_problem(event_path: str, root: Path = Path()) -> str | None:
     from update_runner import UPDATE_BRANCH
 
     pull = json.loads(Path(event_path).read_text())["pull_request"]
-    if pull["head"]["ref"] == UPDATE_BRANCH:
+    head_repo = (pull["head"].get("repo") or {}).get("full_name")
+    base_repo = (pull["base"].get("repo") or {}).get("full_name")
+    if pull["head"]["ref"] == UPDATE_BRANCH and head_repo and head_repo == base_repo:
         return None
     try:
         policy = load_policy(root, required=False)
