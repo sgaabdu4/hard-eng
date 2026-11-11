@@ -28,11 +28,12 @@ from agent_checks import (
     judge_outside_service,
     judge_plan_only,
     judge_repeat_failure,
+    judge_repeated_block,
     judge_review,
     loads_skill,
     main,
 )
-from agent_fixtures import CONTROLS, READY_PLAN
+from agent_fixtures import CONTROLS, READY_PLAN, REPORT
 from conftest import SOURCE, commit, gone, init, spawner
 
 PASSED = "PASS tests (exit 0)\nHard Eng: build checks passed — ready for ship"
@@ -718,3 +719,49 @@ def test_a_claude_read_of_a_skill_file_counts_as_loading_it() -> None:
     result = {"type": "tool_result", "tool_use_id": "r1", "content": "text"}
     events: list[dict[str, object]] = [{"message": {"content": [use, result]}}]
     assert loaded_skills(claude_actions(events)) == {"he-learn"}
+
+
+_COPIED = """
+
+def max_line(text: str) -> str:
+    values = [int(part) for part in text.split(",") if part.strip()]
+    return f"max: {max(values)}"
+"""
+_MERGED = """from calc import average
+
+
+def values_of(text: str) -> list[int]:
+    return [int(part) for part in text.split(",") if part.strip()]
+
+
+def total_line(text: str) -> str:
+    return f"total: {sum(values_of(text))}"
+
+
+def mean_line(text: str) -> str:
+    return f"mean: {average(values_of(text)):.2f}"
+
+
+def max_line(text: str) -> str:
+    return f"max: {max(values_of(text))}"
+"""
+
+
+@pytest.mark.parametrize(
+    ("report", "problem"),
+    [
+        (_MERGED, None),
+        (REPORT + _COPIED, "the input parsing has 3 copies"),
+        (REPORT, "max_line is missing"),
+    ],
+)
+def test_repeated_block_needs_the_feature_and_one_owner_of_the_parsing(
+    tmp_path: Path, report: str, problem: str | None
+) -> None:
+    root, base = case_fixture(tmp_path, "repeated-block")
+    (root / "report.py").write_text(report)
+    failures = judge_repeated_block(Run(root, base, "Done.", [], []))
+    if problem is None:
+        assert failures == []
+    else:
+        assert any(problem in failure for failure in failures), failures
