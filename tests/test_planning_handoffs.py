@@ -443,9 +443,10 @@ def test_a_missing_ux_reference_names_the_step(
     monkeypatch.setattr(plans, "UX_REFERENCE", "gone/ux.md")
     path = tmp_path / "PLAN.md"
     path.write_text(visual_plan)
-    with pytest.raises(ValueError, match="gone/ux.md.*rerun Hard Eng setup") as error:
+    with pytest.raises(
+        ValueError, match="gone/ux.md.*`git checkout HEAD -- gone/ux.md`"
+    ):
         validate_plan(path)
-    assert "restore the file" in str(error.value)
 
 
 def test_a_ready_plan_from_before_the_update_passes_without_rules(
