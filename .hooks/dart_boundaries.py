@@ -110,6 +110,15 @@ def validate_dart_includes(
         validate_dart_includes(included, directory, seen.copy())
 
 
+def flutter_without_test(directory: Path) -> bool:
+    """A Flutter project that does not list `test` cannot run its outside-lib tests on the Dart VM."""
+    pubspec = directory / "pubspec.yaml"
+    lines = pubspec.read_text().splitlines() if pubspec.is_file() else []
+    return any(line.split() == ["sdk:", "flutter"] for line in lines) and not any(
+        line.split(":")[0].strip() == "test" for line in lines
+    )
+
+
 def has_dart_file(directory: Path, prefix: str) -> bool:
     """Looks only below the prefix: this runs in every check, and a walk of all of lib/ is slow."""
     parent, _, start = prefix.rpartition("/")
