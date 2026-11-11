@@ -201,7 +201,9 @@ def plan_sections(content: str, *, allow_placeholders: bool = False) -> dict[str
     for line in content.splitlines():
         for marker in NOT_APPLICABLE_WORD.finditer(line):
             if not NOT_APPLICABLE_REASON_SEPARATOR.match(line[marker.end() :]):
-                raise ValueError("plan N/A needs an inline reason: N/A — reason")
+                raise ValueError(
+                    f"plan N/A needs an inline reason: N/A — reason; line: {line.strip()[:60]}"
+                )
     return sections
 
 

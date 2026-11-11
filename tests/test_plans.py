@@ -1105,3 +1105,19 @@ def test_a_retro_or_same_cause_line_needs_a_reason_and_real_tests(
         validate_plans(repository, "0" * 40, "Complete")
     if "exist" not in refusal:
         assert "None — <reason>" in str(error.value)
+
+
+def test_the_missing_reason_refusal_names_its_line(
+    repository: Path, completed_plan: str
+) -> None:
+    line = "Evidence: The test asserts the exit, N/A for the rest of this long line"
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace(
+            "Evidence: The test asserts the observed command exit; this is fixture data.",
+            line,
+        )
+    )
+    with pytest.raises(ValueError, match="needs an inline reason") as error:
+        validate_plans(repository, "0" * 40, "Complete")
+    assert line[:60] in str(error.value)
+    assert line[:61] not in str(error.value)
