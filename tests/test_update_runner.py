@@ -919,3 +919,16 @@ def test_an_install_that_is_not_on_the_base_branch_gets_the_pushed_line(
         assert outcome.startswith(update_runner.NOT_PUBLISHED)
     assert update_runner.apply_update(project) == 0
     assert update_runner.freshness_note(project) == update_runner.NOT_PUBLISHED
+
+
+def test_the_stop_note_keeps_one_line_of_a_long_failed_result(repository: Path) -> None:
+    (repository / ".hooks").mkdir()
+    marker = json.dumps({"revision": "a" * 40})
+    (repository / update_runner.SOURCE_FILE).write_text(marker)
+    refusal = "setup refused the update: a.md has local edits.\nblock 1\nblock 2"
+    update_runner.record_result(repository, update_runner.failed_update(refusal))
+    note = update_runner.freshness_note(repository)
+    assert note.startswith("Scaffold may be stale. Last Hard Eng update: ")
+    assert "a.md has local edits." in note
+    assert "block 1" not in note
+    assert note.endswith(f"(the rest is in {update_runner.RESULT_FILE})")
