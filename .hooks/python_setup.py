@@ -524,18 +524,29 @@ def osv_identity(package: Mapping[str, object], lockfile: object) -> None:
         raise ValueError(
             f"OSV report lists a package with no name, from {lockfile}. Run the scan again."
         )
-    local = package.get("version") == "" and package.get("ecosystem") == "PyPI"
     path = Path(str(lockfile))
-    if local and path.name == "uv.lock" and path.is_file():
-        wanted = name.lower().replace("_", "-").replace(".", "-")
-        entries = tomllib.loads(path.read_text()).get("package", [])
-        if any(
-            entry.get("name", "").lower().replace("_", "-").replace(".", "-") == wanted
-            and {"editable", "virtual", "directory"} & set(entry.get("source", {}))
-            for entry in entries
-        ):
-            return
+    if package.get("version") == "" and package.get("ecosystem") == "PyPI":
+        if path.name == "uv.lock" and path.is_file():
+            wanted = name.lower().replace("_", "-").replace(".", "-")
+            entries = tomllib.loads(path.read_text()).get("package", [])
+            if any(
+                entry.get("name", "").lower().replace("_", "-").replace(".", "-")
+                == wanted
+                and {"editable", "virtual", "directory"} & set(entry.get("source", {}))
+                for entry in entries
+            ):
+                return
+        if path.name == "uv.lock":
+            raise ValueError(
+                f"OSV report lists {name} with no version, from {lockfile}. "
+                "Only a local uv package may have none. Run `uv lock`, then run the scan again."
+            )
+    if not (isinstance(package.get("ecosystem"), str) and package["ecosystem"]):
+        raise ValueError(
+            f"OSV report lists {name} with no ecosystem, from {lockfile}. Run the scan again."
+        )
     raise ValueError(
-        f"OSV report lists {name} with no usable version, from {lockfile}. "
-        "Only a local uv package may have none. Run `uv lock`, then run the scan again."
+        f"OSV report lists {name} with no version, from {lockfile}. "
+        "Update the lockfile with its package manager so that it holds a version, "
+        "then run the scan again."
     )
