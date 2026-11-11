@@ -240,9 +240,15 @@ def typescript_packages(root: Path, files: list[Path]) -> set[str]:
     return packages
 
 
+LISTED: dict[Path, tuple[frozenset[str], set[str]]] = {}
+
+
 def generated_sources(root: Path, names: list[str]) -> set[str]:
     if not names:
         return set()
+    listed, generated = LISTED.get(root, (frozenset(), set()))
+    if listed.issuperset(names):
+        return generated.intersection(names)
     # A live stdin pipe deadlocked against git's per-path output on macOS (issue 375).
     with tempfile.TemporaryFile() as paths:
         paths.write(("\0".join(names) + "\0").encode())
@@ -943,6 +949,23 @@ def load_groups(
 
         load_policy(root)
     listed = repository_files(root)
+    start = len(str(root)) + 1
+    names = [str(path)[start:] for path in listed]
+    LISTED[root] = frozenset(names), generated_sources(root, names)
+    try:
+        return checked_groups(root, config, listed, base, dependents, starting)
+    finally:
+        del LISTED[root]
+
+
+def checked_groups(
+    root: Path,
+    config: GateConfig,
+    listed: list[Path],
+    base: str | None,
+    dependents: bool,
+    starting: bool,
+) -> list[Group]:
     validate_file_sizes(root, config.get("file_size_exceptions", {}), listed)
     if config.get("scan_git_history", True) is False:
         config["shared"] = [
