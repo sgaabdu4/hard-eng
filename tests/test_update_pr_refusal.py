@@ -7,12 +7,13 @@ from unittest.mock import Mock
 import pytest
 import update_pr
 import update_runner
-from conftest import add_origin, git
+from conftest import SOURCE, add_origin, commit, git
 from test_update_runner import (
     GATES_FILE,
     add_shipping_policy,
     installed_python_project,
     refused_release,
+    shared_names,
 )
 
 
@@ -88,3 +89,18 @@ def test_the_update_brings_the_workflow_files_once_the_base_holds_the_shipping_b
     gates = git(project, "show", f"{update_runner.UPDATE_BRANCH}:{GATES_FILE}")
     names = [gate["name"] for gate in json.loads(gates)["shared"]]
     assert {"actionlint", "zizmor"} <= set(names)
+
+
+def test_a_rerun_writes_the_workflow_gates_when_the_checkout_has_a_workflow(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    add_shipping_policy(project)
+    workflows = project / ".github/workflows"
+    workflows.mkdir(parents=True)
+    source = SOURCE / ".github/workflows/hard-eng.yml"
+    (workflows / "hard-eng.yml").write_text(source.read_text())
+    commit(project, "a workflow")
+    outcome = update_runner.locked_update(project, repair=True)
+    assert "come with the update" not in outcome
+    assert {"actionlint", "zizmor"} <= set(shared_names(project))
