@@ -17,6 +17,7 @@ from plans import (
     plan_sections,
     plan_status,
     release_references,
+    validate_plan,
 )
 from project_files import keep, keeping
 
@@ -339,6 +340,57 @@ def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
     return moved
 
 
+def plan_words(text: str) -> list[str]:
+    """The words of a plan; every table rule counts as one form."""
+    return [
+        "---" if word.count("-") > 2 and not word.strip("-:") else word
+        for word in text.split()
+    ]
+
+
+def fails_todays_rules(path: Path) -> bool:
+    if plan_status(path.read_text()) != "Complete":
+        return False
+    try:
+        validate_plan(path)
+    except ValueError:
+        return True
+    return False
+
+
+def held_words(root: Path, reference: str, name: str) -> list[str] | None:
+    try:
+        return plan_words(_git_output(root, "show", f"{reference}:{name}"))
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
+def reformatted_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
+    """Changed Complete plans that fail today's rules but keep every word of the copy that the base and the branch point hold."""
+    failing = [
+        name
+        for name in changed
+        if is_plan_path(Path(name))
+        and (root / name).is_file()
+        and fails_todays_rules(root / name)
+    ]
+    if not failing:
+        return set()
+    references = {
+        reference
+        for reference in (base or "HEAD", default_branch_point(root))
+        if reference
+    }
+    return {
+        name
+        for name in failing
+        if all(
+            held_words(root, reference, name) == plan_words((root / name).read_text())
+            for reference in references
+        )
+    }
+
+
 def plan_not_needed(root: Path) -> bool:
     small, reason = size_verdict(root)
     if reason == NO_CHANGE:
@@ -356,6 +408,7 @@ def judged_plans(
     """The changed files with released plans added and moved plans out, every plan file, and the plans that judge the change."""
     changed = changed | released_plans(root, base)
     changed -= moved_plans(root, base, changed)
+    changed -= reformatted_plans(root, base, changed)
     paths = plan_files(root)
     applicable = [path for path in paths if str(path.relative_to(root)) in changed]
     return (
