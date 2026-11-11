@@ -6,7 +6,7 @@ from types import ModuleType
 
 import pytest
 from gate_config import Gate, GateConfig, Group, parse_config
-from python_setup import import_configuration, import_contract_gap
+from python_setup import import_configuration, import_contract_gap, leave_out_children
 from reports import parallel_hint
 from test_setup import repository
 
@@ -141,3 +141,42 @@ def test_standalone_python_does_not_invent_import_architecture(
     assert len(annotations) == 1
     assert "main.py" in annotations[0]["command"]
     assert "src" not in annotations[0]["command"]
+
+
+def test_a_python_parent_leaves_out_child_groups_that_have_the_same_gate(
+    tmp_path: Path,
+) -> None:
+    def group(path: str, language: str, *roles: str) -> Group:
+        checks: list[Gate] = [
+            {"name": role, "role": role, "command": [role]} for role in roles
+        ]
+        return {"path": path, "language": language, "checks": checks}
+
+    parent = group(".", "python", "tests", "dependencies")
+    groups = [
+        parent,
+        group("packages/a", "python", "tests", "dependencies"),
+        group("packages/b", "python", "tests"),
+        group("web", "javascript", "tests", "dependencies"),
+    ]
+    tests, deptry = parent["checks"]
+    pytest_command = ["uv", "run", "pytest", "-n", "auto"]
+    deptry_command = ["deptry", ".", "--no-ansi"]
+    assert leave_out_children(tmp_path, pytest_command, parent, tests, groups) == [
+        "uv",
+        "run",
+        "pytest",
+        f"--ignore={tmp_path / 'packages/a'}",
+        f"--ignore={tmp_path / 'packages/b'}",
+        "-n",
+        "auto",
+    ]
+    assert leave_out_children(tmp_path, deptry_command, parent, deptry, groups) == [
+        *deptry_command,
+        "--extend-exclude",
+        "^packages/a(/|$)",
+    ]
+    child = groups[1]
+    assert leave_out_children(tmp_path, pytest_command, child, tests, groups) == (
+        pytest_command
+    )

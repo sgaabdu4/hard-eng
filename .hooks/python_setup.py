@@ -3,11 +3,13 @@
 import configparser
 import json
 import os
+import re
 import shlex
 import tomllib
 from itertools import pairwise
 from pathlib import Path
 
+from dependency_graph import child_groups
 from gate_config import Gate, Group, require_roles
 from project_files import parse_project_text
 from project_setup import dependency_command
@@ -65,6 +67,34 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
     for package in packages:
         prefix.extend(["--with", package, "--upgrade-package", package])
     return [*prefix, *command]
+
+
+def leave_out_children(
+    root: Path, command: list[str], group: Group, gate: Gate, groups: list[Group]
+) -> list[str]:
+    """Keep a Python parent's test and dependency commands out of the folders of its child groups."""
+    role = gate.get("role")
+    if group.get("language") != "python" or role not in {"tests", "dependencies"}:
+        return command
+    below = Path(group["path"])
+    children = [
+        Path(child["path"]).relative_to(below)
+        for child in child_groups(group, role, groups)
+    ]
+    if role == "dependencies":
+        return [
+            *command,
+            *(
+                argument
+                for child in children
+                for argument in ("--extend-exclude", f"^{re.escape(str(child))}(/|$)")
+            ),
+        ]
+    if "pytest" not in command:
+        return command
+    runner = len(command) - 1 - command[::-1].index("pytest")
+    ignores = [f"--ignore={root / below / child}" for child in children]
+    return [*command[: runner + 1], *ignores, *command[runner + 1 :]]
 
 
 def src_children(src: Path) -> list[tuple[str, Path]]:
