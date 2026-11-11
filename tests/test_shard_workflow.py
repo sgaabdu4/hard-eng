@@ -204,6 +204,13 @@ def test_a_run_that_selects_no_package_passes_in_the_gate_job_with_no_download(
 OWN_GATES = SOURCE / "hard-eng.gates.json"
 
 
+def test_own_workflow_is_the_generated_shard_form() -> None:
+    config = json.loads(OWN_GATES.read_text())
+    expected = split_test_shards(config, WORKFLOW_TEMPLATE.read_text())
+    assert (SOURCE / OLD_PATH).read_text() == expected
+    assert list(yaml.safe_load(expected)["jobs"]) == ["checks", "tests", "hard-eng"]
+
+
 @pytest.mark.parametrize("name", [".github/hard-eng.yml", OLD_PATH])
 def test_an_edit_under_github_selects_the_package_checks(
     repository: Path, name: str
