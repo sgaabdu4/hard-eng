@@ -511,10 +511,12 @@ def remember_failure(root: Path, attempt: str, error: Exception) -> None:
 
 
 def failed_update(error: Exception | str) -> str:
+    cause, start, note = str(error).partition("This checkout")
     return (
-        f"Hard Eng update failed: {error}. Fix that cause first. A fix in tracked files "
+        f"Hard Eng update failed: {cause.strip().rstrip('.')}. Fix that cause first. A fix in tracked files "
         "goes on the base branch as its own commit, since the update is built from it. "
         "Cause outside repo → tell user. Installed gates still apply."
+        + (f" {start}{note}" if start else "")
     )
 
 
@@ -728,7 +730,7 @@ def prepare_update(root: Path, repair: bool = False) -> str:
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         if not note:
             raise
-        raise failure_kind(error)(f"{error} {note}") from error
+        raise failure_kind(error)(f"{str(error).rstrip('.')}. {note}") from error
     return f"{built} {note}".strip()
 
 

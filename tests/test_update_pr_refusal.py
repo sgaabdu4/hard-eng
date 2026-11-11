@@ -16,6 +16,12 @@ from test_update_runner import (
     shared_names,
 )
 
+FIX_FIRST = (
+    "Fix that cause first. A fix in tracked files goes on the base branch as its own "
+    "commit, since the update is built from it. Cause outside repo → tell user. "
+    "Installed gates still apply."
+)
+
 
 def test_update_pr_fails_after_a_remembered_refusal(
     release: tuple[Path, Path, str],
@@ -59,6 +65,27 @@ def test_update_pr_with_no_update_branch_prints_no_git_error(
     assert "fatal:" not in done.stderr
 
 
+def recorded_failure(project: Path) -> str:
+    recorded = (project / update_runner.RESULT_FILE).read_text()
+    return ("Hard Eng" + recorded.partition("Hard Eng")[2]).strip()
+
+
+def test_a_failed_update_build_still_names_the_files_that_the_rerun_wrote(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    gone = project.parent / "gone.git"
+    git(project, "remote", "set-url", "origin", str(gone))
+    with pytest.raises(subprocess.SubprocessError) as error:
+        update_runner.locked_update(project, repair=True)
+    cause = f"git ls-remote exited 128: fatal: '{gone}' does not appear to be a git repository"
+    note = f"This checkout: setup wrote {GATES_FILE}; review and commit it."
+    assert str(error.value) == f"{cause}. {note}"
+    assert recorded_failure(project) == (
+        f"Hard Eng update failed: {cause}. {FIX_FIRST} {note}"
+    )
+
+
 def test_a_build_error_that_needs_more_arguments_keeps_its_cause_and_the_note(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -67,8 +94,11 @@ def test_a_build_error_that_needs_more_arguments_keeps_its_cause_and_the_note(
     monkeypatch.setattr(update_runner, "build_update", Mock(side_effect=cause))
     with pytest.raises(ValueError) as error:
         update_runner.locked_update(project, repair=True)
-    assert "Expecting value" in str(error.value)
-    assert f"This checkout: setup wrote {GATES_FILE}" in str(error.value)
+    note = f"This checkout: setup wrote {GATES_FILE}; review and commit it."
+    assert str(error.value) == f"Expecting value: line 1 column 1 (char 0). {note}"
+    assert recorded_failure(project) == (
+        f"Hard Eng update failed: Expecting value: line 1 column 1 (char 0). {FIX_FIRST} {note}"
+    )
 
 
 def test_the_update_brings_the_workflow_files_once_the_base_holds_the_shipping_block(
