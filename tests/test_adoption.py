@@ -10,7 +10,7 @@ from unittest.mock import Mock
 import agent_hooks
 import pytest
 import update
-from conftest import add_origin, commit, git, init
+from conftest import add_origin, commit, git, init, remove_application
 from gate_config import json_file
 from test_setup import repository, snapshot
 from test_updates import select_release
@@ -340,7 +340,7 @@ def test_update_retires_old_generation(
         }
     )
     gates.write_text(json.dumps(config))
-    (target / "package.json").unlink()
+    remove_application(target)
     git(target, "add", "--force", *OLD_FILES)
     commit(target, "old generation wiring")
     if edited:

@@ -304,10 +304,11 @@ def release_template(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, st
     )
     for name in ("PRODUCT.md", "DESIGN.md"):
         shutil.copyfile(SOURCE / name, target / name)
+    installed_gates = json.loads((target / "hard-eng.gates.json").read_text())
     (target / "hard-eng.gates.json").write_text(
         json.dumps(
             {
-                "packages": [],
+                "packages": installed_gates["packages"],
                 "shared": [
                     {
                         "name": "application-check",
@@ -353,6 +354,15 @@ def release(
     source_trees.forget_all()
     yield source, target, old
     source_trees.forget_all()
+
+
+def remove_application(target: Path) -> None:
+    """The installed project keeps no package: no manifest and no group."""
+    (target / "package.json").unlink()
+    gates = target / "hard-eng.gates.json"
+    config = json.loads(gates.read_text())
+    config["packages"] = []
+    gates.write_text(json.dumps(config))
 
 
 def migrates_to_template(root: Path, old: str) -> None:

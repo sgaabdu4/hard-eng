@@ -23,47 +23,6 @@ SOURCE = Path(__file__).resolve().parent
 sys.path[:0] = [str(SOURCE / ".hooks"), str(SOURCE)]
 
 
-def hook_identity(item: object) -> str:
-    """The same matcher and commands are the same hook, whatever its timeout."""
-    handlers = item.get("hooks") if isinstance(item, dict) else None
-    if not isinstance(item, dict) or not isinstance(handlers, list):
-        return json.dumps(item, sort_keys=True)
-    commands = [h.get("command") for h in handlers if isinstance(h, dict)]
-    return json.dumps([item.get("matcher"), commands])
-
-
-def merge(
-    current: JsonObject, additions: JsonObject, path: tuple[str, ...] = ()
-) -> JsonObject:
-    if not isinstance(current, dict):
-        raise TypeError(f"Conflicting setting {'.'.join(path)}; expected an object")
-    for key, value in additions.items():
-        location = (*path, key)
-        existing = current.get(key)
-        if key not in current:
-            current[key] = value
-        elif isinstance(value, dict):
-            if not isinstance(existing, dict):
-                raise TypeError(
-                    f"Conflicting setting {'.'.join(location)}; expected an object"
-                )
-            merge(existing, value, location)
-        elif (
-            isinstance(value, list)
-            and path == ("hooks",)
-            and isinstance(existing, list)
-        ):
-            known = {hook_identity(item) for item in existing}
-            for item in value:
-                if hook_identity(item) not in known:
-                    existing.append(item)
-        elif current[key] != value:
-            raise ValueError(
-                f"Conflicting setting {'.'.join(location)}; preserve it and ask before changing it"
-            )
-    return current
-
-
 def gate_config(root: Path) -> GateConfig:
     from basic_mode import basic_config
     from gate_config import dart_test_support, package_manifests, repository_files
@@ -119,8 +78,29 @@ def gate_config(root: Path) -> GateConfig:
     return config
 
 
+def add_package_groups(root: Path, config: GateConfig) -> None:
+    """Give each supported package that has no group the group a first install gives it."""
+    from gate_config import dart_test_support, package_manifests, repository_files
+
+    declared = {(str(Path(g["path"])), g.get("language")) for g in config["packages"]}
+    missing = {
+        (path, language)
+        for path, language in package_manifests(root, repository_files(root))
+        if (path, language) not in declared
+        and (path, None) not in declared
+        and not dart_test_support(path, language, config["packages"])
+    }
+    if missing:
+        config["packages"] += [
+            group
+            for group in gate_config(root)["packages"]
+            if (str(Path(group["path"])), group.get("language")) in missing
+        ]
+
+
 def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
     import agent_hooks
+    from settings_merge import merge
     from gate_config import json_file
     from project_files import parse_project_text, read_project_file
 
@@ -275,6 +255,7 @@ def apply_dart_typing(
 ) -> None:
     from gate_config import dart_rule_settings
     from project_setup import validate_dart_exclusions
+    from settings_merge import merge
 
     for section, groups in required.items():
         # A key holding only comments, as in `flutter create` output, parses as null.
@@ -815,6 +796,7 @@ def plan_install(
     from swift_setup import add_swift_groups
 
     add_swift_groups(root, config)
+    add_package_groups(root, config)
     from project_setup import (
         adapt_boundaries,
         add_freshness,

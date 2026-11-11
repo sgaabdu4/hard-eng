@@ -12,7 +12,7 @@ from unittest.mock import Mock
 
 import pytest
 import update
-from conftest import SOURCE, commit, git, init
+from conftest import SOURCE, commit, git, init, remove_application
 from gate_config import JsonObject, json_file
 from legacy_command import script_operand
 from shipping import ShippingPolicy
@@ -467,7 +467,7 @@ def test_project_configuration_update_commits_without_rerunning_application_chec
     remote = target.parent / "application-remote.git"
     git(target, "clone", "--bare", str(target), str(remote))
     git(target, "remote", "add", "origin", str(remote))
-    (target / "package.json").unlink()
+    remove_application(target)
     commit(target, "application without task plan")
     installer = source / "setup.py"
     installer.write_text(
@@ -512,7 +512,6 @@ def test_supported_update_migrates_custom_workflow_pins(
             1,
         )
     )
-    (target / "package.json").unlink()
     config_path = target / "hard-eng.gates.json"
     config = json.loads(config_path.read_text())
     config["shared"][0]["command"] = ["python3", "-c", "print('application passes')"]
@@ -574,9 +573,9 @@ def test_update_mixed_with_feature_work_checks_only_affected_packages(
     base = git(target, "rev-parse", "HEAD")
     select_release(source, monkeypatch)
     update.update(target)
-    page = target / "apps/web/page.ts"
+    page = target / "apps/web/page.txt"
     page.parent.mkdir(parents=True)
-    page.write_text("export const page = 1;\n")
+    page.write_text("a page\n")
     if case == "gate-config":
         config = target / "hard-eng.gates.json"
         config.write_text(config.read_text() + "\n")
