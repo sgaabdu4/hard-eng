@@ -2,19 +2,26 @@
 
 import json
 import os
+import shutil
+import subprocess
 import sys
 import threading
 from argparse import ArgumentParser
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from typing import cast
 
+import gate_config
 import pytest
 from ci_jobs import add_shard_option
-from conftest import configure, gate
-from gate_config import Gate, Group, validate_group
+from conftest import SOURCE, configure, gate
+from coverage_sources import python_coverage
+from gate_config import Gate, Group, affected_groups, validate_group
 from gate_times import gate_limit
-from shards import shard_groups, split
+from reports import completed_tests, junit_root, reported_skips
+from shards import merge_coverage, merge_junit, shard_groups, split
+from test_plan_acceptance import UNPROVED, VALUE_ID
 
 
 def shard_group(path: str, role: str | None, value: object) -> Group:
@@ -188,7 +195,7 @@ def test_shards_need_a_direct_pytest_command(
         "command": command,
         "report": {"type": report, "tests": "j", "coverage": "c"},
     }
-    groups = [package("."), cast(Group, {"path": "api", "checks": [cast(Gate, check)]})]
+    groups = [package("."), pytest_group("api", [cast(Gate, check)])]
     if not refused:
         assert names(shard_groups(groups, "rest")) == ["./install", "./lint", "./tests"]
         return
@@ -218,7 +225,10 @@ def pytest_sessionfinish(session):
 LOW_COVERAGE = json.dumps(
     {"files": {"lib.py": {"summary": {"covered_lines": 1, "num_statements": 10}}}}
 )
-PACKAGE = {"language": "python", "sources": ["lib.py"]}
+
+
+def pytest_group(path: str, checks: list[Gate]) -> Group:
+    return {"path": path, "language": "python", "sources": ["lib.py"], "checks": checks}
 
 
 @pytest.fixture
@@ -256,12 +266,9 @@ def shard_gate(count: int | None, name: str = "tests") -> Gate:
     return check
 
 
-def shard_package(path: str, count: int | None) -> Group:
-    return cast(Group, {"path": path, **PACKAGE, "checks": [shard_gate(count)]})
-
-
 def project_groups(count: int | None) -> list[Group]:
-    return [shard_package(".", count), shard_package("tests/child", None)]
+    child = pytest_group("tests/child", [shard_gate(None)])
+    return [pytest_group(".", [shard_gate(count)]), child]
 
 
 def run_part(runner: ModuleType, part: str, count: int | None = 2) -> bool:
@@ -308,7 +315,7 @@ def test_a_shard_keeps_its_reports_apart_and_skips_the_coverage_minimum(
     assert not (shard_project / "j.xml").exists()
     assert not (shard_project / "c.json").exists()
     assert runner.run_gate(
-        {"path": ".", **PACKAGE, "checks": [shard_gate(None)]},
+        pytest_group(".", [shard_gate(None)]),
         shard_gate(None),
         300,
         threading.Lock(),
@@ -333,3 +340,321 @@ def test_shard_time_does_not_shorten_the_full_gate_limit(
     times = json.loads((shard_project / ".git/hard-eng-gate-times.json").read_text())
     assert list(times) == ["./tests@shard"]
     assert gate_limit(shard_project, "./tests", 900) == 900
+
+
+def cov_json(executed: set[int], total: int = 10) -> str:
+    rest = sorted(set(range(1, total + 1)) - executed)
+    summary = {"covered_lines": len(executed), "num_statements": total}
+    entry = {"executed_lines": sorted(executed), "missing_lines": rest}
+    return json.dumps({"files": {"lib.py": {**entry, "summary": summary}}})
+
+
+def junit_text(*cases: str, skipped: tuple[str, ...] = ()) -> str:
+    body = "".join(
+        f'<testcase name="{name}">{"<skipped/>" if name in skipped else ""}</testcase>'
+        for name in cases
+    )
+    return f"<testsuite>{body}</testsuite>"
+
+
+def keep_shard(
+    root: Path,
+    number: int,
+    path: str,
+    files: list[str],
+    reports: tuple[str, str] | None,
+) -> None:
+    folder = root / "coverage/shards" / str(number) / path
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "shard-files.txt").write_text("".join(f"{name}\n" for name in files))
+    if reports:
+        (folder / "j.xml").write_text(reports[0])
+        (folder / "c.json").write_text(reports[1])
+
+
+def merge_group(path: str, count: int) -> list[Group]:
+    check = suite(count)
+    check["command"] = [sys.executable, "-m", "pytest"]
+    return [pytest_group(path, [check])]
+
+
+def serve(groups: list[Group]) -> Callable[..., list[Group]]:
+    def load_groups(*_arguments: object, **_options: object) -> list[Group]:
+        return groups
+
+    return load_groups
+
+
+def run_merge(runner: ModuleType, groups: list[Group]) -> bool:
+    chosen = shard_groups(groups, "merge")[0]
+    return runner.run_gate(chosen, chosen["checks"][0], 60, threading.Lock(), groups)
+
+
+@pytest.fixture
+def merge_project(runner: ModuleType) -> Path:
+    (runner.ROOT / "lib.py").write_text("value = 1\n")
+    (runner.ROOT / "api").mkdir()
+    (runner.ROOT / "api/lib.py").write_text("value = 1\n")
+    return runner.ROOT
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "failed"),
+    [({1, 2, 3, 4}, {4, 5, 6, 7, 8}, False), ({1, 2, 3}, {2, 3, 4, 5}, True)],
+)
+def test_the_gate_job_applies_the_coverage_minimum_to_the_merged_report(
+    runner: ModuleType,
+    merge_project: Path,
+    capsys: pytest.CaptureFixture[str],
+    first: set[int],
+    second: set[int],
+    failed: bool,
+) -> None:
+    keep_shard(merge_project, 1, ".", ["a"], (junit_text("one"), cov_json(first)))
+    keep_shard(merge_project, 2, ".", ["b"], (junit_text("two"), cov_json(second)))
+    assert run_merge(runner, merge_group(".", 2)) is failed
+    assert ("HE-COVERAGE-MIN" in capsys.readouterr().out) is failed
+
+
+@pytest.mark.parametrize("path", [".", "api"])
+@pytest.mark.parametrize("lost", ["folder", "junit"])
+def test_the_gate_job_refuses_missing_shard_reports(
+    runner: ModuleType,
+    merge_project: Path,
+    capsys: pytest.CaptureFixture[str],
+    path: str,
+    lost: str,
+) -> None:
+    reports = (junit_text("one"), cov_json({1, 2, 3, 4, 5, 6, 7, 8}))
+    keep_shard(merge_project, 1, path, ["a"], reports)
+    if lost == "junit":
+        keep_shard(merge_project, 2, path, ["b"], reports)
+        (merge_project / "coverage/shards/2" / path / "j.xml").unlink()
+    count = 2 if lost == "junit" else 3
+    assert run_merge(runner, merge_group(path, count)) is True
+    assert (
+        f"Shard 2 of {count} for {path}/tests sent no reports. List shards 1 to "
+        f"{count} in the tests job of .github/workflows/hard-eng.yml (setup writes it), "
+        "then rerun the workflow." in capsys.readouterr().out
+    )
+
+
+def test_the_gate_job_accepts_a_shard_that_had_no_files(
+    runner: ModuleType, merge_project: Path
+) -> None:
+    reports = (junit_text("one"), cov_json({1, 2, 3, 4, 5, 6, 7, 8}))
+    keep_shard(merge_project, 1, ".", ["a"], reports)
+    keep_shard(merge_project, 2, ".", [], None)
+    keep_shard(merge_project, 4, ".", ["z"], None)
+    assert run_merge(runner, merge_group(".", 2)) is False
+
+
+def test_merged_junit_holds_every_shard_case_and_skip(tmp_path: Path) -> None:
+    first, second, merged = tmp_path / "1.xml", tmp_path / "2.xml", tmp_path / "m.xml"
+    first.write_text(junit_text("test_a[x]", "test_b", skipped=("test_b",)))
+    second.write_text(
+        f"<testsuites>{junit_text('test_c', 'test_d', skipped=('test_d',))}</testsuites>"
+    )
+    merge_junit([first, second], merged)
+    root = junit_root(merged)
+    assert [suite.tag for suite in root] == ["testsuite", "testsuite"]
+    assert len(list(root.iter("testcase"))) == 4
+    assert completed_tests(merged, "python-tests") == 2
+    assert reported_skips(merged, "python-tests") == {"test_b", "test_d"}
+
+
+def test_the_gate_job_fails_skipped_plan_acceptance_tests(
+    runner: ModuleType,
+    merge_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (merge_project / "lib.py").write_text(f"value = {VALUE_ID!r}\n")
+    (merge_project / "tests").mkdir()
+    (merge_project / "tests/test_main.py").write_text(
+        f'def test_value() -> None:\n    """{VALUE_ID}: value kept."""\n'
+    )
+    (merge_project / "docs").mkdir()
+    (merge_project / "docs/requirements.md").write_text(
+        f"## {VALUE_ID} \u2014 Value\n\nThe value is kept.\n\nProof: check\n"
+    )
+    plan = merge_project / "PLAN.md"
+    plan.write_text(
+        plan.read_text().replace(UNPROVED, f"- [x] Value kept \u2192 {VALUE_ID}.")
+    )
+    keep_shard(
+        merge_project,
+        1,
+        ".",
+        ["a"],
+        (junit_text("test_other"), cov_json({1, 2, 3, 4, 5, 6, 7, 8})),
+    )
+    reports = (
+        junit_text("test_value", skipped=("test_value",)),
+        cov_json({1, 2, 3, 4, 5, 6, 7, 8}),
+    )
+    keep_shard(merge_project, 2, ".", ["tests/test_main.py"], reports)
+    configure(merge_project, [])
+    groups = merge_group(".", 2)
+    monkeypatch.setattr(gate_config, "load_groups", serve(groups))
+    assert runner.check(base="0" * 40, plan_stage="Complete", shard="merge") == 1
+    assert "skipped: test_value" in capsys.readouterr().out
+
+
+PICK = "def pick(flag):\n    if flag:\n        return 1\n    return 2\n"
+
+
+def run_pytest(root: Path, report: str, *files: str) -> None:
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith(("COV_CORE_", "COVERAGE_"))
+    }
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-p",
+            "no:cacheprovider",
+            "--cov",
+            "--cov-branch",
+            f"--cov-report=json:{report}",
+            *files,
+        ],
+        cwd=root,
+        env=environment,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_merged_shard_coverage_equals_one_full_run(tmp_path: Path) -> None:
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.pytest.ini_options]\npythonpath = ["."]\n'
+    )
+    (tmp_path / "pkg/lib.py").write_text(PICK)
+    (tmp_path / "pkg/extra.py").write_text("def extra():\n    return 3\n")
+    (tmp_path / "tests/test_a.py").write_text(
+        "from pkg.lib import pick\n\n\ndef test_a():\n    assert pick(True) == 1\n"
+    )
+    (tmp_path / "tests/test_b.py").write_text(
+        "from pkg import extra\nfrom pkg.lib import pick\n\n\n"
+        "def test_b():\n    assert pick(False) == 2\n    assert extra.extra() == 3\n"
+    )
+    run_pytest(tmp_path, "one.json", "tests/test_a.py")
+    run_pytest(tmp_path, "two.json", "tests/test_b.py")
+    run_pytest(tmp_path, "full.json", "tests/test_a.py", "tests/test_b.py")
+    parts = [
+        json.loads((tmp_path / name).read_text()) for name in ("one.json", "two.json")
+    ]
+    (tmp_path / "merged.json").write_text(json.dumps(merge_coverage(parts)))
+    merged = json.loads((tmp_path / "merged.json").read_text())
+    full = json.loads((tmp_path / "full.json").read_text())
+    assert set(merged["files"]) == set(full["files"])
+    assert "pkg/extra.py" not in parts[0]["files"]
+    keys = ("executed_lines", "missing_lines", "executed_branches", "missing_branches")
+    counts = (
+        "covered_lines",
+        "num_statements",
+        "num_branches",
+        "covered_branches",
+        "missing_branches",
+    )
+    for name, entry in full["files"].items():
+        assert {key: merged["files"][name][key] for key in keys} == {
+            key: entry[key] for key in keys
+        }
+        assert {key: merged["files"][name]["summary"][key] for key in counts} == {
+            key: entry["summary"][key] for key in counts
+        }
+    assert python_coverage(tmp_path / "merged.json", tmp_path) == python_coverage(
+        tmp_path / "full.json", tmp_path
+    )
+    assert merged["files"]["pkg/lib.py"]["summary"]["num_branches"] == 2
+
+
+BARE_MERGE = """
+import importlib.util, json, sys
+from pathlib import Path
+hooks, root, base, groups = sys.argv[1:5]
+sys.modules["yaml"] = None
+sys.path.insert(0, hooks)
+import gate_config
+gate_config.load_groups = lambda *_, **__: json.loads(Path(groups).read_text())
+spec = importlib.util.spec_from_file_location("runner", hooks + "/hard-eng.py")
+runner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runner)
+runner.ROOT = Path(root)
+sys.argv = ["hard-eng.py", "check", "--base", base, "--shard", "merge"]
+raise SystemExit(runner.main())
+"""
+
+
+def test_the_gate_job_runs_with_bare_python(
+    runner: ModuleType, merge_project: Path, tmp_path: Path
+) -> None:
+    reports = (junit_text("one"), cov_json({1, 2, 3, 4, 5, 6, 7, 8, 9}))
+    keep_shard(merge_project, 1, ".", ["a"], reports)
+    keep_shard(merge_project, 2, ".", [], None)
+    configure(merge_project, [])
+    groups = tmp_path / "groups.json"
+    groups.write_text(json.dumps(merge_group(".", 2)))
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "git").symlink_to(shutil.which("git") or "git")
+    done = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            BARE_MERGE,
+            str(SOURCE / ".hooks"),
+            str(merge_project),
+            "0" * 40,
+            str(groups),
+        ],
+        cwd=merge_project,
+        env={"PATH": str(tools), "HOME": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
+def test_the_gate_job_needs_nothing_when_the_tests_package_is_unaffected(
+    runner: ModuleType, repository: Path
+) -> None:
+    (repository / "api").mkdir()
+    (repository / "web").mkdir()
+    (repository / "web/page.py").write_text("value = 1\n")
+    packages: list[Group] = [
+        {**merge_group("api", 3)[0], "depends_on": []},
+        {"path": "web", "checks": [], "depends_on": []},
+    ]
+    chosen = affected_groups(
+        repository, [*packages, {"path": ".", "checks": []}], "HEAD"
+    )
+    assert [group["path"] for group in chosen] == ["web", "."]
+    assert shard_groups(chosen, "merge") == []
+
+
+@pytest.mark.parametrize(("shard", "provisioned"), [("merge", False), ("rest", True)])
+def test_only_the_gate_job_skips_tool_setup(
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    shard: str,
+    provisioned: bool,
+) -> None:
+    started: list[str] = []
+    configure(runner.ROOT, [])
+
+    def provision(*_arguments: object) -> None:
+        started.append(shard)
+
+    monkeypatch.setattr(gate_config, "load_groups", serve([]))
+    monkeypatch.setattr(runner, "provision_tools", provision)
+    assert runner.check(base="0" * 40, plan_stage="Complete", shard=shard) == 0
+    assert bool(started) is provisioned

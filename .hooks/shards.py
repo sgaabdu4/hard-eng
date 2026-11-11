@@ -1,12 +1,16 @@
 """Split a pytest tests gate over CI shards; only a shard run or a full check loads this."""
 
+import json
 import re
 import subprocess
+import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
+from typing import cast
 
 from gate_config import Gate, Group
 from process_group import run_in_group
+from reports import junit_root
 
 COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
 KEPT = "coverage/shards"
@@ -126,6 +130,9 @@ def part_command(
     timeout: float,
 ) -> tuple[list[str], Path | None]:
     """The command of one shard: the gate command and the files of that shard."""
+    if gate["part"] == "merge":
+        merge_reports(root, group, gate)
+        return [], coverage
     base, sizes = collected(root, group, gate, command, timeout)
     names = split(sizes, gate["shards"])[int(gate["part"]) - 1]
     folder = shard_folder(root, gate["part"], group)
@@ -146,3 +153,85 @@ def keep_reports(root: Path, group: Group, gate: Gate) -> None:
         if source.is_file():
             (folder / name).parent.mkdir(parents=True, exist_ok=True)
             source.replace(folder / name)
+
+
+type Entry = dict[str, list[int] | list[list[int]]]
+
+
+def lines(entries: list[Entry], key: str) -> set[int]:
+    return {n for entry in entries for n in cast(list[int], entry.get(key, []))}
+
+
+def pairs(entries: list[Entry], key: str) -> set[tuple[int, int]]:
+    return {
+        (start, end)
+        for entry in entries
+        for start, end in cast(list[list[int]], entry.get(key, []))
+    }
+
+
+def merge_file(entries: list[Entry]) -> dict[str, object]:
+    """Lines and branches that ran in any shard count as run."""
+    run = lines(entries, "executed_lines")
+    missed = lines(entries, "missing_lines") - run
+    excluded = lines(entries, "excluded_lines")
+    taken = pairs(entries, "executed_branches")
+    untaken = pairs(entries, "missing_branches") - taken
+    return {
+        "executed_lines": sorted(run),
+        "missing_lines": sorted(missed),
+        "excluded_lines": sorted(excluded),
+        "executed_branches": [list(pair) for pair in sorted(taken)],
+        "missing_branches": [list(pair) for pair in sorted(untaken)],
+        "summary": {
+            "covered_lines": len(run),
+            "num_statements": len(run | missed),
+            "missing_lines": len(missed),
+            "excluded_lines": len(excluded),
+            "num_branches": len(taken | untaken),
+            "covered_branches": len(taken),
+            "missing_branches": len(untaken),
+        },
+    }
+
+
+def merge_coverage(reports: list[dict[str, object]]) -> dict[str, object]:
+    """One coverage report from the shard reports; a file only some shards list comes from them."""
+    seen: dict[str, list[Entry]] = {}
+    for report in reports:
+        for name, entry in cast(dict[str, Entry], report["files"]).items():
+            seen.setdefault(name, []).append(entry)
+    meta = reports[0].get("meta") if reports else None
+    return {"meta": meta, "files": {n: merge_file(e) for n, e in seen.items()}}
+
+
+def merge_junit(paths: list[Path], target: Path) -> None:
+    merged = ET.Element("testsuites")
+    for path in paths:
+        part = junit_root(path)
+        merged.extend([part] if part.tag == "testsuite" else list(part))
+    ET.ElementTree(merged).write(target, encoding="utf-8", xml_declaration=True)
+
+
+def merge_reports(root: Path, group: Group, gate: Gate) -> None:
+    """Write the merged test and coverage reports of shards 1 to N at the gate's report paths."""
+    report, count = gate["report"], gate["shards"]
+    tests: list[Path] = []
+    coverage: list[dict[str, object]] = []
+    for number in range(1, count + 1):
+        folder = shard_folder(root, str(number), group)
+        listed = folder / "shard-files.txt"
+        kept = [folder / report["tests"], folder / report["coverage"]]
+        empty = listed.is_file() and not listed.read_text().strip()
+        if not listed.is_file() or not (empty or all(path.is_file() for path in kept)):
+            raise ValueError(
+                f"Shard {number} of {count} for {group['path']}/{gate['name']} sent no "
+                f"reports. List shards 1 to {count} in the tests job of "
+                ".github/workflows/hard-eng.yml (setup writes it), then rerun the workflow."
+            )
+        if not empty:
+            tests.append(kept[0])
+            coverage.append(json.loads(kept[1].read_text()))
+    directory = root / group["path"]
+    merge_junit(tests, directory / report["tests"])
+    (directory / report["coverage"]).write_text(json.dumps(merge_coverage(coverage)))
