@@ -375,7 +375,9 @@ def validate_osv_package(
         isinstance(package.get(key), str) and package[key]
         for key in ("name", "version", "ecosystem")
     ):
-        raise ValueError("OSV report is missing package identity")
+        from python_setup import osv_identity
+
+        osv_identity(package, source["path"])
     if item.get("vulnerabilities", []) != [] or item.get("groups", []) != []:
         found = item.get("vulnerabilities")
         entries = found if isinstance(found, list) else []
