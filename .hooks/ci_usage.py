@@ -273,7 +273,7 @@ def _pull_request_head(
 
 
 def reused_pull_request(root: Path, base: str) -> str | None:
-    """The PR head whose passed required checks already cover this base-branch push."""
+    """The PR head whose passed required checks already cover this branch push."""
     import os
 
     from shipping import ShippingError, _checks, _repo, _sha, git, load_policy
@@ -284,7 +284,7 @@ def reused_pull_request(root: Path, base: str) -> str | None:
             policy is None
             or os.environ.get("GITHUB_ACTIONS") != "true"
             or os.environ.get("GITHUB_EVENT_NAME") != "push"
-            or os.environ.get("GITHUB_REF") != f"refs/heads/{policy['base']}"
+            or not os.environ.get("GITHUB_REF", "").startswith("refs/heads/")
         ):
             return None
     except ShippingError:
@@ -293,8 +293,9 @@ def reused_pull_request(root: Path, base: str) -> str | None:
         if git(root, "status", "--porcelain"):
             raise ShippingError("the checkout has uncommitted changes")
         repository = _repo(os.environ.get("GITHUB_REPOSITORY"), "workflow")
+        branch = os.environ["GITHUB_REF"].removeprefix("refs/heads/")
         head, tree = _pull_request_head(
-            root, repository, _sha(base, "push base"), policy["base"]
+            root, repository, _sha(base, "push base"), branch
         )
         if tree != git(root, "rev-parse", "HEAD^{tree}").strip():
             raise ShippingError("the merged PR tested a different tree")
