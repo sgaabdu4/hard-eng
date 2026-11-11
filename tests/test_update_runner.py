@@ -19,9 +19,10 @@ import pytest
 import update
 import update_pr
 import update_runner
-from conftest import SOURCE, add_origin, commit, git, init
+from conftest import SOURCE, add_origin, commit, default_policy, git, init
 from gate_config import (
     JsonObject,
+    json_file,
     package_manifests,
     parse_config,
     repository_files,
@@ -813,13 +814,70 @@ def test_a_rerun_writes_the_planned_gates_file_to_the_current_checkout(
     before = (project / GATES_FILE).read_text()
     assert "extra" not in before
     outcome = update_runner.locked_update(project, repair=True)
-    assert f"This checkout: setup wrote {GATES_FILE} for the project" in outcome
+    assert f"This checkout: setup wrote {GATES_FILE}; review" in outcome
     assert ("on the base branch of a remote" in outcome) is not remote
     assert '"extra"' in (project / GATES_FILE).read_text()
     assert git(project, "status", "--porcelain") == f"M {GATES_FILE}"
     assert git(project, "diff", "--cached", "--name-only") == ""
     again = update_runner.locked_update(project, repair=True)
     assert "This checkout" not in again
+
+
+def add_shipping_policy(project: Path) -> None:
+    gates = project / GATES_FILE
+    config = json.loads(gates.read_text())
+    config["shipping"] = default_policy()
+    gates.write_text(json_file(project, config))
+    commit(project, "a shipping policy")
+
+
+def shared_names(project: Path) -> list[str]:
+    config = json.loads((project / GATES_FILE).read_text())
+    return [gate["name"] for gate in config["shared"]]
+
+
+def test_a_rerun_leaves_the_workflow_gates_to_the_update_when_the_checkout_has_no_workflow(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    add_shipping_policy(project)
+    assert not (project / ".github/workflows").exists()
+    outcome = update_runner.locked_update(project, repair=True)
+    assert '"extra"' in (project / GATES_FILE).read_text()
+    assert "actionlint" not in shared_names(project)
+    assert "zizmor" not in shared_names(project)
+    assert "the update brings the workflow files and their gates" in outcome
+    assert git(project, "status", "--porcelain") == f"M {GATES_FILE}"
+    commit(project, "the packages")
+    outcome = update_runner.locked_update(project, repair=True)
+    assert "the update brings the workflow files and their gates" in outcome
+    assert "setup wrote" not in outcome
+    assert git(project, "status", "--porcelain") == ""
+    config = json.loads((project / GATES_FILE).read_text())
+    config["shared"].append(
+        {"name": "actionlint", "role": "workflows", "command": ["actionlint"]}
+    )
+    (project / GATES_FILE).write_text(json_file(project, config))
+    commit(project, "a gate that the project holds")
+    update_runner.locked_update(project, repair=True)
+    assert "actionlint" in shared_names(project)
+    assert git(project, "status", "--porcelain") == ""
+
+
+def test_a_failed_update_build_still_names_the_files_that_the_rerun_wrote(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    git(project, "remote", "set-url", "origin", str(project.parent / "gone.git"))
+    with pytest.raises(subprocess.SubprocessError) as error:
+        update_runner.locked_update(project, repair=True)
+    assert f"This checkout: setup wrote {GATES_FILE}; review and commit it." in str(
+        error.value
+    )
+    assert "current packages" not in str(error.value)
+    assert '"extra"' in (project / GATES_FILE).read_text()
+    recorded = (project / update_runner.RESULT_FILE).read_text()
+    assert f"setup wrote {GATES_FILE}" in recorded
 
 
 def test_a_rerun_writes_each_project_file_that_setup_plans_and_no_scaffold_file(
@@ -843,7 +901,7 @@ def test_a_rerun_writes_each_project_file_that_setup_plans_and_no_scaffold_file(
     (project / installed).unlink()
     outcome = update_runner.locked_update(project, repair=True)
     written = f"{GATES_FILE}, web/.semgrepignore, web/tsconfig.json"
-    assert f"This checkout: setup wrote {written} for the project" in outcome
+    assert f"This checkout: setup wrote {written}; review" in outcome
     assert "review and commit them" in outcome
     assert git(project, "status", "--porcelain", "-uall").splitlines() == [
         f"D {installed}",
