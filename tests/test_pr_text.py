@@ -198,7 +198,8 @@ def test_pr_text_check_runs_on_each_push_and_edit_and_the_footer_job_skips_pushe
 ):
     workflow = yaml.safe_load(_workflow_text())
     types = workflow[True]["pull_request"]["types"]
-    assert {"synchronize", "edited"} <= set(types)
+    assert {"opened", "edited", "synchronize", "reopened"} <= set(types)
+    assert "if" not in workflow["jobs"]["pr-text"]
     footer = workflow["jobs"]["remove-claude-footer"]["if"]
     assert "github.event.action != 'synchronize'" in footer
 

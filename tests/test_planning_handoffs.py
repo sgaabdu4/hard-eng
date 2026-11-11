@@ -522,3 +522,20 @@ def test_the_step_named_by_a_missing_ux_reference_repairs_the_checkout(
         == 0
     )
     assert git(target, "branch", "--show-current").strip() == "feature/work"
+
+
+@pytest.mark.parametrize(
+    "marked",
+    [
+        "- Least effort (count: clicks): Pass — 4 clicks",
+        "- Least effort (count: steps): Pass — 4 clicks",
+        "- Least effort: Pass — 4 clicks",
+    ],
+    ids=["marker", "wrong-marker-text", "plain"],
+)
+def test_a_rule_label_may_carry_its_marker(
+    tmp_path: Path, visual_plan: str, marked: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan.replace("- Least effort: Pass — 4 clicks", marked))
+    assert validate_plan(path) == "Complete"
