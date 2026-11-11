@@ -95,6 +95,21 @@ def runner_arguments(command: list[str]) -> list[str]:
     return command[len(command) - command[::-1].index("pytest") :]
 
 
+def require_no_path(root: Path, group: Group, gate: Gate, command: list[str]) -> None:
+    for argument in runner_arguments(command):
+        named = root / group["path"] / argument.split("::")[0]
+        if not argument.startswith("-") and (
+            named.is_dir() or (named.is_file() and named.suffix == ".py")
+        ):
+            raise ValueError(
+                f"{group['path']}/{gate['name']}: the command names the path "
+                f'"{argument}", so every shard would run it whole. Remove the path '
+                "from the command and list it in testpaths in the pytest settings. "
+                "If it is the value of an option, write it as --option=value "
+                "(for example --cov=src)."
+            )
+
+
 def collected(
     root: Path, group: Group, gate: Gate, command: list[str], timeout: float
 ) -> tuple[Path, dict[str, int]]:
@@ -138,6 +153,7 @@ def part_command(
     if gate["part"] == "merge":
         merge_reports(root, group, gate)
         return [], coverage
+    require_no_path(root, group, gate, command)
     base, sizes = collected(root, group, gate, command, timeout)
     names = split(sizes, gate["shards"])[int(gate["part"]) - 1]
     folder = shard_folder(root, gate["part"], group)
