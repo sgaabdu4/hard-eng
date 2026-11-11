@@ -821,7 +821,7 @@ def test_a_full_check_warns_from_80_commits_and_never_refuses(
     change_size.commit_note(repository)
     assert capsys.readouterr().out == (
         "Hard Eng warning: this branch has 101 commits; ship refuses a PR with more "
-        "than 100 (HE-PR-COMMITS). Move the finished commits to a PR of their own "
+        "than 100 (HE-PR-COMMITS). Move the oldest finished commits to a PR of their own "
         "and merge it first, or join neighbour commits.\n"
     )
     git(repository, "switch", "-q", "main")
