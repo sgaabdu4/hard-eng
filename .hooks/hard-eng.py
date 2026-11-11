@@ -308,6 +308,16 @@ def production_files(
     return files
 
 
+def without_fixes(command: list[str]) -> list[str]:
+    """`fix = true` in ruff's settings makes `ruff check` rewrite files and exit 0."""
+    tool = next(
+        (i for i, part in enumerate(command) if part.split("@")[0] == "ruff"), -1
+    )
+    if command[tool + 1 : tool + 2] != ["check"] or tool < 0:
+        return command
+    return [*command[: tool + 2], "--no-fix", *command[tool + 2 :]]
+
+
 def prepare_command(
     group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
 ) -> list[str]:
@@ -320,7 +330,7 @@ def prepare_command(
         return []
     from hot_paths import semgrep_options
 
-    command = semgrep_options(ROOT, group, gate, command)
+    command = without_fixes(semgrep_options(ROOT, group, gate, command))
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 
