@@ -263,20 +263,30 @@ def test_a_missing_or_unreadable_report_prints_nothing_new(
 
 
 @pytest.mark.parametrize(
-    "timeout,named",
+    "timeout,named,step",
     [
-        ({"location": {"path": "tests/tables.py"}}, "tests/tables.py"),
-        ({"error_type": "Fixpoint timeout"}, "a file that Semgrep did not name"),
+        (
+            {"location": {"path": "tests/tables.py"}},
+            "ran out of time on tests/tables.py.",
+            "move them to a data module, then run the same check again",
+        ),
+        (
+            {"error_type": "Fixpoint timeout"},
+            "ran out of time and named no file;",
+            "run the same check again",
+        ),
     ],
 )
 def test_a_semgrep_timeout_names_each_file_and_the_step(
-    timeout: dict[str, object], named: str, tmp_path: Path
+    timeout: dict[str, object], named: str, step: str, tmp_path: Path
 ) -> None:
     report = json.loads(REPORTS["semgrep"])
     report["time"]["fixpoint_timeouts"] = [timeout]
     path = tmp_path / "semgrep.json"
     path.write_text(json.dumps(report))
-    with pytest.raises(ValueError, match="data module") as error:
+    with pytest.raises(ValueError, match="ran out of time") as error:
         reports.validate_semgrep(path)
     assert named in str(error.value)
+    assert str(error.value).endswith(step)
     assert "None" not in str(error.value)
+    assert ("data module" in str(error.value)) == ("tables" in named)

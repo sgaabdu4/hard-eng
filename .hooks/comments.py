@@ -345,7 +345,7 @@ SECURITY_OFF = re.compile(
     r"|shellcheck\s+disable=|zizmor:\s*ignore|coverage:ignore-",
     re.IGNORECASE,
 )
-RETRY_WORDS = ("retr", "Retr", "rerun", "flaky")
+RETRY_WORDS = ("retry", "Retry", "retries", "rerun", "flaky")
 SCAN_IGNORES = {".gitleaksignore", ".semgrepignore", ".gitleaks.toml"}
 UNOWNED = (".hooks/", ".agents/", ".claude/")
 
@@ -376,7 +376,9 @@ def disabled_classes(root: Path, name: str, added: list[tuple[int, str]]) -> lis
     marks = [
         n
         for n, t in added
-        if t[:1] in (" ", "\t") and "".join(t.split()) == "__test__=False"
+        if "__test__" in t
+        and t[:1] in (" ", "\t")
+        and "".join(t.split()) == "__test__=False"
     ]
     if not marks:
         return []
@@ -415,7 +417,12 @@ def off_hit(pattern: re.Pattern[str], text: str, in_test: bool) -> re.Match[str]
 def marks_in_file(root: Path, name: str, added: list[tuple[int, str]]) -> list[str]:
     """Switch-offs that only the whole file shows: Swift traits and Python test classes."""
     if name.endswith(".py"):
-        return disabled_classes(root, name, added) if (root / name).is_file() else []
+        marked = any("__test__" in text for _, text in added)
+        return (
+            disabled_classes(root, name, added)
+            if marked and (root / name).is_file()
+            else []
+        )
     if not name.endswith(".swift") or not (root / name).is_file():
         return []
     traits = disabled_traits((root / name).read_text(errors="replace"))
