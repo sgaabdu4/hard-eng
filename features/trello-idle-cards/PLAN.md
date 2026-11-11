@@ -4,7 +4,7 @@ Status: Ready
 
 ## Outcome + scope
 
-A real coordinator run showed two cards stuck for days. One sat in Doing after its question was answered; the other sat in To do after the card it waited for was finished. No report list named them: the lists only react to new comments, promises, questions and labels, and neither card had any. Now `check` adds an `idle` list: each card in To do, Doing or Urgent with no comment or move for `chaseHours`. A Workers rule in the run steps says what to do with each listed card: check its worker for a stall, ask a person once or record what it waits for, close it, or start it. Non-goals: chasing people (the `silent` and `buried` lists), Discuss cards, a new setting.
+A real coordinator run showed two cards stuck for days. One sat in Doing after its question was answered; the other sat in To do after the card it waited for was finished. No report list named them: the lists only react to new comments, promises, questions and labels, and neither card had any. Now `check` adds an `idle` list: each card in To do, Doing or Urgent with no comment or move for `chaseHours`. A Workers rule in the run steps says what to do with each listed card: check its worker for a stall, ask a person once or record what it waits for, close it, or send it to its worker or start one. Non-goals: chasing people (the `silent` and `buried` lists), Discuss cards, a new setting.
 
 ## Repository context
 
@@ -35,7 +35,7 @@ Execution: one session; failing tests first, then the list, the rule row and a r
 
 ## Risks + recovery
 
-A board with many open cards that rightly wait lists them on every run. Recovery: the coordinator records each wait in `handover.md` and sends no message; revert this pull request if the list is noisy.
+A board with many open cards that rightly wait lists them on every run, and its first run can tag each person a card waits on. Recovery: a wait on a card or a release is recorded in `handover.md` with no message; a wait on a person gets one tagged comment, then `silent` chases it; revert this pull request if the list is noisy.
 
 ## ux_reference
 
@@ -46,5 +46,13 @@ N/A — no app screens change.
 Result: Pending
 Evidence: Pending.
 E2E: N/A — no user journey; the report tests run the real script against a fake Trello.
+Retro: these items, each sorted by HE Learn's Retro rows.
+- Bug found on the base branch (user report): an open card with no new comment was never listed → the report tests are the gate that should catch it: `tests/test_trello_report.py::test_an_open_card_nobody_touched_is_listed_as_idle` failed on develop 2f103be9 (no `idle` field) and passes now; mechanical: `tests/test_trello_coordinator.py::test_every_report_list_has_a_run_action` fails when a report list has no run action.
+- The Stop hook and `check --quick` stopped on "plan is Draft": code changed before the plan was set to Ready; the same stop happened earlier on the same day in another project → caught both times by the existing check before any push; HE Plan's Readiness rule already sets that order. None new.
+- The Ready check's tests step hit its 600-second limit with failures and errors near the end, while checks from other sessions kept the load average at 58 to 71 → the same suite then passed alone: 2,684 tests in 469 s, run without coverage and without the step limit. Not reproduced, so no cause found. None until it recurs.
+- Reader passes 1 to 4 found ways the new rule could leave a card stuck, skip its tester, message a busy worker every hour or start a second worker → caught by the Writing Great Skills Reader rule; fixed before push. None new.
+- Review corrections: the Risks line still said no message after the rule began to tag people, and no test covered a card that only we commented on → caught by review before push; the second case is now in `tests/test_trello_report.py::test_a_recent_comment_or_move_keeps_an_open_card_off_the_idle_list`. None new.
+- My slips: a types run on the skill script outside the gate's own paths, and a replay started from a worktree whose main checkout holds no key → outside cause. None.
+
 Delivery target: PR
 Delivery: Pending — PR into develop.

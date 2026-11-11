@@ -51,10 +51,12 @@ def test_a_recent_comment_or_move_keeps_an_open_card_off_the_idle_list(
         make_card(4, "#4 Card", "l-done", **old),
         make_card(5, "#5 Card", "l-discuss", **old),
     ]
+    project.fake.cards.append(make_card(6, "#6 Card", "l-doing", **old))
     project.fake.actions += [
         comment("c1", 1, "m-sam", "The total is 40.", 2),
         move_action("v2", 2, "l-todo", 3, name="To do"),
     ]
+    ours(project, ("o6", 6, "**Working on it.** The export runs tonight.", 2))
     assert project.report()["idle"] == []
 
 
