@@ -787,9 +787,9 @@ def fail_nothing(*_arguments: object) -> bool:
     return False
 
 
-def test_stop_after_a_source_edit_starts_few_git_processes(
+def edited_project(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> str:
     configure(tmp_path, [gate("suite", "pass")])
     git(tmp_path, "config", "user.name", "Fixture")
     git(tmp_path, "config", "user.email", "fixture@example.invalid")
@@ -798,6 +798,13 @@ def test_stop_after_a_source_edit_starts_few_git_processes(
     (tmp_path / "app.py").write_text("value = 2\n")
     monkeypatch.setattr(runner, "provision_tools", start_nothing)
     monkeypatch.setattr(runner, "run_gates", fail_nothing)
+    return base
+
+
+def test_stop_after_a_source_edit_starts_few_git_processes(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = edited_project(runner, tmp_path, monkeypatch)
     with counted_git() as starts:
         assert runner.check(base=base, quick=True) == 0
     assert len(starts) == 31, starts
@@ -841,3 +848,13 @@ def test_only_a_change_with_a_retry_word_loads_the_retry_rules(
         check=True,
     )
     assert result.stdout.strip() == loaded
+
+
+def test_only_a_full_check_counts_the_branch_commits(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = edited_project(runner, tmp_path, monkeypatch)
+    for quick, expected in ((True, 0), (False, 1)):
+        with counted_git() as starts:
+            assert runner.check(base=base, quick=quick) == 0
+        assert started(starts, "rev-list", "--count") == expected, starts

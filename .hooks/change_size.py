@@ -400,6 +400,7 @@ def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) 
 
 
 MAX_PR_COMMITS = 100
+WARN_PR_COMMITS = 80
 
 
 def commits_problem(count: int) -> str | None:
@@ -410,4 +411,28 @@ def commits_problem(count: int) -> str | None:
         f"PR has {count} commits; HE-PR-COMMITS allows at most {MAX_PR_COMMITS}. "
         "Ship the finished part in its own PR and continue on a new branch, "
         "or join neighbour commits (HE-PR-COMMITS)."
+    )
+
+
+def commit_note(root: Path) -> None:
+    """Warn, never refuse, when the branch nears or passes the HE-PR-COMMITS cap."""
+    point = default_branch_point(root)
+    if point is None:
+        return
+    try:
+        count = int(
+            _git_output(root, "rev-list", "--count", "--no-merges", f"{point}..HEAD")
+        )
+    except (subprocess.CalledProcessError, OSError, ValueError):
+        return
+    if count < WARN_PR_COMMITS:
+        return
+    way = (
+        "Ship the finished part in its own PR, or join neighbour commits."
+        if count > MAX_PR_COMMITS
+        else "Ship this work soon, then continue on a new branch."
+    )
+    print(
+        f"Hard Eng warning: this branch has {count} commits; ship refuses a PR "
+        f"with more than {MAX_PR_COMMITS} (HE-PR-COMMITS). {way}"
     )
