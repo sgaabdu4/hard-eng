@@ -176,7 +176,6 @@ UPGRADES = {
     "bun": "bun update {recursive}--latest --minimum-release-age={age} {names}",
     "dart": "dart pub upgrade --major-versions {names}",
     "flutter": "flutter pub upgrade --major-versions {names}",
-    "uv": "uv add [--group <group>] {minimums}",
 }
 
 
@@ -334,11 +333,14 @@ def validate_freshness(
     if stale:
         names = " ".join(dict.fromkeys(name for name, _, _ in stale))
         recursive = "-r " if "-r" in gate["command"] else ""
-        minimums = " ".join(f"'{name}>={target}'" for name, _, target in stale)
         step = UPGRADES.get(tool, "").format(
-            recursive=recursive, names=names, minimums=minimums, age=RELEASE_AGE_SECONDS
+            recursive=recursive, names=names, age=RELEASE_AGE_SECONDS
         )
         step = f"Run `{step}` in a separate PR first (baseline repair)."
+        if tool == "uv":
+            from uv_freshness import uv_steps
+
+            step = uv_steps(directory, path.read_text(), stale)
         if tool == "poetry":
             from poetry_freshness import poetry_steps
 
