@@ -306,7 +306,7 @@ def ux_rules(content: str) -> None:
     labels = f"\n{content}".count("\nRules:")
     if labels != 1:
         raise ValueError(
-            f"UX Rules is missing; judge the inspected image against each Usability rule of {UX_REFERENCE} and add one line per rule"
+            f"UX Rules is missing; judge the inspected image against each Usability rule of {UX_REFERENCE} and add one line per rule; the field is a line that starts with `Rules:`"
             if not labels
             else f"plan needs one 'Rules:' field, found {labels}"
         )
@@ -333,6 +333,11 @@ def ux_rules(content: str) -> None:
             "UX Rules needs one `- <rule>: Pass|Fail|N/A — text` line for each Usability rule; "
             + "; ".join(wrong)
             + f"; add a line for each rule of {UX_REFERENCE}"
+            + (
+                "; the rule lines stand in one block directly below `Rules:` with no empty line"
+                if any(w.startswith("no line") for w in wrong)
+                else ""
+            )
         )
     for label, ((verdict, text),) in given.items():
         if verdict == "Fail":
