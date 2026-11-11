@@ -203,9 +203,13 @@ def test_a_python_parent_leaves_out_child_groups_that_have_the_same_gate(
     assert leave_out_children(tmp_path, ["ruff"], parent, other) == ["ruff"]
 
 
-def sphinx_project(root: Path, sources: list[str]) -> tuple[Group, Gate]:
+def docs_project(
+    root: Path, config: str | None, sources: list[str]
+) -> tuple[Group, Gate]:
     (root / "docs").mkdir()
-    (root / "docs/conf.py").write_text("project = 'fixture'\n")
+    if config:
+        (root / "docs" / config).parent.mkdir(exist_ok=True)
+        (root / "docs" / config).write_text("project = 'fixture'\n")
     gate: Gate = {"name": "deptry", "role": "dependencies", "command": ["deptry", "."]}
     group: Group = {
         "path": ".",
@@ -219,24 +223,23 @@ def sphinx_project(root: Path, sources: list[str]) -> tuple[Group, Gate]:
     return group, gate
 
 
-def test_the_dependency_gate_leaves_out_a_sphinx_docs_folder(tmp_path: Path) -> None:
-    group, gate = sphinx_project(tmp_path, ["src/mylib"])
-    assert leave_out_children(tmp_path, ["deptry", "."], group, gate) == [
-        "deptry",
-        ".",
-        "--extend-exclude",
-        "^docs(/|$)",
-    ]
-
-
-def test_a_docs_folder_in_sources_stays_in_the_dependency_gate(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("config", "sources", "left_out"),
+    [
+        ("conf.py", ["src/mylib"], True),
+        ("source/conf.py", ["src/mylib"], True),
+        (None, ["src/mylib"], False),
+        ("conf.py", ["docs"], False),
+    ],
+)
+def test_the_dependency_gate_leaves_out_a_sphinx_docs_folder_that_is_no_source(
+    tmp_path: Path, config: str | None, sources: list[str], left_out: bool
 ) -> None:
-    group, gate = sphinx_project(tmp_path, ["docs"])
-    assert leave_out_children(tmp_path, ["deptry", "."], group, gate) == [
-        "deptry",
-        ".",
-    ]
+    group, gate = docs_project(tmp_path, config, sources)
+    expected = ["deptry", "."] + (
+        ["--extend-exclude", "^docs(/|$)"] if left_out else []
+    )
+    assert leave_out_children(tmp_path, ["deptry", "."], group, gate) == expected
 
 
 def pyrefly_package(root: Path, files: dict[str, str]) -> Path:

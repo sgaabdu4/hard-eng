@@ -48,7 +48,7 @@ Proof: check
 
 ## HE-UI-SOURCE
 
-A change fails when its added lines in UI source hold a transition on every property (`transition: all`, `transition-property: all`, the Tailwind class `transition-all`) or a colour literal outside a theme or token file (Tailwind arbitrary colours, Dart `Color(0x`, `Colors.` names, Swift `Color(red:`). Tests, generated files, comment lines and paths under `.hooks/`, `.agents/` and `.claude/` are exempt, and lines that existed before the change are not flagged. Nothing is flagged when the comparison is with the empty tree (a new repository's first commit).
+A change fails when its added lines in UI source hold a transition on every property (`transition: all`, `transition-property: all`, the Tailwind class `transition-all`) or one of these colour literals outside a theme or token file: a Tailwind arbitrary colour, Dart `Color(0x`, `Color.fromARGB(`, `Color.fromRGBO(` or a `Colors.` name other than `transparent`, Swift `Color(red:` or `#colorLiteral(`. No other colour form is flagged. UI source = a stylesheet, markup, component, JavaScript, TypeScript, Dart or Swift file. A theme or token file = a file in a folder named `theme`, `token`, `color`, `colour` or `palette` (or the plural), a file whose name ends in one of those words, or `tailwind.config.*`. Tests, generated files, comment lines and paths under `.hooks/`, `.agents/` and `.claude/` are exempt, and lines that existed before the change are not flagged. Nothing is flagged when the comparison is with the empty tree (a new repository's first commit).
 
 Proof: check
 
