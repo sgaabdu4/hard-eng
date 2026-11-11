@@ -21,10 +21,10 @@ Decision: one reference, `mockups.md`, loaded only for design work. The proof ga
 
 ## Acceptance + steps
 
-- [ ] A picture with no proof file, a proof older than the picture, a proof without `change`, `shows` and `showsChange: true`, or a proof missing a rule line of at least 20 characters is refused before any upload, dry run included; the error names the file and the missing keys → `tests/test_trello_coordinator.py::test_a_picture_needs_a_current_proof_file`.
-- [ ] A proof with all nine rule lines, or with a `notNewUi` reason, passes; a file that is not a picture needs no proof → `tests/test_trello_coordinator.py::test_a_picture_needs_a_current_proof_file`.
-- [ ] A comment with a new-screen picture ends with the bold closing line after the pictures; a comment whose pictures are `notNewUi` does not → `tests/test_trello_coordinator.py::test_a_new_screen_post_ends_with_the_closing_line`.
-- [ ] The rule names and the closing line in `mockups.md` match the tool → `tests/test_trello_coordinator.py::test_mockup_rules_match_the_proof_gate`.
+- [ ] A picture with no proof file, a proof older than the picture, a proof without `change`, `shows` and `showsChange: true`, or a proof missing a rule line of at least 20 characters is refused before any upload, dry run included; the error names the file and the missing keys → `tests/test_trello_pictures.py::test_a_picture_needs_a_current_proof_file`.
+- [ ] A proof with all nine rule lines, or with a `notNewUi` reason, passes; a file that is not a picture needs no proof → `tests/test_trello_pictures.py::test_a_picture_needs_a_current_proof_file`.
+- [ ] A comment with a new-screen picture ends with the bold closing line after the pictures; a comment whose pictures are `notNewUi` does not → `tests/test_trello_pictures.py::test_a_new_screen_post_ends_with_the_closing_line`.
+- [ ] The rule names and the closing line in `mockups.md` match the tool → `tests/test_trello_pictures.py::test_mockup_rules_match_the_proof_gate`.
 - [ ] Real board: on a test card, a picture with no proof is refused; with a proof it posts with the closing line; both are then removed → manual check with the fixed tool, result recorded here.
 
 ## Baseline + execution
