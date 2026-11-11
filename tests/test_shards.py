@@ -1,6 +1,9 @@
 """CI test shards: the field, the split, the shard run and the report merge."""
 
+import json
+import os
 import sys
+import threading
 from argparse import ArgumentParser
 from pathlib import Path
 from types import ModuleType
@@ -10,6 +13,7 @@ import pytest
 from ci_jobs import add_shard_option
 from conftest import configure, gate
 from gate_config import Gate, Group, validate_group
+from gate_times import gate_limit
 from shards import shard_groups, split
 
 
@@ -193,3 +197,139 @@ def test_shards_need_a_direct_pytest_command(
         match=r'^api/tests: shards split pytest suites only, and the command must run pytest directly\. Remove "shards" from this gate in hard-eng.gates.json\.$',
     ):
         shard_groups(groups, "rest")
+
+
+LOG_HOOKS = """
+def pytest_sessionstart(session):
+    with open({log!r}, "a") as log:
+        log.write("collect\\n" if session.config.option.collectonly else "run\\n")
+
+
+def pytest_runtest_logstart(nodeid, location):
+    with open({log!r}, "a") as log:
+        log.write("ran " + location[0] + "\\n")
+
+
+def pytest_sessionfinish(session):
+    if not session.config.option.collectonly:
+        with open("c.json", "w") as report:
+            report.write({low!r})
+"""
+LOW_COVERAGE = json.dumps(
+    {"files": {"lib.py": {"summary": {"covered_lines": 1, "num_statements": 10}}}}
+)
+PACKAGE = {"language": "python", "sources": ["lib.py"]}
+
+
+@pytest.fixture
+def shard_project(runner: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Path:
+    for name in [*os.environ]:
+        if name.startswith(("COV_CORE_", "COVERAGE_")):
+            monkeypatch.delenv(name)
+    root = runner.ROOT
+    log = root / "log.txt"
+    (root / "pyproject.toml").write_text(
+        '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+        'python_files = ["test_*.py", "check_*.py"]\n'
+    )
+    (root / "lib.py").write_text("value = 1\n")
+    (root / "conftest.py").write_text(LOG_HOOKS.format(log=str(log), low=LOW_COVERAGE))
+    for name, padding in {
+        "tests/test_a.py": 3000,
+        "tests/test_b.py": 2000,
+        "tests/check_c.py": 1000,
+        "extra/tests/test_outside.py": 10,
+        "tests/child/test_child.py": 10,
+    }.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(
+            f"def test_it() -> None:\n    pass\n# {'x' * padding}\n"
+        )
+    (root / "tests/child/lib.py").write_text("value = 2\n")
+    return root
+
+
+def shard_gate(count: int | None, name: str = "tests") -> Gate:
+    check = suite(count)
+    check["name"] = name
+    check["command"] = [sys.executable, "-m", "pytest", "--junitxml=j.xml"]
+    return check
+
+
+def shard_package(path: str, count: int | None) -> Group:
+    return cast(Group, {"path": path, **PACKAGE, "checks": [shard_gate(count)]})
+
+
+def project_groups(count: int | None) -> list[Group]:
+    return [shard_package(".", count), shard_package("tests/child", None)]
+
+
+def run_part(runner: ModuleType, part: str, count: int | None = 2) -> bool:
+    (runner.ROOT / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": project_groups(count), "shared": []})
+    )
+    groups = project_groups(count)
+    chosen = shard_groups(groups, part)[0]
+    return runner.run_gate(chosen, chosen["checks"][0], 300, threading.Lock(), groups)
+
+
+def log_lines(root: Path) -> list[str]:
+    log = root / "log.txt"
+    lines = log.read_text().splitlines() if log.exists() else []
+    log.unlink(missing_ok=True)
+    return lines
+
+
+def test_a_shard_runs_only_the_files_pytest_collects_for_it(
+    runner: ModuleType, shard_project: Path
+) -> None:
+    assert run_part(runner, "1") is False
+    assert {line for line in log_lines(shard_project) if line.startswith("ran ")} == {
+        "ran tests/test_a.py"
+    }
+    assert run_part(runner, "2") is False
+    assert {line for line in log_lines(shard_project) if line.startswith("ran ")} == {
+        "ran tests/test_b.py",
+        "ran tests/check_c.py",
+    }
+
+
+def test_a_shard_keeps_its_reports_apart_and_skips_the_coverage_minimum(
+    runner: ModuleType, shard_project: Path
+) -> None:
+    assert run_part(runner, "1") is False
+    kept = shard_project / "coverage/shards/1"
+    assert sorted(path.name for path in kept.iterdir()) == [
+        "c.json",
+        "j.xml",
+        "shard-files.txt",
+    ]
+    assert (kept / "shard-files.txt").read_text() == "tests/test_a.py\n"
+    assert not (shard_project / "j.xml").exists()
+    assert not (shard_project / "c.json").exists()
+    assert runner.run_gate(
+        {"path": ".", **PACKAGE, "checks": [shard_gate(None)]},
+        shard_gate(None),
+        300,
+        threading.Lock(),
+    )
+
+
+def test_an_empty_shard_starts_no_pytest(
+    runner: ModuleType, shard_project: Path
+) -> None:
+    assert run_part(runner, "4", 4) is False
+    assert log_lines(shard_project) == ["collect"]
+    kept = shard_project / "coverage/shards/4"
+    assert [path.name for path in kept.iterdir()] == ["shard-files.txt"]
+    assert (kept / "shard-files.txt").read_text() == ""
+    assert not (shard_project / "j.xml").exists()
+
+
+def test_shard_time_does_not_shorten_the_full_gate_limit(
+    runner: ModuleType, shard_project: Path
+) -> None:
+    assert run_part(runner, "2") is False
+    times = json.loads((shard_project / ".git/hard-eng-gate-times.json").read_text())
+    assert list(times) == ["./tests@shard"]
+    assert gate_limit(shard_project, "./tests", 900) == 900
