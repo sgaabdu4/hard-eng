@@ -22,6 +22,7 @@ from freshness import (
 from gate_config import Gate, Group, JsonObject, validate_gate, validate_required_checks
 from gitleaks_scan import run_gate_command
 from project_setup import add_freshness
+from reports import validate_scanner_report
 from shipping import ShippingPolicy
 from test_setup import repository
 
@@ -340,7 +341,7 @@ def poetry_dry_run(
     tool = tmp_path / "bin/uvx"
     tool.parent.mkdir(exist_ok=True)
     tool.write_text(
-        f"#!/bin/sh\necho \"$* age=$POETRY_SOLVER_MIN_RELEASE_AGE\" >> '{log}'\n"
+        f"#!/bin/sh\necho \"$* age=$POETRY_SOLVER_MIN_RELEASE_AGE cwd=$(pwd)\" >> '{log}'\n"
         f"cat '{answer}'\nexit {status}\n"
     )
     tool.chmod(0o755)
@@ -420,7 +421,22 @@ def test_the_poetry_dry_run_carries_the_release_wait_and_the_section(
     assert len(call) == 1
     assert "add --dry-run --no-ansi -n --group dev" in call[0]
     assert "mypy>=1.19.1 pytest>=7.4.4 pytest-cov>=4.1.0" in call[0]
-    assert call[0].endswith("age=2")
+    assert " age=2 " in call[0]
+
+
+def test_the_poetry_dry_run_runs_in_the_directory_of_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "service"
+    package.mkdir()
+    stale_poetry_project(package)
+    log = poetry_dry_run(tmp_path, monkeypatch, fixture("poetry-add-dry-run.txt"))
+    report = tmp_path / "freshness.report"
+    report.write_text(fixture("poetry-show-python-bound.json"))
+    gate = freshness_gate("poetry")
+    with pytest.raises(ValueError, match="baseline repair"):
+        validate_scanner_report("freshness", gate, report, gate["command"], package, 60)
+    assert log.read_text().strip().endswith(f"cwd={package.resolve()}")
 
 
 def test_a_failed_poetry_dry_run_names_its_command_and_the_tool_text(
