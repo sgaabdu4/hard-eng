@@ -420,10 +420,10 @@ def test_push_runs_checks_when_pull_request_proof_is_missing(
     [
         ("GITHUB_ACTIONS", None),
         ("GITHUB_EVENT_NAME", "pull_request"),
-        ("GITHUB_REF", "refs/heads/feature/shipping"),
+        ("GITHUB_REF", "refs/tags/v1"),
     ],
 )
-def test_only_ci_pushes_to_the_base_branch_reuse_pull_request_checks(
+def test_only_ci_branch_pushes_reuse_pull_request_checks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -461,3 +461,12 @@ def test_reused_pull_request_result_skips_gates(
     output = capsys.readouterr().out
     assert f"PR head {'a' * 40} passed the required checks" in output
     assert "fails" not in output
+
+
+def test_a_push_to_another_branch_reuses_the_merged_pr_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    push = _merged_push(tmp_path, monkeypatch)
+    push.pulls[0]["base"] = {"ref": "release/1"}
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/release/1")
+    assert reused_pull_request(push.root, push.base) == push.head
