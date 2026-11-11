@@ -20,7 +20,13 @@ from coverage_sources import python_coverage
 from gate_config import Gate, Group, affected_groups, validate_group
 from gate_times import gate_limit
 from reports import completed_tests, junit_root, reported_skips
-from shards import merge_coverage, merge_junit, shard_groups, split
+from shards import (
+    merge_coverage,
+    merge_junit,
+    require_no_path,
+    shard_groups,
+    split,
+)
 from test_plan_acceptance import UNPROVED, VALUE_ID
 
 
@@ -669,3 +675,38 @@ def test_two_sharded_gates_in_one_package_are_refused(
         match=r'^\.: only one gate of a package can hold "shards"\. Remove "shards" from all but one tests gate in hard-eng\.gates\.json\.$',
     ):
         shard_groups([group], "rest")
+
+
+def test_a_path_in_the_gate_command_is_refused_because_every_shard_would_run_it_whole(
+    runner: ModuleType, shard_project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    check = {**shard_gate(2), "command": [sys.executable, "-m", "pytest", "tests"]}
+    group = pytest_group(".", [cast(Gate, check)])
+    chosen = shard_groups([group], "1")[0]
+    failed = runner.run_gate(
+        chosen, chosen["checks"][0], 300, threading.Lock(), [group]
+    )
+    assert failed is True
+    assert (
+        './tests: the command names the path "tests", so every shard would run it '
+        "whole. Remove the path from the command and list it in testpaths in the "
+        "pytest settings. If it is the value of an option, write it as "
+        "--option=value (for example --cov=src)." in capsys.readouterr().out
+    )
+    assert log_lines(shard_project) == []
+
+
+def test_an_option_value_that_names_a_folder_gets_the_equals_form_in_the_refusal(
+    shard_project: Path,
+) -> None:
+    (shard_project / "src").mkdir()
+    group = pytest_group(".", [shard_gate(2)])
+    command = [sys.executable, "-m", "pytest"]
+    require_no_path(shard_project, group, group["checks"][0], [*command, "--cov=src"])
+    with pytest.raises(
+        ValueError,
+        match=r"If it is the value of an option, write it as --option=value \(for example --cov=src\)\.$",
+    ):
+        require_no_path(
+            shard_project, group, group["checks"][0], [*command, "--cov", "src"]
+        )
