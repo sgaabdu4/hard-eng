@@ -82,3 +82,41 @@ def refuse_ignored_locks(
                 f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
                 f"remove that rule, then commit {relative}"
             )
+
+
+def expanded(value: object) -> bool:
+    if isinstance(value, dict):
+        return bool(value)
+    return isinstance(value, list) and any(expanded(item) for item in value)
+
+
+def json_text(
+    value: object, layout: tuple[str, int, int], indent: str = "", used: int = 0
+) -> str:
+    unit, tab, width = layout
+    if isinstance(value, list) and not expanded(value):
+        flat = json.dumps(value, separators=(", ", ": "))
+        if used + len(flat) <= width:
+            return flat
+    if not isinstance(value, (dict, list)) or not value:
+        return json.dumps(value)
+    inner = indent + unit
+    entries = (
+        [(f"{json.dumps(key)}: ", item) for key, item in value.items()]
+        if isinstance(value, dict)
+        else [("", item) for item in value]
+    )
+    last = len(entries) - 1
+    body = ",\n".join(
+        inner
+        + head
+        + json_text(
+            item,
+            layout,
+            inner,
+            len((inner + head).expandtabs(tab)) + (index < last),
+        )
+        for index, (head, item) in enumerate(entries)
+    )
+    opening, closing = "{}" if isinstance(value, dict) else "[]"
+    return f"{opening}\n{body}\n{indent}{closing}"
