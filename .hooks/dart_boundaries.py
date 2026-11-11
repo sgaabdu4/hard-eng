@@ -112,7 +112,7 @@ def dart_options(path: Path) -> DartOptions:
 
 
 def validate_dart_includes(
-    path: Path, directory: Path, seen: set[Path] | None = None
+    path: Path, directory: Path, seen: set[Path] | None = None, packaged: bool = False
 ) -> None:
     seen = set() if seen is None else seen
     path = path.resolve()
@@ -154,7 +154,18 @@ def validate_dart_includes(
             included = Path(unquote(uri.path))
         else:
             included = path.parent / include
-        validate_dart_includes(included, directory, seen.copy())
+        package = include.startswith("package:")
+        try:
+            validate_dart_includes(
+                included, directory, seen.copy(), packaged or package
+            )
+        except ValueError as error:
+            if packaged or not package:
+                raise
+            raise ValueError(
+                f"{error}. A package file cannot be changed: remove `include: {include}` "
+                f"from {path} and list the lint rules that you need there"
+            ) from error
 
 
 def flutter_without_test(directory: Path) -> bool:
