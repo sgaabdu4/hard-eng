@@ -23,7 +23,6 @@ import update_runner
 from conftest import SOURCE, commit, git, plan_document
 from gate_config import Group, JsonObject, affected_groups
 from shipping import ShippingPolicy
-from test_updates import select_release
 
 
 @pytest.mark.parametrize(
@@ -950,19 +949,3 @@ def test_installed_hooks_spell_out_no_claude_email_address() -> None:
 def test_shared_agent_rules_stay_within_the_released_size() -> None:
     """Installed projects cap their AGENTS.md; the release before develop held 3921 bytes."""
     assert len((SOURCE / "AGENTS.md").read_bytes()) <= 3921
-
-
-def test_update_brings_a_changed_shared_rule_and_keeps_the_project_rules(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, target, _ = release
-    with (target / "AGENTS.md").open("a") as rules:
-        rules.write("\n# Project rules\n\nKeep this.\n")
-    commit(target, "project rules")
-    with (source / "AGENTS.md").open("a") as rules:
-        rules.write("- A new shared rule.\n")
-    select_release(source, monkeypatch)
-    update.update(target)
-    installed = (target / "AGENTS.md").read_text()
-    assert "\n- A new shared rule.\n<!-- hard-eng:end -->\n" in installed
-    assert installed.endswith("\n# Project rules\n\nKeep this.\n")

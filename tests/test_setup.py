@@ -579,6 +579,18 @@ def snapshot(root: Path) -> dict[str, bytes]:
     }
 
 
+def test_the_step_of_the_claude_md_refusal_installs_with_the_moved_rules(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("Project rules\n")
+    with pytest.raises(ValueError, match="move shared guidance to the matching AGENTS"):
+        installer.install(tmp_path)
+    (tmp_path / "CLAUDE.md").rename(tmp_path / "AGENTS.md")
+    installer.install(tmp_path)
+    assert (tmp_path / "AGENTS.md").read_text().endswith("\nProject rules\n")
+
+
 def test_install_preserves_project_and_repeats(
     installer: ModuleType, tmp_path: Path, shipping_policy: ShippingPolicy
 ) -> None:
