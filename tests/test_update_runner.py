@@ -880,6 +880,18 @@ def test_a_failed_update_build_still_names_the_files_that_the_rerun_wrote(
     assert f"setup wrote {GATES_FILE}" in recorded
 
 
+def test_a_build_error_that_needs_more_arguments_keeps_its_cause_and_the_note(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    cause = json.JSONDecodeError("Expecting value", "{", 0)
+    monkeypatch.setattr(update_runner, "build_update", Mock(side_effect=cause))
+    with pytest.raises(ValueError) as error:
+        update_runner.locked_update(project, repair=True)
+    assert "Expecting value" in str(error.value)
+    assert f"This checkout: setup wrote {GATES_FILE}" in str(error.value)
+
+
 def test_a_rerun_writes_each_project_file_that_setup_plans_and_no_scaffold_file(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
