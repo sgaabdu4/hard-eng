@@ -97,7 +97,7 @@ VISIBLE_TEMP = Path("/tmp")
 HELD: list[IO[str]] = []
 NOT_INSTALLED = (
     "Tools are not installed yet and cannot be fetched now: {error}. "
-    "Connect once or run the full check (python3 .hooks/hard-eng.py check) to install them."
+    "Connect once or run the full check (python3 .hooks/hard-eng.py check; in a build python3 .hooks/hard-eng.py check --plan-stage Ready) to install them."
 )
 
 

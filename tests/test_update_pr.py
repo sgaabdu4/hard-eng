@@ -976,6 +976,22 @@ def test_update_branch_needs_no_plan_for_files_the_update_wrote(
     )
 
 
+def test_a_check_with_no_base_needs_no_plan_on_a_verified_update_branch(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import plans
+
+    source, target, _ = release
+    (target / "PLAN.md").write_text("# Later work\n\nStatus: Draft\n")
+    commit(target, "draft plan for later work")
+    git(target, "update-ref", "refs/heads/main", "HEAD")
+    git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH)
+    select_release(source, monkeypatch)
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert plans.validate_plans(target) == "Complete"
+
+
 def test_update_branch_check_skips_an_unrelated_draft_plan(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

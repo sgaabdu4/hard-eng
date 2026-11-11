@@ -4,8 +4,15 @@ import subprocess
 from pathlib import Path, PurePosixPath
 
 from dependency_graph import owner_language
-from gate_config import Group, parse_config
-from plans import _git_output, _is_test, default_branch_point, is_documentation
+from gate_config import Group, changed_files, parse_config
+from plans import (
+    _git_output,
+    _is_test,
+    default_branch_point,
+    is_documentation,
+    is_plan_path,
+    release_references,
+)
 
 NO_CHANGE = "no change"
 MAX_SMALL_LINES = 20
@@ -165,16 +172,42 @@ def size_verdict(root: Path) -> tuple[bool, str]:
     return _verdict(status, counts, untracked, names, configured_packages(root))
 
 
-def judges_branch(root: Path) -> bool:
-    """A check with no base judges the whole branch only when Hard Eng is on its branch point; a first install keeps its own check."""
+def judged_point(root: Path) -> str | None:
+    """The branch point that a check with no base judges from, once Hard Eng is on it; a first install keeps its own check."""
     point = default_branch_point(root)
     if point is None:
-        return False
+        return None
     try:
         _git_output(root, "cat-file", "-e", f"{point}:.hooks/hard-eng.py")
     except (subprocess.CalledProcessError, OSError):
-        return False
-    return True
+        return None
+    return point
+
+
+def _revision(root: Path, reference: str) -> str | None:
+    try:
+        return _git_output(
+            root, "rev-parse", "--verify", "-q", f"{reference}^{{commit}}"
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
+def released_plans(root: Path, base: str | None) -> set[str]:
+    """Plans changed since the release base, so a feature check sees what the release checks."""
+    references = release_references(root)
+    revisions = {name: _revision(root, name) for name in references}
+    tips = set(revisions.values())
+    remote = {tip for name, tip in revisions.items() if name.startswith("origin/")}
+    if base is None and remote - {None}:
+        # A caller's base names what is released; without one, origin does.
+        tips = remote
+    point = default_branch_point(root)
+    if point is None or _revision(root, base or "HEAD") in tips:
+        return set()
+    return {
+        name for name in changed_files(root, point) or () if is_plan_path(Path(name))
+    }
 
 
 def plan_not_needed(root: Path) -> bool:
