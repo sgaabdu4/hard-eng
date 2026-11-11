@@ -6,16 +6,15 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: pr-text-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
-
 jobs:
   remove-claude-footer:
     name: remove-claude-footer
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'synchronize'
     runs-on: ${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}
     timeout-minutes: 2
+    concurrency:
+      group: pr-text-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     permissions:
       contents: read # Read the footer rule from .hooks.
       pull-requests: write # Rewrite the PR body without the footer.

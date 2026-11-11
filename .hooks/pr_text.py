@@ -8,7 +8,7 @@ from pathlib import Path
 
 UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
 MERMAID_BLOCK = re.compile(r"^[ \t]*```[ \t]*mermaid\b", re.MULTILINE)
-NOT_CHECKED_LINE = re.compile(r"^[ \t]*Not checked:(.*)$", re.MULTILINE)
+NOT_CHECKED_LINE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?Not checked:(.*)$", re.MULTILINE)
 EMPTY_ANSWER = re.compile(r"(?:none|nothing|n/a)?[ \t]*[-—–]*", re.IGNORECASE)
 
 
@@ -26,8 +26,9 @@ def body_problem(body: str) -> str | None:
         if not EMPTY_ANSWER.fullmatch(found.strip().rstrip(".")):
             return None
     return (
-        "PR body needs a line `Not checked: <what no check covered>`, "
-        "or `Not checked: None` and the reason after it"
+        "PR body needs a line that starts `Not checked:`, with the answer on that line: "
+        "`Not checked: <what no check covered>`, "
+        "or `Not checked: None — <reason>`"
     )
 
 
