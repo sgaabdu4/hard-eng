@@ -81,7 +81,7 @@ def shared(
 
 def tell_unproven(error: Exception) -> None:
     """Print once why an update could not be proven; a later check judges its files as ordinary changes."""
-    reason = str(error).strip() or type(error).__name__
+    reason = str(error).strip().rstrip(".") or type(error).__name__
     if reason not in TOLD:
         TOLD.add(reason)
         print(
