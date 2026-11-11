@@ -260,3 +260,23 @@ def test_a_missing_or_unreadable_report_prints_nothing_new(
     broken = tmp_path / "broken.json"
     broken.write_text("{")
     assert failed(scanner, broken, tmp_path, capsys) == ""
+
+
+@pytest.mark.parametrize(
+    "timeout,named",
+    [
+        ({"location": {"path": "tests/tables.py"}}, "tests/tables.py"),
+        ({"error_type": "Fixpoint timeout"}, "a file that Semgrep did not name"),
+    ],
+)
+def test_a_semgrep_timeout_names_each_file_and_the_step(
+    timeout: dict[str, object], named: str, tmp_path: Path
+) -> None:
+    report = json.loads(REPORTS["semgrep"])
+    report["time"]["fixpoint_timeouts"] = [timeout]
+    path = tmp_path / "semgrep.json"
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="data module") as error:
+        reports.validate_semgrep(path)
+    assert named in str(error.value)
+    assert "None" not in str(error.value)
