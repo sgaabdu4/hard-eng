@@ -441,3 +441,18 @@ def test_a_test_named_in_a_later_field_is_not_counted_for_the_retro_line(
         )
     )
     assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
+
+
+def test_a_missing_retro_test_is_reported_for_the_retro_line(
+    repository: Path, completed_plan: str
+) -> None:
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace(
+            RETRO_LINE, "Retro: Fixed in `tests/test_gone.py::test_gone`."
+        )
+    )
+    with pytest.raises(
+        ValueError,
+        match="Retro names tests that do not exist: tests/test_gone.py::test_gone",
+    ):
+        validate_plans(repository, "0" * 40, "Complete")

@@ -410,15 +410,17 @@ def reasoned(value: str, name: str) -> None:
         raise ValueError(f"'{name}:' needs a reason; write `None — <reason>`")
 
 
-def claimed_tests(sections: dict[str, str]) -> list[tuple[str, str]]:
-    """The `path::test` names of test files in each Same cause and Retro value."""
-    return [
-        (path, name.split("[", 1)[0])
-        for text in (sections["Repository context"], sections["Verification"])
-        for claim in CLAIM_VALUE.finditer(text)
-        for path, name in TEST_REFERENCE.findall(claim[0])
-        if _is_test(PurePosixPath(path))
-    ]
+def claimed_tests(sections: dict[str, str]) -> dict[str, list[tuple[str, str]]]:
+    """The `path::test` names of test files in each Same cause and Retro value, by field."""
+    found: dict[str, list[tuple[str, str]]] = {}
+    for text in (sections["Repository context"], sections["Verification"]):
+        for claim in CLAIM_VALUE.finditer(text):
+            found.setdefault(claim["field"], []).extend(
+                (path, name.split("[", 1)[0])
+                for path, name in TEST_REFERENCE.findall(claim[0])
+                if _is_test(PurePosixPath(path))
+            )
+    return found
 
 
 def newer_fields(
@@ -541,11 +543,12 @@ def plan_stage(root: Path, path: Path, changed: set[str]) -> str:
         if status == "Complete" and edited:
             sections = plan_sections(path.read_text())
             references, requirements = acceptance_tests(sections)
-            references += claimed_tests(sections)
-            if missing := missing_tests(root, references):
-                raise ValueError(
-                    "acceptance names tests that do not exist: " + ", ".join(missing)
-                )
+            named = {"acceptance": references, **claimed_tests(sections)}
+            for line, found in named.items():
+                if missing := missing_tests(root, found):
+                    raise ValueError(
+                        f"{line} names tests that do not exist: " + ", ".join(missing)
+                    )
             if untested := untested_requirements(root, requirements):
                 raise ValueError(
                     "acceptance names unknown, retired or untested requirements: "
