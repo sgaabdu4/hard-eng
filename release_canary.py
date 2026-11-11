@@ -322,6 +322,28 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
     )
 
 
+def install_last_release(
+    value: str,
+    revision: str,
+    source: Path,
+    work: Path,
+    log: IO[str],
+    checkout: Path = SOURCE,
+) -> None:
+    """Install the release users have: the candidate's merge base with main."""
+    old = work.with_name(f"{work.name}.release")
+    released = output(["git", "merge-base", revision, "origin/main"], checkout)
+    must(work.parent, log, "clone failed", ["git", "clone", "-q", str(source), str(old)])
+    must(
+        old,
+        log,
+        "clone failed",
+        ["git", "checkout", "-q", "--detach", released],
+        ["git", "submodule", "update", "-q", "--init", "--recursive"],
+    )
+    install_new("greenfield", value, old, work, log)
+
+
 def prepare(
     target: tuple[str, str],
     revision: str,
