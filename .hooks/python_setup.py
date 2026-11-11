@@ -93,7 +93,10 @@ def leave_out_children(
         for child in child_groups(group, role, list(configured_packages(root).values()))
     ]
     if role == "dependencies":
-        sphinx = (root / below / "docs/conf.py").is_file() and not any(
+        sphinx = any(
+            (root / below / f"docs/{place}conf.py").is_file()
+            for place in ("", "source/")
+        ) and not any(
             Path(source).parts[:1] == ("docs",) for source in group.get("sources", [])
         )
         return [
