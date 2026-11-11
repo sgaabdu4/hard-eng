@@ -338,13 +338,14 @@ def validate_freshness(
         step = UPGRADES.get(tool, "").format(
             recursive=recursive, names=names, minimums=minimums, age=RELEASE_AGE_SECONDS
         )
+        step = f"Run `{step}` in a separate PR first (baseline repair)."
         if tool == "poetry":
             from poetry_freshness import poetry_steps
 
-            step = "`, then `".join(poetry_steps(directory, stale))
+            step = poetry_steps(directory, stale)
         raise ValueError(
             "Outdated direct dependencies: "
             + "; ".join(f"{n} {c} → {t}" for n, c, t in stale)
-            + f". Run `{step}` in a separate PR first (baseline repair)."
+            + f". {step}"
         )
     print("Every direct dependency is on its newest release at least 2 days old")

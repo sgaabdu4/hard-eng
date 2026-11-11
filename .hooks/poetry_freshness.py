@@ -21,6 +21,7 @@ OPERATION = re.compile(
     r"^\s*- (?:Installing|Updating|Downgrading) (?P<name>\S+) \((?P<versions>[^)]*)\)",
     re.MULTILINE,
 )
+LEGACY = ("dev-dependencies",)
 STEP = "POETRY_SOLVER_MIN_RELEASE_AGE=2 uvx poetry add"
 TABLE_FLAGS = {
     "markers": "--markers",
@@ -54,6 +55,7 @@ def sections(data: dict[str, object]) -> Iterator[tuple[tuple[str, ...], object]
         yield ("--group", group), items
     poetry = table(table(data.get("tool")).get("poetry"))
     yield (), poetry.get("dependencies", {})
+    yield LEGACY, poetry.get("dev-dependencies", {})
     for group, body in table(poetry.get("group")).items():
         yield ("--group", group), table(body).get("dependencies", {})
 
@@ -112,19 +114,34 @@ def declarations(directory: Path) -> dict[str, list[Declared]]:
     return found
 
 
-def poetry_steps(directory: Path, stale: list[Stale]) -> list[str]:
+def poetry_steps(directory: Path, stale: list[Stale]) -> str:
     declared = declarations(directory)
     lines: dict[tuple[str, ...], list[str]] = {}
+    legacy, by_hand = False, []
     for name, _, target in stale:
-        for item in declared.get(canonical(name), [Declared((), name, "")]):
-            if not item.unsupported:
+        items = declared.get(canonical(name), [])
+        legacy = legacy or any(item.options == LEGACY for item in items)
+        by_hand += [] if items else [name]
+        for item in items:
+            if not item.unsupported and item.options != LEGACY:
                 lines.setdefault(item.options, []).append(
                     f"{item.head}>={target}{item.tail}"
                 )
-    return [
+    commands = [
         " ".join([STEP, *map(shlex.quote, options), *map(shlex.quote, entries)])
         for options, entries in lines.items()
     ]
+    parts = [
+        f"Run `{'`, then `'.join(commands)}` in a separate PR first (baseline repair)."
+    ] * bool(commands)
+    if legacy:
+        parts.append(
+            "Move the entries of [tool.poetry.dev-dependencies] to [tool.poetry.group.dev.dependencies] "
+            "(Poetry reads the old section as the dev group), then run the check again."
+        )
+    if by_hand:
+        parts.append(f"Raise {' and '.join(by_hand)} by hand in pyproject.toml.")
+    return " ".join(parts)
 
 
 def solver_versions(directory: Path, args: list[str]) -> dict[str, str]:
@@ -153,27 +170,32 @@ def solver_versions(directory: Path, args: list[str]) -> dict[str, str]:
 def poetry_targets(directory: Path, stale: list[Stale]) -> list[Stale]:
     """Replace each latest version by the newest one that installs with the project's pins."""
     declared = declarations(directory)
-    plans: dict[tuple[str, ...], list[tuple[str, str, Declared]]] = {}
+    plans: dict[tuple[str, ...], list[tuple[Stale, Declared]]] = {}
     first: dict[str, tuple[str, ...]] = {}
-    for name, current, latest in stale:
-        for item in declared.get(canonical(name), [Declared((), name, "")]):
-            if item.unsupported:
+    kept = []
+    for row in stale:
+        name, _, latest = row
+        items = declared.get(canonical(name), [])
+        if not items or any(item.options == LEGACY for item in items):
+            kept.append(row)
+            continue
+        raisable = [item for item in items if not item.unsupported]
+        for item in raisable or items:
+            if not raisable:
                 print(
                     f"{name} {latest}: Hard Eng cannot raise a {item.unsupported} entry; update it by hand"
                 )
-                continue
-            plans.setdefault(item.options, []).append((name, current, item))
+        for item in raisable:
+            plans.setdefault(item.options, []).append((row, item))
             first.setdefault(name, item.options)
     picked: dict[str, str] = {}
     for options, plan in plans.items():
-        entries = [f"{item.head}>={current}{item.tail}" for _, current, item in plan]
+        entries = [f"{item.head}>={row[1]}{item.tail}" for row, item in plan]
         versions = solver_versions(
             directory, ["add", "--dry-run", "--no-ansi", "-n", *options, *entries]
         )
-        for name, current, _ in plan:
-            version = versions.get(canonical(name))
-            if version is None:
-                raise ValueError(f"Poetry's dry run named no version for {name}")
+        for (name, current, latest), _ in plan:
+            version = versions.get(canonical(name), latest)
             if newer(version, picked.get(name, current)):
                 picked[name] = version
     for name, current, latest in stale:
@@ -185,6 +207,9 @@ def poetry_targets(directory: Path, stale: list[Stale]) -> list[Stale]:
             print(
                 f"{name} stays at {current}: {latest} does not install with this project's Python range or pins; `{shown}` shows why"
             )
-    return [
-        (name, current, picked[name]) for name, current, _ in stale if name in picked
-    ]
+    moved = {
+        name: (name, current, picked[name])
+        for name, current, _ in stale
+        if name in picked
+    }
+    return [moved.get(row[0], row) for row in stale if row[0] in moved or row in kept]
