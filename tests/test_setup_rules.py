@@ -73,9 +73,7 @@ def test_the_line_limit_refusal_names_the_ways_out(tmp_path: Path) -> None:
     assert "hard-eng.gates.json" in message
 
 
-def test_setup_refuses_an_ignored_lockfile_that_is_not_there_yet(
-    tmp_path: Path,
-) -> None:
+def ignored_dart_lock(tmp_path: Path) -> tuple[Path, GateConfig]:
     root = tmp_path / "project"
     init(root)
     package = root / "app"
@@ -89,6 +87,14 @@ def test_setup_refuses_an_ignored_lockfile_that_is_not_there_yet(
             {"path": "app", "language": "dart", "sources": ["lib"], "checks": []}
         ],
     }
+    return root, config
+
+
+def test_setup_refuses_an_ignored_lockfile_that_is_not_there_yet(
+    tmp_path: Path,
+) -> None:
+    root, config = ignored_dart_lock(tmp_path)
+    package = root / "app"
     assert not (package / "pubspec.lock").exists()
     with pytest.raises(ValueError, match=r"app/pubspec.lock is ignored by Git"):
         adapt_packages(root, config)
@@ -130,6 +136,22 @@ def test_an_ignored_package_resolved_does_not_fail_a_group_with_no_lockfile_gate
 ) -> None:
     root = ignored_lock_project(tmp_path, "Package.resolved", [gate("suite", "pass")])
     assert gate_config.load_groups(root)
+
+
+def test_the_step_for_an_ignored_lockfile_that_is_not_on_disk_can_be_done(
+    tmp_path: Path,
+) -> None:
+    root, config = ignored_dart_lock(tmp_path)
+    package = root / "app"
+    with pytest.raises(ValueError, match=r"app/pubspec.lock is ignored") as refused:
+        adapt_packages(root, config)
+    message = str(refused.value)
+    assert "run the project's install" in message
+    assert "then commit app/pubspec.lock" in message
+    (root / ".gitignore").write_text("")
+    (package / "pubspec.lock").write_text("# lock\n")
+    commit(root, "track the lock file")
+    adapt_packages(root, config)
 
 
 def test_check_refuses_a_lockfile_that_git_ignores(tmp_path: Path) -> None:

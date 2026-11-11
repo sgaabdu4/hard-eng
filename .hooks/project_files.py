@@ -18,6 +18,7 @@ INSTALL_LOCKS = {
     "dart": "pubspec.lock",
     "flutter": "pubspec.lock",
 }
+INSTALL_STEP = "run the project's install to write the file, "
 KINDS = {".toml": "TOML", ".yaml": "YAML", ".yml": "YAML"}
 KEPT: dict[str, dict[tuple[str, ...], object]] = {}
 
@@ -111,7 +112,8 @@ def refuse_ignored_locks(
     """A lock file that Git ignores is missing from a fresh clone; ask Git when the file is not on disk yet."""
     for lockfile in locks:
         relative = lockfile.relative_to(root)
-        if lockfile.is_file():
+        written = lockfile.is_file()
+        if written:
             ignored = str(relative) not in listed
         else:
             ignored = (
@@ -124,7 +126,7 @@ def refuse_ignored_locks(
             raise ValueError(
                 f"{relative} is ignored by Git, so the install fails in a fresh clone. "
                 f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
-                f"remove that rule, then commit {relative}"
+                f"remove that rule, {'' if written else INSTALL_STEP}then commit {relative}"
             )
 
 
