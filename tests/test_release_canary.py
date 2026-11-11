@@ -508,6 +508,7 @@ def test_ci_names_every_new_project_without_a_newest_passing_job(
         "new project (scaffold-nextjs, ubuntu-latest)\tsuccess",
         "new project (scaffold-opennext, ubuntu-latest)\tsuccess",
         "new project (brownfield-itsdangerous, ubuntu-latest)\tsuccess",
+        "new project (update-python, ubuntu-latest)\tsuccess",
         "hard-eng\tsuccess",
     ]
 
@@ -521,7 +522,7 @@ def test_ci_names_every_new_project_without_a_newest_passing_job(
     ]
     rows[:] = ["hard-eng\tsuccess"]
     assert release_canary.ci_failures("a" * 40) == [
-        release_canary.folder(" ".join(target)) for target in release_canary.NEW_TARGETS
+        release_canary.folder(" ".join(target)) for target in release_canary.CI_TARGETS
     ]
 
 
@@ -551,7 +552,7 @@ def test_a_release_pr_waits_for_develops_push_run_to_pass(
 ) -> None:
     passed = [
         f"new project ({release_canary.folder(' '.join(target))}, {os_name})\tsuccess"
-        for target in release_canary.NEW_TARGETS
+        for target in release_canary.CI_TARGETS
         for os_name in ("ubuntu-latest", "macos-latest")
     ]
     assert release_gate(monkeypatch, "setup.py", passed) == 0
@@ -566,7 +567,7 @@ def test_a_release_pr_waits_while_develops_push_run_is_running(
 ) -> None:
     passed = [
         f"new project ({release_canary.folder(' '.join(target))}, {os_name})\tsuccess"
-        for target in release_canary.NEW_TARGETS
+        for target in release_canary.CI_TARGETS
         for os_name in ("ubuntu-latest", "macos-latest")
     ]
     replies = [passed[1:] + [passed[0][:-7] + "null"], passed, passed]
@@ -639,7 +640,7 @@ def test_ci_and_reruns_pick_only_the_named_new_projects(
     ]
     monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--ci"])
     found = release_canary.targets(release_canary.arguments(), ["o/a"])
-    assert found == list(release_canary.NEW_TARGETS)
+    assert found == list(release_canary.CI_TARGETS)
     monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD"])
     found = release_canary.targets(release_canary.arguments(), ["o/a"])
     assert found == [("installed", "o/a"), *release_canary.NEW_TARGETS]
@@ -722,3 +723,76 @@ def test_the_last_release_is_the_candidates_merge_base_with_main_not_mains_merge
             "python", candidate, source, tmp_path / "work", log, checkout
         )
     assert git(installed_from[0], "rev-parse", "HEAD") == released
+
+
+def test_the_update_target_moves_an_installed_project_to_the_candidate_from_a_local_host(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, old = release
+    for name in ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"):
+        monkeypatch.delenv(name)
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
+    candidate = commit(source, "candidate")
+    with (target.parent / "log").open("w") as log:
+        release_canary.update_to(candidate, source, target, log)
+    marker = json.loads((target / ".hooks/hard-eng-source.json").read_text())
+    assert marker["revision"] == candidate != old
+    assert git(target, "branch", "--show-current") == "hard-eng/update"
+
+
+def test_an_update_that_prints_no_ready_step_fails_with_the_printed_text(
+    tmp_path: Path,
+) -> None:
+    work = tmp_path / "work"
+    init(work)
+    (work / ".hooks").mkdir()
+    (work / ".hooks/update.py").write_text(
+        "def latest_verified(previous):\n    return None\n\n\n"
+        "def update(root):\n"
+        "    return 'Hard Eng updates start after the Hard Eng install "
+        "is on the base branch of a remote.'\n"
+    )
+    commit(work, "installed")
+    with (tmp_path / "log").open("w") as log:
+        with pytest.raises(release_canary.Failed, match="base branch of a remote"):
+            release_canary.update_to("a" * 40, tmp_path / "source", work, log)
+
+
+def test_ci_runs_the_update_target_on_linux_only_and_the_release_gate_waits_for_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD", "--ci"])
+    assert release_canary.UPDATE_TARGET in release_canary.targets(
+        release_canary.arguments(), []
+    )
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD"])
+    assert release_canary.UPDATE_TARGET not in release_canary.targets(
+        release_canary.arguments(), []
+    )
+    text = (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
+    workflow = yaml.safe_load(text)
+    matrix = workflow["jobs"]["new-project"]["strategy"]["matrix"]
+    assert matrix["exclude"] == [{"os": "macos-latest", "target": "update-python"}]
+    assert "c.CI_TARGETS]" in text and "c.NEW_TARGETS" not in text
+    monkeypatch.setattr(release_canary, "output", lambda command: "hard-eng\tsuccess")
+    assert "update-python" in release_canary.ci_failures("a" * 40)
+
+
+def test_the_update_target_ends_with_the_full_check_on_the_update_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+
+    def install_last_release(*_: object) -> None:
+        calls.append("install")
+
+    def update_to(*_: object) -> None:
+        calls.append("update")
+
+    monkeypatch.setattr(release_canary, "install_last_release", install_last_release)
+    monkeypatch.setattr(release_canary, "update_to", update_to)
+    with (tmp_path / "log").open("w") as log:
+        args = (release_canary.UPDATE_TARGET, "a" * 40, tmp_path, tmp_path / "w", log)
+        checks = release_canary.prepare(*args)
+    assert calls == ["install", "update"]
+    assert [name for name, _ in checks] == ["full check"]
