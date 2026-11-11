@@ -194,7 +194,7 @@ def test_copied_code_lines_name_paths_from_the_repository_root(
     tmp_path: Path, group: str, prefix: str
 ) -> None:
     path = scanned_tree(tmp_path, group)
-    both = f"{prefix}src/pkg/a.py or {prefix}tests/pkg/a.py"
+    both = f"({prefix}src/pkg/a.py or {prefix}tests/pkg/a.py)"
     assert scan_findings.jscpd_findings(path) == [
         f"copied code {both}:1-16 {prefix}src/pkg/b.py:3-18",
         f"copied code {both}:1-16 {both}:1-16",

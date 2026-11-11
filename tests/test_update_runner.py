@@ -807,8 +807,8 @@ def test_a_rerun_writes_the_planned_gates_file_to_the_current_checkout(
     before = (project / GATES_FILE).read_text()
     assert "extra" not in before
     outcome = update_runner.locked_update(project, repair=True)
-    assert f"This checkout: setup wrote {GATES_FILE} to match" in outcome
-    assert ("pushed to a remote" in outcome) is not remote
+    assert f"This checkout: setup wrote {GATES_FILE} for the project" in outcome
+    assert ("on the base branch of a remote" in outcome) is not remote
     assert '"extra"' in (project / GATES_FILE).read_text()
     assert git(project, "status", "--porcelain") == f"M {GATES_FILE}"
     assert git(project, "diff", "--cached", "--name-only") == ""
@@ -826,7 +826,8 @@ def test_a_rerun_writes_each_project_file_that_setup_plans_and_no_scaffold_file(
     commit(project, "a web package")
     outcome = update_runner.locked_update(project, repair=True)
     written = f"{GATES_FILE}, web/.semgrepignore, web/tsconfig.json"
-    assert f"This checkout: setup wrote {written} to match" in outcome
+    assert f"This checkout: setup wrote {written} for the project" in outcome
+    assert "review and commit them" in outcome
     assert git(project, "status", "--porcelain", "-uall").splitlines() == [
         f"M {GATES_FILE}",
         "?? web/.semgrepignore",

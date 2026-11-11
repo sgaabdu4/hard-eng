@@ -26,7 +26,7 @@ UPDATE_BRANCH = "hard-eng/update"
 UPDATE_REF = f"refs/heads/{UPDATE_BRANCH}"
 UPDATE_COMMAND = "python3 .hooks/hard-eng.py update-pr"
 REPAIR_SUBJECT = "Install Hard Eng"
-NOT_PUBLISHED = "Hard Eng updates start after the project is pushed to a remote with its base branch."
+NOT_PUBLISHED = "Hard Eng updates start after the Hard Eng install is on the base branch of a remote."
 HEX_REVISION = re.compile(r"[0-9a-f]{40}")
 OWNER = re.compile(r"hard-eng-update (\d+)")
 TEMPORARY = re.compile(
@@ -686,8 +686,8 @@ def repair_checkout(root: Path, previous: str) -> str:
         update.replace_file(root / name, content.encode())
     if written:
         notes.append(
-            f"setup wrote {', '.join(written)} to match the project's files; "
-            "review and commit with your change"
+            f"setup wrote {', '.join(written)} for the project's current packages; "
+            f"review and commit {'it' if len(written) == 1 else 'them'}"
         )
     return f"This checkout: {'; '.join(notes)}." if notes else ""
 

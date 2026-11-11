@@ -140,7 +140,8 @@ def test_the_cleanup_refusal_names_every_kept_path_and_the_step(
     ):
         assert message.count(kept) == 1
     assert message.endswith(
-        "Remove the generated files that nobody needs, keep or move the rest, "
+        "In that worktree, `git status --ignored` lists each file. Delete the "
+        "generated files that nobody needs, commit or move the rest out of it, "
         "then run cleanup again."
     )
     assert task.exists()

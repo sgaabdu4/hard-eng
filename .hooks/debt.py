@@ -197,7 +197,7 @@ def print_new(
     if candidates and len(lines) < 20:
         sure_new = sum(new[form] for form in doubtful)
         lines.append(
-            f"  {sure_new} of the next {len(candidates)} lines are new; the others are recorded:"
+            f"  {sure_new} of these {len(candidates)} lines are new; the others are recorded:"
         )
         lines += [f"  {line}" for line in candidates[: 20 - len(surely)]]
     cut = len(surely) + len(candidates) - 20
@@ -287,8 +287,8 @@ def record(
     )
     if left_out:
         print(
-            f"Left out {left_out.total()} new findings in {', '.join(left_out)}; "
-            "check fails until they are fixed."
+            f"Did not record {left_out.total()} new findings in {', '.join(left_out)}; "
+            "`check` fails until they are fixed."
         )
     return 0
 
@@ -313,7 +313,7 @@ def refuse_new_debt(root: Path, base: str | None) -> str | None:
         and git_file(root, base, SOURCE_FILE) is not None
     ):
         raise ValueError(
-            f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings instead"
+            f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings that `check` prints instead"
         )
     return base
 

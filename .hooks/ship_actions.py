@@ -390,7 +390,8 @@ def unchanged_checkout(shipment: Shipment) -> None:
         raise ValueError(
             "Cleanup preserves modified, untracked or ignored work: "
             + ", ".join(kept_groups(kept))
-            + ". Remove the generated files that nobody needs, keep or move the rest, "
+            + ". In that worktree, `git status --ignored` lists each file. Delete the "
+            "generated files that nobody needs, commit or move the rest out of it, "
             "then run cleanup again."
         )
     if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:

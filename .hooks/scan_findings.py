@@ -88,7 +88,8 @@ def named_from_root(name: str, root: Path, folder: Path, scanned: list[str]) -> 
         if (folder / entry / name).is_file()
         or ((folder / entry).is_file() and Path(entry).name == name)
     ]
-    return " or ".join(str(item.relative_to(root)) for item in found) or name
+    names = [str(item.relative_to(root)) for item in found]
+    return f"({' or '.join(names)})" if len(names) > 1 else "".join(names) or name
 
 
 def jscpd_findings(path: Path) -> list[str]:

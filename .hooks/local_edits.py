@@ -53,11 +53,11 @@ def merge_local_edits(name: str, target: Path, old: Path, content: str) -> str:
     if merged.returncode != 0:
         raise ValueError(
             f"{name} {CONFLICT_HEADING} "
-            f"Conflicts, local lines first, then the update's lines:\n"
+            "Each block below shows the local lines, then the update's lines:\n"
             f"{conflict_blocks(merged.stdout)}\n"
-            "In each block, put the update's lines in place of the local lines, "
-            "commit, then update again. After that, add your own change again "
-            "on other lines."
+            f"In {name}, put the update's lines in place of those local lines, "
+            "commit, then run the same command again. To keep your own change, "
+            "add it again after that, on lines that the update does not change."
         )
     if name.endswith(".py"):
         try:
