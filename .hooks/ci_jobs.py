@@ -52,7 +52,7 @@ def language_filter(args: Namespace) -> LanguageFilter:
 
 
 def language_groups(groups: list[Group], languages: LanguageFilter) -> list[Group]:
-    """Groups of the chosen languages; a group kept by `only` keeps its ancestors' lockfiles gates."""
+    """Groups of the chosen languages; a group kept by `only` keeps the lockfiles gate of every folder above it."""
     only, skip = languages
     if not only and not skip:
         return groups
@@ -66,7 +66,7 @@ def language_groups(groups: list[Group], languages: LanguageFilter) -> list[Grou
     for group in groups:
         if chosen(group):
             result.append(group)
-        elif only and group.get("language"):
+        elif only:
             installs = [g for g in group["checks"] if g.get("role") == "lockfiles"]
             if installs and any(
                 PurePosixPath(group["path"]) in p.parents for p in paths

@@ -277,6 +277,15 @@ def test_an_ancestor_without_a_dependency_install_adds_nothing() -> None:
     assert [g["path"] for g in kept] == ["app/ios", "app/macos"]
 
 
+def test_a_language_filter_keeps_the_install_of_a_root_with_no_language() -> None:
+    groups: list[Group] = [
+        {"path": ".", "checks": checks("lockfiles", "vulnerabilities")},
+        {"path": "app", "language": "swift", "checks": checks("tests")},
+    ]
+    kept = language_groups(groups, LanguageFilter(only=("swift",)))
+    assert layout(kept) == [(".", ["lockfiles"]), ("app", ["tests"])]
+
+
 def test_no_filter_returns_the_groups_unchanged() -> None:
     groups = sample_groups()
     assert language_groups(groups, LanguageFilter()) is groups
