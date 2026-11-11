@@ -590,3 +590,16 @@ def test_stop_still_blocks_when_the_branch_holds_its_own_unfinished_draft_plan(
     )
     assert response["decision"] == "block"
     assert "Planning incomplete" in str(response)
+
+
+def test_stop_shows_the_quick_check_line_for_a_small_change_when_the_base_holds_a_ready_plan(
+    repository: Path,
+) -> None:
+    plan = (
+        plan_document()
+        .replace("Status: Complete", "Status: Ready")
+        .replace("## Verification\nResult: Passed", "## Verification\nResult: Pending")
+    )
+    message = str(small_edit_after_plan(repository, plan, own_plan=False))
+    assert "quick checks passed" in message
+    assert "planning checks passed" not in message
