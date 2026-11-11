@@ -37,7 +37,7 @@ def test_a_picture_needs_a_current_proof_file(project: Project, tmp_path: Path) 
     ]
     for proof, named in refused:
         write_proof(shot, proof)
-        for flags in ([], ["--dry-run"]):
+        for flags in ((), ("--dry-run",)):
             result = project.run("upload", "1", str(shot), *flags)
             error = str(result.payload["error"])
             assert result.code == 1, proof
