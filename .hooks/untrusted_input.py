@@ -286,7 +286,7 @@ def validate_typescript(
             "TypeScript configuration omits declared production files: "
             + ", ".join(shown[:3])
             + (f" and {len(shown) - 3} more" if len(shown) > 3 else "")
-            + f". Add the folder of each file to the `include` list of {where}"
+            + f". Add the folder of each file to the `include` list of {where}, and remove any `exclude` entry that matches the file"
         )
     build_composites(root, compiler, selected, directory, timeout)
 
