@@ -517,3 +517,18 @@ def test_the_plan_rule_asks_no_update_proof_in_a_feature_branch_that_merged_an_u
     with pytest.raises(ValueError, match="PLAN.md: plan needs"):
         plans.validate_plans(target, "main")
     proof.assert_not_called()
+
+
+def test_one_check_asks_the_update_proof_one_time(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import plans
+    from project_files import keeping
+
+    target = draft_plan_beside_an_update(release, monkeypatch)
+    proof = Mock(return_value=True)
+    monkeypatch.setattr(update, "verified_revision", proof)
+    with keeping("references"):
+        update.installed_update_paths(target, "main")
+        assert plans.validate_plans(target, "main") == "Complete"
+    assert proof.call_count == 1
