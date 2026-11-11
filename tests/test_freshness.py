@@ -607,3 +607,23 @@ def test_the_target_is_a_version_that_the_python_range_can_install() -> None:
     assert stale_dependencies("uv", newest, Registry(records), now) == [
         ("tqdm", "4.26.0", "4.67.13")
     ]
+
+
+def test_the_target_has_passed_the_wait_when_a_newer_release_cannot_install() -> None:
+    old, young = "2024-01-01T00:00:00+00:00", "2024-12-07T00:00:00+00:00"
+    now = moment("2024-12-08T00:00:00+00:00")
+    report = "app v0.1.0\n└── tqdm v1.0.0 (latest: v2.0.0)\n"
+
+    def registry(dates: dict[str, str]) -> Registry:
+        releases = {
+            version: [{"upload_time_iso_8601": stamp}]
+            for version, stamp in dates.items()
+        }
+        return Registry({PYPI + "tqdm/json": json.dumps({"releases": releases})})
+
+    waiting = registry({"1.0.0": old, "2.0.0": young, "3.0.0": old})
+    assert stale_dependencies("uv", report, waiting, now) == []
+    between = registry({"1.0.0": old, "1.5.0": old, "2.0.0": young, "3.0.0": old})
+    assert stale_dependencies("uv", report, between, now) == [
+        ("tqdm", "1.0.0", "1.5.0")
+    ]

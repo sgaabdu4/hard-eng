@@ -72,7 +72,10 @@ def pub_eligible(name: str, fetch: Fetch, cutoff: datetime, ceiling: str) -> str
     )
 
 
-def pypi_eligible(name: str, fetch: Fetch, cutoff: datetime) -> str | None:
+def pypi_eligible(
+    name: str, fetch: Fetch, cutoff: datetime, ceiling: str
+) -> str | None:
+    """The ceiling is uv's latest: it obeys the project's Python range, a newer release may not."""
     package = fetch(f"https://pypi.org/pypi/{urllib.parse.quote(name)}/json")
     if not isinstance(package, dict) or not isinstance(package.get("releases"), dict):
         raise TypeError(f"PyPI returned an unreadable record for {name}")
@@ -82,6 +85,7 @@ def pypi_eligible(name: str, fetch: Fetch, cutoff: datetime) -> str | None:
             for version, files in package["releases"].items()
             if files
             and not all(item.get("yanked") for item in files)
+            and not newer(version, ceiling)
             and released_before(
                 min(item["upload_time_iso_8601"] for item in files), cutoff
             )
@@ -94,11 +98,6 @@ def newer(target: str | None, current: str) -> bool:
         return False
     want, have = version_key(target, strict=True), version_key(current, strict=False)
     return want is not None and have is not None and want > have
-
-
-def within(target: str | None, ceiling: str) -> str | None:
-    """uv's latest obeys the project's Python range; a newer PyPI release may not install."""
-    return ceiling if newer(target, ceiling) else target
 
 
 def behind(
@@ -200,7 +199,7 @@ def stale_dependencies(
     installable = {name: latest for name, _, latest in rows}
     return behind(
         [(name, current) for name, current, _ in rows],
-        lambda name: within(pypi_eligible(name, fetch, cutoff), installable[name]),
+        lambda name: pypi_eligible(name, fetch, cutoff, installable[name]),
     )
 
 
