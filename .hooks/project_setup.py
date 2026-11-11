@@ -440,11 +440,11 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
     owned = owned_files(root, config["packages"], files)
     typescript = typescript_packages(root, files)
     tracked = {str(path.relative_to(root)) for path in files}
+    locks: dict[str, Path] = {}
     for package in config["packages"]:
         directory = root / package["path"]
         adapt_sources(root, package, owned[directory])
-        lockfile = adapt_package(directory, package)
-        refuse_ignored_locks(root, [directory / lockfile], tracked, ask_git=True)
+        locks[package["path"]] = directory / adapt_package(directory, package)
         adapt_boundaries(package, typescript)
         for gate in package["checks"]:
             if gate.get("role") == "security":
@@ -454,7 +454,9 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
                     else argument
                     for argument in gate["command"]
                 ]
-    adapt_workspaces(root, config)
+    members = adapt_workspaces(root, config)
+    own = [lock for path, lock in locks.items() if path not in members]
+    refuse_ignored_locks(root, own, tracked, ask_git=True)
 
 
 def adapt_boundaries(package: Group, typescript: set[str]) -> None:
@@ -533,7 +535,9 @@ def workspace_matches(relative: str, members: list[str]) -> bool:
     )
 
 
-def adapt_workspaces(root: Path, config: GateConfig) -> None:
+def adapt_workspaces(root: Path, config: GateConfig) -> set[str]:
+    """The paths of the members, which use the lockfile of their workspace root."""
+    shared: set[str] = set()
     for owner in config["packages"]:
         directory, language = root / owner["path"], owner["language"]
         members = workspace_members(directory, language)
@@ -549,6 +553,7 @@ def adapt_workspaces(root: Path, config: GateConfig) -> None:
                 continue
             relative = str(path.relative_to(directory))
             if workspace_matches(relative, members):
+                shared.add(child["path"])
                 child["checks"] = [
                     gate
                     for gate in child["checks"]
@@ -580,6 +585,7 @@ def adapt_workspaces(root: Path, config: GateConfig) -> None:
             ]
             owner.pop("language")
             owner.pop("sources")
+    return shared
 
 
 FRESHNESS_COMMANDS = {
