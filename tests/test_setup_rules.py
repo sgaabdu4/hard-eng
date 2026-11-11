@@ -1,5 +1,6 @@
 """Setup rules: what setup adds to an installed gates file and what it refuses."""
 
+import json
 from pathlib import Path
 
 import gate_config
@@ -71,6 +72,55 @@ def test_the_line_limit_refusal_names_the_ways_out(tmp_path: Path) -> None:
     assert "reason" in message
     assert "evidence" in message
     assert "hard-eng.gates.json" in message
+
+
+def gated_root(tmp_path: Path, *checks: dict[str, object]) -> Path:
+    root = tmp_path / "project"
+    init(root)
+    configure(root, list(checks) or [gate("suite", "pass")])
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        (root / name).write_text((SOURCE / name).read_text())
+    return root
+
+
+def line_limit_project(tmp_path: Path) -> Path:
+    root = gated_root(tmp_path)
+    (root / "big.py").write_text("value = 1\n" * 1001)
+    commit(root, "start")
+    with pytest.raises(ValueError, match="big.py: 1001 lines"):
+        gate_config.load_groups(root)
+    return root
+
+
+def test_splitting_the_long_file_clears_the_line_limit_refusal(tmp_path: Path) -> None:
+    root = line_limit_project(tmp_path)
+    (root / "big.py").write_text("value = 1\n" * 500)
+    (root / "big_more.py").write_text("value = 2\n" * 501)
+    assert gate_config.load_groups(root)
+
+
+def test_marking_the_file_generated_clears_the_line_limit_refusal(
+    tmp_path: Path,
+) -> None:
+    root = line_limit_project(tmp_path)
+    (root / ".gitattributes").write_text("big.py linguist-generated=true\n")
+    assert gate_config.load_groups(root)
+
+
+def test_a_file_size_exception_clears_the_line_limit_refusal(tmp_path: Path) -> None:
+    root = line_limit_project(tmp_path)
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [],
+                "shared": [gate("suite", "pass")],
+                "file_size_exceptions": {
+                    "big.py": {"reason": "fixture", "evidence": "fixture"}
+                },
+            }
+        )
+    )
+    assert gate_config.load_groups(root)
 
 
 def ignored_dart_lock(tmp_path: Path) -> tuple[Path, GateConfig]:
@@ -155,18 +205,10 @@ def test_the_step_for_an_ignored_lockfile_that_is_not_on_disk_can_be_done(
 
 
 def test_check_refuses_a_lockfile_that_git_ignores(tmp_path: Path) -> None:
-    root = tmp_path / "project"
-    init(root)
-    configure(
-        root,
-        [
-            gate(
-                "lockfile", "pass", role="lockfiles", command=["uv", "sync", "--locked"]
-            )
-        ],
+    root = gated_root(
+        tmp_path,
+        gate("lockfile", "pass", role="lockfiles", command=["uv", "sync", "--locked"]),
     )
-    for name in ("PRODUCT.md", "DESIGN.md"):
-        (root / name).write_text((SOURCE / name).read_text())
     (root / ".gitignore").write_text("uv.lock\n")
     commit(root, "start")
     (root / "uv.lock").write_text("# lock\n")
