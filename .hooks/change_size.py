@@ -120,6 +120,17 @@ def update_written(root: Path, point: str, names: set[str]) -> set[str]:
     return installed | setup_written(root, point, names - installed, sources)
 
 
+def update_only(root: Path, base: str, changed: set[str]) -> bool:
+    """Whether a clean tree holds only files a verified Hard Eng update wrote."""
+    from update import maybe_installed
+
+    if not any(maybe_installed(name) for name in changed):
+        return False
+    if _git_output(root, "status", "--porcelain"):
+        return False
+    return not changed - update_written(root, base, changed)
+
+
 def _verdict(
     status: list[str],
     counts: list[str],

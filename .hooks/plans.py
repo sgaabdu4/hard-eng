@@ -603,7 +603,13 @@ def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) 
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
-    from change_size import judged_point, moved_plans, plan_not_needed, released_plans
+    from change_size import (
+        judged_point,
+        moved_plans,
+        plan_not_needed,
+        released_plans,
+        update_only,
+    )
 
     explicit_stage = stage is not None
     base = base or judged_point(root)
@@ -612,15 +618,15 @@ def validate_plans(
         raise ValueError("Cannot verify plan scope; fetch or supply a valid Git --base")
     if stage is None:
         stage = "Draft" if planning_only(root, changed) else "Complete"
-    if base is not None and not explicit_stage and changed:
-        from change_size import update_written
-
-        # Unrelated open plans must not block a verified Hard Eng update branch.
-        if not changed - update_written(root, base, changed):
-            print(
-                "Plan: only files the verified Hard Eng update wrote; no plan needed."
-            )
-            return stage
+    # Unrelated open plans must not block a verified Hard Eng update branch.
+    if (
+        base is not None
+        and not explicit_stage
+        and changed
+        and update_only(root, base, changed)
+    ):
+        print("Plan: only files the verified Hard Eng update wrote; no plan needed.")
+        return stage
     changed |= released_plans(root, base)
     changed -= moved_plans(root, base, changed)
     paths = plan_files(root)

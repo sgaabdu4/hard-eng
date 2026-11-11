@@ -392,3 +392,20 @@ def test_update_branch_check_skips_an_unrelated_draft_plan(
     commit(target, "project work beside the update")
     with pytest.raises(ValueError, match="PLAN.md: plan needs"):
         plans.validate_plans(target, "main")
+
+
+def test_the_update_only_rule_asks_no_proof_of_a_tree_that_is_not_clean(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import plans
+
+    target = draft_plan_beside_an_update(release, monkeypatch)
+    proof = Mock(return_value=True)
+    monkeypatch.setattr(update, "verified_revision", proof)
+    assert plans.validate_plans(target, "main") == "Complete"
+    proof.assert_called()
+    proof.reset_mock()
+    (target / "app.py").write_text("print('more work')\n")
+    with pytest.raises(ValueError, match="PLAN.md: plan needs"):
+        plans.validate_plans(target, "main")
+    proof.assert_not_called()
