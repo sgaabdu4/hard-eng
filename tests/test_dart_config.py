@@ -69,6 +69,27 @@ def test_package_include_root_is_a_directory(
         validate_dart_includes(options, tmp_path)
 
 
+@pytest.mark.parametrize("content", ["include: ../lib/shared.yaml\n", "analyzer: {}\n"])
+def test_a_nested_settings_file_that_lacks_the_settings_is_named_with_its_step(
+    runner: ModuleType, tmp_path: Path, content: str
+) -> None:
+    """A settings file in a source folder replaces the package's settings for that folder."""
+    (tmp_path / "analysis_options.yaml").write_text(yaml.safe_dump(DART_TYPING))
+    runner.validate_typing(tmp_path, "dart", ["tool"])
+    nested = tmp_path / "tool/analysis_options.yaml"
+    nested.parent.mkdir()
+    nested.write_text(content)
+    with pytest.raises((TypeError, ValueError), match="Dart requires") as error:
+        runner.validate_typing(tmp_path, "dart", ["tool"])
+    assert f": {nested}. This file replaces the package's settings" in str(error.value)
+    assert "or remove it" in str(error.value)
+    nested.unlink()
+    (tmp_path / "analysis_options.yaml").write_text("linter: {}\n")
+    with pytest.raises(TypeError, match="Dart requires analyzer settings") as error:
+        runner.validate_typing(tmp_path, "dart", ["tool"])
+    assert str(error.value).endswith(f": {tmp_path / 'analysis_options.yaml'}")
+
+
 @pytest.mark.parametrize(
     "section,group,rule",
     [
