@@ -30,7 +30,7 @@ def test_ready_refuses_a_pr_over_the_commit_cap(
         fixture,
         fake,
         monkeypatch,
-        "PR has 101 commits; HE-PR-COMMITS allows at most 100.*own PR.*join neighbour",
+        "PR has 101 commits; HE-PR-COMMITS allows at most 100.*PR of their own.*join neighbour",
     )
 
 

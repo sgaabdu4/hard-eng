@@ -462,8 +462,8 @@ def commits_problem(count: int) -> str | None:
         return None
     return (
         f"PR has {count} commits; HE-PR-COMMITS allows at most {MAX_PR_COMMITS}. "
-        "Ship the finished part in its own PR and continue on a new branch, "
-        "or join neighbour commits (HE-PR-COMMITS)."
+        "Move the finished commits to a PR of their own, merge it, then rebase the rest. "
+        "Or join neighbour commits without moving the base."
     )
 
 
@@ -481,7 +481,8 @@ def commit_note(root: Path) -> None:
     if count < WARN_PR_COMMITS:
         return
     way = (
-        "Ship the finished part in its own PR, or join neighbour commits."
+        "Move the finished commits to a PR of their own and merge it first, "
+        "or join neighbour commits."
         if count > MAX_PR_COMMITS
         else "Ship this work soon, then continue on a new branch."
     )
