@@ -65,3 +65,9 @@ def test_branch_coverage_is_reported_separately_from_lines(
         path, "python-tests", tmp_path, {tmp_path / "app.py"}
     ) == (7, 10)
     assert "Branch coverage: 1/4 (25.00%; informational)" in capsys.readouterr().out
+
+
+def test_a_missing_python_coverage_report_names_the_cov_step(tmp_path: Path) -> None:
+    report = tmp_path / "coverage.json"
+    with pytest.raises(ValueError, match="--cov="):
+        reports.line_coverage(report, "python-tests", tmp_path, {tmp_path / "a.py"})
