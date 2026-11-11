@@ -139,6 +139,71 @@ def value_starts(text: str, start: int) -> dict[str, int]:
     return found
 
 
+def biome_setting(config: dict[str, object], key: str, default: int) -> int:
+    """json.formatter.<key>, else formatter.<key>, else the Biome default."""
+    for section in (config.get("json"), config):
+        formatter = section.get("formatter") if isinstance(section, dict) else None
+        value = formatter.get(key) if isinstance(formatter, dict) else None
+        if isinstance(value, int):
+            return value
+    return default
+
+
+def add_member(text: str, masked: str, brace: int, member: str) -> str:
+    """Put member before the first member of the object, with the gap the file already has."""
+    first = brace + 1
+    while masked[first] in " \t\r\n":
+        first += 1
+    gap = text[brace + 1 : first]
+    if gap.strip():
+        raise ValueError("a comment stands before the first member")
+    if masked[first] == "}":
+        return f"{text[:brace]}{{ {member} }}{text[first + 1 :]}"
+    return f"{text[:first]}{member},{gap}{text[first:]}"
+
+
+def add_line_entry(text: str, masked: str, end: int, close: int) -> str:
+    """Add the entry as a new line below the last entry of a list written over several lines."""
+    start = text.rfind("\n", 0, end) + 1
+    stop = text.find("\n", end)
+    line = text[start:end]
+    if stop < 0 or stop > close or "[" in masked[start:end]:
+        raise ValueError("the last entry shares its line")
+    indent = line[: len(line) - len(line.lstrip())]
+    comma = "" if masked[end - 1] == "," else ","
+    entry = f'\n{indent}"{BIOME_IGNORE}"'
+    return f"{text[:end]}{comma}{text[end:stop]}{entry}{text[stop:]}"
+
+
+def add_inline_entry(
+    text: str, masked: str, config: dict[str, object], start: int, close: int
+) -> str:
+    """Add the entry to a one-line list; write the list over several lines when the line gets too long."""
+    end = len(masked[:close].rstrip())
+    comma = "" if masked[end - 1] == "," else ","
+    edited = f'{text[:end]}{comma} "{BIOME_IGNORE}"{text[end:]}'
+    first = edited.rfind("\n", 0, start) + 1
+    last = edited.find("\n", start)
+    line = edited[first : None if last < 0 else last]
+    tab = " " * biome_setting(config, "indentWidth", 2)
+    if len(line.replace("\t", tab)) <= biome_setting(config, "lineWidth", 80):
+        return edited
+    key = line[: line.index("[")]
+    after = line[line.index("]") + 1 :]
+    if not key.strip().startswith('"includes"') or after not in {"", ","}:
+        raise ValueError("the list shares its line")
+    if masked[start : close + 1] != text[start : close + 1]:
+        raise ValueError("a comment stands in the list")
+    indent = key[: len(key) - len(key.lstrip())]
+    inner = indent + ("\t" if indent.startswith("\t") else tab)
+    entries = [
+        *json.loads(text[start : close + 1]),
+        BIOME_IGNORE,
+    ]
+    body = ",\n".join(f"{inner}{json.dumps(entry)}" for entry in entries)
+    return f"{text[:start]}[\n{body}\n{indent}]{text[close + 1 :]}"
+
+
 def biome_edit(text: str, config: dict[str, object]) -> str | None:
     """The text with BIOME_IGNORE as the last files.includes entry; None when it is there."""
     masked = JSONC.sub(lambda match: match[1] or " " * len(match[0]), text)
@@ -147,26 +212,22 @@ def biome_edit(text: str, config: dict[str, object]) -> str | None:
     if isinstance(files, dict) and isinstance(files.get("includes"), list):
         if files["includes"] and files["includes"][-1] == BIOME_IGNORE:
             return None
-        inner = value_starts(masked, top["files"])
-        close = closing(masked, inner["includes"])
+        start = value_starts(masked, top["files"])["includes"]
+        close = closing(masked, start)
         end = len(masked[:close].rstrip())
         if not files["includes"]:
-            return text[: inner["includes"] + 1] + f'"{BIOME_IGNORE}"' + text[close:]
-        comma = "" if masked[end - 1] == "," else ","
-        return text[:end] + f'{comma} "{BIOME_IGNORE}"' + text[end:]
+            return f'{text[: start + 1]}"{BIOME_IGNORE}"{text[close:]}'
+        if "\n" in text[start:close]:
+            return add_line_entry(text, masked, end, close)
+        return add_inline_entry(text, masked, config, start, close)
     if "extends" in config:
         raise ValueError("a local list replaces the inherited one")
     listed = f'"includes": ["**", "{BIOME_IGNORE}"]'
     if isinstance(files, dict):
-        opening = top["files"]
-        return (
-            text[: opening + 1] + listed + ("," if files else "") + text[opening + 1 :]
-        )
+        return add_member(text, masked, top["files"], listed)
     if files is not None:
         raise ValueError("files is not an object")
-    opening = masked.index("{")
-    held = f'"files": {{{listed}}}' + ("," if config else "")
-    return text[: opening + 1] + held + text[opening + 1 :]
+    return add_member(text, masked, masked.index("{"), f'"files": {{ {listed} }}')
 
 
 def biome_proof(before: dict[str, object], after: dict[str, object]) -> bool:
