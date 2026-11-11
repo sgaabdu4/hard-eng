@@ -581,6 +581,20 @@ def report_missing_bun(path: Path) -> None:
         )
 
 
+def report_branch_filter(path: Path, triggers: object) -> None:
+    """Say when a pull_request branch filter leaves out PRs into other branches."""
+    event = triggers.get("pull_request") if isinstance(triggers, dict) else None
+    branches = event.get("branches") if isinstance(event, dict) else None
+    names = [branches] if isinstance(branches, str) else branches
+    if isinstance(names, list) and names and "**" not in names:
+        print(
+            f"CI adaptation pending: {path.name} runs Hard Eng only for PRs into "
+            f"{', '.join(map(str, names))}; a stacked PR into another branch skips "
+            "the check. Add '**' to its pull_request branches.",
+            file=sys.stderr,
+        )
+
+
 def integrated(workflows: list[Path]) -> bool:
     """Existing CI that already runs the check needs no integration reminder."""
     import yaml
@@ -593,6 +607,7 @@ def integrated(workflows: list[Path]) -> bool:
                 found = True
                 report_missing_bun(path)
                 triggers = workflow.get("on", workflow.get(True))
+                report_branch_filter(path, triggers)
                 if (isinstance(triggers, str) and triggers in MAINTENANCE_EVENTS) or (
                     isinstance(triggers, (list, dict))
                     and triggers
