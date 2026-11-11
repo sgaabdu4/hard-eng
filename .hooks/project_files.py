@@ -59,7 +59,7 @@ def read_project_file[T](
 def refuse_ignored_locks(
     root: Path,
     directories: Iterable[Path],
-    listed: Container[Path],
+    listed: Container[str],
     *,
     ask_git: bool,
     names: Iterable[str] = LOCK_NAMES,
@@ -68,7 +68,7 @@ def refuse_ignored_locks(
     for lockfile in (directory / name for directory in directories for name in names):
         relative = lockfile.relative_to(root)
         if lockfile.is_file():
-            ignored = lockfile not in listed
+            ignored = str(relative) not in listed
         else:
             ignored = (
                 ask_git

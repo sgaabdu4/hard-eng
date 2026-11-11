@@ -980,7 +980,7 @@ def checked_groups(
     report_paths: set[Path] = set()
     count = sum(validate_group(root, group, report_paths) for group in groups)
     directories = [root / group["path"] for group in groups]
-    refuse_ignored_locks(root, directories, set(listed), ask_git=False)
+    refuse_ignored_locks(root, directories, LISTED[root][0], ask_git=False)
     if not count:
         raise ValueError("No checks configured; verification cannot pass")
     validate_required_checks(root, config, listed, starting)

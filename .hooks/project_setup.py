@@ -438,7 +438,7 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
     files = repository_files(root)
     owned = owned_files(root, config["packages"], files)
     typescript = typescript_packages(root, files)
-    tracked = set(files)
+    tracked = {str(path.relative_to(root)) for path in files}
     for package in config["packages"]:
         directory = root / package["path"]
         adapt_sources(root, package, owned[directory])
