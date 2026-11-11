@@ -16,6 +16,7 @@ import update_pr
 import update_runner
 from conftest import add_origin, commit, default_policy, git, remove_application
 from test_husky_setup import husky_project
+from test_plans import edit
 from test_update_runner import prefix_commit_messages
 from test_updates import select_release
 
@@ -974,6 +975,62 @@ def test_update_branch_needs_no_plan_for_files_the_update_wrote(
         False,
         "it adds, deletes or renames the file logo.png",
     )
+
+
+@pytest.mark.parametrize("repair", [True, False], ids=["repair", "update"])
+def test_a_fix_on_the_update_branch_is_judged_without_the_update_files(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch, repair: bool
+) -> None:
+    source, target, _ = feature
+    (target / "app.py").write_text("".join(f"line {n}\n" for n in range(30)))
+    (target / "appwrite.config.json").write_text("{}\n")
+    commit(target, "plan the backend")
+    git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
+    if repair:
+        monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+        update_runner.locked_update(target, repair=True)
+    else:
+        newer_release(source, monkeypatch, "update")
+        assert update_runner.apply_update(target) == 0
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    fixing = target.parent / "fixing"
+    git(target, "worktree", "add", "-q", str(fixing), BRANCH)
+    assert change_size.size_verdict(fixing)[1] == (
+        "only files the verified Hard Eng update wrote"
+    )
+    edit(fixing, "app.py", 2)
+    if repair:
+        commit(fixing, "fix the project")
+    assert change_size.size_verdict(fixing) == (True, "1 file, 4 changed lines")
+
+
+def test_a_hand_edit_of_an_installed_file_on_the_update_branch_stays_big(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = feature
+    newer_release(source, monkeypatch, "update")
+    assert update_runner.apply_update(target) == 0
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    fixing = target.parent / "fixing"
+    git(target, "worktree", "add", "-q", str(fixing), BRANCH)
+    installed = fixing / ".agents/skills/he/references/workflow.md"
+    installed.write_text(installed.read_text() + "\nhand edit\n")
+    small, reason = change_size.size_verdict(fixing)
+    assert not small, reason
+
+
+def test_an_update_branch_with_another_file_still_runs_the_gates(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    git(target, "update-ref", "refs/heads/main", "HEAD")
+    git(target, "checkout", "-qb", BRANCH)
+    newer_release(source, monkeypatch, "update")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert update.check_scaffold_update(target, "main")
+    (target / "app.py").write_text("print('project work')\n")
+    assert not update.check_scaffold_update(target, "main")
 
 
 def test_a_check_with_no_base_needs_no_plan_on_a_verified_update_branch(

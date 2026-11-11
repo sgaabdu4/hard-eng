@@ -187,3 +187,29 @@ def test_a_branch_that_installs_hard_eng_names_the_install_as_the_reason(
     assert "Size: big, because this branch installs Hard Eng; a plan is needed." in (
         capsys.readouterr().out
     )
+
+
+def test_a_change_with_no_installed_path_starts_no_update_lookup(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (repository / ".hooks").mkdir()
+    (repository / ".hooks/hard-eng-source.json").write_text(
+        '{"revision": "' + "a" * 40 + '"}\n'
+    )
+    sized_branch(repository)
+    edit(repository, "a.py", 2)
+    started: list[str] = []
+    real = subprocess.check_output
+
+    def spy(command: list[str], *arguments: object, **options: object) -> str:
+        started.append(command[1])
+        return real(command, *arguments, **options)
+
+    monkeypatch.setattr(subprocess, "check_output", spy)
+    assert change_size.size_verdict(repository) == (True, "1 file, 4 changed lines")
+    assert not {"status", "show", "log"}.intersection(started)
+    started.clear()
+    edit(repository, "a.py", 1)
+    (repository / "AGENTS.md").write_text("rules\n")
+    change_size.size_verdict(repository)
+    assert len({"status", "show", "log"}.intersection(started)) <= 2
