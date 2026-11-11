@@ -5,10 +5,8 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 import shipping
@@ -800,148 +798,6 @@ def _merged_push(
     }.items():
         monkeypatch.setenv(name, value)
     return MergedPush(root, base, head, responses, pulls)
-
-
-@pytest.mark.parametrize("method", ["squash", "merge", "rebase"])
-def test_push_reuses_passed_pull_request_tree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, method: str
-) -> None:
-    push = _merged_push(tmp_path, monkeypatch, method=method)
-    assert shipping.reused_pull_request(push.root, push.base) == push.head
-
-
-def _different_tree(push: MergedPush) -> None:
-    push.responses[f"git/commits/{push.head}"] = {"tree": {"sha": "f" * 40}}
-
-
-def _base_not_contained(push: MergedPush) -> None:
-    push.responses[f"compare/{push.base}...{push.head}"] = {"status": "diverged"}
-
-
-def _check_failed(push: MergedPush) -> None:
-    push.responses[f"commits/{push.head}/check-runs?per_page=100&filter=all"] = [
-        {"total_count": 1, "check_runs": [_check(push.head, conclusion="failure")]}
-    ]
-
-
-def _check_missing(push: MergedPush) -> None:
-    push.responses[f"commits/{push.head}/check-runs?per_page=100&filter=all"] = [
-        {"total_count": 0, "check_runs": []}
-    ]
-
-
-def _check_pending(push: MergedPush) -> None:
-    push.responses[f"commits/{push.head}/check-runs?per_page=100&filter=all"] = [
-        {
-            "total_count": 1,
-            "check_runs": [_check(push.head, status="in_progress", conclusion=None)],
-        }
-    ]
-
-
-def _query_failure(push: MergedPush) -> None:
-    del push.responses[f"commits/{_native(push.root, 'rev-parse', 'HEAD')}/pulls"]
-
-
-def _no_merged_pull_request(push: MergedPush) -> None:
-    push.pulls[0]["merged_at"] = None
-
-
-def _pull_request_into_another_base(push: MergedPush) -> None:
-    push.pulls[0]["base"] = {"ref": "release"}
-
-
-def _two_merged_pull_requests(push: MergedPush) -> None:
-    push.pulls.append({**push.pulls[0], "number": 8, "head": {"sha": "e" * 40}})
-
-
-def _uncommitted_change(push: MergedPush) -> None:
-    (push.root / "source.txt").write_text("uncommitted\n")
-
-
-@pytest.mark.parametrize(
-    "break_proof",
-    [
-        _different_tree,
-        _base_not_contained,
-        _check_failed,
-        _check_missing,
-        _check_pending,
-        _query_failure,
-        _no_merged_pull_request,
-        _pull_request_into_another_base,
-        _two_merged_pull_requests,
-        _uncommitted_change,
-    ],
-)
-def test_push_runs_checks_when_pull_request_proof_is_missing(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    break_proof: Callable[[MergedPush], None],
-) -> None:
-    push = _merged_push(tmp_path, monkeypatch)
-    break_proof(push)
-    assert shipping.reused_pull_request(push.root, push.base) is None
-    reason = capsys.readouterr().out
-    assert reason.startswith(
-        "Running the checks again; the merged PR's checks do not cover this push: "
-    )
-    assert (
-        reason.strip()
-        .removeprefix(
-            "Running the checks again; the merged PR's checks do not cover this push:"
-        )
-        .strip()
-    )
-
-
-@pytest.mark.parametrize(
-    ("name", "value"),
-    [
-        ("GITHUB_ACTIONS", None),
-        ("GITHUB_EVENT_NAME", "pull_request"),
-        ("GITHUB_REF", "refs/heads/feature/shipping"),
-    ],
-)
-def test_only_ci_pushes_to_the_base_branch_reuse_pull_request_checks(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    name: str,
-    value: str | None,
-) -> None:
-    push = _merged_push(tmp_path, monkeypatch)
-    if value is None:
-        monkeypatch.delenv(name)
-    else:
-        monkeypatch.setenv(name, value)
-    assert shipping.reused_pull_request(push.root, push.base) is None
-    assert capsys.readouterr().out == ""
-
-
-def test_reused_pull_request_result_skips_gates(
-    runner: ModuleType,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    failing = {
-        "name": "fails",
-        "command": [sys.executable, "-c", "raise SystemExit(2)"],
-    }
-    (tmp_path / "hard-eng.gates.json").write_text(
-        json.dumps({"packages": [], "shared": [failing]})
-    )
-
-    def reused(_root: Path, base: str) -> str:
-        return base
-
-    monkeypatch.setattr(shipping, "reused_pull_request", reused)
-    assert runner.check(base="a" * 40) == 0
-    output = capsys.readouterr().out
-    assert f"PR head {'a' * 40} passed the required checks" in output
-    assert "fails" not in output
 
 
 @pytest.mark.parametrize(

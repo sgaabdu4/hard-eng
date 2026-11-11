@@ -549,7 +549,7 @@ def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path,
 
 def proven_elsewhere(base: str | None) -> bool:
     """A merged PR or verified upstream release already proved this change."""
-    from shipping import reused_pull_request
+    from ci_usage import reused_pull_request
     from update import check_scaffold_update
 
     if base is None:
