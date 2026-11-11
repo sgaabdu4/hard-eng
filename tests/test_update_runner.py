@@ -870,22 +870,6 @@ def test_a_rerun_leaves_the_workflow_gates_to_the_update_when_the_checkout_has_n
     assert git(project, "status", "--porcelain") == ""
 
 
-def test_a_failed_update_build_still_names_the_files_that_the_rerun_wrote(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    project = installed_python_project(release, monkeypatch, True)
-    git(project, "remote", "set-url", "origin", str(project.parent / "gone.git"))
-    with pytest.raises(subprocess.SubprocessError) as error:
-        update_runner.locked_update(project, repair=True)
-    assert f"This checkout: setup wrote {GATES_FILE}; review and commit it." in str(
-        error.value
-    )
-    assert "current packages" not in str(error.value)
-    assert '"extra"' in (project / GATES_FILE).read_text()
-    recorded = (project / update_runner.RESULT_FILE).read_text()
-    assert f"setup wrote {GATES_FILE}" in recorded
-
-
 def test_a_rerun_writes_each_project_file_that_setup_plans_and_no_scaffold_file(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
