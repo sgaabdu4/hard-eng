@@ -43,6 +43,7 @@ SOURCE_ONLY_FILES = {
     "AGENTS.override.md",
     "release_canary.py",
     ".github/workflows/canary.yml",
+    ".github/workflows/hard-eng.yml",
 }
 # Runs the project's own installed updater, told that this release is the newest verified one.
 UPDATE = """
