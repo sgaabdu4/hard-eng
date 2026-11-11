@@ -699,7 +699,9 @@ def repair_checkout(root: Path, previous: str) -> str:
             f"review and commit {'it' if len(written) == 1 else 'them'}"
         )
     if waits is not None and waits != planned:
-        notes.append("the update brings the workflow files and their gates")
+        notes.append(
+            "the workflow files and their gates come with the update once the shipping block is on the base branch"
+        )
     return f"This checkout: {'; '.join(notes)}." if notes else ""
 
 

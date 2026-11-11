@@ -7,8 +7,13 @@ from unittest.mock import Mock
 import pytest
 import update_pr
 import update_runner
-from conftest import add_origin
-from test_update_runner import GATES_FILE, installed_python_project, refused_release
+from conftest import add_origin, git
+from test_update_runner import (
+    GATES_FILE,
+    add_shipping_policy,
+    installed_python_project,
+    refused_release,
+)
 
 
 def test_update_pr_fails_after_a_remembered_refusal(
@@ -63,3 +68,23 @@ def test_a_build_error_that_needs_more_arguments_keeps_its_cause_and_the_note(
         update_runner.locked_update(project, repair=True)
     assert "Expecting value" in str(error.value)
     assert f"This checkout: setup wrote {GATES_FILE}" in str(error.value)
+
+
+def test_the_update_brings_the_workflow_files_once_the_base_holds_the_shipping_block(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    git(project, "switch", "-q", "main")
+    add_shipping_policy(project)
+    git(project, "push", "-q", "--no-verify", "origin", "main")
+    git(project, "switch", "-q", "task")
+    git(project, "merge", "-q", "main")
+    outcome = update_runner.locked_update(project, repair=True)
+    assert (
+        "come with the update once the shipping block is on the base branch" in outcome
+    )
+    tree = git(project, "ls-tree", "-r", "--name-only", update_runner.UPDATE_BRANCH)
+    assert ".github/workflows/hard-eng.yml" in tree.splitlines()
+    gates = git(project, "show", f"{update_runner.UPDATE_BRANCH}:{GATES_FILE}")
+    names = [gate["name"] for gate in json.loads(gates)["shared"]]
+    assert {"actionlint", "zizmor"} <= set(names)
