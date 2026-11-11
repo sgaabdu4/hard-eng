@@ -10,7 +10,13 @@ import pytest
 from change_size import plan_tests
 from conftest import add_origin, commit, configure, gate, git, init, plan_document
 from gate_config import repository_files
-from plans import is_plan_path, plan_files, validate_plan, validate_plans
+from plans import (
+    is_plan_path,
+    missing_tests,
+    plan_files,
+    validate_plan,
+    validate_plans,
+)
 from test_plans import edit, new_file, released_branch
 
 # Fixture IDs are built so this file names no real registry ID.
@@ -577,3 +583,48 @@ def test_the_skip_rule_fails_a_plan_test_that_the_report_shows_skipped(
     assert change_size.plan_skips(root, None, groups, 0) is skipped
     printed = capsys.readouterr().out
     assert ("plan acceptance tests were skipped: test_skip" in printed) is skipped
+
+
+COMMENTED_TESTS = [
+    (
+        "tests/test_ops.py",
+        "# def test_divide() -> None: removed until division lands",
+        "def test_divide() -> None: ...",
+    ),
+    (
+        "tests/ops.test.ts",
+        "// test('test_divide', () => {});",
+        "test('test_divide', () => {});",
+    ),
+    (
+        "tests/ops.test.js",
+        '  // it("test_divide", () => {});',
+        'it("test_divide", () => {});',
+    ),
+    (
+        "test/ops_test.dart",
+        "// test('test_divide', () {});",
+        "test('test_divide', () {});",
+    ),
+    ("tests/OpsTests.swift", "// func test_divide() {}", "func test_divide() {}"),
+    ("tests/OpsTests.swift", '// @Test("test_divide")', '@Test("test_divide")'),
+    ("tests/ops_spec.rb", '# it "test_divide" do', 'it "test_divide" do'),
+]
+
+
+@pytest.mark.parametrize(
+    ("path", "comment", "real"),
+    COMMENTED_TESTS,
+    ids=[f"{path}-{n}" for n, (path, _, _) in enumerate(COMMENTED_TESTS)],
+)
+def test_a_test_named_only_on_a_comment_line_does_not_count(
+    tmp_path: Path, path: str, comment: str, real: str
+) -> None:
+    (tmp_path / path).parent.mkdir(exist_ok=True)
+    reference = [(path, "test_divide")]
+    (tmp_path / path).write_text(comment + "\n")
+    assert missing_tests(tmp_path, reference) == [f"{path}::test_divide"]
+    (tmp_path / path).write_text(real + "\n")
+    assert missing_tests(tmp_path, reference) == []
+    (tmp_path / path).write_text(comment + "\n" + real + "\n")
+    assert missing_tests(tmp_path, reference) == []

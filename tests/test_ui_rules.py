@@ -322,3 +322,11 @@ def test_the_starting_state_of_a_new_repository_is_not_judged(tmp_path: Path) ->
     first = unborn(tmp_path / "c", "page.tsx", line)
     commit(first, "first commit")
     validate_suppressions(first, "0" * 40)
+
+
+def test_the_nextjs_starter_holds_its_own_page_that_meets_the_rule() -> None:
+    """HE-UI-SOURCE: the page that the nextjs flow keeps is a starter file, so the starter scan covers it."""
+    page = SOURCE / ".agents/starters/nextjs/app/page.tsx"
+    assert page.is_file()
+    lines = list(enumerate(page.read_text().splitlines(), 1))
+    assert ui_rules.line_findings("app/page.tsx", lines) == []
