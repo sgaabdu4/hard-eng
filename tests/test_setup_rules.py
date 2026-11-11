@@ -13,6 +13,27 @@ from project_setup import (
 )
 
 
+def ignored_lock_package(
+    tmp_path: Path, language: str, manifest: str, text: str, lock: str, on_disk: bool
+) -> tuple[Path, GateConfig]:
+    root = tmp_path / "project"
+    init(root)
+    package = root / "app"
+    package.mkdir()
+    (package / manifest).write_text(text)
+    if on_disk:
+        (root / "app" / lock).write_text("# lock\n")
+    (root / ".gitignore").write_text(f"{lock}\n")
+    commit(root, "start")
+    config: GateConfig = {
+        "shared": [],
+        "packages": [
+            {"path": "app", "language": language, "sources": ["lib"], "checks": []}
+        ],
+    }
+    return root, config
+
+
 @pytest.mark.parametrize(
     ("language", "manifest", "text", "lock"),
     [
@@ -24,20 +45,7 @@ from project_setup import (
 def test_an_ignored_lock_file_is_refused(
     tmp_path: Path, language: str, manifest: str, text: str, lock: str
 ) -> None:
-    root = tmp_path / "project"
-    init(root)
-    package = root / "app"
-    package.mkdir()
-    (package / manifest).write_text(text)
-    (package / lock).write_text("# lock\n")
-    (root / ".gitignore").write_text(f"{lock}\n")
-    commit(root, "start")
-    config: GateConfig = {
-        "shared": [],
-        "packages": [
-            {"path": "app", "language": language, "sources": ["lib"], "checks": []}
-        ],
-    }
+    root, config = ignored_lock_package(tmp_path, language, manifest, text, lock, True)
     with pytest.raises(ValueError, match=rf"app/{lock} is ignored by Git") as refused:
         adapt_packages(root, config)
     assert ".gitignore" in str(refused.value)
@@ -351,3 +359,33 @@ def test_an_ignored_lockfile_link_on_disk_is_refused_without_the_install_step(
     message = str(refused.value)
     assert "remove that rule, then commit uv.lock" in message
     assert "run the project's install" not in message
+
+
+@pytest.mark.parametrize(
+    ("language", "manifest", "text", "lock"),
+    [
+        (
+            "javascript",
+            "package.json",
+            '{"name": "app", "dependencies": {"left-pad": "1.3.0"}}\n',
+            "bun.lock",
+        ),
+        (
+            "python",
+            "pyproject.toml",
+            '[project]\nname = "app"\ndependencies = ["requests"]\n',
+            "uv.lock",
+        ),
+    ],
+)
+def test_a_missing_lockfile_that_git_ignores_names_the_rule_to_remove_the_first_time(
+    tmp_path: Path, language: str, manifest: str, text: str, lock: str
+) -> None:
+    root, config = ignored_lock_package(tmp_path, language, manifest, text, lock, False)
+    with pytest.raises(ValueError, match=rf"app/{lock} is ignored by Git") as refused:
+        adapt_packages(root, config)
+    assert "remove that rule" in str(refused.value)
+    (root / ".gitignore").write_text("")
+    (root / "app" / lock).write_text("# lock\n")
+    commit(root, "track the lock file")
+    adapt_packages(root, config)

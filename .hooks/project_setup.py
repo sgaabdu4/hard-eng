@@ -29,6 +29,7 @@ from hook_chain import is_own
 from project_files import (
     INSTALL_LOCKS,
     dependency_free,
+    missing_lock_error,
     read_project_file,
     refuse_ignored_locks,
 )
@@ -352,8 +353,10 @@ def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
             if (parent / ".git").exists():
                 break
     if not (directory / lockfile).exists() and not dependency_free(directory):
-        raise ValueError(
-            f"{directory}: bun.lock is required; run bun install and commit bun.lock"
+        raise missing_lock_error(
+            directory,
+            "bun.lock",
+            f"{directory}: bun.lock is required; run bun install and commit bun.lock",
         )
     return "bun", ["bun", "install", "--frozen-lockfile"], lockfile
 
@@ -399,10 +402,12 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
                 return uv  # A uv workspace member uses its root's lockfile.
             if (parent / ".git").exists():
                 break
-        raise ValueError(
+        raise missing_lock_error(
+            directory,
+            "uv.lock",
             f"{directory}: uv.lock or poetry.lock is required; run `uv lock` after "
             "declaring dependencies in pyproject.toml (`uv add -r requirements.txt` "
-            "imports a requirements file), then review and commit the lockfile"
+            "imports a requirements file), then review and commit the lockfile",
         )
     import yaml
 

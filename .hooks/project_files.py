@@ -106,6 +106,31 @@ def group_locks(root: Path, groups: Iterable["Group"]) -> Generator[Path]:
                 yield root / group["path"] / name
 
 
+def ignored_text(relative: object, step: str) -> str:
+    return (
+        f"{relative} is ignored by Git, so the install fails in a fresh clone. "
+        f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
+        f"remove that rule, {step}then commit {relative}"
+    )
+
+
+def missing_lock_error(directory: Path, name: str, message: str) -> ValueError:
+    """The missing-lockfile message; when Git ignores the file, which need not exist, it names the rule to remove too."""
+    ignored = not subprocess.run(
+        ["git", "check-ignore", "-q", name], cwd=directory, check=False
+    ).returncode
+    if not ignored:
+        return ValueError(message)
+    prefix = subprocess.run(
+        ["git", "rev-parse", "--show-prefix"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    return ValueError(f"{message}. {ignored_text(prefix + name, '')}")
+
+
 def refuse_ignored_locks(
     root: Path, locks: Iterable[Path], listed: Container[str], *, ask_git: bool
 ) -> None:
@@ -123,11 +148,7 @@ def refuse_ignored_locks(
                 ).returncode
             )
         if ignored:
-            raise ValueError(
-                f"{relative} is ignored by Git, so the install fails in a fresh clone. "
-                f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
-                f"remove that rule, {'' if written else INSTALL_STEP}then commit {relative}"
-            )
+            raise ValueError(ignored_text(relative, "" if written else INSTALL_STEP))
 
 
 def dependency_free(directory: Path) -> bool:
