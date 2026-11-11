@@ -22,6 +22,7 @@ STOP_SIGNAL: list[int] = []
 STARTING = threading.Lock()
 INSTALLS: dict[str, bool] = {}
 INSTALLED_FILE = "hard-eng-installed"
+INSTALL_FOLDERS = (".venv", "node_modules", ".dart_tool")
 
 
 class Process(NamedTuple):
@@ -153,7 +154,7 @@ def check_lock_file(root: Path) -> Generator[tuple[IO[str], bool]]:
 
 
 def lock_stamp(root: Path, key: str) -> str:
-    """Size and change time of each lock file in a package group's folder; its install mark holds only while they stay the same.
+    """Size and change time of each lock file, and the install folders, in a package group's folder; its install mark holds only while they stay the same.
 
     A workspace root can hold the install and have no language, so the language does not pick the names."""
     from gate_config import LOCKFILES
@@ -164,7 +165,8 @@ def lock_stamp(root: Path, key: str) -> str:
         with suppress(OSError):
             status = (folder / name).stat()
             found.append(f"{name} {status.st_size} {status.st_mtime_ns}")
-    return "; ".join(found)
+    present = [name for name in INSTALL_FOLDERS if (folder / name).is_dir()]
+    return "; ".join([*found, f"folders {' '.join(present)}"])
 
 
 def read_installed(lock: IO[str], root: Path) -> frozenset[str]:

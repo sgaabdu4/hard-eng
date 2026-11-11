@@ -128,6 +128,20 @@ def test_a_changed_lock_file_drops_the_install_mark(tmp_path: Path) -> None:
         assert process_group.read_installed(lock, tmp_path) == frozenset()
 
 
+def test_a_removed_install_folder_drops_the_install_mark(tmp_path: Path) -> None:
+    key = process_group.install_key({"path": "app", "language": "python"})
+    package = tmp_path / "app"
+    (package / ".venv").mkdir(parents=True)
+    (package / "uv.lock").write_text("one\n")
+    with (tmp_path / "lock").open("w+") as lock:
+        before = process_group.read_installed(lock, tmp_path)
+        process_group.note_install(key, "lockfiles", False)
+        process_group.save_installed(lock, before, tmp_path)
+        assert process_group.read_installed(lock, tmp_path) == {key}
+        (package / ".venv").rmdir()
+        assert process_group.read_installed(lock, tmp_path) == frozenset()
+
+
 def test_a_quick_check_installs_again_after_the_lock_file_of_a_group_with_no_language_changes(
     runner: ModuleType, tmp_path: Path
 ) -> None:
