@@ -200,12 +200,18 @@ def plan_sections(content: str, *, allow_placeholders: bool = False) -> dict[str
     for heading in SECTIONS:
         if headings.count(heading) != 1 or not sections[heading].strip():
             raise ValueError(f"plan needs one filled '## {heading}' section")
-    for line in content.splitlines():
-        for marker in NOT_APPLICABLE_WORD.finditer(line):
-            if not NOT_APPLICABLE_REASON_SEPARATOR.match(line[marker.end() :]):
-                raise ValueError(
-                    f"plan N/A needs an inline reason: N/A — reason; line: {line.strip()[:60]}"
-                )
+    bare = [
+        f"line {number}: {line.strip()[:60]}"
+        for number, line in enumerate(content.splitlines(), 1)
+        if any(
+            not NOT_APPLICABLE_REASON_SEPARATOR.match(line[marker.end() :])
+            for marker in NOT_APPLICABLE_WORD.finditer(line)
+        )
+    ]
+    if bare:
+        raise ValueError(
+            f"plan N/A needs an inline reason: N/A — reason; {'; '.join(bare)}; add the reason after each N/A"
+        )
     return sections
 
 
