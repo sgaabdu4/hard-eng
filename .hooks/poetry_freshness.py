@@ -114,19 +114,34 @@ def declarations(directory: Path) -> dict[str, list[Declared]]:
     return found
 
 
+def lock_floors(directory: Path) -> dict[str, str]:
+    """The lowest version of each name in poetry.lock, which a split lock holds once for each Python range."""
+    path = directory / "poetry.lock"
+    packages = (
+        tomllib.loads(path.read_text()).get("package", []) if path.is_file() else []
+    )
+    floors: dict[str, str] = {}
+    for package in packages:
+        name, version = canonical(package["name"]), package["version"]
+        if name not in floors or newer(floors[name], version):
+            floors[name] = version
+    return floors
+
+
 def poetry_steps(directory: Path, stale: list[Stale]) -> str:
     declared = declarations(directory)
+    floors = lock_floors(directory)
     lines: dict[tuple[str, ...], list[str]] = {}
     legacy = False
     by_hand: list[str] = []
-    for name, _, target in stale:
+    for name, current, _ in stale:
         items = declared.get(canonical(name), [])
         legacy = legacy or any(item.options == LEGACY for item in items)
         by_hand += [] if items else [name]
         for item in items:
             if not item.unsupported and item.options != LEGACY:
                 lines.setdefault(item.options, []).append(
-                    f"{item.head}>={target}{item.tail}"
+                    f"{item.head}>={floors.get(canonical(name), current)}{item.tail}"
                 )
     commands = [
         " ".join([STEP, *map(shlex.quote, options), *map(shlex.quote, entries)])
@@ -204,8 +219,12 @@ def poetry_targets(directory: Path, stale: list[Stale]) -> list[Stale]:
             plans.setdefault(item.options, []).append((row, item))
             first.setdefault(name, item.options)
     picked: dict[str, str] = {}
+    floors = lock_floors(directory) if plans else {}
     for options, plan in plans.items():
-        entries = [f"{item.head}>={row[1]}{item.tail}" for row, item in plan]
+        entries = [
+            f"{item.head}>={floors.get(canonical(row[0]), row[1])}{item.tail}"
+            for row, item in plan
+        ]
         versions = solver_versions(
             directory, ["add", "--dry-run", "--no-ansi", "-n", *options, *entries]
         )

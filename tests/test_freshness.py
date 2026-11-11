@@ -254,58 +254,58 @@ POETRY_SECTIONS = [
     pytest.param(
         '[project]\ndependencies = ["httpx>=0.27"]\n',
         ["httpx"],
-        ["'httpx>=0.28.1'"],
+        ["'httpx>=0.27.0'"],
         id="project-dependency",
     ),
     pytest.param(
         '[project.optional-dependencies]\ncli = ["httpx>=0.27"]\n',
         ["httpx"],
-        ["--optional cli 'httpx>=0.28.1'"],
+        ["--optional cli 'httpx>=0.27.0'"],
         id="optional-extra",
     ),
     pytest.param(
         '[dependency-groups]\ntest = ["coverage>=7"]\n'
         'dev = [{include-group = "test"}, "httpx>=0.27", "pytest>=7"]\n',
         ["httpx", "pytest"],
-        ["--group dev 'httpx>=0.28.1' 'pytest>=9.1.1'"],
+        ["--group dev 'httpx>=0.27.0' 'pytest>=7.4.4'"],
         id="dependency-group-beside-include-group",
     ),
     pytest.param(
         '[tool.poetry.dependencies]\npython = "^3.9"\nhttpx = "^0.27"\n',
         ["httpx"],
-        ["'httpx>=0.28.1'"],
+        ["'httpx>=0.27.0'"],
         id="poetry-string",
     ),
     pytest.param(
         '[tool.poetry.group.test.dependencies]\npytest = "^7.2"\n',
         ["pytest"],
-        ["--group test 'pytest>=9.1.1'"],
+        ["--group test 'pytest>=7.4.4'"],
         id="poetry-group-table",
     ),
     pytest.param(
         '[tool.poetry.dependencies]\nhttpx = {version = "^0.27", python = "<3.11"}\n'
         'pytest = "^7.2"\n',
         ["httpx", "pytest"],
-        ["--python '<3.11' 'httpx>=0.28.1'", "'pytest>=9.1.1'"],
+        ["--python '<3.11' 'httpx>=0.27.0'", "'pytest>=7.4.4'"],
         id="poetry-table-with-python",
     ),
     pytest.param(
         "[project]\ndependencies = ['httpx[http2]>=0.27; python_version < \"3.13\"']\n",
         ["httpx"],
-        ["'httpx[http2]>=0.28.1; python_version < \"3.13\"'"],
+        ["'httpx[http2]>=0.27.0; python_version < \"3.13\"'"],
         id="pep508-marker-and-extras",
     ),
     pytest.param(
         '[project]\ndependencies = ["HTTPX>=0.27"]\n',
         ["httpx"],
-        ["'HTTPX>=0.28.1'"],
+        ["'HTTPX>=0.27.0'"],
         id="canonical-name",
     ),
     pytest.param(
         '[project]\ndependencies = ["httpx>=0.27"]\n'
         '[dependency-groups]\ndev = ["httpx>=0.27"]\n',
         ["httpx"],
-        ["'httpx>=0.28.1'", "--group dev 'httpx>=0.28.1'"],
+        ["'httpx>=0.27.0'", "--group dev 'httpx>=0.27.0'"],
         id="two-sections",
     ),
 ]
@@ -376,7 +376,7 @@ def test_poetry_names_the_newest_release_its_solver_can_install(
         check(tmp_path, "poetry", fixture("poetry-show-python-bound.json"))
     assert "pytest 7.4.4 → 9.2.0" not in str(failure.value)
     assert "mypy 1.19.1 → 2.4.1" not in str(failure.value)
-    assert f"`{POETRY_ADD}--group dev 'pytest-cov>=7.1.0'`" in str(failure.value)
+    assert f"`{POETRY_ADD}--group dev 'pytest-cov>=4.1.0'`" in str(failure.value)
     out = capsys.readouterr().out
     assert "pytest stays at 7.4.4: 9.2.0 does not install" in out
     assert "`uvx poetry add --dry-run --group dev 'mypy==2.4.1'` shows why" in out
@@ -503,7 +503,7 @@ def test_a_poetry_dev_dependencies_entry_fails_with_the_move_step(
     (tmp_path / "pyproject.toml").write_text(moved)
     with pytest.raises(ValueError, match=r"pytest 7\.4\.4 → 8\.4\.2") as failure:
         check(tmp_path, "poetry", pytest_rows())
-    assert f"`{POETRY_ADD}--group dev 'pytest>=8.4.2'`" in str(failure.value)
+    assert f"`{POETRY_ADD}--group dev 'pytest>=7.4.4'`" in str(failure.value)
 
 
 def test_a_stale_name_without_a_declaration_fails_with_the_hand_step(
@@ -526,7 +526,7 @@ def test_a_dry_run_with_no_line_for_a_name_falls_back_to_the_latest(
     with pytest.raises(ValueError, match=r"pytest 7\.4\.4 → 9\.2\.0") as failure:
         check(tmp_path, "poetry", pytest_rows())
     assert "named no version" not in str(failure.value)
-    assert f"{POETRY_ADD}--group dev 'pytest>=9.2.0' 'pytest-cov>=7.1.0'" in str(
+    assert f"{POETRY_ADD}--group dev 'pytest>=7.4.4' 'pytest-cov>=4.1.0'" in str(
         failure.value
     )
     holds = [
@@ -642,7 +642,7 @@ def test_hold_expires_and_needs_reason(tmp_path: Path) -> None:
         (
             "poetry",
             "poetry-show.json",
-            POETRY_ADD + "'httpx>=0.28.1' 'pytest>=9.1.1'",
+            POETRY_ADD + "'httpx>=0.27.0' 'pytest>=8.0.0'",
         ),
     ],
 )
