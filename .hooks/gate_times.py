@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import threading
+from functools import cache
 from pathlib import Path
 
 from gate_config import JsonValue
@@ -12,6 +13,7 @@ GATE_FLOOR_SECONDS = 600
 GATE_TIMES_LOCK = threading.Lock()
 
 
+@cache
 def gate_times(root: Path) -> Path:
     common = subprocess.check_output(
         ["git", "rev-parse", "--git-common-dir"], cwd=root, text=True
