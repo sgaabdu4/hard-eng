@@ -16,7 +16,8 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TextIO
 
-from gate_config import SOURCE_FILE, json_file
+from ci_setup import GATES_FILE, without_workflow_gates
+from gate_config import SOURCE_FILE
 
 RESULT_FILE = ".hard-eng/update-result.txt"
 LOG_FILE = ".hard-eng/update.log"
@@ -26,7 +27,6 @@ UPDATE_BRANCH = "hard-eng/update"
 UPDATE_REF = f"refs/heads/{UPDATE_BRANCH}"
 UPDATE_COMMAND = "python3 .hooks/hard-eng.py update-pr"
 REPAIR_SUBJECT = "Install Hard Eng"
-GATES_FILE = "hard-eng.gates.json"
 NOT_PUBLISHED = "Hard Eng updates start after the Hard Eng install is on the base branch of a remote."
 HEX_REVISION = re.compile(r"[0-9a-f]{40}")
 OWNER = re.compile(r"hard-eng-update (\d+)")
@@ -655,28 +655,6 @@ def published(root: Path, base: str) -> bool:
     return found.returncode == 0
 
 
-def without_workflow_gates(root: Path, changes: dict[str, str | None]) -> str | None:
-    """The planned gates file without the workflow gates the project lacks, while no workflow file exists."""
-    planned = changes.get(GATES_FILE)
-    workflows = root / ".github/workflows"
-    if (
-        planned is None
-        or not any(name.startswith(".github/workflows/") for name in changes)
-        or any(path.is_file() for path in workflows.rglob("*"))
-    ):
-        return None
-    config = json.loads(planned)
-    held = {
-        gate["name"] for gate in json.loads((root / GATES_FILE).read_text())["shared"]
-    }
-    config["shared"] = [
-        gate
-        for gate in config["shared"]
-        if gate.get("role") not in {"workflows", "ci-security"} or gate["name"] in held
-    ]
-    return json_file(root, config)
-
-
 def repair_checkout(root: Path, previous: str) -> str:
     """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
     import hook_chain
@@ -725,6 +703,14 @@ def repair_checkout(root: Path, previous: str) -> str:
     return f"This checkout: {'; '.join(notes)}." if notes else ""
 
 
+def failure_kind(error: Exception) -> type[Exception]:
+    """The base class a caller catches for this error; each takes one message."""
+    for kind in (subprocess.SubprocessError, OSError, TypeError):
+        if isinstance(error, kind):
+            return kind
+    return ValueError
+
+
 def prepare_update(root: Path, repair: bool = False) -> str:
     """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
     note = ""
@@ -740,12 +726,7 @@ def prepare_update(root: Path, repair: bool = False) -> str:
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
         if not note:
             raise
-        kind = (
-            subprocess.SubprocessError
-            if isinstance(error, subprocess.SubprocessError)
-            else type(error)
-        )
-        raise kind(f"{error} {note}") from error
+        raise failure_kind(error)(f"{error} {note}") from error
     return f"{built} {note}".strip()
 
 
