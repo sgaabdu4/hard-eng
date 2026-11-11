@@ -381,14 +381,30 @@ def test_adopt_refuses_first_when_check_would_refuse_the_debt_file(
     assert not (tmp_path / debt.DEBT_FILE).exists()
 
 
-@pytest.mark.parametrize("on_base", [True, False])
-@pytest.mark.parametrize("only_commit", [False, True])
+def refused(runner: ModuleType) -> str:
+    debt.OUTPUTS.clear()
+    with pytest.raises(ValueError, match="only the change that installs") as caught:
+        runner.adopt()
+    return str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("only_commit", "position"),
+    [
+        (False, "base"),
+        (False, "other"),
+        (False, "detached"),
+        (True, "base"),
+        (True, "other"),
+        (True, "detached"),
+    ],
+)
 def test_the_step_for_adopt_with_no_remote_can_be_done(
     runner: ModuleType,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     only_commit: bool,
-    on_base: bool,
+    position: str,
 ) -> None:
     adoptable(tmp_path, "print('a.py:1:1: F1 bad'); raise SystemExit(1)", only_commit)
     git(tmp_path, "switch", "-q", "main")
@@ -396,18 +412,29 @@ def test_the_step_for_adopt_with_no_remote_can_be_done(
         (tmp_path / ".hooks").mkdir()
         (tmp_path / ".hooks/hard-eng-source.json").write_text("{}")
         commit(tmp_path, "install")
-    if not on_base:
-        git(tmp_path, "switch", "-q", "-c", "work")
+    if position != "base":
+        git(
+            tmp_path,
+            "switch",
+            "-q",
+            *(["-c", "work"] if position == "other" else ["--detach"]),
+        )
     monkeypatch.setattr(runner, "provision_tools", no_provisioning)
-    debt.OUTPUTS.clear()
-    with pytest.raises(ValueError, match="only the change that installs") as refusal:
-        runner.adopt()
-    for step in re.findall(r"`(git [^`]+)`", str(refusal.value)):
+    message = refused(runner)
+    if switch := re.search(r"switch to `([^`]+)`", message):
+        assert not re.findall(r"`git [^`]+`", message)
+        git(tmp_path, "switch", "-q", switch[1])
+        message = refused(runner)
+    for step in re.findall(r"`(git [^`]+)`", message):
         git(tmp_path, *shlex.split(step)[1:])
     debt.OUTPUTS.clear()
     assert runner.adopt() == 0
     commit(tmp_path, "install with debt")
+    head = git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "switch", "-q", "main")
+    git(tmp_path, "merge", "-q", "--no-edit", head)
     assert git(tmp_path, "ls-files", debt.DEBT_FILE) == debt.DEBT_FILE
+    assert len(git(tmp_path, "rev-list", "--max-parents=0", "main").split()) == 1
 
 
 COUNT_WORD_PAIRS = [
