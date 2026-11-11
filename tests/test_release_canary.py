@@ -689,3 +689,36 @@ def test_the_brownfield_adoption_adds_a_performance_suite_before_adopt(
         release_canary.install_new("brownfield", "itsdangerous", tmp_path, work, log)
     assert [len(found) for found in suites] == [1]
     compile(suites[0][0].read_text(), "suite", "exec")
+
+
+def test_the_last_release_is_the_candidates_merge_base_with_main_not_mains_merge_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Users go from main's merge commit to the next one, so the old install is its ancestor."""
+    checkout = tmp_path / "checkout"
+    init(checkout)
+    git(checkout, "checkout", "-qb", "develop")
+    (checkout / "a.txt").write_text("base\n")
+    base = commit(checkout, "base")
+    (checkout / "a.txt").write_text("released\n")
+    released = commit(checkout, "released")
+    git(checkout, "checkout", "-qb", "main", base)
+    git(checkout, "merge", "-q", "--no-ff", "-m", "release", "develop")
+    git(checkout, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(checkout, "checkout", "-q", "develop")
+    (checkout / "a.txt").write_text("candidate\n")
+    candidate = commit(checkout, "candidate")
+    source = tmp_path / "source"
+    git(tmp_path, "clone", "-q", str(checkout), str(source))
+    git(source, "checkout", "-q", "--detach", candidate)
+    installed_from: list[Path] = []
+
+    def install_new(kind: str, value: str, old: Path, work: Path, log: object) -> None:
+        installed_from.append(old)
+
+    monkeypatch.setattr(release_canary, "install_new", install_new)
+    with (tmp_path / "log").open("w") as log:
+        release_canary.install_last_release(
+            "python", candidate, source, tmp_path / "work", log, checkout
+        )
+    assert git(installed_from[0], "rev-parse", "HEAD") == released
