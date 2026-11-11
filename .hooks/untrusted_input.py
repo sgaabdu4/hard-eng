@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from itertools import takewhile
 from pathlib import Path
 
@@ -86,6 +87,128 @@ def fallow_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
     if "extends" in config and "ignorePatterns" not in config:
         raise ValueError(f"{advice}; a local list replaces the inherited one")
     updated = json_listed(name, text, "ignorePatterns", pattern, [])
+    if updated is not None:
+        changes[name] = updated
+
+
+BIOME_IGNORE = "!.hooks"
+
+
+def closing(text: str, start: int) -> int:
+    """Offset of the bracket that closes the object or list opening at start."""
+    depth = 0
+    index = start
+    while index < len(text):
+        char = text[index]
+        if char == '"':
+            index += 1
+            while text[index] != '"':
+                index += 2 if text[index] == "\\" else 1
+        elif char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    raise ValueError("unbalanced brackets")
+
+
+def value_starts(text: str, start: int) -> dict[str, int]:
+    """Offset of the value of each key that sits directly in the object opening at start."""
+    found: dict[str, int] = {}
+    depth = 0
+    index = start
+    while index < len(text):
+        char = text[index]
+        if char == '"':
+            end = index + 1
+            while text[end] != '"':
+                end += 2 if text[end] == "\\" else 1
+            after = text[end + 1 :].lstrip()
+            if depth == 1 and after.startswith(":"):
+                found[text[index + 1 : end]] = len(text) - len(after[1:].lstrip())
+            index = end
+        elif char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+            if depth == 0:
+                break
+        index += 1
+    return found
+
+
+def biome_edit(text: str, config: dict[str, object]) -> str | None:
+    """The text with BIOME_IGNORE as the last files.includes entry; None when it is there."""
+    masked = JSONC.sub(lambda match: match[1] or " " * len(match[0]), text)
+    top = value_starts(masked, masked.index("{"))
+    files = config.get("files")
+    if isinstance(files, dict) and isinstance(files.get("includes"), list):
+        if files["includes"] and files["includes"][-1] == BIOME_IGNORE:
+            return None
+        inner = value_starts(masked, top["files"])
+        close = closing(masked, inner["includes"])
+        end = len(masked[:close].rstrip())
+        if not files["includes"]:
+            return text[: inner["includes"] + 1] + f'"{BIOME_IGNORE}"' + text[close:]
+        comma = "" if masked[end - 1] == "," else ","
+        return text[:end] + f'{comma} "{BIOME_IGNORE}"' + text[end:]
+    if "extends" in config:
+        raise ValueError("a local list replaces the inherited one")
+    listed = f'"includes": ["**", "{BIOME_IGNORE}"]'
+    if isinstance(files, dict):
+        opening = top["files"]
+        return (
+            text[: opening + 1] + listed + ("," if files else "") + text[opening + 1 :]
+        )
+    if files is not None:
+        raise ValueError("files is not an object")
+    opening = masked.index("{")
+    held = f'"files": {{{listed}}}' + ("," if config else "")
+    return text[: opening + 1] + held + text[opening + 1 :]
+
+
+def biome_proof(before: dict[str, object], after: dict[str, object]) -> bool:
+    """True when only the files.includes list differs and it now ends with BIOME_IGNORE."""
+
+    def rest(config: dict[str, object]) -> dict[str, object]:
+        others = {key: value for key, value in config.items() if key != "files"}
+        files = config.get("files")
+        if isinstance(files, dict):
+            kept = {key: value for key, value in files.items() if key != "includes"}
+            return {**others, "files": kept} if kept else others
+        return others
+
+    files = after.get("files")
+    includes = files.get("includes") if isinstance(files, dict) else None
+    ended = isinstance(includes, list) and includes[-1:] == [BIOME_IGNORE]
+    return ended and rest(before) == rest(after)
+
+
+def biome_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
+    """Keep the project's Biome from judging Hard Eng's .hooks declarations, which hold any[] and {} on purpose."""
+    name = next(
+        (name for name in ("biome.json", "biome.jsonc") if (root / name).exists()),
+        None,
+    )
+    if name is None:
+        return
+    text = changes.get(name) or (root / name).read_text()
+    try:
+        config = jsonc_config(name, text)
+        updated = biome_edit(text, config)
+        if updated is not None:
+            after = jsonc_config(name, updated)
+            if not biome_proof(config, after):
+                raise ValueError("the edit changed other settings")
+    except (ValueError, TypeError, KeyError):
+        print(
+            f'{name}: add "{BIOME_IGNORE}" as the last entry of files.includes, '
+            "so that your own Biome runs leave the Hard Eng files",
+            file=sys.stderr,
+        )
+        return
     if updated is not None:
         changes[name] = updated
 
@@ -487,3 +610,4 @@ def typescript_config(
         changes[name] = json_file(root, config)
     if directory == root:
         fallow_ignores_hooks(root, changes)
+        biome_ignores_hooks(root, changes)

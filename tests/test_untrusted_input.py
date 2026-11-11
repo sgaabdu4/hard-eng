@@ -11,6 +11,7 @@ from types import ModuleType
 import pytest
 from gate_config import Gate, Group
 from untrusted_input import (
+    biome_ignores_hooks,
     fallow_ignores_hooks,
     jsonc_config,
     next_route_types,
@@ -215,6 +216,95 @@ def test_fallow_config_setup_cannot_edit_names_the_line_to_add(
     (tmp_path / name).write_text(text)
     with pytest.raises(ValueError, match="add '.hooks/\\*\\*' to ignorePatterns"):
         fallow_ignores_hooks(tmp_path, {})
+
+
+@pytest.mark.parametrize(
+    ("name", "existing", "expected"),
+    [
+        (
+            "biome.json",
+            '{"files": {"includes": ["**", "!dist"]}}',
+            {"files": {"includes": ["**", "!dist", "!.hooks"]}},
+        ),
+        (
+            "biome.json",
+            '{"files": {"includes": []}}',
+            {"files": {"includes": ["!.hooks"]}},
+        ),
+        (
+            "biome.json",
+            '{"files": {"ignoreUnknown": true}, "linter": {"enabled": true}}',
+            {
+                "files": {"ignoreUnknown": True, "includes": ["**", "!.hooks"]},
+                "linter": {"enabled": True},
+            },
+        ),
+        (
+            "biome.json",
+            '{"linter": {"enabled": true}}',
+            {
+                "files": {"includes": ["**", "!.hooks"]},
+                "linter": {"enabled": True},
+            },
+        ),
+        (
+            "biome.jsonc",
+            '{\n  // keep me\n  "files": {\n    "includes": [\n      "**", // all\n      "!dist",\n    ],\n  },\n}\n',
+            {"files": {"includes": ["**", "!dist", "!.hooks"]}},
+        ),
+        (
+            "biome.json",
+            '{"overrides": [{"includes": ["a.ts"]}], "files": {"includes": ["**"]}}',
+            {
+                "overrides": [{"includes": ["a.ts"]}],
+                "files": {"includes": ["**", "!.hooks"]},
+            },
+        ),
+        (
+            "biome.json",
+            '{"overrides": [{"includes": ["a.ts"]}], "linter": {"includes": ["x"]}}',
+            {
+                "files": {"includes": ["**", "!.hooks"]},
+                "overrides": [{"includes": ["a.ts"]}],
+                "linter": {"includes": ["x"]},
+            },
+        ),
+    ],
+)
+def test_setup_keeps_the_project_biome_run_away_from_the_hooks_folder(
+    tmp_path: Path, name: str, existing: str, expected: dict[str, object]
+) -> None:
+    (tmp_path / name).write_text(existing)
+    changes: dict[str, str] = {}
+    biome_ignores_hooks(tmp_path, changes)
+    text = changes[name]
+    assert jsonc_config(name, text) == expected
+    if "keep me" in existing:
+        assert "// keep me" in text
+        assert "// all" in text
+    (tmp_path / name).write_text(text)
+    rerun: dict[str, str] = {}
+    biome_ignores_hooks(tmp_path, rerun)
+    assert rerun == {}
+
+
+def test_setup_leaves_a_project_without_biome_settings_alone(tmp_path: Path) -> None:
+    changes: dict[str, str] = {}
+    biome_ignores_hooks(tmp_path, changes)
+    assert changes == {}
+
+
+def test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "biome.json").write_text('{"extends": ["./base.json"]}')
+    changes: dict[str, str] = {}
+    biome_ignores_hooks(tmp_path, changes)
+    assert changes == {}
+    assert capsys.readouterr().err == (
+        'biome.json: add "!.hooks" as the last entry of files.includes, '
+        "so that your own Biome runs leave the Hard Eng files\n"
+    )
 
 
 def test_fresh_install_ships_and_includes_the_untrusted_input_declarations(
