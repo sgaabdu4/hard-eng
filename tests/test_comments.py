@@ -346,6 +346,7 @@ RUFF_FORMS = [
     ("# ruff: isort: o" + "ff", "# ruff: isort: o" + "ff"),
     ("# fmt: o" + "ff", "# fmt: o" + "ff"),
     ("# fmt: sk" + "ip", "# fmt: sk" + "ip"),
+    ("# yapf: dis" + "able", "# yapf: dis" + "able"),
 ]
 
 
@@ -368,6 +369,7 @@ def test_the_word_for_a_ruff_comment_in_a_string_or_prose_passes(
     (root / "app.py").write_text(
         "word = 'no" + "qa'\nnote = 'fmt: o" + "ff'\nmsg = 'isort: sk" + "ip'\n"
         "# the no" + "qa word is only prose here, and so is ruff: no" + "qa\n"
+        "# yapf was the old formatter\n# yapf: enable\n"
     )
     validate_suppressions(root, "HEAD")
 
@@ -471,10 +473,32 @@ def test_the_todo_and_conditional_test_forms_are_refused(
     assert f"a.test.ts:1 adds '{caller}.{form}(" in str(error.value)
 
 
+@pytest.mark.parametrize(
+    "form",
+    [
+        "test.concurrent.sk" + "ip(",
+        "it.concurrent.to" + "do(",
+        "describe.sequential.sk" + "ip(",
+        "describe.shuffle.on" + "ly(",
+        "test.concurrent.sequential.fix" + "me(",
+    ],
+)
+def test_a_chained_modifier_does_not_hide_a_switched_off_test(
+    tmp_path: Path, form: str
+) -> None:
+    """HE-NO-SWITCH-OFF: Vitest and Bun chain concurrent, sequential and shuffle before the switch-off word."""
+    root = switch_root(tmp_path, "a.test.ts", "")
+    (root / "a.test.ts").write_text(f"{form}'s', () => {{}});\n")
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"a.test.ts:1 adds '{form}'" in str(error.value)
+
+
 def test_a_normal_test_and_another_object_named_todo_pass(tmp_path: Path) -> None:
     root = switch_root(tmp_path, "a.test.ts", "")
     (root / "a.test.ts").write_text(
         "test('s', () => {});\nlist.to" + "do('x');\nit.each([1])('s', () => {});\n"
+        "test.concurrent('s', () => {});\ndescribe.sequential('s', () => {});\n"
     )
     validate_suppressions(root, "HEAD")
 
