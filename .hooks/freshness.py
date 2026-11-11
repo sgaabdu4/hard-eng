@@ -96,6 +96,11 @@ def newer(target: str | None, current: str) -> bool:
     return want is not None and have is not None and want > have
 
 
+def within(target: str | None, ceiling: str) -> str | None:
+    """uv's latest obeys the project's Python range; a newer PyPI release may not install."""
+    return ceiling if newer(target, ceiling) else target
+
+
 def behind(
     rows: list[tuple[str, str]],
     eligible: Callable[[str], str | None],
@@ -145,12 +150,12 @@ UV_ROW = re.compile(
 )
 
 
-def uv_rows(text: str) -> list[tuple[str, str]]:
+def uv_rows(text: str) -> list[tuple[str, str, str]]:
     if not VERSION_LINE.match(text):
         raise ValueError("uv tree printed no dependency tree")
     return list(
         dict.fromkeys(
-            (match["name"].partition("[")[0], match["current"])
+            (match["name"].partition("[")[0], match["current"], match["latest"])
             for line in text.splitlines()
             if (match := UV_ROW.match(line))
         )
@@ -191,7 +196,12 @@ def stale_dependencies(
             [(name, current) for name, (current, _) in rows.items()],
             lambda name: pub_eligible(name, fetch, cutoff, rows[name][1]),
         )
-    return behind(uv_rows(text), lambda name: pypi_eligible(name, fetch, cutoff))
+    rows = uv_rows(text)
+    installable = {name: latest for name, _, latest in rows}
+    return behind(
+        [(name, current) for name, current, _ in rows],
+        lambda name: within(pypi_eligible(name, fetch, cutoff), installable[name]),
+    )
 
 
 def bun_waiting(directory: Path, recursive: bool) -> Callable[[str], bool]:
