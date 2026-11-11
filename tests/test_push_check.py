@@ -269,8 +269,12 @@ class Pushed:
 
 @pytest.fixture
 def pushed(
-    runner: ModuleType, tmp_path: Path, shipping_policy: ShippingPolicy
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> Pushed:
+    monkeypatch.delenv("CI", raising=False)
     shipping_policy["pre_push_mutation_seconds"] = 0.0
     return Pushed(runner, tmp_path, shipping_policy)
 
@@ -429,22 +433,36 @@ def git_starts(run: Callable[[], int]) -> list[list[str]]:
 
 
 def test_the_quick_check_starts_no_git_for_the_pass_record(
-    runner: ModuleType, tmp_path: Path
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv("CI", raising=False)
     configure(tmp_path, [gate("suite", "pass")])
     (tmp_path / ".gitignore").write_text("__pycache__/\n")
     git(tmp_path, "config", "user.name", "Pass Fixture")
     git(tmp_path, "config", "user.email", "pass@example.invalid")
     base = commit(tmp_path, "start")
     resolve = ["rev-parse", "--verify", "-q", f"{base}^{{commit}}"]
-    quick = git_starts(lambda: runner.check(base=base, quick=True))
-    full = git_starts(lambda: runner.check(base=base))
-    statuses = [command for command in full if "--porcelain=v2" in command]
-    assert not [command for command in quick if "--porcelain=v2" in command]
-    assert len(statuses) == 2
-    assert [c[1:] for c in full].count(resolve) - [c[1:] for c in quick].count(
-        resolve
-    ) == 1
+    old = tmp_path / ".git/hard-eng-passed"
+
+    def starts(kept: bool = True, **options: bool) -> tuple[int, int]:
+        old.write_text("{}")
+        found = git_starts(lambda: runner.check(base=base, **options))
+        assert (old.read_text() == "{}") is kept
+        return (
+            len([c for c in found if "--porcelain=v2" in c]),
+            [c[1:] for c in found].count(resolve),
+        )
+
+    quick = starts(quick=True)
+    assert quick[0] == 0
+    assert starts(dependents=False) == quick
+    assert starts(related_tests=True) == quick
+    monkeypatch.setenv("CI", "true")
+    assert starts() == quick
+    monkeypatch.delenv("CI")
+    statuses, resolves = starts(kept=False)
+    assert statuses == 2
+    assert resolves - quick[1] == 1
 
 
 def test_after_a_spared_check_the_mutation_report_runs_on_installed_dependencies(
@@ -458,6 +476,7 @@ def test_after_a_spared_check_the_mutation_report_runs_on_installed_dependencies
         "role": "lockfiles",
         "command": [sys.executable, "-c", "open('installed.flag', 'w').write('x')"],
     }
+    monkeypatch.delenv("CI", raising=False)
     pushed = Pushed(runner, tmp_path, shipping_policy, [install])
     revision = pushed.task()
     assert pushed.check() == 0

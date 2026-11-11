@@ -240,10 +240,15 @@ def clean_tree(root: Path) -> tuple[str, bool] | None:
 def clean_start(
     lock: IO[str], root: Path, base: str | None, plan_stage: str | None, partial: bool
 ) -> tuple[str, str, float] | None:
-    """Remove the old pass record; give the start of a full check that may write a new one."""
+    """Remove the old pass record; give the start of a full check that may write a new one; a partial check or one in CI does no record work."""
     import time
 
-    if base is None or partial or plan_stage not in (None, "Complete"):
+    if (
+        base is None
+        or partial
+        or os.environ.get("CI")
+        or plan_stage not in (None, "Complete")
+    ):
         return None
     with suppress(OSError):
         Path(lock.name).with_name(PASSED_FILE).unlink()
