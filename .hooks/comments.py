@@ -57,7 +57,8 @@ UI_MARKS = (
     "Color.from",
     "Colors.",
     "Color(red",
-    "Color(.",
+    "Color(.sRGB",
+    "Color(.displayP3",
     "colorLiteral",
 )
 TEST_ATTRIBUTE = re.compile(r"@(?:Test|Suite)\s*\(")

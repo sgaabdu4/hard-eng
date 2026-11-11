@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 import ui_rules
-from comments import UI_SUFFIXES, validate_suppressions
+from comments import UI_MARKS, UI_SUFFIXES, validate_suppressions
 from conftest import SOURCE, commit, git, init
 
 RULE = "HE-UI-SOURCE"
@@ -127,16 +127,25 @@ def test_an_added_dart_colour_literal_is_refused(tmp_path: Path, line: str) -> N
     assert COLOUR_STEP in message
 
 
-@pytest.mark.parametrize(
-    "line",
-    [
-        "let c = Color(red: 1, green: 0, blue: 0)",
-        "let c = Color(.sRGB, red: 1, green: 0, blue: 0)",
-        "let c = UIColor(red: 1, green: 0, blue: 0, alpha: 1)",
-        "let c = NSColor(red: 1, green: 0, blue: 0, alpha: 1)",
-        "let c = #colorLiteral(red: 1, green: 0, blue: 0, alpha: 1)",
-    ],
-)
+SWIFT_REFUSED = [
+    "let c = Color(red: 1, green: 0, blue: 0)",
+    "let c = Color(.sRGB, red: 1, green: 0, blue: 0)",
+    "let c = Color(.sRGBLinear, red: 1, green: 0, blue: 0)",
+    "let c = Color(.displayP3, red: 1, green: 0, blue: 0)",
+    "let c = UIColor(red: 1, green: 0, blue: 0, alpha: 1)",
+    "let c = NSColor(red: 1, green: 0, blue: 0, alpha: 1)",
+    "let c = #colorLiteral(red: 1, green: 0, blue: 0, alpha: 1)",
+]
+
+
+@pytest.mark.parametrize("line", SWIFT_REFUSED)
+def test_each_swift_form_that_the_rule_refuses_holds_a_mark(line: str) -> None:
+    """HE-UI-SOURCE: a form that the colour pattern refuses reaches the check through a mark."""
+    assert ui_rules.SWIFT_COLOUR.search(line)
+    assert any(mark in line for mark in UI_MARKS)
+
+
+@pytest.mark.parametrize("line", SWIFT_REFUSED)
 def test_an_added_swift_colour_literal_is_refused(tmp_path: Path, line: str) -> None:
     """HE-UI-SOURCE: a Swift colour typed in a view file fails."""
     root = change(
@@ -158,6 +167,16 @@ def test_an_added_swift_colour_literal_is_refused(tmp_path: Path, line: str) -> 
         ("Sources/App/AppTheme.swift", "let c = Color(red: 1, green: 0, blue: 0)"),
         ("src/colorPalette.ts", "export const a = 'bg-[#FAFAFA]';"),
         ("lib/app_colors.dart", "const c = Color(0xFF112233);"),
+        ("Sources/App/Color+Brand.swift", "let c = Color(red: 1, green: 0, blue: 0)"),
+        (
+            "Sources/App/UIColor+App.swift",
+            "let c = UIColor(red: 1, green: 0, blue: 0, alpha: 1)",
+        ),
+        ("Sources/App/View+Theme.swift", "let c = Color(red: 1, green: 0, blue: 0)"),
+        (
+            "Sources/App/Color+Extensions.swift",
+            "let c = Color(red: 1, green: 0, blue: 0)",
+        ),
         ("src/design/themes/dark.css", "a { color: #fff; } .x { @apply bg-[#fff]; }"),
     ],
 )
@@ -174,13 +193,17 @@ def test_a_colour_in_a_theme_or_token_file_passes(
         "src/auth/TokenInput.tsx",
         "src/components/ThemeToggle.tsx",
         "src/colorful/Hero.tsx",
+        "Sources/App/ColorPicker.swift",
+        "Sources/App/View+Helpers.swift",
+        "Sources/App/ColorPicker+Layout.swift",
     ],
 )
 def test_a_name_that_only_holds_a_theme_word_is_still_judged(
     tmp_path: Path, name: str
 ) -> None:
     """HE-UI-SOURCE: the theme path rule matches whole words, so a word inside a longer name gains no pass."""
-    root = change(tmp_path, name, "// base\n", '// base\n<i className="bg-[#fff]" />\n')
+    line = '<i className="bg-[#fff]" /> Color(red: 1, green: 0, blue: 0)'
+    root = change(tmp_path, name, "// base\n", f"// base\n{line}\n")
     assert f"{name}:2:" in refused(root)
 
 
@@ -274,6 +297,8 @@ def ui_rules_loaded(root: Path) -> bool:
         ("src/a.py", "x = 1", False),
         ("src/a.css", "a { color: red; }", False),
         ("src/a.css", "a { transition: all 1s; }", True),
+        ("src/a.swift", "let c = Color(.systemBackground)", False),
+        ("src/a.swift", "let c = Color(.sRGB, red: 1, green: 0, blue: 0)", True),
     ],
 )
 def test_a_change_with_no_ui_file_does_not_load_the_ui_rules(
