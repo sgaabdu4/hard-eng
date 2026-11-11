@@ -851,7 +851,7 @@ def test_setup_rerun_restores_a_missing_pre_push_hook_before_the_first_push(
     hook.unlink(missing_ok=True)
     outcome = update_runner.locked_update(target, repair=True)
     assert outcome.startswith(update_runner.NOT_PUBLISHED)
-    assert outcome.endswith("This checkout: installed the missing pre-push hook.")
+    assert "This checkout: installed the missing pre-push hook" in outcome
     assert hook.is_file()
 
 

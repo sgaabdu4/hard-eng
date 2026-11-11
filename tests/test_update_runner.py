@@ -820,7 +820,7 @@ def test_a_rerun_writes_the_planned_gates_file_to_the_current_checkout(
     assert git(project, "status", "--porcelain") == f"M {GATES_FILE}"
     assert git(project, "diff", "--cached", "--name-only") == ""
     again = update_runner.locked_update(project, repair=True)
-    assert "This checkout" not in again
+    assert "setup wrote" not in again
 
 
 def add_shipping_policy(project: Path) -> None:

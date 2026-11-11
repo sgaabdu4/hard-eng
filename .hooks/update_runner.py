@@ -700,6 +700,10 @@ def repair_checkout(root: Path, previous: str) -> str:
             f"setup wrote {', '.join(written)}; "
             f"review and commit {'it' if len(written) == 1 else 'them'}"
         )
+    if "shipping" not in json.loads((root / GATES_FILE).read_text()):
+        notes.append(
+            "CI setup pending: add a `shipping` block with the project's checks and a measured ci_seconds budget to hard-eng.gates.json and merge it to the base branch, then rerun setup"
+        )
     if waits is not None and waits != planned:
         notes.append(
             "the update brings the workflow files and their gates when the `shipping` block of hard-eng.gates.json is on the base branch"
@@ -866,7 +870,8 @@ def branch_current(root: Path, tip: str) -> bool:
         and waiting
         and HEX_REVISION.fullmatch(current)
         and based.returncode == 0
-        and waiting == latest_verified(current)
+        and waiting == (latest_verified(current) or current)
+        and (waiting != current or update_branch_tip(root) != tip)
     )
 
 
