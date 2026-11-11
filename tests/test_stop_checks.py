@@ -72,7 +72,10 @@ def test_the_lock_message_names_the_check_that_runs_gates_in_a_build(
 
     import plans
 
-    monkeypatch.setattr(plans, "build_in_progress", lambda *_: building)
+    def build_state(*_: object) -> bool:
+        return building
+
+    monkeypatch.setattr(plans, "build_in_progress", build_state)
     (repository / ".git/info/exclude").write_text(".hard-eng/\n")
     payload: JsonObject = {"session_id": "busy"}
     assert agent_hooks.record_session(repository, payload)

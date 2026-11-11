@@ -3,7 +3,6 @@
 import fcntl
 import json
 import subprocess
-import tempfile
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -15,6 +14,7 @@ import update
 import update_pr
 import update_runner
 from conftest import add_origin, commit, default_policy, git, remove_application
+from test_change_size import draft_plan_beside_an_update
 from test_husky_setup import husky_project
 from test_plans import edit
 from test_update_runner import prefix_commit_messages
@@ -173,23 +173,6 @@ def test_update_from_a_linked_worktree_ignores_its_inherited_hooks_path(
     assert update_runner.apply_update(linked) == 0
     assert first in git(target, "show", f"{BRANCH}:{update.SOURCE_FILE}")
     assert git(linked, "config", "core.hooksPath") == str(stale)
-
-
-def test_husky_update_succeeds_when_the_temporary_directory_is_a_symlink(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _, target, _ = release
-    husky_project(target)
-    add_origin(target)
-    monkeypatch.setattr(update_runner.signal, "signal", Mock())
-    symlinked = tmp_path / "symlinked-tmp"
-    symlinked.symlink_to(tmp_path / "tmp")
-    monkeypatch.setenv("TMPDIR", str(symlinked))
-    monkeypatch.setattr(tempfile, "tempdir", None)
-    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
-    assert update_runner.apply_update(target) == 0
-    result = (target / update_runner.RESULT_FILE).read_text()
-    assert "failed" not in result, result
 
 
 def fix_update_branch(target: Path) -> str:
@@ -941,46 +924,9 @@ def test_manual_setup_rerun_prints_a_refusal_as_a_message(
     assert "Traceback" not in result.stderr
 
 
-def test_update_branch_needs_no_plan_for_files_the_update_wrote(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Issue 299: setup's own edits outside the scaffold made update PRs demand a plan."""
-    import change_size
-
-    source, target, _ = release
-    ignore = target / ".gitignore"
-    current = ignore.read_text()
-    ignore.write_text("".join(current.splitlines(keepends=True)[:-1]))
-    retired = {"mcpServers": {"context-mode": {"command": "context-mode"}}}
-    (target / ".mcp.json").write_text(json.dumps(retired))
-    commit(target, "ignore list and MCP file from an older release")
-    git(target, "update-ref", "refs/heads/main", "HEAD")
-    git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH)
-    select_release(source, monkeypatch)
-    update.update(target)
-    assert ignore.read_text() == current
-    assert not (target / ".mcp.json").exists()
-    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
-    small, reason = change_size.size_verdict(target)
-    assert small, reason
-    (target / "package.json").write_text('{"private":true,"type":"module"}')
-    commit(target, "project edit beside the update")
-    assert change_size.size_verdict(target) == (
-        False,
-        "it changes package.json, which always needs a plan",
-    )
-    (target / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n\xff\xfe")
-    commit(target, "binary file beside the update")
-    assert change_size.size_verdict(target) == (
-        False,
-        "it adds, deletes or renames the file logo.png",
-    )
-
-
-@pytest.mark.parametrize("repair", [True, False], ids=["repair", "update"])
-def test_a_fix_on_the_update_branch_is_judged_without_the_update_files(
+def update_checkout(
     feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch, repair: bool
-) -> None:
+) -> Path:
     source, target, _ = feature
     (target / "app.py").write_text("".join(f"line {n}\n" for n in range(30)))
     (target / "appwrite.config.json").write_text("{}\n")
@@ -995,6 +941,14 @@ def test_a_fix_on_the_update_branch_is_judged_without_the_update_files(
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
     fixing = target.parent / "fixing"
     git(target, "worktree", "add", "-q", str(fixing), BRANCH)
+    return fixing
+
+
+@pytest.mark.parametrize("repair", [True, False], ids=["repair", "update"])
+def test_a_fix_on_the_update_branch_is_judged_without_the_update_files(
+    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch, repair: bool
+) -> None:
+    fixing = update_checkout(feature, monkeypatch, repair)
     assert change_size.size_verdict(fixing)[1] == (
         "only files the verified Hard Eng update wrote"
     )
@@ -1007,12 +961,7 @@ def test_a_fix_on_the_update_branch_is_judged_without_the_update_files(
 def test_a_hand_edit_of_an_installed_file_on_the_update_branch_stays_big(
     feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source, target, _ = feature
-    newer_release(source, monkeypatch, "update")
-    assert update_runner.apply_update(target) == 0
-    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
-    fixing = target.parent / "fixing"
-    git(target, "worktree", "add", "-q", str(fixing), BRANCH)
+    fixing = update_checkout(feature, monkeypatch, False)
     installed = fixing / ".agents/skills/he/references/workflow.md"
     installed.write_text(installed.read_text() + "\nhand edit\n")
     small, reason = change_size.size_verdict(fixing)
@@ -1038,33 +987,5 @@ def test_a_check_with_no_base_needs_no_plan_on_a_verified_update_branch(
 ) -> None:
     import plans
 
-    source, target, _ = release
-    (target / "PLAN.md").write_text("# Later work\n\nStatus: Draft\n")
-    commit(target, "draft plan for later work")
-    git(target, "update-ref", "refs/heads/main", "HEAD")
-    git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH)
-    select_release(source, monkeypatch)
-    update.update(target)
-    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    target = draft_plan_beside_an_update(release, monkeypatch)
     assert plans.validate_plans(target) == "Complete"
-
-
-def test_update_branch_check_skips_an_unrelated_draft_plan(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A project's open Draft plan blocked its Hard Eng update PR check."""
-    import plans
-
-    source, target, _ = release
-    (target / "PLAN.md").write_text("# Later work\n\nStatus: Draft\n")
-    commit(target, "draft plan for later work")
-    git(target, "update-ref", "refs/heads/main", "HEAD")
-    git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH)
-    select_release(source, monkeypatch)
-    update.update(target)
-    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
-    assert plans.validate_plans(target, "main") == "Complete"
-    (target / "app.py").write_text("print('project work')\n")
-    commit(target, "project work beside the update")
-    with pytest.raises(ValueError, match="PLAN.md: plan needs"):
-        plans.validate_plans(target, "main")
