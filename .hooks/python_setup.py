@@ -334,8 +334,9 @@ def imports_step(directory: Path, package: Group) -> str:
     )
 
 
-def pyrefly_gap(file: str, options: Mapping[str, object]) -> str:
-    """The step that makes a package's Pyrefly settings strict, or an empty string."""
+def pyrefly_gap(file: str, options: Mapping[str, object] | None) -> str:
+    """The step that makes a package's Pyrefly settings strict, or an empty string; None is a file with no Pyrefly table."""
+    table, options = options is not None, options or {}
     errors = options.get("errors")
     refused = [key for key in PYREFLY_REFUSED if options.get(key)]
     if isinstance(errors, dict):
@@ -359,26 +360,22 @@ def pyrefly_gap(file: str, options: Mapping[str, object]) -> str:
                 f"change {key} to {value}" if key in options else f"add {key} = {value}"
             )
     if wrong:
-        place = (
-            "under [tool.pyrefly]"
-            if file.endswith("pyproject.toml")
-            else "at the top of the file, before any [table] line"
-        )
+        place = "at the top of the file, before any [table] line"
+        if file.endswith("pyproject.toml"):
+            place = "under [tool.pyrefly]" if table else "in a new [tool.pyrefly] table"
         steps.append(f"{' and '.join(wrong)} {place}")
     if refused:
         steps.append(f"remove {', '.join(refused)}")
     return f"{file}: {'; '.join(steps)}" if steps else ""
 
 
-def pyrefly_options(directory: Path) -> tuple[Path, Mapping[str, object]]:
-    """The file that holds a package's Pyrefly settings, and the settings in it."""
+def pyrefly_options(directory: Path) -> tuple[Path, Mapping[str, object] | None]:
+    """The file that holds a package's Pyrefly settings, and the settings in it; None with no Pyrefly table."""
     native = directory / "pyrefly.toml"
     if native.exists():
         return native, tomllib.loads(native.read_text())
     project = directory / "pyproject.toml"
-    return project, tomllib.loads(project.read_text()).get("tool", {}).get(
-        "pyrefly", {}
-    )
+    return project, tomllib.loads(project.read_text()).get("tool", {}).get("pyrefly")
 
 
 def validate_pyrefly(directory: Path, root: Path) -> None:
