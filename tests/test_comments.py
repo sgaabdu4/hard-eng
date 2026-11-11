@@ -10,6 +10,7 @@ import pytest
 from comments import validate_comments, validate_suppressions
 from conftest import SOURCE, commit, git, init
 from shipping import ShippingPolicy
+from switch_off_forms import RUFF_FORMS, SWITCHES
 
 BLOCK = "Code comments are none by default"
 
@@ -213,95 +214,6 @@ def test_check_without_base_covers_committed_branch_changes(
 
 
 OFF = "A change must not switch a check off"
-SWITCHES = [
-    ("app.py", "x = 1  # no" + "qa: E501\n", "# no" + "qa"),
-    ("app.py", "x = 1  # type:" + " ignore\n", "# type:" + " ignore"),
-    ("app.py", "x = 1  # pyrefly:" + " ignore\n", "# pyrefly:" + " ignore"),
-    ("app.py", "x = 1  # pyright:" + " ignore\n", "# pyright:" + " ignore"),
-    ("app.py", "x = 1  # pylint:" + " disable=x\n", "# pylint:" + " disable"),
-    ("app.py", "x = 1  # pragma:" + " no cover\n", "# pragma:" + " no cover"),
-    ("t.py", "@pytest.mark." + "skip\ndef t(): ...\n", "pytest.mark." + "skip"),
-    ("t.py", "@pytest.mark." + "skipif(a)\ndef t(): ...\n", "pytest.mark." + "skipif"),
-    ("t.py", "@pytest.mark." + "xfail\ndef t(): ...\n", "pytest.mark." + "xfail"),
-    (
-        "t.py",
-        "pytestmark = pytest.mark." + "skip(reason='x')\n",
-        "pytest.mark." + "skip",
-    ),
-    ("t.py", "pytestmark = mark." + "skip(reason='x')\n", "mark." + "skip"),
-    ("t.py", "pytest." + "skip('x')\n", "pytest." + "skip("),
-    ("t.py", "pytest." + "xfail('x')\n", "pytest." + "xfail("),
-    ("a.ts", "// eslint-" + "disable-next-line\nf();\n", "eslint-" + "disable"),
-    ("a.ts", "// @ts-" + "ignore\nf();\n", "@ts-" + "ignore"),
-    ("a.tsx", "// @ts-expect-" + "error\nf();\n", "@ts-expect-" + "error"),
-    ("a.mjs", "// @ts-no" + "check\n", "@ts-no" + "check"),
-    ("a.js", "// biome-" + "ignore lint: x\nf();\n", "biome-" + "ignore"),
-    ("a.test.ts", "describe." + "only('s', () => {});\n", "describe." + "only("),
-    ("a.test.js", "it." + "skip('s', () => {});\n", "it." + "skip("),
-    ("a.test.js", "x" + "it('s', () => {});\n", "x" + "it("),
-    ("a.test.js", "f" + "describe('s', () => {});\n", "f" + "describe("),
-    ("a.js", "/* istanbul " + "ignore next */\nf();\n", "/* istanbul " + "ignore"),
-    ("a.js", "/* c8 " + "ignore next */\nf();\n", "/* c8 " + "ignore"),
-    ("a.js", "/* v8 " + "ignore next */\nf();\n", "/* v8 " + "ignore"),
-    ("lib/a.dart", "// ig" + "nore: unused_import\n", "// ig" + "nore:"),
-    ("lib/a.dart", "// ig" + "nore_for_file: x\n", "// ig" + "nore_for_file:"),
-    ("test/a_test.dart", "test('t', () {}, ski" + "p: true);\n", "ski" + "p:"),
-    (
-        "test/a_test.dart",
-        "group('t', () {}, ski" + "p: 'later');\n",
-        "ski" + "p:",
-    ),
-    ("test/a_test.dart", "@Sk" + "ip('why')\nlibrary a;\n", "@Sk" + "ip("),
-    ("app.py", "x = 1  # no" + "semgrep\n", "no" + "semgrep"),
-    ("deploy.sh", "curl x  # no" + "sem\n", "no" + "sem"),
-    ("a.ts", "const k = 'x'; // gitleaks" + ":allow\n", "gitleaks" + ":allow"),
-    ("config.yml", "key: x  # gitleaks" + ":allow\n", "gitleaks" + ":allow"),
-    (
-        ".gitleaksignore",
-        "abc:config.yml:generic-api-key:1\n",
-        "abc:config.yml:generic-api-key:1",
-    ),
-    ("app/.semgrepignore", "src/\n", "src/"),
-    ("t.py", "@unittest." + "skip('x')\ndef t(): ...\n", "unittest." + "skip"),
-    ("t.py", "@unittest." + "skipIf(a, 'x')\ndef t(): ...\n", "unittest." + "skipIf"),
-    (
-        "t.py",
-        "@unittest." + "expectedFailure\ndef t(): ...\n",
-        "unittest." + "expectedFailure",
-    ),
-    ("t.py", "        self.skip" + "Test('x')\n", "skip" + "Test("),
-    ("t.py", "np = pytest.import" + "orskip('numpy')\n", "import" + "orskip("),
-    ("t.py", "__test__ " + "= False\n", "__test__ " + "= False"),
-    ("t.py", "    raise unittest" + ".SkipTest('x')\n", "unittest" + ".SkipTest"),
-    ("t.py", "@sk" + "ip('x')\ndef t(): ...\n", "@sk" + "ip("),
-    ("a.test.ts", "it." + "skip.each([1])('s', () => {});\n", "it." + "skip."),
-    ("a.test.ts", "test." + "skipIf(ci)('s', () => {});\n", "test." + "skipIf("),
-    ("a.spec.ts", "test." + "fixme('s', () => {});\n", "test." + "fixme("),
-    ("a.test.js", "x" + "test('s', () => {});\n", "x" + "test("),
-    ("a.test.js", "test('s', { ski" + "p: true }, () => {});\n", "ski" + "p: true"),
-    ("a.test.js", "test('s', { ski" + "p: 'later' }, () => {});\n", "ski" + "p: '"),
-    ("a.test.js", "test('s', { on" + "ly: true }, () => {});\n", "on" + "ly: true"),
-    ("test/a_test.dart", "test('t', () {}, so" + "lo: true);\n", "so" + "lo:"),
-    ("lib/a.dart", "f(); // coverage:" + "ignore-line\n", "coverage:" + "ignore-"),
-    (
-        "ios/RunnerTests/ATests.swift",
-        "@Test(.enab" + "led(if: false)) func a() {}\n",
-        ".enab" + "led(if: false)",
-    ),
-    ("src/a.ts", "// jscpd:" + "ignore-start\n", "jscpd:" + "ignore"),
-    ("src/a.ts", "// fallow-" + "ignore-next-line\n", "fallow-" + "ignore"),
-    ("build.sh", "# shellcheck " + "disable=SC2086\n", "shellcheck " + "disable="),
-    (
-        ".github/workflows/ci.yml",
-        "      - uses: a/b@v1 # zizmor: " + "ignore[unpinned-uses]\n",
-        "zizmor: " + "ignore",
-    ),
-    (
-        ".gitleaks.toml",
-        "paths = ['''tests/fixtures''']\n",
-        "paths = ['''tests/fixtures''']",
-    ),
-]
 
 
 def switch_root(tmp_path: Path, name: str, before: str) -> Path:
@@ -327,6 +239,30 @@ def test_added_switch_off_fails_naming_file_line_and_pattern(
         validate_suppressions(root, "HEAD")
     assert f"{name}:2 adds {pattern!r}" in str(error.value)
     assert "fix the cause" in str(error.value)
+
+
+@pytest.mark.parametrize(("text", "pattern"), RUFF_FORMS)
+def test_each_ruff_suppression_form_is_refused(
+    tmp_path: Path, text: str, pattern: str
+) -> None:
+    """HE-NO-SWITCH-OFF: every Ruff, isort and formatter off comment fails, in any letter case."""
+    root = switch_root(tmp_path, "app.py", "")
+    (root / "app.py").write_text(f"ok = 1\nx = 1  {text}\n")
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"app.py:2 adds {pattern!r}" in str(error.value)
+
+
+def test_the_word_for_a_ruff_comment_in_a_string_or_prose_passes(
+    tmp_path: Path,
+) -> None:
+    root = switch_root(tmp_path, "app.py", "")
+    (root / "app.py").write_text(
+        "word = 'no" + "qa'\nnote = 'fmt: o" + "ff'\nmsg = 'isort: sk" + "ip'\n"
+        "# the no" + "qa word is only prose here, and so is ruff: no" + "qa\n"
+        "# yapf was the old formatter\n# yapf: enable\n"
+    )
+    validate_suppressions(root, "HEAD")
 
 
 def test_an_external_diff_tool_does_not_hide_an_added_switch_off(
@@ -391,6 +327,71 @@ def test_skip_argument_counts_only_in_test_files(tmp_path: Path) -> None:
     (root / "test/page_test.dart").write_text("test('t', () {}, ski" + "p: offset);\n")
     with pytest.raises(ValueError, match="test/page_test.dart:1 adds 'ski" + "p:'"):
         validate_suppressions(root, "HEAD")
+
+
+@pytest.mark.parametrize(
+    ("text", "pattern"),
+    [
+        ("x = 1  # pyre-ig" + "nore", "# pyre-ig" + "nore"),
+        ("x = 1  # pyre-ig" + "nore[16]", "# pyre-ig" + "nore"),
+        ("x = 1  # pyre-fix" + "me[16]", "# pyre-fix" + "me"),
+    ],
+)
+def test_the_pyre_ignore_comments_are_refused(
+    tmp_path: Path, text: str, pattern: str
+) -> None:
+    """HE-NO-SWITCH-OFF: Pyrefly honours pyre comments when permissive ignores are on."""
+    root = switch_root(tmp_path, "app.py", "")
+    (root / "app.py").write_text(f"ok = 1\n{text}\n")
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"app.py:2 adds {pattern!r}" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "form",
+    ["to" + "do", "to" + "doIf", "fai" + "ling", "fa" + "ils", "i" + "f", "run" + "If"],
+)
+@pytest.mark.parametrize("caller", ["it", "test", "describe"])
+def test_the_todo_and_conditional_test_forms_are_refused(
+    tmp_path: Path, caller: str, form: str
+) -> None:
+    """HE-NO-SWITCH-OFF: Bun and Vitest skip or weaken a test with these forms too."""
+    root = switch_root(tmp_path, "a.test.ts", "")
+    (root / "a.test.ts").write_text(f"{caller}.{form}(cond)('s', () => {{}});\n")
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"a.test.ts:1 adds '{caller}.{form}(" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "form",
+    [
+        "test.concurrent.sk" + "ip(",
+        "it.concurrent.to" + "do(",
+        "describe.sequential.sk" + "ip(",
+        "describe.shuffle.on" + "ly(",
+        "test.concurrent.sequential.fix" + "me(",
+    ],
+)
+def test_a_chained_modifier_does_not_hide_a_switched_off_test(
+    tmp_path: Path, form: str
+) -> None:
+    """HE-NO-SWITCH-OFF: Vitest and Bun chain concurrent, sequential and shuffle before the switch-off word."""
+    root = switch_root(tmp_path, "a.test.ts", "")
+    (root / "a.test.ts").write_text(f"{form}'s', () => {{}});\n")
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"a.test.ts:1 adds '{form}'" in str(error.value)
+
+
+def test_a_normal_test_and_another_object_named_todo_pass(tmp_path: Path) -> None:
+    root = switch_root(tmp_path, "a.test.ts", "")
+    (root / "a.test.ts").write_text(
+        "test('s', () => {});\nlist.to" + "do('x');\nit.each([1])('s', () => {});\n"
+        "test.concurrent('s', () => {});\ndescribe.sequential('s', () => {});\n"
+    )
+    validate_suppressions(root, "HEAD")
 
 
 ASSERTS = [
@@ -748,6 +749,31 @@ def test_edited_moved_and_split_assertions_pass(tmp_path: Path) -> None:
     (root / "tests/test_a.py").write_text("def t():\n    assert f() == 2\n")
     (root / "tests/test_b.py").write_text("def u():\n    assert g()\n")
     validate_suppressions(root, "HEAD")
+
+
+@pytest.mark.parametrize(
+    ("name", "before", "after"),
+    [
+        (
+            "tests/test_a.py",
+            "def test_a():\n    assert f() == 3\n",
+            "def test_a():\n    # assert f() == 3\n    pass\n",
+        ),
+        (
+            "src/a.test.ts",
+            "test('a', () => {\n  expect(f()).toBe(3);\n});\n",
+            "test('a', () => {\n  // expect(f()).toBe(3);\n});\n",
+        ),
+    ],
+)
+def test_a_commented_out_assertion_counts_as_lost(
+    tmp_path: Path, name: str, before: str, after: str
+) -> None:
+    root = switch_root(tmp_path, name, before)
+    (root / name).write_text(after)
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert "tests lose 1 assertion lines net (1 removed, 0 added)" in str(error.value)
 
 
 def test_removed_assertion_outside_tests_passes(tmp_path: Path) -> None:

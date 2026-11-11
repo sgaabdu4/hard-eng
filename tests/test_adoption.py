@@ -101,6 +101,9 @@ def test_managed_instruction_update_preserves_native_scaffold_proof(
     guide.write_text(guide.read_text() + "\nUpdated managed fixture guidance.\n")
     select_release(source, monkeypatch)
     assert "Updated Hard Eng" in update.update(target)
+    kept = suffix if suffix.strip() else ""
+    arrived = "fixture guidance.\n<!-- hard-eng:end -->\n" + kept
+    assert instructions.read_text().endswith(arrived)
     git(target, "diff", "--check", base)
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
     assert update.check_scaffold_update(target, base)

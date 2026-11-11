@@ -13,6 +13,7 @@ from conftest import commit, git
 from gate_config import Gate, Group
 from test_basic_mode import no_provisioning
 
+HINT = "  The debt file has no line numbers. Run the tool of this check on the files of this change to find the new ones."
 FINDINGS = "import pathlib, sys; text = pathlib.Path('findings.txt').read_text(); print(text, end=''); sys.exit(bool(text))"
 
 
@@ -83,7 +84,7 @@ def test_a_new_finding_beyond_the_debt_prints_its_real_line(
     assert debt.judge(tmp_path, group, lint, True, old + extra) is True
     printed = capsys.readouterr().out.splitlines()
     assert printed[1] == "  1 of these 26 lines are new; the others are recorded:"
-    assert len(printed) == 2 + 20 + 1
+    assert len(printed) == 3 + 20 + 1
     assert printed[-1] == "  6 more lines not shown"
     two = price + f"{tmp_path}/app/cart.tsx:3:1 lint/style/useConst\n"
     assert debt.judge(tmp_path, group, lint, True, old + extra + two) is True
@@ -93,6 +94,7 @@ def test_a_new_finding_beyond_the_debt_prints_its_real_line(
         "  ./app/cart.tsx:3:1 lint/style/useConst",
     ]
     assert mixed[3] == "  1 of these 26 lines are new; the others are recorded:"
+    assert mixed[4] == HINT
     assert mixed[-1] == "  8 more lines not shown"
 
 
@@ -501,3 +503,96 @@ def test_a_performance_budget_failure_is_still_recorded(tmp_path: Path) -> None:
     outputs = {"./performance": "FAILED tests/performance/test_load.py - over budget\n"}
     assert debt.record(tmp_path, [group], {"./performance"}, outputs) == 0
     assert "./performance" in debt.load(tmp_path)
+
+
+def test_a_rule_name_matches_its_record_from_another_temp_folder(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "semgrep.json"
+    security: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep"],
+        "report": {"type": "semgrep", "path": "semgrep.json"},
+    }
+    group: Group = {"path": ".", "checks": [security]}
+    stable = "agents.skills.he.semgrep.no-eval"
+
+    def semgrep(rule: str) -> None:
+        result = {"check_id": rule, "path": "a.py", "extra": {"lines": "eval(x)"}}
+        report.write_text(json.dumps({"results": [result]}))
+
+    semgrep("private.var.folders.a1.b-2.T.tmp0c3d.hard-eng-rules.no-eval")
+    assert debt.record(tmp_path, [group], {"./security"}, {"./security": "x\n"}) == 0
+    assert debt.load(tmp_path)["./security"] == {f"{stable} a.py eval(x)": 1, "x": 1}
+    for rule in (
+        "tmp.other.folder9.hard-eng-rules.no-eval",
+        "var.folders.zz.T.tmp77.hard-eng-rules.no-eval",
+        stable,
+    ):
+        semgrep(rule)
+        assert debt.judge(tmp_path, group, security, True, "x\n") is False
+    old = {"./security": {"tmp.old.run.hard-eng-rules.no-eval a.py eval(x)": 1, "x": 1}}
+    (tmp_path / debt.DEBT_FILE).write_text(json.dumps({"version": 1, "gates": old}))
+    assert debt.judge(tmp_path, group, security, True, "x\n") is False
+
+
+def test_a_recorded_line_matches_when_its_number_column_gets_narrower(
+    repository: Path,
+) -> None:
+    assert_same_debt_line(repository, "999  +     def f(x):", "989 +     def f(x):")
+
+
+@pytest.mark.parametrize("mark", ["✖", "×"])
+def test_the_summary_line_of_biome_is_no_finding(
+    repository: Path, capsys: pytest.CaptureFixture[str], mark: str
+) -> None:
+    warning = "src/a.ts:1:1 lint/style/useConst"
+    error = "src/b.ts:2:2 lint/suspicious/noDebugger"
+    recorded = (
+        f"{warning}\n{error}\n{mark} Some warnings were emitted while running checks.\n"
+    )
+    assert debt.record(repository, [LINT_GROUP], {"./lint"}, {"./lint": recorded}) == 0
+    capsys.readouterr()
+    now = f"{error}\n{mark} Some errors were emitted while running checks.\n"
+    assert debt.judge(repository, LINT_GROUP, LINT, True, now) is True
+    printed = capsys.readouterr().out
+    assert "1 recorded lines are fixed" in printed
+    assert "findings beyond" not in printed
+    unchanged = f"{warning}\n{now}"
+    assert debt.judge(repository, LINT_GROUP, LINT, True, unchanged) is False
+
+
+def test_new_lines_inside_a_recorded_form_get_a_hint(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tmp_path, lint, group = repository, LINT, LINT_GROUP
+    kind = "lint/suspicious/noDebugger"
+    recorded = {f"src/fN.ts:N:N {kind}": 2}
+    (tmp_path / debt.DEBT_FILE).write_text(
+        json.dumps({"version": 1, "gates": {"./lint": recorded}})
+    )
+    old = f"src/f1.ts:1:5 {kind}\nsrc/f2.ts:2:5 {kind}\n"
+    assert debt.judge(tmp_path, group, lint, True, old) is False
+    capsys.readouterr()
+    assert debt.judge(tmp_path, group, lint, True, old + f"src/f3.ts:3:5 {kind}\n")
+    printed = capsys.readouterr().out.splitlines()
+    assert printed[1] == "  1 of these 3 lines are new; the others are recorded:"
+    assert printed[2] == HINT
+    assert debt.judge(tmp_path, group, lint, True, "src/g.ts:1:1 lint/style/useConst\n")
+    assert HINT not in capsys.readouterr().out
+
+
+def test_only_the_performance_gate_reads_the_missing_suite_rule(
+    tmp_path: Path,
+) -> None:
+    quoted = "docs.md:3:1 mentions HE-PERFORMANCE-SUITE in a sentence\n"
+    group: Group = {"path": ".", "checks": [LINT, PERFORMANCE]}
+    assert debt.record(tmp_path, [group], {"./lint"}, {"./lint": quoted}) == 0
+    assert debt.load(tmp_path) == {
+        "./lint": {"docs.md:N:N mentions HE-PERFORMANCE-SUITE in a sentence": 1}
+    }
+    assert debt.judge(tmp_path, group, LINT, True, quoted) is False
+    written = {"version": 1, "gates": {"./performance": {MISSING_SUITE: 1}}}
+    (tmp_path / debt.DEBT_FILE).write_text(json.dumps(written))
+    assert debt.judge(tmp_path, group, PERFORMANCE, True, MISSING_SUITE) is True

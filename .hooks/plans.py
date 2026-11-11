@@ -8,12 +8,17 @@ from pathlib import Path, PurePosixPath
 from gate_config import (
     ALL_ZERO_OBJECT_ID,
     SOURCE_FILE,
-    Group,
     changed_files,
     repository_files,
 )
+from project_files import keep
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
+SMALL_SIZE = "Size: small ("
+QUICK_PASS = (
+    "Hard Eng: quick checks passed; the full check runs the tests and the other gates."
+)
+LABEL_FILLER = str.maketrans("", "", "_+/ ")
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
 NOT_APPLICABLE_WORD = re.compile(r"(?i)\bN/A\b")
 TITLE_LINE = re.compile(r"(?m)^# \S.+$")
@@ -75,6 +80,10 @@ CAPTURES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".mp4", ".mov", ".
 
 
 def plan_files(root: Path) -> list[Path]:
+    return list(keep("listings", ("plan_files", str(root)), lambda: _plan_files(root)))
+
+
+def _plan_files(root: Path) -> list[Path]:
     names = subprocess.check_output(
         [
             "git",
@@ -136,9 +145,7 @@ def report_stage(
             "Hard Eng: planning checks passed — ready for build within the authorized scope."
         )
     elif stage == "Complete" and quick:
-        print(
-            "Hard Eng: quick checks passed; the full check runs the tests and the other gates."
-        )
+        print(QUICK_PASS)
     elif stage == "Complete":
         print(
             "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."
@@ -199,7 +206,9 @@ def plan_sections(content: str, *, allow_placeholders: bool = False) -> dict[str
     for line in content.splitlines():
         for marker in NOT_APPLICABLE_WORD.finditer(line):
             if not NOT_APPLICABLE_REASON_SEPARATOR.match(line[marker.end() :]):
-                raise ValueError("plan N/A needs an inline reason: N/A — reason")
+                raise ValueError(
+                    f"plan N/A needs an inline reason: N/A — reason; line: {line.strip()[:60]}"
+                )
     return sections
 
 
@@ -301,6 +310,29 @@ def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, lis
     return handoff, blockers, errors
 
 
+def _draft_errors(content: str) -> tuple[list[str], bool]:
+    """What stops a Draft plan, and whether that leaves it unfinished."""
+    try:
+        sections = plan_sections(content, allow_placeholders=True)
+        handoff, blockers, errors = draft_handoff(sections)
+        if handoff == "Approval":
+            try:
+                plan_sections(content)
+            except ValueError as error:
+                errors.append(str(error))
+            errors.extend(readiness_errors(sections))
+        if not errors and handoff == "Clarification":
+            return [f"waiting for: {blockers}"], False
+        if errors:
+            return errors, True
+        errors = ["approval handoff prepared; authorization remains outside this plan"]
+        if blockers and not no_blockers(blockers):
+            errors.append(f"decisions to resolve: {blockers}")
+        return errors, False
+    except ValueError as error:
+        return [str(error)], True
+
+
 def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
     paths = plan_files(root)
     selected = [path for path in paths if str(path.relative_to(root)) in changed]
@@ -310,28 +342,13 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
         content = path.read_text()
         if plan_status(content) != "Draft":
             continue
-        try:
-            sections = plan_sections(content, allow_placeholders=True)
-            handoff, blockers, errors = draft_handoff(sections)
-            if handoff == "Approval":
-                try:
-                    plan_sections(content)
-                except ValueError as error:
-                    errors.append(str(error))
-                errors.extend(readiness_errors(sections))
-            if not errors and handoff == "Clarification":
-                errors = [f"waiting for: {blockers}"]
-            elif not errors and handoff == "Approval":
-                errors = [
-                    "approval handoff prepared; authorization remains outside this plan"
-                ]
-                if blockers and not no_blockers(blockers):
-                    errors.append(f"decisions to resolve: {blockers}")
-            else:
-                unfinished = True
-        except ValueError as error:
-            errors = [str(error)]
-            unfinished = True
+        errors, stuck = _draft_errors(content)
+        if stuck and not selected:
+            from change_size import held_by_base
+
+            if held_by_base(root, path):
+                continue
+        unfinished |= stuck
         messages.append(f"{path.relative_to(root)}: " + "; ".join(errors))
     notice = (
         "Hard Eng: Planning incomplete — " + " | ".join(messages) if messages else ""
@@ -382,6 +399,30 @@ def touched_since_update(path: Path) -> bool:
     )
 
 
+def reasoned(value: str, name: str) -> None:
+    if value.lower() in {"none", "none."}:
+        raise ValueError(f"'{name}:' needs a reason; write `None — <reason>`")
+
+
+def claimed_tests(sections: dict[str, str]) -> dict[str, list[tuple[str, str]]]:
+    """The `path::test` names of test files in each Same cause and Retro value, by field."""
+    found: dict[str, list[tuple[str, str]]] = {}
+    for text in (sections["Repository context"], sections["Verification"]):
+        name = ""
+        for line in text.split("\n"):
+            label = line.partition(":")[0]
+            titled = "A" <= label[:1] <= "Z" and label.translate(LABEL_FILLER).isalnum()
+            if line[:1] == "#" or (titled and label != line):
+                name = label if label in {"Same cause", "Retro"} else ""
+            if name:
+                found.setdefault(name, []).extend(
+                    (path, test.split("[", 1)[0])
+                    for path, test in TEST_REFERENCE.findall(line)
+                    if _is_test(PurePosixPath(path))
+                )
+    return found
+
+
 def newer_fields(
     sections: dict[str, str],
     status: str,
@@ -392,14 +433,14 @@ def newer_fields(
 ) -> None:
     """Old Complete plans skip Same cause; Single source and Retro bind only edited plans."""
     if not legacy:
-        field(sections["Repository context"], "Same cause")
+        reasoned(field(sections["Repository context"], "Same cause"), "Same cause")
         acceptance_tests(sections)
     if not changed:
         return
     try:
         field(sections["Repository context"], "Single source")
         if status == "Complete":
-            field(sections["Verification"], "Retro")
+            reasoned(field(sections["Verification"], "Retro"), "Retro")
     except ValueError:
         if status != "Complete" or touched_since_update(path):
             raise
@@ -502,10 +543,12 @@ def plan_stage(root: Path, path: Path, changed: set[str]) -> str:
         if status == "Complete" and edited:
             sections = plan_sections(path.read_text())
             references, requirements = acceptance_tests(sections)
-            if missing := missing_tests(root, references):
-                raise ValueError(
-                    "acceptance names tests that do not exist: " + ", ".join(missing)
-                )
+            named = {"acceptance": references, **claimed_tests(sections)}
+            for line, found in named.items():
+                if missing := missing_tests(root, found):
+                    raise ValueError(
+                        f"{line} names tests that do not exist: " + ", ".join(missing)
+                    )
             if untested := untested_requirements(root, requirements):
                 raise ValueError(
                     "acceptance names unknown, retired or untested requirements: "
@@ -537,6 +580,12 @@ def _git_output(root: Path, *args: str) -> str:
 
 
 def release_references(root: Path) -> tuple[str, ...]:
+    return keep(
+        "references", ("release_references", str(root)), lambda: _references(root)
+    )
+
+
+def _references(root: Path) -> tuple[str, ...]:
     from shipping import ShippingError, load_policy
 
     try:
@@ -553,6 +602,10 @@ def release_references(root: Path) -> tuple[str, ...]:
 
 
 def default_branch_point(root: Path) -> str | None:
+    return keep("references", ("branch_point", str(root)), lambda: _point(root))
+
+
+def _point(root: Path) -> str | None:
     for reference in release_references(root):
         try:
             return _git_output(root, "merge-base", "HEAD", reference).strip()
@@ -561,53 +614,13 @@ def default_branch_point(root: Path) -> str | None:
     return None
 
 
-def applicable_plans(root: Path, paths: list[Path], changed: set[str]) -> list[Path]:
-    applicable = [path for path in paths if str(path.relative_to(root)) in changed]
-    return applicable or [
-        path
-        for path in paths
-        if plan_status(path.read_text()) not in {None, "Complete"}
-    ]
-
-
-def plan_tests(root: Path, base: str | None) -> set[str]:
-    """Test names that the active plans' acceptance lines depend on."""
-    from change_size import released_plans
-
-    changed = (changed_files(root, base or "HEAD") or set()) | released_plans(
-        root, base
-    )
-    paths = plan_files(root)
-    names = set()
-    for path in applicable_plans(root, paths, changed):
-        content = path.read_text()
-        if plan_status(content) in {"Ready", "Complete"}:
-            sections = plan_sections(content, allow_placeholders=True)
-            references, requirements = acceptance_tests(sections)
-            names.update(name for _, name in references)
-            tests = requirement_tests(root) if requirements else {}
-            for requirement in requirements:
-                names.update(name for _, _, name in tests.get(requirement, []))
-    return names
-
-
-def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) -> bool:
-    from reports import skipped_tests
-
-    skipped = sorted(plan_tests(root, base) & skipped_tests(root, groups, since))
-    if skipped:
-        print("FAIL plan acceptance tests were skipped: " + ", ".join(skipped))
-    return bool(skipped)
-
-
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
     from change_size import (
+        judged_plans,
         judged_point,
-        moved_plans,
         plan_not_needed,
-        released_plans,
         update_only,
     )
 
@@ -628,16 +641,18 @@ def validate_plans(
     ):
         print("Plan: only files the verified Hard Eng update wrote; no plan needed.")
         return stage
-    changed |= released_plans(root, base)
-    changed -= moved_plans(root, base, changed)
-    paths = plan_files(root)
-    applicable = applicable_plans(root, paths, changed)
+    changed, paths, applicable = judged_plans(root, base, changed)
+    asks_size = bool(changed) and not any(
+        str(path.relative_to(root)) in changed for path in paths
+    )
+    if asks_size and plan_not_needed(root):
+        return stage
     if not applicable and explicit_stage and not changed:
         applicable = paths
     if (
         (changed != set() or explicit_stage)
         and not applicable
-        and not plan_not_needed(root)
+        and (asks_size or not plan_not_needed(root))
     ):
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"

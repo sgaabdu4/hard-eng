@@ -12,6 +12,7 @@ import pytest
 import update
 import update_runner
 from conftest import commit, git
+from gate_config import changed_files
 from plans import validate_plans
 from test_plans import edit, new_file, released_branch, sized_branch
 from test_updates import select_release
@@ -466,15 +467,117 @@ def test_update_branch_check_skips_an_unrelated_draft_plan(
 def test_the_update_only_rule_asks_no_proof_of_a_tree_that_is_not_clean(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    target = draft_plan_beside_an_update(release, monkeypatch)
+    proof = Mock(return_value=True)
+    monkeypatch.setattr(update, "verified_revision", proof)
+    changed = changed_files(target, "main") or set()
+    assert change_size.update_only(target, "main", changed)
+    proof.assert_called()
+    proof.reset_mock()
+    (target / "app.py").write_text("print('more work')\n")
+    changed = changed_files(target, "main") or set()
+    assert not change_size.update_only(target, "main", changed)
+    proof.assert_not_called()
+
+
+def test_the_plan_rule_asks_the_update_proof_one_time_in_the_update_worktree_with_an_open_plan_on_the_base(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     import plans
 
     target = draft_plan_beside_an_update(release, monkeypatch)
     proof = Mock(return_value=True)
     monkeypatch.setattr(update, "verified_revision", proof)
-    assert plans.validate_plans(target, "main") == "Complete"
-    proof.assert_called()
-    proof.reset_mock()
+    (target / "app.py").write_text("print('more work')\n")
+    with pytest.raises(ValueError, match="PLAN.md: plan needs"):
+        plans.validate_plans(target, "main")
+    assert proof.call_count == 1
+
+
+def test_the_plan_rule_asks_no_update_proof_in_a_feature_branch_that_merged_an_update(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import plans
+
+    source, target, _ = release
+    (target / "PLAN.md").write_text("# Later work\n\nStatus: Draft\n")
+    commit(target, "draft plan for later work")
+    git(target, "update-ref", "refs/heads/main", "HEAD")
+    git(target, "checkout", "-qb", "feature")
+    git(target, "checkout", "-q", "main")
+    git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH)
+    select_release(source, monkeypatch)
+    update.update(target)
+    git(target, "update-ref", "refs/heads/main", "HEAD")
+    git(target, "checkout", "-q", "feature")
+    git(target, "merge", "-q", "--no-edit", "main")
+    proof = Mock(return_value=True)
+    monkeypatch.setattr(update, "verified_revision", proof)
     (target / "app.py").write_text("print('more work')\n")
     with pytest.raises(ValueError, match="PLAN.md: plan needs"):
         plans.validate_plans(target, "main")
     proof.assert_not_called()
+
+
+def test_one_check_asks_the_update_proof_one_time(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import plans
+    from project_files import keeping
+
+    target = draft_plan_beside_an_update(release, monkeypatch)
+    proof = Mock(return_value=True)
+    monkeypatch.setattr(update, "verified_revision", proof)
+    with keeping("references"):
+        update.installed_update_paths(target, "main")
+        assert plans.validate_plans(target, "main") == "Complete"
+    assert proof.call_count == 1
+
+
+@pytest.mark.parametrize("status", ["Draft", None])
+def test_a_feature_merge_of_an_update_asks_no_proof_of_a_tree_that_is_not_clean(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, status: str | None
+) -> None:
+    import plans
+
+    source, target, _ = release
+    if status:
+        (target / "PLAN.md").write_text(f"# Later work\n\nStatus: {status}\n")
+        commit(target, "open plan on the base")
+    git(target, "update-ref", "refs/heads/main", "HEAD")
+    git(target, "checkout", "-qb", "work")
+    (target / "app.py").write_text("print('feature')\n")
+    session_base = commit(target, "feature work")
+    git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH, "main")
+    select_release(source, monkeypatch)
+    update.update(target)
+    git(target, "checkout", "-q", "main")
+    git(target, "merge", "-q", "--ff-only", update_runner.UPDATE_BRANCH)
+    git(target, "checkout", "-q", "work")
+    git(target, "merge", "-q", "--no-commit", "--no-ff", "main")
+    proof = Mock(return_value=False)
+    monkeypatch.setattr(update, "verified_revision", proof)
+    with pytest.raises(ValueError, match="PLAN.md"):
+        plans.validate_plans(target, session_base)
+    proof.assert_not_called()
+
+
+@pytest.mark.parametrize("holds", [True, False])
+def test_the_update_proof_decides_whether_the_open_plan_of_the_base_judges_a_small_fix(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, holds: bool
+) -> None:
+    import plans
+
+    (release[1] / "app.py").write_text("".join(f"line {n}\n" for n in range(30)))
+    commit(release[1], "application on the base")
+    target = draft_plan_beside_an_update(release, monkeypatch)
+    (target / "app.py").write_text(
+        "changed\n" + "".join(f"line {n}\n" for n in range(1, 30))
+    )
+    commit(target, "small fix on the update branch")
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=holds))
+    if holds:
+        assert plans.validate_plans(target, "main") == "Complete"
+        return
+    with pytest.raises(ValueError, match="PLAN.md: plan needs"):
+        plans.validate_plans(target, "main")

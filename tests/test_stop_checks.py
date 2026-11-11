@@ -10,8 +10,9 @@ import agent_hooks
 import debt
 import failures
 import pytest
-from conftest import SOURCE, add_origin, commit, git, gone
+from conftest import SOURCE, add_origin, commit, git, gone, plan_document
 from gate_config import Gate, Group, JsonObject
+from test_plans import install_native_hooks
 
 
 def install_check(repository: Path, script: str) -> Path:
@@ -507,3 +508,85 @@ def test_failures_with_no_output_are_not_counted_as_repeats(tmp_path: Path) -> N
     for output in ("", "\n  \n", ""):
         assert failures.repeat_note(tmp_path, output) == ""
     assert not (tmp_path / ".hard-eng/failures.json").exists()
+
+
+@pytest.mark.parametrize("status", ["Draft", "Ready"])
+def test_stop_passes_a_small_change_when_the_base_holds_an_open_plan(
+    repository: Path, status: str
+) -> None:
+    plan = (
+        plan_document()
+        .replace("Status: Complete", f"Status: {status}")
+        .replace("## Verification\nResult: Passed", "## Verification\nResult: Pending")
+    )
+    response = small_edit_after_plan(repository, plan, own_plan=False)
+    message = str(response)
+    assert "decision" not in response
+    assert "build in progress" not in message
+    assert "Planning incomplete" not in message
+
+
+UNFINISHED_BASELINE = "## Baseline + execution\nResult: Pending"
+
+
+def small_edit_after_plan(repository: Path, plan: str, *, own_plan: bool) -> JsonObject:
+    """Stop after a 3-line edit; the plan is on the base, or the branch adds it before the session."""
+    install_native_hooks(repository, "")
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n__pycache__/\n")
+    (repository / "a.py").write_text("".join(f"line {n}\n" for n in range(30)))
+    if not own_plan:
+        (repository / "PLAN.md").write_text(plan)
+    commit(repository, "the base")
+    add_origin(repository)
+    git(repository, "fetch", "-q", "origin")
+    git(repository, "switch", "-qc", "work")
+    if own_plan:
+        (repository / "PLAN.md").write_text(plan)
+        commit(repository, "the branch plan")
+    payload: JsonObject = {"session_id": "small"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "a.py").write_text(
+        "".join(f"changed {n}\n" for n in range(3))
+        + "".join(f"line {n}\n" for n in range(3, 30))
+    )
+    return agent_hooks.completion(repository, payload, "claude")
+
+
+def test_stop_does_not_block_a_small_change_for_an_unfinished_draft_plan_of_the_base(
+    repository: Path,
+) -> None:
+    plan = plan_document().replace("Status: Complete", "Status: Draft")
+    response = small_edit_after_plan(
+        repository,
+        plan.replace("## Baseline + execution\nResult: Passed", UNFINISHED_BASELINE),
+        own_plan=False,
+    )
+    assert "decision" not in response
+    assert "Planning incomplete" not in str(response)
+    assert "quick checks passed" in str(response)
+
+
+def test_stop_still_blocks_when_the_branch_holds_its_own_unfinished_draft_plan(
+    repository: Path,
+) -> None:
+    plan = plan_document().replace("Status: Complete", "Status: Draft")
+    response = small_edit_after_plan(
+        repository,
+        plan.replace("## Baseline + execution\nResult: Passed", UNFINISHED_BASELINE),
+        own_plan=True,
+    )
+    assert response["decision"] == "block"
+    assert "Planning incomplete" in str(response)
+
+
+def test_stop_shows_the_quick_check_line_for_a_small_change_when_the_base_holds_a_ready_plan(
+    repository: Path,
+) -> None:
+    plan = (
+        plan_document()
+        .replace("Status: Complete", "Status: Ready")
+        .replace("## Verification\nResult: Passed", "## Verification\nResult: Pending")
+    )
+    message = str(small_edit_after_plan(repository, plan, own_plan=False))
+    assert "quick checks passed" in message
+    assert "planning checks passed" not in message

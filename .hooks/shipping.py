@@ -789,6 +789,7 @@ def _graphql_pull(
 
 
 _UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
+_MERMAID_BLOCK = re.compile(r"^[ \t]*```[ \t]*mermaid\b", re.MULTILINE)
 
 
 def _current_with_base(
@@ -803,6 +804,20 @@ def _current_with_base(
     if behind:
         raise ShippingError(
             f"PR is {behind} commit(s) behind {base}; rebase on it, push and rerun the checks"
+        )
+
+
+def _body_problem(body: str) -> None:
+    """Refuse a PR body with no undo line or fewer than two Mermaid diagrams."""
+    if not _UNDO_LINE.search(body):
+        raise ShippingError(
+            "PR body needs a line that starts `Undo:` and lists the undo steps"
+        )
+    if len(_MERMAID_BLOCK.findall(body)) < 2:
+        raise ShippingError(
+            "PR body needs a `Before and after` part with two or more Mermaid diagrams: "
+            "one of the old flow and one of the new flow for each main change, "
+            "or two or more of the new flows when no old flow exists"
         )
 
 
@@ -826,10 +841,7 @@ def _ready_state(
     )
     if threads is None or any(node.get("isResolved") is not True for node in threads):
         raise ShippingError("a review conversation is unresolved or uncounted")
-    if not _UNDO_LINE.search(pull.body):
-        raise ShippingError(
-            "PR body needs a line that starts `Undo:` and lists the undo steps"
-        )
+    _body_problem(pull.body)
     _current_with_base(root, identity, pull.base_ref, pull.head_sha)
     if pull.mergeable is not True or pull.mergeable_state != "clean":
         _checks(root, "/".join(identity[:2]), pull.head_sha, policy)

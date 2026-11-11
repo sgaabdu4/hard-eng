@@ -780,3 +780,32 @@ def test_types_gate_builds_a_library_behind_an_intermediate_solution(
     assert [call for call in calls if "-b" in call] == [
         ["tsc", "-b", "lib/tsconfig.json"]
     ]
+
+
+def test_the_omitted_file_message_names_the_exclude_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.ts").write_text("export {};\n")
+    config = tmp_path / "tsconfig.json"
+    config.write_text('{"include": ["lib"], "exclude": ["src"]}')
+
+    def compiled(_: list[str]) -> dict[str, object]:
+        settings = json.loads(config.read_text())
+        reached = "src" in settings.get("include", [])
+        left_out = "src" in settings.get("exclude", [])
+        files = ["src/app.ts"] if reached and not left_out else []
+        return {"compilerOptions": STRICT_JS, "files": [*files, UNTRUSTED]}
+
+    fake_tsc(monkeypatch, compiled)
+    expected = {tmp_path / "src/app.ts"}
+    with pytest.raises(ValueError, match="omits declared production files") as omitted:
+        validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
+    message = str(omitted.value)
+    assert "`include` list" in message
+    assert "remove any `exclude` entry that matches the file" in message
+    config.write_text('{"include": ["lib", "src"], "exclude": ["src"]}')
+    with pytest.raises(ValueError, match="omits declared production files"):
+        validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)
+    config.write_text('{"include": ["lib", "src"]}')
+    validate_typescript(tmp_path, ["tsc"], tmp_path, expected, 10)

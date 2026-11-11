@@ -18,50 +18,19 @@ from dependency_graph import (
     readers_above,
     shared_only,
 )
-from project_files import parse_project_text, read_project_file
+from project_files import (
+    group_locks,
+    json_text,
+    keep,
+    parse_project_text,
+    read_project_file,
+    refuse_ignored_locks,
+)
 
 type JsonValue = (
     str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
 )
 type JsonObject = dict[str, JsonValue]
-
-
-def expanded(value: object) -> bool:
-    if isinstance(value, dict):
-        return bool(value)
-    return isinstance(value, list) and any(expanded(item) for item in value)
-
-
-def json_text(
-    value: object, layout: tuple[str, int, int], indent: str = "", used: int = 0
-) -> str:
-    unit, tab, width = layout
-    if isinstance(value, list) and not expanded(value):
-        flat = json.dumps(value, separators=(", ", ": "))
-        if used + len(flat) <= width:
-            return flat
-    if not isinstance(value, (dict, list)) or not value:
-        return json.dumps(value)
-    inner = indent + unit
-    entries = (
-        [(f"{json.dumps(key)}: ", item) for key, item in value.items()]
-        if isinstance(value, dict)
-        else [("", item) for item in value]
-    )
-    last = len(entries) - 1
-    body = ",\n".join(
-        inner
-        + head
-        + json_text(
-            item,
-            layout,
-            inner,
-            len((inner + head).expandtabs(tab)) + (index < last),
-        )
-        for index, (head, item) in enumerate(entries)
-    )
-    opening, closing = "{}" if isinstance(value, dict) else "[]"
-    return f"{opening}\n{body}\n{indent}{closing}"
 
 
 JSONC = re.compile(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', re.DOTALL)
@@ -366,6 +335,8 @@ def validate_file_sizes(
         raise ValueError(
             "HE-FILE-LENGTH: Handwritten files exceed 1000 physical lines: "
             + "; ".join(failures)
+            + ". Split the file; or mark generator output with `<pattern> linguist-generated=true` in .gitattributes;"
+            + " or add a `file_size_exceptions` entry for the exact file, with `reason` and `evidence`, in hard-eng.gates.json"
         )
 
 
@@ -448,6 +419,11 @@ def initial_base(root: Path) -> str:
 
 
 def changed_files(root: Path, base: str) -> set[str] | None:
+    names = keep("listings", ("changed", str(root), base), lambda: _changed(root, base))
+    return None if names is None else set(names)
+
+
+def _changed(root: Path, base: str) -> set[str] | None:
     try:
         if ALL_ZERO_OBJECT_ID.fullmatch(base) or (
             base == "HEAD"
@@ -977,6 +953,9 @@ def checked_groups(
     ]
     report_paths: set[Path] = set()
     count = sum(validate_group(root, group, report_paths) for group in groups)
+    refuse_ignored_locks(
+        root, group_locks(root, groups), LISTED[root][0], ask_git=False
+    )
     if not count:
         raise ValueError("No checks configured; verification cannot pass")
     validate_required_checks(root, config, listed, starting)

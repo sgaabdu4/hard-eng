@@ -289,14 +289,16 @@ def validate_comments(root: Path, base: str | None) -> None:
 
 
 PYTHON_OFF = re.compile(
-    r"#\s*(noqa|type:\s*ignore|pyrefly:\s*ignore|pyright:\s*ignore|pylint:\s*disable"
-    r"|pragma:\s*no cover)|\b(pytest\.)?mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
+    r"#\s*((?:(?:ruff|flake8)\s*:\s*)?(?i:noqa)|type:\s*ignore|pyrefly:\s*ignore"
+    r"|pyright:\s*ignore|pyre-(?:ignore|fixme)|pylint:\s*disable|pragma:\s*no cover"
+    r"|ruff:\s*(?:file-ignore|ignore|disable)\["
+    r"|(?:ruff:\s*)?isort:\s*(?:skip_file|skip|off)\b|fmt:\s*(?:off|skip)\b|yapf:\s*disable\b)|\b(pytest\.)?mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
     r"|\bunittest\.([Ss]kip\w*|expectedFailure)\b|\bskipTest\(|\bimportorskip\("
     r"|^\s*@skip(If|Unless)?\(|^__test__\s*=\s*False\b"
 )
 SCRIPT_OFF = re.compile(
     r"eslint-disable|@ts-(ignore|expect-error|nocheck)|biome-ignore"
-    r"|\b(it|test|describe|suite)\.(skip|only|fixme)(If)?[.(]"
+    r"|\b(it|test|describe|suite)(?:\.(?:concurrent|sequential|shuffle))*\.(skip|only|fixme|todo|failing|fails|if|runIf)(If)?[.(]"
     r"|\b(xit|xtest|xdescribe|fit|fdescribe)\("
     r"|(/\*|//)\s*(istanbul|c8|v8) ignore"
 )
@@ -430,7 +432,12 @@ def assertion_lines(name: str, lines: list[tuple[int, str]]) -> list[tuple[int, 
         if name.endswith(".py")
         else ("assert", "expect(", "XCTAssert", "#require(")
     )
-    return [(n, text) for n, text in lines if any(word in text for word in words)]
+    mark = "#" if name.endswith(".py") else "//"
+    return [
+        (n, text)
+        for n, text in lines
+        if any(word in text for word in words) and not text.lstrip().startswith(mark)
+    ]
 
 
 WORD = re.compile(r"[A-Za-z_]\w*")

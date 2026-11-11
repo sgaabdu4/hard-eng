@@ -104,6 +104,7 @@ def test_native_stop_only_pauses_ready_approval(
     repository: Path, completed_plan: str, pending_baseline: bool
 ) -> None:
     shutil.copytree(SOURCE / ".hooks", repository / ".hooks")
+    (repository / ".gitignore").write_text(".hard-eng/\n__pycache__/\n")
     for name in ("PRODUCT.md", "DESIGN.md"):
         shutil.copyfile(SOURCE / name, repository / name)
     git(repository, "add", ".")

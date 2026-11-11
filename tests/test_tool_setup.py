@@ -1,14 +1,18 @@
 import fcntl
+import json
 import os
 import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
 
 import pytest
+from conftest import gate
 
 SOURCE = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 11, 10, 13, 45, tzinfo=UTC)
@@ -396,6 +400,7 @@ def test_parallel_scanners_run_the_version_found_once_before_them(
     monkeypatch.setenv("PATH", f"{uvx.parent}:{os.environ['PATH']}")
     monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check"])
     monkeypatch.setattr(tool_setup, "SCANNER_VERSIONS", {})
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
     fixed_cutoff(monkeypatch)
     tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
     assert calls.read_text().splitlines() == [
@@ -403,6 +408,110 @@ def test_parallel_scanners_run_the_version_found_once_before_them(
         f"--exclude-newer {WAIT[1]} semgrep@latest --version",
     ]
     assert tool_setup.managed_command(["ruff", "check"])[3:5] == ["ruff@9.9.9", "check"]
+
+
+def fake_uvx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: str) -> Path:
+    import tool_setup
+
+    calls = tmp_path / "calls.txt"
+    uvx = tmp_path / "bin/uvx"
+    uvx.parent.mkdir()
+    uvx.write_text(
+        "#!/bin/sh\n"
+        f'echo "$*" >> {calls}\n'
+        'for a in "$@"; do case "$a" in *@latest) echo "${a%@latest} 9.9.9";; esac; done\n'
+    )
+    uvx.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{uvx.parent}:{os.environ['PATH']}")
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", argv])
+    monkeypatch.setattr(tool_setup, "SCANNER_VERSIONS", {})
+    fixed_cutoff(monkeypatch)
+    return calls
+
+
+def test_a_full_check_looks_up_the_scanner_versions_and_stores_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    calls = fake_uvx(tmp_path, monkeypatch, "check")
+    tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
+    tool_setup.SCANNER_VERSIONS.clear()
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    assert len(calls.read_text().splitlines()) == 3
+    stored = json.loads(tool_setup.scanner_store().read_text())
+    assert stored == {
+        "cutoff": WAIT[1],
+        "versions": {"ruff": "9.9.9", "semgrep": "9.9.9"},
+    }
+
+
+def test_a_quick_check_reuses_the_scanner_versions_of_its_cutoff_hour(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    calls = fake_uvx(tmp_path, monkeypatch, "check")
+    tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
+    tool_setup.SCANNER_VERSIONS.clear()
+    calls.unlink()
+    tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
+    assert not calls.exists()
+    assert tool_setup.SCANNER_VERSIONS == {"ruff": "9.9.9", "semgrep": "9.9.9"}
+    tool_setup.pin_python_scanners(["ruff", "zizmor"], 30)
+    assert len(calls.read_text().splitlines()) == 1
+
+
+def test_a_stored_value_that_is_no_version_is_dropped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    calls = fake_uvx(tmp_path, monkeypatch, "check")
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
+    tool_setup.scanner_store().parent.mkdir(parents=True)
+    broken = {"cutoff": WAIT[1], "versions": {"ruff": "latest; rm -rf"}}
+    tool_setup.scanner_store().write_text(json.dumps(broken))
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    assert tool_setup.SCANNER_VERSIONS == {"ruff": "9.9.9"}
+    assert len(calls.read_text().splitlines()) == 1
+
+
+def test_a_quick_check_names_the_full_check_when_uv_lost_a_stored_scanner(
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
+    lost = "Because ruff==0.4.0 was not found in the cache and you require ruff==0.4.0"
+    check = gate("lint", f"import sys; sys.exit({lost!r})")
+    assert runner.run_gate({"path": ".", "checks": []}, check, 30, threading.Lock())
+    assert "ruff==0.4.0 is not in uv's cache" in capsys.readouterr().out
+    other = gate("lint", "import sys; sys.exit('ruff found 2 errors')")
+    assert runner.run_gate({"path": ".", "checks": []}, other, 30, threading.Lock())
+    assert "uv's cache" not in capsys.readouterr().out
+
+
+def test_a_new_cutoff_hour_ends_the_stored_scanner_versions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    calls = fake_uvx(tmp_path, monkeypatch, "check")
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
+    monkeypatch.setattr(
+        tool_setup, "release_cutoff", lambda now=None: "2026-11-08T14:00:00Z"
+    )
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    assert len(calls.read_text().splitlines()) == 2
+    stored = json.loads(tool_setup.scanner_store().read_text())
+    assert stored["cutoff"] == "2026-11-08T14:00:00Z"
+    tool_setup.scanner_store().write_text("not json")
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    assert len(calls.read_text().splitlines()) == 3
 
 
 def test_configured_uvx_scanners_are_pinned_like_bare_ones(
@@ -449,6 +558,16 @@ def test_node_runs_on_bun_except_for_cloudflare_tools(
     runtime: str,
 ) -> None:
     """Under Bun, miniflare's typegen fetch reaches a real parked domain, not workerd."""
+    assert run_through_node(tmp_path, monkeypatch, tool, installed) == [runtime, tool]
+
+
+def run_through_node(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tool: str,
+    installed: tuple[str, ...],
+) -> list[str]:
+    """Run a tool through the `node` stand-in and return the runtime that took it."""
     import tool_setup
 
     bin_directory = tmp_path / "bin"
@@ -463,7 +582,28 @@ def test_node_runs_on_bun_except_for_cloudflare_tools(
     for path in (environment["PATH"], os.environ["PATH"]):
         assert shutil.which("node", path=path) == str(shim)
     ran = subprocess.run([shim, tool], capture_output=True, text=True, check=True)
-    assert ran.stdout.split() == [runtime, tool]
+    return ran.stdout.split()
+
+
+@pytest.mark.parametrize(
+    ("tool", "installed", "runtime"),
+    [
+        ("installs/npm-react-doctor/latest/bin/react-doctor", ("bun", "node"), "node"),
+        ("node_modules/react-doctor/bin/react-doctor.js", ("bun", "node"), "node"),
+        ("node_modules/.bin/react-doctor", ("bun", "node"), "node"),
+        ("installs/npm-react-doctor/latest/bin/react-doctor", ("bun",), "bun"),
+        ("node_modules/react-scripts/bin/react-scripts.js", ("bun", "node"), "bun"),
+    ],
+)
+def test_react_doctor_runs_on_node_when_node_is_installed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tool: str,
+    installed: tuple[str, ...],
+    runtime: str,
+) -> None:
+    """Under Bun, React Doctor waits 30 s for an idle worker before it exits."""
+    assert run_through_node(tmp_path, monkeypatch, tool, installed) == [runtime, tool]
 
 
 def test_node_with_a_script_on_stdin_runs_it_on_bun(

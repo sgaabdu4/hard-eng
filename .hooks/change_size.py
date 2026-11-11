@@ -6,13 +6,20 @@ from pathlib import Path, PurePosixPath
 from dependency_graph import owner_language
 from gate_config import SOURCE_FILE, Group, changed_files, parse_config
 from plans import (
+    SMALL_SIZE,
     _git_output,
     _is_test,
+    acceptance_tests,
     default_branch_point,
     is_documentation,
     is_plan_path,
+    plan_files,
+    plan_sections,
+    plan_status,
     release_references,
+    requirement_tests,
 )
+from project_files import keep, keeping
 
 NO_CHANGE = "no change"
 MAX_SMALL_LINES = 20
@@ -231,6 +238,12 @@ def judged_point(root: Path) -> str | None:
 
 
 def _revision(root: Path, reference: str) -> str | None:
+    return keep(
+        "references", ("revision", str(root), reference), lambda: _tip(root, reference)
+    )
+
+
+def _tip(root: Path, reference: str) -> str | None:
     try:
         return _git_output(
             root, "rev-parse", "--verify", "-q", f"{reference}^{{commit}}"
@@ -254,6 +267,17 @@ def released_plans(root: Path, base: str | None) -> set[str]:
     return {
         name for name in changed_files(root, point) or () if is_plan_path(Path(name))
     }
+
+
+def held_by_base(root: Path, path: Path) -> bool:
+    """A remote base holds the plan and the branch did not change it; with no remote base each plan is the branch's own."""
+    with keeping("references"):
+        remote = any(
+            _revision(root, name)
+            for name in release_references(root)
+            if name.startswith("origin/")
+        )
+        return remote and str(path.relative_to(root)) not in released_plans(root, None)
 
 
 def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
@@ -292,7 +316,54 @@ def plan_not_needed(root: Path) -> bool:
     if reason == NO_CHANGE:
         return True
     if small:
-        print(f"Size: small ({reason}); no plan needed.")
+        print(f"{SMALL_SIZE}{reason}); no plan needed.")
     else:
         print(f"Size: big, because {reason}; a plan is needed.")
     return small
+
+
+def judged_plans(
+    root: Path, base: str | None, changed: set[str]
+) -> tuple[set[str], list[Path], list[Path]]:
+    """The changed files with released plans added and moved plans out, every plan file, and the plans that judge the change."""
+    changed = changed | released_plans(root, base)
+    changed -= moved_plans(root, base, changed)
+    paths = plan_files(root)
+    applicable = [path for path in paths if str(path.relative_to(root)) in changed]
+    return (
+        changed,
+        paths,
+        applicable
+        or [
+            path
+            for path in paths
+            if plan_status(path.read_text()) not in {None, "Complete"}
+        ],
+    )
+
+
+def plan_tests(root: Path, base: str | None) -> set[str]:
+    """Test names that the active plans' acceptance lines depend on."""
+    _, _, applicable = judged_plans(
+        root, base, changed_files(root, base or "HEAD") or set()
+    )
+    names = set()
+    for path in applicable:
+        content = path.read_text()
+        if plan_status(content) in {"Ready", "Complete"}:
+            sections = plan_sections(content, allow_placeholders=True)
+            references, requirements = acceptance_tests(sections)
+            names.update(name for _, name in references)
+            tests = requirement_tests(root) if requirements else {}
+            for requirement in requirements:
+                names.update(name for _, _, name in tests.get(requirement, []))
+    return names
+
+
+def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) -> bool:
+    from reports import skipped_tests
+
+    skipped = sorted(plan_tests(root, base) & skipped_tests(root, groups, since))
+    if skipped:
+        print("FAIL plan acceptance tests were skipped: " + ", ".join(skipped))
+    return bool(skipped)

@@ -444,6 +444,23 @@ def test_current_files_omits_a_normal_unstaged_tracked_deletion(
     assert "deleted.txt" not in scanned(tmp_path, project, monkeypatch)
 
 
+def count_listings(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
+    listings: list[Path] = []
+    real_run = subprocess.run
+
+    def spy(
+        command: list[str], *, cwd: Path, check: bool, capture_output: bool, text: bool
+    ) -> subprocess.CompletedProcess[str]:
+        if command[:3] == ["git", "ls-files", "-z"]:
+            listings.append(cwd)
+        return real_run(
+            command, cwd=cwd, check=check, capture_output=capture_output, text=text
+        )
+
+    monkeypatch.setattr(gitleaks_scan.subprocess, "run", spy)
+    return listings
+
+
 def test_a_folder_reached_by_two_links_is_listed_once_and_copied_twice(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -459,19 +476,7 @@ def test_a_folder_reached_by_two_links_is_listed_once_and_copied_twice(
     (project / "generated").mkdir()
     (project / "generated/secret.txt").write_text("local secret\n")
     os.symlink("generated/secret.txt", project / "ignored-target-link")
-    listings: list[Path] = []
-    real_run = subprocess.run
-
-    def spy(
-        command: list[str], *, cwd: Path, check: bool, capture_output: bool, text: bool
-    ) -> subprocess.CompletedProcess[str]:
-        if command[:2] == ["git", "ls-files"]:
-            listings.append(cwd)
-        return real_run(
-            command, cwd=cwd, check=check, capture_output=capture_output, text=text
-        )
-
-    monkeypatch.setattr(gitleaks_scan.subprocess, "run", spy)
+    listings = count_listings(monkeypatch)
     copy = tmp_path / "copy"
     gitleaks_scan.copy_scan_tree(project, copy)
     for folder in ("real", "first-link", "second-link"):
@@ -479,8 +484,79 @@ def test_a_folder_reached_by_two_links_is_listed_once_and_copied_twice(
     assert (copy / "tracked-link").read_text() == "committed\n"
     assert (copy / "other-tracked-link").read_text() == "committed\n"
     assert not (copy / "ignored-target-link").exists()
-    assert listings.count((project / "real").resolve()) == 1
-    assert listings.count(project.resolve()) <= 2
+    assert listings.count(project.resolve()) == 2
+    assert listings.count((project / "generated").resolve()) == 1
+    assert len(listings) == 3
+
+
+def copied_files(copy: Path) -> set[str]:
+    return {str(path.relative_to(copy)) for path in copy.rglob("*") if path.is_file()}
+
+
+def test_linked_folders_of_one_repository_share_one_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = repository(tmp_path)
+    for name in ("one", "two", "three"):
+        skill = project / f".agents/skills/{name}"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(f"{name}\n")
+        (skill / "nested").mkdir()
+        (skill / "nested/more.txt").write_text(f"{name} more\n")
+    git(project, "add", "-f", ".agents")
+    (project / ".claude/skills").mkdir(parents=True)
+    for name in ("one", "two", "three"):
+        os.symlink(f"../../.agents/skills/{name}", project / f".claude/skills/{name}")
+    (project / "generated").mkdir()
+    (project / "generated/secret.txt").write_text("local secret\n")
+    os.symlink("generated", project / "ignored-folder-link")
+    git(project, "add", ".claude")
+    git(project, "commit", "-qm", "links")
+    (project / ".agents/skills/one/untracked.txt").write_text("fresh\n")
+    listings = count_listings(monkeypatch)
+    copy = tmp_path / "copy"
+    gitleaks_scan.copy_scan_tree(project, copy)
+    expected = {".gitignore", "tracked.txt"}
+    for name in ("one", "two", "three"):
+        for base in (".agents/skills", ".claude/skills"):
+            expected |= {f"{base}/{name}/SKILL.md", f"{base}/{name}/nested/more.txt"}
+    expected |= {
+        ".agents/skills/one/untracked.txt",
+        ".claude/skills/one/untracked.txt",
+    }
+    assert copied_files(copy) == expected
+    assert listings == [project.resolve()]
+
+
+def test_a_linked_submodule_keeps_its_own_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = repository(tmp_path)
+    add_submodule(project, tmp_path)
+    os.symlink("skills/submodule", project / "submodule-link")
+    (project / "skills/submodule/inner").mkdir()
+    (project / "skills/submodule/inner/file.txt").write_text("inner\n")
+    os.symlink("inner", project / "skills/submodule/inner-link")
+    git(project, "add", "submodule-link")
+    git(project, "commit", "-qm", "link to a submodule")
+    listings = count_listings(monkeypatch)
+    copy = tmp_path / "copy"
+    gitleaks_scan.copy_scan_tree(project, copy)
+    submodule = (project / "skills/submodule").resolve()
+    assert copied_files(copy) == {
+        ".gitignore",
+        ".gitmodules",
+        "tracked.txt",
+        "skills/submodule/submodule.txt",
+        "skills/submodule/inner/file.txt",
+        "skills/submodule/inner-link/file.txt",
+        "submodule-link/submodule.txt",
+        "submodule-link/inner/file.txt",
+        "submodule-link/inner-link/file.txt",
+    }
+    assert listings.count(project.resolve()) == 1
+    assert listings.count(submodule) == 1
+    assert len(listings) == 2
 
 
 def test_current_files_rejects_an_absolute_report_path_through_a_symlink(

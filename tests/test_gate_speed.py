@@ -6,27 +6,38 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
 
 import agent_hooks
+import change_size
+import comments
+import debt
 import gate_config
 import gate_times
+import plans
 import pytest
 from ci_setup import migrate_impact_token
 from conftest import (
     SOURCE,
+    add_origin,
     commit,
     configure,
     gate,
+    git,
     init,
     load_module,
+    plan_document,
     running,
     spawner,
 )
 from gate_config import Gate, Group
 from gate_schedule import gate_order, waits
+from project_files import keeping
 
 
 def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
@@ -50,6 +61,60 @@ def test_the_gate_limit_is_three_times_the_last_passing_time(
     monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
     gate_times.record_gate_time(tmp_path, "./suite", 2)
     assert gate_times.gate_limit(tmp_path, "./suite", 100) == 6
+
+
+def watch_common_folder_asks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path, list[Path]]:
+    first, second = tmp_path / "first", tmp_path / "second"
+    for root in (first, second):
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+    asked: list[Path] = []
+    real = subprocess.check_output
+
+    def counting(command: list[str], *, cwd: Path, text: bool) -> str:
+        asked.append(cwd)
+        time.sleep(0.2)
+        return real(command, cwd=cwd, text=text)
+
+    monkeypatch.setattr(gate_times.subprocess, "check_output", counting)
+    return first, second, asked
+
+
+def test_gate_times_ask_git_for_the_common_folder_one_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second, asked = watch_common_folder_asks(tmp_path, monkeypatch)
+    with keeping("references"):
+        for key in ("./one", "./two", "./three"):
+            gate_times.record_gate_time(first, key, 1)
+            gate_times.gate_limit(first, key, 100)
+        assert asked == [first]
+        gate_times.gate_limit(second, "./one", 100)
+        assert asked == [first, second]
+    gate_times.gate_limit(first, "./one", 100)
+    assert asked == [first, second, first]
+
+
+def test_parallel_gates_ask_git_for_the_common_folder_one_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second, asked = watch_common_folder_asks(tmp_path, monkeypatch)
+    meeting = threading.Barrier(5)
+
+    def gate() -> None:
+        meeting.wait()
+        gate_times.gate_limit(first, "./suite", 100)
+
+    threads = [threading.Thread(target=gate) for _ in range(5)]
+    with keeping("references"):
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert asked == [first]
+        gate_times.gate_limit(second, "./suite", 100)
+        assert asked == [first, second]
 
 
 def no_requirements(
@@ -477,7 +542,7 @@ def test_stop_with_nothing_changed_loads_no_network_module(repository: Path) -> 
     loaded = {line.rpartition("|")[2].strip() for line in trace.splitlines()}
     assert "agent_hooks" in loaded
     unused = {"socket", "ssl", "http.client", "urllib.request", "update", "shipping"}
-    assert not loaded & unused
+    assert not loaded & (unused | {"change_size"})
 
 
 def test_stop_with_nothing_changed_starts_no_more_git_commands_than_before(
@@ -489,6 +554,42 @@ def test_stop_with_nothing_changed_starts_no_more_git_commands_than_before(
         line for line in events.read_text().splitlines() if '"event":"start"' in line
     ]
     assert len(starts) <= 6, len(starts)
+
+
+SESSION_START_MODULES = (
+    "agent_hooks coverage_sources dependency_graph fallow_report freshness "
+    "gate_config gitleaks_scan hook_chain local_edits mcp_setup plans process_group "
+    "project_files project_setup python_setup release_history source_trees submodules "
+    "swift_setup tool_setup update update_runner"
+)
+COUNT_PATTERNS = """
+import re, sys
+hooks, own, real = sys.argv[1], [], re.compile
+sys.path.insert(0, hooks)
+def counted(pattern, flags=0):
+    own.append(sys._getframe(1).f_code.co_filename.startswith(hooks))
+    return real(pattern, flags)
+re.compile = counted
+for name in sys.argv[2:]:
+    __import__(name)
+print(sum(own))
+"""
+
+
+def test_the_session_start_modules_compile_no_more_patterns_at_import() -> None:
+    counted = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            COUNT_PATTERNS,
+            str(SOURCE / ".hooks"),
+            *SESSION_START_MODULES.split(),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert int(counted.stdout) <= 76, counted.stdout
 
 
 ATTRIBUTE_STARTS: list[str] = []
@@ -546,3 +647,139 @@ def test_one_attributes_read_gives_each_rule_the_same_generated_files(
         gate_config.load_groups(repository)
     attributes.write_text("")
     assert gate_config.generated_sources(repository, ["big.py"]) == set()
+
+
+GIT_STARTS: list[str] = []
+COUNTING: list[bool] = []
+
+
+def record_git_starts(event: str, arguments: tuple[object, ...]) -> None:
+    if COUNTING and event == "subprocess.Popen":
+        command = arguments[1]
+        if isinstance(command, list) and command[:1] == ["git"]:
+            GIT_STARTS.append(" ".join(str(word) for word in command[1:]))
+
+
+sys.addaudithook(record_git_starts)
+
+
+@contextmanager
+def counted_git() -> Generator[list[str]]:
+    GIT_STARTS.clear()
+    COUNTING.append(True)
+    try:
+        yield GIT_STARTS
+    finally:
+        COUNTING.clear()
+
+
+def started(starts: list[str], *words: str) -> int:
+    return sum(all(word in start.split(" ") for word in words) for start in starts)
+
+
+def branch_repository(tmp_path: Path) -> Path:
+    root = tmp_path / "repository"
+    init(root)
+    (root / "base.txt").write_text("base\n")
+    commit(root, "base")
+    add_origin(root)
+    git(root, "fetch", "-q", "origin")
+    git(root, "checkout", "-qb", "feature")
+    (root / "feature.txt").write_text("feature\n")
+    commit(root, "feature")
+    return root
+
+
+def test_one_check_resolves_the_branch_point_one_time(tmp_path: Path) -> None:
+    root = branch_repository(tmp_path)
+    base = git(root, "rev-parse", "origin/main")
+    with keeping("references"), counted_git() as starts:
+        points = {plans.default_branch_point(root) for _ in range(3)}
+        assert plans.release_references(root) == plans.release_references(root)
+        change_size.released_plans(root, None)
+        change_size.released_plans(root, None)
+    assert points == {base}
+    assert started(starts, "merge-base") == 1, starts
+    assert started(starts, "config") == 1, starts
+    assert started(starts, "rev-parse") == 5, starts
+    with counted_git() as starts:
+        plans.default_branch_point(root)
+        plans.default_branch_point(root)
+    assert started(starts, "merge-base") == 2, starts
+
+
+def test_a_second_check_in_one_process_reads_a_moved_reference(
+    tmp_path: Path,
+) -> None:
+    root = branch_repository(tmp_path)
+    first = git(root, "rev-parse", "origin/main")
+    with keeping("references"):
+        assert plans.default_branch_point(root) == first
+    moved = git(root, "rev-parse", "HEAD")
+    git(root, "update-ref", "refs/remotes/origin/main", moved)
+    with keeping("references"):
+        assert plans.default_branch_point(root) == moved
+
+
+def test_the_rules_of_one_check_list_the_changed_files_one_time(
+    tmp_path: Path,
+) -> None:
+    root = generated_repository(tmp_path)
+    base = git(root, "rev-parse", "HEAD")
+    (root / "PLAN.md").write_text(plan_document())
+    (root / "edited.py").write_text("value = 1\n")
+    with keeping("listings"), counted_git() as starts:
+        gate_config.load_groups(root, base)
+        debt.require_shrink(root, base)
+        plans.validate_plans(root, base, "Complete")
+        comments.validate_comments(root, base)
+        comments.validate_suppressions(root, base)
+        plans.validate_records(root, base)
+        names = gate_config.changed_files(root, base)
+        assert names == {"PLAN.md", "edited.py"}
+        assert names is not None
+        names.add("other.py")
+        paths = plans.plan_files(root)
+        paths.clear()
+        (root / "late.py").write_text("late = 1\n")
+        assert gate_config.changed_files(root, base) == {"PLAN.md", "edited.py"}
+        assert plans.plan_files(root) == [root / "PLAN.md"]
+    assert started(starts, "diff", "--name-only") == 1, starts
+    assert started(starts, "ls-files", ":(icase)plan.md") == 1, starts
+    assert gate_config.changed_files(root, base) == {"PLAN.md", "edited.py", "late.py"}
+    assert plans.plan_files(root) == [root / "PLAN.md"]
+
+
+def test_a_changed_file_list_is_listed_again_when_no_check_runs(
+    tmp_path: Path,
+) -> None:
+    root = generated_repository(tmp_path)
+    base = git(root, "rev-parse", "HEAD")
+    with counted_git() as starts:
+        gate_config.changed_files(root, base)
+        gate_config.changed_files(root, base)
+    assert started(starts, "diff", "--name-only") == 2, starts
+
+
+def start_nothing(*_arguments: object) -> None:
+    return None
+
+
+def fail_nothing(*_arguments: object) -> bool:
+    return False
+
+
+def test_stop_after_a_source_edit_starts_few_git_processes(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configure(tmp_path, [gate("suite", "pass")])
+    git(tmp_path, "config", "user.name", "Fixture")
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    (tmp_path / "app.py").write_text("value = 1\n")
+    base = commit(tmp_path, "Add the project")
+    (tmp_path / "app.py").write_text("value = 2\n")
+    monkeypatch.setattr(runner, "provision_tools", start_nothing)
+    monkeypatch.setattr(runner, "run_gates", fail_nothing)
+    with counted_git() as starts:
+        assert runner.check(base=base, quick=True) == 0
+    assert len(starts) == 31, starts

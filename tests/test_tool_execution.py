@@ -888,3 +888,32 @@ def test_the_missing_performance_suite_message_names_an_existing_file(
     named = re.search(r"\((\.agents/skills/\S+\.md)\)", output)
     assert named is not None
     assert (SOURCE / named[1]).is_file()
+
+
+def test_a_ruff_gate_never_fixes_files(runner: ModuleType, tmp_path: Path) -> None:
+    group: Group = {"path": ".", "checks": []}
+    commands = {
+        "lint": ["ruff", "check", "."],
+        "complexity": ["ruff", "check", "--select", "C901", "."],
+        "annotations": ["ruff", "check", "--select", "ANN", "."],
+        "format": ["ruff", "format", "--check", "."],
+    }
+    prepared = {
+        role: runner.prepare_command(
+            group, {"name": role, "role": role, "command": command}, 5
+        )
+        for role, command in commands.items()
+    }
+    assert all("--no-fix" in prepared[role] for role in commands if role != "format")
+    assert "--no-fix" not in prepared["format"]
+    (tmp_path / "pyproject.toml").write_text("[tool.ruff]\nfix = true\n")
+    source = tmp_path / "a.py"
+    source.write_text("import os\n")
+    tool = next(i for i, part in enumerate(prepared["lint"]) if "ruff@" in part)
+    offline = ["uvx", "--offline", "ruff@latest", *prepared["lint"][tool + 1 :]]
+    result = subprocess.run(
+        offline, cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "F401" in result.stdout, result.stdout + result.stderr
+    assert source.read_text() == "import os\n"

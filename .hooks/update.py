@@ -982,11 +982,13 @@ def proven_installed(
     root: Path, base: str, names: set[str], revision: str, previous: str
 ) -> set[str]:
     """The installed paths among these names, when the verified release installs them exactly."""
+    from project_files import keep
+
     installed = {name for name in names if maybe_installed(name)}
     try:
-        proven = verified_revision(revision) and release_installed(
-            root, base, installed, revision, previous
-        )
+        proven = keep(
+            "references", ("verified", revision), lambda: verified_revision(revision)
+        ) and release_installed(root, base, installed, revision, previous)
     except (OSError, ValueError, TypeError, subprocess.SubprocessError):
         return set()
     return installed if proven else set()

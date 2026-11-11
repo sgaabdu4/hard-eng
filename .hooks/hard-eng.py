@@ -67,6 +67,7 @@ from gate_config import (
     generated_sources,
     nonproduction_source,
 )
+from project_files import keeping, stop_keeping
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
 from python_setup import (
@@ -75,7 +76,7 @@ from python_setup import (
     require_import_contract,
     validate_pyrefly,
 )
-from tool_setup import managed_command, provision_tools
+from tool_setup import lost_scanner_note, managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
     project_command,
@@ -308,6 +309,16 @@ def production_files(
     return files
 
 
+def without_fixes(command: list[str]) -> list[str]:
+    """`fix = true` in ruff's settings makes `ruff check` rewrite files and exit 0."""
+    tool = next(
+        (i for i, part in enumerate(command) if part.split("@")[0] == "ruff"), -1
+    )
+    if command[tool + 1 : tool + 2] != ["check"] or tool < 0:
+        return command
+    return [*command[: tool + 2], "--no-fix", *command[tool + 2 :]]
+
+
 def prepare_command(
     group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
 ) -> list[str]:
@@ -320,7 +331,7 @@ def prepare_command(
         return []
     from hot_paths import semgrep_options
 
-    command = semgrep_options(ROOT, group, gate, command)
+    command = without_fixes(semgrep_options(ROOT, group, gate, command))
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 
@@ -451,6 +462,9 @@ def run_gate(
     note_install(install_key(group), gate.get("role"), failed)
     if failed:
         FAILED_GATES.append(key)
+        if note := lost_scanner_note(OUTPUTS.get(name, "")):
+            with output_lock:
+                print(note, flush=True)
     else:
         record_gate_time(ROOT, key, time.monotonic() - started)
     return failed
@@ -708,6 +722,7 @@ def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool 
     )
 
 
+@keeping("references", "listings")
 def check(
     timeout: float | None = None,
     base: str | None = None,
@@ -739,6 +754,7 @@ def check(
 
         require_shrink(ROOT, base)
         timeout = timeout or gate_budget(ROOT)
+        import change_size
         import plans
         from comments import validate_comments, validate_suppressions
 
@@ -747,11 +763,14 @@ def check(
         validate_comments(ROOT, base)
         validate_suppressions(ROOT, base)
         plans.validate_records(ROOT, base)
+        stop_keeping("listings")
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         save_installed(lock, installed, ROOT)
-        failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))
+        failed |= verify_plan and change_size.plan_skips(
+            ROOT, base, groups, int(started)
+        )
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
         return int(failed)
 

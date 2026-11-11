@@ -26,7 +26,7 @@ from gate_config import (
     typescript_packages,
 )
 from hook_chain import is_own
-from project_files import read_project_file
+from project_files import INSTALL_LOCKS, read_project_file, refuse_ignored_locks
 
 CARET_VERSION = re.compile(r"\^?(\d+)\.(\d+)\.(\d+)")
 REGEX_SPECIAL_CHARACTER = re.compile(r"([.\[\]()*+?{}|^$\\])")
@@ -353,7 +353,7 @@ def javascript_manager(directory: Path) -> tuple[str, list[str], str]:
             "Vitest, Jest or `node --test`. "
             "Then delete: " + ", ".join(legacy or ["the old packageManager value"])
         )
-    lockfile = "bun.lock"
+    lockfile = INSTALL_LOCKS["bun"]
     if not (directory / lockfile).exists() and not (directory / ".git").exists():
         for parent in directory.parents:
             if (parent / "package.json").exists() and workspace_matches(
@@ -395,8 +395,8 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
         return javascript_manager(directory)
     if language == "python":
         if (directory / "poetry.lock").exists():
-            return "poetry", ["poetry", "sync"], "poetry.lock"
-        uv = ("uv", ["uv", "sync", "--locked"], "uv.lock")
+            return "poetry", ["poetry", "sync"], INSTALL_LOCKS["poetry"]
+        uv = ("uv", ["uv", "sync", "--locked"], INSTALL_LOCKS["uv"])
         if (directory / "uv.lock").exists():
             return uv
         for parent in [] if (directory / ".git").exists() else directory.parents:
@@ -431,25 +431,20 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
         )
         else "dart"
     )
-    return manager, [manager, "pub", "get", "--enforce-lockfile"], "pubspec.lock"
+    install = [manager, "pub", "get", "--enforce-lockfile"]
+    return manager, install, INSTALL_LOCKS[manager]
 
 
 def adapt_packages(root: Path, config: GateConfig) -> None:
     files = repository_files(root)
     owned = owned_files(root, config["packages"], files)
     typescript = typescript_packages(root, files)
-    tracked = set(files)
+    tracked = {str(path.relative_to(root)) for path in files}
+    locks: dict[str, Path] = {}
     for package in config["packages"]:
         directory = root / package["path"]
         adapt_sources(root, package, owned[directory])
-        lockfile = directory / adapt_package(directory, package)
-        if lockfile.is_file() and lockfile not in tracked:
-            relative = lockfile.relative_to(root)
-            raise ValueError(
-                f"{relative} is ignored by Git, so the install fails in a fresh clone. "
-                f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
-                f"remove that rule, then commit {relative}"
-            )
+        locks[package["path"]] = directory / adapt_package(directory, package)
         adapt_boundaries(package, typescript)
         for gate in package["checks"]:
             if gate.get("role") == "security":
@@ -459,7 +454,9 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
                     else argument
                     for argument in gate["command"]
                 ]
-    adapt_workspaces(root, config)
+    members = adapt_workspaces(root, config)
+    own = [lock for path, lock in locks.items() if path not in members]
+    refuse_ignored_locks(root, own, tracked, ask_git=True)
 
 
 def adapt_boundaries(package: Group, typescript: set[str]) -> None:
@@ -538,7 +535,9 @@ def workspace_matches(relative: str, members: list[str]) -> bool:
     )
 
 
-def adapt_workspaces(root: Path, config: GateConfig) -> None:
+def adapt_workspaces(root: Path, config: GateConfig) -> set[str]:
+    """The paths of the members, which use the lockfile of their workspace root."""
+    shared: set[str] = set()
     for owner in config["packages"]:
         directory, language = root / owner["path"], owner["language"]
         members = workspace_members(directory, language)
@@ -554,6 +553,7 @@ def adapt_workspaces(root: Path, config: GateConfig) -> None:
                 continue
             relative = str(path.relative_to(directory))
             if workspace_matches(relative, members):
+                shared.add(child["path"])
                 child["checks"] = [
                     gate
                     for gate in child["checks"]
@@ -585,6 +585,7 @@ def adapt_workspaces(root: Path, config: GateConfig) -> None:
             ]
             owner.pop("language")
             owner.pop("sources")
+    return shared
 
 
 FRESHNESS_COMMANDS = {

@@ -17,6 +17,7 @@ from project_setup import dependency_command
 
 PYREFLY_REFUSED = (
     "ignore-missing-imports",
+    "permissive-ignores",
     "replace-imports-with-any",
     "replace-untyped-imports-with-any",
     "sub-config",

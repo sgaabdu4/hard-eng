@@ -326,3 +326,39 @@ def prepare_repeat_failure(root: Path) -> None:
     with (root / ".gitignore").open("a") as ignores:
         ignores.write(".sync-attempts\n")
     commit(root, "Sync with the build cache")
+
+
+REPORT = """from calc import average
+
+
+def total_line(text: str) -> str:
+    values = [int(part) for part in text.split(",") if part.strip()]
+    return f"total: {sum(values)}"
+
+
+def mean_line(text: str) -> str:
+    values = [int(part) for part in text.split(",") if part.strip()]
+    return f"mean: {average(values):.2f}"
+"""
+REPORT_TESTS = """import unittest
+
+from report import mean_line, total_line
+
+
+class ReportTest(unittest.TestCase):
+    def test_total_line(self) -> None:
+        self.assertEqual(total_line("1, 2,,3"), "total: 6")
+
+    def test_mean_line(self) -> None:
+        self.assertEqual(mean_line("2,4"), "mean: 3.00")
+
+
+if __name__ == "__main__":
+    unittest.main()
+"""
+
+
+def prepare_repeated_block(root: Path) -> None:
+    (root / "report.py").write_text(REPORT)
+    (root / "test_report.py").write_text(REPORT_TESTS)
+    commit(root, "Report lines for comma-separated values")

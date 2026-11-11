@@ -91,6 +91,13 @@ Describe the actual comparison, not an assumed result. Missing proof is not unch
 
 The verifier checks the declaration or attachment availability/media type; E2E owns inspection of the actual comparison and behavior. Keep baseline/final context in the PR; do not upload sensitive content or fabricate a missing baseline.
 
+## PR text
+
+- Form = headings + sections + bold lead words. Plain simplified English for people, in the style of ASD-STE100, sentences of 20 words or fewer.
+- `Before and after` part = for each main change one Mermaid diagram of the old flow + one of the new flow; a main change with no old flow shows two or more diagrams of its new flows. Label each diagram with a bold word, such as `**Before**` or `**After**`. Do not start a line with `Before:` or `After:`. The checker reads such a line as a UI evidence label. It refuses a PR that has one of these lines and also the "UI appearance: unchanged" note. Use `flowchart TD`, quoted labels, no backticks inside labels. `ready` refuses fewer than two Mermaid blocks ([what `ready` verifies](#commands--proof-boundaries)).
+- UI change whose appearance differs = before and after screenshots ([UI evidence](#ui-evidence-in-the-pr)) with a red ring on each changed thing: draw the ring in the page before you take the screenshot, or on the image afterwards. When stills cannot show the flow, add a video of the whole flow below the pairs, with no `Before:` or `After:` label (the checker needs equal counts of those lines and ignores unlabeled media).
+- The Hard Eng update PR keeps its generated text.
+
 ## Commands + proof boundaries
 
 From the task checkout, with its actual PR URL and plan (a change `check` reports as `Size: small` ships without a plan: omit `--plan`; delivery scope is Merge and every check still runs, while a big change without a plan is refused):
@@ -99,7 +106,7 @@ From the task checkout, with its actual PR URL and plan (a change `check` report
 python3 .hooks/hard-eng.py ship --plan PLAN.md --pr https://github.com/owner/repo/pull/123 --stage ready
 ```
 
-`ready` verifies current PR identity, branch/build evidence, required checks, applicable UI evidence and a PR body line that starts `Undo:` and lists the undo steps on that line. It also refuses a PR head that is behind its base, so two PRs that pass alone cannot break the base together. To recover, rebase on the base, push and wait for the checks again. It is read-only. `merge` runs the same gate before a head-matched rebase merge; squash and merge commits are refused. Invoke it only with existing merge authorization. A queued or pending merge is unfinished. A PR blocked only by a required review nobody but its author can give (sole push collaborator with admin bypass, every head check successful, no change requests or conflicts) passes and merges with `--admin`, reporting the bypass; never run `gh pr merge --admin` directly.
+`ready` verifies current PR identity, branch/build evidence, required checks, applicable UI evidence, a PR body line that starts `Undo:` and lists the undo steps on that line, and two or more Mermaid blocks in the body (the [PR text](#pr-text) `Before and after` part). It also refuses a PR head that is behind its base, so two PRs that pass alone cannot break the base together. To recover, rebase on the base, push and wait for the checks again. It is read-only. `merge` runs the same gate before a head-matched rebase merge; squash and merge commits are refused. Invoke it only with existing merge authorization. A queued or pending merge is unfinished. A PR blocked only by a required review nobody but its author can give (sole push collaborator with admin bypass, every head check successful, no change requests or conflicts) passes and merges with `--admin`, reporting the bypass; never run `gh pr merge --admin` directly.
 
 `delivered` requires actual merge/remote proof and, for Deploy, the configured runtime verification. Before cleanup, retain evidence and make sure no other task uses the checkout. Deliberately remove only known generated build/test artifacts; unknown ignored files are retained. Run `cleanup` from the repository's persistent checkout with `--worktree` naming the completed linked worktree. Native guards must pass; the main checkout, the base branch, a task branch another worktree uses, and a changed/dirty/untracked/locked/current checkout or active Git index lock are retained. Cleanup does not manufacture delivery proof. Use `python3 -B` for the cleanup invocation so Python does not create new bytecode artifacts.
 

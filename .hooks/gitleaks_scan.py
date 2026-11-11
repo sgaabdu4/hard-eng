@@ -29,8 +29,16 @@ def scan_paths(repository: Path) -> list[Path]:
     return sorted(paths)
 
 
+def git_owner(folder: Path) -> Path | None:
+    """Return the nearest folder at or above this one that holds a .git entry."""
+    return next(
+        (parent for parent in (folder, *folder.parents) if (parent / ".git").exists()),
+        None,
+    )
+
+
 class ScanCache:
-    """One Git listing per folder, shared by every link that reaches it."""
+    """One Git listing per repository, shared by every link that reaches it."""
 
     def __init__(self) -> None:
         self.listings: dict[Path, list[Path]] = {}
@@ -38,7 +46,17 @@ class ScanCache:
 
     def paths(self, root: Path) -> list[Path]:
         if root not in self.listings:
-            self.listings[root] = scan_paths(root)
+            owner = git_owner(root)
+            if owner is None or owner == root or owner not in self.listings:
+                self.listings[root] = scan_paths(root)
+            else:
+                prefix = root.relative_to(owner).parts
+                self.listings[root] = [
+                    Path(*path.parts[len(prefix) :])
+                    for path in self.listings[owner]
+                    if path.parts[: len(prefix)] == prefix
+                    and len(path.parts) > len(prefix)
+                ]
         return self.listings[root]
 
     def is_tracked(self, path: Path) -> bool:

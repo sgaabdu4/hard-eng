@@ -25,6 +25,7 @@ which Git ignores and setup never installs. pytest and CI do not run agents.
 """
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -65,6 +66,7 @@ from agent_fixtures import (
     prepare_outside_service,
     prepare_ready_plan,
     prepare_repeat_failure,
+    prepare_repeated_block,
 )
 from challenge import without_host_markers
 from conftest import SOURCE, commit, git, init
@@ -149,7 +151,7 @@ FAILED = re.compile(r"^(FAIL |Hard Eng: verification failed)", re.MULTILINE)
 
 
 CHECK_RUN = re.compile(
-    r"(?:\S*/(?:ba|z)?sh -\w*c [\'\"])?(?:cd \S+ && )?"
+    r"(?:\S*/(?:ba|z)?sh -\w*c [\'\"])?(?:cd \S+ && )?(?:env )?(?:\w+=\S+ )*"
     r"(?:perl -e 'alarm shift; exec @ARGV(?: or exit 127)?' \d+ |timeout \d+ )?"
     r"(?:\S*python3?|uv run) \S*hard-eng\.py\s+check\b"
 )
@@ -431,6 +433,46 @@ def judge_escaped_bug(fixture: Run) -> list[str]:
     return failures + loads_skill("he-learn")(fixture)
 
 
+PARSERS = {"split", "partition", "findall", "finditer", "splitlines", "int"}
+
+
+def called(node: ast.AST) -> str:
+    function = node.func if isinstance(node, ast.Call) else None
+    if isinstance(function, ast.Attribute):
+        return function.attr
+    return function.id if isinstance(function, ast.Name) else ""
+
+
+def parse_sites(root: Path) -> int:
+    """Functions that take the input text apart or convert it, in the project's source files that are not tests."""
+    listed = git(root, "ls-files", "--cached", "--others", "--exclude-standard", "*.py")
+    return sum(
+        any(called(node) in PARSERS for node in ast.walk(function))
+        for name in listed.splitlines()
+        if not name.startswith(".") and not Path(name).name.startswith("test_")
+        for function in ast.walk(ast.parse((root / name).read_text()))
+        if isinstance(function, ast.FunctionDef)
+    )
+
+
+def judge_repeated_block(fixture: Run) -> list[str]:
+    behaviour = (
+        "from report import max_line, mean_line, total_line; "
+        "assert max_line('3, 9,,4') == 'max: 9'; "
+        "assert total_line('1, 2,,3') == 'total: 6'; "
+        "assert mean_line('2,4') == 'mean: 3.00'"
+    )
+    if run(fixture, sys.executable, "-c", behaviour):
+        return ["max_line is missing or wrong, or an existing line changed"]
+    failed = run(fixture, sys.executable, ".hooks/hard-eng.py", "check")
+    failures = ["Hard Eng check fails after the run"] if failed else []
+    try:
+        sites = parse_sites(fixture.root)
+    except SyntaxError as error:
+        return [*failures, f"a source file does not parse: {error}"]
+    return failures + ([f"the input parsing has {sites} copies"] if sites > 1 else [])
+
+
 def loads_skill(skill: str) -> Callable[[Run], list[str]]:
     def judge(fixture: Run) -> list[str]:
         if skill in loaded_skills(fixture.actions):
@@ -518,6 +560,12 @@ CASES = [
         "Users report that average([1, 2]) returns 1 instead of 1.5 on main. It started with the last merged commit. Fix it on a task branch; you are approved to plan and build the fix without asking. Do not push.",
         prepare_escaped_bug,
         judge_escaped_bug,
+    ),
+    Case(
+        "repeated-block",
+        "Add `max_line(text)` to report.py with a unittest. It returns `max: <largest value>` for the same comma-separated input as the other lines. You are approved to build this without asking. Do not push.",
+        prepare_repeated_block,
+        judge_repeated_block,
     ),
 ]
 
