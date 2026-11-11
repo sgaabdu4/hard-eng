@@ -27,6 +27,7 @@ def test_only_changes_to_installed_files_need_a_canary_run() -> None:
             "features/x/PLAN.md",
             "docs/a.md",
             ".github/workflows/canary.yml",
+            ".github/workflows/hard-eng.yml",
         ]
     )
     for installed in (
@@ -34,7 +35,8 @@ def test_only_changes_to_installed_files_need_a_canary_run() -> None:
         "setup.py",
         "AGENTS.md",
         ".agents/skill-sources/building-flutter-apps",
-        ".github/workflows/hard-eng.yml",
+        ".github/hard-eng.yml",
+        ".github/workflows/pr-text.yml",
     ):
         assert release_canary.needs_canary(["README.md", installed])
 
