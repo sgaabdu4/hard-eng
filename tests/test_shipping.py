@@ -93,6 +93,8 @@ def _pull(fixture: Fixture, **changes: object) -> dict[str, object]:
         "merged": False,
         "merged_at": None,
         "merge_commit_sha": None,
+        "commits": 1,
+        "rebaseable": True,
     }
     pull.update(changes)
     return pull

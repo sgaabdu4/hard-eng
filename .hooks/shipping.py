@@ -107,6 +107,7 @@ class _PullRequest:
     merged: bool
     merged_at: str | None
     merge_commit_sha: str | None
+    commits: int
 
 
 def _run(
@@ -382,6 +383,9 @@ def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:
         body = ""
     if not isinstance(body, str):
         raise ShippingError("PR body is invalid")
+    commits = data.get("commits")
+    if not isinstance(commits, int) or isinstance(commits, bool):
+        raise ShippingError("PR commit count is invalid")
     return _PullRequest(
         state=_text(data, "state", "PR"),
         draft=draft,
@@ -406,6 +410,7 @@ def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:
             if data.get("merge_commit_sha") is None
             else _sha(data.get("merge_commit_sha"), "PR merge")
         ),
+        commits=commits,
     )
 
 
@@ -820,9 +825,10 @@ def _ready_state(
     )
     if threads is None or any(node.get("isResolved") is not True for node in threads):
         raise ShippingError("a review conversation is unresolved or uncounted")
+    from change_size import commits_problem
     from pr_text import body_problem
 
-    if problem := body_problem(pull.body):
+    if problem := body_problem(pull.body) or commits_problem(pull.commits):
         raise ShippingError(problem)
     _current_with_base(root, identity, pull.base_ref, pull.head_sha)
     if pull.mergeable is not True or pull.mergeable_state != "clean":

@@ -397,3 +397,17 @@ def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) 
     if skipped:
         print("FAIL plan acceptance tests were skipped: " + ", ".join(skipped))
     return bool(skipped)
+
+
+MAX_PR_COMMITS = 100
+
+
+def commits_problem(count: int) -> str | None:
+    """The refusal when a PR holds more commits than HE-PR-COMMITS allows."""
+    if count <= MAX_PR_COMMITS:
+        return None
+    return (
+        f"PR has {count} commits; HE-PR-COMMITS allows at most {MAX_PR_COMMITS}. "
+        "Ship the finished part in its own PR and continue on a new branch, "
+        "or join neighbour commits (HE-PR-COMMITS)."
+    )
