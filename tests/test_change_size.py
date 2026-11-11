@@ -92,3 +92,25 @@ def test_new_documentation_file_beside_a_new_code_file_is_big(
     with pytest.raises(ValueError, match="applicable PLAN"):
         validate_plans(repository)
     assert "Size: big, because it adds" in capsys.readouterr().out
+
+
+def test_a_check_with_no_base_passes_a_first_install_that_the_base_lacks(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    (repository / ".hooks").mkdir()
+    (repository / ".hooks/hard-eng.py").write_text("x = 1\n")
+    commit(repository, "Install Hard Eng")
+    validate_plans(repository)
+    assert "Size:" not in capsys.readouterr().out
+    new_file(repository)
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+
+
+def test_a_check_with_no_base_passes_a_clean_branch_with_no_branch_point(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    git(repository, "branch", "-M", "trunk")
+    validate_plans(repository)
+    assert "Size:" not in capsys.readouterr().out

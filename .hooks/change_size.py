@@ -165,6 +165,18 @@ def size_verdict(root: Path) -> tuple[bool, str]:
     return _verdict(status, counts, untracked, names, configured_packages(root))
 
 
+def judges_branch(root: Path) -> bool:
+    """A check with no base judges the whole branch only when Hard Eng is on its branch point; a first install keeps its own check."""
+    point = default_branch_point(root)
+    if point is None:
+        return False
+    try:
+        _git_output(root, "cat-file", "-e", f"{point}:.hooks/hard-eng.py")
+    except (subprocess.CalledProcessError, OSError):
+        return False
+    return True
+
+
 def plan_not_needed(root: Path) -> bool:
     small, reason = size_verdict(root)
     if reason == NO_CHANGE:
