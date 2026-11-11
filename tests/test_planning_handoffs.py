@@ -326,7 +326,7 @@ def test_a_ux_record_that_skips_a_rule_names_the_rule(
         "UX Rules needs one `- <rule>: Pass|Fail|N/A — text` line for each Usability rule; "
         "no line: Observe; two lines: Widths; "
         "add a line for each rule of .agents/skills/he-plan/references/ux.md; "
-        "the rule lines stand in one block directly below `Rules:` with no empty line"
+        "the rule lines stand in one block below `Rules:` with no empty line between them"
     )
 
 
@@ -735,7 +735,19 @@ def test_an_empty_line_inside_the_rule_lines_names_the_block_step(
     path.write_text(visual_plan.replace("- Observe:", "\n- Observe:", 1))
     with pytest.raises(ValueError, match="no line: Observe") as error:
         validate_plan(path)
-    assert "one block directly below `Rules:` with no empty line" in str(error.value)
+    assert "one block below `Rules:` with no empty line between them" in str(
+        error.value
+    )
+
+
+def test_a_rule_block_below_one_empty_line_is_read_as_the_template_writes_it(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    template = (SOURCE / ".agents/skills/he-plan/templates/PLAN.md").read_text()
+    assert "\nRules:\n\n- [TODO" in template
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan.replace("Rules:\n", "Rules:\n\n", 1))
+    assert validate_plan(path) == "Complete"
 
 
 @pytest.mark.parametrize("label", ["**Rules:**", "- Rules:"])
