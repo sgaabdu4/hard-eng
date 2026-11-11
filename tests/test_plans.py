@@ -1053,3 +1053,55 @@ def test_a_branch_that_edits_the_open_plan_is_judged_by_it(
     with pytest.raises(ValueError, match="plan is Ready; this check requires"):
         validate_plans(repository)
     assert asked == []
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "refusal"),
+    [
+        ("Retro: None — fixture command, no check failed.", "Retro: None", "Retro"),
+        ("Retro: None — fixture command, no check failed.", "Retro: none.", "Retro"),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: NONE",
+            "Same cause",
+        ),
+        (
+            "Retro: None — fixture command, no check failed.",
+            "Retro: Fixed in `tests/test_gone.py::test_gone`.",
+            "tests that do not exist: tests/test_gone.py::test_gone",
+        ),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: One owner; `tests/test_gone.py::test_gone` proves it.",
+            "tests that do not exist: tests/test_gone.py::test_gone",
+        ),
+        (
+            "Retro: None — fixture command, no check failed.",
+            "Retro: Fixed in `tests/test_real.py::test_real`.",
+            None,
+        ),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: HE-YAGNI, step 3 of the plan.",
+            None,
+        ),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: `gate_schedule.py::run_checks` grew past its limit.",
+            None,
+        ),
+    ],
+)
+def test_a_retro_or_same_cause_line_needs_a_reason_and_real_tests(
+    repository: Path, completed_plan: str, old: str, new: str, refusal: str | None
+) -> None:
+    (repository / "tests").mkdir()
+    (repository / "tests/test_real.py").write_text("def test_real() -> None: ...\n")
+    (repository / "PLAN.md").write_text(completed_plan.replace(old, new))
+    if refusal is None:
+        assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
+        return
+    with pytest.raises(ValueError, match=refusal) as error:
+        validate_plans(repository, "0" * 40, "Complete")
+    if "exist" not in refusal:
+        assert "None — <reason>" in str(error.value)

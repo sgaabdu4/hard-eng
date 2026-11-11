@@ -752,7 +752,9 @@ def check(
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         save_installed(lock, installed, ROOT)
-        failed |= verify_plan and change_size.plan_skips(ROOT, base, groups, int(started))
+        failed |= verify_plan and change_size.plan_skips(
+            ROOT, base, groups, int(started)
+        )
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
         return int(failed)
 
