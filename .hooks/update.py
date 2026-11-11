@@ -692,22 +692,36 @@ def repair_current_hook(root: Path, previous: str) -> str:
 
 
 def repair_checkout(root: Path, previous: str) -> str:
-    """A setup rerun fixes this checkout's pre-push hook and gates file; the update path owns every other file."""
+    """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
     hook_chain.install_worktree_hook(root)
     needs_hook = pre_push_missing(root) or hook_chain.foreign_hook(
         root, hook_chain.locate(root)[1]
     )
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         source, old = fetch_sources(Path(temporary), previous, previous)
-        changes, _, hook, _ = update_plan(root, source, old)
+        try:
+            changes, _, hook, _ = update_plan(root, source, old)
+        except ValueError as error:
+            if needs_hook:
+                raise
+            return f"This checkout is unchanged: {error}."
     notes = []
     if needs_hook:
         install_planned_hook(root, hook)
         notes.append("installed the missing pre-push hook")
-    if (gates := changes.get(GATES_FILE)) is not None:
-        replace_file(root / GATES_FILE, gates.encode())
+    written = {
+        name: content
+        for name, content in sorted(changes.items())
+        if content is not None
+        and not maybe_installed(name)
+        and (name == GATES_FILE or not (root / name).exists())
+    }
+    for name, content in written.items():
+        replace_file(root / name, content.encode())
+    if written:
         notes.append(
-            f"{GATES_FILE} now matches the project's files; review it and commit it with your change"
+            f"setup wrote {', '.join(written)} to match the project's files; "
+            "review and commit with your change"
         )
     return f"This checkout: {'; '.join(notes)}." if notes else ""
 

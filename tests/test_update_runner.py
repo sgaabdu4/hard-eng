@@ -807,13 +807,47 @@ def test_a_rerun_writes_the_planned_gates_file_to_the_current_checkout(
     before = (project / GATES_FILE).read_text()
     assert "extra" not in before
     outcome = update_runner.locked_update(project, repair=True)
-    assert "This checkout: hard-eng.gates.json now matches" in outcome
+    assert f"This checkout: setup wrote {GATES_FILE} to match" in outcome
     assert ("pushed to a remote" in outcome) is not remote
     assert '"extra"' in (project / GATES_FILE).read_text()
     assert git(project, "status", "--porcelain") == f"M {GATES_FILE}"
     assert git(project, "diff", "--cached", "--name-only") == ""
     again = update_runner.locked_update(project, repair=True)
     assert "This checkout" not in again
+
+
+def test_a_rerun_writes_each_project_file_that_setup_plans_and_no_scaffold_file(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    (project / "web/src").mkdir(parents=True)
+    (project / "web/package.json").write_text('{"name": "web", "private": true}\n')
+    (project / "web/src/index.ts").write_text("export const value = 1;\n")
+    commit(project, "a web package")
+    outcome = update_runner.locked_update(project, repair=True)
+    written = f"{GATES_FILE}, web/.semgrepignore, web/tsconfig.json"
+    assert f"This checkout: setup wrote {written} to match" in outcome
+    assert git(project, "status", "--porcelain", "-uall").splitlines() == [
+        f"M {GATES_FILE}",
+        "?? web/.semgrepignore",
+        "?? web/tsconfig.json",
+    ]
+    assert '"web"' in (project / GATES_FILE).read_text()
+
+
+def test_a_rerun_goes_on_when_setup_refuses_the_checkout(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    before = (project / GATES_FILE).read_text()
+    skill = project / ".agents/skills/he/SKILL.md"
+    skill.write_text(skill.read_text() + "\nA local line.\n")
+    outcome = update_runner.locked_update(project, repair=True)
+    assert "No newer CI-verified Hard Eng revision is available." in outcome
+    assert "This checkout is unchanged: setup refused the update: " in outcome
+    assert ".agents/skills/he/SKILL.md already differs" in outcome
+    assert (project / GATES_FILE).read_text() == before
+    assert skill.read_text().endswith("\nA local line.\n")
 
 
 def test_a_rerun_the_plan_refuses_writes_nothing(
