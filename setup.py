@@ -403,16 +403,10 @@ def configure_dart_generated(
 def configure_dart_scanner(
     root: Path, directory: Path, changes: dict[str, str]
 ) -> None:
+    from dart_boundaries import SETTINGS_FILES
     from gate_config import json_file
 
-    scanner_names = (
-        ".dart-decimaterc",
-        ".dart-decimaterc.json",
-        ".dart-decimaterc.jsonc",
-        "dart-decimate.toml",
-        ".dart-decimate.toml",
-    )
-    if not any((directory / name).exists() for name in scanner_names):
+    if not any((directory / name).exists() for name in SETTINGS_FILES):
         scanner: dict[str, list[str]] = {"ignore_patterns": [".agents/**"]}
         path = directory / ".dart-decimaterc.json"
         changes[str(path.relative_to(root))] = json_file(root, scanner)
