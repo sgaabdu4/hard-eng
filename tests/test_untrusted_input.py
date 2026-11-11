@@ -780,3 +780,19 @@ def test_types_gate_builds_a_library_behind_an_intermediate_solution(
     assert [call for call in calls if "-b" in call] == [
         ["tsc", "-b", "lib/tsconfig.json"]
     ]
+
+
+def test_the_omitted_file_message_names_the_exclude_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.ts").write_text("export {};\n")
+    fake_tsc(
+        monkeypatch,
+        lambda _: {"compilerOptions": STRICT_JS, "files": [UNTRUSTED]},
+    )
+    with pytest.raises(ValueError, match="omits declared production files") as omitted:
+        validate_typescript(tmp_path, ["tsc"], tmp_path, {tmp_path / "src/app.ts"}, 10)
+    message = str(omitted.value)
+    assert "`include` list" in message
+    assert "remove any `exclude` entry that matches the file" in message
