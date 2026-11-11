@@ -849,7 +849,11 @@ def test_the_update_targets_full_check_passes_its_plan_step_with_no_call_to_a_ha
     monkeypatch.setenv("PYTHONPATH", str(guard))
     monkeypatch.setenv("REACHED", str(reached))
     candidate = commit(source, "candidate")
-    monkeypatch.setattr(release_canary, "install_last_release", lambda *_: None)
+
+    def install_last_release(*_: object) -> None:
+        return None
+
+    monkeypatch.setattr(release_canary, "install_last_release", install_last_release)
     with (tmp_path / "log").open("w") as log:
         ((_, command),) = release_canary.prepare(
             release_canary.UPDATE_TARGET, candidate, source, target, log
