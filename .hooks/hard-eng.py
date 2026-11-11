@@ -67,6 +67,7 @@ from gate_config import (
     generated_sources,
     nonproduction_source,
 )
+from project_files import keeping, stop_keeping
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
 from python_setup import (
@@ -718,6 +719,7 @@ def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool 
     )
 
 
+@keeping("references", "listings")
 def check(
     timeout: float | None = None,
     base: str | None = None,
@@ -758,6 +760,7 @@ def check(
         validate_comments(ROOT, base)
         validate_suppressions(ROOT, base)
         plans.validate_records(ROOT, base)
+        stop_keeping("listings")
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False

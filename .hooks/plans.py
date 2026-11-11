@@ -11,6 +11,7 @@ from gate_config import (
     changed_files,
     repository_files,
 )
+from project_files import keep
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
 SMALL_SIZE = "Size: small ("
@@ -77,6 +78,10 @@ CAPTURES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".mp4", ".mov", ".
 
 
 def plan_files(root: Path) -> list[Path]:
+    return list(keep("listings", ("plan_files", str(root)), lambda: _plan_files(root)))
+
+
+def _plan_files(root: Path) -> list[Path]:
     names = subprocess.check_output(
         [
             "git",
@@ -560,6 +565,12 @@ def _git_output(root: Path, *args: str) -> str:
 
 
 def release_references(root: Path) -> tuple[str, ...]:
+    return keep(
+        "references", ("release_references", str(root)), lambda: _references(root)
+    )
+
+
+def _references(root: Path) -> tuple[str, ...]:
     from shipping import ShippingError, load_policy
 
     try:
@@ -576,6 +587,10 @@ def release_references(root: Path) -> tuple[str, ...]:
 
 
 def default_branch_point(root: Path) -> str | None:
+    return keep("references", ("branch_point", str(root)), lambda: _point(root))
+
+
+def _point(root: Path) -> str | None:
     for reference in release_references(root):
         try:
             return _git_output(root, "merge-base", "HEAD", reference).strip()

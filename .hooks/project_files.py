@@ -3,11 +3,42 @@
 import json
 import subprocess
 import sys
-from collections.abc import Callable, Container, Iterable
+from collections.abc import Callable, Container, Generator, Iterable
+from contextlib import contextmanager
 from pathlib import Path
+from typing import cast
 
 LOCK_NAMES = ("uv.lock", "poetry.lock", "bun.lock", "pubspec.lock", "Package.resolved")
 KINDS = {".toml": "TOML", ".yaml": "YAML", ".yml": "YAML"}
+KEPT: dict[str, dict[tuple[str, ...], object]] = {}
+
+
+@contextmanager
+def keeping(*scopes: str) -> Generator[None]:
+    """Keep what keep() answers in each named scope until the block ends, also on an error."""
+    opened = [name for name in scopes if name not in KEPT]
+    for name in opened:
+        KEPT[name] = {}
+    try:
+        yield
+    finally:
+        for name in opened:
+            KEPT.pop(name, None)
+
+
+def stop_keeping(scope: str) -> None:
+    """End a scope before its block ends."""
+    KEPT.pop(scope, None)
+
+
+def keep[T](scope: str, key: tuple[str, ...], make: Callable[[], T]) -> T:
+    """The answer of make() for this key, asked one time while the scope is open; asked each time when it is not."""
+    store = KEPT.get(scope)
+    if store is None:
+        return make()
+    if key not in store:
+        store[key] = make()
+    return cast(T, store[key])
 
 
 def syntax_errors() -> tuple[type[Exception], ...]:

@@ -20,6 +20,7 @@ from dependency_graph import (
 )
 from project_files import (
     json_text,
+    keep,
     parse_project_text,
     read_project_file,
     refuse_ignored_locks,
@@ -417,6 +418,11 @@ def initial_base(root: Path) -> str:
 
 
 def changed_files(root: Path, base: str) -> set[str] | None:
+    names = keep("listings", ("changed", str(root), base), lambda: _changed(root, base))
+    return None if names is None else set(names)
+
+
+def _changed(root: Path, base: str) -> set[str] | None:
     try:
         if ALL_ZERO_OBJECT_ID.fullmatch(base) or (
             base == "HEAD"
