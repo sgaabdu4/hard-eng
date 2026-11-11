@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock
@@ -10,7 +11,7 @@ import agent_hooks
 import hook_chain
 import pytest
 import update
-from conftest import commit, git
+from conftest import SOURCE, commit, git, init
 from shipping import ShippingPolicy
 from test_basic_mode import go_project
 
@@ -348,3 +349,21 @@ def test_a_new_worktree_matches_the_main_checkout(
     git(repository, "worktree", "add", "-q", str(review), "untrusted")
     assert not (review / "ran").exists()
     assert (review / ".env").resolve() == (repository / ".env").resolve()
+
+
+@pytest.mark.parametrize("option", ["--help", "-h"])
+def test_pre_push_help_prints_the_help(tmp_path: Path, option: str) -> None:
+    root = tmp_path / "repo"
+    init(root)
+    outcome = subprocess.run(
+        [sys.executable, str(SOURCE / ".hooks/hard-eng.py"), "pre-push", option],
+        cwd=root,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert outcome.returncode == 0
+    assert outcome.stdout.startswith("usage:")
+    assert "pre-push" in outcome.stdout
