@@ -7,7 +7,9 @@ from types import ModuleType
 
 import pytest
 from gate_config import (
+    Gate,
     package_manifests,
+    validate_gate,
     validate_group,
     validate_manifest_groups,
     validate_required_checks,
@@ -220,3 +222,19 @@ def test_the_moved_source_message_names_the_replace_step(
         "moved.py" if source == "main.py" else source for source in group["sources"]
     ]
     validate_required_checks(tmp_path, config)
+
+
+def test_a_scanner_refusal_names_the_gate_and_its_command(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        json.dumps({"scripts": {"lint:boundaries": "fallow architecture"}})
+    )
+    gate: Gate = {
+        "name": "lint:boundaries",
+        "command": ["bun", "run", "lint:boundaries"],
+    }
+    with pytest.raises(
+        ValueError,
+        match=r"gate lint:boundaries \(`bun run lint:boundaries`\): "
+        "Fallow scans must fail on every finding",
+    ):
+        validate_gate(gate, tmp_path, set())

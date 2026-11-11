@@ -126,7 +126,7 @@ def bun_rows(text: str) -> list[Stale]:
         elif columns and len(cells) == len(columns):
             row = dict(zip(columns, cells, strict=True))
             latest = row["Latest"].removesuffix("*").strip()
-            if newer(latest, row["Current"]):
+            if not row["Package"].endswith("(peer)") and newer(latest, row["Current"]):
                 rows.append((row["Package"].partition(" ")[0], row["Current"], latest))
     return rows
 

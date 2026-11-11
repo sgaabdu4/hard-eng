@@ -385,9 +385,19 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     from gitleaks_scan import validate_current_files_gate
 
     validate_current_files_gate(gate.get("role"), command)
+    validate_named_output(gate, command, directory, report)
+
+
+def validate_named_output(
+    gate: Gate, command: list[str], directory: Path, report: Report
+) -> None:
     from project_setup import validate_command_output
 
-    validate_command_output(command, directory, report)
+    try:
+        validate_command_output(command, directory, report)
+    except ValueError as error:
+        message = f"gate {gate['name']} (`{' '.join(command)}`): {error}"
+        raise ValueError(message) from error
 
 
 def dart_scan_includes_boundaries(gate: Gate) -> bool:
