@@ -5,7 +5,7 @@ from pathlib import Path
 
 import gate_config
 import pytest
-from conftest import SOURCE, commit, configure, gate, init
+from conftest import SOURCE, commit, configure, gate, git, init
 from gate_config import GateConfig, validate_file_sizes
 from project_setup import (
     adapt_packages,
@@ -150,6 +150,64 @@ def test_setup_refuses_an_ignored_lockfile_that_is_not_there_yet(
         adapt_packages(root, config)
     (root / ".gitignore").write_text("")
     adapt_packages(root, config)
+
+
+@pytest.mark.parametrize(
+    ("language", "manifest", "workspace", "lock"),
+    [
+        (
+            "python",
+            "pyproject.toml",
+            '[project]\nname = "app"\n[tool.uv.workspace]\nmembers = ["packages/*"]\n',
+            "uv.lock",
+        ),
+        (
+            "javascript",
+            "package.json",
+            '{"name": "app", "workspaces": ["packages/*"]}\n',
+            "bun.lock",
+        ),
+        (
+            "dart",
+            "pubspec.yaml",
+            "name: app\nworkspace:\n  - packages/part\n",
+            "pubspec.lock",
+        ),
+    ],
+)
+def test_setup_passes_a_workspace_member_that_uses_the_lockfile_of_its_root(
+    tmp_path: Path, language: str, manifest: str, workspace: str, lock: str
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    member = root / "packages/part"
+    member.mkdir(parents=True)
+    (root / manifest).write_text(workspace)
+    (root / lock).write_text("# lock\n")
+    text = {
+        "python": '[project]\nname = "part"\n',
+        "javascript": '{"name": "part"}\n',
+        "dart": "name: part\nresolution: workspace\n",
+    }
+    (member / manifest).write_text(text[language])
+    (root / ".gitignore").write_text(f"packages/*/{lock}\n")
+    commit(root, "start")
+
+    def config() -> GateConfig:
+        return {
+            "shared": [],
+            "packages": [
+                {"path": path, "language": language, "sources": ["lib"], "checks": []}
+                for path in (".", "packages/part")
+            ],
+        }
+
+    adapt_packages(root, config())
+    (root / ".gitignore").write_text(f"{lock}\n")
+    git(root, "rm", "-q", "--cached", lock)
+    commit(root, "ignore the lock file of the root")
+    with pytest.raises(ValueError, match=rf"^{lock} is ignored by Git"):
+        adapt_packages(root, config())
 
 
 def ignored_lock_project(
