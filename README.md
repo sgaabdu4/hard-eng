@@ -123,9 +123,9 @@ A small change needs no plan. `check` decides this from the whole branch, compar
 - It changes 20 lines or fewer in 3 files or fewer. Documentation files do not count.
 - It adds, deletes or renames no file, and changes no binary file.
 - It does not touch dependencies, CI, `.hooks/`, `.agents/`, `.claude/`, the gate configuration, `AGENTS.md` or a database.
-- It removes no test lines.
+- It removes no test lines, but import lines and empty lines do not count.
 
-`check` prints `Size: small` or `Size: big, because …`. It still runs every other gate. A plan that exists is always validated.
+`check` prints `Size: small` or `Size: big, because …`. After `Size: big` with no plan, `check` stops and runs no gate. A plan that exists is always validated.
 
 [HE Plan](.agents/skills/he-plan/SKILL.md) does five things:
 
