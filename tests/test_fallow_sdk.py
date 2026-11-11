@@ -41,25 +41,32 @@ def test_fallow_takes_the_dart_sdk_as_provided_only_in_a_dart_repository(
 
 
 @pytest.mark.parametrize(
-    ("manifest", "install_above", "passes"),
+    ("manifest", "install", "passes"),
     [
-        ({"name": "core"}, True, True),
-        ({"name": "core", "dependencies": {}, "devDependencies": {}}, True, True),
-        ({"name": "core", "dependencies": {"zod": "1.0.0"}}, True, False),
-        ({"name": "core", "devDependencies": {"vitest": "1.0.0"}}, True, False),
-        ({"name": "core", "peerDependencies": {"react": "1.0.0"}}, True, False),
-        ({"name": "core", "optionalDependencies": {"fsevents": "1.0.0"}}, True, False),
-        ({"name": "core"}, False, False),
+        ({"name": "core"}, "repo", True),
+        ({"name": "core", "dependencies": {}, "devDependencies": {}}, "repo", True),
+        ({"name": "core", "dependencies": {"zod": "1.0.0"}}, "repo", False),
+        ({"name": "core", "devDependencies": {"vitest": "1.0.0"}}, "repo", False),
+        ({"name": "core", "peerDependencies": {"react": "1.0.0"}}, "repo", False),
+        (
+            {"name": "core", "optionalDependencies": {"fsevents": "1.0.0"}},
+            "repo",
+            False,
+        ),
+        ({"name": "core"}, "none", False),
+        ({"name": "core"}, "outside", False),
     ],
 )
 def test_a_member_with_no_dependencies_needs_no_install_folder_of_its_own(
-    tmp_path: Path, manifest: dict[str, object], install_above: bool, passes: bool
+    tmp_path: Path, manifest: dict[str, object], install: str, passes: bool
 ) -> None:
-    member = tmp_path / "packages/core"
+    repository = tmp_path / "repo"
+    member = repository / "packages/core"
     member.mkdir(parents=True)
+    (repository / "hard-eng.gates.json").write_text("{}")
     (member / "package.json").write_text(json.dumps(manifest))
-    if install_above:
-        (tmp_path / "node_modules").mkdir()
+    if install != "none":
+        ({"repo": repository, "outside": tmp_path}[install] / "node_modules").mkdir()
     data = json.loads(REPORTS["fallow"])
     data["workspace_diagnostics"] = [
         {"path": "node_modules", "kind": "node-modules-missing"},

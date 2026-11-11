@@ -333,7 +333,7 @@ def reject_diagnostic_notes(diagnostics: list[object], optional: set[str]) -> No
 
 
 def installed_above(directory: Path | None) -> bool:
-    """A package that declares no dependency reads the install of a folder above it."""
+    """A package that declares no dependency reads the install of a folder above it, up to the repository."""
     if directory is None:
         return False
     try:
@@ -346,9 +346,14 @@ def installed_above(directory: Path | None) -> bool:
         "peerDependencies",
         "optionalDependencies",
     )
-    return not any(manifest.get(kind) for kind in kinds) and any(
-        (folder / "node_modules").is_dir() for folder in directory.resolve().parents
-    )
+    if any(manifest.get(kind) for kind in kinds):
+        return False
+    folder = directory.resolve()
+    while not (folder / "hard-eng.gates.json").is_file() and folder != folder.parent:
+        folder = folder.parent
+        if (folder / "node_modules").is_dir():
+            return True
+    return False
 
 
 def optional_notes(directory: Path | None) -> set[str]:
