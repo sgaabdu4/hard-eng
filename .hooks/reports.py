@@ -820,7 +820,8 @@ def validate_scanner_report(
     elif scanner == "freshness":
         from freshness import freshness_waiting, validate_freshness
 
-        validate_freshness(path, gate, waiting=freshness_waiting(gate, directory))
+        waiting = freshness_waiting(gate, directory)
+        validate_freshness(path, gate, waiting=waiting, directory=directory)
     elif scanner == "fallow":
         validate_fallow(path, sdk_binaries(directory), directory)
     else:
