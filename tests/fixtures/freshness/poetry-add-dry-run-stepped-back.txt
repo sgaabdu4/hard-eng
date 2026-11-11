@@ -1,0 +1,13 @@
+
+Updating dependencies
+Resolving dependencies...
+
+Package operations: 1 install, 2 updates, 0 removals, 4 skipped
+
+  - Installing pygments (2.21.0)
+  - Updating pytest (7.4.4 -> 8.4.2)
+  - Installing iniconfig (2.1.0): Skipped for the following reason: Already installed
+  - Installing coverage (7.10.7): Skipped for the following reason: Already installed
+  - Installing packaging (26.3): Skipped for the following reason: Already installed
+  - Installing pluggy (1.6.0): Skipped for the following reason: Already installed
+  - Updating pytest-cov (4.1.0 -> 7.1.0)

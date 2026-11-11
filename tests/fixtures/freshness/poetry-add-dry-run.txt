@@ -1,0 +1,11 @@
+Updating dependencies
+Resolving dependencies...
+
+Package operations: 0 installs, 3 updates, 0 removals, 43 skipped
+
+  - Updating coverage (7.2.7 -> 7.16.2)
+  - Downgrading pyyaml (6.0.3 -> 6.0.1)
+  - Installing mypy-extensions (1.0.0): Skipped for the following reason: Already installed
+  - Installing mypy (1.19.1): Skipped for the following reason: Already installed
+  - Installing pytest (7.4.4): Skipped for the following reason: Already installed
+  - Updating pytest-cov (4.1.0 -> 7.1.0)

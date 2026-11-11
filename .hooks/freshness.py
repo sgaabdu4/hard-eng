@@ -177,7 +177,6 @@ UPGRADES = {
     "dart": "dart pub upgrade --major-versions {names}",
     "flutter": "flutter pub upgrade --major-versions {names}",
     "uv": "uv add [--group <group>] {minimums}",
-    "poetry": "poetry add {latest}",
 }
 
 
@@ -311,6 +310,7 @@ def validate_freshness(
     fetch: Fetch = fetch_json,
     now: datetime | None = None,
     waiting: Callable[[str], bool] | None = None,
+    directory: Path = Path(),
 ) -> None:
     now = now or datetime.now(UTC)
     tool = Path(gate["command"][0]).name
@@ -320,6 +320,10 @@ def validate_freshness(
         raise ValueError(f"Registry unreachable: {error}") from error
     except (KeyError, TypeError, ValueError, AttributeError) as error:
         raise ValueError(f"{tool} output is unreadable: {error!r}") from error
+    if tool == "poetry":
+        from poetry_freshness import poetry_targets
+
+        stale = poetry_targets(directory, stale)
     holds: list[JsonObject] = gate.get("holds", [])
     stale = [item for item in stale if not held(item, holds, now.date())]
     if waiting is not None:
@@ -330,12 +334,17 @@ def validate_freshness(
     if stale:
         names = " ".join(dict.fromkeys(name for name, _, _ in stale))
         recursive = "-r " if "-r" in gate["command"] else ""
-        latest = " ".join(f"{name}@latest" for name, _, _ in stale)
         minimums = " ".join(f"'{name}>={target}'" for name, _, target in stale)
+        step = UPGRADES.get(tool, "").format(
+            recursive=recursive, names=names, minimums=minimums, age=RELEASE_AGE_SECONDS
+        )
+        if tool == "poetry":
+            from poetry_freshness import poetry_steps
+
+            step = "`, then `".join(poetry_steps(directory, stale))
         raise ValueError(
             "Outdated direct dependencies: "
             + "; ".join(f"{n} {c} → {t}" for n, c, t in stale)
-            + f". Run `{UPGRADES[tool].format(recursive=recursive, names=names, latest=latest, minimums=minimums, age=RELEASE_AGE_SECONDS)}` in a "
-            "separate PR first (baseline repair)."
+            + f". Run `{step}` in a separate PR first (baseline repair)."
         )
     print("Every direct dependency is on its newest release at least 2 days old")
