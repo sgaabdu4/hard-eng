@@ -22,6 +22,7 @@ GATE_OUTPUT_LIMIT = 8000
 DEBT_LINE = re.compile(r"(?m)^DEBT (\S+) @ (\S+):.*$")
 # Failing tests, broken installs and leaked secrets are never old findings to keep.
 NEVER = {"tests", "lockfiles", "secrets-files", "secrets-history"}
+MISSING_SUITE = "HE-PERFORMANCE-SUITE"
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 RUNNER_LINES = re.compile(
     r"^(warning: (The `UV_|`VIRTUAL_ENV=)|mise |(Downloading|Downloaded|Installed|Uninstalled"
@@ -207,7 +208,7 @@ def print_new(
 def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bool:
     """A gate with debt fails only on findings beyond it, or when listed ones are fixed."""
     debt = load(root).get(f"{group['path']}/{gate['name']}")
-    if debt is None or gate.get("role") in NEVER:
+    if debt is None or gate.get("role") in NEVER or MISSING_SUITE in output:
         return failed
     current = fingerprints(root, group, gate, output) if failed else Counter()
     if new := by_form(current) - by_form(debt):
@@ -264,7 +265,12 @@ def record(
             if key not in failed:
                 continue
             current = fingerprints(root, group, gate, outputs.get(key, ""))
-            if not recordable(gate) or not current or UNREADABLE in current:
+            if (
+                not recordable(gate)
+                or not current
+                or UNREADABLE in current
+                or MISSING_SUITE in outputs.get(key, "")
+            ):
                 refused.append(key)
                 continue
             if old is not None:
