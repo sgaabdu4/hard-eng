@@ -289,8 +289,10 @@ def validate_comments(root: Path, base: str | None) -> None:
 
 
 PYTHON_OFF = re.compile(
-    r"#\s*(noqa|type:\s*ignore|pyrefly:\s*ignore|pyright:\s*ignore|pylint:\s*disable"
-    r"|pragma:\s*no cover)|\b(pytest\.)?mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
+    r"#\s*((?:(?:ruff|flake8)\s*:\s*)?(?i:noqa)|type:\s*ignore|pyrefly:\s*ignore"
+    r"|pyright:\s*ignore|pylint:\s*disable|pragma:\s*no cover"
+    r"|ruff:\s*(?:file-ignore|ignore|disable)\["
+    r"|(?:ruff:\s*)?isort:\s*(?:skip_file|skip|off)\b|fmt:\s*(?:off|skip)\b)|\b(pytest\.)?mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
     r"|\bunittest\.([Ss]kip\w*|expectedFailure)\b|\bskipTest\(|\bimportorskip\("
     r"|^\s*@skip(If|Unless)?\(|^__test__\s*=\s*False\b"
 )
