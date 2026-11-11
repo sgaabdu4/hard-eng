@@ -509,15 +509,70 @@ def test_a_missing_ux_reference_names_the_step(
         validate_plan(path)
 
 
-def test_a_ready_plan_from_before_the_update_passes_without_rules(
+def test_a_ready_plan_from_before_the_update_needs_rules(
     tmp_path: Path, visual_plan: str
 ) -> None:
     text = visual_plan.replace(ux_rules_block(), "").replace(
         "Status: Complete", "Status: Ready"
     )
-    assert (
-        validate_plan(finished_before_the_update(tmp_path / "project", text)) == "Ready"
+    plan = finished_before_the_update(tmp_path / "project", text)
+    with pytest.raises(ValueError, match="UX Rules is missing"):
+        validate_plan(plan)
+
+
+def test_a_draft_approval_plan_from_before_the_update_needs_rules(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    root = tmp_path / "project"
+    text = draft_plan(
+        visual_plan.replace(ux_rules_block(), ""), "Approval", "None", pending_ux=False
     )
+    finished_before_the_update(root, text)
+    notice, _ = plans.planning_feedback(root, {"features/old/PLAN.md"})
+    assert "UX Rules is missing" in notice
+
+
+def git_starts(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
+    calls: list[tuple[str, ...]] = []
+    real = plans._git_output
+
+    def counted(root: Path, *args: str) -> str:
+        calls.append(args)
+        return real(root, *args)
+
+    monkeypatch.setattr(plans, "_git_output", counted)
+    return calls
+
+
+@pytest.mark.parametrize(
+    ("state", "starts"),
+    [("draft", 0), ("ready", 0), ("complete", 3), ("complete-bare", 3)],
+)
+def test_the_age_of_an_old_plan_costs_git_starts_only_for_a_complete_plan(
+    tmp_path: Path,
+    visual_plan: str,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+    starts: int,
+) -> None:
+    root = tmp_path / "project"
+    text = visual_plan.replace(ux_rules_block(), "")
+    if state == "draft":
+        text = draft_plan(text, "Approval", "None", pending_ux=False)
+    if state == "ready":
+        text = text.replace("Status: Complete", "Status: Ready")
+    if state == "complete-bare":
+        text = re.sub(r"(?m)^(Single source|Retro):.*\n", "", text)
+    plan = finished_before_the_update(root, text)
+    calls = git_starts(monkeypatch)
+    if state == "draft":
+        plans.planning_feedback(root, {"features/old/PLAN.md"})
+    elif state == "ready":
+        with pytest.raises(ValueError, match="UX Rules is missing"):
+            validate_plan(plan)
+    else:
+        assert validate_plan(plan) == "Complete"
+    assert len(calls) == starts
 
 
 def test_a_plan_from_before_the_update_that_holds_rules_is_still_judged(
