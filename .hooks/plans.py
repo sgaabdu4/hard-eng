@@ -236,8 +236,8 @@ def e2e_proof(verification: str, status: str, *, legacy: bool = False) -> None:
         )
 
 
-def usability_rules() -> list[tuple[str, bool]]:
-    """The Usability rule labels of the UX reference, each with whether its Pass states a number."""
+def usability_rules() -> list[tuple[str, list[str]]]:
+    """The Usability rule names of the UX reference, each with the unit words its Pass line counts."""
     reference = Path(__file__).resolve().parents[1] / UX_REFERENCE
     try:
         lines = reference.read_text().splitlines()
@@ -254,8 +254,12 @@ def usability_rules() -> list[tuple[str, bool]]:
     for line in lines[start + 1 :]:
         if not line.startswith("  - "):
             break
-        label = line[4:].partition(":")[0]
-        rules.append((label.removesuffix(" (count)"), label.endswith(" (count)")))
+        name, marker, rest = line[4:].partition(" (count: ")
+        if marker:
+            units = rest.partition("):")[0].split(", ")
+        else:
+            name, units = name.partition(":")[0], []
+        rules.append((name, units))
     return rules
 
 
@@ -309,8 +313,25 @@ def ux_rules(content: str) -> None:
             raise ValueError(
                 f"UX Rules: {label} is Fail; fix the design, inspect it again and judge it again before it is shown"
             )
-        if verdict == "Pass" and rules[label] and not any(c.isdigit() for c in text):
-            raise ValueError(f"UX Rules: {label} needs its number")
+        if verdict == "Pass" and (absent := uncounted(text, rules[label])):
+            example = ", ".join(f"3 {unit}" for unit in rules[label])
+            raise ValueError(
+                f"UX Rules: {label} needs a number before the word {', '.join(absent)}; write the line like `- {label}: Pass — {example}`"
+            )
+
+
+def uncounted(text: str, units: list[str]) -> list[str]:
+    """The unit words that have no number directly before them in the Pass text."""
+    words = [word.strip(",.;:()") for word in text.lower().split()]
+    return [
+        unit
+        for unit in units
+        if not any(
+            word in {unit, unit.removesuffix("s")} and words[n - 1].isdigit()
+            for n, word in enumerate(words)
+            if n
+        )
+    ]
 
 
 def partition_verdict(label: str, verdict: str) -> tuple[str, str]:
@@ -322,7 +343,7 @@ def partition_verdict(label: str, verdict: str) -> tuple[str, str]:
     return name, text
 
 
-def ux_proof(content: str, *, legacy: bool = False, rules: bool = True) -> None:
+def ux_proof(content: str, *, legacy: bool = False, path: Path | None = None) -> None:
     if NOT_APPLICABLE_WITH_REASON.fullmatch(content.strip()):
         return
     proof(content, {"Passed"})
@@ -356,8 +377,13 @@ def ux_proof(content: str, *, legacy: bool = False, rules: bool = True) -> None:
         )
     for name in ("Capture", "Review"):
         evidence_field(content, name)
-    if rules:
+    if legacy:
+        return
+    try:
         ux_rules(content)
+    except ValueError:
+        if path is None or touched_since_update(path):
+            raise
 
 
 def readiness_errors(
@@ -365,7 +391,7 @@ def readiness_errors(
     status: str = "Ready",
     *,
     legacy: bool = False,
-    rules: bool = True,
+    path: Path | None = None,
 ) -> list[str]:
     errors = []
     for name in ("Baseline + execution", "ux_reference", "Verification"):
@@ -373,7 +399,7 @@ def readiness_errors(
             if name == "Baseline + execution":
                 proof(sections[name], {"Passed"})
             elif name == "ux_reference":
-                ux_proof(sections[name], legacy=legacy, rules=rules)
+                ux_proof(sections[name], legacy=legacy, path=path)
             else:
                 e2e_proof(sections[name], status, legacy=legacy)
         except ValueError as error:
@@ -405,7 +431,7 @@ def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, lis
     return handoff, blockers, errors
 
 
-def _draft_errors(content: str) -> tuple[list[str], bool]:
+def _draft_errors(content: str, path: Path) -> tuple[list[str], bool]:
     """What stops a Draft plan, and whether that leaves it unfinished."""
     try:
         sections = plan_sections(content, allow_placeholders=True)
@@ -415,7 +441,7 @@ def _draft_errors(content: str) -> tuple[list[str], bool]:
                 plan_sections(content)
             except ValueError as error:
                 errors.append(str(error))
-            errors.extend(readiness_errors(sections))
+            errors.extend(readiness_errors(sections, path=path))
         if not errors and handoff == "Clarification":
             return [f"waiting for: {blockers}"], False
         if errors:
@@ -437,7 +463,7 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
         content = path.read_text()
         if plan_status(content) != "Draft":
             continue
-        errors, stuck = _draft_errors(content)
+        errors, stuck = _draft_errors(content, path)
         if stuck and not selected:
             from change_size import held_by_base
 
@@ -529,7 +555,7 @@ def newer_fields(
     changed: bool,
     path: Path,
 ) -> None:
-    """Old Complete plans skip Same cause; Single source, Retro and UX Rules bind only edited plans."""
+    """Old Complete plans skip Same cause; Single source and Retro bind only edited plans."""
     if not legacy:
         reasoned(field(sections["Repository context"], "Same cause"), "Same cause")
         acceptance_tests(sections)
@@ -539,7 +565,6 @@ def newer_fields(
         field(sections["Repository context"], "Single source")
         if status == "Complete":
             reasoned(field(sections["Verification"], "Retro"), "Retro")
-            ux_rules(sections["ux_reference"])
     except ValueError:
         if status != "Complete" or touched_since_update(path):
             raise
@@ -561,9 +586,7 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     if not no_blockers(field(sections["Decisions + authorization"], "Blockers")):
         raise ValueError("ready/complete plan has unresolved Blockers")
     legacy = status == "Complete" and not changed
-    errors = readiness_errors(
-        sections, status, legacy=legacy, rules=status != "Complete"
-    )
+    errors = readiness_errors(sections, status, legacy=legacy, path=path)
     if errors:
         raise ValueError("; ".join(errors))
     newer_fields(sections, status, legacy=legacy, changed=changed, path=path)
