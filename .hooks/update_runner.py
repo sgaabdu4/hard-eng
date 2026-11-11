@@ -702,7 +702,7 @@ def repair_checkout(root: Path, previous: str) -> str:
         )
     if waits is not None and waits != planned:
         notes.append(
-            "the workflow files and their gates come with the update once the shipping block is on the base branch"
+            "the workflow files and their gates come with the update, which needs the `shipping` block of hard-eng.gates.json on the base branch"
         )
     return f"This checkout: {'; '.join(notes)}." if notes else ""
 

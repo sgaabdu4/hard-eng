@@ -935,7 +935,7 @@ def test_a_ready_plan_with_code_edits_names_the_build_form_of_the_check(
         ValueError, match="plan is Ready; this check requires Complete"
     ) as error:
         validate_plans(repository)
-    assert "During the build, run this check with --plan-stage Ready" in str(
+    assert "Complete. During the build, run this check with --plan-stage Ready" in str(
         error.value
     )
     with pytest.raises(ValueError, match="requires Complete") as explicit:

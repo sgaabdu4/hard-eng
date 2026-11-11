@@ -357,8 +357,8 @@ def test_the_missing_tools_message_names_the_build_form_of_the_check(
 ) -> None:
     (registry / "offline").touch()
     result = provision(tmp_path, quick=True)
-    assert "run the full check (python3 .hooks/hard-eng.py check" in result.stdout
-    assert "in a build python3 .hooks/hard-eng.py check --plan-stage Ready" in (
+    assert "run the full check (`python3 .hooks/hard-eng.py check`;" in result.stdout
+    assert "during a build, `python3 .hooks/hard-eng.py check --plan-stage Ready`)" in (
         result.stdout
     )
 
