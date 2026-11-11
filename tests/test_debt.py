@@ -533,3 +533,9 @@ def test_a_rule_name_matches_its_record_from_another_temp_folder(
     old = {"./security": {"tmp.old.run.hard-eng-rules.no-eval a.py eval(x)": 1, "x": 1}}
     (tmp_path / debt.DEBT_FILE).write_text(json.dumps({"version": 1, "gates": old}))
     assert debt.judge(tmp_path, group, security, True, "x\n") is False
+
+
+def test_a_recorded_line_matches_when_its_number_column_gets_narrower(
+    repository: Path,
+) -> None:
+    assert_same_debt_line(repository, "999  +     def f(x):", "989 +     def f(x):")
