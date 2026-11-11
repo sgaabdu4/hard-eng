@@ -658,3 +658,14 @@ def test_only_the_gate_job_skips_tool_setup(
     monkeypatch.setattr(runner, "provision_tools", provision)
     assert runner.check(base="0" * 40, plan_stage="Complete", shard=shard) == 0
     assert bool(started) is provisioned
+
+
+def test_two_sharded_gates_in_one_package_are_refused(
+    runner: ModuleType, shard_project: Path
+) -> None:
+    group = pytest_group(".", [shard_gate(2), shard_gate(3, "more")])
+    with pytest.raises(
+        ValueError,
+        match=r'^\.: only one gate of a package can hold "shards"\. Remove "shards" from all but one tests gate in hard-eng\.gates\.json\.$',
+    ):
+        shard_groups([group], "rest")

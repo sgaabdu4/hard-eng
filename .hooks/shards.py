@@ -29,6 +29,11 @@ def split(sizes: dict[str, int], count: int) -> list[list[str]]:
 
 def require_pytest(groups: list[Group]) -> None:
     for group in groups:
+        if sum("shards" in gate for gate in group["checks"]) > 1:
+            raise ValueError(
+                f'{group["path"]}: only one gate of a package can hold "shards". '
+                'Remove "shards" from all but one tests gate in hard-eng.gates.json.'
+            )
         for gate in group["checks"]:
             direct = (
                 gate.get("report", {}).get("type") == "python-tests"
