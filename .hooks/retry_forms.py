@@ -7,19 +7,20 @@ from comments import JAVASCRIPT
 from plans import _is_test
 
 NONZERO = r"(?!\s*(?:0|false|null)\b)\s*\S"
+COUNT = r"\s*[1-9]\d*\s*(?:[,})]|$)"
 JS_TEST = re.compile(
     r"(jest\.retryTimes\()|\bconfigure\(\s*\{[^}\n]*?(retries:)"
-    + NONZERO
+    + COUNT
     + r"|\b(?:test|it|describe|bench|suite)\b[^\n]*\{\s*(retry:)"
-    + NONZERO
+    + COUNT
     + r"|[})]\s*,\s*\{\s*(retry:)"
-    + NONZERO
+    + COUNT
     + r"|^\s*\{\s*(retry:)"
-    + NONZERO
+    + COUNT
 )
 JS_CONFIG = re.compile(r"(jest\.retryTimes\()|\b(retry:|retries:)" + NONZERO)
 PYTHON = re.compile(r"\b(mark\.flaky)\b|(@flaky)\b")
-DART_TEST = re.compile(r"(@Retry\()|\b(retry:)" + NONZERO)
+DART_TEST = re.compile(r"(@Retry\()|\b(retry:)" + COUNT)
 PYTEST_SETTINGS = re.compile(
     r"(--force-reruns|--reruns)(?![ =]+0\b)|^\s*(reruns)\s*="
     + NONZERO
