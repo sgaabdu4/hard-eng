@@ -19,7 +19,9 @@ QUICK_PASS = (
     "Hard Eng: quick checks passed; the full check runs the tests and the other gates."
 )
 BARE_NONE = re.compile(r"(?i)none\.?")
-CLAIM_LINE = re.compile(r"(?m)^(?:Same cause|Retro): *(.*)$")
+CLAIM_VALUE = re.compile(
+    r"(?m)^(?P<field>Same cause|Retro):.*(?:\n(?![A-Z][\w+/ ]*:|#).*)*"
+)
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
 NOT_APPLICABLE_WORD = re.compile(r"(?i)\bN/A\b")
 TITLE_LINE = re.compile(r"(?m)^# \S.+$")
@@ -409,14 +411,12 @@ def reasoned(value: str, name: str) -> None:
 
 
 def claimed_tests(sections: dict[str, str]) -> list[tuple[str, str]]:
-    """The `path::test` names of test files on the Same cause and Retro lines."""
-    lines = CLAIM_LINE.findall(
-        sections["Repository context"] + "\n" + sections["Verification"]
-    )
+    """The `path::test` names of test files in each Same cause and Retro value."""
     return [
         (path, name.split("[", 1)[0])
-        for line in lines
-        for path, name in TEST_REFERENCE.findall(line)
+        for text in (sections["Repository context"], sections["Verification"])
+        for claim in CLAIM_VALUE.finditer(text)
+        for path, name in TEST_REFERENCE.findall(claim[0])
         if _is_test(PurePosixPath(path))
     ]
 

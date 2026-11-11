@@ -412,3 +412,32 @@ def test_the_missing_reason_refusal_names_its_line(
         validate_plans(repository, "0" * 40, "Complete")
     assert line[:60] in str(error.value)
     assert line[:61] not in str(error.value)
+
+
+RETRO_LINE = "Retro: None — fixture command, no check failed."
+
+
+def test_a_test_named_on_a_later_line_of_the_retro_value_must_exist(
+    repository: Path, completed_plan: str
+) -> None:
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace(
+            RETRO_LINE,
+            "Retro: these items, each with its test.\n"
+            "- Fixed → `tests/test_gone.py::test_gone`.",
+        )
+    )
+    with pytest.raises(ValueError, match="tests/test_gone.py::test_gone"):
+        validate_plans(repository, "0" * 40, "Complete")
+
+
+def test_a_test_named_in_a_later_field_is_not_counted_for_the_retro_line(
+    repository: Path, completed_plan: str
+) -> None:
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace(
+            RETRO_LINE,
+            RETRO_LINE + "\nDelivery: see `tests/test_gone.py::test_gone`.",
+        )
+    )
+    assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
