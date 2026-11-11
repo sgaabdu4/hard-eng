@@ -813,3 +813,55 @@ def test_release_age_has_one_value() -> None:
     for workflow in ("hard-eng.yml", "canary.yml"):
         text = (SOURCE / ".github/workflows" / workflow).read_text()
         assert f"MISE_MINIMUM_RELEASE_AGE: {seconds // 86400}d\n" in text
+
+
+def test_the_child_exclusion_passes_the_test_filter_rule(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    for name in ("src", "packages/child/src"):
+        (tmp_path / name).mkdir(parents=True)
+        (tmp_path / name / "module.py").write_text("VALUE = 1\n")
+    report = {
+        "type": "python-tests",
+        "tests": "coverage/junit.xml",
+        "coverage": "coverage/coverage.json",
+    }
+
+    def package(path: str, command: list[str]) -> Group:
+        tests: Gate = {
+            "name": "tests",
+            "role": "tests",
+            "command": command,
+            "report": report,
+        }
+        return {
+            "path": path,
+            "language": "python",
+            "sources": ["src"],
+            "depends_on": [],
+            "checks": [tests],
+        }
+
+    parent = package(".", ["pytest", "-n", "auto"])
+    groups = [parent, package("packages/child", ["pytest"])]
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": groups, "shared": []})
+    )
+    commands: list[list[str]] = []
+
+    def record(
+        _group: Group, _gate: Gate, command: list[str], *_arguments: object
+    ) -> SimpleNamespace:
+        commands.append(command)
+        return SimpleNamespace(returncode=1)
+
+    monkeypatch.setattr(runner, "run_projects", record)
+    gate = parent["checks"][0]
+    assert runner.run_limited_gate(parent, gate, 60, nullcontext(), groups)
+    assert commands[0][1] == f"--ignore={tmp_path / 'packages/child'}"
+    gate["command"] = ["pytest", "--ignore=packages/child"]
+    assert runner.run_limited_gate(parent, gate, 60, nullcontext(), groups)
+    assert len(commands) == 1

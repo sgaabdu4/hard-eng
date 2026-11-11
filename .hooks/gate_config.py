@@ -67,6 +67,12 @@ JSONC = re.compile(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', re.DOTALL)
 TRAILING_COMMA = re.compile(r",(\s*[}\]])")
 ALL_ZERO_OBJECT_ID = re.compile(r"0{40}|0{64}")
 SOURCE_FILE = ".hooks/hard-eng-source.json"
+SOURCE_SUFFIXES = {
+    "python": {".py"},
+    "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
+    "dart": {".dart"},
+    "swift": {".swift"},
+}
 
 
 def json_layout(root: Path) -> tuple[str, int, int]:

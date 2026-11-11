@@ -15,6 +15,18 @@ def owner_language(by_path: dict[str, Group], name: str) -> str | None:
     return by_path[max(matches, key=len)].get("language") if matches else None
 
 
+def child_groups(group: Group, role: str | None, groups: list[Group]) -> list[Group]:
+    """Groups below this one in its language that have a gate of the same role."""
+    return [
+        child
+        for child in groups
+        if child["path"] != group["path"]
+        and (group["path"] == "." or Path(child["path"]).is_relative_to(group["path"]))
+        and child.get("language") == group.get("language")
+        and any(check.get("role") == role for check in child["checks"])
+    ]
+
+
 def impact_inputs(group: Group) -> list[PurePosixPath]:
     inputs = group.get("impact_inputs", [])
     if not isinstance(inputs, list) or any(

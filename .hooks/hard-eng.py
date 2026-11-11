@@ -58,7 +58,9 @@ from ci_jobs import (
 )
 from dart_boundaries import validate_dart_boundaries
 from debt import OUTPUTS, remember
+from dependency_graph import child_groups
 from gate_config import (
+    SOURCE_SUFFIXES,
     Gate,
     Group,
     JsonObject,
@@ -69,7 +71,7 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
-from python_setup import pytest_options, require_import_contract
+from python_setup import leave_out_children, pytest_options, require_import_contract
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -286,14 +288,8 @@ def reject_test_filters(
 def production_files(
     directory: Path, group: Group, *, include_tests: bool = False
 ) -> set[Path]:
-    extensions = {
-        "python": {".py"},
-        "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
-        "dart": {".dart"},
-        "swift": {".swift"},
-    }
     language, sources = group.get("language"), group.get("sources")
-    if language not in extensions or not isinstance(sources, list) or not sources:
+    if language not in SOURCE_SUFFIXES or not isinstance(sources, list) or not sources:
         raise ValueError(
             "Test packages must declare their language and production sources"
         )
@@ -307,7 +303,7 @@ def production_files(
                 f"Production source must exist inside its package: {source}"
             )
         for file in [root] if root.is_file() else root.rglob("*"):
-            if file.is_file() and file.suffix in extensions[language]:
+            if file.is_file() and file.suffix in SOURCE_SUFFIXES[language]:
                 if file.name.endswith((".d.ts", ".d.mts", ".d.cts")) or (
                     not include_tests
                     and nonproduction_source(file.relative_to(directory))
@@ -569,6 +565,11 @@ def run_limited_gate(
             report_path, coverage_path, directory, expected_sources = prepare_reports(
                 group, report, kind, tests, scanner, command
             )
+        from change_size import configured_packages
+
+        command = leave_out_children(
+            ROOT, command, group, gate, list(configured_packages(ROOT).values())
+        )
         command, coverage_path = related_command(
             command, coverage_path, gate, groups or [group], directory, related_base
         )
@@ -673,10 +674,8 @@ def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path,
         return ()
     return tuple(
         ROOT / child["path"]
-        for child in groups
-        if child["path"] != "."
-        and child.get("language") == "javascript"
-        and any(
+        for child in child_groups(group, gate.get("role"), groups)
+        if any(
             check.get("role") == gate.get("role") and check["command"] == command
             for check in child["checks"]
         )
