@@ -952,3 +952,43 @@ def test_no_network_names_the_address_and_the_step(
     assert "api.github.com" in message and "Connection refused" in message
     assert "check the network and run the same command again" in message
     assert update.github_json("repos/example/commits/main") == {"sha": "x"}
+
+
+def test_a_conflicting_local_edit_shows_both_texts_and_the_step(
+    tmp_path: Path,
+) -> None:
+    from local_edits import merge_local_edits
+
+    old, target = tmp_path / "old", tmp_path / "target"
+    lines = [f"line {number}\n" for number in range(60)]
+    old.write_text("".join(lines))
+    local = lines.copy()
+    local[10] = "line 10 with my wording\n"
+    target.write_text("".join(local))
+    updated = lines.copy()
+    updated[10] = "line 10 as the update words it\n"
+    content = "".join(updated)
+    with pytest.raises(ValueError) as refused:
+        merge_local_edits("skill.md", target, old, content)
+    message = str(refused.value)
+    assert "line 10 with my wording" in message
+    assert "line 10 as the update words it" in message
+    assert "put the update's lines in place of the local lines" in message
+    target.write_text(content)
+    assert merge_local_edits("skill.md", target, old, content) == content
+    target.write_text(content + "my own addition\n")
+    kept = merge_local_edits("skill.md", target, old, content)
+    assert kept.endswith("my own addition\n") and "as the update words it" in kept
+
+
+def test_the_conflict_text_stops_at_forty_lines(tmp_path: Path) -> None:
+    from local_edits import merge_local_edits
+
+    old, target = tmp_path / "old", tmp_path / "target"
+    lines = [f"line {number}\n" for number in range(200)]
+    old.write_text("".join(lines))
+    target.write_text("".join(f"mine {number}\n" for number in range(200)))
+    content = "".join(f"theirs {number}\n" for number in range(200))
+    with pytest.raises(ValueError) as refused:
+        merge_local_edits("skill.md", target, old, content)
+    assert str(refused.value).count("\n") <= 45
