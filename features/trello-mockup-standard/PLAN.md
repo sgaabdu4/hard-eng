@@ -25,7 +25,7 @@ Decision: one reference, `mockups.md`, loaded only for design work. The proof ga
 - [ ] A proof with all nine rule lines, or with a `notNewUi` reason, passes; a file that is not a picture needs no proof → `tests/test_trello_pictures.py::test_a_picture_needs_a_current_proof_file`.
 - [ ] A comment with a new-screen picture ends with the bold closing line after the pictures; a comment whose pictures are `notNewUi` does not → `tests/test_trello_pictures.py::test_a_new_screen_post_ends_with_the_closing_line`.
 - [ ] The rule names and the closing line in `mockups.md` match the tool → `tests/test_trello_pictures.py::test_mockup_rules_match_the_proof_gate`.
-- [ ] Real board: on a test card, a picture with no proof is refused; with a proof it posts with the closing line; both are then removed → manual check with the fixed tool, result recorded here.
+- [x] Real board: on a test card, a picture with no proof is refused; with a proof it posts with the closing line; both are then removed → N/A — a test cannot post to a real board. Manual check on 2026-11-11 with the fixed tool: refused with "No proof file", then posted with the closing line after the picture; comment and picture removed.
 
 ## Baseline + execution
 
