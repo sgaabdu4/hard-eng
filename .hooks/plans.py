@@ -243,7 +243,7 @@ def usability_rules() -> list[tuple[str, list[str]]]:
         lines = reference.read_text().splitlines()
     except OSError as error:
         raise ValueError(
-            f"UX Rules cannot read {UX_REFERENCE}: {error}; rerun Hard Eng setup to restore the file"
+            f"UX Rules cannot read {UX_REFERENCE}: {error}; restore it with `git checkout HEAD -- {UX_REFERENCE}`"
         ) from error
     start = next(
         (n for n, line in enumerate(lines) if line.startswith("- Usability =")), None

@@ -41,7 +41,8 @@ Before: [TODO: Markdown image; only Mock or no-prior-UI New may explain N/A — 
 Proposed: [TODO: Markdown image of rendered proposal]
 Capture: [TODO: Rendering/capture method + observed result]
 Review: [TODO: Inspected flow/states/devices + direction]
-Rules: [TODO: one line per Usability rule of references/ux.md — `- <rule>: Pass|Fail|N/A — what was checked on the inspected image`; fix every Fail before showing the design]
+Rules: [TODO: image + widths judged]
+- [TODO: one line per Usability rule of references/ux.md, as `- <rule>: Pass|Fail|N/A — text`; fix every Fail before showing the design]
 
 ## Verification
 

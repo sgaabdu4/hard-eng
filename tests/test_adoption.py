@@ -3,6 +3,7 @@
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock
@@ -10,6 +11,7 @@ from unittest.mock import Mock
 import agent_hooks
 import pytest
 import update
+import update_runner
 from conftest import add_origin, commit, git, init, remove_application
 from gate_config import json_file
 from test_setup import repository, snapshot
@@ -291,6 +293,43 @@ def test_install_removes_edited_old_generation_files(
     installer.install(tmp_path)
     for name in edited:
         assert not (tmp_path / name).exists(), name
+
+
+def test_the_step_named_by_a_missing_ux_reference_repairs_the_checkout(
+    release: tuple[Path, Path, str],
+    visual_plan: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, target, _ = release
+    add_origin(target)
+    git(target, "switch", "-qc", "feature/work")
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    (target / "PLAN.md").write_text(
+        visual_plan.replace("Status: Complete", "Status: Ready")
+    )
+    git(target, "add", "PLAN.md")
+    git(target, "commit", "-qm", "plan")
+    reference = target / ".agents/skills/he-plan/references/ux.md"
+    reference.unlink()
+    command = [
+        sys.executable,
+        "-c",
+        "import sys; sys.path.insert(0, '.hooks'); from plans import validate_plan; "
+        "from pathlib import Path; print(validate_plan(Path('PLAN.md')))",
+    ]
+    refused = subprocess.run(
+        command, cwd=target, capture_output=True, text=True, check=False
+    )
+    assert refused.returncode == 1
+    step = refused.stderr.split("`")[1]
+    subprocess.run(step.split(), cwd=target, check=True)
+    assert reference.is_file()
+    assert (
+        subprocess.run(command, cwd=target, capture_output=True, check=False).returncode
+        == 0
+    )
+    assert git(target, "branch", "--show-current").strip() == "feature/work"
 
 
 @pytest.mark.parametrize("committed", [True, False])
