@@ -22,6 +22,33 @@ from plans import default_branch_point
 
 DISABLED_CALL = re.compile(r"\.disabled\(")
 QUOTE_OR_BACKSLASH = re.compile(r"[\\'\"]")
+UI_SUFFIXES = (
+    ".css",
+    ".scss",
+    ".less",
+    ".html",
+    ".vue",
+    ".svelte",
+    ".astro",
+    ".jsx",
+    ".tsx",
+    ".js",
+    ".ts",
+    ".dart",
+    ".swift",
+)
+UI_MARKS = (
+    "transition",
+    "-[#",
+    "-[rgb",
+    "-[hsl",
+    "-[oklch",
+    "Color(0x",
+    "Color.from",
+    "Colors.",
+    "Color(red",
+    "colorLiteral",
+)
 TEST_ATTRIBUTE = re.compile(r"@(?:Test|Suite)\s*\(")
 DIFF_HUNK_HEADER = re.compile(r"@@ -(\d+)(?:,\d+)? \+(\d+)")
 CONTROL_KEYWORD_BEFORE = re.compile(r"\b(if|while|for|with)\s*$")
@@ -595,6 +622,23 @@ def security_switch_offs(
     return found
 
 
+def ui_source_check(root: Path, added: dict[str, list[tuple[int, str]]]) -> None:
+    marked = {
+        name: [(n, t) for n, t in lines if any(mark in t for mark in UI_MARKS)]
+        for name, lines in added.items()
+        if name.endswith(UI_SUFFIXES)
+    }
+    if candidates := {name: lines for name, lines in marked.items() if lines}:
+        from ui_rules import ui_findings
+
+        if found := ui_findings(root, candidates):
+            raise ValueError(
+                "HE-UI-SOURCE: Added UI lines must hold no transition on every property "
+                "and no colour literal outside a theme or token file. "
+                + "; ".join(found)
+            )
+
+
 def validate_suppressions(root: Path, base: str | None) -> None:
     try:
         added, removed = diff_lines(root, base or default_branch_point(root) or "HEAD")
@@ -650,3 +694,4 @@ def validate_suppressions(root: Path, base: str | None) -> None:
             "HE-NO-SWITCH-OFF: A change must not switch a check off: fix the cause instead of "
             "suppressing, skipping or deleting the check. " + "; ".join(found)
         )
+    ui_source_check(root, added)

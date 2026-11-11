@@ -369,7 +369,9 @@ def install_last_release(
     """Install the release users have: the candidate's merge base with main."""
     old = work.with_name(f"{work.name}.release")
     released = output(["git", "merge-base", revision, "origin/main"], checkout)
-    must(work.parent, log, "clone failed", ["git", "clone", "-q", str(source), str(old)])
+    must(
+        work.parent, log, "clone failed", ["git", "clone", "-q", str(source), str(old)]
+    )
     must(
         old,
         log,

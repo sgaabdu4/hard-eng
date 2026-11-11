@@ -46,6 +46,12 @@ A change fails when its added lines hold any of these: a Python, JavaScript, Typ
 
 Proof: check
 
+## HE-UI-SOURCE
+
+A change fails when its added lines in UI source hold a transition on every property (`transition: all`, `transition-property: all`, the Tailwind class `transition-all`) or a colour literal outside a theme or token file (Tailwind arbitrary colours, Dart `Color(0x`, `Colors.` names, Swift `Color(red:`). Tests, generated files, comment lines and paths under `.hooks/`, `.agents/` and `.claude/` are exempt, and lines that existed before the change are not flagged.
+
+Proof: check
+
 ## HE-UNTRUSTED-JSON
 
 In JavaScript and TypeScript, parsed JSON has the type `unknown` until code validates it. TypeScript configurations must load the Hard Eng declarations that set this type.

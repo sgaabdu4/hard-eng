@@ -753,9 +753,11 @@ def test_an_update_that_prints_no_ready_step_fails_with_the_printed_text(
         "is on the base branch of a remote.'\n"
     )
     commit(work, "installed")
-    with (tmp_path / "log").open("w") as log:
-        with pytest.raises(release_canary.Failed, match="base branch of a remote"):
-            release_canary.update_to("a" * 40, tmp_path / "source", work, log)
+    with (
+        (tmp_path / "log").open("w") as log,
+        pytest.raises(release_canary.Failed, match="base branch of a remote"),
+    ):
+        release_canary.update_to("a" * 40, tmp_path / "source", work, log)
 
 
 def test_ci_runs_the_update_target_on_linux_only_and_the_release_gate_waits_for_it(
@@ -774,7 +776,11 @@ def test_ci_runs_the_update_target_on_linux_only_and_the_release_gate_waits_for_
     matrix = workflow["jobs"]["new-project"]["strategy"]["matrix"]
     assert matrix["exclude"] == [{"os": "macos-latest", "target": "update-python"}]
     assert "c.CI_TARGETS]" in text and "c.NEW_TARGETS" not in text
-    monkeypatch.setattr(release_canary, "output", lambda command: "hard-eng\tsuccess")
+
+    def output(command: list[str]) -> str:
+        return "hard-eng\tsuccess"
+
+    monkeypatch.setattr(release_canary, "output", output)
     assert "update-python" in release_canary.ci_failures("a" * 40)
 
 
