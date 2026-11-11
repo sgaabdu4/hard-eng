@@ -456,3 +456,36 @@ def test_a_missing_retro_test_is_reported_for_the_retro_line(
         match="Retro names tests that do not exist: tests/test_gone.py::test_gone",
     ):
         validate_plans(repository, "0" * 40, "Complete")
+
+
+@pytest.mark.parametrize(
+    ("report_case", "skipped"), [("<skipped/>", True), ("", False)], ids=["skip", "run"]
+)
+def test_the_skip_rule_fails_a_plan_test_that_the_report_shows_skipped(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    report_case: str,
+    skipped: bool,
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / "a.py").write_text("value = 0\n")
+    commit(root, "base")
+    (root / "PLAN.md").write_text(
+        plan_document().replace(
+            UNPROVED, "- [x] Skip → `tests/test_skip.py::test_skip`."
+        )
+    )
+    (root / "tests.xml").write_text(
+        f'<testsuite><testcase name="test_skip">{report_case}</testcase></testsuite>'
+    )
+    check: gate_config.Gate = {
+        "name": "tests",
+        "role": "tests",
+        "command": ["true"],
+        "report": {"tests": "tests.xml", "type": "python-tests"},
+    }
+    groups: list[gate_config.Group] = [{"path": ".", "checks": [check]}]
+    assert change_size.plan_skips(root, None, groups, 0) is skipped
+    printed = capsys.readouterr().out
+    assert ("plan acceptance tests were skipped: test_skip" in printed) is skipped
