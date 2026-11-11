@@ -643,6 +643,11 @@ def bun_node(storage: Path, environment: dict[str, str]) -> None:
             "*node_modules/.bin/miniflare*|*node_modules/miniflare/*) "
             f'exec {shlex.quote(node)} "$@";; esac\n'
         )
+        # Under Bun, React Doctor waits 30 s for an idle worker before it exits.
+        script += (
+            'case "$*" in *npm-react-doctor/*|*node_modules/.bin/react-doctor*|'
+            f'*node_modules/react-doctor/*) exec {shlex.quote(node)} "$@";; esac\n'
+        )
     # Node runs a piped script when no script or -e/-p is named; Bun prints help and exits 0.
     script += (
         "piped=1\nvalue=0\n"
