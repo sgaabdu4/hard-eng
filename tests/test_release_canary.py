@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -813,7 +814,8 @@ def test_the_update_target_ends_with_the_full_check_on_the_update_branch(
     command = checks[0][1]
     assert command[0] == "env" and command[-1] == "a" * 40
     assert f"GIT_CONFIG_KEY_0=url.{tmp_path.as_uri()}.insteadOf" in command
-    assert "check" in command[command.index("-c") + 1]
+    assert command[-3:] == ["-c", release_canary.CHECK, "a" * 40]
+    assert 'sys.argv = [".hooks/hard-eng.py", "check"]' in release_canary.CHECK
 
 
 def test_the_update_targets_full_check_passes_its_plan_step_with_no_call_to_a_hard_eng_host(
@@ -825,8 +827,7 @@ def test_the_update_targets_full_check_passes_its_plan_step_with_no_call_to_a_ha
     remove_application(target)
     gates = json.loads((target / "hard-eng.gates.json").read_text())
     gates["shared"] = [
-        {"name": "actionlint", "role": "workflows", "command": ["echo", "actionlint"]},
-        {"name": "zizmor", "role": "ci-security", "command": ["echo", "zizmor"]},
+        {"name": "local", "command": ["python3", "-c", "print('LOCAL')"]}
     ]
     (target / "hard-eng.gates.json").write_text(json.dumps(gates))
     commit(target, "no application")
@@ -838,13 +839,23 @@ def test_the_update_targets_full_check_passes_its_plan_step_with_no_call_to_a_ha
     (guard / "sitecustomize.py").write_text(
         "import os, socket\n"
         "def refuse(host, *rest, **named):\n"
-        "    if 'github' in str(host):\n"
+        "    if str(host) not in ('localhost', '127.0.0.1', '::1'):\n"
         "        open(os.environ['REACHED'], 'a').write(str(host) + '\\n')\n"
         "        raise OSError('no real host in a test')\n"
         "    return real(host, *rest, **named)\n"
         "real = socket.getaddrinfo\n"
         "socket.getaddrinfo = refuse\n"
     )
+    programs = tmp_path / "programs"
+    programs.mkdir()
+    for name, path in (
+        ("env", "/usr/bin/env"),
+        ("git", shutil.which("git")),
+        ("uv", shutil.which("uv")),
+        ("python3", sys.executable),
+    ):
+        (programs / name).symlink_to(str(path))
+    monkeypatch.setenv("UV_OFFLINE", "1")
     monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
     monkeypatch.setenv("PYTHONPATH", str(guard))
     monkeypatch.setenv("REACHED", str(reached))
@@ -865,9 +876,15 @@ def test_the_update_targets_full_check_passes_its_plan_step_with_no_call_to_a_ha
             capture_output=True,
             text=True,
             timeout=900,
+            env={
+                **os.environ,
+                "PATH": str(programs),
+            },
         )
     refusal = done.stdout + done.stderr
-    assert "PLAN REFUSED" not in refusal and "applicable PLAN.md" not in refusal
+    assert "Plan: only files the verified Hard Eng update wrote" in refusal
+    assert "Hard Eng installs its tools with Bun" in refusal
+    assert done.returncode == 1
     assert not reached.exists()
 
 

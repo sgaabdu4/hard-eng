@@ -117,7 +117,8 @@ def declarations(directory: Path) -> dict[str, list[Declared]]:
 def poetry_steps(directory: Path, stale: list[Stale]) -> str:
     declared = declarations(directory)
     lines: dict[tuple[str, ...], list[str]] = {}
-    legacy, by_hand = False, []
+    legacy = False
+    by_hand: list[str] = []
     for name, _, target in stale:
         items = declared.get(canonical(name), [])
         legacy = legacy or any(item.options == LEGACY for item in items)
@@ -167,6 +168,20 @@ def solver_versions(directory: Path, args: list[str]) -> dict[str, str]:
     }
 
 
+def print_stays(
+    stale: list[Stale], first: dict[str, tuple[str, ...]], picked: dict[str, str]
+) -> None:
+    for name, current, latest in stale:
+        if name in first and name not in picked:
+            shown = " ".join(
+                ["uvx poetry add --dry-run", *map(shlex.quote, first[name])]
+                + [f"'{name}=={latest}'"]
+            )
+            print(
+                f"{name} stays at {current}: {latest} does not install with this project's Python range or pins; `{shown}` shows why"
+            )
+
+
 def poetry_targets(directory: Path, stale: list[Stale]) -> list[Stale]:
     """Replace each latest version by the newest one that installs with the project's pins."""
     declared = declarations(directory)
@@ -198,15 +213,7 @@ def poetry_targets(directory: Path, stale: list[Stale]) -> list[Stale]:
             version = versions.get(canonical(name), latest)
             if newer(version, picked.get(name, current)):
                 picked[name] = version
-    for name, current, latest in stale:
-        if name in first and name not in picked:
-            shown = " ".join(
-                ["uvx poetry add --dry-run", *map(shlex.quote, first[name])]
-                + [f"'{name}=={latest}'"]
-            )
-            print(
-                f"{name} stays at {current}: {latest} does not install with this project's Python range or pins; `{shown}` shows why"
-            )
+    print_stays(stale, first, picked)
     moved = {
         name: (name, current, picked[name])
         for name, current, _ in stale
