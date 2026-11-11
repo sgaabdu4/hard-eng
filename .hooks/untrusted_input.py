@@ -202,10 +202,18 @@ def biome_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
             after = jsonc_config(name, updated)
             if not biome_proof(config, after):
                 raise ValueError("the edit changed other settings")
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError) as error:
+        last = f'"{BIOME_IGNORE}" as the last entry'
+        step = f"add {last} of files.includes"
+        if "inherited" in str(error):
+            step = (
+                "it extends another configuration, and a local files.includes list "
+                "replaces the inherited one. Copy the inherited list into "
+                f'files.includes (use "**" when there is none) and add "{BIOME_IGNORE}" '
+                "as its last entry"
+            )
         print(
-            f'{name}: add "{BIOME_IGNORE}" as the last entry of files.includes, '
-            "so that your own Biome runs leave the Hard Eng files",
+            f"{name}: {step}, so that your own Biome runs leave the Hard Eng files",
             file=sys.stderr,
         )
         return
