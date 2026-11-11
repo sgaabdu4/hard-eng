@@ -21,7 +21,7 @@ HARD = ["!.hooks", "!.hard-eng", "!**/coverage"]
         (
             "biome.json",
             '{"files": {"includes": []}}',
-            {"files": {"includes": [*HARD]}},
+            {"files": {"includes": ["**", *HARD]}},
         ),
         (
             "biome.json",
@@ -215,7 +215,7 @@ def test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings(
     (tmp_path / "biome.json").write_text('{"files": {"includes": [/* ours */]}}')
     biome_ignores_hooks(tmp_path, changes)
     assert changes == {}
-    assert (
-        f"add {entries} as the last entries of files.includes"
-        in capsys.readouterr().err
+    assert capsys.readouterr().err == (
+        f'biome.json: files.includes is empty: put "**" first, then add {entries} '
+        "as the last entries, so that your own Biome runs leave the Hard Eng files\n"
     )

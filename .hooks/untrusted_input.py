@@ -213,7 +213,7 @@ def add_inline_entry(
 
 def biome_list(includes: list[str] | None) -> list[str]:
     """The files.includes list with the Hard Eng entries that it lacks at the end."""
-    current = ["**"] if includes is None else includes
+    current = includes or ["**"]
     return [*current, *(name for name in BIOME_IGNORES if name not in current)]
 
 
@@ -291,6 +291,8 @@ def biome_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
         quoted = [f'"{entry}"' for entry in BIOME_IGNORES]
         entries = f"{', '.join(quoted[:-1])} and {quoted[-1]}"
         step = f"add {entries} as the last entries of files.includes"
+        if "empty" in str(error):
+            step = f'files.includes is empty: put "**" first, then add {entries} as the last entries'
         if "inherited" in str(error):
             step = (
                 "it extends another configuration, and a local files.includes list "
