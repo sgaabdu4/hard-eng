@@ -89,3 +89,12 @@ def test_existing_ci_without_bun_is_reported(
     path.write_text(job.format(setup, check))
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
     assert "without setting up Bun" not in capsys.readouterr().err
+
+
+def test_an_old_workflow_gets_double_quoted_mise_switches(tmp_path: Path) -> None:
+    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    for name in ("MISE_PREFER_OFFLINE", "MISE_USE_VERSIONS_HOST"):
+        assert f'{name}: "false"\n' in template
+    old = template.replace('"false"', "'false'")
+    assert old != template
+    migrates_to_template(tmp_path, old)
