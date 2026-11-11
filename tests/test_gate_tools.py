@@ -1,6 +1,7 @@
 """A required check that writes no report must name the tool of its role."""
 
 import json
+import re
 from pathlib import Path
 
 import gate_config
@@ -178,3 +179,17 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
     group["checks"][0]["command"] = ["bun", "run", "typecheck"]
     with pytest.raises(ValueError, match="must use Bun, not: npx"):
         gate_config.validate_group(tmp_path, group, set())
+
+
+def test_the_shipped_format_gate_covers_each_installed_workflow() -> None:
+    gates = json.loads((SOURCE / "hard-eng.gates.json").read_text())
+    named = {check["name"]: check["command"] for check in gates["shared"]}
+    installed = set(
+        re.findall(
+            r"\.github/workflows/[\w-]+\.yml",
+            (SOURCE / ".hooks/ci_setup.py").read_text(),
+        )
+    )
+    assert ".github/workflows/hard-eng.yml" in installed
+    for path in installed:
+        assert path in named["shipped-format"], path
