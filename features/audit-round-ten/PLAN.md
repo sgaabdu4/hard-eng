@@ -96,7 +96,7 @@ Slice 7, issue 573 (`.hooks/coverage_sources.py`, `.hooks/update.py`, `.agents/s
 - [ ] Setup of a package with `src` and root tool configuration files lists only `src`, and the check passes → `tests/test_greenfield.py::test_setup_and_check_leave_root_tool_configs_out_of_the_sources`
 - [ ] A build script folder, a runtime file with a dot in its tool part, `middleware.ts` and a configuration file in a subfolder still need listing → `tests/test_greenfield.py::test_runtime_files_beside_tool_configs_still_need_listing`
 - [ ] A listed root tool configuration file stays a production file → `tests/test_runner.py::test_a_listed_root_tool_config_keeps_its_coverage_demand`
-- [ ] An update leaves a listed root tool configuration file in `sources` → `tests/test_scaffold_replay.py::test_an_update_keeps_a_listed_root_tool_config_in_the_sources`
+- [ ] An update leaves a listed root tool configuration file in `sources` → N/A — an update does not compute `sources` again for a package that the gate file holds (`adapt_packages` runs only when setup makes a new gate file), so no update path can remove the entry
 - [ ] The CI check of an update PR refuses code outside the listed sources, and a local check of the same update does no added work → `tests/test_scaffold_replay.py::test_scaffold_update_check_refuses_code_outside_the_sources`
 
 ## Baseline + execution
