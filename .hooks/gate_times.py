@@ -7,21 +7,23 @@ import threading
 from pathlib import Path
 
 from gate_config import JsonValue
+from project_files import keep
 
 GATE_FLOOR_SECONDS = 600
 GATE_TIMES_LOCK = threading.Lock()
 COMMON_FOLDER_LOCK = threading.Lock()
-GATE_TIME_FILES: dict[Path, Path] = {}
+
+
+def times_file(root: Path) -> Path:
+    common = subprocess.check_output(
+        ["git", "rev-parse", "--git-common-dir"], cwd=root, text=True
+    ).strip()
+    return root / common / "hard-eng-gate-times.json"
 
 
 def gate_times(root: Path) -> Path:
     with COMMON_FOLDER_LOCK:
-        if root not in GATE_TIME_FILES:
-            common = subprocess.check_output(
-                ["git", "rev-parse", "--git-common-dir"], cwd=root, text=True
-            ).strip()
-            GATE_TIME_FILES[root] = root / common / "hard-eng-gate-times.json"
-        return GATE_TIME_FILES[root]
+        return keep("references", ("gate_times", str(root)), lambda: times_file(root))
 
 
 def gate_limit(root: Path, key: str, budget: float) -> float:

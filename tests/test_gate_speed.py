@@ -85,12 +85,15 @@ def test_gate_times_ask_git_for_the_common_folder_one_time(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     first, second, asked = watch_common_folder_asks(tmp_path, monkeypatch)
-    for key in ("./one", "./two", "./three"):
-        gate_times.record_gate_time(first, key, 1)
-        gate_times.gate_limit(first, key, 100)
-    assert asked == [first]
-    gate_times.gate_limit(second, "./one", 100)
-    assert asked == [first, second]
+    with keeping("references"):
+        for key in ("./one", "./two", "./three"):
+            gate_times.record_gate_time(first, key, 1)
+            gate_times.gate_limit(first, key, 100)
+        assert asked == [first]
+        gate_times.gate_limit(second, "./one", 100)
+        assert asked == [first, second]
+    gate_times.gate_limit(first, "./one", 100)
+    assert asked == [first, second, first]
 
 
 def test_parallel_gates_ask_git_for_the_common_folder_one_time(
@@ -104,13 +107,14 @@ def test_parallel_gates_ask_git_for_the_common_folder_one_time(
         gate_times.gate_limit(first, "./suite", 100)
 
     threads = [threading.Thread(target=gate) for _ in range(5)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-    assert asked == [first]
-    gate_times.gate_limit(second, "./suite", 100)
-    assert asked == [first, second]
+    with keeping("references"):
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert asked == [first]
+        gate_times.gate_limit(second, "./suite", 100)
+        assert asked == [first, second]
 
 
 def no_requirements(
