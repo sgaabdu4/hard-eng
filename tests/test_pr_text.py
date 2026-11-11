@@ -79,15 +79,13 @@ def _event(
     *,
     head: str = "task",
     base: str = "main",
-    draft: bool = False,
     repo: str = "acme/widget",
 ) -> str:
     event = {
         "pull_request": {
             "body": body,
-            "draft": draft,
             "head": {"ref": head, "repo": {"full_name": repo}},
-            "base": {"ref": base},
+            "base": {"ref": base, "repo": {"full_name": "acme/widget"}},
         }
     }
     path = tmp_path / "event.json"
@@ -137,15 +135,18 @@ def test_event_problem_exempts_only_the_update_pr_and_other_bases(
         assert "Edit the PR text" in problem
 
 
-@pytest.mark.parametrize(
-    ("draft", "repo"), [(True, "acme/widget"), (False, "outsider/widget")]
-)
-def test_event_problem_checks_draft_and_fork_prs(
-    tmp_path: Path, draft: bool, repo: str
+def test_event_problem_checks_a_fork_pr_even_on_the_update_branch_name(
+    tmp_path: Path,
 ) -> None:
     root = _project(tmp_path)
-    event = _event(tmp_path, _GOOD, draft=draft, repo=repo)
-    assert event_problem(event, root) is not None
+    (tmp_path / "fork").mkdir()
+    (tmp_path / "own").mkdir()
+    fork = _event(tmp_path / "fork", "", head="hard-eng/update", repo="outsider/widget")
+    problem = event_problem(fork, root)
+    assert problem is not None
+    assert "Edit the PR text" in problem
+    own = _event(tmp_path / "own", "", head="hard-eng/update")
+    assert event_problem(own, root) is None
 
 
 def test_event_problem_treats_a_gates_file_with_a_bad_shipping_value_as_no_shipping(
