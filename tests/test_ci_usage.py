@@ -309,7 +309,7 @@ def test_push_reuse_never_looks_up_jobs(
     monkeypatch.setattr(shipping, "gh", spy)
     monkeypatch.delitem(sys.modules, "ci_usage")
     assert shipping.reused_pull_request(push.root, push.base) is None
-    assert spy.call_args_list
+    assert [call for call in spy.call_args_list if "check-runs" in call.args[-1]]
     assert not [
         call for call in spy.call_args_list if "/actions/jobs/" in call.args[-1]
     ]
