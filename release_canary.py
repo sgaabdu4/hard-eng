@@ -13,7 +13,9 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Generator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -110,6 +112,8 @@ NOT_FOLDER_NAME = re.compile(r"[^a-z0-9]+")
 CI_JOB = re.compile(r"new project \(([a-z0-9-]+), [\w.-]+\)")
 CI_SYSTEMS = ("ubuntu-latest", "macos-latest")
 PUSH_LOOKUP_SECONDS = 120
+RELEASE_GATE_SECONDS = 3720
+RERUN = "Rerun this job once the Canary run for develop's push has finished."
 AGENTS = ("claude", "codex")
 TASK = (
     "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
@@ -679,7 +683,18 @@ def ci_failures(revision: str) -> list[str]:
 
 
 def lookups_too_long(_signal: int, _frame: object) -> None:
-    raise TimeoutError("the lookups of a push passed their time limit")
+    raise TimeoutError("the lookups passed their time limit")
+
+
+@contextmanager
+def time_limit(seconds: float) -> Generator[None]:
+    """One total time limit for the lookups inside, below the limit of their CI job."""
+    signal.signal(signal.SIGALRM, lookups_too_long)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 def push_outputs(names: list[str], revision: str) -> str:
@@ -687,22 +702,28 @@ def push_outputs(names: list[str], revision: str) -> str:
     listed = [folder(" ".join(target)) for target in CI_TARGETS]
     if not needs_canary(names):
         return "targets=[]"
-    signal.signal(signal.SIGALRM, lookups_too_long)
-    signal.setitimer(signal.ITIMER_REAL, PUSH_LOOKUP_SECONDS)
     try:
-        proven = proven_revision(revision)
-        if proven != revision and not unproven(proven):
-            return f"targets=[]\ncovered={proven}"
+        with time_limit(PUSH_LOOKUP_SECONDS):
+            proven = proven_revision(revision)
+            if proven != revision and not unproven(proven):
+                return f"targets=[]\ncovered={proven}"
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         print(
             "The lookup of the merged PR failed; the new projects run.", file=sys.stderr
         )
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
     return "targets=" + json.dumps(listed)
 
 
 def release_pr_gate(base: str, revision: str) -> int:
+    try:
+        with time_limit(RELEASE_GATE_SECONDS):
+            return release_gate(base, revision)
+    except TimeoutError:
+        print(f"The release gate passed its time limit. {RERUN}")
+        return 1
+
+
+def release_gate(base: str, revision: str) -> int:
     names = output(["git", "diff", "--name-only", f"{base}...{revision}"]).split()
     if not needs_canary(names):
         print("No installed file changed; no new project to check.")
@@ -718,7 +739,7 @@ def release_pr_gate(base: str, revision: str) -> int:
         print(
             f"New projects without a passing run for this commit: {', '.join(missing)}"
         )
-        print("Rerun this job once the Canary run for develop's push has finished.")
+        print(RERUN)
         return 1
     if proven != revision:
         print(
