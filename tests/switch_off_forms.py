@@ -234,6 +234,7 @@ RETRY_FORMS = [
 RETRY_PASSES = [
     ("src/api.ts", "const c = ky.create({ re" + "try: 3 });\n"),
     ("src/app.py", "re" + "tries = 3\n"),
+    ("pyproject.toml", "re" + "tries = 0\n"),
     ("tests/stream.test.ts", "const s = sse({ re" + "try: 1000 });\n"),
     ("tests/api.test.ts", "}, { re" + "try: 0 });\n"),
     ("tests/api.test.ts", "const c = makeClient({ re" + "try: false });\n"),
@@ -260,6 +261,10 @@ RETRY_PASSES = [
     ("vite.config.ts", "  plugins: [],\n  re" + "tries: 0,\n"),
     ("hard-eng.gates.json", '"--re' + 'tries=0",\n'),
     ("pyproject.toml", "[tool.other]\nre" + "tries = 3\n"),
+    (
+        "pyproject.toml",
+        "[tool.pytest.ini_options]\nminversion = '8'\n[tool.other]\nre" + "tries = 3\n",
+    ),
     ("package.json", '"fetch": "curl --re' + 'try 3"\n'),
     ("docs/guide.md", "Set the re" + "try count and mark the fl" + "aky tests.\n"),
     ("tests/test_api.py", "name = 'fl" + "aky'\n"),

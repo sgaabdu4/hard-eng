@@ -700,9 +700,11 @@ def security_switch_offs(
             elif ignore and entry and not entry.startswith("#"):
                 found.append(f"{name}:{number} adds {entry!r}")
             elif any(word in text for word in RETRY_WORDS):
-                from retry_forms import retry_form
+                from retry_forms import retry_form, table_retry
 
-                if form := retry_form(name, text):
+                if form := retry_form(name, text) or table_retry(
+                    root / name, number, text
+                ):
                     found.append(f"{name}:{number} adds {form!r}")
     return found
 

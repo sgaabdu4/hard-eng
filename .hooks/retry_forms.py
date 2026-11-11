@@ -1,7 +1,7 @@
 """The forms that retry a failed test, judged by the kind of file that holds them."""
 
 import re
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from comments import JAVASCRIPT
 from plans import _is_test
@@ -52,6 +52,12 @@ PYTEST_SETTINGS = re.compile(
     + r"|addopts[^\n]*(--retries)\b"
 )
 KEYS = re.compile(r"^\s*(retry)\s*[=:]" + NONZERO)
+PLUGIN_COUNT = re.compile(r"^\s*(retries)\s*=" + NONZERO)
+TABLE_HEAD = re.compile(r"^\s*(\[[^\[\]=,\"']+\])\s*(?:[#;].*)?$")
+PYTEST_FILES = ("pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg")
+PYTEST_TABLES = frozenset(
+    {"[tool.pytest.ini_options]", "[tool.pytest]", "[pytest]", "[tool:pytest]"}
+)
 COMMANDS = re.compile(
     r'"(--retry|--retries|--reruns)(?:"|=(?!0")[^"]*")|(-retry-tests-on-failure)'
     r"|\b(?:vitest|playwright|jest|bun test|pytest)\b[^\n]*?(--retry|--retries|--reruns)\b(?![ =]+0\b)"
@@ -62,9 +68,7 @@ BY_NAME = {
     "package.json": COMMANDS,
     "bunfig.toml": KEYS,
     "dart_test.yaml": KEYS,
-    **dict.fromkeys(
-        ("pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg"), PYTEST_SETTINGS
-    ),
+    **dict.fromkeys(PYTEST_FILES, PYTEST_SETTINGS),
 }
 BY_SUFFIX = {".xctestplan": COMMANDS, ".xcscheme": COMMANDS}
 IN_TESTS = {".py": PYTHON, ".dart": DART_TEST, **dict.fromkeys(JAVASCRIPT, JS_TEST)}
@@ -94,3 +98,17 @@ def retry_form(name: str, text: str) -> str | None:
     pattern = retry_pattern(name)
     hit = pattern.search(text) if pattern else None
     return hit[hit.lastindex or 0] if hit else None
+
+
+def table_retry(path: Path, number: int, text: str) -> str | None:
+    """The retry count of the pytest-retry plugin, when the added line sits in a pytest table."""
+    hit = PLUGIN_COUNT.search(text) if path.name in PYTEST_FILES else None
+    if hit is None:
+        return None
+    try:
+        above = path.read_text(encoding="utf-8").splitlines()[: number - 1]
+    except (OSError, UnicodeDecodeError):
+        return None
+    heads = (TABLE_HEAD.match(line) for line in reversed(above))
+    table = next((head[1] for head in heads if head), "")
+    return hit[1] if table in PYTEST_TABLES else None
