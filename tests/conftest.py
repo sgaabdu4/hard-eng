@@ -5,15 +5,16 @@ import importlib.util
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Generator
+from collections.abc import Buffer, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import pytest
 
@@ -119,6 +120,25 @@ def load_module(name: str, path: Path) -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+class LocalSocket(socket.socket):
+    """A test must never reach a real host; local hosts and Unix sockets stay open."""
+
+    @override
+    def connect(self, address: object, /) -> None:
+        if isinstance(address, tuple):
+            if address[0] not in LOCAL_HOSTS:
+                pytest.fail(f"a test opened a connection to {address[0]}")
+            super().connect(address)
+        elif isinstance(address, str | Buffer):
+            super().connect(address)
+
+
+socket.socket = LocalSocket
 
 
 def git(root: Path, *arguments: str) -> str:

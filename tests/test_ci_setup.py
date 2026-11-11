@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import ci_jobs
 import pytest
 import tool_setup
 import yaml
@@ -337,6 +338,7 @@ def test_ci_comparison_is_required_before_project_execution(
     )
     monkeypatch.setenv("GITHUB_ACTIONS", ci)
     monkeypatch.setenv("GITHUB_EVENT_NAME", event)
+    monkeypatch.setattr(ci_jobs, "bun_releases", list)
     if rejected:
         with pytest.raises(ValueError, match="require --base"):
             runner.check(base=base)

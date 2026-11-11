@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import ci_jobs
 import gate_config
 import pytest
 import shipping
@@ -498,6 +499,7 @@ def test_force_push_base_outside_history_compares_with_parent(
     rewritten_away = "b" * 40
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.setenv("GITHUB_EVENT_NAME", event)
+    monkeypatch.setattr(ci_jobs, "bun_releases", list)
     if event == "pull_request":
         with pytest.raises(ValueError, match="Cannot verify plan scope"):
             runner.check(base=rewritten_away)
