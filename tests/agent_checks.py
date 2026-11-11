@@ -433,7 +433,7 @@ def judge_escaped_bug(fixture: Run) -> list[str]:
     return failures + loads_skill("he-learn")(fixture)
 
 
-PARSERS = {"split", "partition", "findall", "finditer", "splitlines"}
+PARSERS = {"split", "partition", "findall", "finditer", "splitlines", "int"}
 
 
 def called(node: ast.AST) -> str:
@@ -444,13 +444,14 @@ def called(node: ast.AST) -> str:
 
 
 def parse_sites(root: Path) -> int:
-    """Calls that take the input text apart, in the project's source files that are not tests."""
+    """Functions that take the input text apart or convert it, in the project's source files that are not tests."""
     listed = git(root, "ls-files", "--cached", "--others", "--exclude-standard", "*.py")
     return sum(
-        called(node) in PARSERS
+        any(called(node) in PARSERS for node in ast.walk(function))
         for name in listed.splitlines()
         if not name.startswith(".") and not Path(name).name.startswith("test_")
-        for node in ast.walk(ast.parse((root / name).read_text()))
+        for function in ast.walk(ast.parse((root / name).read_text()))
+        if isinstance(function, ast.FunctionDef)
     )
 
 
@@ -465,7 +466,10 @@ def judge_repeated_block(fixture: Run) -> list[str]:
         return ["max_line is missing or wrong, or an existing line changed"]
     failed = run(fixture, sys.executable, ".hooks/hard-eng.py", "check")
     failures = ["Hard Eng check fails after the run"] if failed else []
-    sites = parse_sites(fixture.root)
+    try:
+        sites = parse_sites(fixture.root)
+    except SyntaxError as error:
+        return [*failures, f"a source file does not parse: {error}"]
     return failures + ([f"the input parsing has {sites} copies"] if sites > 1 else [])
 
 
@@ -559,7 +563,7 @@ CASES = [
     ),
     Case(
         "repeated-block",
-        "Add `max_line(text)` to report.py with a unittest. It returns `max: <largest value>` for the same comma-separated input as the other lines. You are approved to plan and build this without asking. Do not push.",
+        "Add `max_line(text)` to report.py with a unittest. It returns `max: <largest value>` for the same comma-separated input as the other lines. You are approved to build this without asking. Do not push.",
         prepare_repeated_block,
         judge_repeated_block,
     ),

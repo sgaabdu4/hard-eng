@@ -745,6 +745,25 @@ def mean_line(text: str) -> str:
 def max_line(text: str) -> str:
     return f"max: {max(values_of(text))}"
 """
+_OWN_SUM = "sum(int(p) for p in text.split(',') if p.strip())"
+_PARTIAL = """from calc import average
+
+
+def parts(text: str) -> list[str]:
+    return [part for part in text.split(",") if part.strip()]
+
+
+def total_line(text: str) -> str:
+    return f"total: {sum(int(part) for part in parts(text))}"
+
+
+def mean_line(text: str) -> str:
+    return f"mean: {average([int(part) for part in parts(text)]):.2f}"
+
+
+def max_line(text: str) -> str:
+    return f"max: {max(int(part) for part in parts(text))}"
+"""
 
 
 @pytest.mark.parametrize(
@@ -752,6 +771,8 @@ def max_line(text: str) -> str:
     [
         (_MERGED, None),
         (REPORT + _COPIED, "the input parsing has 3 copies"),
+        (_MERGED.replace("sum(values_of(text))", _OWN_SUM), "has 2 copies"),
+        (_PARTIAL, "has 4 copies"),
         (REPORT, "max_line is missing"),
     ],
 )
@@ -765,3 +786,13 @@ def test_repeated_block_needs_the_feature_and_one_owner_of_the_parsing(
         assert failures == []
     else:
         assert any(problem in failure for failure in failures), failures
+
+
+def test_repeated_block_reports_a_source_file_that_does_not_parse(
+    tmp_path: Path,
+) -> None:
+    root, base = case_fixture(tmp_path, "repeated-block")
+    (root / "report.py").write_text(_MERGED)
+    (root / "scratch.py").write_text("def broken(:\n")
+    failures = judge_repeated_block(Run(root, base, "Done.", [], []))
+    assert any("does not parse" in failure for failure in failures), failures
