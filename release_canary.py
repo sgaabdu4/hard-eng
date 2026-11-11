@@ -310,6 +310,7 @@ def update_to(revision: str, source: Path, work: Path, log: IO[str]) -> None:
     try:
         done = subprocess.run(
             [*local_source(source), sys.executable, "-c", UPDATE, revision],
+            check=False,
             cwd=work,
             capture_output=True,
             text=True,
