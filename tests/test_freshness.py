@@ -577,3 +577,16 @@ def test_the_bun_release_age_check_runs_in_the_gates_workspace_mode(
     assert waiting is not None
     waiting("typescript")
     assert seen.read_text().startswith("update -r --latest typescript")
+
+
+def test_a_root_line_with_no_version_is_read() -> None:
+    report = "dynv\n└── httpx v0.27.0 (latest: v0.28.1)\n"
+    records = {PYPI + "httpx/json": fixture("pypi-httpx.json")}
+    stale = stale_dependencies(
+        "uv", report, Registry(records), moment("2024-12-08T15:37:22+00:00")
+    )
+    assert stale == [("httpx", "0.27.0", "0.28.1")]
+    with pytest.raises(ValueError, match="no dependency tree"):
+        stale_dependencies(
+            "uv", "", Registry(records), moment("2024-12-08T00:00:00+00:00")
+        )
