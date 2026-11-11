@@ -914,7 +914,7 @@ def checked_changes(
     scope: tuple[str, dict[str, str], str, str],
 ) -> JsonObject:
     """Run the check on the session's changes; a split keeps Semgrep's taint analysis bounded."""
-    from plans import SMALL_SIZE, build_in_progress
+    from plans import QUICK_PASS, SMALL_SIZE, build_in_progress
 
     base, current, changed, notice = scope
     claim = str(
@@ -944,7 +944,7 @@ def checked_changes(
         }
     returncode, output = run_check(root, base, building)
     if SMALL_SIZE in output:
-        building, notice = False, ""
+        building, notice = False, QUICK_PASS
     decisions = show_decisions(root, changed.splitlines(), state)
     if returncode == 0:
         if state is not None and not state.exists():

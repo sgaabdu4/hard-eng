@@ -15,6 +15,9 @@ from project_files import keep
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
 SMALL_SIZE = "Size: small ("
+QUICK_PASS = (
+    "Hard Eng: quick checks passed; the full check runs the tests and the other gates."
+)
 BARE_NONE = re.compile(r"(?i)none\.?")
 CLAIM_LINE = re.compile(r"(?m)^(?:Same cause|Retro): *(.*)$")
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
@@ -143,9 +146,7 @@ def report_stage(
             "Hard Eng: planning checks passed — ready for build within the authorized scope."
         )
     elif stage == "Complete" and quick:
-        print(
-            "Hard Eng: quick checks passed; the full check runs the tests and the other gates."
-        )
+        print(QUICK_PASS)
     elif stage == "Complete":
         print(
             "Hard Eng: build checks passed — ready for ship; remote delivery is not verified by this check."
