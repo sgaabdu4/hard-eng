@@ -4,9 +4,12 @@ import subprocess
 from pathlib import Path
 from unittest.mock import Mock
 
+import change_size
 import pytest
 import update
 from conftest import commit, git
+from coverage_sources import require_listed_sources
+from gate_config import parse_config, repository_files
 from test_updates import fixed_revision
 
 SKILL_LOCK = ".agents/skills/marketing-video/bun.lock"
@@ -193,3 +196,37 @@ def test_scaffold_update_check_refuses_code_outside_the_sources(
     with pytest.raises(ValueError, match="outside its sources: scripts"):
         update.check_scaffold_update(target, base)
     assert after_the_gate_check(spy) == ["ls-files"]
+
+
+def test_the_step_of_the_update_refusal_works_on_the_update_branch(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target, base = update_beside_code_outside_the_sources(release, monkeypatch)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    gates = target / "hard-eng.gates.json"
+    gates.write_text(
+        gates.read_text().replace('"sources": ["src"]', '"sources": ["scripts", "src"]')
+    )
+    commit(target, "list the scripts folder")
+    assert not update.check_scaffold_update(target, base)
+    packages = parse_config(gates.read_text())["packages"]
+    require_listed_sources(
+        target, packages, repository_files(target), python_only=False
+    )
+
+
+def test_an_update_adds_the_biome_entry_and_stays_an_update(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    (target / "biome.json").write_text(
+        '{\n  "files": {\n    "includes": ["**"]\n  }\n}\n'
+    )
+    base = commit(target, "project Biome settings")
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert '"!.hooks"' in (target / "biome.json").read_text()
+    changed = set(git(target, "diff", "--name-only", base).splitlines())
+    assert "biome.json" in changed
+    assert change_size.update_only(target, base, changed)
