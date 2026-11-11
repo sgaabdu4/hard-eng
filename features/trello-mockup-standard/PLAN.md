@@ -49,7 +49,7 @@ Evidence: On 2026-11-11 each new test failed first (no rule list, no `mockups.md
 E2E: N/A — no user journey; the tests run the real script against a fake Trello, and one real-board check covers the live path.
 Retro: these items, each sorted by HE Learn's Retro rows.
 - The Ready check refused the coordinator test file at 1,006 lines → mechanical: the existing file-length check caught it before push; the new tests moved to `tests/test_trello_pictures.py`. None new.
-- The Ready check refused the real-board acceptance line with no test or N/A reason → mechanical: the existing plan check caught it. None new.
+- The Ready check refused the real-board acceptance line, which named no test and gave no reason why none can prove it → mechanical: the existing plan check caught it. None new.
 - The types check refused an empty list in a new test → mechanical: the existing types check caught it. None new.
 - Reader pass 1 found rule names copied from the planning UX guide, which had changed on develop → single source: the proof rules now point to `ux.md`, and `tests/test_trello_pictures.py::test_mockup_rules_match_the_proof_gate` fails when a quoted rule name is not in `ux.md`.
 - Reader passes 2 and 3 found rules that could not reach the worker, proofs that forced a false claim for evidence pictures, and a worker that could write proof files → judgement: fixed in `mockups.md` before push; the Writing Great Skills Reader rule is the existing owner. None new.
