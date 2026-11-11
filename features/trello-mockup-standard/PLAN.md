@@ -55,6 +55,8 @@ Retro: these items, each sorted by HE Learn's Retro rows.
 - Reader passes 2 and 3 found rules that could not reach the worker, proofs that forced a false claim for evidence pictures, and a worker that could write proof files → judgement: fixed in `mockups.md` before push; the Writing Great Skills Reader rule is the existing owner. None new.
 - The advisor found that the closing line made our tagged comment count as a question → `tests/test_trello_report.py::test_the_closing_line_does_not_make_our_comment_a_question`.
 - The independent review asked for the closing line on testing posts → skipped as outside the standard, reason above. None new.
+- The Complete check refused a retro line it read as an empty N/A, then the new table layout (shipped-format) → mechanical: the existing plan and format checks caught both before push; the table now uses the check's own Biome layout. None new.
+- The Complete check's tests step hit its 600-second limit twice with no failed test, at a load average of 280 to 340 from other sessions' checks; the full suite then passed alone (3,359 tests in 857 s, still under load) → outside cause: machine load; the limit stays as the user set it. None.
 
 Delivery target: PR
 Delivery: Pending — PR into develop, then the release to main.
