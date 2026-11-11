@@ -934,6 +934,8 @@ def test_unknown_branch_point_is_big(
 def test_a_check_with_no_base_judges_the_size_of_the_whole_branch(
     repository: Path, completed_plan: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    (repository / ".hooks").mkdir()
+    (repository / ".hooks/hard-eng.py").write_text("")
     sized_branch(repository)
     remote = repository.parent / "origin.git"
     git(repository, "clone", "--bare", str(repository), str(remote))
