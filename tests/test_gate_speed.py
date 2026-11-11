@@ -773,6 +773,8 @@ def test_stop_after_a_source_edit_starts_few_git_processes(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     configure(tmp_path, [gate("suite", "pass")])
+    git(tmp_path, "config", "user.name", "Fixture")
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
     (tmp_path / "app.py").write_text("value = 1\n")
     base = commit(tmp_path, "Add the project")
     (tmp_path / "app.py").write_text("value = 2\n")
