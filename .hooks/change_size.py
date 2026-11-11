@@ -245,6 +245,8 @@ def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
         for name in changed
         if is_plan_path(Path(name)) and not (root / name).exists()
     ]
+    if not gone:
+        return set()
     references = [
         reference for reference in (base, default_branch_point(root)) if reference
     ]
