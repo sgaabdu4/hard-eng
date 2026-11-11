@@ -467,17 +467,53 @@ def test_update_branch_check_skips_an_unrelated_draft_plan(
 def test_the_update_only_rule_asks_no_proof_of_a_tree_that_is_not_clean(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import plans
-
     target = draft_plan_beside_an_update(release, monkeypatch)
     proof = Mock(return_value=True)
     monkeypatch.setattr(update, "verified_revision", proof)
-    assert plans.validate_plans(target, "main") == "Complete"
+    changed = changed_files(target, "main") or set()
+    assert change_size.update_only(target, "main", changed)
     proof.assert_called()
     proof.reset_mock()
     (target / "app.py").write_text("print('more work')\n")
     changed = changed_files(target, "main") or set()
     assert not change_size.update_only(target, "main", changed)
     proof.assert_not_called()
+
+
+def test_the_plan_rule_asks_the_update_proof_one_time_in_the_update_worktree_with_an_open_plan_on_the_base(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import plans
+
+    target = draft_plan_beside_an_update(release, monkeypatch)
+    proof = Mock(return_value=True)
+    monkeypatch.setattr(update, "verified_revision", proof)
+    (target / "app.py").write_text("print('more work')\n")
     with pytest.raises(ValueError, match="PLAN.md: plan needs"):
         plans.validate_plans(target, "main")
+    assert proof.call_count == 1
+
+
+def test_the_plan_rule_asks_no_update_proof_in_a_feature_branch_that_merged_an_update(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import plans
+
+    source, target, _ = release
+    (target / "PLAN.md").write_text("# Later work\n\nStatus: Draft\n")
+    commit(target, "draft plan for later work")
+    git(target, "update-ref", "refs/heads/main", "HEAD")
+    git(target, "checkout", "-qb", "feature")
+    git(target, "checkout", "-q", "main")
+    git(target, "checkout", "-qb", update_runner.UPDATE_BRANCH)
+    select_release(source, monkeypatch)
+    update.update(target)
+    git(target, "update-ref", "refs/heads/main", "HEAD")
+    git(target, "checkout", "-q", "feature")
+    git(target, "merge", "-q", "--no-edit", "main")
+    proof = Mock(return_value=True)
+    monkeypatch.setattr(update, "verified_revision", proof)
+    (target / "app.py").write_text("print('more work')\n")
+    with pytest.raises(ValueError, match="PLAN.md: plan needs"):
+        plans.validate_plans(target, "main")
+    proof.assert_not_called()
