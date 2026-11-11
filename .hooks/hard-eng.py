@@ -636,7 +636,7 @@ def check(
         from comments import validate_comments, validate_suppressions
 
         if verify_plan:
-            plan_stage = plans.validate_plans(ROOT, base, plan_stage)
+            plan_stage = change_size.judged_stage(ROOT, base, plan_stage)
         validate_comments(ROOT, base)
         validate_suppressions(ROOT, base)
         plans.validate_records(ROOT, base)

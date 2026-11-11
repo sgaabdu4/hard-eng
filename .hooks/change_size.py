@@ -19,7 +19,7 @@ from plans import (
     release_references,
     validate_plan,
 )
-from project_files import keep, keeping
+from project_files import KEPT, keep, keeping
 
 NO_CHANGE = "no change"
 MAX_SMALL_LINES = 20
@@ -408,7 +408,8 @@ def judged_plans(
     """The changed files with released plans added and moved plans out, every plan file, and the plans that judge the change."""
     changed = changed | released_plans(root, base)
     changed -= moved_plans(root, base, changed)
-    changed -= reformatted_plans(root, base, changed)
+    skipped: set[str] = keep("references", ("reformatted", str(root)), set)
+    changed -= skipped
     paths = plan_files(root)
     applicable = [path for path in paths if str(path.relative_to(root)) in changed]
     return (
@@ -421,6 +422,23 @@ def judged_plans(
             if plan_status(path.read_text()) not in {None, "Complete"}
         ],
     )
+
+
+def judged_stage(root: Path, base: str | None, stage: str | None) -> str:
+    """The stage that validate_plans reaches; a failing run is judged again without its reformatted old plans."""
+    from plans import validate_plans
+
+    with keeping("references"):
+        try:
+            return validate_plans(root, base, stage)
+        except ValueError:
+            point = base or judged_point(root)
+            changed = changed_files(root, point or "HEAD") or set()
+            found = reformatted_plans(root, point, changed)
+            if not found:
+                raise
+            KEPT["references"][("reformatted", str(root))] = found
+            return validate_plans(root, base, stage)
 
 
 def plan_tests(root: Path, base: str | None) -> set[str]:

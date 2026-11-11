@@ -795,9 +795,7 @@ def test_a_reformatted_old_complete_plan_counts_as_unchanged(
     assert "Same cause" in str(
         pytest.raises(ValueError, validate_plan, root / OLD_NAME).value
     )
-    assert plans.validate_plans(root, base) == "Draft"
-    changed, _, applicable = change_size.judged_plans(root, base, {OLD_NAME})
-    assert OLD_NAME not in changed and applicable == []
+    assert change_size.judged_stage(root, base, None) == "Draft"
 
 
 @pytest.mark.parametrize("change", ["a word added", "two words joined", "a new plan"])
@@ -817,7 +815,7 @@ def test_a_word_change_or_a_new_plan_still_needs_todays_fields(
         (root / name).parent.mkdir(parents=True)
     (root / name).write_text(text)
     with pytest.raises(ValueError, match="Same cause"):
-        plans.validate_plans(root, base)
+        change_size.judged_stage(root, base, None)
 
 
 def test_a_reformatted_old_plan_does_not_cover_new_code(
@@ -828,7 +826,7 @@ def test_a_reformatted_old_plan_does_not_cover_new_code(
     (root / OLD_NAME).write_text(formatted_again(old))
     (root / "app.py").write_text("".join(f"line {n}\n" for n in range(60)))
     with pytest.raises(ValueError, match="applicable PLAN"):
-        plans.validate_plans(root, base)
+        change_size.judged_stage(root, base, None)
 
 
 def test_a_passing_changed_complete_plan_starts_no_word_comparison(
@@ -838,14 +836,20 @@ def test_a_passing_changed_complete_plan_starts_no_word_comparison(
     finished_before_the_update(root, completed_plan)
     base = git(root, "rev-parse", "HEAD")
     (root / OLD_NAME).write_text(completed_plan.replace("Verify", "Check", 1))
-    calls: list[tuple[str, ...]] = []
-    real = change_size._git_output
+    calls: list[str] = []
+    real_git = change_size._git_output
+    real_validate = plans.validate_plan
 
-    def counted(directory: Path, *args: str) -> str:
-        calls.append(args)
-        return real(directory, *args)
+    def counted_git(directory: Path, *args: str) -> str:
+        calls.append(args[0])
+        return real_git(directory, *args)
 
-    monkeypatch.setattr(change_size, "_git_output", counted)
-    changed, _, applicable = change_size.judged_plans(root, base, {OLD_NAME})
-    assert OLD_NAME in changed and len(applicable) == 1
-    assert not [args for args in calls if args[0] == "show"]
+    def counted_validate(path: Path, *, changed: bool = True) -> str:
+        calls.append("validate")
+        return real_validate(path, changed=changed)
+
+    monkeypatch.setattr(change_size, "_git_output", counted_git)
+    monkeypatch.setattr(change_size, "validate_plan", counted_validate)
+    monkeypatch.setattr(plans, "validate_plan", counted_validate)
+    assert change_size.judged_stage(root, base, None) == "Complete"
+    assert calls.count("validate") == 1 and "show" not in calls
