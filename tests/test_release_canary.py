@@ -506,9 +506,15 @@ def test_ci_names_every_new_project_without_a_newest_passing_job(
         "new project (scaffold-vite, macos-latest)\tfailure",
         "new project (scaffold-vite, ubuntu-latest)\tsuccess",
         "new project (greenfield-python, ubuntu-latest)\t",
-        "new project (scaffold-nextjs, ubuntu-latest)\tsuccess",
-        "new project (scaffold-opennext, ubuntu-latest)\tsuccess",
-        "new project (brownfield-itsdangerous, ubuntu-latest)\tsuccess",
+        *(
+            f"new project ({name}, {system})\tsuccess"
+            for name in (
+                "scaffold-nextjs",
+                "scaffold-opennext",
+                "brownfield-itsdangerous",
+            )
+            for system in release_canary.CI_SYSTEMS
+        ),
         "new project (update-python, ubuntu-latest)\tsuccess",
         "hard-eng\tsuccess",
     ]

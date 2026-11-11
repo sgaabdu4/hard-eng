@@ -64,6 +64,9 @@ def test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr(
         "pull-requests": "read",
     }
     assert "covered" in job["outputs"]
+    matrix = workflow["jobs"]["new-project"]["strategy"]["matrix"]
+    assert tuple(matrix["os"]) == release_canary.CI_SYSTEMS
+    assert matrix["exclude"] == [{"os": "macos-latest", "target": "update-python"}]
     summary = workflow["jobs"]["canary"]["steps"][0]["run"]
     assert (
         "passed every new project on these exact files; not repeating them." in summary
@@ -77,6 +80,7 @@ def test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr(
         "a failed job",
         "other files",
         "no merged pull request",
+        "no macOS runs at the head",
         "a failed lookup",
         "a failed check-runs lookup",
         "a lookup that timed out",
@@ -86,7 +90,12 @@ def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], case: str
 ) -> None:
     failed = [*all_passed()[1:], all_passed()[0][:-7] + "failure"]
-    rows = {"no runs at the head": [], "a failed job": failed}.get(case, all_passed())
+    linux = [row for row in all_passed() if "ubuntu" in row]
+    rows = {
+        "no runs at the head": [],
+        "a failed job": failed,
+        "no macOS runs at the head": linux,
+    }.get(case, all_passed())
     fault = subprocess.CalledProcessError(1, "gh")
     breaks = {
         "a failed lookup": ("/pulls", fault),
