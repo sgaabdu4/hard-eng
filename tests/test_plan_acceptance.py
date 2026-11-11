@@ -364,6 +364,9 @@ def test_a_branch_that_edits_the_open_plan_is_judged_by_it(
         ),
         ("Retro: None — fixture command, no check failed.", "Retro: None —", "Retro"),
         ("Retro: None — fixture command, no check failed.", "Retro: None -", "Retro"),
+        ("Retro: None — fixture command, no check failed.", "Retro: None --", "Retro"),
+        ("Retro: None — fixture command, no check failed.", "Retro: None —.", "Retro"),
+        ("Retro: None — fixture command, no check failed.", "Retro: None:", "Retro"),
         (
             "Retro: None — fixture command, no check failed.",
             "Retro: None —   ",
