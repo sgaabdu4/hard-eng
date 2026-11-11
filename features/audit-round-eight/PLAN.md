@@ -109,7 +109,7 @@ Slice 5, ways to switch a check off in a source file (`.hooks/comments.py`, `.ho
 Slice 4, the PR form (`.hooks/shipping.py`, `.agents/skills/he-ship`, `.agents/skills/e2e`, `.agents/skills/he/references/requirements.md`):
 
 - [x] `ship --stage ready` refuses a PR body with fewer than two Mermaid blocks and names the before and after part → `tests/test_shipping.py::test_ready_refuses_a_pr_body_with_no_before_and_after_diagrams`
-- [x] The ship reference holds the PR text contract, the ship skill links to it, the E2E skill names the red ring and the video, and HE-OUTPUT-PLAIN names PR texts → N/A — skill text; the Reader check and the token count against `develop` are in Verification.
+- [x] The ship reference holds the PR text contract, the ship skill links to it, the E2E skill names the red ring and the video, and the plain output rule names PR texts → N/A — skill text; the Reader check and the token count against `develop` are in Verification.
 
 Review fixes (after the code review, the test review and the Reader checks):
 
