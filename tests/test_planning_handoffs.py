@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import agent_hooks
+import plans
 import pytest
 from conftest import SOURCE, commit, git, init, ux_rules_block
 from gate_config import JsonObject
@@ -229,6 +230,32 @@ def test_changed_plans_need_single_source_and_retro(
     assert "\nSingle source: " in template and "\nRetro: " in template
 
 
+def dated(root: Path, day: int, message: str) -> None:
+    stamp = f"2026-11-0{day}T12:00:00+00:00"
+    git(root, "add", ".")
+    subprocess.run(
+        ["git", "commit", "-qm", message],
+        cwd=root,
+        check=True,
+        env={**os.environ, "GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp},
+    )
+
+
+def finished_before_the_update(root: Path, text: str) -> Path:
+    init(root)
+    (root / "README.md").write_text("base\n")
+    commit(root, "base")
+    plan = root / "features/old/PLAN.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text(text)
+    dated(root, 1, "finish the plan")
+    marker = root / ".hooks/hard-eng-source.json"
+    marker.parent.mkdir()
+    marker.write_text('{"revision": "new"}\n')
+    dated(root, 2, "update Hard Eng")
+    return plan
+
+
 def test_a_plan_untouched_since_the_hard_eng_update_skips_the_newer_fields(
     tmp_path: Path, completed_plan: str
 ) -> None:
@@ -243,25 +270,15 @@ def test_a_plan_untouched_since_the_hard_eng_update_skips_the_newer_fields(
     plan.parent.mkdir(parents=True)
     old = re.sub(r"(?m)^(Single source|Retro):.*\n", "", completed_plan)
 
-    def dated(day: int, message: str) -> None:
-        stamp = f"2026-11-0{day}T12:00:00+00:00"
-        git(root, "add", ".")
-        subprocess.run(
-            ["git", "commit", "-qm", message],
-            cwd=root,
-            check=True,
-            env={**os.environ, "GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp},
-        )
-
     plan.write_text(old)
-    dated(1, "finish the old plan")
+    dated(root, 1, "finish the old plan")
     marker.write_text('{"revision": "new"}\n')
-    dated(2, "update Hard Eng")
+    dated(root, 2, "update Hard Eng")
     assert validate_plan(plan) == "Complete"
     plan.write_text(old.replace("Result: Passed", "Result: Passed\n", 1))
     with pytest.raises(ValueError, match="Single source"):
         validate_plan(plan)
-    dated(3, "edit the old plan after the update")
+    dated(root, 3, "edit the old plan after the update")
     with pytest.raises(ValueError, match="Single source"):
         validate_plan(plan)
 
@@ -363,3 +380,34 @@ def test_an_unchanged_complete_plan_without_rules_still_passes(
     path = tmp_path / "PLAN.md"
     path.write_text(visual_plan.replace(ux_rules_block(), ""))
     assert validate_plan(path, changed=False) == "Complete"
+
+
+def test_a_changed_complete_plan_from_before_the_update_passes_without_rules(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    plan = finished_before_the_update(
+        tmp_path / "project", visual_plan.replace(ux_rules_block(), "")
+    )
+    assert validate_plan(plan) == "Complete"
+
+
+def test_a_complete_plan_edited_after_the_update_needs_rules(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    root = tmp_path / "project"
+    plan = finished_before_the_update(root, visual_plan.replace(ux_rules_block(), ""))
+    plan.write_text(plan.read_text() + "\nReopened for new work.\n")
+    dated(root, 3, "edit the plan after the update")
+    with pytest.raises(ValueError, match="UX Rules is missing"):
+        validate_plan(plan)
+
+
+def test_a_missing_ux_reference_names_the_step(
+    tmp_path: Path, visual_plan: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(plans, "UX_REFERENCE", "gone/ux.md")
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan)
+    with pytest.raises(ValueError, match="gone/ux.md.*rerun Hard Eng setup") as error:
+        validate_plan(path)
+    assert "restore the file" in str(error.value)
