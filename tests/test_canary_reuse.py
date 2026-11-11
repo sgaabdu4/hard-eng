@@ -1,7 +1,9 @@
 """`release_canary.py`: a push or a release PR follows the passed new-project jobs of a merged PR."""
 
 import json
+import os
 import subprocess
+from pathlib import Path
 
 import pytest
 import yaml
@@ -64,6 +66,7 @@ def test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr(
         "pull-requests": "read",
     }
     assert "covered" in job["outputs"]
+    assert release_canary.PUSH_LOOKUP_SECONDS * 2 <= job["timeout-minutes"] * 60
     matrix = workflow["jobs"]["new-project"]["strategy"]["matrix"]
     assert tuple(matrix["os"]) == release_canary.CI_SYSTEMS
     assert matrix["exclude"] == [{"os": "macos-latest", "target": "update-python"}]
@@ -121,6 +124,27 @@ def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
     assert (seen.out, "merged PR failed" in seen.err) == ("", case in breaks)
     if case not in breaks or case == "a failed lookup":
         assert release_canary.ci_failures(PUSHED)
+
+
+def test_a_push_runs_the_new_projects_when_a_lookup_stalls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "gh").write_text("#!/bin/sh\nexec sleep 2\n")
+    (tmp_path / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    run = release_canary.output
+
+    def output(command: list[str]) -> str:
+        return "t1" if command[0] == "git" else run(command)
+
+    monkeypatch.setattr(release_canary, "output", output)
+    monkeypatch.setattr(release_canary, "PUSH_LOOKUP_SECONDS", 0.2)
+    listed = [release_canary.folder(" ".join(t)) for t in release_canary.CI_TARGETS]
+    got = release_canary.push_outputs(["setup.py"], PUSHED)
+    assert got == "targets=" + json.dumps(listed)
+    assert "merged PR failed" in capsys.readouterr().err
 
 
 def test_the_release_gate_follows_a_reused_push_to_the_pr_head(
