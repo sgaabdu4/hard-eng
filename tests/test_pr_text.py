@@ -38,6 +38,10 @@ _VALID = _GOOD + "Not checked: the Mac canary\n"
         ("**Not checked:** the Mac canary", False),
         ("Not checked: the Mac canary", True),
         ("  Not checked: the Mac canary", True),
+        ("- Not checked: the Mac canary", True),
+        ("* Not checked: the Mac canary", True),
+        ("- Not checked: N/A", False),
+        ("Not checked:\n- the Mac canary", False),
         ("Not checked: None — docs only, CI ran every check", True),
     ],
 )
@@ -47,6 +51,12 @@ def test_not_checked_needs_what_was_not_checked_or_a_reason_for_none(
     body = _GOOD if line is None else f"{_GOOD}{line}\n"
     assert (body_problem(body) is None) is passes
     assert (body_problem(body.replace("\n", "\r\n")) is None) is passes
+
+
+def test_not_checked_refusal_says_the_answer_goes_on_the_line_that_starts_it() -> None:
+    problem = body_problem(f"{_GOOD}Not checked:\n- the Mac canary\n")
+    assert problem is not None
+    assert "a line that starts `Not checked:`, with the answer on that line" in problem
 
 
 def test_ready_refuses_a_pr_body_without_a_not_checked_line(
@@ -153,3 +163,15 @@ def test_pr_text_check_runs_on_each_push_and_edit_and_the_footer_job_skips_pushe
     assert {"synchronize", "edited"} <= set(types)
     footer = workflow["jobs"]["remove-claude-footer"]["if"]
     assert "github.event.action != 'synchronize'" in footer
+
+
+def test_only_the_footer_job_holds_the_concurrency_group_so_a_push_cannot_cancel_it() -> (
+    None
+):
+    workflow = yaml.safe_load(_workflow_text())
+    assert "concurrency" not in workflow
+    assert "concurrency" not in workflow["jobs"]["pr-text"]
+    assert workflow["jobs"]["remove-claude-footer"]["concurrency"] == {
+        "group": "pr-text-${{ github.event.pull_request.number }}",
+        "cancel-in-progress": False,
+    }
