@@ -637,7 +637,7 @@ def test_hold_expires_and_needs_reason(tmp_path: Path) -> None:
         (
             "uv",
             "uv-tree.txt",
-            "uv add [--group <group>] 'httpx>=0.28.0' 'pytest>=8.3.4'",
+            "uv add 'httpx>=0.28.0'`, then `uv add --group dev 'pytest>=8.3.4'",
         ),
         (
             "poetry",
