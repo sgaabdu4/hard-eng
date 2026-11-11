@@ -340,7 +340,9 @@ def stored_scanner_versions(cutoff: str) -> dict[str, str]:
     return {
         name: version
         for name, version in versions.items()
-        if isinstance(name, str) and isinstance(version, str)
+        if isinstance(name, str)
+        and isinstance(version, str)
+        and VERSION_NUMBER.fullmatch(version)
     }
 
 
