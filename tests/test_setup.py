@@ -977,3 +977,32 @@ def test_install_commit_unchanged_by_a_project_hook_is_kept(
     output = capsys.readouterr().out
     assert "Committed the installed files locally without pushing." in output
     assert git(project, "rev-parse", "HEAD") != head
+
+
+def planned_gates(installer: ModuleType, root: Path) -> str:
+    return installer.plan_install(root.resolve())[0].get("hard-eng.gates.json", "")
+
+
+def test_the_plan_adds_the_group_of_a_new_package(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    (tmp_path / "bun.lock").unlink()
+    (tmp_path / "uv.lock").touch()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="1"\n')
+    gates = tmp_path / "hard-eng.gates.json"
+    gates.write_text(planned_gates(installer, tmp_path))
+    first = json.loads(gates.read_text())
+    assert [group["path"] for group in first["packages"]] == ["."]
+    (tmp_path / "web").mkdir()
+    (tmp_path / "web/package.json").write_text('{"private":true}')
+    (tmp_path / "web/bun.lock").write_text('{"lockfileVersion": 1}\n')
+    second_text = planned_gates(installer, tmp_path) or gates.read_text()
+    second = json.loads(second_text)
+    languages = {(g["path"], g["language"]) for g in second["packages"]}
+    assert languages == {(".", "python"), ("web", "javascript")}
+    assert second["packages"][0] == first["packages"][0]
+    assert second["shared"] == first["shared"]
+    gates.write_text(second_text)
+    assert planned_gates(installer, tmp_path) in {"", second_text}

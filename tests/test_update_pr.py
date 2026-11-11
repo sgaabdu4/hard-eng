@@ -14,7 +14,7 @@ import pytest
 import update
 import update_pr
 import update_runner
-from conftest import add_origin, commit, default_policy, git
+from conftest import add_origin, commit, default_policy, git, remove_application
 from test_husky_setup import husky_project
 from test_update_runner import prefix_commit_messages
 from test_updates import select_release
@@ -780,6 +780,7 @@ def test_next_update_adds_the_stack_skill_the_base_branch_now_needs(
     skill: str,
 ) -> None:
     source, target, _ = feature
+    remove_application(target)
     (target / marker).write_text("{}\n" if marker.endswith(".json") else "name: app\n")
     commit(target, "plan the stack")
     git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
