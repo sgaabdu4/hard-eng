@@ -209,6 +209,9 @@ def print_new(
         lines.append(
             f"  {sure_new} of these {len(candidates)} lines are new; the others are recorded:"
         )
+        lines.append(
+            "  The debt file has no line numbers. Run the tool of this check on the files of this change to find the new ones."
+        )
         lines += [f"  {line}" for line in candidates[: 20 - len(surely)]]
     cut = len(surely) + len(candidates) - 20
     print("\n".join(lines + ([f"  {cut} more lines not shown"] if cut > 0 else [])))
