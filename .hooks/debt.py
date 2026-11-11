@@ -20,6 +20,10 @@ RULE_FOLDER = re.compile(r"[\w.-]*hard-eng-rules\.")
 CODE_FRAME = re.compile(r"[> ]*(?:N[ ]*)*[│|]")
 
 SUMMARY = re.compile(r"\W*Some (?:errors|warnings) were emitted while running checks")
+# Ruff's fix advice for a finding, and its count of fixes: they change with the code near an old finding.
+RUFF_HINT = re.compile(
+    r"help: |note: |- |N \+ |N (?:\w+ )?fix |\[\*\] N fixabl|No fixes available"
+)
 DEBT_FILE = "hard-eng.debt.json"
 GATE_OUTPUT_LIMIT = 8000
 DEBT_LINE = re.compile(r"(?m)^DEBT (\S+) @ (\S+):.*$")
@@ -151,10 +155,12 @@ def real_forms(lines: list[str]) -> dict[str, list[str]]:
     return forms
 
 
-def by_form(lines: Counter[str]) -> Counter[str]:
+def by_form(lines: Counter[str], ruff: bool = False) -> Counter[str]:
     forms: Counter[str] = Counter()
     for line, count in lines.items():
-        if not (CODE_FRAME.match(form := neutral(line)) or SUMMARY.match(form)):
+        form = neutral(line)
+        advice = CODE_FRAME.match(form) or SUMMARY.match(form)
+        if not (advice or (ruff and RUFF_HINT.match(form))):
             forms[form] += count
     return forms
 
@@ -227,13 +233,15 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     if debt is None or gate.get("role") in NEVER or lacks_suite(gate, output):
         return failed
     current = fingerprints(root, group, gate, output) if failed else Counter()
-    if new := by_form(current) - by_form(debt):
+    ruff = "ruff" in gate["command"]
+    old = by_form(debt, ruff)
+    if new := by_form(current, ruff) - old:
         print(f"FAIL {gate['name']} @ {group['path']}: findings beyond {DEBT_FILE}:")
         spelling = {neutral(line): [line] for line in current}
         spelling.update(real_forms(real_lines(root, group, gate, output)))
-        print_new(new, by_form(debt), spelling)
+        print_new(new, old, spelling)
         return True
-    if fixed := by_form(debt) - by_form(current):
+    if fixed := old - by_form(current, ruff):
         print(
             f"FAIL {gate['name']} @ {group['path']}: {fixed.total()} recorded lines are fixed; run "
             f"`python3 .hooks/hard-eng.py adopt` to drop them from {DEBT_FILE}"
@@ -290,8 +298,9 @@ def record(
                 refused.append(key)
                 continue
             if old is not None:
+                ruff = "ruff" in gate["command"]
                 kept = still_found(old.get(key, Counter()), current)
-                if fresh := by_form(current) - by_form(kept):
+                if fresh := by_form(current, ruff) - by_form(kept, ruff):
                     left_out[key] = fresh.total()
                 current = kept
             if current:
