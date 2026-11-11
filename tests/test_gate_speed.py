@@ -511,11 +511,11 @@ def generated_repository(tmp_path: Path) -> Path:
     configure(repository, [gate("suite", "pass")])
     for name in ("PRODUCT.md", "DESIGN.md"):
         (repository / name).write_text((SOURCE / name).read_text())
-    (repository / "big.txt").write_text("line\n" * 1100)
+    (repository / "big.py").write_text("line\n" * 1100)
     (repository / "app").mkdir()
     (repository / "app/package.json").write_text("{}\n")
     (repository / ".gitattributes").write_text(
-        "big.txt linguist-generated\napp/package.json linguist-generated\n"
+        "big.py linguist-generated\napp/package.json linguist-generated\n"
     )
     commit(repository, "Add generated files")
     return repository
@@ -536,8 +536,13 @@ def test_one_attributes_read_gives_each_rule_the_same_generated_files(
     tmp_path: Path,
 ) -> None:
     repository = generated_repository(tmp_path)
+    attributes = repository / ".gitattributes"
     assert gate_config.load_groups(repository)
-    (repository / ".gitattributes").write_text("")
-    with pytest.raises(ValueError):
+    attributes.write_text("app/package.json linguist-generated\n")
+    with pytest.raises(ValueError, match="HE-FILE-LENGTH.*big.py: 1100 lines"):
         gate_config.load_groups(repository)
-    assert gate_config.generated_sources(repository, ["big.txt"]) == set()
+    attributes.write_text("big.py linguist-generated\n")
+    with pytest.raises(ValueError, match="package is missing.*: app"):
+        gate_config.load_groups(repository)
+    attributes.write_text("")
+    assert gate_config.generated_sources(repository, ["big.py"]) == set()
