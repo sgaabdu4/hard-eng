@@ -1,4 +1,5 @@
 import fcntl
+import json
 import os
 import shutil
 import signal
@@ -396,6 +397,7 @@ def test_parallel_scanners_run_the_version_found_once_before_them(
     monkeypatch.setenv("PATH", f"{uvx.parent}:{os.environ['PATH']}")
     monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check"])
     monkeypatch.setattr(tool_setup, "SCANNER_VERSIONS", {})
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
     fixed_cutoff(monkeypatch)
     tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
     assert calls.read_text().splitlines() == [
@@ -403,6 +405,80 @@ def test_parallel_scanners_run_the_version_found_once_before_them(
         f"--exclude-newer {WAIT[1]} semgrep@latest --version",
     ]
     assert tool_setup.managed_command(["ruff", "check"])[3:5] == ["ruff@9.9.9", "check"]
+
+
+def fake_uvx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: str) -> Path:
+    import tool_setup
+
+    calls = tmp_path / "calls.txt"
+    uvx = tmp_path / "bin/uvx"
+    uvx.parent.mkdir()
+    uvx.write_text(
+        "#!/bin/sh\n"
+        f'echo "$*" >> {calls}\n'
+        'for a in "$@"; do case "$a" in *@latest) echo "${a%@latest} 9.9.9";; esac; done\n'
+    )
+    uvx.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{uvx.parent}:{os.environ['PATH']}")
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", argv])
+    monkeypatch.setattr(tool_setup, "SCANNER_VERSIONS", {})
+    fixed_cutoff(monkeypatch)
+    return calls
+
+
+def test_a_full_check_looks_up_the_scanner_versions_and_stores_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    calls = fake_uvx(tmp_path, monkeypatch, "check")
+    tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
+    tool_setup.SCANNER_VERSIONS.clear()
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    assert len(calls.read_text().splitlines()) == 3
+    stored = json.loads(tool_setup.scanner_store().read_text())
+    assert stored == {
+        "cutoff": WAIT[1],
+        "versions": {"ruff": "9.9.9", "semgrep": "9.9.9"},
+    }
+
+
+def test_a_quick_check_reuses_the_scanner_versions_of_its_cutoff_hour(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    calls = fake_uvx(tmp_path, monkeypatch, "check")
+    tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
+    tool_setup.SCANNER_VERSIONS.clear()
+    calls.unlink()
+    tool_setup.pin_python_scanners(["ruff", "semgrep"], 30)
+    assert not calls.exists()
+    assert tool_setup.SCANNER_VERSIONS == {"ruff": "9.9.9", "semgrep": "9.9.9"}
+    tool_setup.pin_python_scanners(["ruff", "zizmor"], 30)
+    assert len(calls.read_text().splitlines()) == 1
+
+
+def test_a_new_cutoff_hour_ends_the_stored_scanner_versions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tool_setup
+
+    calls = fake_uvx(tmp_path, monkeypatch, "check")
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
+    monkeypatch.setattr(
+        tool_setup, "release_cutoff", lambda now=None: "2026-11-08T14:00:00Z"
+    )
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    assert len(calls.read_text().splitlines()) == 2
+    stored = json.loads(tool_setup.scanner_store().read_text())
+    assert stored["cutoff"] == "2026-11-08T14:00:00Z"
+    tool_setup.scanner_store().write_text("not json")
+    tool_setup.pin_python_scanners(["ruff"], 30)
+    assert len(calls.read_text().splitlines()) == 3
 
 
 def test_configured_uvx_scanners_are_pinned_like_bare_ones(
