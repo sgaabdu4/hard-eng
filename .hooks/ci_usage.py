@@ -241,6 +241,14 @@ def ci_usage(
     return 0
 
 
+def _compared_tree(comparison: dict[str, JsonValue], side: str) -> str | None:
+    """The tree of one commit of a compare reply. A merge commit on the branch is not in the PR head, but its files are when the merge base has the same tree."""
+    value: JsonValue = comparison.get(side)
+    for key in ("commit", "tree", "sha"):
+        value = value.get(key) if isinstance(value, dict) else None
+    return value if isinstance(value, str) else None
+
+
 def _pull_request_head(
     root: Path, repository: str, base: str, branch: str
 ) -> tuple[str, str]:
@@ -266,7 +274,9 @@ def _pull_request_head(
     endpoint = f"repos/{repository}/compare/{base}...{head}"
     comparison = _object(_json(gh(root, "api", endpoint), "compare"), "compare")
     if comparison.get("status") not in {"ahead", "identical"}:
-        raise ShippingError("PR head does not contain the previous base")
+        tree = _compared_tree(comparison, "base_commit")
+        if tree is None or tree != _compared_tree(comparison, "merge_base_commit"):
+            raise ShippingError("PR head does not contain the previous base")
     endpoint = f"repos/{repository}/git/commits/{head}"
     commit = _object(_json(gh(root, "api", endpoint), "PR commit"), "PR commit")
     return head, _text(_object(commit.get("tree"), "PR tree"), "sha", "PR tree")

@@ -465,6 +465,26 @@ def test_reused_pull_request_result_skips_gates(
     assert "fails" not in output
 
 
+def _diverged(push: MergedPush, base_tree: str, merge_base_tree: str) -> None:
+    push.responses[f"compare/{push.base}...{push.head}"] = {
+        "status": "diverged",
+        "base_commit": {"commit": {"tree": {"sha": base_tree}}},
+        "merge_base_commit": {"commit": {"tree": {"sha": merge_base_tree}}},
+    }
+
+
+def test_a_push_reuses_a_pr_head_that_starts_from_the_files_of_a_merged_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A release merge commit on the branch is not in the next PR head, but its files are."""
+    push = _merged_push(tmp_path, monkeypatch, method="merge")
+    _diverged(push, "b" * 40, "b" * 40)
+    assert reused_pull_request(push.root, push.base) == push.head
+    _diverged(push, "b" * 40, "c" * 40)
+    assert reused_pull_request(push.root, push.base) is None
+    assert "PR head does not contain the previous base" in capsys.readouterr().out
+
+
 def test_a_push_to_another_branch_reuses_the_merged_pr_checks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
