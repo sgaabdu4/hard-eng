@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from ci_setup import configure_ci, migrate_bun
-from conftest import SOURCE, migrates_to_template
+from conftest import SOURCE, WORKFLOW_TEMPLATE, migrates_to_template
 
 
 @pytest.mark.parametrize(
@@ -23,7 +23,7 @@ from conftest import SOURCE, migrates_to_template
     ],
 )
 def test_pnpm_setup_step_with_a_condition_migrates_as_one_step(step: str) -> None:
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     old = template.replace(
         "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0\n"
         "        with:\n          bun-version: ${{ steps.impact.outputs.bun || 'latest' }}\n",
@@ -34,7 +34,7 @@ def test_pnpm_setup_step_with_a_condition_migrates_as_one_step(step: str) -> Non
 
 
 def test_pnpm_bootstrap_migrates_to_the_template_bun_steps(tmp_path: Path) -> None:
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     bun_step = (
         "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0\n"
         "        with:\n          bun-version: ${{ steps.impact.outputs.bun || 'latest' }}\n"
@@ -92,7 +92,7 @@ def test_existing_ci_without_bun_is_reported(
 
 
 def test_an_old_workflow_gets_double_quoted_mise_switches(tmp_path: Path) -> None:
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     for name in ("MISE_PREFER_OFFLINE", "MISE_USE_VERSIONS_HOST"):
         assert f'{name}: "false"\n' in template
     old = template.replace('"false"', "'false'")

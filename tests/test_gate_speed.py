@@ -24,6 +24,7 @@ import pytest
 from ci_setup import migrate_impact_token
 from conftest import (
     SOURCE,
+    WORKFLOW_TEMPLATE,
     add_origin,
     commit,
     configure,
@@ -209,7 +210,7 @@ def test_impact_takes_the_fast_path_when_the_change_is_already_proven(
 
 
 def test_old_impact_step_gains_the_token_its_reuse_lookup_needs() -> None:
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     token = "          GH_TOKEN: ${{ github.token }}\n"
     start = template.index("id: impact")
     old = template[:start] + template[start:].replace(token, "", 1)

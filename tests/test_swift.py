@@ -17,7 +17,14 @@ from basic_mode import announce
 from ci_jobs import LanguageFilter, impact_runner
 from ci_setup import configure_ci
 from comments import validate_comments, validate_suppressions
-from conftest import SOURCE, commit, init, load_module, migrates_to_template
+from conftest import (
+    SOURCE,
+    WORKFLOW_TEMPLATE,
+    commit,
+    init,
+    load_module,
+    migrates_to_template,
+)
 from gate_config import GateConfig, Group, validate_group, validate_required_checks
 from gate_schedule import gate_order
 from swift_setup import add_swift_groups, swift_projects
@@ -604,7 +611,7 @@ def test_workflow_without_swift_keeps_its_jobs(
     workflow = generated_workflow(root, config)
     assert list(yaml.safe_load(workflow)["jobs"]) == ["hard-eng"]
     assert ",," not in workflow
-    assert ",," not in (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    assert ",," not in WORKFLOW_TEMPLATE.read_text()
 
 
 def test_existing_workflow_gains_the_runner_job_once(
@@ -647,7 +654,7 @@ LEGACY_LAUNCHER = '--package="@jdxcode/mise-linux-${RUNNER_ARCH,,}@latest"'
 
 
 def test_launcher_migration(tmp_path: Path) -> None:
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     assert '--package="$MISE_PACKAGE"' in template
     echo = next(line for line in template.splitlines() if "MISE_PACKAGE=" in line)
     old = template.replace(echo + "\n", "").replace(

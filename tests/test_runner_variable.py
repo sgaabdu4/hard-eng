@@ -25,9 +25,16 @@ def hosted(plain: str, *, swift: bool) -> str:
     )
 
 
-@pytest.mark.parametrize("name", ["hard-eng.yml", "pr-text.yml"])
-def test_shipped_workflows_take_their_runner_from_the_variable(name: str) -> None:
-    workflow = yaml.safe_load((SOURCE / ".github/workflows" / name).read_text())
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".github/hard-eng.yml",
+        ".github/workflows/hard-eng.yml",
+        ".github/workflows/pr-text.yml",
+    ],
+)
+def test_shipped_workflows_take_their_runner_from_the_variable(path: str) -> None:
+    workflow = yaml.safe_load((SOURCE / path).read_text())
     assert {job["runs-on"] for job in workflow["jobs"].values()} == {LINUX_RUNNER}
 
 

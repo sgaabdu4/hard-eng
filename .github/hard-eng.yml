@@ -1,0 +1,78 @@
+name: Hard Eng
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+  workflow_call:
+    inputs:
+      base_sha:
+        description: Git comparison base for affected checks
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  checks: read # Verify the upstream release for scaffold-only updates.
+  pull-requests: read # Find the merged PR whose passed checks cover a base-branch push.
+
+concurrency:
+  group: hard-eng-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hard-eng:
+    name: hard-eng
+    runs-on: ${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    env:
+      EXTRA_SDK_TOOLS: dart@latest
+      MISE_FETCH_REMOTE_VERSIONS_CACHE: 0s
+      MISE_PREFER_OFFLINE: "false"
+      MISE_USE_VERSIONS_HOST: "false"
+      MISE_MINIMUM_RELEASE_AGE: 2d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+      - name: Find whether only docs changed
+        id: impact
+        env:
+          BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "MISE_DATA_DIR=${MISE_DATA_DIR:-$RUNNER_TEMP/hard-eng-tools/mise/data}"
+            echo "MISE_CACHE_DIR=${MISE_CACHE_DIR:-$RUNNER_TEMP/hard-eng-tools/mise/cache}"
+            echo "MISE_STATE_DIR=${MISE_STATE_DIR:-$RUNNER_TEMP/hard-eng-tools/mise/state}"
+            echo "BUN_INSTALL_CACHE_DIR=${BUN_INSTALL_CACHE_DIR:-$RUNNER_TEMP/hard-eng-tools/bun/cache}"
+            echo "MISE_PACKAGE=@jdxcode/mise-$(uname -s | tr '[:upper:]' '[:lower:]')-$(echo "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')@latest"
+          } >> "$GITHUB_ENV"
+          python3 .hooks/hard-eng.py impact --base "$BASE_SHA" >> "$GITHUB_OUTPUT" || echo docs_only=false >> "$GITHUB_OUTPUT"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ steps.impact.outputs.bun || 'latest' }}
+      - name: Run the secret scan for docs-only changes
+        if: steps.impact.outputs.docs_only == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          bun x --package="$MISE_PACKAGE" mise --no-config install uv@latest &&
+          bun x --package="$MISE_PACKAGE" mise --no-config exec uv@latest -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
+      - name: Run required checks
+        if: steps.impact.outputs.docs_only != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}
+          SDK_TOOLS: ${{ steps.impact.outputs.tools || 'uv@latest python@3.12' }}
+        run: |
+          read -r -a tools <<< "$SDK_TOOLS ${EXTRA_SDK_TOOLS:-}"
+          bun x --package="$MISE_PACKAGE" mise --no-config install "${tools[@]}" &&
+          MISE_FETCH_REMOTE_VERSIONS_CACHE=1h bun x --package="$MISE_PACKAGE" mise --no-config exec "${tools[@]}" -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
