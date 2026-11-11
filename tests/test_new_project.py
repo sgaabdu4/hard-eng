@@ -295,7 +295,25 @@ def test_python_locks_the_scaffold_and_adds_tested_starter_code(
     """A new Python project starts with tests and a performance suite, so its first check passes."""
     ran = created(tmp_path, monkeypatch, "python", {"main.py": "print('hi')\n"})
     assert "--no-package" in ran[0]
-    assert ran[1] == ["uv", "lock", "--quiet"]
+    assert ran[2] == ["uv", "lock", "--quiet"]
     assert (tmp_path / "tests/test_main.py").is_file()
     assert (tmp_path / "tests/performance/test_greeting_performance.py").is_file()
     assert "def greeting" in (tmp_path / "main.py").read_text()
+
+
+def test_python_declares_pytest_for_the_types_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ran = created(tmp_path, monkeypatch, "python", {"main.py": "print('hi')\n"})
+    declared = ["uv", "add", "--quiet", "--dev", "--bounds", "exact", "--no-sync"]
+    assert ran[1] == [*declared, "pytest"]
+    assert ran.index(["uv", "lock", "--quiet"]) > 1
+
+
+def test_the_python_starter_test_calls_main_directly() -> None:
+    starter = new_project.SOURCE / ".agents/starters/python/tests/test_main.py"
+    text = starter.read_text()
+    assert "main.main()" in text
+    assert "runpy" not in text
+    assert "run_module" not in text
+    assert "__main__" not in text
