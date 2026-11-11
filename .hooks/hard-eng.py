@@ -621,9 +621,8 @@ def check(
 
     with check_lock(ROOT) as lock:
         installed = read_installed(lock, ROOT)
-        start = clean_start(
-            lock, ROOT, base, plan_stage, quick or languages != NO_LANGUAGES
-        )
+        partial = quick or languages != NO_LANGUAGES or not dependents or related_tests
+        start = clean_start(lock, ROOT, base, plan_stage, partial)
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(language_groups(groups, languages), quick, installed)
         from debt import require_shrink
