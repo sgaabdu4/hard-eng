@@ -22,6 +22,12 @@ FIX_FIRST = (
     "Installed gates still apply."
 )
 
+CI_STEP = (
+    "CI setup pending: add a `shipping` block with the project's checks and a "
+    "measured ci_seconds budget to hard-eng.gates.json and merge it to the base "
+    "branch, then rerun setup"
+)
+
 
 def test_update_pr_fails_after_a_remembered_refusal(
     release: tuple[Path, Path, str],
@@ -79,7 +85,7 @@ def test_a_failed_update_build_still_names_the_files_that_the_rerun_wrote(
     with pytest.raises(subprocess.SubprocessError) as error:
         update_runner.locked_update(project, repair=True)
     cause = f"git ls-remote exited 128: fatal: '{gone}' does not appear to be a git repository"
-    note = f"This checkout: setup wrote {GATES_FILE}; review and commit it."
+    note = f"This checkout: setup wrote {GATES_FILE}; review and commit it; {CI_STEP}."
     assert str(error.value) == f"{cause}. {note}"
     assert recorded_failure(project) == (
         f"Hard Eng update failed: {cause}. {FIX_FIRST} {note}"
@@ -94,7 +100,7 @@ def test_a_build_error_that_needs_more_arguments_keeps_its_cause_and_the_note(
     monkeypatch.setattr(update_runner, "build_update", Mock(side_effect=cause))
     with pytest.raises(ValueError) as error:
         update_runner.locked_update(project, repair=True)
-    note = f"This checkout: setup wrote {GATES_FILE}; review and commit it."
+    note = f"This checkout: setup wrote {GATES_FILE}; review and commit it; {CI_STEP}."
     assert str(error.value) == f"Expecting value: line 1 column 1 (char 0). {note}"
     assert recorded_failure(project) == (
         f"Hard Eng update failed: Expecting value: line 1 column 1 (char 0). {FIX_FIRST} {note}"
@@ -135,3 +141,73 @@ def test_a_rerun_writes_the_workflow_gates_when_the_checkout_has_a_workflow(
     outcome = update_runner.locked_update(project, repair=True)
     assert "the update brings the workflow files" not in outcome
     assert {"actionlint", "zizmor"} <= set(shared_names(project))
+
+
+def built_repair_branch(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    project = installed_python_project(release, monkeypatch, True)
+    git(project, "switch", "-q", "main")
+    add_shipping_policy(project)
+    git(project, "push", "-q", "--no-verify", "origin", "main")
+    git(project, "switch", "-q", "task")
+    git(project, "merge", "-q", "main")
+    update_runner.locked_update(project, repair=True)
+    return project
+
+
+def test_a_repair_branch_in_its_own_worktree_is_ready_when_nothing_is_newer(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = built_repair_branch(release, monkeypatch)
+    git(
+        project,
+        "worktree",
+        "add",
+        "-q",
+        str(project.parent / "fixing"),
+        update_runner.UPDATE_BRANCH,
+    )
+    outcome = update_runner.locked_update(project, repair=True)
+    assert "ready on" in outcome
+
+
+def test_a_merged_repair_branch_at_the_base_tip_is_not_ready(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = built_repair_branch(release, monkeypatch)
+    branch = update_runner.UPDATE_BRANCH
+    tip = git(project, "rev-parse", "origin/main")
+    assert update_runner.branch_current(project, tip)
+    git(project, "push", "-q", "--no-verify", "origin", f"{branch}:main")
+    git(project, "fetch", "-q", "origin", "main")
+    assert not update_runner.branch_current(
+        project, git(project, "rev-parse", "origin/main")
+    )
+
+
+def test_a_rerun_with_the_block_only_on_the_checkout_prints_no_ci_setup_step(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    add_shipping_policy(project)
+    capsys.readouterr()
+    outcome = update_runner.locked_update(project, repair=True)
+    shown = capsys.readouterr().err + outcome
+    assert "CI setup pending" not in shown
+    assert "the update brings the workflow files" in outcome
+
+
+def test_a_rerun_with_no_shipping_block_names_the_ci_step_once(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    capsys.readouterr()
+    outcome = update_runner.locked_update(project, repair=True)
+    shown = capsys.readouterr().err + outcome
+    assert shown.count("CI setup pending") == 1
+    assert "merge it to the base branch, then rerun setup" in outcome

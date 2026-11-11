@@ -333,7 +333,9 @@ def update_plan(
         timeout=60,
         check=False,
     )
-    sys.stderr.write(planned.stderr)
+    for line in planned.stderr.splitlines(keepends=True):
+        if not line.startswith("CI setup pending:"):
+            sys.stderr.write(line)
     if planned.returncode != 0:
         reason = refusal_reason(planned.stderr)
         raise ValueError(f"setup refused the update: {reason or 'no reason printed'}")

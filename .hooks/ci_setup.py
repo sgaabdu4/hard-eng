@@ -731,7 +731,7 @@ def adapt_ci(
     policy = load_policy(root, required=False)
     if policy is None:
         print(
-            "CI setup pending: configure project shipping checks and a measured ci_seconds budget, then rerun setup. The source repository's timeout is not a project budget.",
+            "CI setup pending: add a `shipping` block with the project's checks and a measured ci_seconds budget to hard-eng.gates.json. After it is on the base branch, rerun setup; the update then adds the workflow. The source repository's timeout is not a project budget.",
             file=sys.stderr,
         )
         return
