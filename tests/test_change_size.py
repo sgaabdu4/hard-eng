@@ -12,6 +12,7 @@ import pytest
 import update
 import update_runner
 from conftest import commit, git
+from gate_config import changed_files
 from plans import validate_plans
 from test_plans import edit, new_file, released_branch, sized_branch
 from test_updates import select_release
@@ -475,6 +476,8 @@ def test_the_update_only_rule_asks_no_proof_of_a_tree_that_is_not_clean(
     proof.assert_called()
     proof.reset_mock()
     (target / "app.py").write_text("print('more work')\n")
+    changed = changed_files(target, "main") or set()
+    assert not change_size.update_only(target, "main", changed)
+    proof.assert_not_called()
     with pytest.raises(ValueError, match="PLAN.md: plan needs"):
         plans.validate_plans(target, "main")
-    proof.assert_not_called()

@@ -7,6 +7,7 @@ from types import ModuleType
 import gate_config
 import pytest
 from conftest import add_origin, commit, configure, gate, git, init, plan_document
+from change_size import plan_tests
 from gate_config import repository_files
 from plans import is_plan_path, plan_files, validate_plan, validate_plans
 
@@ -245,3 +246,40 @@ def test_an_unpushed_plan_on_the_default_branch_covers_a_later_fix(
     commit(root, "plan and work")
     (root / "app.py").write_text("value = 1\n")
     assert validate_plans(root, stage="Complete") == "Complete"
+
+
+def test_the_skip_rule_and_the_plan_rule_judge_the_same_plans(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / ".hooks").mkdir()
+    (root / ".hooks/hard-eng.py").write_text("")
+    (root / "a.py").write_text("value = 0\n")
+    (root / "PLAN.md").write_text(
+        plan_document().replace(
+            UNPROVED, "- [x] Moved → `tests/test_moved.py::test_moved`."
+        )
+    )
+    commit(root, "base")
+    add_origin(root)
+    git(root, "fetch", "-q", "origin")
+    git(root, "switch", "-qc", "work")
+    (root / "features/moved").mkdir(parents=True)
+    git(root, "mv", "PLAN.md", "features/moved/PLAN.md")
+    commit(root, "move the plan")
+    assert plan_tests(root, None) == set()
+    git(root, "switch", "-q", "main")
+    (root / "features/open").mkdir(parents=True)
+    (root / "features/open/PLAN.md").write_text(
+        plan_document()
+        .replace("Status: Complete", "Status: Ready")
+        .replace(UNPROVED, "- [x] Open → `tests/test_open.py::test_open`.")
+    )
+    commit(root, "open plan on the base")
+    git(root, "push", "-q", "origin", "main")
+    git(root, "switch", "-q", "work")
+    git(root, "merge", "-q", "main")
+    (root / "a.py").write_text("value = 1\nother = 2\n" * 20)
+    commit(root, "big change")
+    assert plan_tests(root, None) == {"test_open"}
+    with pytest.raises(ValueError, match="features/open/PLAN.md: plan is Ready"):
+        validate_plans(root)

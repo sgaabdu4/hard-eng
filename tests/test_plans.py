@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import change_size
 import pytest
 from conftest import SOURCE, commit, git
 from gate_config import GateConfig
@@ -996,3 +997,59 @@ def test_a_branch_that_only_moves_a_plan_passes(
     (repository / "features/moved/PLAN.md").write_text(completed_plan + "\nmore\n")
     commit(repository, "edit the moved plan")
     assert validate_plans(repository) == "Complete"
+
+
+def open_plan_on_the_base(repository: Path, completed_plan: str, status: str) -> None:
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", f"Status: {status}")
+    )
+    released_branch(repository)
+
+
+@pytest.mark.parametrize("status", ["Draft", "Ready"])
+def test_a_small_change_needs_no_plan_when_the_base_holds_an_open_plan(
+    repository: Path,
+    completed_plan: str,
+    capsys: pytest.CaptureFixture[str],
+    status: str,
+) -> None:
+    open_plan_on_the_base(repository, completed_plan, status)
+    edit(repository, "a.py", 3)
+    commit(repository, "small code change")
+    assert validate_plans(repository) == "Complete"
+    assert "Size: small" in capsys.readouterr().out
+    assert validate_plans(repository, stage="Ready") == "Ready"
+    assert validate_plans(repository, "main") == "Complete"
+
+
+@pytest.mark.parametrize("status", ["Draft", "Ready"])
+def test_a_big_change_is_judged_by_the_open_plan_of_the_base(
+    repository: Path, completed_plan: str, status: str
+) -> None:
+    open_plan_on_the_base(repository, completed_plan, status)
+    new_file(repository)
+    commit(repository, "big code change")
+    with pytest.raises(ValueError, match=f"plan is {status}; this check requires"):
+        validate_plans(repository)
+
+
+@pytest.mark.parametrize("big", [False, True], ids=["small", "big"])
+def test_a_branch_that_edits_the_open_plan_is_judged_by_it(
+    repository: Path,
+    completed_plan: str,
+    monkeypatch: pytest.MonkeyPatch,
+    big: bool,
+) -> None:
+    open_plan_on_the_base(repository, completed_plan, "Ready")
+    new_file(repository) if big else edit(repository, "a.py", 3)
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", "Status: Ready") + "\nmore\n"
+    )
+    commit(repository, "code and plan")
+    asked: list[Path] = []
+    monkeypatch.setattr(
+        change_size, "size_verdict", lambda root: asked.append(root) or (True, "")
+    )
+    with pytest.raises(ValueError, match="plan is Ready; this check requires"):
+        validate_plans(repository)
+    assert asked == []
