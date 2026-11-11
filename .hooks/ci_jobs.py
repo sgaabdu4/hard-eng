@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 import urllib.request
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from collections.abc import Callable
 from contextlib import redirect_stdout, suppress
 from datetime import UTC, datetime, timedelta
@@ -41,6 +41,23 @@ def add_language_filters(parser: ArgumentParser) -> ArgumentParser:
             default=[],
             help=help_text,
         )
+    return parser
+
+
+def shard_value(value: str) -> str:
+    if value in ("rest", "merge"):
+        return value
+    if value.isascii() and value.isdecimal() and int(value) > 0:
+        return str(int(value))
+    raise ArgumentTypeError("--shard takes a shard number, rest or merge")
+
+
+def add_shard_option(parser: ArgumentParser) -> ArgumentParser:
+    parser.add_argument(
+        "--shard",
+        type=shard_value,
+        help="Run test shard N, the gates outside the shards (rest), or merge the shard reports (merge)",
+    )
     return parser
 
 

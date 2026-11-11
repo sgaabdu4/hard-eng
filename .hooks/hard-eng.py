@@ -51,6 +51,7 @@ from ci_jobs import (
     NO_LANGUAGES,
     LanguageFilter,
     add_language_filters,
+    add_shard_option,
     language_filter,
     language_groups,
 )
@@ -608,6 +609,7 @@ def check(
     related_tests: bool = False,
     quick: bool = False,
     languages: LanguageFilter = NO_LANGUAGES,
+    shard: str | None = None,
 ) -> int:
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
@@ -627,6 +629,10 @@ def check(
         start = clean_start(lock, ROOT, base, plan_stage, partial)
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(language_groups(groups, languages), quick, installed)
+        if shard:
+            from shards import shard_groups
+
+            groups = shard_groups(groups, shard)
         from debt import require_shrink
 
         require_shrink(ROOT, base)
@@ -725,6 +731,7 @@ def check_command(args: "Namespace") -> int:
         related_tests=args.related_tests,
         quick=args.quick,
         languages=language_filter(args),
+        shard=args.shard,
     )
 
 
@@ -739,8 +746,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.set_defaults(apply=False, merge=True)
     commands = parser.add_subparsers(dest="command", required=True)
-    checks = add_language_filters(
-        commands.add_parser("check", help="Run applicable native checks")
+    checks = add_shard_option(
+        add_language_filters(
+            commands.add_parser("check", help="Run applicable native checks")
+        )
     )
     checks.add_argument("--base", help="Git base; unknown impact runs all checks")
     checks.add_argument("--plan-stage", choices=("Draft", "Ready", "Complete"))
