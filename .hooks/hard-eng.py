@@ -832,7 +832,10 @@ def check_command(args: "Namespace") -> int:
 def main() -> int:
     import argparse
 
-    if "pre-push" in (Path(sys.argv[0]).name, *sys.argv[1:2]):
+    if "pre-push" in (Path(sys.argv[0]).name, *sys.argv[1:2]) and not {
+        "-h",
+        "--help",
+    } & set(sys.argv[1:]):
         return pre_push()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.set_defaults(apply=False, merge=True)
