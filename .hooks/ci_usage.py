@@ -272,11 +272,11 @@ def _pull_request_head(
     return head, _text(_object(commit.get("tree"), "PR tree"), "sha", "PR tree")
 
 
-def _release_head(root: Path, base_branch: str) -> tuple[str, str]:
-    """The head and tree of a PR from the base branch into another branch of this repository."""
+def _release_revision(base_branch: str) -> str | None:
+    """The head commit of a PR from the base branch into another branch of this repository."""
     import os
 
-    from shipping import ShippingError, _json, _object, _repo, _sha, _text, git
+    from shipping import ShippingError, _json, _object, _repo, _sha, _text
 
     try:
         text = Path(os.environ.get("GITHUB_EVENT_PATH", "")).read_text()
@@ -285,18 +285,16 @@ def _release_head(root: Path, base_branch: str) -> tuple[str, str]:
     pull = _object(_object(_json(text, "event"), "event").get("pull_request"), "PR")
     head = _object(pull.get("head"), "PR head")
     base = _object(pull.get("base"), "PR base")
-    if _text(head, "ref", "PR head") != base_branch:
-        raise ShippingError("the PR head is not the base branch")
-    if _text(base, "ref", "PR base") == base_branch:
-        raise ShippingError("the PR base is the base branch")
+    if (
+        _text(head, "ref", "PR head") != base_branch
+        or _text(base, "ref", "PR base") == base_branch
+    ):
+        return None
     repositories = {
         _repo(_object(side.get("repo"), "PR repository").get("full_name"), "PR")
         for side in (head, base)
     }
-    if len(repositories) != 1:
-        raise ShippingError("the PR head comes from another repository")
-    revision = _sha(head.get("sha"), "PR head")
-    return revision, git(root, "rev-parse", f"{revision}^{{tree}}").strip()
+    return _sha(head.get("sha"), "PR head") if len(repositories) == 1 else None
 
 
 def reused_pull_request(root: Path, base: str) -> str | None:
@@ -316,6 +314,9 @@ def reused_pull_request(root: Path, base: str) -> str | None:
             or not (on_push or event == "pull_request")
         ):
             return None
+        release = "" if on_push else _release_revision(policy["base"]) or ""
+        if not (on_push or release):
+            return None
     except ShippingError:
         return None
     try:
@@ -330,7 +331,8 @@ def reused_pull_request(root: Path, base: str) -> str | None:
                 ref.removeprefix("refs/heads/"),
             )
         else:
-            head, tree = _release_head(root, policy["base"])
+            head = release
+            tree = git(root, "rev-parse", f"{head}^{{tree}}").strip()
         if tree != git(root, "rev-parse", "HEAD^{tree}").strip():
             raise ShippingError("the covering PR tested a different tree")
         _checks(root, repository, head, policy, False, completed_only=not on_push)
