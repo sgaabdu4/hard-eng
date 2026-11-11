@@ -455,6 +455,30 @@ def test_the_pyre_ignore_comments_are_refused(
     assert f"app.py:2 adds {pattern!r}" in str(error.value)
 
 
+@pytest.mark.parametrize(
+    "form",
+    ["to" + "do", "to" + "doIf", "fai" + "ling", "fa" + "ils", "i" + "f", "run" + "If"],
+)
+@pytest.mark.parametrize("caller", ["it", "test", "describe"])
+def test_the_todo_and_conditional_test_forms_are_refused(
+    tmp_path: Path, caller: str, form: str
+) -> None:
+    """HE-NO-SWITCH-OFF: Bun and Vitest skip or weaken a test with these forms too."""
+    root = switch_root(tmp_path, "a.test.ts", "")
+    (root / "a.test.ts").write_text(f"{caller}.{form}(cond)('s', () => {{}});\n")
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"a.test.ts:1 adds '{caller}.{form}(" in str(error.value)
+
+
+def test_a_normal_test_and_another_object_named_todo_pass(tmp_path: Path) -> None:
+    root = switch_root(tmp_path, "a.test.ts", "")
+    (root / "a.test.ts").write_text(
+        "test('s', () => {});\nlist.to" + "do('x');\nit.each([1])('s', () => {});\n"
+    )
+    validate_suppressions(root, "HEAD")
+
+
 ASSERTS = [
     ("tests/test_a.py", "def test_a():\n    assert f() == 1\n    assert g()\n"),
     ("src/a.test.ts", "test('a', () => {\n  expect(f()).toBe(1);\n});\n"),
