@@ -36,7 +36,7 @@ Proof: check
 
 ## HE-COMMENT-LINES
 
-A changed source file holds no comment block longer than one line. Generated output and scaffold paths are exempt, and so are blocks a file already held when the change that installs Hard Eng is made. A later change that touches the file answers for each block.
+A changed source file holds no comment block longer than one line. Generated output and scaffold paths are exempt. In the change that installs Hard Eng, blocks that a file held before that change are also exempt. In each later change, every comment block longer than one line in a changed file fails the check.
 
 Proof: check
 
