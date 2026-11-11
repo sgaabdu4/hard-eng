@@ -16,6 +16,7 @@ from project_setup import (
     [
         ("dart", "pubspec.yaml", "name: app\n", "pubspec.lock"),
         ("python", "pyproject.toml", '[project]\nname = "app"\n', "uv.lock"),
+        ("javascript", "package.json", '{"name": "app"}\n', "bun.lock"),
     ],
 )
 def test_an_ignored_lock_file_is_refused(
