@@ -955,10 +955,12 @@ def test_no_network_names_the_address_and_the_step(
 
 
 def test_a_conflicting_local_edit_shows_both_texts_and_the_step(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from local_edits import merge_local_edits
 
+    (tmp_path / "gitconfig").write_text("[merge]\n\tconflictStyle = diff3\n")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
     old, target = tmp_path / "old", tmp_path / "target"
     lines = [f"line {number}\n" for number in range(60)]
     old.write_text("".join(lines))
@@ -974,6 +976,7 @@ def test_a_conflicting_local_edit_shows_both_texts_and_the_step(
     assert "line 10 with my wording" in message
     assert "line 10 as the update words it" in message
     assert "In skill.md, put the update's lines in place of those local" in message
+    assert "installed lines" not in message
     target.write_text(content)
     assert merge_local_edits("skill.md", target, old, content) == content
     target.write_text(content + "my own addition\n")
