@@ -63,6 +63,25 @@ BROWNFIELD = (
     "https://github.com/pallets/itsdangerous.git",
     "672971d66a2ef9f85151e53283113f33d642dabd",
 )
+# `adopt` refuses a project with no performance suite, so a real adoption adds one first.
+BROWNFIELD_SUITE = "tests/performance/test_signing_performance.py"
+BROWNFIELD_SUITE_TEXT = """import time
+
+from itsdangerous import URLSafeSerializer
+
+
+def run_seconds() -> float:
+    serializer = URLSafeSerializer(secret_key="secret-key")
+    start = time.perf_counter()
+    for index in range(2_000):
+        serializer.loads(serializer.dumps({"index": index}))
+    return time.perf_counter() - start
+
+
+def test_signing_round_trips_2k_values_within_budget() -> None:
+    # Fastest of 5 runs, so a busy shared runner's pause does not fail a fast build.
+    assert min(run_seconds() for _ in range(5)) < 1.0
+"""
 KINDS = ("installed", "scaffold", "greenfield", "brownfield")
 # Installed projects prove the release with their full checks; new projects prove the agents.
 AGENT_KINDS = ("scaffold", "greenfield", "brownfield")
@@ -290,6 +309,8 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
     must(work, log, "setup failed", ["sh", str(source / "setup.sh"), str(source), *new])
     add_documents(work)
     if kind == "brownfield":
+        (work / BROWNFIELD_SUITE).parent.mkdir(parents=True)
+        (work / BROWNFIELD_SUITE).write_text(BROWNFIELD_SUITE_TEXT)
         # Old findings become shrink-only debt in the install commit, as for a real adoption.
         must(work, log, "adopt failed", [sys.executable, ".hooks/hard-eng.py", "adopt"])
     must(
