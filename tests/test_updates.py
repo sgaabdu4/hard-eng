@@ -924,3 +924,31 @@ def test_installed_hooks_pass_react_doctor_command_input_rule() -> None:
         for match in REACT_DOCTOR_0_9_14_COMMAND_INPUT_RISK.finditer(source)
     ]
     assert findings == []
+
+
+def test_no_network_names_the_address_and_the_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import io
+    import urllib.error
+    import urllib.request
+
+    answers: list[object] = [
+        urllib.error.URLError(ConnectionRefusedError(61, "Connection refused")),
+        io.BytesIO(b'{"sha": "x"}'),
+    ]
+
+    def opener(*_arguments: object, **_options: object) -> object:
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(urllib.request, "urlopen", opener)
+    monkeypatch.setattr(update, "github_token", Mock(return_value=None))
+    with pytest.raises(OSError) as refused:
+        update.github_json("repos/example/commits/main")
+    message = str(refused.value)
+    assert "api.github.com" in message and "Connection refused" in message
+    assert "check the network and run the same command again" in message
+    assert update.github_json("repos/example/commits/main") == {"sha": "x"}

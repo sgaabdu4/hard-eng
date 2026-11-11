@@ -55,6 +55,7 @@ def github_token() -> str | None:
 
 def github_response(endpoint: str, headers: dict[str, str]) -> bytes:
     import http.client
+    import urllib.error
     import urllib.request
 
     auth = {"Authorization": f"Bearer {token}"} if (token := github_token()) else {}
@@ -65,6 +66,13 @@ def github_response(endpoint: str, headers: dict[str, str]) -> bytes:
             return response.read()
     except http.client.HTTPException as error:
         raise OSError(f"GitHub response for {endpoint} was cut short") from error
+    except urllib.error.HTTPError:
+        raise
+    except urllib.error.URLError as error:
+        raise OSError(
+            f"Could not reach api.github.com ({error.reason}); "
+            "check the network and run the same command again"
+        ) from error
 
 
 def github_json(endpoint: str) -> object:
