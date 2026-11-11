@@ -216,6 +216,8 @@ def biome_edit(text: str, config: dict[str, object]) -> str | None:
         close = closing(masked, start)
         end = len(masked[:close].rstrip())
         if not files["includes"]:
+            if text[start + 1 : close].strip():
+                raise ValueError("a comment stands in the empty list")
             return f'{text[: start + 1]}"{BIOME_IGNORE}"{text[close:]}'
         if "\n" in text[start:close]:
             return add_line_entry(text, masked, end, close)

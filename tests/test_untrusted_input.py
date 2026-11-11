@@ -387,6 +387,10 @@ def test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings(
         'files.includes (use "**" when there is none) and add "!.hooks" as its '
         "last entry, so that your own Biome runs leave the Hard Eng files\n"
     )
+    (tmp_path / "biome.json").write_text('{"files": {"includes": [/* ours */]}}')
+    biome_ignores_hooks(tmp_path, changes)
+    assert changes == {}
+    assert "as the last entry of files.includes" in capsys.readouterr().err
 
 
 def test_fresh_install_ships_and_includes_the_untrusted_input_declarations(
