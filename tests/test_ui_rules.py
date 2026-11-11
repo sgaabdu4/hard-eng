@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import ui_rules
 from comments import UI_SUFFIXES, validate_suppressions
-from conftest import SOURCE, commit, init
+from conftest import SOURCE, commit, git, init
 
 RULE = "HE-UI-SOURCE"
 TRANSITION_STEP = "List the properties that change"
@@ -183,6 +183,14 @@ def test_a_test_file_and_a_generated_file_are_not_judged(tmp_path: Path) -> None
     validate_suppressions(owned, "HEAD")
 
 
+def watch_lookups(monkeypatch: pytest.MonkeyPatch, looked: list[list[str]]) -> None:
+    def lookup(_root: Path, names: list[str]) -> set[str]:
+        looked.append(names)
+        return set()
+
+    monkeypatch.setattr(ui_rules, "generated_sources", lookup)
+
+
 def ui_rules_loaded(root: Path) -> bool:
     code = (
         "import sys\n"
@@ -246,11 +254,7 @@ def test_a_colour_in_a_theme_file_starts_no_git_command(
 ) -> None:
     root = change(tmp_path, name, "// base\n", f"// base\n{line}\n")
     looked: list[list[str]] = []
-    monkeypatch.setattr(
-        ui_rules,
-        "generated_sources",
-        lambda _root, names: looked.append(names) or set(),
-    )
+    watch_lookups(monkeypatch, looked)
     validate_suppressions(root, "HEAD")
     assert looked == []
 
@@ -265,10 +269,43 @@ def test_a_candidate_file_reaches_the_generated_lookup(
         '// base\n<i className="transition-all" />\n',
     )
     looked: list[list[str]] = []
-    monkeypatch.setattr(
-        ui_rules,
-        "generated_sources",
-        lambda _root, names: looked.append(names) or set(),
-    )
+    watch_lookups(monkeypatch, looked)
     refused(root)
     assert looked == [["src/a.tsx"]]
+
+
+def test_no_starter_file_holds_a_line_that_the_ui_rules_refuse() -> None:
+    """HE-UI-SOURCE: the starter files that new projects begin with meet the rule."""
+    found: list[str] = []
+    for path in sorted((SOURCE / ".agents/starters").rglob("*")):
+        name = str(path.relative_to(SOURCE / ".agents/starters"))
+        if path.is_file() and path.suffix in UI_SUFFIXES:
+            lines = list(enumerate(path.read_text().splitlines(), 1))
+            found += ui_rules.line_findings(name, lines)
+    assert found == []
+
+
+def test_lines_from_before_the_install_are_not_judged(tmp_path: Path) -> None:
+    """HE-UI-SOURCE: an install change adds no old line; a repository with no commit judges every line, as the switch-off guard does."""
+    old = 'const c = <i className="transition-all bg-[#fff]" />;\n'
+    root = change(tmp_path, "src/a.tsx", old, old)
+    (root / "old.py").write_text("x = 1  # no" + "qa\n")
+    commit(root, "project before the install")
+    git(root, "branch", "-M", "main")
+    git(root, "switch", "-qc", "install")
+    (root / "AGENTS.md").write_text("rules\n")
+    commit(root, "Install Hard Eng")
+    validate_suppressions(root, None)
+
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    for name, text, rule in (
+        ("a.tsx", old, RULE),
+        ("old.py", "x = 1  # no" + "qa\n", "HE-NO-SWITCH-OFF"),
+    ):
+        isolated = fresh / name
+        isolated.mkdir()
+        init(isolated / "repo")
+        (isolated / "repo" / name).write_text(text)
+        with pytest.raises(ValueError, match=rule):
+            validate_suppressions(isolated / "repo", None)
