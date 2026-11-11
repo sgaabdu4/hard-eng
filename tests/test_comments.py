@@ -836,6 +836,31 @@ def test_edited_moved_and_split_assertions_pass(tmp_path: Path) -> None:
     validate_suppressions(root, "HEAD")
 
 
+@pytest.mark.parametrize(
+    ("name", "before", "after"),
+    [
+        (
+            "tests/test_a.py",
+            "def test_a():\n    assert f() == 3\n",
+            "def test_a():\n    # assert f() == 3\n    pass\n",
+        ),
+        (
+            "src/a.test.ts",
+            "test('a', () => {\n  expect(f()).toBe(3);\n});\n",
+            "test('a', () => {\n  // expect(f()).toBe(3);\n});\n",
+        ),
+    ],
+)
+def test_a_commented_out_assertion_counts_as_lost(
+    tmp_path: Path, name: str, before: str, after: str
+) -> None:
+    root = switch_root(tmp_path, name, before)
+    (root / name).write_text(after)
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert "tests lose 1 assertion lines net (1 removed, 0 added)" in str(error.value)
+
+
 def test_removed_assertion_outside_tests_passes(tmp_path: Path) -> None:
     root = switch_root(tmp_path, "lib.py", "assert ready\nx = 1\n")
     (root / "lib.py").write_text("x = 1\n")

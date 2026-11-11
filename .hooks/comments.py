@@ -432,7 +432,12 @@ def assertion_lines(name: str, lines: list[tuple[int, str]]) -> list[tuple[int, 
         if name.endswith(".py")
         else ("assert", "expect(", "XCTAssert", "#require(")
     )
-    return [(n, text) for n, text in lines if any(word in text for word in words)]
+    mark = "#" if name.endswith(".py") else "//"
+    return [
+        (n, text)
+        for n, text in lines
+        if any(word in text for word in words) and not text.lstrip().startswith(mark)
+    ]
 
 
 WORD = re.compile(r"[A-Za-z_]\w*")
