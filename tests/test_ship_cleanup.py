@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import pytest
@@ -146,3 +147,9 @@ def test_the_cleanup_refusal_names_every_kept_path_and_the_step(
         "out, then undo its edit. Then run cleanup again."
     )
     assert task.exists()
+    (task / ".coverage").unlink()
+    shutil.rmtree(task / "coverage")
+    shutil.rmtree(task / ".venv")
+    (task / "notes.private").rename(root.parent / "notes.private")
+    ship_actions.cleanup(root, shipment)
+    assert not task.exists()
