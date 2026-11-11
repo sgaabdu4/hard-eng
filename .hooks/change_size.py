@@ -8,10 +8,15 @@ from gate_config import SOURCE_FILE, Group, changed_files, parse_config
 from plans import (
     _git_output,
     _is_test,
+    acceptance_tests,
     default_branch_point,
     is_documentation,
     is_plan_path,
+    plan_files,
+    plan_sections,
+    plan_status,
     release_references,
+    requirement_tests,
 )
 
 NO_CHANGE = "no change"
@@ -296,3 +301,40 @@ def plan_not_needed(root: Path) -> bool:
     else:
         print(f"Size: big, because {reason}; a plan is needed.")
     return small
+
+
+def applicable_plans(root: Path, paths: list[Path], changed: set[str]) -> list[Path]:
+    applicable = [path for path in paths if str(path.relative_to(root)) in changed]
+    return applicable or [
+        path
+        for path in paths
+        if plan_status(path.read_text()) not in {None, "Complete"}
+    ]
+
+
+def plan_tests(root: Path, base: str | None) -> set[str]:
+    """Test names that the active plans' acceptance lines depend on."""
+    changed = (changed_files(root, base or "HEAD") or set()) | released_plans(
+        root, base
+    )
+    paths = plan_files(root)
+    names = set()
+    for path in applicable_plans(root, paths, changed):
+        content = path.read_text()
+        if plan_status(content) in {"Ready", "Complete"}:
+            sections = plan_sections(content, allow_placeholders=True)
+            references, requirements = acceptance_tests(sections)
+            names.update(name for _, name in references)
+            tests = requirement_tests(root) if requirements else {}
+            for requirement in requirements:
+                names.update(name for _, _, name in tests.get(requirement, []))
+    return names
+
+
+def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) -> bool:
+    from reports import skipped_tests
+
+    skipped = sorted(plan_tests(root, base) & skipped_tests(root, groups, since))
+    if skipped:
+        print("FAIL plan acceptance tests were skipped: " + ", ".join(skipped))
+    return bool(skipped)
