@@ -1,7 +1,8 @@
 name: Canary
 
 # Sets up and fully checks each public new project (scaffolds, greenfield, brownfield) from
-# this revision. The release canary on the maintainer's Mac needs these jobs green on the
+# this revision, and updates a project installed from the last release to it (Linux only).
+# The release canary on the maintainer's Mac needs these jobs green on the
 # develop head before it starts its agent sessions; installed projects stay on the Mac.
 on:
   push:
@@ -41,7 +42,7 @@ jobs:
           # A release PR holds develop's tree, which develop's push already checked.
           if [ "$BASE_REF" = main ] && [ "$HEAD_REF" = develop ]; then echo 'targets=[]' >> "$GITHUB_OUTPUT"; exit 0; fi
           if [ "$EVENT" = workflow_dispatch ]; then names=setup.py; else names=$(git diff --name-only "$BASE...HEAD"); fi
-          printf '%s\n' "$names" | python3 -I -c 'import json, sys; sys.path.insert(0, "."); import release_canary as c; names = sys.stdin.read().split(); print("targets=" + json.dumps([c.folder(" ".join(t)) for t in c.NEW_TARGETS] if c.needs_canary(names) else []))' >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$names" | python3 -I -c 'import json, sys; sys.path.insert(0, "."); import release_canary as c; names = sys.stdin.read().split(); print("targets=" + json.dumps([c.folder(" ".join(t)) for t in c.CI_TARGETS] if c.needs_canary(names) else []))' >> "$GITHUB_OUTPUT"
 
   new-project:
     name: new project (${{ matrix.target }}, ${{ matrix.os }})
@@ -53,6 +54,9 @@ jobs:
         os:
           - ubuntu-latest
           - macos-latest
+        exclude:
+          - os: macos-latest
+            target: update-python
         target: ${{ fromJSON(needs.targets.outputs.targets) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
