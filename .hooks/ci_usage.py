@@ -239,3 +239,70 @@ def ci_usage(
             f"(push {minutes[0]} min, pull_request {minutes[1]} min)"
         )
     return 0
+
+
+def _pull_request_head(
+    root: Path, repository: str, base: str, branch: str
+) -> tuple[str, str]:
+    """The head and tree of the one PR merged into this push, whatever the merge method."""
+    from shipping import ShippingError, _json, _object, _sha, _text, gh, git
+
+    revision = git(root, "rev-parse", "HEAD").strip()
+    endpoint = f"repos/{repository}/commits/{revision}/pulls"
+    value = _json(gh(root, "api", endpoint), "commit PRs")
+    if not isinstance(value, list):
+        raise ShippingError("commit PRs response is invalid")
+    heads = set()
+    for item in value:
+        pull = _object(item, "PR")
+        if (
+            pull.get("merged_at")
+            and _object(pull.get("base"), "PR base").get("ref") == branch
+        ):
+            heads.add(_sha(_object(pull.get("head"), "PR head").get("sha"), "PR head"))
+    if len(heads) != 1:
+        raise ShippingError("push merges no single PR")
+    head = heads.pop()
+    endpoint = f"repos/{repository}/compare/{base}...{head}"
+    comparison = _object(_json(gh(root, "api", endpoint), "compare"), "compare")
+    if comparison.get("status") not in {"ahead", "identical"}:
+        raise ShippingError("PR head does not contain the previous base")
+    endpoint = f"repos/{repository}/git/commits/{head}"
+    commit = _object(_json(gh(root, "api", endpoint), "PR commit"), "PR commit")
+    return head, _text(_object(commit.get("tree"), "PR tree"), "sha", "PR tree")
+
+
+def reused_pull_request(root: Path, base: str) -> str | None:
+    """The PR head whose passed required checks already cover this base-branch push."""
+    import os
+
+    from shipping import ShippingError, _checks, _repo, _sha, git, load_policy
+
+    try:
+        policy = load_policy(root, required=False)
+        if (
+            policy is None
+            or os.environ.get("GITHUB_ACTIONS") != "true"
+            or os.environ.get("GITHUB_EVENT_NAME") != "push"
+            or os.environ.get("GITHUB_REF") != f"refs/heads/{policy['base']}"
+        ):
+            return None
+    except ShippingError:
+        return None
+    try:
+        if git(root, "status", "--porcelain"):
+            raise ShippingError("the checkout has uncommitted changes")
+        repository = _repo(os.environ.get("GITHUB_REPOSITORY"), "workflow")
+        head, tree = _pull_request_head(
+            root, repository, _sha(base, "push base"), policy["base"]
+        )
+        if tree != git(root, "rev-parse", "HEAD^{tree}").strip():
+            raise ShippingError("the merged PR tested a different tree")
+        _checks(root, repository, head, policy, False)
+    except ShippingError as error:
+        print(
+            f"Running the checks again; the merged PR's checks do not cover this push: {error}",
+            flush=True,
+        )
+        return None
+    return head
