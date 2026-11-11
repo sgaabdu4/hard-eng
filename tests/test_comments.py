@@ -436,6 +436,25 @@ def test_skip_argument_counts_only_in_test_files(tmp_path: Path) -> None:
         validate_suppressions(root, "HEAD")
 
 
+@pytest.mark.parametrize(
+    ("text", "pattern"),
+    [
+        ("x = 1  # pyre-ig" + "nore", "# pyre-ig" + "nore"),
+        ("x = 1  # pyre-ig" + "nore[16]", "# pyre-ig" + "nore"),
+        ("x = 1  # pyre-fix" + "me[16]", "# pyre-fix" + "me"),
+    ],
+)
+def test_the_pyre_ignore_comments_are_refused(
+    tmp_path: Path, text: str, pattern: str
+) -> None:
+    """HE-NO-SWITCH-OFF: Pyrefly honours pyre comments when permissive ignores are on."""
+    root = switch_root(tmp_path, "app.py", "")
+    (root / "app.py").write_text(f"ok = 1\n{text}\n")
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"app.py:2 adds {pattern!r}" in str(error.value)
+
+
 ASSERTS = [
     ("tests/test_a.py", "def test_a():\n    assert f() == 1\n    assert g()\n"),
     ("src/a.test.ts", "test('a', () => {\n  expect(f()).toBe(1);\n});\n"),
