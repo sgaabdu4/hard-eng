@@ -549,18 +549,20 @@ def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path,
 
 def proven_elsewhere(base: str | None) -> bool:
     """A merged PR or verified upstream release already proved this change."""
-    from ci_usage import reused_pull_request
     from update import check_scaffold_update
 
     if base is None:
         return False
-    if head := reused_pull_request(ROOT, base):
-        print(
-            f"Commit {head} passed the required checks on this exact tree; "
-            "not repeating them.",
-            flush=True,
-        )
-        return True
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        from ci_usage import reused_pull_request
+
+        if head := reused_pull_request(ROOT, base):
+            print(
+                f"Commit {head} passed the required checks on this exact tree; "
+                "not repeating them.",
+                flush=True,
+            )
+            return True
     return check_scaffold_update(ROOT, base)
 
 

@@ -458,6 +458,7 @@ def test_reused_pull_request_result_skips_gates(
         return base
 
     monkeypatch.setattr("ci_usage.reused_pull_request", reused)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
     assert runner.check(base="a" * 40) == 0
     output = capsys.readouterr().out
     assert f"Commit {'a' * 40} passed the required checks" in output
