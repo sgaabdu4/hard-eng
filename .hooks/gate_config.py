@@ -559,7 +559,26 @@ def packages_for(
         selected.update(consumers)
         if matches:
             selected.add(max(matches, key=len))
+            selected.update(readers_above(by_path, name, max(matches, key=len)))
     return selected
+
+
+def readers_above(by_path: dict[str, Group], name: str, nearest: str) -> set[str]:
+    """A file of another language than its group is also read by the nearest group above it of its own."""
+    suffix = Path(name).suffix
+    language = next(
+        (key for key, kinds in SOURCE_SUFFIXES.items() if suffix in kinds), None
+    )
+    if language is None or by_path[nearest].get("language") == language:
+        return set()
+    above = [
+        path
+        for path, group in by_path.items()
+        if group.get("language") == language
+        and path != nearest
+        and Path(nearest).is_relative_to(path)
+    ]
+    return {max(above, key=len)} if above else set()
 
 
 def affected_groups(
