@@ -237,7 +237,7 @@ def test_a_change_with_no_installed_path_starts_no_update_lookup(
     (repository / "AGENTS.md").write_text("rules\n")
     change_size.size_verdict(repository)
     lookups = [name for name in started(spy) if name in {"status", "show", "log"}]
-    assert len(lookups) <= 2
+    assert lookups == ["show", "log"]
 
 
 def test_a_change_with_no_removed_plan_starts_no_moved_plan_lookup(
