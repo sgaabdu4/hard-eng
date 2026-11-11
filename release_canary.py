@@ -108,6 +108,7 @@ CI_KINDS = (*AGENT_KINDS, "update")
 NOT_FOLDER_NAME = re.compile(r"[^a-z0-9]+")
 CI_JOB = re.compile(r"new project \(([a-z0-9-]+), [\w.-]+\)")
 CI_SYSTEMS = ("ubuntu-latest", "macos-latest")
+PUSH_LOOKUP_SECONDS = 120
 AGENTS = ("claude", "codex")
 TASK = (
     "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
@@ -676,11 +677,17 @@ def ci_failures(revision: str) -> list[str]:
     return unproven(proven_revision(revision))
 
 
+def lookups_too_long(_signal: int, _frame: object) -> None:
+    raise TimeoutError("the lookups of a push passed their time limit")
+
+
 def push_outputs(names: list[str], revision: str) -> str:
     """The `targets` job outputs for a push: no jobs when the merged PR proved these files."""
     listed = [folder(" ".join(target)) for target in CI_TARGETS]
     if not needs_canary(names):
         return "targets=[]"
+    signal.signal(signal.SIGALRM, lookups_too_long)
+    signal.setitimer(signal.ITIMER_REAL, PUSH_LOOKUP_SECONDS)
     try:
         proven = proven_revision(revision)
         if proven != revision and not unproven(proven):
@@ -689,6 +696,8 @@ def push_outputs(names: list[str], revision: str) -> str:
         print(
             "The lookup of the merged PR failed; the new projects run.", file=sys.stderr
         )
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
     return "targets=" + json.dumps(listed)
 
 
