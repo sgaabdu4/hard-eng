@@ -77,15 +77,6 @@ def emit_dart_test_failure(
         print(summary)
 
 
-def parallel_hint(code: int, tests: bool, command: list[str]) -> str:
-    if code in {0, 5} or not tests or "-n auto" not in " ".join(command):
-        return ""
-    return (
-        "\nThese tests ran in parallel (-n auto). If they pass serially, isolate "
-        "the state they share, or set -n 0 in this gate's command."
-    )
-
-
 def quick_groups(
     groups: list[Group], quick: bool = True, installed: frozenset[str] = frozenset()
 ) -> list[Group]:

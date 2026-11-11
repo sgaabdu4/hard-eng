@@ -103,6 +103,15 @@ def stopped_note(code: int) -> str:
     return f"\nThe check was stopped{cause}, so this gate was ended before it finished."
 
 
+def parallel_hint(code: int, tests: bool, command: list[str]) -> str:
+    if code in {0, 5} or not tests or "-n auto" not in " ".join(command):
+        return ""
+    return (
+        "\nThese tests ran in parallel (-n auto). If they pass serially, isolate "
+        "the state they share, or set -n 0 in this gate's command."
+    )
+
+
 def process_table() -> list[Process]:
     output = subprocess.run(
         ["ps", "-Ao", "pid=,ppid=,command="],

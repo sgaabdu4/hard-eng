@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import reports
 from gate_config import Gate
+from process_group import parallel_hint
 from test_reports import REPORTS
 
 PARALLEL = ["uv", "run", "pytest", "-n", "auto"]
@@ -20,8 +21,8 @@ def failed(
 
 
 def test_a_run_with_no_tests_gets_no_parallel_hint() -> None:
-    assert reports.parallel_hint(5, True, PARALLEL) == ""
-    assert "-n 0" in reports.parallel_hint(1, True, PARALLEL)
+    assert parallel_hint(5, True, PARALLEL) == ""
+    assert "-n 0" in parallel_hint(1, True, PARALLEL)
 
 
 def test_a_failed_secret_scan_names_rule_file_and_line(

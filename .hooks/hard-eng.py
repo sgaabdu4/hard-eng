@@ -501,8 +501,8 @@ def run_limited_gate(
         if scanner and report_path is not None:
             report_args = (gate, report_path, command, directory, timeout)
             scanner_result(result.returncode == 0, scanner, *report_args)
-        from process_group import stopped_note
-        from reports import check_coverage, completed_tests, parallel_hint
+        from process_group import parallel_hint, stopped_note
+        from reports import check_coverage, completed_tests
 
         if (
             result.returncode == 0
