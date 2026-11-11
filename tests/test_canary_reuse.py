@@ -147,6 +147,41 @@ def test_a_push_runs_the_new_projects_when_a_lookup_stalls(
     assert "merged PR failed" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(
+    ("release", "covered", "line"),
+    [
+        ("true", "", "the next step checks the push run of develop"),
+        ("false", "", "No installed file changed; no new project to check."),
+        ("false", MERGED_HEAD, "not repeating them."),
+    ],
+)
+def test_the_canary_summary_says_no_installed_file_changed_only_when_none_changed(
+    release: str, covered: str, line: str
+) -> None:
+    workflow = yaml.safe_load(
+        (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
+    )
+    step = workflow["jobs"]["canary"]["steps"][0]
+    assert "github.event.pull_request.head.ref == 'develop'" in step["env"]["RELEASE"]
+    done = subprocess.run(
+        ["bash", "-e", "-c", step["run"]],
+        env={
+            "PATH": os.environ["PATH"],
+            "RELEASE": release,
+            "LISTED": "[]",
+            "COVERED": covered,
+            "TARGETS": "success",
+            "PROJECTS": "skipped",
+        },
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    printed = done.stdout.splitlines()
+    assert len(printed) == 1
+    assert line in printed[0]
+
+
 def test_the_release_gate_follows_a_reused_push_to_the_pr_head(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
