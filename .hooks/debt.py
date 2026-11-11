@@ -326,7 +326,7 @@ def git_file(root: Path, base: str, name: str) -> str | None:
 
 def refuse_new_debt(root: Path, base: str | None) -> str | None:
     """HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add the debt file."""
-    from plans import default_branch_point
+    from plans import _git_output, default_branch_point
 
     base = base or default_branch_point(root)
     if (
@@ -334,8 +334,18 @@ def refuse_new_debt(root: Path, base: str | None) -> str | None:
         and git_file(root, base, DEBT_FILE) is None
         and git_file(root, base, SOURCE_FILE) is not None
     ):
+        lone_install = (
+            not _git_output(root, "remote").strip()
+            and _git_output(root, "rev-parse", "HEAD").strip() == base
+            and git_file(root, "HEAD~1", SOURCE_FILE) is None
+        )
         raise ValueError(
             f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings that `check` prints instead"
+            + (
+                "; this repository has no remote, so the install commit is the base: run `git reset --soft HEAD~1`, then `adopt`, then commit the install and the debt file together"
+                if lone_install
+                else ""
+            )
         )
     return base
 

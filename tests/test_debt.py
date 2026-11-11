@@ -380,6 +380,26 @@ def test_adopt_refuses_first_when_check_would_refuse_the_debt_file(
     assert not (tmp_path / debt.DEBT_FILE).exists()
 
 
+def test_the_step_for_adopt_with_no_remote_can_be_done(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adoptable(tmp_path, "print('a.py:1:1: F1 bad'); raise SystemExit(1)", False)
+    git(tmp_path, "switch", "-q", "main")
+    (tmp_path / ".hooks").mkdir()
+    (tmp_path / ".hooks/hard-eng-source.json").write_text("{}")
+    commit(tmp_path, "install")
+    monkeypatch.setattr(runner, "provision_tools", no_provisioning)
+    debt.OUTPUTS.clear()
+    with pytest.raises(ValueError, match="only the change that installs") as refusal:
+        runner.adopt()
+    assert "git reset --soft HEAD~1" in str(refusal.value)
+    git(tmp_path, "reset", "--soft", "HEAD~1")
+    debt.OUTPUTS.clear()
+    assert runner.adopt() == 0
+    commit(tmp_path, "install with debt")
+    assert git(tmp_path, "ls-files", debt.DEBT_FILE) == debt.DEBT_FILE
+
+
 COUNT_WORD_PAIRS = [
     ("Found 3 errors.", "Found 1 error."),
     (
