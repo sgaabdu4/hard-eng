@@ -50,6 +50,11 @@ DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
     },
 }
 
+NESTED_STEP = (
+    ". This file replaces the package's settings for its folder: give it the `analyzer`"
+    " and `linter` settings of the package's analysis_options.yaml, or remove it"
+)
+
 
 def dart_rule_settings(value: object) -> object:
     if isinstance(value, list):
@@ -236,12 +241,14 @@ def validate_dart_typing(
     from gate_config import JsonObject
     from project_setup import validate_dart_exclusions
 
-    options = dart_options(directory / "analysis_options.yaml")
+    path = directory / "analysis_options.yaml"
+    options = dart_options(path)
+    where = f": {path}" + ("" if package_root in (None, directory) else NESTED_STEP)
     for section, groups in DART_TYPING.items():
         for group, settings in groups.items():
             section_options = cast(JsonObject, options).get(section)
             if not isinstance(section_options, dict):
-                raise TypeError(f"Dart requires {section} settings")
+                raise TypeError(f"Dart requires {section} settings{where}")
             actual = section_options.get(group)
             if group == "rules":
                 actual = dart_rule_settings(actual)
@@ -251,10 +258,10 @@ def validate_dart_typing(
             if not isinstance(actual, dict) or any(
                 actual.get(key) != value for key, value in settings.items()
             ):
-                raise ValueError(f"Dart requires strict {section}.{group} settings")
-    validate_dart_includes(
-        directory / "analysis_options.yaml", package_root or directory
-    )
+                raise ValueError(
+                    f"Dart requires strict {section}.{group} settings{where}"
+                )
+    validate_dart_includes(path, package_root or directory)
     for source in {*sources, "test", "tests"}:
         for nested in (directory / source).rglob("analysis_options.yaml"):
             if nested.parent != directory:
