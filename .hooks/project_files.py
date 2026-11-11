@@ -6,9 +6,18 @@ import sys
 from collections.abc import Callable, Container, Generator, Iterable
 from contextlib import contextmanager
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-LOCK_NAMES = ("uv.lock", "poetry.lock", "bun.lock", "pubspec.lock", "Package.resolved")
+if TYPE_CHECKING:
+    from gate_config import Group
+
+INSTALL_LOCKS = {
+    "uv": "uv.lock",
+    "poetry": "poetry.lock",
+    "bun": "bun.lock",
+    "dart": "pubspec.lock",
+    "flutter": "pubspec.lock",
+}
 KINDS = {".toml": "TOML", ".yaml": "YAML", ".yml": "YAML"}
 KEPT: dict[str, dict[tuple[str, ...], object]] = {}
 
@@ -87,16 +96,20 @@ def read_project_file[T](
         raise syntax_error(repository_name(path, root), error) from error
 
 
+def group_locks(root: Path, groups: Iterable["Group"]) -> Generator[Path]:
+    """The lock file that the install command of each group's lockfile gate reads."""
+    for group in groups:
+        for check in group["checks"]:
+            name = INSTALL_LOCKS.get(check["command"][0])
+            if check.get("role") == "lockfiles" and name:
+                yield root / group["path"] / name
+
+
 def refuse_ignored_locks(
-    root: Path,
-    directories: Iterable[Path],
-    listed: Container[str],
-    *,
-    ask_git: bool,
-    names: Iterable[str] = LOCK_NAMES,
+    root: Path, locks: Iterable[Path], listed: Container[str], *, ask_git: bool
 ) -> None:
     """A lock file that Git ignores is missing from a fresh clone; ask Git when the file is not on disk yet."""
-    for lockfile in (directory / name for directory in directories for name in names):
+    for lockfile in locks:
         relative = lockfile.relative_to(root)
         if lockfile.is_file():
             ignored = str(relative) not in listed

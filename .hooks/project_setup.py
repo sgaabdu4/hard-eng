@@ -443,7 +443,7 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
         directory = root / package["path"]
         adapt_sources(root, package, owned[directory])
         lockfile = adapt_package(directory, package)
-        refuse_ignored_locks(root, [directory], tracked, ask_git=True, names=[lockfile])
+        refuse_ignored_locks(root, [directory / lockfile], tracked, ask_git=True)
         adapt_boundaries(package, typescript)
         for gate in package["checks"]:
             if gate.get("role") == "security":

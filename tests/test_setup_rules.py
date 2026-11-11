@@ -96,10 +96,53 @@ def test_setup_refuses_an_ignored_lockfile_that_is_not_there_yet(
     adapt_packages(root, config)
 
 
+def ignored_lock_project(
+    tmp_path: Path, lock: str, checks: list[dict[str, object]]
+) -> Path:
+    root = tmp_path / "project"
+    init(root)
+    configure(root, checks)
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        (root / name).write_text((SOURCE / name).read_text())
+    (root / ".gitignore").write_text(f"{lock}\n")
+    commit(root, "start")
+    (root / lock).write_text("# lock\n")
+    return root
+
+
+def test_an_ignored_lockfile_of_another_manager_does_not_fail_the_config_load(
+    tmp_path: Path,
+) -> None:
+    root = ignored_lock_project(
+        tmp_path,
+        "poetry.lock",
+        [
+            gate(
+                "lockfile", "pass", role="lockfiles", command=["uv", "sync", "--locked"]
+            )
+        ],
+    )
+    assert gate_config.load_groups(root)
+
+
+def test_an_ignored_package_resolved_does_not_fail_a_group_with_no_lockfile_gate(
+    tmp_path: Path,
+) -> None:
+    root = ignored_lock_project(tmp_path, "Package.resolved", [gate("suite", "pass")])
+    assert gate_config.load_groups(root)
+
+
 def test_check_refuses_a_lockfile_that_git_ignores(tmp_path: Path) -> None:
     root = tmp_path / "project"
     init(root)
-    configure(root, [gate("suite", "pass")])
+    configure(
+        root,
+        [
+            gate(
+                "lockfile", "pass", role="lockfiles", command=["uv", "sync", "--locked"]
+            )
+        ],
+    )
     for name in ("PRODUCT.md", "DESIGN.md"):
         (root / name).write_text((SOURCE / name).read_text())
     (root / ".gitignore").write_text("uv.lock\n")

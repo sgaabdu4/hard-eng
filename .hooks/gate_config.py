@@ -19,6 +19,7 @@ from dependency_graph import (
     shared_only,
 )
 from project_files import (
+    group_locks,
     json_text,
     keep,
     parse_project_text,
@@ -952,8 +953,9 @@ def checked_groups(
     ]
     report_paths: set[Path] = set()
     count = sum(validate_group(root, group, report_paths) for group in groups)
-    directories = [root / group["path"] for group in groups]
-    refuse_ignored_locks(root, directories, LISTED[root][0], ask_git=False)
+    refuse_ignored_locks(
+        root, group_locks(root, groups), LISTED[root][0], ask_git=False
+    )
     if not count:
         raise ValueError("No checks configured; verification cannot pass")
     validate_required_checks(root, config, listed, starting)
