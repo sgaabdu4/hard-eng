@@ -151,7 +151,7 @@ FAILED = re.compile(r"^(FAIL |Hard Eng: verification failed)", re.MULTILINE)
 
 
 CHECK_RUN = re.compile(
-    r"(?:\S*/(?:ba|z)?sh -\w*c [\'\"])?(?:cd \S+ && )?"
+    r"(?:\S*/(?:ba|z)?sh -\w*c [\'\"])?(?:cd \S+ && )?(?:env )?(?:\w+=\S+ )*"
     r"(?:perl -e 'alarm shift; exec @ARGV(?: or exit 127)?' \d+ |timeout \d+ )?"
     r"(?:\S*python3?|uv run) \S*hard-eng\.py\s+check\b"
 )
