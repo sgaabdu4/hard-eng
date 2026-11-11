@@ -26,6 +26,7 @@ FIELDS = (
 REAL_CASE = "Waiting for real case"
 OPEN_WORK = frozenset({"todo", "doing", "urgent"})
 TRELLO_ID = re.compile(r"[0-9a-f]{24}")
+TOUCHES = frozenset({"comment", "move", "created"})
 WORKING = r"\b(?:I am (?:fixing|building|changing)|I will fix|being built|waits for the #\d+ fix)\b"
 INTENT = (
     r"\bI(?: am|['’]m) (?:fixing|building|changing|adding|checking|making|watching|writing|looking"
@@ -369,7 +370,8 @@ def real_cases(ctx: Context, view: View) -> list[Item]:
 
 def last_touch(ctx: Context, view: View) -> str:
     card = text(view.card.get("id"))
-    dates = [event.date for event in ctx.snapshot.threads.get(card, [])]
+    events = ctx.snapshot.threads.get(card, [])
+    dates = [e.date for e in events if e.kind in TOUCHES]
     if moved := ctx.snapshot.moves.get(card):
         dates.append(moved)
     if TRELLO_ID.fullmatch(card):
