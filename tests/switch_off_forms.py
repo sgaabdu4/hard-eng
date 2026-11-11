@@ -129,3 +129,56 @@ RUFF_FORMS = [
     ("# fmt: sk" + "ip", "# fmt: sk" + "ip"),
     ("# yapf: dis" + "able", "# yapf: dis" + "able"),
 ]
+
+RETRY_FORMS = [
+    ("tests/api.test.ts", "}, { re" + "try: 3 });\n", "re" + "try:"),
+    (
+        "tests/test_api.py",
+        "@pytest.mark.fl" + "aky(reruns=5)\ndef t(): ...\n",
+        "mark.fl" + "aky",
+    ),
+    ("test/api_test.dart", "@Re" + "try(3)\nvoid main() {}\n", "@Re" + "try("),
+    ("test/api_test.dart", "}, re" + "try: 2);\n", "re" + "try:"),
+    (
+        "src/sum.test.ts",
+        "test('adds', { re" + "try: 3 }, () => {});\n",
+        "re" + "try:",
+    ),
+    (
+        "e2e/login.spec.ts",
+        "test.describe.configure({ re" + "tries: 2 });\n",
+        "re" + "tries:",
+    ),
+    ("src/sum.test.js", "jest.re" + "tryTimes(3);\n", "jest.re" + "tryTimes("),
+    (
+        "playwright.config.ts",
+        "  re" + "tries: process.env.CI ? 2 : 0,\n",
+        "re" + "tries:",
+    ),
+    ("bunfig.toml", "re" + "try = 3\n", "re" + "try"),
+    ("pyproject.toml", 'addopts = "--re' + 'runs 3"\n', "--re" + "runs"),
+    ("pytest.ini", "re" + "runs = 2\n", "re" + "runs"),
+    ("packages/web/vitest.config.ts", "  re" + "try: 2,\n", "re" + "try:"),
+    ("pkgs/a/dart_test.yaml", "re" + "try: 3\n", "re" + "try"),
+    (
+        "conftest.py",
+        "metafunc.add_marker(pytest.mark.fl" + "aky(reruns=1))\n",
+        "mark.fl" + "aky",
+    ),
+    ("hard-eng.gates.json", '"--re' + 'try",\n', "--re" + "try"),
+    ("package.json", '"test": "vitest run --re' + 'try 3"\n', "--re" + "try"),
+    ("ios/App.xctestplan", '"re' + 'tryOnFailure"\n', "re" + "tryOnFailure"),
+]
+
+RETRY_PASSES = [
+    ("src/api.ts", "const c = ky.create({ re" + "try: 3 });\n"),
+    ("src/app.py", "re" + "tries = 3\n"),
+    ("tests/stream.test.ts", "const s = sse({ re" + "try: 1000 });\n"),
+    ("tests/api.test.ts", "}, { re" + "try: 0 });\n"),
+    ("tests/api.test.ts", "test('x', { re" + "try: false }, () => {});\n"),
+    ("playwright.config.ts", "  re" + "tries: 0,\n"),
+    ("pyproject.toml", "[tool.other]\nre" + "tries = 3\n"),
+    ("package.json", '"fetch": "curl --re' + 'try 3"\n'),
+    ("docs/guide.md", "Set the re" + "try count and mark the fl" + "aky tests.\n"),
+    ("tests/test_api.py", "name = 'fl" + "aky'\n"),
+]

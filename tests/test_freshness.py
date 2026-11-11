@@ -299,7 +299,11 @@ def test_hold_expires_and_needs_reason(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("tool", "report", "command"),
     [
-        ("bun", "bun-outdated.txt", "bun update --latest is-odd left-pad"),
+        (
+            "bun",
+            "bun-outdated.txt",
+            "bun update --latest --minimum-release-age=172800 is-odd left-pad",
+        ),
         (
             "uv",
             "uv-tree.txt",
@@ -559,7 +563,10 @@ def test_the_bun_repair_command_covers_a_workspace_once(tmp_path: Path) -> None:
         validate_freshness(
             path, gate, Registry({}), moment("2026-10-26T00:00:00+00:00")
         )
-    assert "`bun update -r --latest typescript left-pad`" in str(failure.value)
+    assert (
+        "`bun update -r --latest --minimum-release-age=172800 typescript left-pad`"
+        in str(failure.value)
+    )
 
 
 def test_the_bun_release_age_check_runs_in_the_gates_workspace_mode(
