@@ -75,16 +75,51 @@ def erased_swift(files: set[Path]) -> set[Path]:
     return erased
 
 
-TOOL_NAME_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-")
+TOOL_CONFIGS = frozenset(
+    {
+        "astro",
+        "babel",
+        "capacitor",
+        "commitlint",
+        "cypress",
+        "drizzle",
+        "eslint",
+        "jest",
+        "knip",
+        "lint-staged",
+        "metro",
+        "next",
+        "next-sitemap",
+        "nuxt",
+        "open-next",
+        "panda",
+        "playwright",
+        "postcss",
+        "prettier",
+        "release",
+        "rollup",
+        "rsbuild",
+        "rspack",
+        "stylelint",
+        "svelte",
+        "tailwind",
+        "tsdown",
+        "tsup",
+        "uno",
+        "vite",
+        "vitest",
+        "vue",
+        "webpack",
+        "wxt",
+    }
+)
 CONFIG_EXTENSIONS = {"js", "mjs", "cjs", "ts", "mts", "cts"}
 
 
 def root_tool_config(name: str) -> bool:
     """A name like `next.config.ts`: tool configuration that a framework needs at the package root."""
     tool, _, extension = name.partition(".config.")
-    return (
-        extension in CONFIG_EXTENSIONS and bool(tool) and set(tool) <= TOOL_NAME_CHARS
-    )
+    return extension in CONFIG_EXTENSIONS and tool in TOOL_CONFIGS
 
 
 def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:
