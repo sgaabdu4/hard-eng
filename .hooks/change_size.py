@@ -17,7 +17,6 @@ from plans import (
     plan_sections,
     plan_status,
     release_references,
-    requirement_tests,
 )
 from project_files import keep, keeping
 
@@ -347,6 +346,8 @@ def plan_tests(root: Path, base: str | None) -> set[str]:
     _, _, applicable = judged_plans(
         root, base, changed_files(root, base or "HEAD") or set()
     )
+    from requirement_registry import requirement_tests
+
     names = set()
     for path in applicable:
         content = path.read_text()

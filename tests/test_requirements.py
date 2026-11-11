@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 from conftest import SOURCE, init
-from plans import registry_entries, requirement_tests, validate_requirements
+from requirement_registry import (
+    registry_entries,
+    requirement_tests,
+    validate_requirements,
+)
 
 # Fixture IDs are built so this file names no real registry ID.
 HE, REQ = "HE", "REQ"
