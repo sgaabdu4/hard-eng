@@ -48,6 +48,29 @@ def test_an_added_transition_all_class_is_refused_with_its_step(
     assert TRANSITION_STEP in message
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        "a { transition:  all 200ms; }",
+        "a { transition : all 200ms; }",
+        "a { transition: opacity 150ms, all 300ms; }",
+        'const s = {"transition" : "all 0.2s"};',
+        "a { transition-property:  all; }",
+    ],
+)
+def test_a_spaced_or_listed_transition_on_every_property_is_refused(
+    tmp_path: Path, line: str
+) -> None:
+    """HE-UI-SOURCE: every spelling that the rule accepts reaches the rule, not only the exact marks."""
+    root = change(
+        tmp_path,
+        "src/box.ts",
+        "export const a = 1;\n",
+        f"export const a = 1;\n{line}\n",
+    )
+    assert "src/box.ts:2:" in refused(root)
+
+
 def test_an_added_css_transition_on_every_property_is_refused(tmp_path: Path) -> None:
     """HE-UI-SOURCE: a stylesheet or style object that transitions all properties fails."""
     root = change(
@@ -237,6 +260,8 @@ def test_the_colour_step_names_the_paths_that_pass_as_the_code_does(
         ("src/a.tsx", 'const c = <i className="text-all-caps my-transition-all" />;'),
         ("src/a.tsx", 'const c = <i className="transition-all-foo" />;'),
         ("src/a.css", "* { transition: none; }"),
+        ("src/a.css", "a { transition: opacity 150ms; } /* not all */"),
+        ("src/a.tsx", 'const c = <i className="transition-colors small" />;'),
         ("src/a.tsx", 'const c = <i className="bg-[hsl(var(--background))]" />;'),
         ("src/a.tsx", 'const c = <i className="bg-[rgb(var(--primary)/0.5)]" />;'),
         ("src/a.tsx", 'const c = <i className="text-[oklch(var(--x))]" />;'),
@@ -314,7 +339,7 @@ def test_a_change_with_no_ui_file_does_not_load_the_ui_rules(
         'const c = <i className="transition-colors duration-200" />;',
         "a { transition: opacity 150ms ease-out; }",
         'const c = <i className="transition-[opacity,transform]" />;',
-        "a { transition: opacity 1s, all 2s; }",
+        "a { transition: opacity 1s, color 2s; }",
     ],
 )
 def test_a_common_transition_line_does_not_load_the_ui_rules(
