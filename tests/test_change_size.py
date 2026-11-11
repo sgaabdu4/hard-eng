@@ -831,3 +831,17 @@ def test_a_full_check_warns_from_80_commits_and_never_refuses(
     git(repository, "branch", "-M", "odd-name")
     change_size.commit_note(repository)
     assert capsys.readouterr().out == ""
+
+
+def test_the_commit_warning_counts_a_merge_commit_as_github_does(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    git(repository, "branch", "-M", "main")
+    git(repository, "switch", "-qc", "work")
+    add_commits(repository, 78)
+    git(repository, "switch", "-qc", "side", "HEAD~1")
+    add_commits(repository, 1)
+    git(repository, "switch", "-q", "work")
+    git(repository, "merge", "-q", "--no-ff", "-m", "Merge the side branch", "side")
+    change_size.commit_note(repository)
+    assert "this branch has 80 commits" in capsys.readouterr().out

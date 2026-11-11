@@ -491,9 +491,7 @@ def commit_note(root: Path) -> None:
     if point is None:
         return
     try:
-        count = int(
-            _git_output(root, "rev-list", "--count", "--no-merges", f"{point}..HEAD")
-        )
+        count = int(_git_output(root, "rev-list", "--count", f"{point}..HEAD"))
     except (subprocess.CalledProcessError, OSError, ValueError):
         return
     if count < WARN_PR_COMMITS:
