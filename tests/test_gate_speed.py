@@ -802,6 +802,8 @@ print("retry_forms" in sys.modules)
     ("name", "text", "loaded"),
     [
         ("app.py", "value = 2\n", "False"),
+        ("app.py", "value = store.retrieve(1)\n", "False"),
+        ("app.py", "value = Retrofit(1)\n", "False"),
         ("tests/api.test.ts", "}, { re" + "try: 3 });\n", "True"),
     ],
 )

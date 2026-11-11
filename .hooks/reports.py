@@ -494,10 +494,12 @@ def validate_semgrep(path: Path) -> None:
                 )
         if timeouts := timing.get("fixpoint_timeouts", []):
             paths = {(t.get("location") or {}).get("path") for t in timeouts}
-            names = sorted(p or "a file that Semgrep did not name" for p in paths)
+            named = ", ".join(sorted(p for p in paths if p))
             raise ValueError(
-                f"Semgrep ran out of time on {', '.join(names)}. If a named file holds big "
-                "tables of text constants, move them to a data module and rerun"
+                f"Semgrep ran out of time on {named}. If a file holds big tables of "
+                "text constants, move them to a data module, then run the same check again"
+                if named
+                else "Semgrep ran out of time and named no file; run the same check again"
             )
         targets = timing["targets"]
         if not isinstance(targets, list) or {t["path"] for t in targets} != set(

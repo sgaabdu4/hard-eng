@@ -8,7 +8,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from comments import validate_comments, validate_suppressions
+from comments import RETRY_WORDS, validate_comments, validate_suppressions
 from conftest import SOURCE, commit, git, init
 from shipping import ShippingPolicy
 from switch_off_forms import RETRY_FORMS, RETRY_PASSES, RUFF_FORMS, SWITCHES, TEST_FLAGS
@@ -363,6 +363,13 @@ def test_a_class_mark_is_refused_only_when_the_class_holds_a_test(
     with pytest.raises(ValueError, match=OFF) as error:
         validate_suppressions(root, "HEAD")
     assert f"tests/doubles.py:{line} adds '__test__ " + "= False'" in str(error.value)
+
+
+@pytest.mark.parametrize(("name", "text", "form"), RETRY_FORMS)
+def test_every_refused_retry_form_holds_a_word_that_loads_the_rules(
+    name: str, text: str, form: str
+) -> None:
+    assert any(word in text for word in RETRY_WORDS), (name, form)
 
 
 @pytest.mark.parametrize("name", ["test/a_test.dart", "src/a.test.ts"])
