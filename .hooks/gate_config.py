@@ -18,7 +18,7 @@ from dependency_graph import (
     readers_above,
     shared_only,
 )
-from project_files import parse_project_text, read_project_file
+from project_files import parse_project_text, read_project_file, refuse_ignored_locks
 
 type JsonValue = (
     str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
@@ -979,6 +979,8 @@ def checked_groups(
     ]
     report_paths: set[Path] = set()
     count = sum(validate_group(root, group, report_paths) for group in groups)
+    directories = [root / group["path"] for group in groups]
+    refuse_ignored_locks(root, directories, set(listed), ask_git=False)
     if not count:
         raise ValueError("No checks configured; verification cannot pass")
     validate_required_checks(root, config, listed, starting)
