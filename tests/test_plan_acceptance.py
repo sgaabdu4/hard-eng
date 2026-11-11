@@ -356,6 +356,28 @@ def test_a_branch_that_edits_the_open_plan_is_judged_by_it(
             "Same cause: NONE",
             "Same cause",
         ),
+        ("Retro: None — fixture command, no check failed.", "Retro: None —", "Retro"),
+        ("Retro: None — fixture command, no check failed.", "Retro: None -", "Retro"),
+        (
+            "Retro: None — fixture command, no check failed.",
+            "Retro: None —   ",
+            "Retro",
+        ),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: None —",
+            "Same cause",
+        ),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: None -",
+            "Same cause",
+        ),
+        (
+            "Retro: None — fixture command, no check failed.",
+            "Retro: None — no failed check or correction",
+            None,
+        ),
         (
             "Retro: None — fixture command, no check failed.",
             "Retro: Fixed in `tests/test_gone.py::test_gone`.",
