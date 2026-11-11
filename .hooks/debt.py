@@ -339,10 +339,15 @@ def refuse_new_debt(root: Path, base: str | None) -> str | None:
             and _git_output(root, "rev-parse", "HEAD").strip() == base
             and git_file(root, "HEAD~1", SOURCE_FILE) is None
         )
+        undo = (
+            "git reset --soft HEAD~1"
+            if _git_output(root, "rev-list", "--parents", "-n1", "HEAD").split()[1:]
+            else "git update-ref -d HEAD"
+        )
         raise ValueError(
             f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings that `check` prints instead"
             + (
-                "; this repository has no remote, so the install commit is the base: run `git reset --soft HEAD~1`, then `adopt`, then commit the install and the debt file together"
+                f"; this repository has no remote, so the install commit is the base: run `{undo}`, then `adopt`, then commit the install and the debt file together"
                 if lone_install
                 else ""
             )

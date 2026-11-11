@@ -21,7 +21,6 @@ from shipping import (
     PendingCheck,
     Shipment,
     ShippingError,
-    ShippingPolicy,
     gh,
     git,
     load_policy,
@@ -272,17 +271,29 @@ def push_base(
     return base
 
 
-def spared(root: Path, revision: str, base: str | None, policy: ShippingPolicy) -> bool:
-    """Say so and skip the push check when a full check passed on this commit and base."""
+def spared(root: Path, revision: str, base: str | None) -> bool:
+    """Say so when a full check passed on this exact commit and base."""
     minutes = None if base is None else passed_minutes(root, revision, base)
-    if minutes is None or policy["pre_push_mutation_seconds"]:
-        return False
-    print(
-        f"Hard Eng: the full check passed on this exact commit and base {minutes} min "
-        "ago; not repeating it.",
-        flush=True,
-    )
-    return True
+    if minutes is not None:
+        print(
+            f"Hard Eng: the full check passed on this exact commit and base {minutes} min "
+            "ago; not repeating it.",
+            flush=True,
+        )
+    return minutes is not None
+
+
+def push_check(runner: str, base: str | None, quick: bool) -> list[str]:
+    """The check for a push; a pass that stands in for the full check leaves a quick one."""
+    if quick:
+        return ["check", "--base", str(base), "--quick"]
+    # A pushed revision older than these options runs its full check.
+    narrow = [
+        option
+        for option in ("--without-dependents", "--related-tests")
+        if option in runner
+    ]
+    return ["check", *(["--base", base, *narrow] if base else [])]
 
 
 def pre_push(root: Path) -> int:
@@ -300,7 +311,10 @@ def pre_push(root: Path) -> int:
         )
         assert policy is not None
         base = push_base(root, policy["base"], fields[2], fields[3], revision)
-        if set(revision) == {"0"} or spared(root, revision, base, policy):
+        if set(revision) == {"0"}:
+            continue
+        passed = spared(root, revision, base)
+        if passed and not policy["pre_push_mutation_seconds"]:
             continue
         with suppress(ShippingError):
             if GITHUB_SSH_PREFIX.match(
@@ -315,13 +329,7 @@ def pre_push(root: Path) -> int:
         environment = snapshot_environment(root)
         with snapshot(root, revision, environment) as checkout:
             runner = (checkout / ".hooks/hard-eng.py").read_text()
-            # A pushed revision older than these options runs its full check.
-            narrow = [
-                option
-                for option in ("--without-dependents", "--related-tests")
-                if option in runner
-            ]
-            check = ["check", *(["--base", base, *narrow] if base else [])]
+            check = push_check(runner, base, passed)
             if returncode := run_hard_eng(checkout, check, environment):
                 return returncode
             changed = subprocess.run(
