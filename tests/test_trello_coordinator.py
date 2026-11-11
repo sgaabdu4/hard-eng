@@ -25,6 +25,7 @@ from trello_fakes import (
     make_action,
     make_card,
     move_action,
+    picture,
     refs,
     write_lease,
 )
@@ -282,9 +283,8 @@ def test_comment_posts_new_and_blocks_private_data(
 ) -> None:
     project.configure(privacy=[r"Project\s+Zed"])
     project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
-    note, image = tmp_path / "note.txt", tmp_path / "shot.png"
+    note, image = tmp_path / "note.txt", picture(tmp_path / "shot.png")
     note.write_text("The fix is live.")
-    image.write_bytes(b"fake image")
     first = project.run("comment", "1", str(note), "--image", str(image))
     second = project.run("comment", "#1", str(note))
     assert (first.code, second.code) == (0, 0), first.text + second.text
@@ -335,8 +335,7 @@ def write_note(tmp_path: Path, body: str = "") -> Path:
 
 def test_testing_move_needs_proof(project: Project, tmp_path: Path) -> None:
     project.fake.cards = [make_card(5, "#5 Move", "l-doing")]
-    proof = tmp_path / "proof.png"
-    proof.write_bytes(b"fake image")
+    proof = picture(tmp_path / "proof.png")
     note = write_note(tmp_path)
     shows = "The saved total now shows on the list"
     refused = project.run("move", "5", "testing", "--comment", str(note))
@@ -384,8 +383,8 @@ def test_testing_move_needs_proof(project: Project, tmp_path: Path) -> None:
         ("POST", "/cards/card5/idMembers"),
     ]
     post, put, label, member = project.fake.writes[1:]
-    picture = "![proof.png](https://files.example.test/att-1.png)"
-    assert post.form["text"] == note.read_text() + "\n\n" + picture
+    image_line = "![proof.png](https://files.example.test/att-1.png)"
+    assert post.form["text"] == note.read_text() + "\n\n" + image_line
     assert put.form == {"idList": "l-testing", "pos": "top"}
     assert (label.form, member.form) == ({"value": "lb-sam"}, {"value": "m-sam"})
     assert (project.state / "posted.log").read_text().split() == ["act-1", "act-2"]
@@ -520,8 +519,7 @@ def test_label_upload_and_member_dry_runs_write_nothing(
     project: Project, tmp_path: Path
 ) -> None:
     project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
-    shot = tmp_path / "shot.png"
-    shot.write_bytes(b"fake image")
+    shot = picture(tmp_path / "shot.png")
     for command in (
         ("label", "1", "add", "Needs Sam"),
         ("upload", "1", str(shot)),
@@ -564,14 +562,12 @@ def test_label_upload_and_download_use_the_card_endpoints(
         "Waiting for real case",
     )
     assert (add.path, add.form) == ("/cards/card1/idLabels", {"value": "lb-new-1"})
-    shot = tmp_path / "shot.png"
-    shot.write_bytes(b"fake image")
+    shot = picture(tmp_path / "shot.png")
     uploaded = project.run("upload", "1", str(shot))
     assert uploaded.payload["markdown"] == (
         "![shot.png](https://files.example.test/att-1.png)"
     )
-    other = tmp_path / "other.png"
-    other.write_bytes(b"fake image")
+    other = picture(tmp_path / "other.png")
     both = project.run("upload", "1", str(shot), str(other))
     assert both.payload["markdown"] == (
         "![shot.png](https://files.example.test/att-2.png)\n\n"
@@ -581,6 +577,78 @@ def test_label_upload_and_download_use_the_card_endpoints(
     downloaded = project.run("download", "1", "--since", ago(10), "--dir", str(folder))
     assert downloaded.payload == {"paths": [str(folder / "att9-shot.png")]}
     assert (folder / "att9-shot.png").read_bytes() == b"png-bytes"
+
+
+def write_proof(shot: Path, proof: object) -> Path:
+    sidecar = Path(f"{shot}.json")
+    sidecar.unlink(missing_ok=True)
+    if proof is not None:
+        sidecar.write_text(proof if isinstance(proof, str) else json.dumps(proof))
+    return sidecar
+
+
+def test_a_picture_needs_a_current_proof_file(project: Project, tmp_path: Path) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    rules = dict.fromkeys(project.mods.commands.UI_RULES, "Checked on the picture.")
+    base = {"change": "The total shows", "shows": "The list", "showsChange": True}
+    good = base | {"uiRules": rules}
+    shot = picture(tmp_path / "shot.png")
+    refused: list[tuple[object, str]] = [
+        (None, "No proof file"),
+        ("not json", "JSON object"),
+        ([], "JSON object"),
+        ({**base, "showsChange": "yes"}, "showsChange"),
+        ({"shows": "The list", "showsChange": True, "uiRules": rules}, "change"),
+        (base, "uiRules.idiotProof"),
+        ({**base, "uiRules": rules | {"nothingLost": "too short"}}, "nothingLost"),
+        ({**base, "notNewUi": " "}, "notNewUi"),
+    ]
+    for proof, named in refused:
+        write_proof(shot, proof)
+        for flags in ([], ["--dry-run"]):
+            result = project.run("upload", "1", str(shot), *flags)
+            error = str(result.payload["error"])
+            assert result.code == 1, proof
+            assert "shot.png" in error and named in error, error
+    sidecar = write_proof(shot, good)
+    os.utime(sidecar, (os.path.getmtime(shot) - 60,) * 2)
+    stale = project.run("upload", "1", str(shot))
+    assert stale.code == 1
+    assert "older" in str(stale.payload["error"])
+    late = picture(tmp_path / "late.png")
+    write_proof(shot, None)
+    assert project.run("upload", "1", str(late), str(shot)).code == 1
+    assert project.fake.writes == []
+    for proof in (good, base | {"notNewUi": "An existing screen"}):
+        write_proof(shot, proof)
+        assert project.run("upload", "1", str(shot)).code == 0, proof
+    paper = tmp_path / "plan.pdf"
+    paper.write_bytes(b"pdf")
+    assert project.run("upload", "1", str(paper)).code == 0
+
+
+def test_a_new_screen_post_ends_with_the_closing_line(
+    project: Project, tmp_path: Path
+) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    commands = project.mods.commands
+    rules = dict.fromkeys(commands.UI_RULES, "Checked on the picture.")
+    note = tmp_path / "note.txt"
+    note.write_text(
+        "**Here is the new list.**\n\n@sam reply yes, or say what to change."
+    )
+    old = picture(tmp_path / "old.png")
+    new = picture(tmp_path / "new.png", uiRules=rules)
+    posts = []
+    for images in ([old], [old, new]):
+        flags = [part for image in images for part in ("--image", str(image))]
+        result = project.run("comment", "1", str(note), *flags)
+        assert result.code == 0, result.text
+        sent = [c for c in project.fake.writes if c.path.endswith("/comments")]
+        posts.append(sent[-1].form["text"])
+    assert commands.CLOSING not in posts[0]
+    last_picture = "![new.png](https://files.example.test/att-3.png)"
+    assert posts[1].endswith(f"{last_picture}\n\n{commands.CLOSING}")
 
 
 def test_one_run_at_a_time(project: Project, mods: Mods) -> None:
@@ -847,6 +915,13 @@ def test_every_report_list_has_a_run_action(mods: Mods) -> None:
     rules = sections((SKILL / "references/run.md").read_text())["Report lists"]
     acted = {name for cell in first_cells(rules) for name in re.findall(r"\w+", cell)}
     assert acted == set(mods.report.FIELDS)
+
+
+def test_mockup_rules_match_the_proof_gate(mods: Mods) -> None:
+    text = (SKILL / "references/mockups.md").read_text()
+    rules = sections(text)["Rules brief"]
+    assert tuple(first_cells(rules)) == mods.commands.UI_RULES
+    assert mods.commands.CLOSING in text
 
 
 def test_cli_matches_the_reference_contract(mods: Mods) -> None:

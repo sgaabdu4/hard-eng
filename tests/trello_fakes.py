@@ -101,6 +101,20 @@ def move_action(
     )
 
 
+PROOF: Data = {
+    "change": "The list shows its total",
+    "shows": "The list screen with the total at the top",
+    "showsChange": True,
+}
+
+
+def picture(path: Path, **proof: object) -> Path:
+    path.write_bytes(b"fake image")
+    fields = PROOF | (proof or {"notNewUi": "Shows a screen that already exists"})
+    Path(f"{path}.json").write_text(json.dumps(fields))
+    return path
+
+
 def create_action(ident: str, card: int, who: str, hours: float) -> Data:
     action = make_action(ident, "createCard", card, who, hours)
     data = action["data"]
