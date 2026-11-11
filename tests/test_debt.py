@@ -501,3 +501,35 @@ def test_a_performance_budget_failure_is_still_recorded(tmp_path: Path) -> None:
     outputs = {"./performance": "FAILED tests/performance/test_load.py - over budget\n"}
     assert debt.record(tmp_path, [group], {"./performance"}, outputs) == 0
     assert "./performance" in debt.load(tmp_path)
+
+
+def test_a_rule_name_matches_its_record_from_another_temp_folder(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "semgrep.json"
+    security: Gate = {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep"],
+        "report": {"type": "semgrep", "path": "semgrep.json"},
+    }
+    group: Group = {"path": ".", "checks": [security]}
+    stable = "agents.skills.he.semgrep.no-eval"
+
+    def semgrep(rule: str) -> None:
+        result = {"check_id": rule, "path": "a.py", "extra": {"lines": "eval(x)"}}
+        report.write_text(json.dumps({"results": [result]}))
+
+    semgrep("private.var.folders.a1.b-2.T.tmp0c3d.hard-eng-rules.no-eval")
+    assert debt.record(tmp_path, [group], {"./security"}, {"./security": "x\n"}) == 0
+    assert debt.load(tmp_path)["./security"] == {f"{stable} a.py eval(x)": 1, "x": 1}
+    for rule in (
+        "tmp.other.folder9.hard-eng-rules.no-eval",
+        "var.folders.zz.T.tmp77.hard-eng-rules.no-eval",
+        stable,
+    ):
+        semgrep(rule)
+        assert debt.judge(tmp_path, group, security, True, "x\n") is False
+    old = {"./security": {"tmp.old.run.hard-eng-rules.no-eval a.py eval(x)": 1, "x": 1}}
+    (tmp_path / debt.DEBT_FILE).write_text(json.dumps({"version": 1, "gates": old}))
+    assert debt.judge(tmp_path, group, security, True, "x\n") is False

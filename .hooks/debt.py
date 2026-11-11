@@ -15,6 +15,7 @@ DIGIT_RUN = re.compile(r"\d+")
 COUNTED_WORDS = re.compile(r"(?<!\w)N((?: \w+){1,2})")
 WORD = re.compile(r"\w+")
 TIME = re.compile(r"(?<!\w)N(?:\.N)?(?:ns|[µu]s|ms|s)(?!\w)")
+RULE_FOLDER = re.compile(r"[\w.-]*hard-eng-rules\.")
 CODE_FRAME = re.compile(r"[> ]*(?:N[ ]*)*[│|]")
 
 DEBT_FILE = "hard-eng.debt.json"
@@ -103,17 +104,23 @@ def real_lines(root: Path, group: Group, gate: Gate, output: str) -> list[str]:
     return [line for line in cleaned if line and not RUNNER_LINES.match(line)]
 
 
+def stable_rules(line: str) -> str:
+    """Semgrep names a rule from the folder of its rules file; the temp folder is no part of the rule."""
+    return RULE_FOLDER.sub("agents.skills.he.semgrep.", line)
+
+
 def fingerprints(root: Path, group: Group, gate: Gate, output: str) -> Counter[str]:
     """Output lines with line numbers, counts and the checkout path made neutral."""
     report = gate.get("report", {})
     path = root / group["path"] / report.get("path", "")
     found: Counter[str] = Counter(
-        DIGIT_RUN.sub("N", line) for line in real_lines(root, group, gate, output)
+        DIGIT_RUN.sub("N", stable_rules(line))
+        for line in real_lines(root, group, gate, output)
     )
     extract = REPORT_FINDINGS.get(str(report.get("type")))
     if extract is not None and path.is_file():
         try:
-            found.update(extract(path))
+            found.update(map(stable_rules, extract(path)))
         except (ValueError, KeyError, TypeError, AttributeError):
             found[UNREADABLE] += 1
     return found
@@ -127,7 +134,7 @@ def neutral(line: str) -> str:
 
     return COUNTED_WORDS.sub(
         lambda counted: "N" + WORD.sub(singular, counted.group(1)),
-        TIME.sub("Ntime", ANSI.sub("", line)),
+        TIME.sub("Ntime", ANSI.sub("", stable_rules(line))),
     )
 
 
