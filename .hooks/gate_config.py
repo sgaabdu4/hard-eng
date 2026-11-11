@@ -15,6 +15,7 @@ from dependency_graph import (
     expand_dependents,
     impact_inputs,
     is_workflow,
+    readers_above,
     shared_only,
 )
 from project_files import parse_project_text, read_project_file
@@ -67,12 +68,6 @@ JSONC = re.compile(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', re.DOTALL)
 TRAILING_COMMA = re.compile(r",(\s*[}\]])")
 ALL_ZERO_OBJECT_ID = re.compile(r"0{40}|0{64}")
 SOURCE_FILE = ".hooks/hard-eng-source.json"
-SOURCE_SUFFIXES = {
-    "python": {".py"},
-    "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
-    "dart": {".dart"},
-    "swift": {".swift"},
-}
 
 
 def json_layout(root: Path) -> tuple[str, int, int]:
@@ -561,24 +556,6 @@ def packages_for(
             selected.add(max(matches, key=len))
             selected.update(readers_above(by_path, name, max(matches, key=len)))
     return selected
-
-
-def readers_above(by_path: dict[str, Group], name: str, nearest: str) -> set[str]:
-    """A file of another language than its group is also read by the nearest group above it of its own."""
-    suffix = Path(name).suffix
-    language = next(
-        (key for key, kinds in SOURCE_SUFFIXES.items() if suffix in kinds), None
-    )
-    if language is None or by_path[nearest].get("language") == language:
-        return set()
-    above = [
-        path
-        for path, group in by_path.items()
-        if group.get("language") == language
-        and path != nearest
-        and Path(nearest).is_relative_to(path)
-    ]
-    return {max(above, key=len)} if above else set()
 
 
 def affected_groups(

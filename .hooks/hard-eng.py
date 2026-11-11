@@ -58,9 +58,8 @@ from ci_jobs import (
 )
 from dart_boundaries import validate_dart_boundaries
 from debt import OUTPUTS, remember
-from dependency_graph import child_groups
+from dependency_graph import SOURCE_SUFFIXES, child_groups
 from gate_config import (
-    SOURCE_SUFFIXES,
     Gate,
     Group,
     JsonObject,
