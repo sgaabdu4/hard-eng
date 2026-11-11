@@ -350,6 +350,24 @@ def test_ship_merge_matches_verified_head_and_checks_result(
     remote.assert_not_called()
 
 
+def test_ship_ready_prints_the_branch_rule_note_before_pass(
+    delivered_worktree: tuple[Path, Shipment],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, shipment = delivered_worktree
+    note = "Not checked: whether main requires build (gh query failed)."
+    monkeypatch.setattr(
+        ship_actions, "verify", Mock(return_value=replace(shipment, rule_note=note))
+    )
+    ship_actions.run(root, "PLAN.md", shipment.pr_url, "ready", None, None)
+    lines = capsys.readouterr().out.splitlines()
+    assert lines == [
+        note,
+        f"PASS ship ready: {shipment.pr_url} at {shipment.merged_sha}",
+    ]
+
+
 def test_ship_merge_reports_pending_delivery_after_merge_command(
     delivered_worktree: tuple[Path, Shipment], monkeypatch: pytest.MonkeyPatch
 ) -> None:

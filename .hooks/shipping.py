@@ -56,6 +56,7 @@ class Shipment:
     merged_sha: str | None
     delivery_target: str
     review_bypass: bool = False
+    rule_note: str | None = None
 
 
 class ShippingError(ValueError):
@@ -483,7 +484,9 @@ def _check_revision(run: dict[str, JsonValue], revision: str) -> None:
         raise ShippingError("required check is stale")
 
 
-def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) -> None:
+def _checks(
+    root: Path, repository: str, revision: str, policy: ShippingPolicy, explain: bool
+) -> None:
     endpoint = (
         f"repos/{repository}/commits/{revision}/check-runs?per_page=100&filter=all"
     )
@@ -506,7 +509,10 @@ def _checks(root: Path, repository: str, revision: str, policy: ShippingPolicy) 
             raise ShippingError(f"required check truncated: {name}")
         _check_revision(run, revision)
         if run.get("status") != "completed":
-            raise PendingCheck(f"required check has not completed: {name}")
+            from ci_usage import queue_note
+
+            note = queue_note(root, repository, run, policy["ci_seconds"], explain)
+            raise PendingCheck(f"required check has not completed: {name}{note}")
         if run.get("conclusion") == "skipped":
             raise ShippingError(
                 f"required check was skipped; gate its steps, not the job: {name}"
@@ -571,7 +577,7 @@ def reused_pull_request(root: Path, base: str) -> str | None:
         )
         if tree != git(root, "rev-parse", "HEAD^{tree}").strip():
             raise ShippingError("the merged PR tested a different tree")
-        _checks(root, repository, head, policy)
+        _checks(root, repository, head, policy, False)
     except ShippingError as error:
         print(
             f"Running the checks again; the merged PR's checks do not cover this push: {error}",
@@ -591,7 +597,7 @@ def passed_branch_point(root: Path) -> str | None:
         if policy is None or point is None:
             return None
         remote = git(root, "remote", "get-url", "origin").strip()
-        _checks(root, origin_repository(remote), point, policy)
+        _checks(root, origin_repository(remote), point, policy, False)
     except ShippingError:
         return None
     return point
@@ -860,7 +866,7 @@ def _ready_state(
         raise ShippingError(problem)
     _current_with_base(root, identity, pull.base_ref, pull.head_sha)
     if pull.mergeable is not True or pull.mergeable_state != "clean":
-        _checks(root, "/".join(identity[:2]), pull.head_sha, policy)
+        _checks(root, "/".join(identity[:2]), pull.head_sha, policy, True)
     bypass = pull.mergeable is True and pull.mergeable_state == "blocked"
     if bypass:
         from review_bypass import bypass_problem
@@ -913,11 +919,14 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         raise ShippingError("PR base branch does not match shipping policy")
     if pull.base_repository != repository or pull.head_repository != repository:
         raise ShippingError("PR repository or head repository does not match origin")
-    review_bypass = False
+    review_bypass, rule_note = False, None
     if stage == "ready":
         review_bypass = _ready_state(
             resolved_root, pull, policy, branch, local_head, (owner, name, number)
         )
+        from review_bypass import branch_rule_note
+
+        rule_note = branch_rule_note(resolved_root, policy, (owner, name, number))
         revision, merged_sha = pull.head_sha, None
     else:
         revision = _delivered(resolved_root, pull, policy["base"], origin_url)
@@ -925,7 +934,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     if policy["ui_paths"]:
         paths = _changed_paths(resolved_root, owner, name, number)
         _ui_evidence(resolved_root, pull, paths, policy)
-    _checks(resolved_root, repository, revision, policy)
+    _checks(resolved_root, repository, revision, policy, True)
     if stage == "delivered" and target == "Deploy":
         _delivery(resolved_root, policy, revision, url)
     current = _pull(resolved_root, owner, name, number)
@@ -944,4 +953,5 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         merged_sha=merged_sha,
         delivery_target=target,
         review_bypass=review_bypass,
+        rule_note=rule_note,
     )
