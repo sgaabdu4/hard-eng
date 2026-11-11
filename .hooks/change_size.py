@@ -250,7 +250,7 @@ def released_plans(root: Path, base: str | None) -> set[str]:
 
 
 def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
-    """Changed plan paths that only moved a plan the base holds, with the paths they left."""
+    """Changed plan paths that only moved a plan the base holds."""
     gone = [
         name
         for name in changed
@@ -277,7 +277,7 @@ def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
         and (root / name).is_file()
         and (root / name).read_text() in held
     }
-    return moved | {held[(root / name).read_text()] for name in moved}
+    return moved
 
 
 def plan_not_needed(root: Path) -> bool:
