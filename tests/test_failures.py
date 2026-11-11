@@ -114,6 +114,20 @@ def test_failure_hook_ignores_errors_that_are_not_agent_mistakes(
     assert failure_outputs(repository, monkeypatch, capsys, [payload] * 4) == [{}] * 4
 
 
+def test_exit_code_lines_alone_never_count_as_a_repeated_error(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session: JsonObject = {"session_id": "codes"}
+    assert agent_hooks.record_session(repository, session)
+    payloads: list[JsonObject] = [
+        {**session, "tool_name": "Bash", "error": error}
+        for error in ("Exit code 1", "exit=1", "exit=1 \n", "exit=1", "Exit code 1")
+    ]
+    assert failure_outputs(repository, monkeypatch, capsys, payloads) == [{}] * 5
+
+
 @pytest.mark.parametrize(
     "error",
     [

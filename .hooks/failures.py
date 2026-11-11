@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 FINDING = re.compile(r"(?i)fail|error|\.[a-z]\w*[:(]#|(?-i:^[A-Z]+# )")
-EXIT_CODE_OR_SPACE_OR_DIGIT = re.compile(r"(?i)exit code|[\d\s]")
+EXIT_CODE_OR_SPACE_OR_DIGIT = re.compile(r"(?i)exit code|exit=|[\d\s]")
 NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 ROOT = Path(__file__).resolve().parents[1]
