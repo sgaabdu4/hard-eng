@@ -76,6 +76,7 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
         "abstract_contract.dart",
         "redirecting_factory.dart",
         "default_parameter.dart",
+        "concrete_interface.dart",
         "enum_field.dart",
         "enum_default.dart",
     }
@@ -83,6 +84,22 @@ def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
     report.write_text("SF:runtime.dart\nDA:1,1\nend_of_record\n")
     with pytest.raises(ValueError, match="no executable lines"):
         line_coverage(report, "dart-tests", tmp_path, erased)
+
+
+def test_a_concrete_class_of_constants_needs_no_coverage_entry(
+    tmp_path: Path,
+) -> None:
+    sources = {
+        "constants.dart": "class Constants { static const a = 'x'; }\n",
+        "empty.dart": "class Marker {}\n",
+        "instance_field.dart": "class Value { final int a = 1; }\n",
+        "method_body.dart": "class Value { int call() => 1; }\n",
+        "explicit_constructor.dart": "class Value { const Value(); }\n",
+    }
+    for name, source in sources.items():
+        (tmp_path / name).write_text(source)
+    erased = erased_dart({tmp_path / name for name in sources})
+    assert {path.name for path in erased} == {"constants.dart", "empty.dart"}
 
 
 def test_missing_dart_parser_keeps_sources_required(
