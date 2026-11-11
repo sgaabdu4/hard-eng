@@ -317,17 +317,54 @@ def scanner_version(
     return found[0] if found else ""
 
 
+def scanner_store() -> Path:
+    """The file, shared by every checkout, that holds the versions of one cutoff hour."""
+    shared = Path(os.environ.get("RUNNER_TEMP") or temporary_root()) / "hard-eng-tools"
+    return shared / "scanner-versions.json"
+
+
+def stored_scanner_versions(cutoff: str) -> dict[str, str]:
+    """The versions stored for this cutoff hour; none when the file is missing or old."""
+    try:
+        stored = json.loads(scanner_store().read_text())
+        versions = stored["versions"] if stored["cutoff"] == cutoff else {}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+    if not isinstance(versions, dict):
+        return {}
+    return {
+        name: version
+        for name, version in versions.items()
+        if isinstance(name, str) and isinstance(version, str)
+    }
+
+
 def pin_python_scanners(names: list[str], timeout: float) -> None:
     """Resolve each scanner's latest version once, serially, so parallel gates run it
-    pinned instead of each refreshing uv's shared interpreter cache at once."""
+    pinned instead of each refreshing uv's shared interpreter cache at once.
+    A quick check reuses the versions that a lookup of the same cutoff hour stored."""
+    cutoff = release_cutoff()
+    stored = stored_scanner_versions(cutoff)
+    found = False
     for name in names:
+        if quick_mode() and name in stored:
+            SCANNER_VERSIONS[name] = stored[name]
+            continue
         version = scanner_version(name, quick_mode(), timeout)
         if version is None and quick_mode():
             version = scanner_version(name, False, timeout)
             if version is None:
                 raise ValueError(NOT_INSTALLED.format(error=f"{name} could not be run"))
         if version:
-            SCANNER_VERSIONS[name] = version
+            SCANNER_VERSIONS[name] = stored[name] = version
+            found = True
+    if found:
+        try:
+            path = scanner_store()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            replace_file(path, json.dumps({"cutoff": cutoff, "versions": stored}))
+        except OSError:
+            pass
 
 
 def bun_age(tool: str, seconds: int) -> str:
