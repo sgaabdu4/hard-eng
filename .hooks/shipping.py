@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 from agent_hooks import reject_attribution
 from gate_config import JsonValue
-from project_files import read_project_file
+from project_files import parse_project_text, read_project_file
 from ship_evidence import attachment_urls
 
 REPOSITORY_NAME_PART = re.compile(r"[A-Za-z0-9_.-]+")
@@ -314,6 +314,10 @@ def load_policy(root: Path, required: bool = True) -> ShippingPolicy | None:
         payload = read_project_file(path, root)
     except (OSError, ValueError) as error:
         raise ShippingError(str(error)) from error
+    return _policy_block(payload, required)
+
+
+def _policy_block(payload: object, required: bool) -> ShippingPolicy | None:
     if not isinstance(payload, dict):
         raise ShippingError("hard-eng.gates.json must be an object")
     if "shipping" not in payload:
@@ -328,6 +332,33 @@ def load_policy(root: Path, required: bool = True) -> ShippingPolicy | None:
     if not isinstance(raw, dict):
         raise ShippingError("shipping policy must be an object")
     return _policy(cast(dict[str, JsonValue], raw))
+
+
+def pushed_policy(root: Path, revision: str) -> ShippingPolicy:
+    """The shipping policy that the pushed commit holds, not the one in the working tree."""
+    short = revision[:12]
+    try:
+        text = git(root, "cat-file", "blob", f"{revision}:hard-eng.gates.json")
+    except ShippingError:
+        text = None
+    policy = None
+    if text is not None:
+        try:
+            policy = _policy_block(
+                parse_project_text(text, "hard-eng.gates.json"), False
+            )
+        except ValueError as error:
+            raise ShippingError(
+                f"Pushed commit {short} has an invalid hard-eng.gates.json: {error}; "
+                "fix it, commit it and push again."
+            ) from error
+    if policy is None:
+        raise ShippingError(
+            f"Pushed commit {short} has no shipping policy in hard-eng.gates.json; "
+            "add the shipping block (.agents/skills/he-ship/references/checks.md), "
+            "commit it and push again."
+        )
+    return policy
 
 
 def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:

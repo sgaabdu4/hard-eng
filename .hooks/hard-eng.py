@@ -609,7 +609,7 @@ def check(
 ) -> int:
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
-    from process_group import read_installed, save_installed
+    from process_group import clean_start, read_installed, record_pass, save_installed
     from reports import quick_groups
     from shipping import gate_budget
 
@@ -621,6 +621,9 @@ def check(
 
     with check_lock(ROOT) as lock:
         installed = read_installed(lock, ROOT)
+        start = clean_start(
+            lock, ROOT, base, plan_stage, quick or languages != NO_LANGUAGES
+        )
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(language_groups(groups, languages), quick, installed)
         from debt import require_shrink
@@ -645,6 +648,7 @@ def check(
             ROOT, base, groups, int(started)
         )
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
+        record_pass(lock, ROOT, start, failed)
         return int(failed)
 
 
