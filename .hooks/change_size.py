@@ -210,6 +210,35 @@ def released_plans(root: Path, base: str | None) -> set[str]:
     }
 
 
+def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
+    """Changed plan paths that only moved a plan the base holds, with the paths they left."""
+    gone = [
+        name
+        for name in changed
+        if is_plan_path(Path(name)) and not (root / name).exists()
+    ]
+    references = [
+        reference for reference in (base, default_branch_point(root)) if reference
+    ]
+    held: dict[str, str] = {}
+    for name in gone:
+        for reference in references:
+            try:
+                held[_git_output(root, "show", f"{reference}:{name}")] = name
+                break
+            except (subprocess.CalledProcessError, OSError):
+                continue
+    moved = {
+        name
+        for name in changed
+        if held
+        and is_plan_path(Path(name))
+        and (root / name).is_file()
+        and (root / name).read_text() in held
+    }
+    return moved | {held[(root / name).read_text()] for name in moved}
+
+
 def plan_not_needed(root: Path) -> bool:
     small, reason = size_verdict(root)
     if reason == NO_CHANGE:

@@ -1029,6 +1029,42 @@ def test_an_old_complete_plan_does_not_cover_committed_work_under_a_plan_stage_c
             validate_plans(repository, stage=stage)
 
 
+def moved_plan_branch(repository: Path, completed_plan: str) -> None:
+    (repository / "PLAN.md").write_text(completed_plan)
+    released_branch(repository)
+    (repository / "features/moved").mkdir(parents=True)
+    git(repository, "mv", "PLAN.md", "features/moved/PLAN.md")
+    commit(repository, "move the plan")
+
+
+def test_a_moved_plan_does_not_cover_new_work(
+    repository: Path, completed_plan: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    moved_plan_branch(repository, completed_plan)
+    new_file(repository)
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+    assert "Size: big, because it adds" in capsys.readouterr().out
+    (repository / "new.py").unlink()
+    edit(repository, "a.py", 2)
+    (repository / "features/next").mkdir()
+    (repository / "features/next/PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", "Status: Draft")
+    )
+    with pytest.raises(ValueError, match="features/next/PLAN.md: plan is Draft"):
+        validate_plans(repository)
+
+
+def test_a_branch_that_only_moves_a_plan_passes(
+    repository: Path, completed_plan: str
+) -> None:
+    moved_plan_branch(repository, completed_plan)
+    validate_plans(repository)
+    (repository / "features/moved/PLAN.md").write_text(completed_plan + "\nmore\n")
+    commit(repository, "edit the moved plan")
+    assert validate_plans(repository) == "Complete"
+
+
 def test_a_plan_stage_check_passes_a_small_change_with_no_plan(
     repository: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
