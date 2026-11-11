@@ -539,3 +539,23 @@ def test_a_recorded_line_matches_when_its_number_column_gets_narrower(
     repository: Path,
 ) -> None:
     assert_same_debt_line(repository, "999  +     def f(x):", "989 +     def f(x):")
+
+
+@pytest.mark.parametrize("mark", ["✖", "×"])
+def test_the_summary_line_of_biome_is_no_finding(
+    repository: Path, capsys: pytest.CaptureFixture[str], mark: str
+) -> None:
+    warning = "src/a.ts:1:1 lint/style/useConst"
+    error = "src/b.ts:2:2 lint/suspicious/noDebugger"
+    recorded = (
+        f"{warning}\n{error}\n{mark} Some warnings were emitted while running checks.\n"
+    )
+    assert debt.record(repository, [LINT_GROUP], {"./lint"}, {"./lint": recorded}) == 0
+    capsys.readouterr()
+    now = f"{error}\n{mark} Some errors were emitted while running checks.\n"
+    assert debt.judge(repository, LINT_GROUP, LINT, True, now) is True
+    printed = capsys.readouterr().out
+    assert "1 recorded lines are fixed" in printed
+    assert "findings beyond" not in printed
+    unchanged = f"{warning}\n{now}"
+    assert debt.judge(repository, LINT_GROUP, LINT, True, unchanged) is False
