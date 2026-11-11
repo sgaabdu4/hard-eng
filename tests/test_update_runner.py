@@ -929,6 +929,6 @@ def test_the_stop_note_keeps_one_line_of_a_long_failed_result(repository: Path) 
     update_runner.record_result(repository, update_runner.failed_update(refusal))
     note = update_runner.freshness_note(repository)
     assert note.startswith("Scaffold may be stale. Last Hard Eng update: ")
-    assert "a.md has local edits. Fix that cause first." in note
+    assert "a.md has local edits. (the rest is in" in note
     assert "block 1" not in note
     assert note.endswith(f"(the rest is in {update_runner.RESULT_FILE})")
