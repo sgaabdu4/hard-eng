@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from comments import validate_suppressions
+import ui_rules
+from comments import UI_SUFFIXES, validate_suppressions
 from conftest import SOURCE, commit, init
 
 RULE = "HE-UI-SOURCE"
@@ -53,12 +54,13 @@ def test_an_added_css_transition_on_every_property_is_refused(tmp_path: Path) ->
         "src/app.css",
         "a { color: red; }\n",
         "a { color: red; }\nb { transition: all 0.3s ease; }\nc { transition-property: all; }\n"
-        "d { transition: opacity 1s, all 2s; }\n",
+        "d { transition:all .2s; }\ne { transition-property:all; }\n",
     )
     message = refused(root)
     assert "src/app.css:2:" in message
     assert "src/app.css:3:" in message
     assert "src/app.css:4:" in message
+    assert "src/app.css:5:" in message
     script = change(
         tmp_path / "s",
         "src/box.ts",
@@ -181,18 +183,7 @@ def test_a_test_file_and_a_generated_file_are_not_judged(tmp_path: Path) -> None
     validate_suppressions(owned, "HEAD")
 
 
-@pytest.mark.parametrize(
-    ("name", "line", "loaded"),
-    [
-        ("src/a.py", "x = 1", False),
-        ("src/a.css", "a { color: red; }", False),
-        ("src/a.css", "a { transition: all 1s; }", True),
-    ],
-)
-def test_a_change_with_no_ui_file_does_not_load_the_ui_rules(
-    tmp_path: Path, name: str, line: str, loaded: bool
-) -> None:
-    root = change(tmp_path, name, "# base\n", f"# base\n{line}\n")
+def ui_rules_loaded(root: Path) -> bool:
     code = (
         "import sys\n"
         f"sys.path.insert(0, {str(SOURCE / '.hooks')!r})\n"
@@ -206,4 +197,78 @@ def test_a_change_with_no_ui_file_does_not_load_the_ui_rules(
     result = subprocess.run(
         [sys.executable, "-I", "-c", code], capture_output=True, text=True, check=True
     )
-    assert result.stdout.strip() == str(loaded)
+    return result.stdout.strip() == "True"
+
+
+@pytest.mark.parametrize(
+    ("name", "line", "loaded"),
+    [
+        ("src/a.py", "x = 1", False),
+        ("src/a.css", "a { color: red; }", False),
+        ("src/a.css", "a { transition: all 1s; }", True),
+    ],
+)
+def test_a_change_with_no_ui_file_does_not_load_the_ui_rules(
+    tmp_path: Path, name: str, line: str, loaded: bool
+) -> None:
+    root = change(tmp_path, name, "# base\n", f"# base\n{line}\n")
+    assert ui_rules_loaded(root) is loaded
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'const c = <i className="transition-colors duration-200" />;',
+        "a { transition: opacity 150ms ease-out; }",
+        'const c = <i className="transition-[opacity,transform]" />;',
+        "a { transition: opacity 1s, all 2s; }",
+    ],
+)
+def test_a_common_transition_line_does_not_load_the_ui_rules(
+    tmp_path: Path, line: str
+) -> None:
+    root = change(tmp_path, "src/a.tsx", "// base\n", f"// base\n{line}\n")
+    assert ui_rules_loaded(root) is False
+
+
+@pytest.mark.parametrize(
+    ("name", "line"),
+    [
+        ("lib/core/theme/app_colors.dart", "final c = Colors.red;"),
+        ("src/tokens.ts", "export const a = 'bg-[#FAFAFA]';"),
+        ("src/a.test.tsx", 'const c = <i className="transition-all" />;'),
+        ("lib/a_test.dart", "final c = Colors.red;"),
+        (".claude/a.tsx", 'const c = <i className="transition-all" />;'),
+    ],
+)
+def test_a_colour_in_a_theme_file_starts_no_git_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, line: str
+) -> None:
+    root = change(tmp_path, name, "// base\n", f"// base\n{line}\n")
+    looked: list[list[str]] = []
+    monkeypatch.setattr(
+        ui_rules,
+        "generated_sources",
+        lambda _root, names: looked.append(names) or set(),
+    )
+    validate_suppressions(root, "HEAD")
+    assert looked == []
+
+
+def test_a_candidate_file_reaches_the_generated_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = change(
+        tmp_path,
+        "src/a.tsx",
+        "// base\n",
+        '// base\n<i className="transition-all" />\n',
+    )
+    looked: list[list[str]] = []
+    monkeypatch.setattr(
+        ui_rules,
+        "generated_sources",
+        lambda _root, names: looked.append(names) or set(),
+    )
+    refused(root)
+    assert looked == [["src/a.tsx"]]
