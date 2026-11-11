@@ -340,3 +340,14 @@ def test_the_lockfile_rule_follows_git_for_files_and_links(
         return
     with pytest.raises(ValueError, match=r"uv.lock is ignored by Git"):
         run_lock_rule(root, caller)
+
+
+def test_an_ignored_lockfile_link_on_disk_is_refused_without_the_install_step(
+    tmp_path: Path,
+) -> None:
+    root = lock_rule_project(tmp_path, "setup", "link", tracked=False)
+    with pytest.raises(ValueError, match=r"uv.lock is ignored by Git") as refused:
+        run_lock_rule(root, "setup")
+    message = str(refused.value)
+    assert "remove that rule, then commit uv.lock" in message
+    assert "run the project's install" not in message

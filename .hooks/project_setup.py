@@ -26,7 +26,12 @@ from gate_config import (
     typescript_packages,
 )
 from hook_chain import is_own
-from project_files import INSTALL_LOCKS, read_project_file, refuse_ignored_locks
+from project_files import (
+    INSTALL_LOCKS,
+    dependency_free,
+    read_project_file,
+    refuse_ignored_locks,
+)
 
 CARET_VERSION = re.compile(r"\^?(\d+)\.(\d+)\.(\d+)")
 REGEX_SPECIAL_CHARACTER = re.compile(r"([.\[\]()*+?{}|^$\\])")
@@ -303,23 +308,6 @@ def native_typecheck(scripts: JsonObject, checks: list[Gate]) -> bool:
             )
             for gate in checks
         )
-    )
-
-
-def dependency_free(directory: Path) -> bool:
-    """Bun deletes the lockfile of a package that declares nothing to install."""
-    path = directory / "package.json"
-    manifest = read_project_file(path) if path.is_file() else None
-    fields = (
-        "dependencies",
-        "devDependencies",
-        "optionalDependencies",
-        "peerDependencies",
-    )
-    return (
-        isinstance(manifest, dict)
-        and not manifest.get("workspaces")
-        and not any(manifest.get(key) for key in fields)
     )
 
 
