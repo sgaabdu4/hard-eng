@@ -210,6 +210,7 @@ def test_the_colour_step_names_the_paths_that_pass_as_the_code_does(
         ),
         ("src/a.tsx", "// keep transition-all out of this"),
         ("src/a.css", "/* transition: all 1s */"),
+        ("src/a.tsx", "{/* transition-all was here */}"),
         ("src/a.tsx", 'const c = <i className="text-all-caps my-transition-all" />;'),
         ("src/a.tsx", 'const c = <i className="transition-all-foo" />;'),
         ("src/a.css", "* { transition: none; }"),

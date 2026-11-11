@@ -12,7 +12,7 @@ THEME_WORDS = frozenset(
     + ("themes", "tokens", "colors", "colours", "palettes")
 )
 NAME_WORDS = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+")
-COMMENT_LINE = re.compile(r"^\s*(?://|/\*|<!--|\*(?:\s|/|$))")
+COMMENT_LINE = re.compile(r"^\s*(?:\{\s*)?(?://|/\*|<!--|\*(?:\s|/|$))")
 TRANSITION_CLASS = re.compile(r"(?<![\w-])transition-all(?![\w-])")
 TRANSITION_STYLE = re.compile(
     r"(?<!\w)transition(?:-property|Property)?[\"']?\s*:\s*[\"'`]?(?:[^;\"'`,]*,\s*)?all(?![\w-])"
