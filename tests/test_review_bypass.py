@@ -434,8 +434,10 @@ def test_ship_ready_decides_for_a_non_admin_from_the_rules_it_can_read(
     [
         (
             {"branchProtectionRule": None, "rules": nodes({"type": "WORKFLOWS"})},
-            "Not checked: whether main requires build "
-            "(a required workflow rule may enforce it).",
+            (
+                "Not checked: whether main requires build "
+                "(a required workflow rule may enforce it)."
+            ),
         ),
         (
             {
