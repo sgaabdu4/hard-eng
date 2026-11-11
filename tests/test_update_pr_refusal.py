@@ -107,15 +107,22 @@ def test_a_build_error_that_needs_more_arguments_keeps_its_cause_and_the_note(
     )
 
 
-def test_the_update_brings_the_workflow_files_once_the_base_holds_the_shipping_block(
+def base_with_policy(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> Path:
     project = installed_python_project(release, monkeypatch, True)
     git(project, "switch", "-q", "main")
     add_shipping_policy(project)
     git(project, "push", "-q", "--no-verify", "origin", "main")
     git(project, "switch", "-q", "task")
     git(project, "merge", "-q", "main")
+    return project
+
+
+def test_the_update_brings_the_workflow_files_once_the_base_holds_the_shipping_block(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = base_with_policy(release, monkeypatch)
     outcome = update_runner.locked_update(project, repair=True)
     assert (
         "the update brings the workflow files and their gates when the `shipping` block of hard-eng.gates.json is on the base branch"
@@ -146,12 +153,7 @@ def test_a_rerun_writes_the_workflow_gates_when_the_checkout_has_a_workflow(
 def built_repair_branch(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> Path:
-    project = installed_python_project(release, monkeypatch, True)
-    git(project, "switch", "-q", "main")
-    add_shipping_policy(project)
-    git(project, "push", "-q", "--no-verify", "origin", "main")
-    git(project, "switch", "-q", "task")
-    git(project, "merge", "-q", "main")
+    project = base_with_policy(release, monkeypatch)
     update_runner.locked_update(project, repair=True)
     return project
 

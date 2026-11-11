@@ -203,6 +203,42 @@ def test_a_python_parent_leaves_out_child_groups_that_have_the_same_gate(
     assert leave_out_children(tmp_path, ["ruff"], parent, other) == ["ruff"]
 
 
+def sphinx_project(root: Path, sources: list[str]) -> tuple[Group, Gate]:
+    (root / "docs").mkdir()
+    (root / "docs/conf.py").write_text("project = 'fixture'\n")
+    gate: Gate = {"name": "deptry", "role": "dependencies", "command": ["deptry", "."]}
+    group: Group = {
+        "path": ".",
+        "language": "python",
+        "sources": sources,
+        "checks": [gate],
+    }
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [group], "shared": []})
+    )
+    return group, gate
+
+
+def test_the_dependency_gate_leaves_out_a_sphinx_docs_folder(tmp_path: Path) -> None:
+    group, gate = sphinx_project(tmp_path, ["src/mylib"])
+    assert leave_out_children(tmp_path, ["deptry", "."], group, gate) == [
+        "deptry",
+        ".",
+        "--extend-exclude",
+        "^docs(/|$)",
+    ]
+
+
+def test_a_docs_folder_in_sources_stays_in_the_dependency_gate(
+    tmp_path: Path,
+) -> None:
+    group, gate = sphinx_project(tmp_path, ["docs"])
+    assert leave_out_children(tmp_path, ["deptry", "."], group, gate) == [
+        "deptry",
+        ".",
+    ]
+
+
 def pyrefly_package(root: Path, files: dict[str, str]) -> Path:
     directory = root / "tools/cli"
     directory.mkdir(parents=True)
