@@ -4,12 +4,14 @@ import json
 from pathlib import Path
 from types import ModuleType
 
+import change_size
 import gate_config
 import pytest
-from conftest import add_origin, commit, configure, gate, git, init, plan_document
 from change_size import plan_tests
+from conftest import add_origin, commit, configure, gate, git, init, plan_document
 from gate_config import repository_files
 from plans import is_plan_path, plan_files, validate_plan, validate_plans
+from test_plans import edit, new_file, released_branch
 
 # Fixture IDs are built so this file names no real registry ID.
 REQ = "REQ"
@@ -283,3 +285,130 @@ def test_the_skip_rule_and_the_plan_rule_judge_the_same_plans(tmp_path: Path) ->
     assert plan_tests(root, None) == {"test_open"}
     with pytest.raises(ValueError, match="features/open/PLAN.md: plan is Ready"):
         validate_plans(root)
+
+
+def open_plan_on_the_base(repository: Path, completed_plan: str, status: str) -> None:
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", f"Status: {status}")
+    )
+    released_branch(repository)
+
+
+@pytest.mark.parametrize("status", ["Draft", "Ready"])
+def test_a_small_change_needs_no_plan_when_the_base_holds_an_open_plan(
+    repository: Path,
+    completed_plan: str,
+    capsys: pytest.CaptureFixture[str],
+    status: str,
+) -> None:
+    open_plan_on_the_base(repository, completed_plan, status)
+    edit(repository, "a.py", 3)
+    commit(repository, "small code change")
+    assert validate_plans(repository) == "Complete"
+    assert "Size: small" in capsys.readouterr().out
+    assert validate_plans(repository, stage="Ready") == "Ready"
+    assert validate_plans(repository, "main") == "Complete"
+
+
+@pytest.mark.parametrize("status", ["Draft", "Ready"])
+def test_a_big_change_is_judged_by_the_open_plan_of_the_base(
+    repository: Path, completed_plan: str, status: str
+) -> None:
+    open_plan_on_the_base(repository, completed_plan, status)
+    new_file(repository)
+    commit(repository, "big code change")
+    with pytest.raises(ValueError, match=f"plan is {status}; this check requires"):
+        validate_plans(repository)
+
+
+@pytest.mark.parametrize("big", [False, True], ids=["small", "big"])
+def test_a_branch_that_edits_the_open_plan_is_judged_by_it(
+    repository: Path,
+    completed_plan: str,
+    monkeypatch: pytest.MonkeyPatch,
+    big: bool,
+) -> None:
+    open_plan_on_the_base(repository, completed_plan, "Ready")
+    new_file(repository) if big else edit(repository, "a.py", 3)
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", "Status: Ready") + "\nmore\n"
+    )
+    commit(repository, "code and plan")
+    asked: list[Path] = []
+
+    def size_asked(root: Path) -> tuple[bool, str]:
+        asked.append(root)
+        return True, ""
+
+    monkeypatch.setattr(change_size, "size_verdict", size_asked)
+    with pytest.raises(ValueError, match="plan is Ready; this check requires"):
+        validate_plans(repository)
+    assert asked == []
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "refusal"),
+    [
+        ("Retro: None — fixture command, no check failed.", "Retro: None", "Retro"),
+        ("Retro: None — fixture command, no check failed.", "Retro: none.", "Retro"),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: NONE",
+            "Same cause",
+        ),
+        (
+            "Retro: None — fixture command, no check failed.",
+            "Retro: Fixed in `tests/test_gone.py::test_gone`.",
+            "tests that do not exist: tests/test_gone.py::test_gone",
+        ),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: One owner; `tests/test_gone.py::test_gone` proves it.",
+            "tests that do not exist: tests/test_gone.py::test_gone",
+        ),
+        (
+            "Retro: None — fixture command, no check failed.",
+            "Retro: Fixed in `tests/test_real.py::test_real`.",
+            None,
+        ),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: HE-YAGNI, step 3 of the plan.",
+            None,
+        ),
+        (
+            "Same cause: N/A — fixture command, not a fix.",
+            "Same cause: `gate_schedule.py::run_checks` grew past its limit.",
+            None,
+        ),
+    ],
+)
+def test_a_retro_or_same_cause_line_needs_a_reason_and_real_tests(
+    repository: Path, completed_plan: str, old: str, new: str, refusal: str | None
+) -> None:
+    (repository / "tests").mkdir()
+    (repository / "tests/test_real.py").write_text("def test_real() -> None: ...\n")
+    (repository / "PLAN.md").write_text(completed_plan.replace(old, new))
+    if refusal is None:
+        assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
+        return
+    with pytest.raises(ValueError, match=refusal) as error:
+        validate_plans(repository, "0" * 40, "Complete")
+    if "exist" not in refusal:
+        assert "None — <reason>" in str(error.value)
+
+
+def test_the_missing_reason_refusal_names_its_line(
+    repository: Path, completed_plan: str
+) -> None:
+    line = "Evidence: The test asserts the exit, N/A for the rest of this long line"
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace(
+            "Evidence: The test asserts the observed command exit; this is fixture data.",
+            line,
+        )
+    )
+    with pytest.raises(ValueError, match="needs an inline reason") as error:
+        validate_plans(repository, "0" * 40, "Complete")
+    assert line[:60] in str(error.value)
+    assert line[:61] not in str(error.value)

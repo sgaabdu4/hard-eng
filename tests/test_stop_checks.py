@@ -1,7 +1,6 @@
 """Ending a turn must not rerun a passing check or leave an interrupted one running."""
 
 import json
-import shutil
 import subprocess
 import sys
 import time
@@ -13,6 +12,7 @@ import failures
 import pytest
 from conftest import SOURCE, add_origin, commit, git, gone, plan_document
 from gate_config import Gate, Group, JsonObject
+from test_plans import install_native_hooks
 
 
 def install_check(repository: Path, script: str) -> Path:
@@ -514,17 +514,7 @@ def test_failures_with_no_output_are_not_counted_as_repeats(tmp_path: Path) -> N
 def test_stop_passes_a_small_change_when_the_base_holds_an_open_plan(
     repository: Path, status: str
 ) -> None:
-    shutil.copytree(
-        SOURCE / ".hooks",
-        repository / ".hooks",
-        ignore=shutil.ignore_patterns("__pycache__"),
-    )
-    for name in ("PRODUCT.md", "DESIGN.md"):
-        shutil.copyfile(SOURCE / name, repository / name)
-    gate = {"name": "fixture-check", "command": [sys.executable, "-c", ""]}
-    (repository / "hard-eng.gates.json").write_text(
-        json.dumps({"packages": [], "shared": [gate]})
-    )
+    install_native_hooks(repository, "")
     (repository / ".git/info/exclude").write_text(".hard-eng/\n__pycache__/\n")
     (repository / "a.py").write_text("".join(f"line {n}\n" for n in range(30)))
     (repository / "PLAN.md").write_text(
