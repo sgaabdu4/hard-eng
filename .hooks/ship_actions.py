@@ -16,14 +16,16 @@ from xml.parsers.expat import ExpatError
 
 from challenge import shipping_note
 from gate_config import Group
-from process_group import exit_when_stopped
+from process_group import exit_when_stopped, passed_minutes
 from shipping import (
     PendingCheck,
     Shipment,
     ShippingError,
+    ShippingPolicy,
     gh,
     git,
     load_policy,
+    pushed_policy,
     verify,
 )
 from submodules import update_submodules
@@ -270,18 +272,35 @@ def push_base(
     return base
 
 
+def spared(root: Path, revision: str, base: str | None, policy: ShippingPolicy) -> bool:
+    """Say so and skip the push check when a full check passed on this commit and base."""
+    minutes = None if base is None else passed_minutes(root, revision, base)
+    if minutes is None or policy["pre_push_mutation_seconds"]:
+        return False
+    print(
+        f"Hard Eng: the full check passed on this exact commit and base {minutes} min "
+        "ago; not repeating it.",
+        flush=True,
+    )
+    return True
+
+
 def pre_push(root: Path) -> int:
     exit_when_stopped()
-    policy = load_policy(root)
-    assert policy is not None
     started, mutating = time.monotonic(), 0.0
     for line in sys.stdin:
         fields = line.split()
         if len(fields) != 4:
             raise ValueError("Invalid pre-push input")
         revision = fields[1]
+        policy = (
+            load_policy(root)
+            if set(revision) == {"0"}
+            else pushed_policy(root, revision)
+        )
+        assert policy is not None
         base = push_base(root, policy["base"], fields[2], fields[3], revision)
-        if set(revision) == {"0"}:
+        if set(revision) == {"0"} or spared(root, revision, base, policy):
             continue
         with suppress(ShippingError):
             if GITHUB_SSH_PREFIX.match(
