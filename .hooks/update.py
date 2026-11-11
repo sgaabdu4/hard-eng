@@ -991,6 +991,7 @@ def proven_installed(
         proven = keep(
             "references", ("verified", revision), lambda: verified_revision(revision)
         ) and release_installed(root, base, installed, revision, previous)
-    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        source_trees.tell_unproven(error)
         return set()
     return installed if proven else set()
