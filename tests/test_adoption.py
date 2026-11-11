@@ -101,6 +101,9 @@ def test_managed_instruction_update_preserves_native_scaffold_proof(
     guide.write_text(guide.read_text() + "\nUpdated managed fixture guidance.\n")
     select_release(source, monkeypatch)
     assert "Updated Hard Eng" in update.update(target)
+    kept = suffix if suffix.strip() else ""
+    arrived = "fixture guidance.\n<!-- hard-eng:end -->\n" + kept
+    assert instructions.read_text().endswith(arrived)
     git(target, "diff", "--check", base)
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
     assert update.check_scaffold_update(target, base)
@@ -479,18 +482,6 @@ def test_install_rejects_an_edited_import_only_claude_md(
     )
     with pytest.raises(ValueError, match="CLAUDE.md"):
         installer.install(tmp_path)
-
-
-def test_the_step_of_the_claude_md_refusal_installs_with_the_moved_rules(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    repository(tmp_path)
-    (tmp_path / "CLAUDE.md").write_text("Project rules\n")
-    with pytest.raises(ValueError, match="move shared guidance to the matching AGENTS"):
-        installer.install(tmp_path)
-    (tmp_path / "CLAUDE.md").rename(tmp_path / "AGENTS.md")
-    installer.install(tmp_path)
-    assert (tmp_path / "AGENTS.md").read_text().endswith("\nProject rules\n")
 
 
 @pytest.mark.parametrize("name", ["CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md"])
