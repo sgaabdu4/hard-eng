@@ -77,6 +77,8 @@ Gate = TypedDict(
         "parallel": NotRequired[bool],
         "report": NotRequired[Report],
         "holds": NotRequired[list[JsonObject]],
+        "shards": NotRequired[int],
+        "part": NotRequired[str],
     },
 )
 Group = TypedDict(
@@ -310,6 +312,14 @@ def validate_file_sizes(
         )
 
 
+def validate_shards(gate: Gate) -> None:
+    count = gate.get("shards", 2)
+    if "shards" in gate and not (
+        gate.get("role") == "tests" and type(count) is int and 2 <= count <= 16
+    ):
+        raise ValueError(f"{gate['name']}: shards must be 2 to 16 on a tests gate")
+
+
 def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     if (
         not isinstance(gate, dict)
@@ -319,6 +329,7 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
         raise ValueError("Each check must have a nonempty name")
     if type(gate.get("parallel", False)) is not bool:
         raise ValueError("parallel must be true or false")
+    validate_shards(gate)
     report = gate.get("report", {})
     if not isinstance(report, dict):
         raise TypeError("report must be an object")
