@@ -5,11 +5,14 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
 
 import pytest
+from conftest import gate
 
 SOURCE = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 11, 10, 13, 45, tzinfo=UTC)
@@ -474,6 +477,18 @@ def test_a_stored_value_that_is_no_version_is_dropped(
     tool_setup.pin_python_scanners(["ruff"], 30)
     assert tool_setup.SCANNER_VERSIONS == {"ruff": "9.9.9"}
     assert len(calls.read_text().splitlines()) == 1
+
+
+def test_a_quick_check_names_the_full_check_when_uv_lost_a_stored_scanner(
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
+    lost = "ruff was not found in the cache and you require ruff==0.4.0"
+    check = gate("lint", f"import sys; sys.exit({lost!r})")
+    assert runner.run_gate({"path": ".", "checks": []}, check, 30, threading.Lock())
+    assert "ruff is not in uv's cache" in capsys.readouterr().out
 
 
 def test_a_new_cutoff_hour_ends_the_stored_scanner_versions(

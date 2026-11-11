@@ -76,7 +76,7 @@ from python_setup import (
     require_import_contract,
     validate_pyrefly,
 )
-from tool_setup import managed_command, provision_tools
+from tool_setup import lost_scanner_note, managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
     project_command,
@@ -462,6 +462,9 @@ def run_gate(
     note_install(install_key(group), gate.get("role"), failed)
     if failed:
         FAILED_GATES.append(key)
+        if note := lost_scanner_note(OUTPUTS.get(name, "")):
+            with output_lock:
+                print(note, flush=True)
     else:
         record_gate_time(ROOT, key, time.monotonic() - started)
     return failed
