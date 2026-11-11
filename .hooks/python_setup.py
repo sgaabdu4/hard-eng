@@ -362,7 +362,7 @@ def pyrefly_gap(file: str, options: Mapping[str, object]) -> str:
         place = (
             "under [tool.pyrefly]"
             if file.endswith("pyproject.toml")
-            else "at the top level"
+            else "at the top of the file, before any [table] line"
         )
         steps.append(f"{' and '.join(wrong)} {place}")
     if refused:
@@ -414,7 +414,7 @@ def configure_python(
         )
         if gap:
             raise ValueError(
-                f"{package['path']}: existing Pyrefly settings need strict checking; ask the user before this change: {gap}"
+                f"{package['path']}: existing Pyrefly settings need strict checking; ask the user before this change. {gap}"
             )
     else:
         changes[name] = (

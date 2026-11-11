@@ -112,7 +112,7 @@ def test_the_update_brings_the_workflow_files_once_the_base_holds_the_shipping_b
     git(project, "merge", "-q", "main")
     outcome = update_runner.locked_update(project, repair=True)
     assert (
-        "come with the update, which needs the `shipping` block of hard-eng.gates.json on the base branch"
+        "the update brings the workflow files and their gates when the `shipping` block of hard-eng.gates.json is on the base branch"
         in outcome
     )
     tree = git(project, "ls-tree", "-r", "--name-only", update_runner.UPDATE_BRANCH)
@@ -133,5 +133,5 @@ def test_a_rerun_writes_the_workflow_gates_when_the_checkout_has_a_workflow(
     (workflows / "hard-eng.yml").write_text(source.read_text())
     commit(project, "a workflow")
     outcome = update_runner.locked_update(project, repair=True)
-    assert "come with the update" not in outcome
+    assert "the update brings the workflow files" not in outcome
     assert {"actionlint", "zizmor"} <= set(shared_names(project))

@@ -445,7 +445,7 @@ def summary(name: str, tested: int, survivors: list[Survivor], directory: Path) 
         )
         for unreached, heading in (
             (False, "the tests still pass with these changes:"),
-            (True, "no test ran the code of these changes:"),
+            (True, "no test ran the code where these changes are:"),
         ):
             listed = [found for found in survivors if found[3] is unreached]
             if listed:
