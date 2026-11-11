@@ -670,7 +670,7 @@ def repair_checkout(root: Path, previous: str) -> str:
                 raise
             refused = isinstance(error, ValueError)
             reason = "" if refused else "the installed release could not be fetched: "
-            return f"This checkout is unchanged: {reason}{error}."
+            return f"This checkout is unchanged: {reason}{str(error).rstrip('.')}."
     notes = []
     if needs_hook:
         update.install_planned_hook(root, hook)
