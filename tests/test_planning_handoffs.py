@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import agent_hooks
+import change_size
 import plans
 import pytest
 from conftest import SOURCE, add_origin, commit, git, init, ux_rules_block
@@ -761,3 +762,90 @@ def test_a_rules_label_in_another_form_says_the_field_starts_with_rules(
     with pytest.raises(ValueError, match="UX Rules is missing") as error:
         validate_plan(path)
     assert "a line that starts with `Rules:`" in str(error.value)
+
+
+OLD_NAME = "features/old/PLAN.md"
+TABLE = "| Step | Result |\n| --- | --- |\n| one | pass |\n"
+
+
+def plan_from_before_newer_fields(completed_plan: str) -> str:
+    old = re.sub(r"(?m)^(Same cause|Single source|Retro):.*\n", "", completed_plan)
+    return old.replace("The test creates", TABLE + "The test creates", 1)
+
+
+def formatted_again(text: str) -> str:
+    """What a formatter does to a plan: empty lines between sections and a longer table rule."""
+    return text.replace("\n## ", "\n\n## ").replace(
+        "| --- | --- |", "| ------ | ------ |"
+    )
+
+
+def old_plan_in_a_repository(root: Path, completed_plan: str) -> tuple[str, str]:
+    old = plan_from_before_newer_fields(completed_plan)
+    finished_before_the_update(root, old)
+    return old, git(root, "rev-parse", "HEAD")
+
+
+def test_a_reformatted_old_complete_plan_counts_as_unchanged(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    root = tmp_path / "project"
+    old, base = old_plan_in_a_repository(root, completed_plan)
+    (root / OLD_NAME).write_text(formatted_again(old))
+    assert "Same cause" in str(
+        pytest.raises(ValueError, validate_plan, root / OLD_NAME).value
+    )
+    assert plans.validate_plans(root, base) == "Draft"
+    changed, _, applicable = change_size.judged_plans(root, base, {OLD_NAME})
+    assert OLD_NAME not in changed and applicable == []
+
+
+@pytest.mark.parametrize("change", ["a word added", "two words joined", "a new plan"])
+def test_a_word_change_or_a_new_plan_still_needs_todays_fields(
+    tmp_path: Path, completed_plan: str, change: str
+) -> None:
+    root = tmp_path / "project"
+    old, base = old_plan_in_a_repository(root, completed_plan)
+    text = formatted_again(old)
+    name = OLD_NAME
+    if change == "a word added":
+        text = text.replace("Verify fixture", "Verify the fixture")
+    if change == "two words joined":
+        text = text.replace("Verify fixture", "Verifyfixture")
+    if change == "a new plan":
+        name = "features/new/PLAN.md"
+        (root / name).parent.mkdir(parents=True)
+    (root / name).write_text(text)
+    with pytest.raises(ValueError, match="Same cause"):
+        plans.validate_plans(root, base)
+
+
+def test_a_reformatted_old_plan_does_not_cover_new_code(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    root = tmp_path / "project"
+    old, base = old_plan_in_a_repository(root, completed_plan)
+    (root / OLD_NAME).write_text(formatted_again(old))
+    (root / "app.py").write_text("".join(f"line {n}\n" for n in range(60)))
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        plans.validate_plans(root, base)
+
+
+def test_a_passing_changed_complete_plan_starts_no_word_comparison(
+    tmp_path: Path, completed_plan: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    finished_before_the_update(root, completed_plan)
+    base = git(root, "rev-parse", "HEAD")
+    (root / OLD_NAME).write_text(completed_plan.replace("Verify", "Check", 1))
+    calls: list[tuple[str, ...]] = []
+    real = change_size._git_output
+
+    def counted(directory: Path, *args: str) -> str:
+        calls.append(args)
+        return real(directory, *args)
+
+    monkeypatch.setattr(change_size, "_git_output", counted)
+    changed, _, applicable = change_size.judged_plans(root, base, {OLD_NAME})
+    assert OLD_NAME in changed and len(applicable) == 1
+    assert not [args for args in calls if args[0] == "show"]
