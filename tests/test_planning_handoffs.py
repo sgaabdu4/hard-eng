@@ -303,8 +303,12 @@ def test_a_ux_record_that_skips_a_rule_names_the_rule(
             "- Widths: Pass — checked\n- Widths: Pass — again",
         )
     )
-    with pytest.raises(ValueError, match=r"UX Rules.*Observe.*Widths"):
+    with pytest.raises(ValueError) as error:
         validate_plan(path)
+    assert str(error.value) == (
+        "UX Rules needs exactly one line for each Usability rule; no line: Observe; "
+        "two lines: Widths; add a line for each rule of references/ux.md"
+    )
 
 
 def test_a_ux_record_with_a_fail_cannot_be_passed(

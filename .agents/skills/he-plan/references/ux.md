@@ -2,7 +2,7 @@
 
 Apply to visible changes; preview only the flow and states needed for the decision.
 
-- Grounding = inspect the actual website/screen, affected flow and token/theme/component owners in `DESIGN.md` + production code. A dashboard shell alone cannot support decisions about unseen workflows. Missing relevant context → expose the gap; never invent a baseline.
+- Grounding = inspect the actual website/screen, affected flow and token/theme/component owners in `DESIGN.md` + production code. A dashboard shell alone cannot support decisions about unseen workflows. Missing relevant context → expose the gap; never invent a baseline. A requested change that conflicts with an existing app rule → find the rule + its reason first; say so before agreeing.
 - Usability = judge every proposal, mockup, review and after screenshot against each rule; a Fail sends the design back before anyone sees it:
   - Mistake-proof: risky choices blocked, right answer prefilled; ask "how could a rushed person get this wrong?".
   - Least effort (count): the app acts when sure and shows a person only what needs them, with a prefilled suggestion. Count the clicks per journey; remove any that are not essential.

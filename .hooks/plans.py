@@ -281,9 +281,20 @@ def ux_rules(content: str) -> None:
     unknown = [label for label in given if label not in rules]
     missing = [label for label in rules if label not in given]
     repeated = [label for label, lines in given.items() if len(lines) > 1]
-    if unknown or missing or repeated:
+    wrong = [
+        f"{reason}: {', '.join(names)}"
+        for reason, names in (
+            ("not a rule", unknown),
+            ("no line", missing),
+            ("two lines", repeated),
+        )
+        if names
+    ]
+    if wrong:
         raise ValueError(
-            f"UX Rules needs exactly one line for each rule; not a rule: {unknown or 'none'}; no line: {missing or 'none'}; two lines: {repeated or 'none'}"
+            "UX Rules needs exactly one line for each Usability rule; "
+            + "; ".join(wrong)
+            + "; add a line for each rule of references/ux.md"
         )
     for label, ((verdict, text),) in given.items():
         if verdict == "Fail":
