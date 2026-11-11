@@ -876,7 +876,7 @@ def configure_github_ci(
         add_workflow_checks(config)
     if workflow not in changes and not (root / workflow).is_file():
         return
-    # The cloud GitHub proxy adds a Claude footer to PR bodies; this workflow removes it.
+    # This workflow removes the Claude footer that the cloud GitHub proxy adds to PR bodies, and checks the PR text.
     content = (source / PR_TEXT).read_text()
     if not (root / PR_TEXT).is_file() or (root / PR_TEXT).read_text() != content:
         changes[PR_TEXT] = content

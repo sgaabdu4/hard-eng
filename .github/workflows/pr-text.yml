@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}
     timeout-minutes: 2
     concurrency:
-      group: pr-text-${{ github.event.pull_request.number }}
+      group: pr-text-${{ github.event.pull_request.number }}-${{ github.event.action == 'synchronize' && github.run_id || 'footer' }}
       cancel-in-progress: false
     permissions:
       contents: read # Read the footer rule from .hooks.
