@@ -581,3 +581,18 @@ def test_new_lines_inside_a_recorded_form_get_a_hint(
     assert printed[2] == HINT
     assert debt.judge(tmp_path, group, lint, True, "src/g.ts:1:1 lint/style/useConst\n")
     assert HINT not in capsys.readouterr().out
+
+
+def test_only_the_performance_gate_reads_the_missing_suite_rule(
+    tmp_path: Path,
+) -> None:
+    quoted = "docs.md:3:1 mentions HE-PERFORMANCE-SUITE in a sentence\n"
+    group: Group = {"path": ".", "checks": [LINT, PERFORMANCE]}
+    assert debt.record(tmp_path, [group], {"./lint"}, {"./lint": quoted}) == 0
+    assert debt.load(tmp_path) == {
+        "./lint": {"docs.md:N:N mentions HE-PERFORMANCE-SUITE in a sentence": 1}
+    }
+    assert debt.judge(tmp_path, group, LINT, True, quoted) is False
+    written = {"version": 1, "gates": {"./performance": {MISSING_SUITE: 1}}}
+    (tmp_path / debt.DEBT_FILE).write_text(json.dumps(written))
+    assert debt.judge(tmp_path, group, PERFORMANCE, True, MISSING_SUITE) is True
