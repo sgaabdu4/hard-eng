@@ -15,6 +15,7 @@ from coverage_sources import (
     erased_swift,
     erased_typescript,
     lcov_coverage,
+    omit_step,
     python_coverage,
     xccov_coverage,
 )
@@ -266,6 +267,7 @@ def expected_coverage(
             f"Coverage report omits production files: {', '.join(map(str, relative))}. "
             "Cover them, or mark generator output with "
             "`<pattern> linguist-generated=true` in .gitattributes"
+            + (omit_step(directory) if kind == "python-tests" else "")
             + (
                 ". For Dart code outside lib/: move it under lib/ and test it there"
                 if outside_lib

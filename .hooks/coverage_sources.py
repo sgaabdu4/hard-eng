@@ -9,6 +9,16 @@ from pathlib import Path
 from gate_config import Group, nonproduction_source
 
 IF_DIRECTIVE = re.compile(r"(?m)^\s*#if\b")
+OMIT_SETTING = re.compile(r"(?m)^\s*omit\s*=")
+
+
+def omit_step(directory: Path) -> str:
+    """The sentence for a package whose own coverage settings leave files out of the report."""
+    for name in (".coveragerc", "pyproject.toml", "setup.cfg", "tox.ini"):
+        path = directory / name
+        if path.is_file() and OMIT_SETTING.search(path.read_text(errors="replace")):
+            return f". {name} has a coverage `omit` setting: remove its entries for these files"
+    return ""
 
 
 def erased_typescript(files: set[Path]) -> set[Path]:
