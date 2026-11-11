@@ -700,7 +700,8 @@ def retired_config(root: Path) -> GateConfig | None:
             try:
                 validate_gate(gate, root, set())
             except (OSError, ValueError, TypeError) as error:
-                reason = str(error)
+                label = f"gate {gate['name']} (`{' '.join(arguments)}`): "
+                reason = str(error).removeprefix(label)
         if reason is not None:
             dropped.append(f"{name} ({reason}): {command}")
         elif arguments not in covered:
