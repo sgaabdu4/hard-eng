@@ -38,7 +38,15 @@ UI_SUFFIXES = (
     ".swift",
 )
 UI_MARKS = (
-    "transition",
+    "transition-all",
+    "transition: all",
+    "transition:all",
+    "-property: all",
+    "-property:all",
+    "transitionProperty",
+    "transition: 'all",
+    'transition: "all',
+    "transition: `all",
     "-[#",
     "-[rgb",
     "-[hsl",

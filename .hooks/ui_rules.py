@@ -45,24 +45,29 @@ def colour_pattern(name: str) -> re.Pattern[str]:
     return SWIFT_COLOUR if name.endswith(".swift") else TAILWIND_COLOUR
 
 
-def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> list[str]:
-    """Findings for the candidate lines of each UI file: every-property transitions and typed colours."""
-    names = sorted(name for name in candidates if not name.startswith(UNOWNED))
-    skipped = generated_sources(root, names)
+def line_findings(name: str, lines: list[tuple[int, str]]) -> list[str]:
+    """Findings for one file, from its path and lines alone: no process starts."""
+    if name.startswith(UNOWNED) or is_test_path(PurePosixPath(name)):
+        return []
+    colours = None if is_theme_path(name) else colour_pattern(name)
     found: list[str] = []
-    for name in names:
-        if name in skipped or is_test_path(PurePosixPath(name)):
+    for number, text in lines:
+        if COMMENT_LINE.match(text):
             continue
-        colours = None if is_theme_path(name) else colour_pattern(name)
-        for number, text in candidates[name]:
-            if COMMENT_LINE.match(text):
-                continue
-            if TRANSITION_CLASS.search(text) or TRANSITION_STYLE.search(text):
-                found.append(
-                    f"{name}:{number}: a transition on every property. {TRANSITION_STEP}"
-                )
-            elif colours is not None and (hit := colours.search(text)):
-                found.append(
-                    f"{name}:{number}: a colour typed in the file ({hit[0].strip()}). {COLOUR_STEP}"
-                )
+        if TRANSITION_CLASS.search(text) or TRANSITION_STYLE.search(text):
+            found.append(
+                f"{name}:{number}: a transition on every property. {TRANSITION_STEP}"
+            )
+        elif colours is not None and (hit := colours.search(text)):
+            found.append(
+                f"{name}:{number}: a colour typed in the file ({hit[0].strip()}). {COLOUR_STEP}"
+            )
     return found
+
+
+def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> list[str]:
+    """Findings for the marked lines of each UI file; only a file with a finding is looked up as generated."""
+    found = {name: line_findings(name, lines) for name, lines in candidates.items()}
+    named = sorted(name for name, items in found.items() if items)
+    skipped = generated_sources(root, named) if named else set()
+    return [item for name in named if name not in skipped for item in found[name]]
