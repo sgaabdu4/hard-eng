@@ -481,6 +481,18 @@ def test_install_rejects_an_edited_import_only_claude_md(
         installer.install(tmp_path)
 
 
+def test_the_step_of_the_claude_md_refusal_installs_with_the_moved_rules(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("Project rules\n")
+    with pytest.raises(ValueError, match="move shared guidance to the matching AGENTS"):
+        installer.install(tmp_path)
+    (tmp_path / "CLAUDE.md").rename(tmp_path / "AGENTS.md")
+    installer.install(tmp_path)
+    assert (tmp_path / "AGENTS.md").read_text().endswith("\nProject rules\n")
+
+
 @pytest.mark.parametrize("name", ["CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md"])
 def test_install_preserves_blocking_ancestor_instructions_without_a_fallback(
     installer: ModuleType, tmp_path: Path, name: str
