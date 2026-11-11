@@ -8,7 +8,7 @@ import ci_jobs
 import pytest
 import yaml
 from ci_jobs import bootstrap_bun
-from conftest import SOURCE
+from conftest import WORKFLOW_TEMPLATE
 from gate_config import JsonObject
 from test_apple_jobs import generated, migrate
 from test_swift import app_config, impact_module
@@ -113,7 +113,7 @@ def test_generated_workflows_ask_for_the_resolved_version(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     _, plain, swift = generated(installer, tmp_path)
-    template = (SOURCE / WORKFLOW).read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     assert bun_versions(template) == [EXPRESSION]
     assert bun_versions(plain) == [EXPRESSION]
     assert bun_versions(swift) == [EXPRESSION, EXPRESSION]

@@ -11,7 +11,7 @@ import pytest
 import tool_setup
 import yaml
 from ci_setup import configure_ci
-from conftest import SOURCE
+from conftest import SOURCE, WORKFLOW_TEMPLATE
 from test_setup import repository
 from test_swift import flutter_app, generated_workflow
 
@@ -52,14 +52,14 @@ def exported(workflow: str, runner: Path, preset: dict[str, str]) -> dict[str, s
 
 
 def test_unset_directories_use_the_runner_temp_paths(tmp_path: Path) -> None:
-    workflow = (SOURCE / WORKFLOW).read_text()
+    workflow = WORKFLOW_TEMPLATE.read_text()
     assert exported(workflow, tmp_path, {}) == {
         name: f"{tmp_path}/temp/{tail}" for name, tail in DIRECTORIES.items()
     }
 
 
 def test_directories_the_runner_exports_are_kept(tmp_path: Path) -> None:
-    workflow = (SOURCE / WORKFLOW).read_text()
+    workflow = WORKFLOW_TEMPLATE.read_text()
     preset = {
         "MISE_DATA_DIR": "/opt/tools/data",
         "BUN_INSTALL_CACHE_DIR": "/opt/tools/bun",

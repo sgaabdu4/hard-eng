@@ -811,8 +811,12 @@ def test_release_age_has_one_value() -> None:
         if argument.startswith("--minimum-release-age=")
     ]
     assert ages == [f"--minimum-release-age={seconds}"]
-    for workflow in ("hard-eng.yml", "canary.yml"):
-        text = (SOURCE / ".github/workflows" / workflow).read_text()
+    for workflow in (
+        ".github/hard-eng.yml",
+        ".github/workflows/hard-eng.yml",
+        ".github/workflows/canary.yml",
+    ):
+        text = (SOURCE / workflow).read_text()
         assert f"MISE_MINIMUM_RELEASE_AGE: {seconds // 86400}d\n" in text
 
 

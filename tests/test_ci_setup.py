@@ -20,7 +20,7 @@ from ci_setup import (
     impact_tools,
     workflow_tools,
 )
-from conftest import commit, load_module, use_installed_mise
+from conftest import WORKFLOW_TEMPLATE, commit, load_module, use_installed_mise
 from gate_config import GateConfig, Group, parse_config
 from shipping import ShippingError, ShippingPolicy
 
@@ -424,13 +424,9 @@ def test_known_action_pins_migrate_without_replacing_custom_workflow(
 ) -> None:
     path = tmp_path / ".github/workflows/hard-eng.yml"
     path.parent.mkdir(parents=True)
-    old = (
-        (SOURCE / ".github/workflows/hard-eng.yml")
-        .read_text()
-        .replace(
-            "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
-            "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5",
-        )
+    old = WORKFLOW_TEMPLATE.read_text().replace(
+        "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+        "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5",
     )
     custom = "# Project-owned note\n" + old
     if named:
@@ -438,10 +434,7 @@ def test_known_action_pins_migrate_without_replacing_custom_workflow(
     path.write_text(custom)
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
-    expected = (
-        "# Project-owned note\n"
-        + (SOURCE / ".github/workflows/hard-eng.yml").read_text()
-    )
+    expected = "# Project-owned note\n" + WORKFLOW_TEMPLATE.read_text()
     if named:
         expected = expected.replace("- uses:", "- name: Configure tool\n        uses:")
     assert changes[str(path.relative_to(tmp_path))] == expected
@@ -527,7 +520,7 @@ def test_dart_workflow_uses_packaged_scanner_without_rust(
 
 def test_workflow_runs_once_per_change(tmp_path: Path) -> None:
     """A PR must not run the same check twice; only default-branch pushes run."""
-    template = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
+    template = yaml.safe_load(WORKFLOW_TEMPLATE.read_text())
     triggers = template.get("on", template.get(True))
     assert "pull_request" in triggers
     assert triggers["push"] == {"branches": ["main", "develop"]}
@@ -552,7 +545,7 @@ def test_workflow_runs_once_per_change(tmp_path: Path) -> None:
 
 def test_workflow_call_base_input_feeds_check() -> None:
     """A project's deploy workflow can call Hard Eng and pass its own base."""
-    workflow = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
+    workflow = yaml.safe_load(WORKFLOW_TEMPLATE.read_text())
     triggers = workflow.get("on", workflow.get(True))
     assert "base_sha" in triggers["workflow_call"]["inputs"]
     steps = workflow["jobs"]["hard-eng"]["steps"]
@@ -570,7 +563,7 @@ OLD_BASE = "BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.bef
 
 def test_generated_triggers_migrate_with_customizations(tmp_path: Path) -> None:
     """Installed copies move to single runs plus workflow_call; custom triggers stay."""
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     new_triggers = template[
         template.index("on:\n") : template.index("\n\npermissions:") + 1
     ]
@@ -616,7 +609,7 @@ def test_old_workflow_gains_docs_only_steps(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Installed workflows skip tool setup for docs-only changes after an update."""
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     impact = template[
         template.index("      - name: Find whether") : template.index(
             "      - uses: oven-sh/setup-bun@"
@@ -650,7 +643,7 @@ def migrated_workflow(root: Path, content: str) -> dict[str, str]:
 
 def test_every_template_step_that_runs_mise_has_a_token_mise_reads() -> None:
     """mise ignores GH_TOKEN; unauthenticated runners share a 60-call hourly limit."""
-    workflow = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
+    workflow = yaml.safe_load(WORKFLOW_TEMPLATE.read_text())
     steps = [
         step
         for job in workflow["jobs"].values()
@@ -663,7 +656,7 @@ def test_every_template_step_that_runs_mise_has_a_token_mise_reads() -> None:
 
 
 def test_docs_only_step_gains_the_token_mise_reads(tmp_path: Path) -> None:
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     start = template.index("      - name: Run the secret scan for docs-only changes")
     token = "          GITHUB_TOKEN: ${{ github.token }}\n"
     old = template[:start] + template[start:].replace(token, "", 1)
@@ -828,7 +821,7 @@ def flutter_app_config(root: Path) -> GateConfig:
 def test_existing_workflow_gains_sdk_for_package_added_later(tmp_path: Path) -> None:
     path = tmp_path / ".github/workflows/hard-eng.yml"
     path.parent.mkdir(parents=True)
-    old = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    old = WORKFLOW_TEMPLATE.read_text()
     start, end = old.index("    env:\n"), old.index("    steps:\n")
     old = old[:start] + old[end:]
     old = old.replace(
@@ -937,7 +930,7 @@ def test_customised_workflow_names_missing_sdk(
 @pytest.mark.parametrize("existing", ["", "  pull-requests: write\n"])
 def test_workflow_holds_one_pr_permission(tmp_path: Path, existing: str) -> None:
     (path := tmp_path / ".github/workflows/hard-eng.yml").parent.mkdir(parents=True)
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     path.write_text(template.replace(PERMISSIONS, existing))
     changes: dict[str, str] = {}
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
@@ -949,7 +942,7 @@ def test_existing_workflow_gets_the_two_day_release_wait(
     tmp_path: Path, step: str
 ) -> None:
     (path := tmp_path / ".github/workflows/hard-eng.yml").parent.mkdir(parents=True)
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     job, checks = "      MISE_MINIMUM_RELEASE_AGE: 2d\n", "        env:\n"
 
     def aged(value: str) -> str:
@@ -966,7 +959,7 @@ def test_existing_workflow_gets_the_two_day_release_wait(
 def test_generated_tool_cache_is_removed_from_existing_workflows(
     tmp_path: Path,
 ) -> None:
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     setup = "      - uses: oven-sh/setup-bun@"
     cache = (
         "      - name: Cache native tool downloads\n"

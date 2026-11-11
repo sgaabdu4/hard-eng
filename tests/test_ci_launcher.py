@@ -2,9 +2,9 @@
 
 import pytest
 from ci_setup import migrate_launcher
-from conftest import SOURCE
+from conftest import SOURCE, WORKFLOW_TEMPLATE
 
-TEMPLATE = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+TEMPLATE = WORKFLOW_TEMPLATE.read_text()
 ECHO = next(line for line in TEMPLATE.splitlines() if "MISE_PACKAGE=" in line)
 JOB = """  {name}:
     runs-on: {runner}
