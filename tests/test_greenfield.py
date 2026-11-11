@@ -494,10 +494,13 @@ def test_a_python_root_with_no_import_contract_fails_the_check(
     runner: ModuleType,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
     layout: str,
 ) -> None:
     uv_project(tmp_path, PROJECT)
     add_package(tmp_path, "shop", layout)
+    # Stands in for the install of a project that keeps its code under src.
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / layout))
     installer.install(tmp_path)
     config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
     group = config["packages"][0]
@@ -523,8 +526,10 @@ def test_a_python_root_with_no_import_contract_fails_the_check(
         + "\n"
         + message[message.index("[[tool.importlinter.contracts]]") :]
     )
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is False
     base = tmp_path / layout / "inventory"
     (base / "a.py").write_text("from inventory import b\n")
     (base / "b.py").write_text("from inventory import a\n")
     assert runner.run_gate(group, gate, 300, threading.Lock()) is True
-    assert "FAIL imports (exit" in capsys.readouterr().out
+    cycle = "imports: broken contract: No sibling dependency cycles in inventory"
+    assert cycle in capsys.readouterr().out
