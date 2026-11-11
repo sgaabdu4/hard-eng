@@ -332,7 +332,7 @@ PYTHON_OFF = re.compile(
     r"|ruff:\s*(?:file-ignore|ignore|disable)\["
     r"|(?:ruff:\s*)?isort:\s*(?:skip_file|skip|off)\b|fmt:\s*(?:off|skip)\b|yapf:\s*disable\b)|\b(pytest\.)?mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
     r"|\bunittest\.([Ss]kip\w*|expectedFailure)\b|\bskipTest\(|\bimportorskip\("
-    r"|^\s*@skip(If|Unless)?\(|^\s*__test__\s*=\s*False\b|\braise\s+SkipTest\b"
+    r"|^\s*@skip(If|Unless)?\(|^__test__\s*=\s*False\b|\braise\s+SkipTest\b"
     r"|^\s*from\s+pytest\s+import\s[^#]*?\b(skip|xfail|importorskip)\b"
 )
 SCRIPT_OFF = re.compile(
@@ -381,6 +381,50 @@ def disabled_traits(text: str) -> set[int]:
     return lines
 
 
+def disabled_classes(root: Path, name: str, added: list[tuple[int, str]]) -> list[str]:
+    """Indented `__test__ = False` marks whose class body holds a test function."""
+    marks = [
+        n
+        for n, t in added
+        if t[:1] in (" ", "\t") and "".join(t.split()) == "__test__=False"
+    ]
+    if not marks:
+        return []
+    lines = (root / name).read_text(errors="replace").splitlines()
+    found = []
+    for number in marks:
+        indent = len(lines[number - 1]) - len(lines[number - 1].lstrip())
+        head = number - 2
+        while head >= 0 and (
+            not lines[head].strip()
+            or len(lines[head]) - len(lines[head].lstrip()) >= indent
+        ):
+            head -= 1
+        if head < 0 or not lines[head].lstrip().startswith("class "):
+            continue
+        size = len(lines[head]) - len(lines[head].lstrip())
+        body = []
+        for line in lines[head + 1 :]:
+            if line.strip() and len(line) - len(line.lstrip()) <= size:
+                break
+            body.append(line.strip())
+        if any(line.startswith(("def test", "async def test")) for line in body):
+            found.append(f"{name}:{number} adds '__test__ = False'")
+    return found
+
+
+def marks_in_file(root: Path, name: str, added: list[tuple[int, str]]) -> list[str]:
+    """Switch-offs that only the whole file shows: Swift traits and Python test classes."""
+    if name.endswith(".py"):
+        return disabled_classes(root, name, added) if (root / name).is_file() else []
+    if not name.endswith(".swift") or not (root / name).is_file():
+        return []
+    traits = disabled_traits((root / name).read_text(errors="replace"))
+    return [
+        f"{name}:{number} adds '.disabled('" for number, _ in added if number in traits
+    ]
+
+
 def switch_off_pattern(name: str) -> re.Pattern[str] | None:
     suffix = Path(name).suffix
     if suffix == ".py":
@@ -413,28 +457,23 @@ def header_path(text: str) -> str:
     return text[2:]
 
 
-def diff_lines(
-    root: Path, base: str
+DIFF = (
+    "git",
+    "-c",
+    "core.quotepath=off",
+    "diff",
+    "-U0",
+    "--no-color",
+    "--no-ext-diff",
+    "--src-prefix=a/",
+    "--dst-prefix=b/",
+)
+
+
+def changed_lines(
+    diff: str,
 ) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[tuple[int, str]]]]:
-    """Added and removed (line number, text) pairs per file; untracked files count as added."""
-    diff = subprocess.check_output(
-        [
-            "git",
-            "-c",
-            "core.quotepath=off",
-            "diff",
-            "-U0",
-            "--no-color",
-            "--no-ext-diff",
-            "--src-prefix=a/",
-            "--dst-prefix=b/",
-            base,
-            "--",
-        ],
-        cwd=root,
-        text=True,
-        errors="replace",
-    )
+    """Added and removed (line number, text) pairs per file of a zero-context diff."""
     added: dict[str, list[tuple[int, str]]] = {}
     removed: dict[str, list[tuple[int, str]]] = {}
     name, old, new, in_hunk = "", 0, 0, False
@@ -456,6 +495,17 @@ def diff_lines(
             and line[4:] != "/dev/null"
         ):
             name = header_path(line[4:])
+    return added, removed
+
+
+def diff_lines(
+    root: Path, base: str
+) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[tuple[int, str]]]]:
+    """Added and removed (line number, text) pairs per file; untracked files count as added."""
+    diff = subprocess.check_output(
+        [*DIFF, base, "--"], cwd=root, text=True, errors="replace"
+    )
+    added, removed = changed_lines(diff)
     untracked = subprocess.check_output(
         ["git", "ls-files", "--others", "--exclude-standard", "-z"],
         cwd=root,
@@ -686,13 +736,7 @@ def validate_suppressions(root: Path, base: str | None) -> None:
             for number, text in added.get(name, [])
             if (hit := pattern.search(text) or (tested and re.search(tested, text)))
         ]
-        if name.endswith(".swift") and (root / name).is_file():
-            traits = disabled_traits((root / name).read_text(errors="replace"))
-            found += [
-                f"{name}:{number} adds '.disabled('"
-                for number, _ in added.get(name, [])
-                if number in traits
-            ]
+        found += marks_in_file(root, name, added.get(name, []))
         if is_test_path(PurePosixPath(name)):
             gained += len(assertion_lines(name, added.get(name, [])))
             blocks += [(name, b) for b in removed_blocks(removed.get(name, []))]

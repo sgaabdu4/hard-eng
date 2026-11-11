@@ -10,7 +10,7 @@ import pytest
 from comments import validate_comments, validate_suppressions
 from conftest import SOURCE, commit, git, init
 from shipping import ShippingPolicy
-from switch_off_forms import RETRY_FORMS, RETRY_PASSES, RUFF_FORMS, SWITCHES
+from switch_off_forms import RETRY_FORMS, RETRY_PASSES, RUFF_FORMS, SWITCHES, TEST_FLAGS
 
 BLOCK = "Code comments are none by default"
 
@@ -346,6 +346,22 @@ def test_the_word_for_a_skipped_test_outside_a_raise_passes(tmp_path: Path) -> N
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_text(text)
     validate_suppressions(root, "HEAD")
+
+
+@pytest.mark.parametrize(("text", "line"), TEST_FLAGS)
+def test_a_class_mark_is_refused_only_when_the_class_holds_a_test(
+    tmp_path: Path, text: str, line: int | None
+) -> None:
+    """HE-NO-SWITCH-OFF: a helper class may stay out of collection; a class with a test may not."""
+    root = switch_root(tmp_path, "tests/doubles.py", "")
+    (root / "tests").mkdir()
+    (root / "tests/doubles.py").write_text(text)
+    if line is None:
+        validate_suppressions(root, "HEAD")
+        return
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"tests/doubles.py:{line} adds '__test__ " + "= False'" in str(error.value)
 
 
 def test_names_close_to_a_skip_form_pass(tmp_path: Path) -> None:

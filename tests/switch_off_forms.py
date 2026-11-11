@@ -62,7 +62,6 @@ SWITCHES = [
     ("t.py", "    raise unittest" + ".SkipTest('x')\n", "unittest" + ".SkipTest"),
     ("t.py", "@sk" + "ip('x')\ndef t(): ...\n", "@sk" + "ip("),
     ("t.py", "    raise Ski" + "pTest('x')\n", "raise Ski" + "pTest"),
-    ("t.py", "    __test__ " + "= False\n", "__test__ " + "= False"),
     (
         "t.py",
         "from pytest import fixture, ski" + "p\n",
@@ -175,10 +174,28 @@ RETRY_PASSES = [
     ("src/app.py", "re" + "tries = 3\n"),
     ("tests/stream.test.ts", "const s = sse({ re" + "try: 1000 });\n"),
     ("tests/api.test.ts", "}, { re" + "try: 0 });\n"),
+    ("tests/api.test.ts", "const c = makeClient({ re" + "try: false });\n"),
+    ("tests/api.test.ts", "const c = makeClient({ re" + "try: () => null });\n"),
+    ("test/state_test.dart", "  re" + "try: (_, _) => null,\n"),
+    ("test/handler_test.dart", "  re" + "try: true,\n"),
+    ("test/plan_test.dart", "  'allocation, re" + "try: $retry, state: $state',\n"),
+    ("test/plan_test.dart", "  re" + "try: 0,\n"),
     ("tests/api.test.ts", "test('x', { re" + "try: false }, () => {});\n"),
     ("playwright.config.ts", "  re" + "tries: 0,\n"),
     ("pyproject.toml", "[tool.other]\nre" + "tries = 3\n"),
     ("package.json", '"fetch": "curl --re' + 'try 3"\n'),
     ("docs/guide.md", "Set the re" + "try count and mark the fl" + "aky tests.\n"),
     ("tests/test_api.py", "name = 'fl" + "aky'\n"),
+]
+
+TEST_FLAGS = [
+    ("class TestDouble:\n    __test__ " + "= False\n", None),
+    ("class TestA:\n    __test__ " + "= False\n\n    def test_a(self): ...\n", 2),
+    ("class TestA:\n    def test_a(self): ...\n\n    __test__ " + "= False\n", 4),
+    (
+        "class TestDouble:\n    __test__ "
+        + "= False\n\n\nclass TestB:\n    def test_b(self): ...\n",
+        None,
+    ),
+    ("def test_a(): ...\n\n\nclass Helper:\n    __test__ " + "= False\n", None),
 ]
