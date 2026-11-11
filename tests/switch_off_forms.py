@@ -138,6 +138,55 @@ RETRY_FORMS = [
     ),
     ("test/api_test.dart", "@Re" + "try(3)\nvoid main() {}\n", "@Re" + "try("),
     ("test/api_test.dart", "}, re" + "try: 2);\n", "re" + "try:"),
+    ("test/api_test.dart", "test('x', () async {}, re" + "try: 2);\n", "re" + "try:"),
+    ("test/api_test.dart", "  re" + "try: 2,\n", "re" + "try:"),
+    (
+        "test/api_test.dart",
+        'test("works", () => expect(value, isTrue), re' + "try: 2);\n",
+        "re" + "try:",
+    ),
+    (
+        "src/sum.test.ts",
+        "it('x', () => expect(a).toBe(1), { re" + "try: 2 })\n",
+        "re" + "try:",
+    ),
+    (
+        "test/api_test.dart",
+        "test('x', () => expect(find.text(label(1)), findsOneWidget), re"
+        + "try: 2);\n",
+        "re" + "try:",
+    ),
+    (
+        "test/api_test.dart",
+        "testWidgets('x', (t) async => expect(find.byType(A), findsOneWidget), re"
+        + "try: 3);\n",
+        "re" + "try:",
+    ),
+    (
+        "src/sum.test.ts",
+        "it('x', async () => { expect(await load()).toBe(1) }, { re" + "tries: 2 })\n",
+        "re" + "tries:",
+    ),
+    (
+        "test/api_test.dart",
+        "test('x', () { foo(re" + "try: 1); }, re" + "try: 2);\n",
+        "re" + "try:",
+    ),
+    (
+        "test/api_test.dart",
+        "testWidgets('x', (tester) async {}, re" + "try: 3);\n",
+        "re" + "try:",
+    ),
+    (
+        "src/sum.test.ts",
+        "describe('x', { re" + "tries: 2 }, () => {});\n",
+        "re" + "tries:",
+    ),
+    (
+        "src/sum.test.ts",
+        "test('x', { re" + "try: 3 }, async () => {});\n",
+        "re" + "try:",
+    ),
     (
         "src/sum.test.ts",
         "test('adds', { re" + "try: 3 }, () => {});\n",
@@ -180,6 +229,19 @@ RETRY_PASSES = [
     ("test/handler_test.dart", "  re" + "try: true,\n"),
     ("test/plan_test.dart", "  'allocation, re" + "try: $retry, state: $state',\n"),
     ("test/plan_test.dart", "  re" + "try: 0,\n"),
+    (
+        "test/drain_test.dart",
+        "  expect((await harness.drain()).data, _drained(sent: 1, re" + "try: 1));\n",
+    ),
+    (
+        "test/drain_test.dart",
+        "  expect((await harness.drain()).data, _drained(re" + "try: 1));\n",
+    ),
+    ("test/result_test.dart", "final r = Result(sent: 1, re" + "try: 2);\n"),
+    ("test/result_test.dart", "final a = foo(1); bar(re" + "try: 1);\n"),
+    ("test/result_test.dart", "expect(policy(re" + "try: 2).count, 2);\n"),
+    ("tests/client.test.ts", "const client = makeClient({ re" + "try: 3 });\n"),
+    ("tests/send.test.ts", "await send(job, { re" + "tries: 2 });\n"),
     ("tests/api.test.ts", "test('x', { re" + "try: false }, () => {});\n"),
     ("playwright.config.ts", "  re" + "tries: 0,\n"),
     ("pyproject.toml", "[tool.other]\nre" + "tries = 3\n"),
