@@ -1,6 +1,6 @@
 # Trello coordinator lists open cards nobody has touched
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -22,10 +22,10 @@ Decision: one list, `idle`, with the same item shape as the other lists; one Wor
 
 ## Acceptance + steps
 
-- [ ] A To do, Doing or Urgent card with no comment or move for `chaseHours` is listed, with its hours and list → `tests/test_trello_report.py::test_an_open_card_nobody_touched_is_listed_as_idle`.
-- [ ] A recent comment or move keeps an open card off the list, and Testing, Done and Discuss cards are never listed → `tests/test_trello_report.py::test_a_recent_comment_or_move_keeps_an_open_card_off_the_idle_list`.
-- [ ] A script that bumps the card's last-activity time does not hide an idle card → `tests/test_trello_report.py::test_a_bumped_last_activity_does_not_hide_an_idle_card`.
-- [ ] Every report list, `idle` included, has an action row in the run rules → `tests/test_trello_coordinator.py::test_every_report_list_has_a_run_action`.
+- [x] A To do, Doing or Urgent card with no comment or move for `chaseHours` is listed, with its hours and list → `tests/test_trello_report.py::test_an_open_card_nobody_touched_is_listed_as_idle`.
+- [x] A recent comment or move keeps an open card off the list, and Testing, Done and Discuss cards are never listed → `tests/test_trello_report.py::test_a_recent_comment_or_move_keeps_an_open_card_off_the_idle_list`.
+- [x] A script that bumps the card's last-activity time does not hide an idle card → `tests/test_trello_report.py::test_a_bumped_last_activity_does_not_hide_an_idle_card`.
+- [x] Every report list, `idle` included, has an action row in the run rules → `tests/test_trello_coordinator.py::test_every_report_list_has_a_run_action`.
 
 ## Baseline + execution
 
@@ -43,8 +43,8 @@ N/A — no app screens change.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
+Result: Passed
+Evidence: On 2026-11-11 each new test failed first: no `idle` field on develop 2f103be9; the run-action test with the `idle` row removed; the bumped-clock test with an image and a description edit. Then the coordinator tests passed (137: `tests/test_trello_report.py`, `tests/test_trello_board.py`, `tests/test_trello_coordinator.py`). The full suite passed alone: 2,684 tests in 469 s, run without coverage and without the step limit. A read-only replay on one real board listed one card (50 hours in To do) and planned no writes; the larger board has no coordinator config yet, so it is not checked. Reader passes 1 to 4 and three independent reviews; each finding is in the Retro. The Complete check is the final gate.
 E2E: N/A — no user journey; the report tests run the real script against a fake Trello.
 Retro: these items, each sorted by HE Learn's Retro rows.
 - Bug found on the base branch (user report): an open card with no new comment was never listed → the report tests are the gate that should catch it: `tests/test_trello_report.py::test_an_open_card_nobody_touched_is_listed_as_idle` failed on develop 2f103be9 (no `idle` field) and passes now; mechanical: `tests/test_trello_coordinator.py::test_every_report_list_has_a_run_action` fails when a report list has no run action.
@@ -52,7 +52,7 @@ Retro: these items, each sorted by HE Learn's Retro rows.
 - The Ready check's tests step hit its 600-second limit with failures and errors near the end, while checks from other sessions kept the load average at 58 to 71 → the same suite then passed alone: 2,684 tests in 469 s, run without coverage and without the step limit. Not reproduced, so no cause found. None until it recurs.
 - Reader passes 1 to 4 found ways the new rule could leave a card stuck, skip its tester, message a busy worker every hour or start a second worker → caught by the Writing Great Skills Reader rule; fixed before push. None new.
 - Review corrections: the Risks line still said no message after the rule began to tag people, and no test covered a card that only we commented on → caught by review before push; the second case is now in `tests/test_trello_report.py::test_a_recent_comment_or_move_keeps_an_open_card_off_the_idle_list`. None new.
-- The independent review at 6fc3bdaf found two: an image or a description edit reset the clock, though the docs name only comments and moves; and a card with an open question to a person had no clear branch → caught by the challenge before push; `tests/test_trello_report.py::test_a_bumped_last_activity_does_not_hide_an_idle_card` failed with both events and passes now, and the rule says such a card waits for `silent`. The review at be41cb5b found that `silent` chases only our own questions, so a question from someone else left the card stuck → the rule now skips asking only when our own question is open. None new.
+- The independent review at 6fc3bdaf found two: an image or a description edit reset the clock, though the docs name only comments and moves; and a card with an open question to a person had no clear branch → caught by the challenge before push; `tests/test_trello_report.py::test_a_bumped_last_activity_does_not_hide_an_idle_card` failed with both events and passes now, and the rule says such a card waits for `silent`. The review at be41cb5b found that `silent` chases only our own questions, so a question from someone else left the card stuck → the rule now skips asking only when our own question is open. The review at b712086b found that a card archived during a check and then restored with no comment or move loses its comment times → skipped: it needs that rare order, and the only effect is one listing that makes the coordinator check the card's wait; the review loop stopped there, as its findings had narrowed to this edge. None new.
 - My slips: a types run on the skill script outside the gate's own paths, and a replay started from a worktree whose main checkout holds no key → outside cause. None.
 
 Delivery target: PR
