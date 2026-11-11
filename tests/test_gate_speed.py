@@ -622,6 +622,24 @@ def generated_repository(tmp_path: Path) -> Path:
     return repository
 
 
+def test_the_file_list_holds_only_regular_files(tmp_path: Path) -> None:
+    root = tmp_path / "repository"
+    init(root)
+    (root / "folder").mkdir()
+    for name in ("kept.py", "gone.py", "folder/inner.py"):
+        (root / name).write_text("")
+    (root / "link.py").symlink_to("kept.py")
+    (root / "broken.py").symlink_to("missing.py")
+    commit(root, "Add files")
+    (root / "gone.py").unlink()
+    names = [*gate_config.listed_names(root), "folder"]
+    assert {"broken.py", "gone.py", "link.py"} < set(names)
+    assert gate_config.repository_files(root, names) == [
+        root / "folder/inner.py",
+        root / "kept.py",
+    ]
+
+
 def test_a_config_load_reads_the_git_attributes_one_time(tmp_path: Path) -> None:
     repository = generated_repository(tmp_path)
     ATTRIBUTE_STARTS.clear()
