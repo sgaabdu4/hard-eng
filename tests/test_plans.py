@@ -941,6 +941,9 @@ def test_a_ready_plan_with_code_edits_names_the_build_form_of_the_check(
     with pytest.raises(ValueError, match="requires Complete") as explicit:
         validate_plans(repository, stage="Complete")
     assert "--plan-stage Ready" not in str(explicit.value)
+    with pytest.raises(ValueError, match="requires Complete") as pushed:
+        validate_plans(repository, "main")
+    assert "--plan-stage Ready" not in str(pushed.value)
 
 
 def test_an_old_complete_plan_does_not_cover_committed_work_under_a_plan_stage_check(
