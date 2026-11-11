@@ -57,7 +57,7 @@ Load at the start of every run. Commands = [commands](commands.md).
 - Change touching sign-in, permissions, payments or personal data → a security review worker before the testing move.
 - Proven checklist item → `tick`; a person to add to or drop from a card → `member`.
 - Free worker capacity + an unblocked card → start it. Never archive a worker you still wait on.
-- `idle` card already acted on in step 2 of this run → skip it. Its worker in `handover.md` has not reported since its last brief or follow-up → only the long-run and stall rule above applies. Else find what the card waits for. It waits on a person and we have no open question to them → ask in one tagged comment; from then on `silent` chases it. It waits on anything else, such as another card or a release → record that in `handover.md`; post no comment. It meets the Done rule above → `done`. Else work can go on: send it to the card's worker in `handover.md` per the follow-up rule above; no worker → start one as above.
+- `idle` card already acted on in step 2 of this run → skip it. Its worker in `handover.md` has not reported since its last brief or follow-up → only the long-run and stall rule above applies. Else find what the card waits for. It waits on a person → ask in one tagged comment, unless a question to them is already open; either way `silent` chases it, and no worker starts. It waits on anything else, such as another card or a release → record that in `handover.md`; post no comment. It meets the Done rule above → `done`. Else work can go on: send it to the card's worker in `handover.md` per the follow-up rule above; no worker → start one as above.
 
 ## Simplify
 

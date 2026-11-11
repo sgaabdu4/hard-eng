@@ -8,6 +8,7 @@ from trello_fakes import (
     ago,
     comment,
     edit_comment,
+    make_action,
     make_card,
     move_action,
     refs,
@@ -64,9 +65,17 @@ def test_a_bumped_last_activity_does_not_hide_an_idle_card(project: Project) -> 
     project.fake.cards = [
         make_card(1, "#1 Card", "l-doing", dateLastActivity=ago(0.1)),
         make_card(2, "#2 Card", "l-todo", id="65a1b2c30000000000000000"),
+        make_card(3, "#3 Card", "l-doing", dateLastActivity=ago(0.1)),
     ]
-    project.fake.actions.append(comment("c1", 1, "m-sam", "The total is 40.", 50))
-    assert refs(project.report()["idle"]) == {"1", "2"}
+    project.fake.actions += [
+        comment("c1", 1, "m-sam", "The total is 40.", 50),
+        make_action(
+            "i1", "addAttachmentToCard", 1, "m-sam", 1, attachment={"name": "a.png"}
+        ),
+        comment("c3", 3, "m-sam", "The total is 40.", 50),
+        make_action("d3", "updateCard", 3, "m-sam", 1, old={"desc": ""}),
+    ]
+    assert refs(project.report()["idle"]) == {"1", "2", "3"}
 
 
 def test_a_ticked_due_date_is_not_overdue(project: Project) -> None:
