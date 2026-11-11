@@ -223,6 +223,11 @@ def test_the_strict_pyrefly_refusal_names_the_file_and_the_lines(
     assert "[tool.pyrefly]" in text
     assert 'preset = "strict"' in text
     assert "check-unannotated-defs" not in text
+    assert text.endswith('add preset = "strict" in a new [tool.pyrefly] table')
+    (directory / "pyproject.toml").write_text(
+        project + '\n[tool.pyrefly]\npreset = "strict"\n'
+    )
+    runner.validate_typing(directory, "python")
     (directory / "pyrefly.toml").write_text(
         'preset = "strict"\nreplace-imports-with-any = ["a"]\n'
     )
