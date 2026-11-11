@@ -144,7 +144,7 @@ def test_standalone_python_does_not_invent_import_architecture(
 
 
 def test_a_python_parent_leaves_out_child_groups_that_have_the_same_gate(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def group(path: str, language: str, *roles: str) -> Group:
         checks: list[Gate] = [
@@ -160,9 +160,12 @@ def test_a_python_parent_leaves_out_child_groups_that_have_the_same_gate(
         group("web", "javascript", "tests", "dependencies"),
     ]
     tests, deptry = parent["checks"]
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": groups, "shared": []})
+    )
     pytest_command = ["uv", "run", "pytest", "-n", "auto"]
     deptry_command = ["deptry", ".", "--no-ansi"]
-    assert leave_out_children(tmp_path, pytest_command, parent, tests, groups) == [
+    assert leave_out_children(tmp_path, pytest_command, parent, tests) == [
         "uv",
         "run",
         "pytest",
@@ -171,12 +174,23 @@ def test_a_python_parent_leaves_out_child_groups_that_have_the_same_gate(
         "-n",
         "auto",
     ]
-    assert leave_out_children(tmp_path, deptry_command, parent, deptry, groups) == [
+    assert leave_out_children(tmp_path, deptry_command, parent, deptry) == [
         *deptry_command,
         "--extend-exclude",
         "^packages/a(/|$)",
     ]
     child = groups[1]
-    assert leave_out_children(tmp_path, pytest_command, child, tests, groups) == (
+    assert leave_out_children(tmp_path, pytest_command, child, tests) == (
         pytest_command
     )
+
+    import change_size
+
+    def unreadable(_root: Path) -> dict[str, Group]:
+        raise AssertionError("a gate that leaves out nothing read the gates file")
+
+    monkeypatch.setattr(change_size, "configured_packages", unreadable)
+    web = groups[3]
+    assert leave_out_children(tmp_path, ["web"], web, web["checks"][0]) == ["web"]
+    other: Gate = {"name": "lint", "role": "lint", "command": ["ruff"]}
+    assert leave_out_children(tmp_path, ["ruff"], parent, other) == ["ruff"]

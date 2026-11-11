@@ -70,16 +70,18 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
 
 
 def leave_out_children(
-    root: Path, command: list[str], group: Group, gate: Gate, groups: list[Group]
+    root: Path, command: list[str], group: Group, gate: Gate
 ) -> list[str]:
     """Keep a Python parent's test and dependency commands out of the folders of its child groups."""
     role = gate.get("role")
     if group.get("language") != "python" or role not in {"tests", "dependencies"}:
         return command
+    from change_size import configured_packages
+
     below = Path(group["path"])
     children = [
         Path(child["path"]).relative_to(below)
-        for child in child_groups(group, role, groups)
+        for child in child_groups(group, role, list(configured_packages(root).values()))
     ]
     if role == "dependencies":
         return [

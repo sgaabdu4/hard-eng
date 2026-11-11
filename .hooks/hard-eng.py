@@ -565,11 +565,7 @@ def run_limited_gate(
             report_path, coverage_path, directory, expected_sources = prepare_reports(
                 group, report, kind, tests, scanner, command
             )
-        from change_size import configured_packages
-
-        command = leave_out_children(
-            ROOT, command, group, gate, list(configured_packages(ROOT).values())
-        )
+        command = leave_out_children(ROOT, command, group, gate)
         command, coverage_path = related_command(
             command, coverage_path, gate, groups or [group], directory, related_base
         )
