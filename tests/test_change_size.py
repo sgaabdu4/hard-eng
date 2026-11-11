@@ -560,3 +560,24 @@ def test_a_feature_merge_of_an_update_asks_no_proof_of_a_tree_that_is_not_clean(
     with pytest.raises(ValueError, match="PLAN.md"):
         plans.validate_plans(target, session_base)
     proof.assert_not_called()
+
+
+@pytest.mark.parametrize("holds", [True, False])
+def test_the_update_proof_decides_whether_the_open_plan_of_the_base_judges_a_small_fix(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, holds: bool
+) -> None:
+    import plans
+
+    (release[1] / "app.py").write_text("".join(f"line {n}\n" for n in range(30)))
+    commit(release[1], "application on the base")
+    target = draft_plan_beside_an_update(release, monkeypatch)
+    (target / "app.py").write_text(
+        "changed\n" + "".join(f"line {n}\n" for n in range(1, 30))
+    )
+    commit(target, "small fix on the update branch")
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=holds))
+    if holds:
+        assert plans.validate_plans(target, "main") == "Complete"
+        return
+    with pytest.raises(ValueError, match="PLAN.md: plan needs"):
+        plans.validate_plans(target, "main")
