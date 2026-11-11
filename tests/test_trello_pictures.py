@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -78,13 +79,20 @@ def test_a_new_screen_post_ends_with_the_closing_line(
         assert result.code == 0, result.text
         sent = [c for c in project.fake.writes if c.path.endswith("/comments")]
         posts.append(sent[-1].form["text"])
-    assert commands.CLOSING not in posts[0]
+    closing = project.mods.board.CLOSING
+    assert closing not in posts[0]
     last_picture = "![new.png](https://files.example.test/att-3.png)"
-    assert posts[1].endswith(f"{last_picture}\n\n{commands.CLOSING}")
+    assert posts[1].endswith(f"{last_picture}\n\n{closing}")
 
 
 def test_mockup_rules_match_the_proof_gate(mods: Mods) -> None:
     text = (SKILL / "references/mockups.md").read_text()
     rules = sections(text)["Proof rules"]
     assert tuple(first_cells(rules)) == mods.commands.UI_RULES
-    assert mods.commands.CLOSING in text
+    assert mods.board.CLOSING in text
+    guide = (SKILL.parent / "he-plan/references/ux.md").read_text()
+    label = r"^\s*- ([A-Z][\w -]+?)(?: \(count: [^)]*\))?(?::| =) "
+    labels = set(re.findall(label, guide, re.MULTILINE))
+    prose = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    quoted = set(re.findall(r'"([A-Z][\w -]+)"', prose))
+    assert quoted and quoted <= labels, quoted - labels

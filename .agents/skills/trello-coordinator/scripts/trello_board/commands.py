@@ -45,10 +45,6 @@ UI_RULES = (
     "nothingLost",
 )
 RULE_LINE = 20
-CLOSING = (
-    "**IF YOU NEED ANY CHANGES, PLEASE SEND SCREENSHOTS"
-    " AND PUT ALL OF YOUR ISSUES IN ONE COMMENT.**"
-)
 PROOF_FORMAT = "format: references/mockups.md in the trello-coordinator skill"
 CARD_LINK = re.compile(r"https?://trello\.com/c/([A-Za-z0-9]+)")
 
@@ -252,7 +248,7 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     found = resolve_card(session, args.card)
     card = text(found.get("id"))
     images = attach(session, card, args.image)
-    end = CLOSING if any(obj(row).get("newScreen") for row in images) else ""
+    end = board.CLOSING if any(obj(row).get("newScreen") for row in images) else ""
     action_id = post_comment(session, card, body, images, end)
     labels, people = ask_people(session, found, body)
     return {
@@ -289,7 +285,7 @@ def member_ids(session: Session) -> dict[str, str]:
 def ask_people(
     session: Session, card: Obj, body: str, always: bool = False
 ) -> tuple[list[Json], list[Json]]:
-    if not always and not board.QUESTION.search(body):
+    if not always and not board.asks(body):
         return [], []
     asked = list(dict.fromkeys(name.lower() for name in board.TAG.findall(body)))
     return add_needs(session, card, asked), add_members(session, card, asked)

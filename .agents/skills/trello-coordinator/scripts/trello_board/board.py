@@ -14,6 +14,14 @@ TAG = re.compile(r"(?<![\w@])@(\w+)")
 QUESTION = re.compile(
     r"\?|\b(please|reply|can you|could you|let me know)\b", re.IGNORECASE
 )
+CLOSING = (
+    "**IF YOU NEED ANY CHANGES, PLEASE SEND SCREENSHOTS"
+    " AND PUT ALL OF YOUR ISSUES IN ONE COMMENT.**"
+)
+
+
+def asks(text: str) -> bool:
+    return bool(QUESTION.search(text.replace(CLOSING, "")))
 
 
 @dataclass(frozen=True)
@@ -43,7 +51,7 @@ def questions_in(
     for index, event in enumerate(events):
         if event.kind != "comment":
             continue
-        if not QUESTION.search(event.text) and event.id not in also:
+        if not asks(event.text) and event.id not in also:
             continue
         asked = {name.lower() for name in TAG.findall(event.text)} & members
         for person in sorted(asked - {event.author.lower()}):
