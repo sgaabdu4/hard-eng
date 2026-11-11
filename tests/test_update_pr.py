@@ -14,7 +14,7 @@ import pytest
 import update
 import update_pr
 import update_runner
-from conftest import add_origin, commit, default_policy, git
+from conftest import add_origin, commit, default_policy, git, remove_application
 from test_husky_setup import husky_project
 from test_update_runner import prefix_commit_messages
 from test_updates import select_release
@@ -780,6 +780,7 @@ def test_next_update_adds_the_stack_skill_the_base_branch_now_needs(
     skill: str,
 ) -> None:
     source, target, _ = feature
+    remove_application(target)
     (target / marker).write_text("{}\n" if marker.endswith(".json") else "name: app\n")
     commit(target, "plan the stack")
     git(target, "push", "-q", "--no-verify", "origin", "HEAD:main")
@@ -864,9 +865,9 @@ def test_setup_rerun_restores_a_missing_pre_push_hook_before_the_first_push(
     _, target, _ = release
     hook = target / ".git/hooks/pre-push"
     hook.unlink(missing_ok=True)
-    assert (
-        update_runner.locked_update(target, repair=True) == update_runner.NOT_PUBLISHED
-    )
+    outcome = update_runner.locked_update(target, repair=True)
+    assert outcome.startswith(update_runner.NOT_PUBLISHED)
+    assert outcome.endswith("This checkout: installed the missing pre-push hook.")
     assert hook.is_file()
 
 

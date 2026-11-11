@@ -1,12 +1,13 @@
 """Run a command in its own process group so a timeout stops every process it started."""
 
 import fcntl
+import json
 import os
 import re
 import signal
 import subprocess
 import threading
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import IO, NamedTuple
@@ -19,6 +20,8 @@ RUNNING: set[int] = set()
 STOPPED = threading.Event()
 STOP_SIGNAL: list[int] = []
 STARTING = threading.Lock()
+INSTALLS: dict[str, bool] = {}
+INSTALLED_FILE = "hard-eng-installed"
 
 
 class Process(NamedTuple):
@@ -147,6 +150,55 @@ def check_lock_file(root: Path) -> Generator[tuple[IO[str], bool]]:
         else:
             held = False
         yield lock, held
+
+
+def lock_stamp(root: Path, key: str) -> str:
+    """Size and change time of each lock file in a package group's folder; its install mark holds only while they stay the same.
+
+    A workspace root can hold the install and have no language, so the language does not pick the names."""
+    from gate_config import LOCKFILES
+
+    folder = root / key.partition(":")[2]
+    found = []
+    for name in sorted({name for names in LOCKFILES.values() for name in names}):
+        with suppress(OSError):
+            status = (folder / name).stat()
+            found.append(f"{name} {status.st_size} {status.st_mtime_ns}")
+    return "; ".join(found)
+
+
+def read_installed(lock: IO[str], root: Path) -> frozenset[str]:
+    """Package groups whose install passed in this checkout with the lock files of now; a bad state file counts as none."""
+    INSTALLS.clear()
+    try:
+        saved = json.loads(Path(lock.name).with_name(INSTALLED_FILE).read_text())
+    except (OSError, ValueError):
+        return frozenset()
+    if not isinstance(saved, dict):
+        return frozenset()
+    return frozenset(
+        key for key, stamp in saved.items() if stamp == lock_stamp(root, key)
+    )
+
+
+def install_key(group: Mapping[str, object]) -> str:
+    """One mark for each package group: two languages can share a folder, and each has its own install."""
+    return f"{group.get('language', '')}:{group['path']}"
+
+
+def note_install(key: str, role: object, failed: bool) -> None:
+    if role == "lockfiles":
+        INSTALLS[key] = INSTALLS.get(key, True) and not failed
+
+
+def save_installed(lock: IO[str], before: frozenset[str], root: Path) -> None:
+    passed = {key for key, ok in INSTALLS.items() if ok}
+    after = (before | passed) - (INSTALLS.keys() - passed)
+    if after != before:
+        with suppress(OSError):
+            Path(lock.name).with_name(INSTALLED_FILE).write_text(
+                json.dumps({key: lock_stamp(root, key) for key in sorted(after)})
+            )
 
 
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:

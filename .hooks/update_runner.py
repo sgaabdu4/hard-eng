@@ -26,7 +26,7 @@ UPDATE_BRANCH = "hard-eng/update"
 UPDATE_REF = f"refs/heads/{UPDATE_BRANCH}"
 UPDATE_COMMAND = "python3 .hooks/hard-eng.py update-pr"
 REPAIR_SUBJECT = "Install Hard Eng"
-NOT_PUBLISHED = "Hard Eng updates start after the project is pushed to a remote with its base branch."
+NOT_PUBLISHED = "Hard Eng updates start after the Hard Eng install is on the base branch of a remote."
 HEX_REVISION = re.compile(r"[0-9a-f]{40}")
 OWNER = re.compile(r"hard-eng-update (\d+)")
 TEMPORARY = re.compile(
@@ -186,7 +186,9 @@ def freshness_note(root: Path) -> str:
     if result == "none recorded yet":
         return "Hard Eng freshness unknown: no update result yet."
     if "failed" in result:
-        return f"Scaffold may be stale. Last Hard Eng update: {result}"
+        first, _, rest = result.partition("\n")
+        more = f" (the rest is in {RESULT_FILE})" if rest else ""
+        return f"Scaffold may be stale. Last Hard Eng update: {first}{more}"
     return ""
 
 
@@ -652,22 +654,57 @@ def published(root: Path, base: str) -> bool:
     return found.returncode == 0
 
 
+def repair_checkout(root: Path, previous: str) -> str:
+    """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
+    import hook_chain
+    import update
+
+    hook_chain.install_worktree_hook(root)
+    needs_hook = update.pre_push_missing(root) or hook_chain.foreign_hook(
+        root, hook_chain.locate(root)[1]
+    )
+    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
+        try:
+            source, old = update.fetch_sources(Path(temporary), previous, previous)
+            changes, _, hook, _ = update.update_plan(root, source, old)
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            if needs_hook:
+                raise
+            refused = isinstance(error, ValueError)
+            reason = "" if refused else "the installed release could not be fetched: "
+            return f"This checkout is unchanged: {reason}{str(error).rstrip('.')}."
+    notes = []
+    if needs_hook:
+        update.install_planned_hook(root, hook)
+        notes.append("installed the missing pre-push hook")
+    written = {
+        name: content
+        for name, content in sorted(changes.items())
+        if content is not None
+        and not update.maybe_installed(name)
+        and (name == "hard-eng.gates.json" or not (root / name).exists())
+    }
+    for name, content in written.items():
+        update.replace_file(root / name, content.encode())
+    if written:
+        notes.append(
+            f"setup wrote {', '.join(written)} for the project's current packages; "
+            f"review and commit {'it' if len(written) == 1 else 'them'}"
+        )
+    return f"This checkout: {'; '.join(notes)}." if notes else ""
+
+
 def prepare_update(root: Path, repair: bool = False) -> str:
     """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
-    repaired = ""
+    note = ""
     if repair:
-        from update import repair_current_hook
-
-        repaired = repair_current_hook(
+        note = repair_checkout(
             root, json.loads((root / SOURCE_FILE).read_text())["revision"]
         )
     base = update_base(root)
     if not published(root, base):
-        return NOT_PUBLISHED
-    outcome = build_update(root, base, repair)
-    if "installed the missing" in repaired:
-        return f"{outcome} This checkout: installed the missing pre-push hook."
-    return outcome
+        return f"{NOT_PUBLISHED} {note}".strip()
+    return f"{build_update(root, base, repair)} {note}".strip()
 
 
 def free_step(root: Path, worktree: Path) -> str:
@@ -685,6 +722,8 @@ def build_update(root: Path, base: str, repair: bool) -> str:
     from update_pr import branch_worktree, unfinished_update
 
     tip = fetch_base(root, base)
+    if update_blocker(root) is None and revision_at(root, tip) is None:
+        return NOT_PUBLISHED
     expected = update_branch_tip(root)
     if unfinished_update(root, tip):
         return (

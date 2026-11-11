@@ -271,8 +271,10 @@ def validate_typescript(
         names: list[JsonValue] = listed if isinstance(listed, list) else []
         resolved = {(base / str(name)).resolve() for name in names}
         if (root / DECLARATIONS).resolve() not in resolved:
+            entry = os.path.relpath(root / DECLARATIONS, base)
             raise ValueError(
-                f"HE-UNTRUSTED-JSON: TypeScript configuration omits {DECLARATIONS}; rerun the Hard Eng installer"
+                f"HE-UNTRUSTED-JSON: {os.path.relpath(config, root)} omits {DECLARATIONS}; "
+                f'add "{entry}" to its files list'
             )
         files |= resolved
     if omitted := sorted({(directory / name).resolve() for name in expected} - files):

@@ -192,3 +192,11 @@ def test_a_missing_package_script_names_package_gate_and_script(
         match=r"^\.: gate \S+: .*script test:coverage is missing from package.json",
     ):
         validate_group(tmp_path, group, set())
+
+
+def test_a_package_with_no_group_names_the_rerun(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="javascript package is missing") as caught:
+        validate_manifest_groups(
+            tmp_path, {"packages": [], "shared": []}, {("web", "javascript")}
+        )
+    assert str(caught.value).endswith(": web; rerun setup to add its group")

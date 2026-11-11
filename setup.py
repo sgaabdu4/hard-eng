@@ -8,7 +8,6 @@ import os
 import re
 import runpy
 import shlex
-import shutil
 import subprocess
 import sys
 import tomllib
@@ -21,37 +20,6 @@ if TYPE_CHECKING:
 
 SOURCE = Path(__file__).resolve().parent
 sys.path[:0] = [str(SOURCE / ".hooks"), str(SOURCE)]
-
-
-def merge(
-    current: JsonObject, additions: JsonObject, path: tuple[str, ...] = ()
-) -> JsonObject:
-    if not isinstance(current, dict):
-        raise TypeError(f"Conflicting setting {'.'.join(path)}; expected an object")
-    for key, value in additions.items():
-        location = (*path, key)
-        existing = current.get(key)
-        if key not in current:
-            current[key] = value
-        elif isinstance(value, dict):
-            if not isinstance(existing, dict):
-                raise TypeError(
-                    f"Conflicting setting {'.'.join(location)}; expected an object"
-                )
-            merge(existing, value, location)
-        elif (
-            isinstance(value, list)
-            and path == ("hooks",)
-            and isinstance(existing, list)
-        ):
-            for item in value:
-                if item not in existing:
-                    existing.append(item)
-        elif current[key] != value:
-            raise ValueError(
-                f"Conflicting setting {'.'.join(location)}; preserve it and ask before changing it"
-            )
-    return current
 
 
 def gate_config(root: Path) -> GateConfig:
@@ -109,10 +77,31 @@ def gate_config(root: Path) -> GateConfig:
     return config
 
 
+def add_package_groups(root: Path, config: GateConfig) -> None:
+    """Give each supported package that has no group the group a first install gives it."""
+    from gate_config import dart_test_support, package_manifests, repository_files
+
+    declared = {(str(Path(g["path"])), g.get("language")) for g in config["packages"]}
+    missing = {
+        (path, language)
+        for path, language in package_manifests(root, repository_files(root))
+        if (path, language) not in declared
+        and (path, None) not in declared
+        and not dart_test_support(path, language, config["packages"])
+    }
+    if missing:
+        config["packages"] += [
+            group
+            for group in gate_config(root)["packages"]
+            if (str(Path(group["path"])), group.get("language")) in missing
+        ]
+
+
 def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
     import agent_hooks
     from gate_config import json_file
     from project_files import parse_project_text, read_project_file
+    from settings_merge import merge
 
     codex_config = root / ".codex/config.toml"
     if codex_config.exists():
@@ -265,6 +254,7 @@ def apply_dart_typing(
 ) -> None:
     from gate_config import dart_rule_settings
     from project_setup import validate_dart_exclusions
+    from settings_merge import merge
 
     for section, groups in required.items():
         # A key holding only comments, as in `flutter create` output, parses as null.
@@ -413,16 +403,10 @@ def configure_dart_generated(
 def configure_dart_scanner(
     root: Path, directory: Path, changes: dict[str, str]
 ) -> None:
+    from dart_boundaries import SETTINGS_FILES
     from gate_config import json_file
 
-    scanner_names = (
-        ".dart-decimaterc",
-        ".dart-decimaterc.json",
-        ".dart-decimaterc.jsonc",
-        "dart-decimate.toml",
-        ".dart-decimate.toml",
-    )
-    if not any((directory / name).exists() for name in scanner_names):
+    if not any((directory / name).exists() for name in SETTINGS_FILES):
         scanner: dict[str, list[str]] = {"ignore_patterns": [".agents/**"]}
         path = directory / ".dart-decimaterc.json"
         changes[str(path.relative_to(root))] = json_file(root, scanner)
@@ -682,39 +666,10 @@ def configure_ignores(root: Path, changes: dict[str, str]) -> None:
     changes[".gitignore"] = ignores
 
 
-INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl"}
-# Options whose operand is inline code or a module, then options that take a value.
-INLINE = {"-c", "-m", "-e", "-p", "--eval", "--print"}
-VALUED = {"-W", "-X", "-r", "--require", "--import", "--loader", "-o"}
-
-
-def script_operand(arguments: list[str]) -> str | None:
-    """Return the script an interpreter runs, or None for inline code or modules."""
-    options = iter(arguments[1:])
-    for argument in options:
-        if argument in INLINE:
-            return None
-        if argument == "--" or not argument.startswith("-"):
-            return next(options, None) if argument == "--" else argument
-        if argument in VALUED:
-            next(options, None)
-    return None
-
-
-def legacy_command_problem(root: Path, arguments: list[str]) -> str | None:
-    """Name why a retired family command cannot run, or None when it can."""
-    if not (shutil.which(arguments[0]) or (root / arguments[0]).is_file()):
-        return "program not found"
-    interpreter = Path(arguments[0]).name.rstrip("0123456789.") in INTERPRETERS
-    script = script_operand(arguments) if interpreter else None
-    if script is not None and not (root / script).is_file():
-        return "script not found"
-    return None
-
-
 def retired_config(root: Path) -> GateConfig | None:
     """Regenerate a pre-rebuild families configuration, keeping runnable commands."""
     from gate_config import validate_gate
+    from legacy_command import legacy_command_problem
     from project_files import read_project_file
 
     legacy = read_project_file(root / "hard-eng.gates.json", root)
@@ -834,6 +789,7 @@ def plan_install(
     from swift_setup import add_swift_groups
 
     add_swift_groups(root, config)
+    add_package_groups(root, config)
     from project_setup import (
         adapt_boundaries,
         add_freshness,

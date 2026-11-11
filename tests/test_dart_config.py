@@ -10,13 +10,13 @@ from unittest.mock import Mock
 import pytest
 import yaml
 from conftest import git
+from dart_boundaries import validate_dart_boundaries
 from gate_config import (
     Gate,
     Group,
     JsonObject,
     dart_scan_includes_boundaries,
     generated_sources,
-    validate_dart_boundaries,
 )
 from project_setup import adapt_package, dependency_command, validate_dart_exclusions
 
@@ -608,12 +608,25 @@ def test_generated_sources_reads_paths_from_a_file_not_a_live_pipe(
     """Issue 375: writing paths into git's stdin while it wrote output deadlocked on macOS."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / ".gitattributes").write_text("*.g.dart linguist-generated=true\n")
-    spy = Mock(wraps=subprocess.check_output)
-    monkeypatch.setattr(subprocess, "check_output", spy)
+    spy = Mock(wraps=subprocess.run)
+    monkeypatch.setattr(subprocess, "run", spy)
     names = [f"lib/file_{index}{'.g' * (index % 2)}.dart" for index in range(5000)]
     assert generated_sources(tmp_path, names) == set(names[1::2])
     assert "input" not in spy.call_args.kwargs
     assert hasattr(spy.call_args.kwargs["stdin"], "fileno")
+
+
+def test_generated_sources_starts_one_git_process_in_a_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    names = ["lib/a.g.dart", "lib/b.dart"]
+    assert generated_sources(tmp_path, names) == set()
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitattributes").write_text("*.g.dart linguist-generated=true\n")
+    spy = Mock(wraps=subprocess.run)
+    monkeypatch.setattr(subprocess, "run", spy)
+    assert generated_sources(tmp_path, names) == {"lib/a.g.dart"}
+    assert spy.call_count == 1
 
 
 def test_the_missing_boundary_error_names_the_file_and_the_key(
@@ -636,4 +649,72 @@ def test_the_missing_boundary_error_names_the_file_and_the_key(
     assert step, str(caught.value)
     key, name = step.groups()
     (tmp_path / name).write_text("{" + key + "}")
+    for folder in ("domain", "ui"):
+        (tmp_path / "lib" / folder).mkdir(parents=True)
+        (tmp_path / "lib" / folder / "page.dart").write_text("void main() {}\n")
     validate_dart_boundaries(command, tmp_path, 5)
+
+
+def test_a_settings_file_that_the_tool_rejects_shows_the_tools_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "app"
+    package.mkdir()
+    reason = "failed to parse config .dart-decimaterc.json: expected `,` or `]`"
+
+    def rejecting_tool(*args: list[str], **_kwargs: object) -> str:
+        raise subprocess.CalledProcessError(2, args[0], output="", stderr=reason + "\n")
+
+    monkeypatch.setattr(subprocess, "check_output", rejecting_tool)
+    command = ["dart-decimate", "check", ".", "--strict"]
+    with pytest.raises(
+        ValueError, match=r"^app: dart-decimate config failed"
+    ) as caught:
+        validate_dart_boundaries(command, package, 5)
+    assert reason in str(caught.value)
+    assert "\n" not in str(caught.value)
+    assert "returned non-zero" not in str(caught.value)
+
+
+def boundary_tool(monkeypatch: pytest.MonkeyPatch, rules: list[dict[str, str]]) -> None:
+    def native_config(*_args: object, **_kwargs: object) -> str:
+        return json.dumps({"config": {"boundaries": rules}})
+
+    monkeypatch.setattr(subprocess, "check_output", native_config)
+
+
+def test_a_boundary_rule_with_a_missing_folder_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "lib/feature_a").mkdir(parents=True)
+    (tmp_path / "lib/feature_a/page.dart").write_text("void main() {}\n")
+    (tmp_path / "lib/notes").mkdir()
+    (tmp_path / "lib/notes/plan.md").write_text("no code here\n")
+    (tmp_path / ".dart-decimaterc.json").write_text("{}")
+    command = ["dart-decimate", "check", ".", "--strict"]
+    boundary_tool(monkeypatch, [{"from": "lib/feature", "disallow": "lib"}])
+    validate_dart_boundaries(command, tmp_path, 5)
+    for prefix in ("lib/features", "ui/pages", "lib/notes"):
+        boundary_tool(monkeypatch, [{"from": "lib/feature_a", "disallow": prefix}])
+        with pytest.raises(
+            ValueError,
+            match=rf"{prefix} in .dart-decimaterc.json matches no .dart file",
+        ):
+            validate_dart_boundaries(command, tmp_path, 5)
+
+
+def test_a_linter_rule_set_to_false_is_refused_by_name(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    options = json.loads(json.dumps(runner.DART_TYPING))
+    options["linter"]["rules"]["avoid_print"] = False
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(yaml.safe_dump(options))
+    with pytest.raises(
+        ValueError, match=r"analysis_options.yaml: avoid_print is set to false"
+    ) as caught:
+        runner.validate_typing(tmp_path, "dart", ["lib"])
+    assert str(caught.value).endswith("; remove that entry")
+    del options["linter"]["rules"]["avoid_print"]
+    path.write_text(yaml.safe_dump(options))
+    runner.validate_typing(tmp_path, "dart", ["lib"])

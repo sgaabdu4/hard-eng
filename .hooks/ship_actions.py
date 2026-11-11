@@ -358,6 +358,11 @@ def common_directory(root: Path) -> Path:
     ).resolve()
 
 
+def kept_groups(kept: list[str]) -> list[str]:
+    """Each kept top-level path once; Git lists an ignored folder as one entry, so a file count would mislead."""
+    return list(dict.fromkeys("".join(name.partition("/")[:2]) for name in kept))
+
+
 def unchanged_checkout(shipment: Shipment) -> None:
     target = shipment.root.resolve()
     index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
@@ -384,7 +389,11 @@ def unchanged_checkout(shipment: Shipment) -> None:
     if kept:
         raise ValueError(
             "Cleanup preserves modified, untracked or ignored work: "
-            + ", ".join(kept[:3])
+            + ", ".join(kept_groups(kept))
+            + ". In that worktree, `git status --ignored --untracked-files=all` lists "
+            "each file under those paths. Delete the generated files that nobody "
+            "needs and move the others out of the worktree. Copy an edited tracked file "
+            "out, then undo its edit. Then run cleanup again."
         )
     if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:
         raise ValueError("Cleanup preserves commits added after the verified PR")
@@ -510,6 +519,22 @@ def merge(target: Path, plan: Path | None, shipment: Shipment, method: str) -> S
         ) from error
 
 
+def require_stage_options(
+    stage: str, worktree: str | None, merge_method: str | None
+) -> None:
+    if stage not in {"ready", "merge", "delivered", "cleanup"}:
+        raise ValueError("Unknown shipping stage")
+    if stage == "merge" and merge_method != "rebase":
+        raise ValueError(
+            "Hard Eng merges by rebase only; squash and merge commits are refused"
+        )
+    if stage == "cleanup" and not worktree:
+        raise ValueError(
+            "Cleanup needs --worktree <path of the task's worktree>; "
+            "run it from the repository's main checkout."
+        )
+
+
 def run(
     coordinator: Path,
     plan: str | None,
@@ -518,18 +543,13 @@ def run(
     worktree: str | None,
     merge_method: str | None,
 ) -> int:
+    require_stage_options(stage, worktree, merge_method)
     target = Path(worktree).resolve() if worktree else coordinator.resolve()
     if common_directory(coordinator) != common_directory(target):
         raise ValueError("Shipping target belongs to a different repository")
     plan_path = (target / plan).resolve() if plan else None
     if plan_path is not None and not plan_path.is_relative_to(target):
         raise ValueError("Use the selected task's plan inside its worktree")
-    if stage not in {"ready", "merge", "delivered", "cleanup"}:
-        raise ValueError("Unknown shipping stage")
-    if stage == "merge" and merge_method != "rebase":
-        raise ValueError(
-            "Hard Eng merges by rebase only; squash and merge commits are refused"
-        )
     proof_stage = "ready" if stage in {"ready", "merge"} else "delivered"
     if stage in {"ready", "merge"}:
         require_current(target)

@@ -3,6 +3,7 @@
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -205,6 +206,25 @@ def test_failure_hook_runs_its_own_script_and_replaces_the_old_entry(
     ]
     assert printed[:2] == ["", ""]
     assert "Same tool error 3 times" in printed[2]
+
+
+def test_a_changed_timeout_keeps_one_hook_entry(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    repository(root)
+    installer.install(root)
+    kept: dict[str, str] = {}
+    for name in agent_hooks.HOOK_FILES.values():
+        settings = (root / name).read_text()
+        changed = re.sub(r'"timeout": (\d+)', r'"timeout": \g<1>1', settings)
+        assert changed != settings
+        (root / name).write_text(changed)
+        kept[name] = changed
+    installer.install(root)
+    for name, changed in kept.items():
+        assert json.loads((root / name).read_text()) == json.loads(changed)
 
 
 def test_setup_replaces_the_old_tool_hook_commands(

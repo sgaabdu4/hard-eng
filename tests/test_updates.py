@@ -12,8 +12,9 @@ from unittest.mock import Mock
 
 import pytest
 import update
-from conftest import SOURCE, commit, git, init
+from conftest import SOURCE, commit, git, init, remove_application
 from gate_config import JsonObject, json_file
+from legacy_command import script_operand
 from shipping import ShippingPolicy
 from test_setup import repository as setup_repository
 from test_setup import snapshot
@@ -466,7 +467,7 @@ def test_project_configuration_update_commits_without_rerunning_application_chec
     remote = target.parent / "application-remote.git"
     git(target, "clone", "--bare", str(target), str(remote))
     git(target, "remote", "add", "origin", str(remote))
-    (target / "package.json").unlink()
+    remove_application(target)
     commit(target, "application without task plan")
     installer = source / "setup.py"
     installer.write_text(
@@ -511,7 +512,6 @@ def test_supported_update_migrates_custom_workflow_pins(
             1,
         )
     )
-    (target / "package.json").unlink()
     config_path = target / "hard-eng.gates.json"
     config = json.loads(config_path.read_text())
     config["shared"][0]["command"] = ["python3", "-c", "print('application passes')"]
@@ -555,6 +555,7 @@ def test_development_install_does_not_fetch(
     ("case", "expected"),
     [
         ("feature", {"apps/web"}),
+        ("first-typescript", None),
         ("gate-config", None),
         ("unverified", None),
         ("edited-hook", None),
@@ -573,9 +574,10 @@ def test_update_mixed_with_feature_work_checks_only_affected_packages(
     base = git(target, "rev-parse", "HEAD")
     select_release(source, monkeypatch)
     update.update(target)
-    page = target / "apps/web/page.ts"
+    # A first TypeScript file makes setup plan a boundaries gate, so the gate list changes.
+    page = target / f"apps/web/page.{'ts' if case == 'first-typescript' else 'txt'}"
     page.parent.mkdir(parents=True)
-    page.write_text("export const page = 1;\n")
+    page.write_text("a page\n")
     if case == "gate-config":
         config = target / "hard-eng.gates.json"
         config.write_text(config.read_text() + "\n")
@@ -887,9 +889,9 @@ def test_retired_families_config_is_regenerated_and_reported(
     ],
 )
 def test_retired_interpreter_script_is_found_past_options(
-    installer: ModuleType, command: list[str], script: str | None
+    command: list[str], script: str | None
 ) -> None:
-    assert installer.script_operand(command) == script
+    assert script_operand(command) == script
 
 
 REACT_DOCTOR_0_9_14_COMMAND_INPUT_RISK = re.compile(
@@ -924,3 +926,75 @@ def test_installed_hooks_pass_react_doctor_command_input_rule() -> None:
         for match in REACT_DOCTOR_0_9_14_COMMAND_INPUT_RISK.finditer(source)
     ]
     assert findings == []
+
+
+def test_no_network_names_the_address_and_the_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import io
+    import urllib.error
+    import urllib.request
+
+    answers: list[object] = [
+        urllib.error.URLError(ConnectionRefusedError(61, "Connection refused")),
+        io.BytesIO(b'{"sha": "x"}'),
+    ]
+
+    def opener(*_arguments: object, **_options: object) -> object:
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(urllib.request, "urlopen", opener)
+    monkeypatch.setattr(update, "github_token", Mock(return_value=None))
+    with pytest.raises(OSError) as refused:
+        update.github_json("repos/example/commits/main")
+    message = str(refused.value)
+    assert "api.github.com" in message and "Connection refused" in message
+    assert "check the network and run the same command again" in message
+    assert update.github_json("repos/example/commits/main") == {"sha": "x"}
+
+
+def test_a_conflicting_local_edit_shows_both_texts_and_the_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from local_edits import merge_local_edits
+
+    (tmp_path / "gitconfig").write_text("[merge]\n\tconflictStyle = diff3\n")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    old, target = tmp_path / "old", tmp_path / "target"
+    lines = [f"line {number}\n" for number in range(60)]
+    old.write_text("".join(lines))
+    local = lines.copy()
+    local[10] = "line 10 with my wording\n"
+    target.write_text("".join(local))
+    updated = lines.copy()
+    updated[10] = "line 10 as the update words it\n"
+    content = "".join(updated)
+    with pytest.raises(ValueError) as refused:
+        merge_local_edits("skill.md", target, old, content)
+    message = str(refused.value)
+    assert "line 10 with my wording" in message
+    assert "line 10 as the update words it" in message
+    assert message.splitlines()[0].endswith("same lines as this update.")
+    assert "In skill.md, put the update's lines in place of those local" in message
+    assert "installed lines" not in message
+    target.write_text(content)
+    assert merge_local_edits("skill.md", target, old, content) == content
+    target.write_text(content + "my own addition\n")
+    kept = merge_local_edits("skill.md", target, old, content)
+    assert kept.endswith("my own addition\n") and "as the update words it" in kept
+
+
+def test_the_conflict_text_stops_at_forty_lines(tmp_path: Path) -> None:
+    from local_edits import merge_local_edits
+
+    old, target = tmp_path / "old", tmp_path / "target"
+    lines = [f"line {number}\n" for number in range(200)]
+    old.write_text("".join(lines))
+    target.write_text("".join(f"mine {number}\n" for number in range(200)))
+    content = "".join(f"theirs {number}\n" for number in range(200))
+    with pytest.raises(ValueError) as refused:
+        merge_local_edits("skill.md", target, old, content)
+    assert str(refused.value).count("\n") <= 45

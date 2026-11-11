@@ -38,6 +38,12 @@ def failure_summary(path: Path) -> str | None:
         events = dart_events(path)
     except (OSError, ValueError):
         return None
+    if not any(event.get("type") in {"testStart", "testDone"} for event in events):
+        return unstructured_reason(path)
+    return test_failure(events)
+
+
+def test_failure(events: list[JsonObject]) -> str | None:
     names: dict[int, str] = {}
     places: dict[int, str] = {}
     prints: dict[int, list[str]] = {}
@@ -70,6 +76,22 @@ def failure_summary(path: Path) -> str | None:
     place = places.get(identifier, "no file")
     detail = failure_detail(errors.get(identifier), printed, place)
     return f"Dart test failure: {name}{detail}"
+
+
+def unstructured_reason(path: Path) -> str | None:
+    """The tool's own words, when the run ended before any test event."""
+    lines = []
+    for line in path.read_text().splitlines():
+        try:
+            if isinstance(json.loads(line), dict):
+                continue
+        except ValueError:
+            pass
+        if line.strip():
+            lines.append(line)
+    if not lines:
+        return None
+    return "Dart test run ended before its first test:\n" + "\n".join(lines[:20])
 
 
 def failure_detail(error: str | None, printed: str, place: str) -> str:

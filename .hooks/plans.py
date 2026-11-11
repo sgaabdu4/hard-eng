@@ -57,6 +57,7 @@ SECTIONS = (
     "Verification",
 )
 STAGES = ("Draft", "Ready", "Complete")
+DRAFT_STEP = "; files other than plans changed, so get approval for the plan and set its Status to Ready before you build. During the build, run this check with --plan-stage Ready"
 HANDOFFS = ("Clarification", "Approval")
 PLACEHOLDERS = re.compile(
     r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"
@@ -625,7 +626,7 @@ def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) 
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
-    from change_size import plan_not_needed
+    from change_size import judges_branch, plan_not_needed
 
     explicit_stage = stage is not None
     changed = changed_files(root, base or "HEAD")
@@ -648,9 +649,9 @@ def validate_plans(
     if not applicable and explicit_stage and not changed:
         applicable = paths
     if (
-        (changed != set() or explicit_stage)
+        (changed != set() or explicit_stage or (base is None and judges_branch(root)))
         and not applicable
-        and (explicit_stage or not plan_not_needed(root))
+        and not plan_not_needed(root)
     ):
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"
@@ -665,8 +666,10 @@ def validate_plans(
             # A Draft plan claims no implementation, so it may ride along with finished work.
             if status == "Draft" and reached:
                 continue
+            ready = status == "Draft" and stage == "Complete" and not explicit_stage
             raise ValueError(
                 f"{path.relative_to(root)}: plan is {status}; this check requires {stage}"
+                f"{DRAFT_STEP if ready else ''}"
             )
         effective_stage = min(effective_stage, status, key=STAGES.index)
     return stage if explicit_stage or not applicable else effective_stage

@@ -18,6 +18,8 @@ TIME = re.compile(r"(?<!\w)N(?:\.N)?(?:ns|[µu]s|ms|s)(?!\w)")
 CODE_FRAME = re.compile(r"[> ]*(?:N[ ]*)*[│|]")
 
 DEBT_FILE = "hard-eng.debt.json"
+GATE_OUTPUT_LIMIT = 8000
+DEBT_LINE = re.compile(r"(?m)^DEBT (\S+) @ (\S+):.*$")
 # Failing tests, broken installs and leaked secrets are never old findings to keep.
 NEVER = {"tests", "lockfiles", "secrets-files", "secrets-history"}
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
@@ -90,18 +92,23 @@ def recordable(gate: Gate) -> bool:
     )
 
 
-def fingerprints(root: Path, group: Group, gate: Gate, output: str) -> Counter[str]:
-    """Output lines with line numbers, counts and the checkout path made neutral."""
+def real_lines(root: Path, group: Group, gate: Gate, output: str) -> list[str]:
     report = gate.get("report", {})
     path = root / group["path"] / report.get("path", "")
     lines = output.splitlines()
     if report.get("stdout") is True and path.is_file():
         lines += path.read_text().splitlines()
-    found: Counter[str] = Counter()
-    for line in lines:
-        line = DIGIT_RUN.sub("N", ANSI.sub("", line).replace(str(root), ".")).strip()
-        if line and not RUNNER_LINES.match(line):
-            found[line] += 1
+    cleaned = [ANSI.sub("", line).replace(str(root), ".").strip() for line in lines]
+    return [line for line in cleaned if line and not RUNNER_LINES.match(line)]
+
+
+def fingerprints(root: Path, group: Group, gate: Gate, output: str) -> Counter[str]:
+    """Output lines with line numbers, counts and the checkout path made neutral."""
+    report = gate.get("report", {})
+    path = root / group["path"] / report.get("path", "")
+    found: Counter[str] = Counter(
+        DIGIT_RUN.sub("N", line) for line in real_lines(root, group, gate, output)
+    )
     extract = REPORT_FINDINGS.get(str(report.get("type")))
     if extract is not None and path.is_file():
         try:
@@ -121,6 +128,13 @@ def neutral(line: str) -> str:
         lambda counted: "N" + WORD.sub(singular, counted.group(1)),
         TIME.sub("Ntime", ANSI.sub("", line)),
     )
+
+
+def real_forms(lines: list[str]) -> dict[str, list[str]]:
+    forms: dict[str, list[str]] = {}
+    for line in lines:
+        forms.setdefault(neutral(DIGIT_RUN.sub("N", line)), []).append(line)
+    return forms
 
 
 def by_form(lines: Counter[str]) -> Counter[str]:
@@ -165,20 +179,42 @@ def load(root: Path) -> dict[str, Counter[str]]:
     return {key: Counter(lines) for key, lines in gates.items()}
 
 
+def print_new(
+    new: Counter[str], recorded: Counter[str], spelling: dict[str, list[str]]
+) -> None:
+    """Lines of forms with no recorded line first, then the doubtful ones; 20 lines in all."""
+
+    def ordered(forms: list[str]) -> list[str]:
+        return sorted(
+            (line for form in forms for line in spelling[form]),
+            key=lambda line: not WORD_CHARACTER.search(line),
+        )
+
+    surely = ordered([form for form in new if not recorded[form]])
+    doubtful = [form for form in new if recorded[form]]
+    candidates = ordered(doubtful)
+    lines = [f"  {line}" for line in surely[:20]]
+    if candidates and len(lines) < 20:
+        sure_new = sum(new[form] for form in doubtful)
+        lines.append(
+            f"  {sure_new} of these {len(candidates)} lines are new; the others are recorded:"
+        )
+        lines += [f"  {line}" for line in candidates[: 20 - len(surely)]]
+    cut = len(surely) + len(candidates) - 20
+    print("\n".join(lines + ([f"  {cut} more lines not shown"] if cut > 0 else [])))
+
+
 def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bool:
     """A gate with debt fails only on findings beyond it, or when listed ones are fixed."""
     debt = load(root).get(f"{group['path']}/{gate['name']}")
     if debt is None or gate.get("role") in NEVER:
         return failed
     current = fingerprints(root, group, gate, output) if failed else Counter()
-    spelling = {neutral(line): line for line in current}
     if new := by_form(current) - by_form(debt):
         print(f"FAIL {gate['name']} @ {group['path']}: findings beyond {DEBT_FILE}:")
-        shown = sorted(
-            (spelling[form] for form in new.elements()),
-            key=lambda line: not WORD_CHARACTER.search(line),
-        )
-        print("".join(f"  {line}\n" for line in shown[:20]), end="")
+        spelling = {neutral(line): [line] for line in current}
+        spelling.update(real_forms(real_lines(root, group, gate, output)))
+        print_new(new, by_form(debt), spelling)
         return True
     if fixed := by_form(debt) - by_form(current):
         print(
@@ -206,6 +242,7 @@ def worktree(root: Path) -> bytes:
 
 def settled_run(root: Path, run: Callable[[], object]) -> None:
     """Run the gates; when they fixed files, record what the fixed code still fails with."""
+    refuse_new_debt(root, None)
     before = worktree(root)
     run()
     if worktree(root) != before:
@@ -220,6 +257,7 @@ def record(
     old = load(root) if (root / DEBT_FILE).is_file() else None
     gates: JsonObject = {}
     refused = []
+    left_out: Counter[str] = Counter()
     for group in groups:
         for gate in group["checks"]:
             key = f"{group['path']}/{gate['name']}"
@@ -230,7 +268,10 @@ def record(
                 refused.append(key)
                 continue
             if old is not None:
-                current = still_found(old.get(key, Counter()), current)
+                kept = still_found(old.get(key, Counter()), current)
+                if fresh := by_form(current) - by_form(kept):
+                    left_out[key] = fresh.total()
+                current = kept
             if current:
                 gates[key] = dict(sorted(current.items()))
     if refused and old is None:
@@ -244,6 +285,11 @@ def record(
     print(
         f"Recorded {len(gates)} checks with old findings in {DEBT_FILE}; it can only shrink."
     )
+    if left_out:
+        print(
+            f"Did not record {left_out.total()} new findings in {', '.join(left_out)}; "
+            "`check` fails until they are fixed."
+        )
     return 0
 
 
@@ -256,20 +302,30 @@ def git_file(root: Path, base: str, name: str) -> str | None:
         return None
 
 
-def require_shrink(root: Path, base: str | None) -> None:
-    """HE-DEBT-SHRINK-ONLY: debt appears only with the install and never grows."""
+def refuse_new_debt(root: Path, base: str | None) -> str | None:
+    """HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add the debt file."""
     from plans import default_branch_point
 
-    current = load(root)
     base = base or default_branch_point(root)
-    if not current or base is None:
+    if (
+        base is not None
+        and git_file(root, base, DEBT_FILE) is None
+        and git_file(root, base, SOURCE_FILE) is not None
+    ):
+        raise ValueError(
+            f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings that `check` prints instead"
+        )
+    return base
+
+
+def require_shrink(root: Path, base: str | None) -> None:
+    """HE-DEBT-SHRINK-ONLY: debt appears only with the install and never grows."""
+    current = load(root)
+    if not current:
         return
-    before = git_file(root, base, DEBT_FILE)
+    base = refuse_new_debt(root, base)
+    before = git_file(root, base, DEBT_FILE) if base is not None else None
     if before is None:
-        if git_file(root, base, SOURCE_FILE) is not None:
-            raise ValueError(
-                f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings instead"
-            )
         return
     old = {key: Counter(lines) for key, lines in json.loads(before)["gates"].items()}
     if grown := sorted(
@@ -278,3 +334,22 @@ def require_shrink(root: Path, base: str | None) -> None:
         raise ValueError(
             f"HE-DEBT-SHRINK-ONLY: {DEBT_FILE} grew for {', '.join(grown)}; repair the new findings instead"
         )
+
+
+def bounded(text: str, *, tail: bool = False) -> str:
+    if len(text := ANSI.sub("", text)) <= GATE_OUTPUT_LIMIT:
+        return text
+    note = "\n[gate output cut; rerun check for the full log]\n"
+    return note + text[-GATE_OUTPUT_LIMIT:] if tail else text[:GATE_OUTPUT_LIMIT] + note
+
+
+def keep_debt_lines(shown: str, log: str) -> str:
+    """Put each DEBT line of the log right after the FAIL line of its gate, where shown has it."""
+    for note in DEBT_LINE.finditer(log):
+        failed = re.search(
+            rf"(?m)^FAIL {re.escape(note[1])} \(exit \d+;[^\n]* @ {re.escape(note[2])}(?!\S)[^\n]*\n",
+            shown,
+        )
+        if failed:
+            shown = shown[: failed.end()] + note[0] + "\n" + shown[failed.end() :]
+    return shown

@@ -8,7 +8,7 @@ import tomllib
 from itertools import pairwise
 from pathlib import Path
 
-from gate_config import Group
+from gate_config import Gate, Group, require_roles
 from project_files import parse_project_text
 from project_setup import dependency_command
 
@@ -133,20 +133,19 @@ def import_linter_owner(
     return None
 
 
+def listed_roots(parser: configparser.ConfigParser) -> tuple[list[str], bool]:
+    """The roots that the settings list, and whether the one-root option lists them."""
+    one_root = not parser.has_option("importlinter", "root_packages")
+    option = "root_package" if one_root else "root_packages"
+    text = parser.get("importlinter", option, fallback="")
+    roots = [value.strip() for value in text.splitlines() if value.strip()]
+    return roots, one_root and bool(roots)
+
+
 def has_recursive_import_contract(
     parser: configparser.ConfigParser, roots: list[str]
 ) -> bool:
-    root_option = (
-        "root_packages"
-        if parser.has_option("importlinter", "root_packages")
-        else "root_package"
-    )
-    configured_roots = {
-        value.strip()
-        for value in parser.get("importlinter", root_option, fallback="").splitlines()
-        if value.strip()
-    }
-    if not set(roots).issubset(configured_roots):
+    if not set(roots).issubset(listed_roots(parser)[0]):
         return False
     contracts = [
         parser[section]
@@ -166,6 +165,86 @@ def has_recursive_import_contract(
                 if value.strip()
             )
     return all({root, root + ".**"} <= ancestors for root in roots)
+
+
+def toml_import_linter(table: object) -> configparser.ConfigParser:
+    """The `[tool.importlinter]` table in the shape that `has_recursive_import_contract` reads."""
+
+    def lines(value: object) -> str:
+        return "\n".join(map(str, value if isinstance(value, list) else [value]))
+
+    parser = configparser.ConfigParser(interpolation=None)
+    settings = table if isinstance(table, dict) else {}
+    option = "root_packages" if "root_packages" in settings else "root_package"
+    parser["importlinter"] = {option: lines(settings.get(option, []))}
+    contracts = settings.get("contracts")
+    for index, contract in enumerate(contracts if isinstance(contracts, list) else []):
+        if isinstance(contract, dict):
+            parser[f"importlinter:contract:{index}"] = {
+                str(key): lines(value) for key, value in contract.items()
+            }
+    return parser
+
+
+def import_contract_gap(directory: Path, package: Group) -> str | None:
+    """What a package's Import Linter file lacks for its roots, or None when each root is covered."""
+    roots = python_roots(directory, package)
+    configured = import_linter_owner(directory)
+    if configured is not None:
+        owner, parser = configured
+        kind = "ini"
+    else:
+        owner = directory / "pyproject.toml"
+        text = owner.read_text() if owner.is_file() else ""
+        table = tomllib.loads(text).get("tool", {}).get("importlinter")
+        parser = toml_import_linter(table)
+        kind = "toml"
+    missing = [
+        root for root in roots if not has_recursive_import_contract(parser, [root])
+    ]
+    if not missing:
+        return None
+    ancestors = [value for root in missing for value in (root, root + ".**")]
+    name = "No sibling dependency cycles in " + ", ".join(missing)
+    kept, one_root = listed_roots(parser)
+    listed = sorted({*kept, *missing})
+    how = "put this in place of the root_package line" if one_root else "set this"
+    if kind == "toml":
+        edit = "root_packages = " + json.dumps(listed)
+        block = (
+            '[[tool.importlinter.contracts]]\nname = "' + name + '"\n'
+            'type = "acyclic_siblings"\nancestors = '
+            + json.dumps(ancestors)
+            + "\ndepth = 0\n"
+        )
+    else:
+        edit = "root_packages =" + "".join(f"\n    {value}" for value in listed)
+        block = (
+            f"[importlinter:contract:{'-'.join(missing)}]\nname = {name}\n"
+            "type = acyclic_siblings\nancestors ="
+            + "".join(f"\n    {value}" for value in ancestors)
+            + "\ndepth = 0\n"
+        )
+    table = "tool.importlinter" if kind == "toml" else "importlinter"
+    return (
+        f"{owner.name} has no import contract for {', '.join(missing)}, so the imports "
+        f"gate cannot find an import cycle there. In {Path(package['path'], owner.name)}, "
+        f"under [{table}], {how}:\n{edit}\nThen add this contract:\n{block}"
+    )
+
+
+def require_imports(directory: Path, package: Group, roles: set[str]) -> None:
+    if "imports" not in roles and python_roots(directory, package):
+        step = imports_step(directory, package)
+        require_roles(package["path"], {"imports"}, roles, step)
+
+
+def require_import_contract(directory: Path, package: Group, gate: Gate) -> None:
+    """Runs with the imports gate, not at the config load: each session start loads the config."""
+    if gate.get("role") == "imports" and package.get("language") == "python":
+        gap = import_contract_gap(directory, package)
+        if gap:
+            raise ValueError(f"{package['path']}: {gap}")
 
 
 def import_configuration(directory: Path, package: Group, content: str) -> str:

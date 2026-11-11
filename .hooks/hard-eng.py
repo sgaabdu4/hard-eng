@@ -56,6 +56,7 @@ from ci_jobs import (
     language_filter,
     language_groups,
 )
+from dart_boundaries import validate_dart_boundaries
 from debt import OUTPUTS, remember
 from gate_config import (
     Gate,
@@ -65,11 +66,10 @@ from gate_config import (
     dart_rule_settings,
     generated_sources,
     nonproduction_source,
-    validate_dart_boundaries,
 )
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
-from python_setup import pytest_options
+from python_setup import pytest_options, require_import_contract
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -397,6 +397,7 @@ def prepare_command(
             expected = production_files(directory, group)
             validate_typescript(ROOT, command, directory, expected, timeout)
     validate_dart_boundaries(command, ROOT / group["path"], timeout)
+    require_import_contract(ROOT / group["path"], group, gate)
     return command
 
 
@@ -457,6 +458,7 @@ def run_gate(
 ) -> bool:
     """Run a gate under its own limit and record how long a pass took."""
     from gate_times import gate_limit, record_gate_time
+    from process_group import install_key, note_install
 
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
     started = time.monotonic()
@@ -468,6 +470,7 @@ def run_gate(
         from debt import judge
 
         failed = judge(ROOT, group, gate, failed, OUTPUTS.get(name, ""))
+    note_install(install_key(group), gate.get("role"), failed)
     if failed:
         FAILED_GATES.append(key)
     else:
@@ -602,7 +605,7 @@ def run_limited_gate(
             report_args = (gate, report_path, command, directory, timeout)
             scanner_result(result.returncode == 0, scanner, *report_args)
         from process_group import stopped_note
-        from reports import completed_tests, line_coverage, parallel_hint
+        from reports import check_coverage, completed_tests, parallel_hint
 
         if (
             result.returncode == 0
@@ -613,14 +616,7 @@ def run_limited_gate(
         ):
             raise ValueError("No tests actually ran (empty or entirely skipped report)")
         if result.returncode == 0 and coverage_path is not None:
-            covered, total = line_coverage(
-                coverage_path, kind, directory, expected_sources
-            )
-            print(
-                f"Line coverage: {covered}/{total} ({100 * covered / total:.2f}%; minimum 70%)"
-            )
-            if covered * 100 < total * 70:
-                raise ValueError("HE-COVERAGE-MIN: Line coverage is below 70%")
+            check_coverage(coverage_path, kind, directory, expected_sources)
         stop = stopped_note(result.returncode)
         print(
             f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} "
@@ -649,7 +645,7 @@ def run_limited_gate(
 
 
 @contextmanager
-def check_lock(root: Path) -> Generator[None]:
+def check_lock(root: Path) -> Generator[IO[str]]:
     """Gates write fixed report paths, so one check runs per checkout at a time."""
     from process_group import check_lock_file
 
@@ -657,7 +653,7 @@ def check_lock(root: Path) -> Generator[None]:
         if held:
             print("Waiting for another Hard Eng check in this checkout", flush=True)
             fcntl.flock(lock, fcntl.LOCK_EX)
-        yield
+        yield lock
 
 
 def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path, ...]:
@@ -748,6 +744,7 @@ def check(
 ) -> int:
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
+    from process_group import read_installed, save_installed
     from reports import quick_groups
     from shipping import gate_budget
 
@@ -757,9 +754,10 @@ def check(
     if proven_elsewhere(base):
         return 0
 
-    with check_lock(ROOT):
+    with check_lock(ROOT) as lock:
+        installed = read_installed(lock, ROOT)
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
-        groups = quick_groups(language_groups(groups, languages), quick)
+        groups = quick_groups(language_groups(groups, languages), quick, installed)
         from debt import require_shrink
 
         require_shrink(ROOT, base)
@@ -775,6 +773,7 @@ def check(
         provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
+        save_installed(lock, installed, ROOT)
         failed |= verify_plan and plans.plan_skips(ROOT, base, groups, int(started))
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
         return int(failed)

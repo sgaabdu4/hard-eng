@@ -152,3 +152,25 @@ def test_failure_hook_loads_no_other_hard_eng_module() -> None:
         check=True,
     ).stdout.splitlines()
     assert [name for name in loaded if name.startswith(str(hooks))] == []
+
+
+def test_a_failure_with_no_change_between_stops_is_not_a_repeat(
+    repository: Path,
+) -> None:
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    output = "FAIL lint (exit 1; elapsed 0.2s) @ .\na.py:1:1: F401 unused\n"
+    counts = repository / ".hard-eng/failures.json"
+    assert failures.repeat_note(repository, output) == ""
+    assert failures.repeat_note(repository, output) == ""
+    assert [entry[0] for entry in json.loads(counts.read_text()).values()] == [1]
+    (repository / "work.py").write_text("value = 2\n")
+    assert "Repeat failure: seen 2 times" in failures.repeat_note(repository, output)
+
+
+def test_a_failures_file_with_only_counts_still_loads(repository: Path) -> None:
+    output = "FAIL lint (exit 1; elapsed 0.2s) @ .\na.py:1:1: F401 unused\n"
+    failures.repeat_note(repository, output)
+    counts = repository / ".hard-eng/failures.json"
+    (key,) = json.loads(counts.read_text())
+    counts.write_text(json.dumps({key: 1}))
+    assert "Repeat failure: seen 2 times" in failures.repeat_note(repository, output)

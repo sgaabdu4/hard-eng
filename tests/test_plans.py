@@ -857,49 +857,6 @@ def edit(root: Path, name: str, count: int) -> None:
     (root / name).write_text("\n".join(lines) + "\n")
 
 
-def test_small_change_needs_no_plan(
-    repository: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    sized_branch(repository)
-    edit(repository, "a.py", 2)
-    validate_plans(repository)
-    assert "Size: small (1 file, 4 changed lines); no plan needed." in (
-        capsys.readouterr().out
-    )
-
-
-def test_documentation_only_change_needs_no_plan(
-    repository: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    sized_branch(repository)
-    (repository / "notes.md").write_text("notes\n" * 50)
-    validate_plans(repository)
-    assert "Size: small (documentation only)" in capsys.readouterr().out
-
-
-def test_new_documentation_file_beside_a_small_fix_stays_small(
-    repository: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    sized_branch(repository)
-    edit(repository, "a.py", 2)
-    (repository / "docs").mkdir()
-    (repository / "docs/decision.md").write_text("why\n" * 80)
-    validate_plans(repository)
-    assert "Size: small (1 file, 4 changed lines)" in capsys.readouterr().out
-
-
-def test_new_documentation_file_beside_a_new_code_file_is_big(
-    repository: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    sized_branch(repository)
-    new_file(repository)
-    (repository / "docs").mkdir()
-    (repository / "docs/decision.md").write_text("why\n")
-    with pytest.raises(ValueError, match="applicable PLAN"):
-        validate_plans(repository)
-    assert "Size: big, because it adds" in capsys.readouterr().out
-
-
 def two_commits_then_edit(root: Path) -> None:
     edit(root, "a.py", 6)
     commit(root, "first half")
@@ -972,3 +929,57 @@ def test_unknown_branch_point_is_big(
     assert "the branch point with the default branch cannot be found" in (
         capsys.readouterr().out
     )
+
+
+def test_a_check_with_no_base_judges_the_size_of_the_whole_branch(
+    repository: Path, completed_plan: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (repository / ".hooks").mkdir()
+    (repository / ".hooks/hard-eng.py").write_text("")
+    sized_branch(repository)
+    remote = repository.parent / "origin.git"
+    git(repository, "clone", "--bare", str(repository), str(remote))
+    git(repository, "remote", "add", "origin", str(remote))
+    git(repository, "fetch", "-q", "origin")
+    validate_plans(repository)
+    assert "Size:" not in capsys.readouterr().out
+    new_file(repository)
+    commit(repository, "big change")
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+    assert "Size: big, because it adds" in capsys.readouterr().out
+    (repository / "PLAN.md").write_text(completed_plan)
+    commit(repository, "plan")
+    assert validate_plans(repository) == "Complete"
+
+
+def test_a_plan_stage_check_passes_a_small_change_with_no_plan(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    edit(repository, "a.py", 2)
+    assert validate_plans(repository, stage="Complete") == "Complete"
+    assert "Size: small (1 file, 4 changed lines)" in capsys.readouterr().out
+    new_file(repository)
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository, stage="Complete")
+
+
+def test_a_draft_plan_with_code_edits_names_the_ready_step(
+    repository: Path, completed_plan: str
+) -> None:
+    sized_branch(repository)
+    edit(repository, "a.py", 2)
+    draft = completed_plan.replace("Status: Complete", "Status: Draft")
+    (repository / "PLAN.md").write_text(draft)
+    with pytest.raises(
+        ValueError, match="plan is Draft; this check requires Complete"
+    ) as error:
+        validate_plans(repository)
+    assert (
+        "get approval for the plan and set its Status to Ready before you build"
+        in str(error.value)
+    )
+    with pytest.raises(ValueError, match="requires Ready") as explicit:
+        validate_plans(repository, stage="Ready")
+    assert "set its Status to Ready" not in str(explicit.value)

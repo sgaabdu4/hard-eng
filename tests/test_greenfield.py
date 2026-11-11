@@ -479,3 +479,57 @@ def test_the_dart_sources_message_gives_a_step_that_passes(
     assert step is not None
     (tmp_path / step[1]).rename(tmp_path / step[2])
     validate_required_checks(tmp_path, config)
+
+
+def add_package(root: Path, name: str, parent: str = "") -> None:
+    package = root / parent / name
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / "mod.py").write_text("value = 1\n")
+
+
+@pytest.mark.parametrize("layout", ["", "src"])
+def test_a_python_root_with_no_import_contract_fails_the_check(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    layout: str,
+) -> None:
+    uv_project(tmp_path, PROJECT)
+    add_package(tmp_path, "shop", layout)
+    # Stands in for the install of a project that keeps its code under src.
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / layout))
+    installer.install(tmp_path)
+    config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    group = config["packages"][0]
+    gate = next(check for check in group["checks"] if check.get("role") == "imports")
+    project = tmp_path / "pyproject.toml"
+    validate_required_checks(tmp_path, config)
+    add_package(tmp_path, "inventory", layout)
+    if not layout:
+        group["sources"].append("inventory")
+    validate_required_checks(tmp_path, config)
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is True
+    refusal = capsys.readouterr().out
+    start = "FAIL imports: .: pyproject.toml has no import contract for inventory"
+    assert start in refusal
+    message = refusal[refusal.index(start) : refusal.index("; elapsed")]
+    roots = re.search(r"root_packages = (\[.*?\])", message)
+    assert roots
+    text = project.read_text()
+    old = re.search(r"root_packages = \[.*?\]", text)
+    assert old
+    project.write_text(
+        text.replace(old.group(), roots.group())
+        + "\n"
+        + message[message.index("[[tool.importlinter.contracts]]") :]
+    )
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is False
+    base = tmp_path / layout / "inventory"
+    (base / "a.py").write_text("from inventory import b\n")
+    (base / "b.py").write_text("from inventory import a\n")
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is True
+    cycle = "imports: broken contract: No sibling dependency cycles in inventory"
+    assert cycle in capsys.readouterr().out

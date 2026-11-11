@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -24,8 +25,20 @@ ERROR_NOISE = (
 )
 
 
+def checkout_state(root: Path) -> str:
+    """A short hash of HEAD, staged and unstaged changes and untracked files; empty when git cannot say."""
+    from debt import worktree
+
+    try:
+        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root)
+        staged = subprocess.check_output(["git", "diff", "--cached"], cwd=root)
+        return hashlib.sha256(head + staged + worktree(root)).hexdigest()[:16]
+    except (subprocess.CalledProcessError, OSError):
+        return ""
+
+
 def repeat_note(root: Path, output: str) -> str:
-    """Counts each failure by its failing, file-location and rule-code lines, else all lines, with numbers masked; a second sighting is a repeat."""
+    """Counts each failure by its failing, file-location and rule-code lines, else all lines, with numbers masked; a second sighting after a change to the checkout is a repeat."""
     masked = [
         NUMBER.sub("#", line.strip()) for line in output.splitlines() if line.strip()
     ]
@@ -38,13 +51,23 @@ def repeat_note(root: Path, output: str) -> str:
         loaded: object = json.loads(path.read_text())
     except (OSError, ValueError):
         loaded = None
-    seen: dict[str, int] = (
-        {name: value for name, value in loaded.items() if isinstance(value, int)}
-        if isinstance(loaded, dict)
-        else {}
-    )
-    count = seen.pop(key, 0) + 1
-    seen[key] = count
+    seen: dict[str, tuple[int, str]] = {}
+    for name, value in loaded.items() if isinstance(loaded, dict) else ():
+        if isinstance(value, int):
+            seen[name] = (value, "")
+        elif (
+            isinstance(value, list)
+            and len(value) == 2
+            and isinstance(value[0], int)
+            and isinstance(value[1], str)
+        ):
+            seen[name] = (value[0], value[1])
+    count, last = seen.pop(key, (0, ""))
+    state = checkout_state(root)
+    if count and state and state == last:
+        return ""
+    count += 1
+    seen[key] = (count, state)
     path.parent.mkdir(exist_ok=True)
     path.write_text(json.dumps(dict(list(seen.items())[-100:])))
     if count < 2:

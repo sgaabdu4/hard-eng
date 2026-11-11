@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
@@ -241,25 +242,30 @@ def typescript_packages(root: Path, files: list[Path]) -> set[str]:
 def generated_sources(root: Path, names: list[str]) -> set[str]:
     if not names:
         return set()
-    repository = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if repository.returncode:
-        return set()  # Standalone source directories have no Git attributes.
     # A live stdin pipe deadlocked against git's per-path output on macOS (issue 375).
     with tempfile.TemporaryFile() as paths:
         paths.write(("\0".join(names) + "\0").encode())
         paths.seek(0)
-        attributes = subprocess.check_output(
+        listed = subprocess.run(
             ["git", "check-attr", "-z", "--all", "--stdin"],
             cwd=root,
+            capture_output=True,
             text=True,
             stdin=paths,
-        ).split("\0")
+            check=False,
+        )
+    if listed.returncode:
+        repository = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
+        if repository.returncode:
+            return set()  # Standalone source directories have no Git attributes.
+        sys.stderr.write(listed.stderr)
+        listed.check_returncode()
+    attributes = listed.stdout.split("\0")
     return {
         name
         for name, key, value in zip(attributes[::3], attributes[1::3], attributes[2::3])
@@ -273,6 +279,13 @@ def dart_rule_settings(value: object) -> object:
         if not all(isinstance(rule, str) for rule in value):
             raise ValueError("Dart lint rule names must be strings")
         return {rule: True for rule in value}
+    if isinstance(value, dict):
+        for rule, enabled in value.items():
+            if enabled is False:
+                raise ValueError(
+                    f"analysis_options.yaml: {rule} is set to false, which turns off "
+                    "a lint rule of the included set; remove that entry"
+                )
     return value
 
 
@@ -410,45 +423,6 @@ def dart_scan_includes_boundaries(gate: Gate) -> bool:
         and report.get("type") == "dart-decimate"
         and report.get("stdout") is True
     )
-
-
-def validate_dart_boundaries(
-    command: list[str], directory: Path, timeout: float
-) -> None:
-    if command[:3] != ["dart-decimate", "check", "."]:
-        return
-    from tool_setup import managed_command
-
-    settings = json.loads(
-        subprocess.check_output(
-            managed_command(["dart-decimate", "config", ".", "--format", "json"]),
-            cwd=directory,
-            text=True,
-            timeout=timeout,
-        )
-    )["config"]
-    boundaries = settings.get("boundaries")
-    if (
-        not isinstance(boundaries, list)
-        or not boundaries
-        or any(
-            not isinstance(rule, dict)
-            or not all(
-                isinstance(rule.get(key), str)
-                and rule[key].strip()
-                and not any(mark in rule[key] for mark in "*?")
-                for key in ("from", "disallow")
-            )
-            for rule in boundaries
-        )
-    ):
-        raise ValueError(
-            "Dart boundaries are missing or not usable: each rule needs a `from` and a "
-            "`disallow` folder prefix of this project, with no `*` or `?`. Set "
-            '"boundaries": [{"from": "lib/domain", "disallow": "lib/ui"}] with your own '
-            "prefixes in the package's Dart Decimate settings file; if the package "
-            "has none, make .dart-decimaterc.json for it"
-        )
 
 
 def initial_base(root: Path) -> str:
@@ -797,7 +771,7 @@ def validate_manifest_groups(
                     "; declare a test-support package without language or sources,"
                     " with lockfile and vulnerability checks"
                     if test_support
-                    else ""
+                    else "; rerun setup to add its group"
                 )
             )
         if group.get("sources") or not (
@@ -875,7 +849,6 @@ def validate_package_services(
         workspace_matches,
         workspace_members,
     )
-    from python_setup import python_roots
     from swift_setup import parent_roles
 
     directory = (root / group["path"]).resolve()
@@ -899,15 +872,10 @@ def validate_package_services(
     if not group.get("language"):
         return
     require_roles(group["path"], {"security"}, roles | shared_roles)
-    if (
-        language == "python"
-        and "imports" not in roles
-        and python_roots(directory, group)
-    ):
-        from python_setup import imports_step
+    if language == "python":
+        from python_setup import require_imports
 
-        step = imports_step(directory, group)
-        require_roles(group["path"], {"imports"}, roles, step)
+        require_imports(directory, group, roles)
     if language == "javascript":
         from fallow_report import owns_package_fallow
 

@@ -51,12 +51,49 @@ def test_old_findings_pass_new_ones_fail_and_fixed_ones_must_be_dropped(
         run(runner, group, lint, "a.py:9:1: F841 unused x\nb.py:2:1: F841 unused y\n")
         is True
     )
-    assert "  b.py:N:N: FN unused y" in capsys.readouterr().out
+    assert "  b.py:2:1: F841 unused y" in capsys.readouterr().out
     assert run(runner, group, lint, "") is True
     assert "1 recorded lines are fixed" in capsys.readouterr().out
 
     assert debt.record(tmp_path, [group], set(), {}) == 0
     assert json.loads((tmp_path / debt.DEBT_FILE).read_text())["gates"] == {}
+
+
+def test_a_new_finding_beyond_the_debt_prints_its_real_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lint: Gate = {"name": "lint", "role": "lint", "command": ["biome"]}
+    group: Group = {"path": ".", "checks": [lint]}
+    kind = "lint/suspicious/noDebugger"
+    recorded = {f"src/fN.ts:N:N {kind}": 25}
+    (tmp_path / debt.DEBT_FILE).write_text(
+        json.dumps({"version": 1, "gates": {"./lint": recorded}})
+    )
+    old = "".join(
+        f"src/f{number:02d}.ts:{number}:5 {kind}\n" for number in range(1, 26)
+    )
+    assert debt.judge(tmp_path, group, lint, True, old) is False
+    capsys.readouterr()
+    price = f"{tmp_path}/app/price-list.tsx:41:9 lint/style/useConst\n"
+    assert debt.judge(tmp_path, group, lint, True, price) is True
+    assert capsys.readouterr().out.splitlines()[1:] == [
+        "  ./app/price-list.tsx:41:9 lint/style/useConst"
+    ]
+    extra = old.splitlines(keepends=True)[0]
+    assert debt.judge(tmp_path, group, lint, True, old + extra) is True
+    printed = capsys.readouterr().out.splitlines()
+    assert printed[1] == "  1 of these 26 lines are new; the others are recorded:"
+    assert len(printed) == 2 + 20 + 1
+    assert printed[-1] == "  6 more lines not shown"
+    two = price + f"{tmp_path}/app/cart.tsx:3:1 lint/style/useConst\n"
+    assert debt.judge(tmp_path, group, lint, True, old + extra + two) is True
+    mixed = capsys.readouterr().out.splitlines()
+    assert mixed[1:3] == [
+        "  ./app/price-list.tsx:41:9 lint/style/useConst",
+        "  ./app/cart.tsx:3:1 lint/style/useConst",
+    ]
+    assert mixed[3] == "  1 of these 26 lines are new; the others are recorded:"
+    assert mixed[-1] == "  8 more lines not shown"
 
 
 def test_a_later_adoption_only_drops_lines(tmp_path: Path) -> None:
@@ -66,6 +103,23 @@ def test_a_later_adoption_only_drops_lines(tmp_path: Path) -> None:
     more = {"./lint": "a.py:1 x\nb.py:1 y\n"}
     assert debt.record(tmp_path, [group], {"./lint"}, more) == 0
     assert debt.load(tmp_path) == {"./lint": {"a.py:N x": 1}}
+
+
+def test_adopt_says_how_many_new_findings_it_left_out(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lint: Gate = {"name": "lint", "role": "lint", "command": ["ruff"]}
+    group: Group = {"path": ".", "checks": [lint]}
+    assert debt.record(tmp_path, [group], {"./lint"}, {"./lint": "a.py:1 x\n"}) == 0
+    assert "Did not record" not in capsys.readouterr().out
+    more = {"./lint": "a.py:1 x\nb.py:1 y\nc.py:1 z\n"}
+    assert debt.record(tmp_path, [group], {"./lint"}, more) == 0
+    said = capsys.readouterr().out
+    assert "Recorded 1 checks with old findings in hard-eng.debt.json" in said
+    assert (
+        "Did not record 2 new findings in ./lint; `check` fails until they are fixed."
+        in said
+    )
 
 
 NEVER_DEBT = ["tests", "lockfiles", "secrets-files", "secrets-history"]
@@ -292,6 +346,36 @@ def test_adoption_records_what_the_fixed_code_still_fails_with(
     assert runner.adopt() == 0
     recorded = json.loads((tmp_path / debt.DEBT_FILE).read_text())["gates"]
     assert recorded == {"./lint": {"a.py:N:N: FN still wrong": 1}}
+
+
+def adoptable(tmp_path: Path, command: str, installed: bool) -> None:
+    lint = {"name": "lint", "role": "lint", "command": [sys.executable, "-c", command]}
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [lint]})
+    )
+    git(tmp_path, "config", "user.name", "Fixture")
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    if installed:
+        (tmp_path / ".hooks").mkdir()
+        (tmp_path / ".hooks/hard-eng-source.json").write_text("{}")
+    commit(tmp_path, "baseline")
+    git(tmp_path, "branch", "-f", "main", "HEAD")
+
+
+def test_adopt_refuses_first_when_check_would_refuse_the_debt_file(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ran = tmp_path / "ran.txt"
+    failing = f"import pathlib; pathlib.Path({str(ran)!r}).write_text('x'); print('a.py:1:1: F1 bad'); raise SystemExit(1)"
+    adoptable(tmp_path, failing, installed=True)
+    monkeypatch.setattr(runner, "provision_tools", no_provisioning)
+    debt.OUTPUTS.clear()
+    with pytest.raises(
+        ValueError, match="HE-DEBT-SHRINK-ONLY: only the change that installs"
+    ):
+        runner.adopt()
+    assert not ran.exists()
+    assert not (tmp_path / debt.DEBT_FILE).exists()
 
 
 COUNT_WORD_PAIRS = [

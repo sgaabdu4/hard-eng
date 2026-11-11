@@ -14,6 +14,7 @@ import agent_hooks
 import hook_chain
 import source_trees
 from gate_config import SOURCE_FILE
+from local_edits import refusal_reason
 from mcp_setup import retired_settings
 from release_history import StaleRelease, ordered
 from submodules import update_submodules
@@ -54,6 +55,7 @@ def github_token() -> str | None:
 
 def github_response(endpoint: str, headers: dict[str, str]) -> bytes:
     import http.client
+    import urllib.error
     import urllib.request
 
     auth = {"Authorization": f"Bearer {token}"} if (token := github_token()) else {}
@@ -64,6 +66,13 @@ def github_response(endpoint: str, headers: dict[str, str]) -> bytes:
             return response.read()
     except http.client.HTTPException as error:
         raise OSError(f"GitHub response for {endpoint} was cut short") from error
+    except urllib.error.HTTPError:
+        raise
+    except urllib.error.URLError as error:
+        raise OSError(
+            f"Could not reach api.github.com ({error.reason}); "
+            "check the network and run the same command again"
+        ) from error
 
 
 def github_json(endpoint: str) -> object:
@@ -326,7 +335,7 @@ def update_plan(
     )
     sys.stderr.write(planned.stderr)
     if planned.returncode != 0:
-        reason = " | ".join(planned.stderr.strip().splitlines()[-5:])
+        reason = refusal_reason(planned.stderr)
         raise ValueError(f"setup refused the update: {reason or 'no reason printed'}")
     plan = json.loads(planned.stdout)
     hook = hook_chain.planned_hook(root, plan)

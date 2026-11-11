@@ -19,8 +19,14 @@ import pytest
 import update
 import update_pr
 import update_runner
-from conftest import SOURCE, add_origin, commit, git
-from gate_config import JsonObject
+from conftest import SOURCE, add_origin, commit, git, init
+from gate_config import (
+    JsonObject,
+    package_manifests,
+    parse_config,
+    repository_files,
+    validate_manifest_groups,
+)
 from test_setup import project_with_commit_hook
 from test_updates import select_release
 
@@ -425,7 +431,7 @@ def test_setup_retries_a_remembered_refusal(
     assert fetch.call_count == 1
     with pytest.raises(ValueError, match="secrets-files requires native"):
         update_runner.locked_update(target, repair=True)
-    assert fetch.call_count == 2
+    assert fetch.call_count == 3
 
 
 def test_an_update_replaces_the_old_tool_hook_commands(
@@ -760,3 +766,169 @@ def test_a_setup_rerun_records_its_result(
     recorded = (target / update_runner.RESULT_FILE).read_text()
     assert outcome in recorded
     assert "old refusal" not in recorded
+
+
+GATES_FILE = "hard-eng.gates.json"
+SRC_PROJECT = '[project]\nname="mylib"\nversion="1"\n[build-system]\nrequires = ["uv_build"]\nbuild-backend = "uv_build"\n'
+
+
+def add_src_package(root: Path, name: str) -> None:
+    package = root / "src" / name
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(f"NAME = '{name}'\n")
+    (package / "use.py").write_text(f"from {name} import NAME\n\nvalue = NAME\n")
+
+
+def installed_python_project(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, remote: bool
+) -> Path:
+    source = release[0]
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    project = source.parent / "project"
+    init(project)
+    (project / "uv.lock").touch()
+    (project / "pyproject.toml").write_text(SRC_PROJECT)
+    add_src_package(project, "mylib")
+    subprocess.run(
+        [sys.executable, str(source / "setup.py"), str(project)],
+        check=True,
+        capture_output=True,
+    )
+    commit(project, "installed")
+    if remote:
+        add_origin(project)
+    git(project, "switch", "-q", "-c", "task")
+    add_src_package(project, "extra")
+    commit(project, "a second package")
+    return project
+
+
+@pytest.mark.parametrize("remote", [True, False])
+def test_a_rerun_writes_the_planned_gates_file_to_the_current_checkout(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, remote: bool
+) -> None:
+    project = installed_python_project(release, monkeypatch, remote)
+    before = (project / GATES_FILE).read_text()
+    assert "extra" not in before
+    outcome = update_runner.locked_update(project, repair=True)
+    assert f"This checkout: setup wrote {GATES_FILE} for the project" in outcome
+    assert ("on the base branch of a remote" in outcome) is not remote
+    assert '"extra"' in (project / GATES_FILE).read_text()
+    assert git(project, "status", "--porcelain") == f"M {GATES_FILE}"
+    assert git(project, "diff", "--cached", "--name-only") == ""
+    again = update_runner.locked_update(project, repair=True)
+    assert "This checkout" not in again
+
+
+def test_a_rerun_writes_each_project_file_that_setup_plans_and_no_scaffold_file(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    (project / "web/src").mkdir(parents=True)
+    (project / "web/package.json").write_text('{"name": "web", "private": true}\n')
+    (project / "web/src/index.ts").write_text("export const value = 1;\n")
+    commit(project, "a web package")
+
+    def check_groups() -> None:
+        gates = (project / GATES_FILE).read_text()
+        config = parse_config(gates, require_impact_review=False)
+        manifests = package_manifests(project, repository_files(project))
+        validate_manifest_groups(project, config, manifests)
+
+    with pytest.raises(ValueError, match="web; rerun setup to add its group"):
+        check_groups()
+    installed = ".agents/skills/he-learn/references/decisions.md"
+    (project / installed).unlink()
+    outcome = update_runner.locked_update(project, repair=True)
+    written = f"{GATES_FILE}, web/.semgrepignore, web/tsconfig.json"
+    assert f"This checkout: setup wrote {written} for the project" in outcome
+    assert "review and commit them" in outcome
+    assert git(project, "status", "--porcelain", "-uall").splitlines() == [
+        f"D {installed}",
+        f" M {GATES_FILE}",
+        "?? web/.semgrepignore",
+        "?? web/tsconfig.json",
+    ]
+    check_groups()
+
+
+def test_a_rerun_goes_on_when_setup_refuses_the_checkout(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    before = (project / GATES_FILE).read_text()
+    skill = project / ".agents/skills/he/SKILL.md"
+    skill.write_text(skill.read_text() + "\nA local line.\n")
+    outcome = update_runner.locked_update(project, repair=True)
+    assert "No newer CI-verified Hard Eng revision is available." in outcome
+    assert "This checkout is unchanged: setup refused the update: " in outcome
+    assert ".agents/skills/he/SKILL.md already differs" in outcome
+    assert (project / GATES_FILE).read_text() == before
+    assert skill.read_text().endswith("\nA local line.\n")
+    (project / git(project, "rev-parse", "--git-path", "hooks/pre-push")).unlink()
+    with pytest.raises(ValueError, match="setup refused the update"):
+        update_runner.locked_update(project, repair=True)
+
+
+def test_a_rerun_with_no_remote_keeps_the_pushed_line_when_the_fetch_fails(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, False)
+    failure = subprocess.CalledProcessError(128, ["git", "checkout"])
+    monkeypatch.setattr(update, "fetch_sources", Mock(side_effect=failure))
+    outcome = update_runner.locked_update(project, repair=True)
+    assert outcome.startswith(update_runner.NOT_PUBLISHED)
+    assert "This checkout is unchanged: the installed release could not be" in outcome
+    assert outcome.endswith("exit status 128.")
+
+
+def test_an_update_at_session_start_does_not_touch_the_checkout(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, True)
+    before = (project / GATES_FILE).read_text()
+    fetch = Mock(side_effect=update.fetch_sources)
+    monkeypatch.setattr(update, "fetch_sources", fetch)
+    outcome = update_runner.prepare_update(project)
+    assert "This checkout" not in outcome
+    assert (project / GATES_FILE).read_text() == before
+    assert fetch.call_count == 0
+
+
+def test_an_install_that_is_not_on_the_base_branch_gets_the_pushed_line(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = release[0]
+    select_release(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    project = source.parent / "project"
+    init(project)
+    (project / "package.json").write_text('{"private":true}')
+    (project / "bun.lock").write_text('{"lockfileVersion": 1}\n')
+    commit(project, "baseline")
+    add_origin(project)
+    subprocess.run(
+        [sys.executable, str(source / "setup.py"), str(project)],
+        check=True,
+        capture_output=True,
+    )
+    for repair in (False, True):
+        outcome = update_runner.prepare_update(project, repair)
+        assert outcome.startswith(update_runner.NOT_PUBLISHED)
+    assert update_runner.apply_update(project) == 0
+    assert update_runner.freshness_note(project) == update_runner.NOT_PUBLISHED
+
+
+def test_the_stop_note_keeps_one_line_of_a_long_failed_result(repository: Path) -> None:
+    (repository / ".hooks").mkdir()
+    marker = json.dumps({"revision": "a" * 40})
+    (repository / update_runner.SOURCE_FILE).write_text(marker)
+    refusal = "setup refused the update: a.md has local edits.\nblock 1\nblock 2"
+    update_runner.record_result(repository, update_runner.failed_update(refusal))
+    note = update_runner.freshness_note(repository)
+    assert note.startswith("Scaffold may be stale. Last Hard Eng update: ")
+    assert "a.md has local edits. (the rest is in" in note
+    assert "block 1" not in note
+    assert note.endswith(f"(the rest is in {update_runner.RESULT_FILE})")

@@ -6,6 +6,7 @@ from pathlib import Path
 import change_size
 import pytest
 from conftest import commit, git
+from plans import validate_plans
 from test_plans import edit, new_file, sized_branch
 
 
@@ -48,3 +49,68 @@ def test_the_debt_file_does_not_count_toward_the_size(repository: Path) -> None:
     edit(repository, "a.py", 2)
     edit(repository, "hard-eng.debt.json", 25)
     assert change_size.size_verdict(repository) == (True, "1 file, 4 changed lines")
+
+
+def test_small_change_needs_no_plan(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    edit(repository, "a.py", 2)
+    validate_plans(repository)
+    assert "Size: small (1 file, 4 changed lines); no plan needed." in (
+        capsys.readouterr().out
+    )
+
+
+def test_documentation_only_change_needs_no_plan(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    (repository / "notes.md").write_text("notes\n" * 50)
+    validate_plans(repository)
+    assert "Size: small (documentation only)" in capsys.readouterr().out
+
+
+def test_new_documentation_file_beside_a_small_fix_stays_small(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    edit(repository, "a.py", 2)
+    (repository / "docs").mkdir()
+    (repository / "docs/decision.md").write_text("why\n" * 80)
+    validate_plans(repository)
+    assert "Size: small (1 file, 4 changed lines)" in capsys.readouterr().out
+
+
+def test_new_documentation_file_beside_a_new_code_file_is_big(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    new_file(repository)
+    (repository / "docs").mkdir()
+    (repository / "docs/decision.md").write_text("why\n")
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+    assert "Size: big, because it adds" in capsys.readouterr().out
+
+
+def test_a_check_with_no_base_passes_a_first_install_that_the_base_lacks(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    (repository / ".hooks").mkdir()
+    (repository / ".hooks/hard-eng.py").write_text("x = 1\n")
+    commit(repository, "Install Hard Eng")
+    validate_plans(repository)
+    assert "Size:" not in capsys.readouterr().out
+    new_file(repository)
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+
+
+def test_a_check_with_no_base_passes_a_clean_branch_with_no_branch_point(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    git(repository, "branch", "-M", "trunk")
+    validate_plans(repository)
+    assert "Size:" not in capsys.readouterr().out
