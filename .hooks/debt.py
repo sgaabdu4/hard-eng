@@ -19,6 +19,7 @@ TIME = re.compile(r"(?<!\w)N(?:\.N)?(?:ns|[µu]s|ms|s)(?!\w)")
 RULE_FOLDER = re.compile(r"[\w.-]*hard-eng-rules\.")
 CODE_FRAME = re.compile(r"[> ]*(?:N[ ]*)*[│|]")
 
+SUMMARY = re.compile(r"\W*Some (?:errors|warnings) were emitted while running checks")
 DEBT_FILE = "hard-eng.debt.json"
 GATE_OUTPUT_LIMIT = 8000
 DEBT_LINE = re.compile(r"(?m)^DEBT (\S+) @ (\S+):.*$")
@@ -149,7 +150,7 @@ def real_forms(lines: list[str]) -> dict[str, list[str]]:
 def by_form(lines: Counter[str]) -> Counter[str]:
     forms: Counter[str] = Counter()
     for line, count in lines.items():
-        if not CODE_FRAME.match(form := neutral(line)):
+        if not (CODE_FRAME.match(form := neutral(line)) or SUMMARY.match(form)):
             forms[form] += count
     return forms
 
