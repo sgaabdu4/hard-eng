@@ -290,6 +290,10 @@ def on_update_branch(work: Path, revision: str, log: IO[str]) -> None:
     marker = json.loads((work / SOURCE_FILE).read_text())
     if marker.get("revision") != revision:
         raise Failed("update did not apply")
+    workflow = work / ".github/workflows/hard-eng.yml"
+    split = workflow.is_file() and "--shard" in workflow.read_text()
+    if split and '"shards"' not in (work / "hard-eng.gates.json").read_text():
+        raise Failed("update wrote a shard workflow into a project with no shards")
 
 
 def local_source(source: Path) -> list[str]:
@@ -536,11 +540,13 @@ class Trial:
         start = time.monotonic()
         log_path = self.log()
         with log_path.open("w") as log:
+            ran: list[str] = []
             try:
                 for name, command in prepare(
                     self.target, revision, source, self.work, log, self.check_new
                 ):
                     must(self.work, log, f"{name} failed", command)
+                    ran.append(name)
             except Failed as failure:
                 self.results[self.label] = (False, f"{failure}; log {log_path}")
                 for agent in self.agents:
@@ -548,7 +554,8 @@ class Trial:
                 return []
             finally:
                 self.times.append(("prepare", self.label, time.monotonic() - start))
-        self.results[self.label] = (True, "install and its checks passed")
+        units = f": {', '.join(ran)}" if ran else ""
+        self.results[self.label] = (True, f"install and its checks passed{units}")
         if not self.agents:
             shutil.rmtree(self.work)
         return [partial(self.try_agent, agent) for agent in self.agents]
