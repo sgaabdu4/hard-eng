@@ -32,6 +32,7 @@ RELEASE_AGE_SECONDS = 2 * 24 * 60 * 60
 DIGIT_RUN = re.compile(r"\d+")
 TOOL_VERSION = re.compile(r"\d[\w.+-]*")
 VERSION_NUMBER = re.compile(r"\d+(?:\.\d+)+")
+UV_LOST_SCANNER = re.compile(r"(\S+) was not found in the cache and you require \S+==")
 TOOL_BRACKETS_OR_LATEST = re.compile(r"\[[^\]]*\]|@latest$")
 MISSING_MODULE_NAME = re.compile(r"Cannot find module '([^']+)'")
 NPM_LATEST_PACKAGE = re.compile(r"^(npm:[^\[]+?)(@latest)$")
@@ -344,6 +345,12 @@ def stored_scanner_versions(cutoff: str) -> dict[str, str]:
         and isinstance(version, str)
         and VERSION_NUMBER.fullmatch(version)
     }
+
+
+def lost_scanner_note(output: str) -> str:
+    """The step for a failed quick gate whose stored scanner version left uv's cache."""
+    lost = UV_LOST_SCANNER.search(output) if quick_mode() else None
+    return NOT_INSTALLED.format(error=f"{lost[1]} is not in uv's cache") if lost else ""
 
 
 def pin_python_scanners(names: list[str], timeout: float) -> None:
