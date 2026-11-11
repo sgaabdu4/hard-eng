@@ -325,7 +325,8 @@ def test_a_ux_record_that_skips_a_rule_names_the_rule(
     assert str(error.value).removeprefix("ux_reference: ") == (
         "UX Rules needs one `- <rule>: Pass|Fail|N/A — text` line for each Usability rule; "
         "no line: Observe; two lines: Widths; "
-        "add a line for each rule of .agents/skills/he-plan/references/ux.md"
+        "add a line for each rule of .agents/skills/he-plan/references/ux.md; "
+        "the rule lines stand in one block directly below `Rules:` with no empty line"
     )
 
 
@@ -670,3 +671,26 @@ def test_a_failed_rule_with_its_marker_is_judged_as_failed(
     )
     with pytest.raises(ValueError, match="UX Rules: No clutter is Fail"):
         validate_plan(path)
+
+
+def test_an_empty_line_inside_the_rule_lines_names_the_block_step(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan.replace("- Observe:", "\n- Observe:", 1))
+    with pytest.raises(ValueError, match="no line: Observe") as error:
+        validate_plan(path)
+    assert "one block directly below `Rules:` with no empty line" in str(error.value)
+
+
+@pytest.mark.parametrize("label", ["**Rules:**", "- Rules:"])
+def test_a_rules_label_in_another_form_says_the_field_starts_with_rules(
+    tmp_path: Path, visual_plan: str, label: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    plan = visual_plan.replace("\nRules: Judged", f"\n{label} Judged")
+    assert label in plan
+    path.write_text(plan)
+    with pytest.raises(ValueError, match="UX Rules is missing") as error:
+        validate_plan(path)
+    assert "a line that starts with `Rules:`" in str(error.value)

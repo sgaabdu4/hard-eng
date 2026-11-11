@@ -18,7 +18,7 @@ Add YAML tokens only when actual token values are established in the project. --
 
 ## Layout
 
-[TODO: Existing layout, spacing scale, supported widths (narrowest first), how the layout changes between them, and minimum touch target (44 px; 48 dp on Android).]
+[TODO: Existing layout, spacing scale, supported widths (narrowest first), how the layout changes between them, and minimum touch target (44 pt on iOS, 48 dp on Android, 44 px on the web).]
 
 ## Hierarchy
 
