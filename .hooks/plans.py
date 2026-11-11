@@ -24,6 +24,7 @@ NOT_APPLICABLE_WORD = re.compile(r"(?i)\bN/A\b")
 TITLE_LINE = re.compile(r"(?m)^# \S.+$")
 DOCUMENT_TITLE = re.compile(r"(?m)^# \S[^\n]*$")
 SURFACE_FIELD = re.compile(r"(?m)^Surface:")
+UX_REFERENCE = ".agents/skills/he-plan/references/ux.md"
 E2E_FIELD = re.compile(r"(?m)^E2E:")
 NOT_APPLICABLE_WITH_TEXT = re.compile(r"N/A — \S.+")
 TEST_FILE_SUFFIX = re.compile(r"\.(?:test|spec)\.")
@@ -229,7 +230,80 @@ def e2e_proof(verification: str, status: str, *, legacy: bool = False) -> None:
         )
 
 
-def ux_proof(content: str, *, legacy: bool = False) -> None:
+def usability_rules() -> list[tuple[str, bool]]:
+    """The Usability rule labels of the UX reference, each with whether its Pass states a number."""
+    reference = Path(__file__).resolve().parents[1] / UX_REFERENCE
+    try:
+        lines = reference.read_text().splitlines()
+    except OSError as error:
+        raise ValueError(f"UX Rules cannot read {UX_REFERENCE}: {error}") from error
+    start = next(
+        (n for n, line in enumerate(lines) if line.startswith("- Usability =")), None
+    )
+    if start is None:
+        raise ValueError(f"{UX_REFERENCE} has no '- Usability =' list")
+    rules = []
+    for line in lines[start + 1 :]:
+        if not line.startswith("  - "):
+            break
+        label = line[4:].partition(":")[0]
+        rules.append((label.removesuffix(" (count)"), label.endswith(" (count)")))
+    return rules
+
+
+def rule_lines(content: str) -> list[str]:
+    """The `- <rule>: ...` lines after the `Rules:` label, up to the next field label."""
+    found = []
+    after = False
+    for line in content.split("\n"):
+        if after and line.strip() and not line.startswith("- "):
+            break
+        if after and line.startswith("- "):
+            found.append(line[2:].strip())
+        after = after or line.startswith("Rules:")
+    return found
+
+
+def ux_rules(content: str) -> None:
+    """Each Usability rule gets one Pass, Fail or N/A line; a Fail cannot be a Passed record."""
+    if NOT_APPLICABLE_WITH_REASON.fullmatch(content.strip()):
+        return
+    if "\nRules:" not in f"\n{content}":
+        raise ValueError(
+            "UX Rules is missing; judge the inspected image against each Usability rule of references/ux.md and add one line per rule"
+        )
+    field(content, "Rules")
+    rules = dict(usability_rules())
+    given: dict[str, list[tuple[str, str]]] = {}
+    for line in rule_lines(content):
+        label, _, verdict = line.partition(": ")
+        given.setdefault(label, []).append(partition_verdict(label, verdict))
+    unknown = [label for label in given if label not in rules]
+    missing = [label for label in rules if label not in given]
+    repeated = [label for label, lines in given.items() if len(lines) > 1]
+    if unknown or missing or repeated:
+        raise ValueError(
+            f"UX Rules needs exactly one line for each rule; not a rule: {unknown or 'none'}; no line: {missing or 'none'}; two lines: {repeated or 'none'}"
+        )
+    for label, ((verdict, text),) in given.items():
+        if verdict == "Fail":
+            raise ValueError(
+                f"UX Rules: {label} is Fail; fix the design, inspect it again and judge it again before it is shown"
+            )
+        if verdict == "Pass" and rules[label] and not any(c.isdigit() for c in text):
+            raise ValueError(f"UX Rules: {label} needs its number")
+
+
+def partition_verdict(label: str, verdict: str) -> tuple[str, str]:
+    name, _, text = verdict.partition(" — ")
+    if name not in {"Pass", "Fail", "N/A"} or not text.strip():
+        raise ValueError(
+            f"UX Rules: {label} needs 'Pass, Fail or N/A — text on what was checked'"
+        )
+    return name, text
+
+
+def ux_proof(content: str, *, legacy: bool = False, rules: bool = True) -> None:
     if NOT_APPLICABLE_WITH_REASON.fullmatch(content.strip()):
         return
     proof(content, {"Passed"})
@@ -263,10 +337,16 @@ def ux_proof(content: str, *, legacy: bool = False) -> None:
         )
     for name in ("Capture", "Review"):
         evidence_field(content, name)
+    if rules:
+        ux_rules(content)
 
 
 def readiness_errors(
-    sections: dict[str, str], status: str = "Ready", *, legacy: bool = False
+    sections: dict[str, str],
+    status: str = "Ready",
+    *,
+    legacy: bool = False,
+    rules: bool = True,
 ) -> list[str]:
     errors = []
     for name in ("Baseline + execution", "ux_reference", "Verification"):
@@ -274,7 +354,7 @@ def readiness_errors(
             if name == "Baseline + execution":
                 proof(sections[name], {"Passed"})
             elif name == "ux_reference":
-                ux_proof(sections[name], legacy=legacy)
+                ux_proof(sections[name], legacy=legacy, rules=rules)
             else:
                 e2e_proof(sections[name], status, legacy=legacy)
         except ValueError as error:
@@ -427,7 +507,7 @@ def newer_fields(
     changed: bool,
     path: Path,
 ) -> None:
-    """Old Complete plans skip Same cause; Single source and Retro bind only edited plans."""
+    """Old Complete plans skip Same cause; Single source, Retro and UX Rules bind only edited plans."""
     if not legacy:
         reasoned(field(sections["Repository context"], "Same cause"), "Same cause")
         acceptance_tests(sections)
@@ -437,6 +517,7 @@ def newer_fields(
         field(sections["Repository context"], "Single source")
         if status == "Complete":
             reasoned(field(sections["Verification"], "Retro"), "Retro")
+            ux_rules(sections["ux_reference"])
     except ValueError:
         if status != "Complete" or touched_since_update(path):
             raise
@@ -458,7 +539,9 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     if not no_blockers(field(sections["Decisions + authorization"], "Blockers")):
         raise ValueError("ready/complete plan has unresolved Blockers")
     legacy = status == "Complete" and not changed
-    errors = readiness_errors(sections, status, legacy=legacy)
+    errors = readiness_errors(
+        sections, status, legacy=legacy, rules=status != "Complete"
+    )
     if errors:
         raise ValueError("; ".join(errors))
     newer_fields(sections, status, legacy=legacy, changed=changed, path=path)

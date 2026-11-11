@@ -11,9 +11,9 @@ from unittest.mock import Mock
 
 import agent_hooks
 import pytest
-from conftest import SOURCE, commit, git, init
+from conftest import SOURCE, commit, git, init, ux_rules_block
 from gate_config import JsonObject
-from plans import validate_plan
+from plans import usability_rules, validate_plan
 
 
 def draft_plan(
@@ -264,3 +264,98 @@ def test_a_plan_untouched_since_the_hard_eng_update_skips_the_newer_fields(
     dated(3, "edit the old plan after the update")
     with pytest.raises(ValueError, match="Single source"):
         validate_plan(plan)
+
+
+def rules_plan(visual_plan: str, **verdicts: str) -> str:
+    return visual_plan.replace(ux_rules_block(), ux_rules_block(**verdicts))
+
+
+def test_the_rule_labels_come_from_the_ux_reference() -> None:
+    rules = usability_rules()
+    labels = [label for label, _ in rules]
+    reference = (SOURCE / ".agents/skills/he-plan/references/ux.md").read_text()
+    assert len(rules) == 13
+    assert {"No clutter", "Hierarchy", "Observe"} <= set(labels)
+    assert [label for label, counted in rules if counted] == [
+        "Least effort",
+        "No clutter",
+    ]
+    assert all(f"  - {label}" in reference for label in labels)
+
+
+def test_a_passed_ux_record_without_rules_is_refused(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan.replace(ux_rules_block(), ""))
+    with pytest.raises(ValueError, match="UX Rules is missing; judge the inspected"):
+        validate_plan(path)
+
+
+def test_a_ux_record_that_skips_a_rule_names_the_rule(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    skipped = visual_plan.replace("- Observe: Pass — checked\n", "")
+    path.write_text(
+        skipped.replace(
+            "- Widths: Pass — checked",
+            "- Widths: Pass — checked\n- Widths: Pass — again",
+        )
+    )
+    with pytest.raises(ValueError, match=r"UX Rules.*Observe.*Widths"):
+        validate_plan(path)
+
+
+def test_a_ux_record_with_a_fail_cannot_be_passed(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(rules_plan(visual_plan, Hierarchy="Fail — two strong buttons"))
+    with pytest.raises(ValueError, match="UX Rules: Hierarchy is Fail; fix the design"):
+        validate_plan(path)
+
+
+def test_a_count_rule_needs_its_number(tmp_path: Path, visual_plan: str) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(rules_plan(visual_plan, No_clutter="Pass — nothing was missed"))
+    with pytest.raises(ValueError, match="UX Rules: No clutter needs its number"):
+        validate_plan(path)
+    path.write_text(rules_plan(visual_plan, No_clutter="N/A — no new elements"))
+    assert validate_plan(path) == "Complete"
+
+
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        ("- Hierarchy: Pass — checked\n- Colour: Pass — checked", "Colour"),
+        ("- Hierarchy: Maybe — checked", "Hierarchy.*Pass, Fail or N/A"),
+        ("- Hierarchy: Pass —", "Hierarchy.*text"),
+    ],
+    ids=["unknown-rule", "unknown-verdict", "no-text"],
+)
+def test_an_unknown_rule_line_is_refused(
+    tmp_path: Path, visual_plan: str, line: str, message: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan.replace("- Hierarchy: Pass — checked", line))
+    with pytest.raises(ValueError, match=f"UX Rules.*{message}"):
+        validate_plan(path)
+
+
+def test_a_ux_record_with_one_line_for_each_rule_passes(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan)
+    assert validate_plan(path) == "Complete"
+    path.write_text(visual_plan.replace("Status: Complete", "Status: Ready"))
+    assert validate_plan(path) == "Ready"
+
+
+def test_an_unchanged_complete_plan_without_rules_still_passes(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan.replace(ux_rules_block(), ""))
+    assert validate_plan(path, changed=False) == "Complete"
