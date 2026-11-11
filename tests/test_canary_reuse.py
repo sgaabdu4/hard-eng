@@ -81,6 +81,7 @@ def test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr(
         "other files",
         "no merged pull request",
         "no macOS runs at the head",
+        "a failed run beside a passed run of one job",
         "a failed lookup",
         "a failed check-runs lookup",
         "a lookup that timed out",
@@ -95,6 +96,7 @@ def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
         "no runs at the head": [],
         "a failed job": failed,
         "no macOS runs at the head": linux,
+        "a failed run beside a passed run of one job": [*all_passed(), failed[-1]],
     }.get(case, all_passed())
     fault = subprocess.CalledProcessError(1, "gh")
     breaks = {
