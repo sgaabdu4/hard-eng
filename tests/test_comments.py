@@ -417,6 +417,21 @@ def test_net_loss_of_assertions_fails_naming_lines_and_count(
     assert re.search(rf"removed at {re.escape(name)}:\d+", str(error.value))
 
 
+def test_the_lost_assertion_message_says_what_the_record_covers(
+    tmp_path: Path,
+) -> None:
+    name, text = ASSERTS[0]
+    root = switch_root(tmp_path, name, text)
+    (root / name).write_text(text.replace("assert g()\n", ""))
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    message = str(error.value)
+    assert "To remove a whole test, add `Removed test:" in message
+    assert "the test name is the function name alone" in message
+    assert "An assertion removed from a test that stays must stay" in message
+    assert "get an equal check" in message
+
+
 @pytest.mark.parametrize(
     "name", ["tests/test_my file.py", "tests/test_tab\tfile.py", 'tests/test_"q" é.py']
 )
