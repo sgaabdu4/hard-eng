@@ -324,9 +324,47 @@ def git_file(root: Path, base: str, name: str) -> str | None:
         return None
 
 
+def local_base_branch(root: Path) -> str:
+    """The local branch that `default_branch_point` took the base from; empty when it is not a local branch."""
+    from plans import _git_output, release_references
+
+    for reference in release_references(root):
+        try:
+            _git_output(root, "merge-base", "HEAD", reference)
+        except (subprocess.CalledProcessError, OSError):
+            continue
+        try:
+            _git_output(root, "rev-parse", "--verify", "-q", f"refs/heads/{reference}")
+        except (subprocess.CalledProcessError, OSError):
+            return ""
+        return reference
+    return ""
+
+
+def lone_install_step(root: Path, base: str) -> str:
+    """The step that lets `adopt` pass when the install commit is the base: only a repository with no remote."""
+    from plans import _git_output
+
+    if (
+        _git_output(root, "remote").strip()
+        or _git_output(root, "rev-parse", "HEAD").strip() != base
+        or git_file(root, "HEAD~1", SOURCE_FILE) is not None
+        or not (target := local_base_branch(root))
+    ):
+        return ""
+    start = "; this repository has no remote, so the install commit is the base"
+    if _git_output(root, "rev-list", "--parents", "-n1", "HEAD").split()[1:]:
+        undo = "git reset --soft HEAD~1"
+    elif _git_output(root, "branch", "--show-current").strip() == target:
+        undo = "git update-ref -d HEAD"
+    else:
+        return f"{start} and holds only the install commit: switch to `{target}`, then run `adopt` again for the next step"
+    return f"{start}: run `{undo}`, then `adopt`, then commit the install and the debt file together"
+
+
 def refuse_new_debt(root: Path, base: str | None) -> str | None:
     """HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add the debt file."""
-    from plans import _git_output, default_branch_point
+    from plans import default_branch_point
 
     base = base or default_branch_point(root)
     if (
@@ -334,23 +372,9 @@ def refuse_new_debt(root: Path, base: str | None) -> str | None:
         and git_file(root, base, DEBT_FILE) is None
         and git_file(root, base, SOURCE_FILE) is not None
     ):
-        lone_install = (
-            not _git_output(root, "remote").strip()
-            and _git_output(root, "rev-parse", "HEAD").strip() == base
-            and git_file(root, "HEAD~1", SOURCE_FILE) is None
-        )
-        undo = (
-            "git reset --soft HEAD~1"
-            if _git_output(root, "rev-list", "--parents", "-n1", "HEAD").split()[1:]
-            else "git update-ref -d HEAD"
-        )
         raise ValueError(
             f"HE-DEBT-SHRINK-ONLY: only the change that installs Hard Eng can add {DEBT_FILE}; repair the findings that `check` prints instead"
-            + (
-                f"; this repository has no remote, so the install commit is the base: run `{undo}`, then `adopt`, then commit the install and the debt file together"
-                if lone_install
-                else ""
-            )
+            + lone_install_step(root, base)
         )
     return base
 

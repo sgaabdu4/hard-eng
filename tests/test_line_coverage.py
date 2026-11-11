@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-import pytest
 import project_setup
+import pytest
 import reports
 from gate_config import Group
 
