@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -865,3 +866,25 @@ def test_the_child_exclusion_passes_the_test_filter_rule(
     gate["command"] = ["pytest", "--ignore=packages/child"]
     assert runner.run_limited_gate(parent, gate, 60, nullcontext(), groups)
     assert len(commands) == 1
+
+
+def test_the_missing_performance_suite_message_names_an_existing_file(
+    runner: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    group: Group = {
+        "path": ".",
+        "language": "python",
+        "sources": ["m.py"],
+        "checks": [],
+    }
+    performance: Gate = {
+        "name": "performance",
+        "role": "performance",
+        "command": [sys.executable, "-c", "pass", "tests/performance"],
+        "report": {"type": "performance-junit", "path": "coverage/performance.xml"},
+    }
+    assert runner.run_gate(group, performance, 5, threading.Lock()) is True
+    output = capsys.readouterr().out
+    named = re.search(r"\((\.agents/skills/\S+\.md)\)", output)
+    assert named is not None
+    assert (SOURCE / named[1]).is_file()

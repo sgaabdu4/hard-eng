@@ -416,7 +416,8 @@ def prepare_reports(
                 raise ValueError(
                     f"HE-PERFORMANCE-SUITE: {suite} does not exist; add a test there "
                     "with a real workload and a time budget, or, after review, record a "
-                    "performance_exception and remove this check (he/references/gates.md). "
+                    "performance_exception and remove this check "
+                    "(.agents/skills/he/references/gates.md). "
                     "A new project starts without one: the first code change adds it"
                 )
     for path in paths:
