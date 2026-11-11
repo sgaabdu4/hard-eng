@@ -1,11 +1,14 @@
 """The quick check runs only the fast gate roles."""
 
+import threading
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 
+import process_group
 import pytest
 from conftest import configure, gate
-from gate_config import Group
+from gate_config import Gate, Group
 from reports import quick_groups
 
 QUICK_ROLES = ("format", "lint", "types")
@@ -33,7 +36,8 @@ def test_quick_set_leaves_out_slow_and_unlabelled_gates(runner: ModuleType) -> N
         "checks": [{"name": role, "role": role, "command": ["x"]} for role in slow]
         + [{"name": "unlabelled", "command": ["x"]}],
     }
-    assert quick_groups([group], installed=frozenset({"."}))[0]["checks"] == []
+    marked = frozenset({process_group.install_key(group)})
+    assert quick_groups([group], installed=marked)[0]["checks"] == []
 
 
 @pytest.mark.parametrize(
@@ -86,3 +90,25 @@ def test_the_first_quick_check_in_a_checkout_runs_the_install_one_time(
     (tmp_path / "broken").touch()
     assert installs(quick=True) == (1, 3)
     assert installs(quick=True) == (1, 4)
+    (tmp_path / "broken").unlink()
+    assert installs(quick=True) == (0, 5)
+    (tmp_path / "broken").touch()
+    assert installs(quick=False) == (1, 6)
+    assert installs(quick=True) == (1, 7)
+
+
+def test_an_install_marks_only_its_own_group_in_a_shared_folder(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    install = cast(Gate, gate("install", "pass", role="lockfiles"))
+    python, web = (
+        cast(Group, {"path": ".", "language": language, "checks": [install]})
+        for language in ("python", "javascript")
+    )
+    with (tmp_path / "lock").open("w+") as lock:
+        before = process_group.read_installed(lock)
+        assert runner.run_gate(python, install, 300, threading.Lock()) is False
+        process_group.save_installed(lock, before)
+        installed = process_group.read_installed(lock)
+    kept = quick_groups([python, web], installed=installed)
+    assert [len(group["checks"]) for group in kept] == [0, 1]
