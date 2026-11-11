@@ -1,10 +1,12 @@
 """Read a project file that a person edits; a syntax error names the file."""
 
 import json
+import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Container, Iterable
 from pathlib import Path
 
+LOCK_NAMES = ("uv.lock", "poetry.lock", "bun.lock", "pubspec.lock", "Package.resolved")
 KINDS = {".toml": "TOML", ".yaml": "YAML", ".yml": "YAML"}
 
 
@@ -52,3 +54,31 @@ def read_project_file[T](
         return parse(path.read_text())
     except syntax_errors() as error:
         raise syntax_error(repository_name(path, root), error) from error
+
+
+def refuse_ignored_locks(
+    root: Path,
+    directories: Iterable[Path],
+    listed: Container[Path],
+    *,
+    ask_git: bool,
+    names: Iterable[str] = LOCK_NAMES,
+) -> None:
+    """A lock file that Git ignores is missing from a fresh clone; ask Git when the file is not on disk yet."""
+    for lockfile in (directory / name for directory in directories for name in names):
+        relative = lockfile.relative_to(root)
+        if lockfile.is_file():
+            ignored = lockfile not in listed
+        else:
+            ignored = (
+                ask_git
+                and not subprocess.run(
+                    ["git", "check-ignore", "-q", str(relative)], cwd=root, check=False
+                ).returncode
+            )
+        if ignored:
+            raise ValueError(
+                f"{relative} is ignored by Git, so the install fails in a fresh clone. "
+                f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
+                f"remove that rule, then commit {relative}"
+            )

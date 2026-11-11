@@ -2,8 +2,9 @@
 
 from pathlib import Path
 
+import gate_config
 import pytest
-from conftest import commit, init
+from conftest import SOURCE, commit, configure, gate, init
 from gate_config import GateConfig, validate_file_sizes
 from project_setup import (
     adapt_packages,
@@ -70,3 +71,42 @@ def test_the_line_limit_refusal_names_the_ways_out(tmp_path: Path) -> None:
     assert "reason" in message
     assert "evidence" in message
     assert "hard-eng.gates.json" in message
+
+
+def test_setup_refuses_an_ignored_lockfile_that_is_not_there_yet(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    package = root / "app"
+    package.mkdir()
+    (package / "pubspec.yaml").write_text("name: app\n")
+    (root / ".gitignore").write_text("pubspec.lock\n")
+    commit(root, "start")
+    config: GateConfig = {
+        "shared": [],
+        "packages": [
+            {"path": "app", "language": "dart", "sources": ["lib"], "checks": []}
+        ],
+    }
+    assert not (package / "pubspec.lock").exists()
+    with pytest.raises(ValueError, match=r"app/pubspec.lock is ignored by Git"):
+        adapt_packages(root, config)
+    (root / ".gitignore").write_text("")
+    adapt_packages(root, config)
+
+
+def test_check_refuses_a_lockfile_that_git_ignores(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    init(root)
+    configure(root, [gate("suite", "pass")])
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        (root / name).write_text((SOURCE / name).read_text())
+    (root / ".gitignore").write_text("uv.lock\n")
+    commit(root, "start")
+    (root / "uv.lock").write_text("# lock\n")
+    with pytest.raises(ValueError, match=r"uv.lock is ignored by Git") as refused:
+        gate_config.load_groups(root)
+    assert "git check-ignore -v uv.lock" in str(refused.value)
+    (root / ".gitignore").write_text("")
+    assert gate_config.load_groups(root)

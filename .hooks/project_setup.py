@@ -26,7 +26,7 @@ from gate_config import (
     typescript_packages,
 )
 from hook_chain import is_own
-from project_files import read_project_file
+from project_files import read_project_file, refuse_ignored_locks
 
 CARET_VERSION = re.compile(r"\^?(\d+)\.(\d+)\.(\d+)")
 REGEX_SPECIAL_CHARACTER = re.compile(r"([.\[\]()*+?{}|^$\\])")
@@ -442,14 +442,8 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
     for package in config["packages"]:
         directory = root / package["path"]
         adapt_sources(root, package, owned[directory])
-        lockfile = directory / adapt_package(directory, package)
-        if lockfile.is_file() and lockfile not in tracked:
-            relative = lockfile.relative_to(root)
-            raise ValueError(
-                f"{relative} is ignored by Git, so the install fails in a fresh clone. "
-                f"`git check-ignore -v {relative}` names the rule, often in .gitignore; "
-                f"remove that rule, then commit {relative}"
-            )
+        lockfile = adapt_package(directory, package)
+        refuse_ignored_locks(root, [directory], tracked, ask_git=True, names=[lockfile])
         adapt_boundaries(package, typescript)
         for gate in package["checks"]:
             if gate.get("role") == "security":
