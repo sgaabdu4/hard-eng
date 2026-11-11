@@ -106,9 +106,23 @@ def test_an_install_marks_only_its_own_group_in_a_shared_folder(
         for language in ("python", "javascript")
     )
     with (tmp_path / "lock").open("w+") as lock:
-        before = process_group.read_installed(lock)
+        before = process_group.read_installed(lock, tmp_path)
         assert runner.run_gate(python, install, 300, threading.Lock()) is False
-        process_group.save_installed(lock, before)
-        installed = process_group.read_installed(lock)
+        process_group.save_installed(lock, before, tmp_path)
+        installed = process_group.read_installed(lock, tmp_path)
     kept = quick_groups([python, web], installed=installed)
     assert [len(group["checks"]) for group in kept] == [0, 1]
+
+
+def test_a_changed_lock_file_drops_the_install_mark(tmp_path: Path) -> None:
+    key = process_group.install_key({"path": "app", "language": "python"})
+    package = tmp_path / "app"
+    package.mkdir()
+    (package / "uv.lock").write_text("one\n")
+    with (tmp_path / "lock").open("w+") as lock:
+        before = process_group.read_installed(lock, tmp_path)
+        process_group.note_install(key, "lockfiles", False)
+        process_group.save_installed(lock, before, tmp_path)
+        assert process_group.read_installed(lock, tmp_path) == {key}
+        (package / "uv.lock").write_text("one\ntwo\n")
+        assert process_group.read_installed(lock, tmp_path) == frozenset()
