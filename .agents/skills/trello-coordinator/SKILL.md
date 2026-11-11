@@ -17,9 +17,11 @@ flowchart LR
   C[Core rules] -->|Each run| R[references/run.md]
   C -->|Script or trello.json| K[references/commands.md]
   C -->|Schedule, roles, models| H[references/hosts.md]
+  C -->|Design brief, mockup, picture post| M[references/mockups.md]
   click R "references/run.md"
   click K "references/commands.md"
   click H "references/hosts.md"
+  click M "references/mockups.md"
 ```
 
 ## Core rules

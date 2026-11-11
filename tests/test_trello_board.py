@@ -25,6 +25,7 @@ from trello_fakes import (
     make_action,
     make_card,
     move_action,
+    picture,
     refs,
     write_lease,
 )
@@ -383,8 +384,7 @@ def test_testing_proof_must_be_an_image(
     project: Project, tmp_path: Path, name: str, accepted: bool
 ) -> None:
     project.fake.cards = [make_card(5, "#5 Move", "l-doing")]
-    proof = tmp_path / name
-    proof.write_bytes(b"fake image")
+    proof = picture(tmp_path / name)
     note = tmp_path / "testing.txt"
     note.write_text("**Ready to try.**\n\n@sam please check the total.")
     result = project.run(
@@ -455,9 +455,7 @@ def test_repeated_image_flags_attach_every_image(
     project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
     note = tmp_path / "note.txt"
     note.write_text("Before and after")
-    shots = [tmp_path / "before.png", tmp_path / "after.png"]
-    for shot in shots:
-        shot.write_bytes(b"fake image")
+    shots = [picture(tmp_path / "before.png"), picture(tmp_path / "after.png")]
     result = project.run(
         "comment", "1", str(note), "--image", str(shots[0]), "--image", str(shots[1])
     )
