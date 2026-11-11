@@ -22,9 +22,11 @@ TAILWIND_COLOUR = re.compile(
     r"|(?:rgba?|hsla?|oklch)\((?!\s*var\())"
 )
 DART_COLOUR = re.compile(
-    r"\bColor\(\s*0x|\bColor\.from(?:ARGB|RGBO)\(|\bColors\.(?!transparent\b)[A-Za-z]"
+    r"\bColor\(\s*0x|\bColor\.from(?:ARGB|RGBO)?\(|\bColors\.(?!transparent\b)[A-Za-z]"
 )
-SWIFT_COLOUR = re.compile(r"\b(?:UI|NS)?Color\(\s*red:|#colorLiteral\(")
+SWIFT_COLOUR = re.compile(
+    r"\b(?:UI|NS)?Color\(\s*(?:\.\w+\s*,\s*)?red:|#colorLiteral\("
+)
 TRANSITION_STEP = (
     "List the properties that change, for example transition-[opacity,transform] "
     "or transition: opacity 150ms"

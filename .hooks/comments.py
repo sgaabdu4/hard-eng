@@ -46,6 +46,8 @@ UI_MARKS = (
     "transitionProperty",
     "transition: 'all",
     'transition: "all',
+    'transition": "all',
+    "transition': 'all",
     "transition: `all",
     "-[#",
     "-[rgb",
@@ -55,6 +57,7 @@ UI_MARKS = (
     "Color.from",
     "Colors.",
     "Color(red",
+    "Color(.",
     "colorLiteral",
 )
 TEST_ATTRIBUTE = re.compile(r"@(?:Test|Suite)\s*\(")
