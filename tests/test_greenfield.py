@@ -352,6 +352,8 @@ def test_setup_and_check_leave_root_tool_configs_out_of_the_sources(
     [
         "scripts/build.mjs",
         "sentry.server.config.ts",
+        "auth.config.ts",
+        "payload.config.ts",
         "middleware.ts",
         "tools/vite.config.ts",
         "noxfile.py",
