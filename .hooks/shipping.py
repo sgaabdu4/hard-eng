@@ -496,7 +496,13 @@ def _pending(
 
 
 def _checks(
-    root: Path, repository: str, revision: str, policy: ShippingPolicy, explain: bool
+    root: Path,
+    repository: str,
+    revision: str,
+    policy: ShippingPolicy,
+    explain: bool,
+    *,
+    completed_only: bool = False,
 ) -> None:
     endpoint = (
         f"repos/{repository}/commits/{revision}/check-runs?per_page=100&filter=all"
@@ -507,7 +513,14 @@ def _checks(
     }
     for item in items:
         name = item.get("name")
-        if isinstance(name, str) and name in by_name:
+        finished = item.get("status") == "completed" and (
+            item.get("conclusion") != "cancelled"
+        )
+        if (
+            isinstance(name, str)
+            and name in by_name
+            and (finished or not completed_only)
+        ):
             by_name[name].append(item)
     for name, candidates in by_name.items():
         if not candidates:

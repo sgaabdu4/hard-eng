@@ -272,19 +272,48 @@ def _pull_request_head(
     return head, _text(_object(commit.get("tree"), "PR tree"), "sha", "PR tree")
 
 
+def _release_head(root: Path, base_branch: str) -> tuple[str, str]:
+    """The head and tree of a PR from the base branch into another branch of this repository."""
+    import os
+
+    from shipping import ShippingError, _json, _object, _repo, _sha, _text, git
+
+    try:
+        text = Path(os.environ.get("GITHUB_EVENT_PATH", "")).read_text()
+    except OSError as error:
+        raise ShippingError("the event file is unreadable") from error
+    pull = _object(_object(_json(text, "event"), "event").get("pull_request"), "PR")
+    head = _object(pull.get("head"), "PR head")
+    base = _object(pull.get("base"), "PR base")
+    if _text(head, "ref", "PR head") != base_branch:
+        raise ShippingError("the PR head is not the base branch")
+    if _text(base, "ref", "PR base") == base_branch:
+        raise ShippingError("the PR base is the base branch")
+    repositories = {
+        _repo(_object(side.get("repo"), "PR repository").get("full_name"), "PR")
+        for side in (head, base)
+    }
+    if len(repositories) != 1:
+        raise ShippingError("the PR head comes from another repository")
+    revision = _sha(head.get("sha"), "PR head")
+    return revision, git(root, "rev-parse", f"{revision}^{{tree}}").strip()
+
+
 def reused_pull_request(root: Path, base: str) -> str | None:
-    """The PR head whose passed required checks already cover this branch push."""
+    """The commit whose passed required checks already cover this branch push or release PR."""
     import os
 
     from shipping import ShippingError, _checks, _repo, _sha, git, load_policy
 
     try:
         policy = load_policy(root, required=False)
+        event = os.environ.get("GITHUB_EVENT_NAME")
+        ref = os.environ.get("GITHUB_REF", "")
+        on_push = event == "push" and ref.startswith("refs/heads/")
         if (
             policy is None
             or os.environ.get("GITHUB_ACTIONS") != "true"
-            or os.environ.get("GITHUB_EVENT_NAME") != "push"
-            or not os.environ.get("GITHUB_REF", "").startswith("refs/heads/")
+            or not (on_push or event == "pull_request")
         ):
             return None
     except ShippingError:
@@ -293,16 +322,23 @@ def reused_pull_request(root: Path, base: str) -> str | None:
         if git(root, "status", "--porcelain"):
             raise ShippingError("the checkout has uncommitted changes")
         repository = _repo(os.environ.get("GITHUB_REPOSITORY"), "workflow")
-        branch = os.environ["GITHUB_REF"].removeprefix("refs/heads/")
-        head, tree = _pull_request_head(
-            root, repository, _sha(base, "push base"), branch
-        )
+        if on_push:
+            head, tree = _pull_request_head(
+                root,
+                repository,
+                _sha(base, "push base"),
+                ref.removeprefix("refs/heads/"),
+            )
+        else:
+            head, tree = _release_head(root, policy["base"])
         if tree != git(root, "rev-parse", "HEAD^{tree}").strip():
-            raise ShippingError("the merged PR tested a different tree")
-        _checks(root, repository, head, policy, False)
+            raise ShippingError("the covering PR tested a different tree")
+        _checks(root, repository, head, policy, False, completed_only=not on_push)
     except ShippingError as error:
+        who = "merged PR's" if on_push else "earlier"
+        where = "push" if on_push else "PR"
         print(
-            f"Running the checks again; the merged PR's checks do not cover this push: {error}",
+            f"Running the checks again; the {who} checks do not cover this {where}: {error}",
             flush=True,
         )
         return None
