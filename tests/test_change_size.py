@@ -168,3 +168,22 @@ def test_a_merge_of_another_branch_in_progress_counts_its_files(
         False,
         "it adds, deletes or renames the file other.py",
     )
+
+
+def test_a_branch_that_installs_hard_eng_names_the_install_as_the_reason(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sized_branch(repository)
+    (repository / ".agents").mkdir()
+    (repository / ".agents/biome.json").write_text("{}\n")
+    (repository / ".hooks").mkdir()
+    (repository / ".hooks/hard-eng-source.json").write_text("{}\n")
+    commit(repository, "Install Hard Eng")
+    assert change_size.size_verdict(repository) == (
+        False,
+        "this branch installs Hard Eng",
+    )
+    assert not change_size.plan_not_needed(repository)
+    assert "Size: big, because this branch installs Hard Eng; a plan is needed." in (
+        capsys.readouterr().out
+    )
