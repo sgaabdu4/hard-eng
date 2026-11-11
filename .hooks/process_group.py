@@ -253,7 +253,7 @@ def clean_start(
     with suppress(OSError):
         Path(lock.name).with_name(PASSED_FILE).unlink()
     commit = subprocess.run(
-        ["git", "rev-parse", "--verify", "-q", f"{base}^{{commit}}"],
+        ["git", "rev-parse", "--verify", "-q", base + "^{commit}"],
         cwd=root,
         capture_output=True,
         text=True,

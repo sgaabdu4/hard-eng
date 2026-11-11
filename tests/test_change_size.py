@@ -703,10 +703,10 @@ def test_a_line_diff_that_fails_leaves_the_change_unmeasured(
     replace_line(repository, "tests/test_x.py", 1, "import sys")
     real = subprocess.check_output
 
-    def refuse(command: list[str], **options: object) -> str:
+    def refuse(command: list[str], cwd: Path, **_options: object) -> str:
         if "-U0" in command:
             raise subprocess.CalledProcessError(1, command)
-        return real(command, **options)
+        return real(command, cwd=cwd, text=True)
 
     monkeypatch.setattr(subprocess, "check_output", refuse)
     assert change_size.size_verdict(repository) == (
