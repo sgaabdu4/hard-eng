@@ -555,6 +555,7 @@ def test_development_install_does_not_fetch(
     ("case", "expected"),
     [
         ("feature", {"apps/web"}),
+        ("first-typescript", None),
         ("gate-config", None),
         ("unverified", None),
         ("edited-hook", None),
@@ -573,7 +574,8 @@ def test_update_mixed_with_feature_work_checks_only_affected_packages(
     base = git(target, "rev-parse", "HEAD")
     select_release(source, monkeypatch)
     update.update(target)
-    page = target / "apps/web/page.txt"
+    # A first TypeScript file makes setup plan a boundaries gate, so the gate list changes.
+    page = target / f"apps/web/page.{'ts' if case == 'first-typescript' else 'txt'}"
     page.parent.mkdir(parents=True)
     page.write_text("a page\n")
     if case == "gate-config":
