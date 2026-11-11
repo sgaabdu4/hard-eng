@@ -25,11 +25,12 @@ SOURCE = Path(__file__).resolve().parents[1]
 # Local fixture commands must not inherit the hosting workflow's event.
 os.environ.pop("GITHUB_ACTIONS", None)
 os.environ.pop("GITHUB_EVENT_NAME", None)
-# Fixture repositories must not take signing, hooks or branch names from the developer.
-os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
-# Nor the developer's gh sign-in or default Git ignore file; bytecode is written as in CI.
 SEAL = Path(tempfile.mkdtemp(prefix="hard-eng-seal-"))
 atexit.register(shutil.rmtree, SEAL, ignore_errors=True)
+# Fixture repositories must not take signing, hooks, branch names or a guessed commit name from the developer.
+(SEAL / "gitconfig").write_text("[user]\n\tuseConfigOnly = true\n")
+os.environ["GIT_CONFIG_GLOBAL"] = str(SEAL / "gitconfig")
+# Nor the developer's gh sign-in or default Git ignore file; bytecode is written as in CI.
 (SEAL / "gh").write_text("#!/bin/sh\nexit 1\n")
 (SEAL / "gh").chmod(0o755)
 (SEAL / "config").mkdir()

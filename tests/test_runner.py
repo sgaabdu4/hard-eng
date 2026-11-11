@@ -945,4 +945,17 @@ def test_fixture_git_ignores_the_developers_global_config(tmp_path: Path) -> Non
         text=True,
         check=False,
     )
-    assert found.stdout == ""
+    assert found.stdout == "user.useconfigonly=true\n"
+
+
+def test_fixture_git_guesses_no_commit_name_from_the_account(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    made = subprocess.run(
+        ["git", "commit", "--allow-empty", "-qm", "x"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert made.returncode != 0
+    assert "auto-detection is disabled" in made.stderr
