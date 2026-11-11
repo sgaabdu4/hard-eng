@@ -127,3 +127,20 @@ def test_a_failed_update_proof_names_its_reason_once(
     assert printed.count("could not prove the update") == 1
     assert "no route to host" in printed
     source_trees.forget_all()
+
+
+def test_a_failed_update_proof_line_ends_with_one_period(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_trees.forget_all()
+    cause = "Command 'git clone' returned non-zero exit status 128."
+    monkeypatch.setattr(
+        update, "verified_revision", Mock(side_effect=ValueError(cause))
+    )
+    update.proven_installed(tmp_path, "main", {".hooks/update.py"}, "a" * 40, "b" * 40)
+    printed = capsys.readouterr().err
+    assert f"update: {cause} Its files" in printed
+    assert ".." not in printed
+    source_trees.forget_all()
