@@ -7,7 +7,7 @@ import re
 import signal
 import subprocess
 import threading
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import IO, NamedTuple
@@ -164,13 +164,19 @@ def read_installed(lock: IO[str]) -> frozenset[str]:
     return frozenset(name for name in names if isinstance(name, str))
 
 
-def note_install(path: str, role: object, failed: bool) -> None:
+def install_key(group: Mapping[str, object]) -> str:
+    """One mark for each package group: two languages can share a folder, and each has its own install."""
+    return f"{group.get('language', '')}:{group['path']}"
+
+
+def note_install(key: str, role: object, failed: bool) -> None:
     if role == "lockfiles":
-        INSTALLS[path] = INSTALLS.get(path, True) and not failed
+        INSTALLS[key] = INSTALLS.get(key, True) and not failed
 
 
 def save_installed(lock: IO[str], before: frozenset[str]) -> None:
-    after = before | {path for path, passed in INSTALLS.items() if passed}
+    passed = {key for key, ok in INSTALLS.items() if ok}
+    after = (before | passed) - (INSTALLS.keys() - passed)
     if after != before:
         with suppress(OSError):
             Path(lock.name).with_name(INSTALLED_FILE).write_text(

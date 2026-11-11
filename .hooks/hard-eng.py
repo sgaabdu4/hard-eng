@@ -458,7 +458,7 @@ def run_gate(
 ) -> bool:
     """Run a gate under its own limit and record how long a pass took."""
     from gate_times import gate_limit, record_gate_time
-    from process_group import note_install
+    from process_group import install_key, note_install
 
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
     started = time.monotonic()
@@ -470,7 +470,7 @@ def run_gate(
         from debt import judge
 
         failed = judge(ROOT, group, gate, failed, OUTPUTS.get(name, ""))
-    note_install(group["path"], gate.get("role"), failed)
+    note_install(install_key(group), gate.get("role"), failed)
     if failed:
         FAILED_GATES.append(key)
     else:
