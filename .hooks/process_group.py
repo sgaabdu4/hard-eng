@@ -223,6 +223,7 @@ def clean_tree(root: Path) -> tuple[str, bool] | None:
             "--branch",
             "--no-ahead-behind",
             "--ignore-submodules=none",
+            "--untracked-files=normal",
         ],
         cwd=root,
         capture_output=True,
