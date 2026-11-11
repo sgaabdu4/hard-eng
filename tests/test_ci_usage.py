@@ -1,6 +1,7 @@
 """Billed Actions minutes from GitHub's run and job records."""
 
 import json
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock
@@ -209,7 +210,11 @@ def _queued(
     return fixture, fake
 
 
-_WAITING = {"runner_name": None, "labels": ["self-hosted", "linux"]}
+_WAITING = {
+    "status": "queued",
+    "runner_name": None,
+    "labels": ["self-hosted", "linux"],
+}
 
 
 def test_ready_names_a_required_check_that_no_runner_took(
@@ -235,6 +240,8 @@ def test_ready_names_a_required_check_that_no_runner_took(
         _WAITING | {"created_at": _ago(1)},
         _WAITING | {"created_at": _ago(120), "runner_name": "runner-1"},
         _WAITING | {"created_at": _ago(120), "labels": []},
+        _WAITING | {"created_at": _ago(120), "status": "waiting"},
+        _WAITING | {"created_at": _ago(120), "labels": ["ubuntu-latest"]},
         _WAITING | {"created_at": "yesterday"},
         _WAITING,
         ["not", "a", "job"],
@@ -248,6 +255,21 @@ def test_a_fresh_or_unreadable_queued_job_keeps_the_plain_pending_text(
     with pytest.raises(shipping.PendingCheck) as pending:
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
     assert str(pending.value) == "required check has not completed: build"
+
+
+def test_a_running_check_makes_no_job_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    running = _check(fixture.head, status="in_progress", conclusion=None)
+    fake = FakeGitHub(_pull(fixture), [running])
+    fake.rules = rules_answer(required_rule("build"))
+    fake.job = _WAITING | {"created_at": _ago(120)}
+    _patch_gh(monkeypatch, fake)
+    with pytest.raises(shipping.PendingCheck) as pending:
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert str(pending.value) == "required check has not completed: build"
+    assert not [call for call in fake.calls if "/actions/jobs/" in call[-1]]
 
 
 def test_completed_checks_make_no_job_lookup(
@@ -268,6 +290,7 @@ def test_branch_point_and_push_reuse_never_look_up_jobs(
     monkeypatch.setattr(plans, "default_branch_point", Mock(return_value=fixture.head))
     policy = shipping.load_policy(fixture.root)
     assert policy is not None
+    monkeypatch.delitem(sys.modules, "ci_usage")
     if path == "branch_point":
         assert shipping.passed_branch_point(fixture.root) is None
     else:
@@ -276,3 +299,5 @@ def test_branch_point_and_push_reuse_never_look_up_jobs(
         assert str(pending.value) == "required check has not completed: build"
     assert [call for call in fake.calls if "check-runs" in call[-1]]
     assert not [call for call in fake.calls if "/actions/jobs/" in call[-1]]
+    imported = "ci_usage" in sys.modules
+    assert not imported
