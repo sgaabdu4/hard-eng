@@ -40,22 +40,42 @@ ALL_ZERO_OBJECT_ID = re.compile(r"0{40}|0{64}")
 SOURCE_FILE = ".hooks/hard-eng-source.json"
 
 
+def biome_formatters(
+    path: Path, seen: set[Path]
+) -> tuple[dict[str, int | str], dict[str, int | str]]:
+    """The formatter and json.formatter options of a Biome file after the local files it extends."""
+    path = path.resolve()
+    if path in seen or not path.is_file():
+        return {}, {}
+    seen.add(path)
+    try:
+        text = JSONC.sub(lambda match: match[1] or "", path.read_text())
+        config = json.loads(TRAILING_COMMA.sub(r"\1", text))
+    except (OSError, ValueError):
+        return {}, {}
+    extends = config.get("extends", [])
+    formatter: dict[str, int | str] = {}
+    own: dict[str, int | str] = {}
+    for name in [extends] if isinstance(extends, str) else extends:
+        if not isinstance(name, str):
+            continue
+        inherited = biome_formatters(path.parent / name, seen)
+        formatter, own = {**formatter, **inherited[0]}, {**own, **inherited[1]}
+    return (
+        {**formatter, **config.get("formatter", {})},
+        {**own, **config.get("json", {}).get("formatter", {})},
+    )
+
+
 def json_layout(root: Path) -> tuple[str, int, int]:
     """Read the root Biome config's JSON formatting, else use Prettier's defaults."""
     for name in ("biome.json", "biome.jsonc"):
         if (root / name).is_file():
-            text = JSONC.sub(lambda match: match[1] or "", (root / name).read_text())
-            try:
-                config = json.loads(TRAILING_COMMA.sub(r"\1", text))
-            except ValueError:
-                return "\t", 2, 80
-            options = {
-                **config.get("formatter", {}),
-                **config.get("json", {}).get("formatter", {}),
-            }
-            tab = options.get("indentWidth", 2)
+            formatter, own = biome_formatters(root / name, set())
+            options = {**formatter, **own}
+            tab = int(options.get("indentWidth", 2))
             unit = "\t" if options.get("indentStyle", "tab") == "tab" else " " * tab
-            return unit, tab, options.get("lineWidth", 80)
+            return unit, tab, int(options.get("lineWidth", 80))
     return "  ", 2, 80
 
 
