@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import tomllib
+from collections.abc import Mapping
 from itertools import pairwise
 from pathlib import Path
 
@@ -13,6 +14,13 @@ from dependency_graph import child_groups
 from gate_config import Gate, Group, require_roles
 from project_files import parse_project_text
 from project_setup import dependency_command
+
+PYREFLY_REFUSED = (
+    "ignore-missing-imports",
+    "replace-imports-with-any",
+    "replace-untyped-imports-with-any",
+    "sub-config",
+)
 
 
 def parallel_pytest(package: Group) -> None:
@@ -326,6 +334,50 @@ def imports_step(directory: Path, package: Group) -> str:
     )
 
 
+def pyrefly_gap(file: str, options: Mapping[str, object]) -> str:
+    """The step that makes a package's Pyrefly settings strict, or an empty string."""
+    errors = options.get("errors")
+    refused = [key for key in PYREFLY_REFUSED if options.get(key)]
+    if isinstance(errors, dict):
+        refused += [
+            f"errors.{name}"
+            for name, value in errors.items()
+            if value in (False, "ignore")
+        ]
+    steps = []
+    if (
+        options.get("preset") not in {"strict", "all"}
+        or options.get("check-unannotated-defs", True) is not True
+    ):
+        steps.append(
+            'add these lines under [tool.pyrefly] (at the top of a pyrefly.toml): preset = "strict" and check-unannotated-defs = true'
+        )
+    if refused:
+        steps.append(f"remove {', '.join(refused)}")
+    return f"{file}: {'; '.join(steps)}" if steps else ""
+
+
+def pyrefly_options(directory: Path) -> tuple[Path, Mapping[str, object]]:
+    """The file that holds a package's Pyrefly settings, and the settings in it."""
+    native = directory / "pyrefly.toml"
+    if native.exists():
+        return native, tomllib.loads(native.read_text())
+    project = directory / "pyproject.toml"
+    return project, tomllib.loads(project.read_text()).get("tool", {}).get(
+        "pyrefly", {}
+    )
+
+
+def validate_pyrefly(directory: Path, root: Path) -> None:
+    """The types gate refuses a package whose Pyrefly settings are not strict."""
+    file, options = pyrefly_options(directory)
+    gap = pyrefly_gap(str(file.relative_to(root)), options)
+    if gap:
+        raise ValueError(
+            f"Pyrefly requires strict checking without disabled diagnostics or Any import substitutions; {gap}"
+        )
+
+
 def configure_python(
     root: Path, directory: Path, package: Group, changes: dict[str, str]
 ) -> None:
@@ -344,12 +396,12 @@ def configure_python(
         else settings.get("tool", {}).get("pyrefly")
     )
     if options is not None:
-        if (
-            options.get("preset") not in {"strict", "all"}
-            or options.get("check-unannotated-defs", True) is not True
-        ):
+        gap = pyrefly_gap(
+            str(native.relative_to(root) if native.exists() else name), options
+        )
+        if gap:
             raise ValueError(
-                f"{package['path']}: existing Pyrefly settings need strict checking; preserve them and ask before changing them"
+                f"{package['path']}: existing Pyrefly settings need strict checking; preserve them and ask before changing them. {gap}"
             )
     else:
         changes[name] = (
