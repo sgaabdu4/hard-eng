@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import subprocess
@@ -228,6 +229,38 @@ def test_a_markdown_edit_beside_committed_code_keeps_the_ready_plan_refusal(
     (repository / "README.md").write_text("notes\n")
     with pytest.raises(ValueError, match="plan is Ready; this check requires Complete"):
         validate_plans(repository)
+
+
+def process_starts(monkeypatch: pytest.MonkeyPatch, root: Path) -> int:
+    import plans
+
+    spy = Mock(side_effect=subprocess.Popen)
+    monkeypatch.setattr(subprocess, "Popen", spy)
+    with contextlib.suppress(ValueError):
+        plans.validate_plans(root, "main")
+    return spy.call_count
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [("committed", 23), ("uncommitted", 23), ("update", 31)],
+)
+def test_the_plan_rule_starts_no_more_processes_than_before_for_an_installed_path(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+    expected: int,
+) -> None:
+    if state == "update":
+        target = draft_plan_beside_an_update(release, monkeypatch)
+    else:
+        target = release[1]
+        git(target, "update-ref", "refs/heads/main", "HEAD")
+        git(target, "switch", "-qc", "feature/work")
+        (target / "AGENTS.md").write_text("rules\n")
+        if state == "committed":
+            commit(target, "rules")
+    assert process_starts(monkeypatch, target) == expected
 
 
 def started(spy: Mock) -> list[str]:

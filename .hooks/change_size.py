@@ -99,7 +99,12 @@ def configured_packages(root: Path) -> dict[str, Group]:
     return {group["path"]: group for group in config["packages"]}
 
 
-def update_written(root: Path, point: str, names: set[str]) -> set[str]:
+def update_written(
+    root: Path,
+    point: str,
+    names: set[str],
+    found: tuple[str, str] | None = None,
+) -> set[str]:
     """Paths a verified Hard Eng update in this branch wrote, scaffold and setup edits alike."""
     from ci_setup import setup_written
     from update import (
@@ -111,7 +116,7 @@ def update_written(root: Path, point: str, names: set[str]) -> set[str]:
 
     if not any(maybe_installed(name) for name in names):
         return set()
-    if (found := update_since(root, point)) is None:
+    if (found := found or update_since(root, point)) is None:
         return set()
     installed = proven_installed(root, point, names, *found)
     if not installed:
@@ -122,13 +127,15 @@ def update_written(root: Path, point: str, names: set[str]) -> set[str]:
 
 def update_only(root: Path, base: str, changed: set[str]) -> bool:
     """Whether a clean tree holds only files a verified Hard Eng update wrote."""
-    from update import maybe_installed
+    from update import maybe_installed, update_since
 
     if not any(maybe_installed(name) for name in changed):
         return False
+    if (found := update_since(root, base)) is None:
+        return False
     if _git_output(root, "status", "--porcelain"):
         return False
-    return not changed - update_written(root, base, changed)
+    return not changed - update_written(root, base, changed, found)
 
 
 def _verdict(
