@@ -3,7 +3,7 @@
 import threading
 from pathlib import Path
 from types import ModuleType
-from typing import cast
+from typing import IO, cast
 
 import process_group
 import pytest
@@ -114,16 +114,20 @@ def test_an_install_marks_only_its_own_group_in_a_shared_folder(
     assert [len(group["checks"]) for group in kept] == [0, 1]
 
 
+def mark_install(tmp_path: Path, lock: IO[str], key: str) -> None:
+    before = process_group.read_installed(lock, tmp_path)
+    process_group.note_install(key, "lockfiles", False)
+    process_group.save_installed(lock, before, tmp_path)
+    assert process_group.read_installed(lock, tmp_path) == {key}
+
+
 def test_a_changed_lock_file_drops_the_install_mark(tmp_path: Path) -> None:
     key = process_group.install_key({"path": "app", "language": "python"})
     package = tmp_path / "app"
     package.mkdir()
     (package / "uv.lock").write_text("one\n")
     with (tmp_path / "lock").open("w+") as lock:
-        before = process_group.read_installed(lock, tmp_path)
-        process_group.note_install(key, "lockfiles", False)
-        process_group.save_installed(lock, before, tmp_path)
-        assert process_group.read_installed(lock, tmp_path) == {key}
+        mark_install(tmp_path, lock, key)
         (package / "uv.lock").write_text("one\ntwo\n")
         assert process_group.read_installed(lock, tmp_path) == frozenset()
 
@@ -134,10 +138,7 @@ def test_a_removed_install_folder_drops_the_install_mark(tmp_path: Path) -> None
     (package / ".venv").mkdir(parents=True)
     (package / "uv.lock").write_text("one\n")
     with (tmp_path / "lock").open("w+") as lock:
-        before = process_group.read_installed(lock, tmp_path)
-        process_group.note_install(key, "lockfiles", False)
-        process_group.save_installed(lock, before, tmp_path)
-        assert process_group.read_installed(lock, tmp_path) == {key}
+        mark_install(tmp_path, lock, key)
         (package / ".venv").rmdir()
         assert process_group.read_installed(lock, tmp_path) == frozenset()
 
