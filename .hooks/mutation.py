@@ -25,7 +25,7 @@ GLOB = re.compile(r"[?*()[\]]")
 HUNK = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 STACK_FRAME = re.compile(r"\s+at ")
 LISTED = 20
-Survivor = tuple[str, int, str]
+Survivor = tuple[str, int, str, bool]
 Result = tuple[int, list[Survivor]]
 Adapter = Callable[[Path, dict[str, set[int]], list[str], float | None, Path], Result]
 
@@ -112,7 +112,14 @@ def stryker_survivors(report: object) -> Result:
             tested += status in {"Killed", "Survived", "NoCoverage", "Timeout"}
             if status in {"Survived", "NoCoverage"}:
                 line = mutant["location"]["start"]["line"]
-                survivors.append((name, line, mutated_line(file["source"], mutant)))
+                survivors.append(
+                    (
+                        name,
+                        line,
+                        mutated_line(file["source"], mutant),
+                        status == "NoCoverage",
+                    )
+                )
     return tested, survivors
 
 
@@ -320,7 +327,14 @@ def python(
             globs[pattern] for pattern in globs if fnmatch.fnmatchcase(mutant, pattern)
         )
         if original in content and not text_only(original, mutated):
-            survivors.append((file, content[original], f"{original} → {mutated}"))
+            survivors.append(
+                (
+                    file,
+                    content[original],
+                    f"{original} → {mutated}",
+                    status == "no tests",
+                )
+            )
     return len(statuses), survivors
 
 
@@ -337,7 +351,7 @@ def xunit_survivors(document: str) -> Result:
             if ": " in line
         )
         change = f"{fields['Original line'].strip()} → {fields['Mutation'].strip()}"
-        survivors.append((fields["File"].strip(), int(fields["Line"]), change))
+        survivors.append((fields["File"].strip(), int(fields["Line"]), change, False))
     return tested, survivors
 
 
@@ -427,13 +441,19 @@ def summary(name: str, tested: int, survivors: list[Survivor], directory: Path) 
         print(f"{name}: the tests caught every mutant ({tested}).")
     else:
         print(
-            f"{name}: {len(survivors)} of {tested} mutants survived on changed lines; "
-            "the tests still pass with these changes:"
+            f"{name}: {len(survivors)} of {tested} mutants survived on changed lines."
         )
-        for file, line, change in survivors[:LISTED]:
-            print(f"  {directory / file}:{line}  {change}")
-        if len(survivors) > LISTED:
-            print(f"  … and {len(survivors) - LISTED} more")
+        for unreached, heading in (
+            (False, "the tests still pass with these changes:"),
+            (True, "no test ran the code where these changes are:"),
+        ):
+            listed = [found for found in survivors if found[3] is unreached]
+            if listed:
+                print(heading)
+            for file, line, change, _ in listed[:LISTED]:
+                print(f"  {directory / file}:{line}  {change}")
+            if len(listed) > LISTED:
+                print(f"  … and {len(listed) - LISTED} more")
 
 
 def targets(

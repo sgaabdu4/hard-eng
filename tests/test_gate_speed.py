@@ -15,7 +15,16 @@ import gate_config
 import gate_times
 import pytest
 from ci_setup import migrate_impact_token
-from conftest import SOURCE, commit, configure, gate, load_module, running, spawner
+from conftest import (
+    SOURCE,
+    commit,
+    configure,
+    gate,
+    init,
+    load_module,
+    running,
+    spawner,
+)
 from gate_config import Gate, Group
 from gate_schedule import gate_order, waits
 
@@ -480,3 +489,60 @@ def test_stop_with_nothing_changed_starts_no_more_git_commands_than_before(
         line for line in events.read_text().splitlines() if '"event":"start"' in line
     ]
     assert len(starts) <= 6, len(starts)
+
+
+ATTRIBUTE_STARTS: list[str] = []
+READING: list[bool] = []
+
+
+def record_attribute_starts(event: str, arguments: tuple[object, ...]) -> None:
+    if READING and event == "subprocess.Popen":
+        command = str(arguments[1])
+        if "check-attr" in command:
+            ATTRIBUTE_STARTS.append(command)
+
+
+sys.addaudithook(record_attribute_starts)
+
+
+def generated_repository(tmp_path: Path) -> Path:
+    repository = tmp_path / "repository"
+    init(repository)
+    configure(repository, [gate("suite", "pass")])
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        (repository / name).write_text((SOURCE / name).read_text())
+    (repository / "big.py").write_text("line\n" * 1100)
+    (repository / "app").mkdir()
+    (repository / "app/package.json").write_text("{}\n")
+    (repository / ".gitattributes").write_text(
+        "big.py linguist-generated\napp/package.json linguist-generated\n"
+    )
+    commit(repository, "Add generated files")
+    return repository
+
+
+def test_a_config_load_reads_the_git_attributes_one_time(tmp_path: Path) -> None:
+    repository = generated_repository(tmp_path)
+    ATTRIBUTE_STARTS.clear()
+    READING.append(True)
+    try:
+        gate_config.load_groups(repository)
+    finally:
+        READING.clear()
+    assert len(ATTRIBUTE_STARTS) == 1, ATTRIBUTE_STARTS
+
+
+def test_one_attributes_read_gives_each_rule_the_same_generated_files(
+    tmp_path: Path,
+) -> None:
+    repository = generated_repository(tmp_path)
+    attributes = repository / ".gitattributes"
+    assert gate_config.load_groups(repository)
+    attributes.write_text("app/package.json linguist-generated\n")
+    with pytest.raises(ValueError, match="HE-FILE-LENGTH.*big.py: 1100 lines"):
+        gate_config.load_groups(repository)
+    attributes.write_text("big.py linguist-generated\n")
+    with pytest.raises(ValueError, match="package is missing.*: app"):
+        gate_config.load_groups(repository)
+    attributes.write_text("")
+    assert gate_config.generated_sources(repository, ["big.py"]) == set()

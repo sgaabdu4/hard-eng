@@ -418,6 +418,60 @@ def test_net_loss_of_assertions_fails_naming_lines_and_count(
 
 
 @pytest.mark.parametrize(
+    ("path", "kept", "removed", "name"),
+    [
+        (
+            "tests/test_a.py",
+            "def test_keeps():\n    assert a() == 1\n",
+            "def test_two():\n    assert a() == 1\n",
+            "test_two",
+        ),
+        (
+            "src/a.test.ts",
+            "it('keeps a', () => {\n  expect(a()).toBe(1);\n});\n",
+            "it('adds two numbers', () => {\n  expect(a()).toBe(1);\n});\n",
+            "adds two numbers",
+        ),
+        (
+            "test/a_test.dart",
+            "testWidgets('keeps a', (t) async {\n  expect(a(), 1);\n});\n",
+            "testWidgets('shows a title', (t) async {\n  expect(a(), 1);\n});\n",
+            "shows a title",
+        ),
+    ],
+)
+def test_a_record_written_the_way_the_message_says_is_accepted(
+    tmp_path: Path, path: str, kept: str, removed: str, name: str
+) -> None:
+    root = switch_root(tmp_path, path, kept + removed)
+    (root / path).write_text(kept)
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    message = str(error.value)
+    assert "the function name for a Python test" in message
+    assert "the text between the quotes for it(), test() and testWidgets()" in message
+    (root / "features/x").mkdir(parents=True)
+    record = f"Removed test: {path} :: {name} :: test keeps proves it"
+    (root / "features/x/PLAN.md").write_text(f"# Plan\n\n{record}\n")
+    validate_suppressions(root, "HEAD")
+
+
+def test_the_lost_assertion_message_says_what_the_record_covers(
+    tmp_path: Path,
+) -> None:
+    name, text = ASSERTS[0]
+    root = switch_root(tmp_path, name, text)
+    (root / name).write_text(text.replace("assert g()\n", ""))
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    message = str(error.value)
+    assert "To remove a whole test, add `Removed test:" in message
+    assert "the test name is the function name for a Python test" in message
+    assert "An assertion in a test that stays must stay" in message
+    assert "get an equal check" in message
+
+
+@pytest.mark.parametrize(
     "name", ["tests/test_my file.py", "tests/test_tab\tfile.py", 'tests/test_"q" é.py']
 )
 def test_tracked_paths_git_quotes_still_fail_suppressions_and_lost_assertions(

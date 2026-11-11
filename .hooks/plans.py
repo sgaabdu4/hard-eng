@@ -57,7 +57,8 @@ SECTIONS = (
     "Verification",
 )
 STAGES = ("Draft", "Ready", "Complete")
-DRAFT_STEP = "; files other than plans changed, so get approval for the plan and set its Status to Ready before you build. During the build, run this check with --plan-stage Ready"
+BUILD_STEP = "During the build, run this check with --plan-stage Ready"
+DRAFT_STEP = f"; files other than plans changed, so get approval for the plan and set its Status to Ready before you build. {BUILD_STEP}"
 HANDOFFS = ("Clarification", "Approval")
 PLACEHOLDERS = re.compile(
     r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"
@@ -569,34 +570,10 @@ def applicable_plans(root: Path, paths: list[Path], changed: set[str]) -> list[P
     ]
 
 
-def _revision(root: Path, reference: str) -> str | None:
-    try:
-        return _git_output(
-            root, "rev-parse", "--verify", "-q", f"{reference}^{{commit}}"
-        )
-    except (subprocess.CalledProcessError, OSError):
-        return None
-
-
-def released_plans(root: Path, base: str | None) -> set[str]:
-    """Plans changed since the release base, so a feature check sees what the release checks."""
-    references = release_references(root)
-    revisions = {name: _revision(root, name) for name in references}
-    tips = set(revisions.values())
-    remote = {tip for name, tip in revisions.items() if name.startswith("origin/")}
-    if base is None and remote - {None}:
-        # A caller's base names what is released; without one, origin does.
-        tips = remote
-    point = default_branch_point(root)
-    if point is None or _revision(root, base or "HEAD") in tips:
-        return set()
-    return {
-        name for name in changed_files(root, point) or () if is_plan_path(Path(name))
-    }
-
-
 def plan_tests(root: Path, base: str | None) -> set[str]:
     """Test names that the active plans' acceptance lines depend on."""
+    from change_size import released_plans
+
     changed = (changed_files(root, base or "HEAD") or set()) | released_plans(
         root, base
     )
@@ -626,30 +603,39 @@ def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) 
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
-    from change_size import judges_branch, plan_not_needed
+    from change_size import (
+        judged_point,
+        moved_plans,
+        plan_not_needed,
+        released_plans,
+        update_only,
+    )
 
     explicit_stage = stage is not None
+    typed = base is None
+    base = base or judged_point(root)
     changed = changed_files(root, base or "HEAD")
     if changed is None:
         raise ValueError("Cannot verify plan scope; fetch or supply a valid Git --base")
     if stage is None:
         stage = "Draft" if planning_only(root, changed) else "Complete"
-    if base is not None and not explicit_stage and changed:
-        from change_size import update_written
-
-        # Unrelated open plans must not block a verified Hard Eng update branch.
-        if not changed - update_written(root, base):
-            print(
-                "Plan: only files the verified Hard Eng update wrote; no plan needed."
-            )
-            return stage
+    # Unrelated open plans must not block a verified Hard Eng update branch.
+    if (
+        base is not None
+        and not explicit_stage
+        and changed
+        and update_only(root, base, changed)
+    ):
+        print("Plan: only files the verified Hard Eng update wrote; no plan needed.")
+        return stage
     changed |= released_plans(root, base)
+    changed -= moved_plans(root, base, changed)
     paths = plan_files(root)
     applicable = applicable_plans(root, paths, changed)
     if not applicable and explicit_stage and not changed:
         applicable = paths
     if (
-        (changed != set() or explicit_stage or (base is None and judges_branch(root)))
+        (changed != set() or explicit_stage)
         and not applicable
         and not plan_not_needed(root)
     ):
@@ -666,10 +652,10 @@ def validate_plans(
             # A Draft plan claims no implementation, so it may ride along with finished work.
             if status == "Draft" and reached:
                 continue
-            ready = status == "Draft" and stage == "Complete" and not explicit_stage
+            steps = {"Draft": DRAFT_STEP, "Ready": f". {BUILD_STEP}" * typed}
+            step = steps[status] if stage == "Complete" and not explicit_stage else ""
             raise ValueError(
-                f"{path.relative_to(root)}: plan is {status}; this check requires {stage}"
-                f"{DRAFT_STEP if ready else ''}"
+                f"{path.relative_to(root)}: plan is {status}; this check requires {stage}{step}"
             )
         effective_stage = min(effective_stage, status, key=STAGES.index)
     return stage if explicit_stage or not applicable else effective_stage

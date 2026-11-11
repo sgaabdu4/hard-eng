@@ -466,3 +466,38 @@ def test_a_debt_file_recorded_with_link_codes_still_matches(repository: Path) ->
     assert "\\u001b]N;;https://biomejs.dev" in recorded
     again = (SAMPLES / "biome-two.txt").read_text()
     assert debt.judge(repository, LINT_GROUP, LINT, True, again) is False
+
+
+MISSING_SUITE = (
+    "HE-PERFORMANCE-SUITE: tests/performance does not exist; add a test there"
+)
+PERFORMANCE: Gate = {
+    "name": "performance",
+    "role": "performance",
+    "command": ["pytest", "tests/performance"],
+    "report": {"type": "performance-junit", "path": "perf.xml"},
+}
+
+
+def test_the_missing_performance_suite_is_never_debt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    group: Group = {"path": ".", "checks": [PERFORMANCE]}
+    outputs = {"./performance": MISSING_SUITE + "\n"}
+    assert debt.record(tmp_path, [group], {"./performance"}, outputs) == 1
+    assert not (tmp_path / debt.DEBT_FILE).exists()
+    assert (
+        "must pass before adoption; fix them first: ./performance"
+        in capsys.readouterr().out
+    )
+    written = {"version": 1, "gates": {"./performance": {MISSING_SUITE: 1}}}
+    (tmp_path / debt.DEBT_FILE).write_text(json.dumps(written))
+    assert debt.judge(tmp_path, group, PERFORMANCE, True, MISSING_SUITE + "\n") is True
+    assert "DEBT" not in capsys.readouterr().out
+
+
+def test_a_performance_budget_failure_is_still_recorded(tmp_path: Path) -> None:
+    group: Group = {"path": ".", "checks": [PERFORMANCE]}
+    outputs = {"./performance": "FAILED tests/performance/test_load.py - over budget\n"}
+    assert debt.record(tmp_path, [group], {"./performance"}, outputs) == 0
+    assert "./performance" in debt.load(tmp_path)

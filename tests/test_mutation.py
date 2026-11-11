@@ -163,8 +163,56 @@ def test_each_python_survivor_is_read_from_its_own_diff(
     changed = {"src/shop/price.py": {2}}
     assert mutation.python(tmp_path, changed, ["pytest"], None, tmp_path) == (
         2,
-        [("src/shop/price.py", 2, " → ".join(boundary))],
+        [("src/shop/price.py", 2, " → ".join(boundary), False)],
     )
+
+
+def test_a_mutant_that_no_test_ran_is_not_reported_as_passing_tests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "src/shop").mkdir(parents=True)
+    (tmp_path / "src/shop/price.py").write_text(PRICE)
+    states = {
+        "shop.price.x_discount__mutmut_1": (
+            "survived",
+            "if total >= 100 and member:",
+            "if total > 100 and member:",
+        ),
+        "shop.price.x_discount__mutmut_2": (
+            "no tests",
+            "return total * 0.9",
+            "return total * 1.9",
+        ),
+    }
+
+    def run(
+        command: list[str], _directory: Path, _deadline: float | None, output: Path
+    ) -> int:
+        if "results" in command:
+            output.write_text(
+                "".join(f"    {name}: {state[0]}\n" for name, state in states.items())
+            )
+        elif "show" in command:
+            _, original, mutated = states[command[-1]]
+            output.write_text(
+                f"--- a\n+++ b\n@@ -1 +1 @@\n-    {original}\n+    {mutated}\n"
+            )
+        return 0
+
+    monkeypatch.setattr(mutation, "run", run)
+    tested, survivors = mutation.python(
+        tmp_path, {"src/shop/price.py": {2, 3}}, ["pytest"], None, tmp_path
+    )
+    mutation.summary("python", tested, survivors, Path("."))
+    lines = capsys.readouterr().out.splitlines()
+    passing = lines.index("the tests still pass with these changes:")
+    unreached = lines.index("no test ran the code where these changes are:")
+    assert "if total >= 100 and member: → " in lines[passing + 1]
+    assert "if total >= 100" not in "".join(lines[unreached:])
+    assert "return total * 0.9 → " in lines[unreached + 1]
+    assert passing < unreached
+    mutation.summary("python", 1, [survivors[1]], Path("."))
+    assert "the tests still pass" not in capsys.readouterr().out
 
 
 def test_failed_mutmut_run_is_reported_instead_of_a_clean_result(
@@ -271,6 +319,33 @@ def test_stryker_patterns_match_route_files_literally(
     assert not fnmatch.fnmatchcase("app/(shop)/s/route.ts", path)
 
 
+def test_a_stryker_mutant_without_coverage_is_listed_as_not_run(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    first = {"start": {"line": 2, "column": 7}, "end": {"line": 2, "column": 19}}
+    second = {"start": {"line": 3, "column": 3}, "end": {"line": 3, "column": 9}}
+    source = "function f() {\n  if (total >= 100) {\n  return a;\n"
+    report = {
+        "files": {
+            "src/f.ts": {
+                "source": source,
+                "mutants": [
+                    {"status": "Survived", "location": first, "replacement": "true"},
+                    {"status": "NoCoverage", "location": second, "replacement": "b"},
+                ],
+            }
+        }
+    }
+    tested, survivors = mutation.stryker_survivors(report)
+    mutation.summary("javascript", tested, survivors, Path("."))
+    lines = capsys.readouterr().out.splitlines()
+    passing = lines.index("the tests still pass with these changes:")
+    unreached = lines.index("no test ran the code where these changes are:")
+    assert passing < unreached
+    assert "src/f.ts:2" in lines[passing + 1]
+    assert "src/f.ts:3" in lines[unreached + 1]
+
+
 def test_stryker_and_mutation_test_reports_list_what_survived() -> None:
     location = {"start": {"line": 2, "column": 7}, "end": {"line": 2, "column": 19}}
     stryker = {
@@ -296,6 +371,7 @@ def test_stryker_and_mutation_test_reports_list_what_survived() -> None:
                 "src/price.ts",
                 2,
                 "if (total >= 100 && member) { → if (total > 100 && member) {",
+                False,
             )
         ],
     )
@@ -315,6 +391,7 @@ Mutation:   if (total &gt; 100 &amp;&amp; member) {
                 "lib/price.dart",
                 2,
                 "if (total >= 100 && member) { → if (total > 100 && member) {",
+                False,
             )
         ],
     )

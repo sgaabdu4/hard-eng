@@ -3,8 +3,10 @@
 import json
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import Mock
 
 import hook_chain
 import pytest
@@ -249,3 +251,20 @@ def test_own_launchers_alone_need_no_shell_gate(
     (tmp_path / "deploy.sh").write_text("#!/bin/sh\necho deploy\n")
     with pytest.raises(ValueError, match="missing mandatory checks: shell"):
         validate_required_checks(tmp_path, load_config(tmp_path))
+
+
+def test_husky_update_succeeds_when_the_temporary_directory_is_a_symlink(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, target, _ = release
+    husky_project(target)
+    add_origin(target)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    symlinked = tmp_path / "symlinked-tmp"
+    symlinked.symlink_to(tmp_path / "tmp")
+    monkeypatch.setenv("TMPDIR", str(symlinked))
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=None))
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "failed" not in result, result

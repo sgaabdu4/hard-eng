@@ -511,10 +511,12 @@ def remember_failure(root: Path, attempt: str, error: Exception) -> None:
 
 
 def failed_update(error: Exception | str) -> str:
+    cause, start, note = str(error).partition("This checkout")
     return (
-        f"Hard Eng update failed: {error}. Fix that cause first. A fix in tracked files "
+        f"Hard Eng update failed: {cause.strip().rstrip('.')}. Fix that cause first. A fix in tracked files "
         "goes on the base branch as its own commit, since the update is built from it. "
         "Cause outside repo → tell user. Installed gates still apply."
+        + (f" {start}{note}" if start else "")
     )
 
 
@@ -658,6 +660,7 @@ def repair_checkout(root: Path, previous: str) -> str:
     """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
     import hook_chain
     import update
+    from ci_setup import GATES_FILE, without_workflow_gates
 
     hook_chain.install_worktree_hook(root)
     needs_hook = update.pre_push_missing(root) or hook_chain.foreign_hook(
@@ -677,21 +680,39 @@ def repair_checkout(root: Path, previous: str) -> str:
     if needs_hook:
         update.install_planned_hook(root, hook)
         notes.append("installed the missing pre-push hook")
+    planned = changes.get(GATES_FILE)
+    waits = without_workflow_gates(root, changes)
+    if waits is not None and waits != planned:
+        changes[GATES_FILE] = (
+            None if waits == (root / GATES_FILE).read_text() else waits
+        )
     written = {
         name: content
         for name, content in sorted(changes.items())
         if content is not None
         and not update.maybe_installed(name)
-        and (name == "hard-eng.gates.json" or not (root / name).exists())
+        and (name == GATES_FILE or not (root / name).exists())
     }
     for name, content in written.items():
         update.replace_file(root / name, content.encode())
     if written:
         notes.append(
-            f"setup wrote {', '.join(written)} for the project's current packages; "
+            f"setup wrote {', '.join(written)}; "
             f"review and commit {'it' if len(written) == 1 else 'them'}"
         )
+    if waits is not None and waits != planned:
+        notes.append(
+            "the update brings the workflow files and their gates when the `shipping` block of hard-eng.gates.json is on the base branch"
+        )
     return f"This checkout: {'; '.join(notes)}." if notes else ""
+
+
+def failure_kind(error: Exception) -> type[Exception]:
+    """The base class a caller catches for this error; each takes one message."""
+    for kind in (subprocess.SubprocessError, OSError, TypeError):
+        if isinstance(error, kind):
+            return kind
+    return ValueError
 
 
 def prepare_update(root: Path, repair: bool = False) -> str:
@@ -701,10 +722,16 @@ def prepare_update(root: Path, repair: bool = False) -> str:
         note = repair_checkout(
             root, json.loads((root / SOURCE_FILE).read_text())["revision"]
         )
-    base = update_base(root)
-    if not published(root, base):
-        return f"{NOT_PUBLISHED} {note}".strip()
-    return f"{build_update(root, base, repair)} {note}".strip()
+    try:
+        base = update_base(root)
+        if not published(root, base):
+            return f"{NOT_PUBLISHED} {note}".strip()
+        built = build_update(root, base, repair)
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        if not note:
+            raise
+        raise failure_kind(error)(f"{str(error).rstrip('.')}. {note}") from error
+    return f"{built} {note}".strip()
 
 
 def free_step(root: Path, worktree: Path) -> str:

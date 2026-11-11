@@ -352,6 +352,17 @@ def test_quick_check_offline_without_tools_says_to_connect_once(
     assert "run the full check" in result.stdout
 
 
+def test_the_missing_tools_message_names_the_build_form_of_the_check(
+    tmp_path: Path, registry: Path
+) -> None:
+    (registry / "offline").touch()
+    result = provision(tmp_path, quick=True)
+    assert "run the full check (`python3 .hooks/hard-eng.py check`;" in result.stdout
+    assert "during a build, `python3 .hooks/hard-eng.py check --plan-stage Ready`)" in (
+        result.stdout
+    )
+
+
 def test_quick_check_runs_python_scanners_from_the_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

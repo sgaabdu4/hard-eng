@@ -64,6 +64,29 @@ def test_unchanged_turn_during_a_build_reuses_the_pass_for_that_stage(
     assert runs.read_text().count("run") == 2
 
 
+@pytest.mark.parametrize("building", [True, False])
+def test_the_lock_message_names_the_check_that_runs_gates_in_a_build(
+    repository: Path, monkeypatch: pytest.MonkeyPatch, building: bool
+) -> None:
+    import fcntl
+
+    import plans
+
+    def build_state(*_: object) -> bool:
+        return building
+
+    monkeypatch.setattr(plans, "build_in_progress", build_state)
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    payload: JsonObject = {"session_id": "busy"}
+    assert agent_hooks.record_session(repository, payload)
+    (repository / "work.py").write_text("value = 1\n")
+    with (repository / ".git/hard-eng-check.lock").open("w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        reason = str(agent_hooks.completion(repository, payload)["reason"])
+    assert ("check --plan-stage Ready" in reason) == building
+    assert "`python3 .hooks/hard-eng.py check" in reason
+
+
 def test_work_merged_by_others_after_the_session_started_is_not_checked(
     repository: Path,
 ) -> None:

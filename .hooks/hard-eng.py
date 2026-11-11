@@ -40,7 +40,6 @@ import subprocess
 import tempfile
 import threading
 import time
-import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
@@ -58,6 +57,7 @@ from ci_jobs import (
 )
 from dart_boundaries import validate_dart_boundaries
 from debt import OUTPUTS, remember
+from dependency_graph import SOURCE_SUFFIXES, child_groups
 from gate_config import (
     Gate,
     Group,
@@ -69,7 +69,12 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
-from python_setup import pytest_options, require_import_contract
+from python_setup import (
+    leave_out_children,
+    pytest_options,
+    require_import_contract,
+    validate_pyrefly,
+)
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -196,29 +201,7 @@ def validate_typing(
     package_root: Path | None = None,
 ) -> None:
     if language == "python":
-        native = directory / "pyrefly.toml"
-        options = (
-            tomllib.loads(native.read_text())
-            if native.exists()
-            else tomllib.loads((directory / "pyproject.toml").read_text())
-            .get("tool", {})
-            .get("pyrefly", {})
-        )
-        if (
-            options.get("preset") not in {"strict", "all"}
-            or options.get("check-unannotated-defs", True) is not True
-            or any(
-                value in (False, "ignore")
-                for value in options.get("errors", {}).values()
-            )
-            or options.get("ignore-missing-imports")
-            or options.get("replace-imports-with-any")
-            or options.get("replace-untyped-imports-with-any")
-            or options.get("sub-config")
-        ):
-            raise ValueError(
-                "Pyrefly requires strict checking without disabled diagnostics or Any import substitutions"
-            )
+        validate_pyrefly(directory, ROOT)
     elif language == "dart":
         validate_dart_typing(directory, sources, package_root)
 
@@ -286,14 +269,8 @@ def reject_test_filters(
 def production_files(
     directory: Path, group: Group, *, include_tests: bool = False
 ) -> set[Path]:
-    extensions = {
-        "python": {".py"},
-        "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
-        "dart": {".dart"},
-        "swift": {".swift"},
-    }
     language, sources = group.get("language"), group.get("sources")
-    if language not in extensions or not isinstance(sources, list) or not sources:
+    if language not in SOURCE_SUFFIXES or not isinstance(sources, list) or not sources:
         raise ValueError(
             "Test packages must declare their language and production sources"
         )
@@ -307,7 +284,7 @@ def production_files(
                 f"Production source must exist inside its package: {source}"
             )
         for file in [root] if root.is_file() else root.rglob("*"):
-            if file.is_file() and file.suffix in extensions[language]:
+            if file.is_file() and file.suffix in SOURCE_SUFFIXES[language]:
                 if file.name.endswith((".d.ts", ".d.mts", ".d.cts")) or (
                     not include_tests
                     and nonproduction_source(file.relative_to(directory))
@@ -439,7 +416,8 @@ def prepare_reports(
                 raise ValueError(
                     f"HE-PERFORMANCE-SUITE: {suite} does not exist; add a test there "
                     "with a real workload and a time budget, or, after review, record a "
-                    "performance_exception and remove this check (he/references/gates.md). "
+                    "performance_exception and remove this check "
+                    "(.agents/skills/he/references/gates.md). "
                     "A new project starts without one: the first code change adds it"
                 )
     for path in paths:
@@ -569,6 +547,7 @@ def run_limited_gate(
             report_path, coverage_path, directory, expected_sources = prepare_reports(
                 group, report, kind, tests, scanner, command
             )
+        command = leave_out_children(ROOT, command, group, gate)
         command, coverage_path = related_command(
             command, coverage_path, gate, groups or [group], directory, related_base
         )
@@ -673,10 +652,8 @@ def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path,
         return ()
     return tuple(
         ROOT / child["path"]
-        for child in groups
-        if child["path"] != "."
-        and child.get("language") == "javascript"
-        and any(
+        for child in child_groups(group, gate.get("role"), groups)
+        if any(
             check.get("role") == gate.get("role") and check["command"] == command
             for check in child["checks"]
         )
@@ -855,7 +832,10 @@ def check_command(args: "Namespace") -> int:
 def main() -> int:
     import argparse
 
-    if "pre-push" in (Path(sys.argv[0]).name, *sys.argv[1:2]):
+    if "pre-push" in (Path(sys.argv[0]).name, *sys.argv[1:2]) and not {
+        "-h",
+        "--help",
+    } & set(sys.argv[1:]):
         return pre_push()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.set_defaults(apply=False, merge=True)

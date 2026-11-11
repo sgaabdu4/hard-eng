@@ -332,7 +332,38 @@ def reject_diagnostic_notes(diagnostics: list[object], optional: set[str]) -> No
         raise ValueError("Fallow reports analysis diagnostics: " + "; ".join(notes))
 
 
-def validate_fallow(path: Path, provided: set[str] | None = None) -> None:
+def installed_above(directory: Path | None) -> bool:
+    """A package that declares no dependency reads the install of a folder above it, up to the repository."""
+    if directory is None:
+        return False
+    try:
+        manifest = json.loads((directory / "package.json").read_text())
+    except (OSError, ValueError):
+        return False
+    kinds = (
+        "dependencies",
+        "devDependencies",
+        "peerDependencies",
+        "optionalDependencies",
+    )
+    if any(manifest.get(kind) for kind in kinds):
+        return False
+    folder = directory.resolve()
+    while not (folder / "hard-eng.gates.json").is_file() and folder != folder.parent:
+        folder = folder.parent
+        if (folder / "node_modules").is_dir():
+            return True
+    return False
+
+
+def optional_notes(directory: Path | None) -> set[str]:
+    notes = {"boundaries-not-configured", "rule-packs-not-configured"}
+    return notes | {"node-modules-missing"} if installed_above(directory) else notes
+
+
+def validate_fallow(
+    path: Path, provided: set[str] | None = None, directory: Path | None = None
+) -> None:
     try:
         report = json.loads(path.read_text())
         drop_sdk_binaries(report, provided or set())
@@ -357,7 +388,7 @@ def validate_fallow(path: Path, provided: set[str] | None = None) -> None:
         clean = all(type(n) in (int, float) and n == 0 for n in counts)
         if report["kind"] != "combined" or not clean:
             raise ValueError("Fallow reports findings or skipped analysis")
-        optional = {"boundaries-not-configured", "rule-packs-not-configured"}
+        optional = optional_notes(directory)
         diagnostics = report.get("workspace_diagnostics", [])
         if not isinstance(diagnostics, list):
             raise TypeError("Fallow diagnostics must be a list")

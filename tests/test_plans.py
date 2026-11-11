@@ -5,8 +5,6 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable
-from functools import partial
 from pathlib import Path
 from types import ModuleType
 
@@ -857,83 +855,11 @@ def edit(root: Path, name: str, count: int) -> None:
     (root / name).write_text("\n".join(lines) + "\n")
 
 
-def two_commits_then_edit(root: Path) -> None:
-    edit(root, "a.py", 6)
-    commit(root, "first half")
-    edit(root, "b.py", 6)
-
-
 def new_file(root: Path) -> None:
     (root / "new.py").write_text("x = 1\n")
 
 
-def deleted_file(root: Path) -> None:
-    (root / "d.py").unlink()
-
-
-def binary_file(root: Path) -> None:
-    (root / "image.bin").write_bytes(b"\x00\x03\x04")
-
-
-def removed_test_line(root: Path) -> None:
-    edit(root, "tests/test_a.py", 1)
-
-
-def four_files(root: Path) -> None:
-    for name in ("a.py", "b.py", "c.py", "d.py"):
-        edit(root, name, 1)
-
-
-BIG_CHANGES = [
-    (partial(edit, name="a.py", count=11), "it changes 22 lines"),
-    (four_files, "it changes 4 files"),
-    (new_file, "it adds, deletes or renames the file new.py"),
-    (deleted_file, "it adds, deletes or renames the file d.py"),
-    (binary_file, "it changes the binary file image.bin"),
-    (
-        partial(edit, name="uv.lock", count=1),
-        "it changes uv.lock, which always needs a plan",
-    ),
-    (
-        partial(edit, name=".github/workflows/ci.yml", count=1),
-        "it changes .github/workflows/ci.yml, which always needs a plan",
-    ),
-    (removed_test_line, "it removes lines from the test file tests/test_a.py"),
-    (two_commits_then_edit, "it changes 24 lines"),
-]
-
-
-@pytest.mark.parametrize(("change", "reason"), BIG_CHANGES)
-def test_big_change_still_needs_a_plan_and_names_why(
-    repository: Path,
-    capsys: pytest.CaptureFixture[str],
-    change: Callable[[Path], object],
-    reason: str,
-) -> None:
-    sized_branch(repository)
-    change(repository)
-    with pytest.raises(ValueError, match="applicable PLAN"):
-        validate_plans(repository)
-    assert f"Size: big, because {reason}" in capsys.readouterr().out
-
-
-def test_unknown_branch_point_is_big(
-    repository: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    sized_branch(repository)
-    git(repository, "branch", "-m", "work", "other")
-    git(repository, "branch", "-D", "main")
-    edit(repository, "a.py", 1)
-    with pytest.raises(ValueError, match="applicable PLAN"):
-        validate_plans(repository)
-    assert "the branch point with the default branch cannot be found" in (
-        capsys.readouterr().out
-    )
-
-
-def test_a_check_with_no_base_judges_the_size_of_the_whole_branch(
-    repository: Path, completed_plan: str, capsys: pytest.CaptureFixture[str]
-) -> None:
+def released_branch(repository: Path) -> None:
     (repository / ".hooks").mkdir()
     (repository / ".hooks/hard-eng.py").write_text("")
     sized_branch(repository)
@@ -941,6 +867,12 @@ def test_a_check_with_no_base_judges_the_size_of_the_whole_branch(
     git(repository, "clone", "--bare", str(repository), str(remote))
     git(repository, "remote", "add", "origin", str(remote))
     git(repository, "fetch", "-q", "origin")
+
+
+def test_a_check_with_no_base_judges_the_size_of_the_whole_branch(
+    repository: Path, completed_plan: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    released_branch(repository)
     validate_plans(repository)
     assert "Size:" not in capsys.readouterr().out
     new_file(repository)
@@ -953,33 +885,114 @@ def test_a_check_with_no_base_judges_the_size_of_the_whole_branch(
     assert validate_plans(repository) == "Complete"
 
 
-def test_a_plan_stage_check_passes_a_small_change_with_no_plan(
-    repository: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("committed", [True, False], ids=["committed", "uncommitted"])
+@pytest.mark.parametrize(
+    ("status", "refusal"),
+    [
+        ("Draft", "plan is Draft; this check requires Complete"),
+        ("Ready", "plan is Ready; this check requires Complete"),
+        ("Complete", None),
+        (None, "repository changes need an applicable PLAN.md"),
+    ],
+)
+def test_a_check_with_no_base_judges_committed_code_as_it_judges_uncommitted_code(
+    repository: Path,
+    completed_plan: str,
+    capsys: pytest.CaptureFixture[str],
+    status: str | None,
+    refusal: str | None,
+    committed: bool,
 ) -> None:
-    sized_branch(repository)
-    edit(repository, "a.py", 2)
-    assert validate_plans(repository, stage="Complete") == "Complete"
-    assert "Size: small (1 file, 4 changed lines)" in capsys.readouterr().out
-    new_file(repository)
-    with pytest.raises(ValueError, match="applicable PLAN"):
-        validate_plans(repository, stage="Complete")
+    released_branch(repository)
+    if status:
+        (repository / "PLAN.md").write_text(
+            completed_plan.replace("Status: Complete", f"Status: {status}")
+        )
+        commit(repository, "plan")
+    if status is None:
+        new_file(repository)
+    else:
+        edit(repository, "a.py", 2)
+    if committed:
+        commit(repository, "code")
+    if refusal is None:
+        assert validate_plans(repository) == "Complete"
+        return
+    with pytest.raises(ValueError, match=refusal):
+        validate_plans(repository)
+    assert ("Size: big, because it adds" in capsys.readouterr().out) == (status is None)
 
 
-def test_a_draft_plan_with_code_edits_names_the_ready_step(
+def test_a_ready_plan_with_code_edits_names_the_build_form_of_the_check(
     repository: Path, completed_plan: str
 ) -> None:
     sized_branch(repository)
     edit(repository, "a.py", 2)
-    draft = completed_plan.replace("Status: Complete", "Status: Draft")
-    (repository / "PLAN.md").write_text(draft)
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", "Status: Ready")
+    )
     with pytest.raises(
-        ValueError, match="plan is Draft; this check requires Complete"
+        ValueError, match="plan is Ready; this check requires Complete"
     ) as error:
         validate_plans(repository)
-    assert (
-        "get approval for the plan and set its Status to Ready before you build"
-        in str(error.value)
+    assert "Complete. During the build, run this check with --plan-stage Ready" in str(
+        error.value
     )
-    with pytest.raises(ValueError, match="requires Ready") as explicit:
-        validate_plans(repository, stage="Ready")
-    assert "set its Status to Ready" not in str(explicit.value)
+    with pytest.raises(ValueError, match="requires Complete") as explicit:
+        validate_plans(repository, stage="Complete")
+    assert "--plan-stage Ready" not in str(explicit.value)
+    with pytest.raises(ValueError, match="requires Complete") as pushed:
+        validate_plans(repository, "main")
+    assert "--plan-stage Ready" not in str(pushed.value)
+
+
+def test_an_old_complete_plan_does_not_cover_committed_work_under_a_plan_stage_check(
+    repository: Path, completed_plan: str
+) -> None:
+    (repository / "PLAN.md").write_text(completed_plan)
+    released_branch(repository)
+    for stage in ("Ready", "Complete"):
+        assert validate_plans(repository, stage=stage) == stage
+    new_file(repository)
+    commit(repository, "code")
+    for stage in ("Ready", "Complete"):
+        with pytest.raises(ValueError, match="applicable PLAN"):
+            validate_plans(repository, stage=stage)
+
+
+def moved_plan_branch(repository: Path, completed_plan: str) -> None:
+    (repository / "PLAN.md").write_text(completed_plan)
+    released_branch(repository)
+    (repository / "features/moved").mkdir(parents=True)
+    git(repository, "mv", "PLAN.md", "features/moved/PLAN.md")
+    commit(repository, "move the plan")
+
+
+def test_a_moved_plan_does_not_cover_new_work(
+    repository: Path, completed_plan: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    moved_plan_branch(repository, completed_plan)
+    new_file(repository)
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository)
+    assert "Size: big, because it adds" in capsys.readouterr().out
+    (repository / "new.py").unlink()
+    edit(repository, "a.py", 2)
+    (repository / "features/next").mkdir()
+    (repository / "features/next/PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", "Status: Draft")
+    )
+    with pytest.raises(ValueError, match="features/next/PLAN.md: plan is Draft"):
+        validate_plans(repository)
+
+
+def test_a_branch_that_only_moves_a_plan_passes(
+    repository: Path, completed_plan: str
+) -> None:
+    moved_plan_branch(repository, completed_plan)
+    assert validate_plans(repository) == "Draft"
+    for stage in ("Ready", "Complete"):
+        assert validate_plans(repository, stage=stage) == stage
+    (repository / "features/moved/PLAN.md").write_text(completed_plan + "\nmore\n")
+    commit(repository, "edit the moved plan")
+    assert validate_plans(repository) == "Complete"

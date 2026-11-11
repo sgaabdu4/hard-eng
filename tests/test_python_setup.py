@@ -1,12 +1,19 @@
 """Python projects get the import contract, parallel tests and typing checks they need."""
 
 import json
+import re
+import tomllib
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 from gate_config import Gate, GateConfig, Group, parse_config
-from python_setup import import_configuration, import_contract_gap
+from python_setup import (
+    import_configuration,
+    import_contract_gap,
+    leave_out_children,
+    pyrefly_gap,
+)
 from reports import parallel_hint
 from test_setup import repository
 
@@ -141,3 +148,179 @@ def test_standalone_python_does_not_invent_import_architecture(
     assert len(annotations) == 1
     assert "main.py" in annotations[0]["command"]
     assert "src" not in annotations[0]["command"]
+
+
+def test_a_python_parent_leaves_out_child_groups_that_have_the_same_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def group(path: str, language: str, *roles: str) -> Group:
+        checks: list[Gate] = [
+            {"name": role, "role": role, "command": [role]} for role in roles
+        ]
+        return {"path": path, "language": language, "checks": checks}
+
+    parent = group(".", "python", "tests", "dependencies")
+    groups = [
+        parent,
+        group("packages/a", "python", "tests", "dependencies"),
+        group("packages/b", "python", "tests"),
+        group("web", "javascript", "tests", "dependencies"),
+    ]
+    tests, deptry = parent["checks"]
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": groups, "shared": []})
+    )
+    pytest_command = ["uv", "run", "pytest", "-n", "auto"]
+    deptry_command = ["deptry", ".", "--no-ansi"]
+    assert leave_out_children(tmp_path, pytest_command, parent, tests) == [
+        "uv",
+        "run",
+        "pytest",
+        f"--ignore={tmp_path / 'packages/a'}",
+        f"--ignore={tmp_path / 'packages/b'}",
+        "-n",
+        "auto",
+    ]
+    assert leave_out_children(tmp_path, deptry_command, parent, deptry) == [
+        *deptry_command,
+        "--extend-exclude",
+        "^packages/a(/|$)",
+    ]
+    child = groups[1]
+    assert leave_out_children(tmp_path, pytest_command, child, tests) == (
+        pytest_command
+    )
+
+    import change_size
+
+    def unreadable(_root: Path) -> dict[str, Group]:
+        raise AssertionError("a gate that leaves out nothing read the gates file")
+
+    monkeypatch.setattr(change_size, "configured_packages", unreadable)
+    web = groups[3]
+    assert leave_out_children(tmp_path, ["web"], web, web["checks"][0]) == ["web"]
+    other: Gate = {"name": "lint", "role": "lint", "command": ["ruff"]}
+    assert leave_out_children(tmp_path, ["ruff"], parent, other) == ["ruff"]
+
+
+def pyrefly_package(root: Path, files: dict[str, str]) -> Path:
+    directory = root / "tools/cli"
+    directory.mkdir(parents=True)
+    for name, text in files.items():
+        (directory / name).write_text(text)
+    return directory
+
+
+def test_the_strict_pyrefly_refusal_names_the_file_and_the_lines(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    project = '[project]\nname = "cli"\nversion = "1"\n'
+    directory = pyrefly_package(tmp_path, {"pyproject.toml": project})
+    with pytest.raises(ValueError) as missing:
+        runner.validate_typing(directory, "python")
+    text = str(missing.value)
+    assert "tools/cli/pyproject.toml" in text
+    assert "[tool.pyrefly]" in text
+    assert 'preset = "strict"' in text
+    assert "check-unannotated-defs" not in text
+    assert text.endswith('add preset = "strict" in a new [tool.pyrefly] table')
+    (directory / "pyproject.toml").write_text(
+        project + '\n[tool.pyrefly]\npreset = "strict"\n'
+    )
+    runner.validate_typing(directory, "python")
+    (directory / "pyrefly.toml").write_text(
+        'preset = "strict"\nreplace-imports-with-any = ["a"]\n'
+    )
+    (directory / "pyproject.toml").write_text(
+        project + '[tool.pyrefly]\npreset = "strict"\n'
+    )
+    with pytest.raises(ValueError) as refused:
+        runner.validate_typing(directory, "python")
+    text = str(refused.value)
+    assert "tools/cli/pyrefly.toml" in text
+    assert "replace-imports-with-any" in text
+    assert "preset" not in text
+
+
+@pytest.mark.parametrize(
+    ("setting", "key"),
+    [
+        ("ignore-missing-imports = true", "ignore-missing-imports"),
+        (
+            'replace-untyped-imports-with-any = ["a"]',
+            "replace-untyped-imports-with-any",
+        ),
+        ("sub-config = [{matches = 'a', settings = {}}]", "sub-config"),
+        ("[tool.pyrefly.errors]\nbad-return = false", "bad-return"),
+    ],
+)
+def test_setup_refuses_the_pyrefly_settings_that_the_types_gate_refuses(
+    tmp_path: Path, setting: str, key: str
+) -> None:
+    from python_setup import configure_python
+
+    package: Group = {
+        "path": "tools/cli",
+        "language": "python",
+        "sources": ["cli"],
+        "checks": [],
+    }
+    directory = pyrefly_package(
+        tmp_path,
+        {
+            "uv.lock": "",
+            "pyproject.toml": '[project]\nname = "cli"\nversion = "1"\n'
+            f'[tool.pyrefly]\npreset = "strict"\n{setting}\n',
+        },
+    )
+    with pytest.raises(
+        ValueError, match=r"\. Ask the user before you make that change$"
+    ) as error:
+        configure_python(tmp_path, directory, package, {})
+    assert "tools/cli/pyproject.toml" in str(error.value)
+    assert key in str(error.value)
+
+
+@pytest.mark.parametrize("native", [False, True], ids=["pyproject", "pyrefly-toml"])
+@pytest.mark.parametrize(
+    ("section", "named"),
+    [
+        ('preset = "basic"\ncheck-unannotated-defs = true\n', ["preset"]),
+        (
+            'preset = "strict"\ncheck-unannotated-defs = false\n',
+            ["check-unannotated-defs"],
+        ),
+        (
+            'preset = "basic"\ncheck-unannotated-defs = false\n',
+            ["preset", "check-unannotated-defs"],
+        ),
+        ("", ["preset"]),
+    ],
+)
+def test_the_pyrefly_step_sets_only_the_keys_that_are_wrong(
+    section: str, named: list[str], native: bool
+) -> None:
+    head = "" if native else '[project]\nname = "cli"\n\n[tool.pyrefly]\n'
+    text = head + section + ('[errors]\nbad-return = "error"\n' if native else "")
+    file = "pyrefly.toml" if native else "pyproject.toml"
+    parsed = tomllib.loads(text)
+    step = pyrefly_gap(file, parsed if native else parsed["tool"]["pyrefly"])
+    place = (
+        "at the top of the file, before any [table] line"
+        if native
+        else "under [tool.pyrefly]"
+    )
+    assert step.endswith(place)
+    change = re.compile(r'change (preset|check-unannotated-defs) to ("strict"|true)')
+    add = re.compile(r'add (preset|check-unannotated-defs) = ("strict"|true)')
+    found = [key for key, _ in change.findall(step) + add.findall(step)]
+    assert sorted(found) == sorted(named)
+    for key, value in change.findall(step):
+        assert re.search(rf"(?m)^{key} = ", text)
+        text = re.sub(rf"(?m)^{key} = .*$", f"{key} = {value}", text)
+    for key, value in add.findall(step):
+        assert not re.search(rf"(?m)^{key} = ", text)
+        line = f"{key} = {value}\n"
+        text = line + text if native else text.replace(head, head + line, 1)
+    fixed = tomllib.loads(text)
+    assert pyrefly_gap(file, fixed if native else fixed["tool"]["pyrefly"]) == ""

@@ -4,8 +4,15 @@ import subprocess
 from pathlib import Path, PurePosixPath
 
 from dependency_graph import owner_language
-from gate_config import Group, parse_config
-from plans import _git_output, _is_test, default_branch_point, is_documentation
+from gate_config import SOURCE_FILE, Group, changed_files, parse_config
+from plans import (
+    _git_output,
+    _is_test,
+    default_branch_point,
+    is_documentation,
+    is_plan_path,
+    release_references,
+)
 
 NO_CHANGE = "no change"
 MAX_SMALL_LINES = 20
@@ -92,18 +99,43 @@ def configured_packages(root: Path) -> dict[str, Group]:
     return {group["path"]: group for group in config["packages"]}
 
 
-def update_written(root: Path, point: str) -> set[str]:
+def update_written(
+    root: Path,
+    point: str,
+    names: set[str],
+    found: tuple[str, str] | None = None,
+) -> set[str]:
     """Paths a verified Hard Eng update in this branch wrote, scaffold and setup edits alike."""
     from ci_setup import setup_written
-    from update import installed_update_paths, shared_sources, update_in_diff
+    from update import (
+        maybe_installed,
+        proven_installed,
+        shared_sources,
+        update_since,
+    )
 
-    installed = installed_update_paths(root, point)
-    found = update_in_diff(root, point)
-    if not installed or found is None:
+    if not any(maybe_installed(name) for name in names):
         return set()
-    revision, previous, names = found
-    sources = shared_sources(revision, previous)
+    if (found := found or update_since(root, point)) is None:
+        return set()
+    installed = proven_installed(root, point, names, *found)
+    if not installed:
+        return set()
+    sources = shared_sources(*found)
     return installed | setup_written(root, point, names - installed, sources)
+
+
+def update_only(root: Path, base: str, changed: set[str]) -> bool:
+    """Whether a clean tree holds only files a verified Hard Eng update wrote."""
+    from update import maybe_installed, update_since
+
+    if not any(maybe_installed(name) for name in changed):
+        return False
+    if (found := update_since(root, base)) is None:
+        return False
+    if _git_output(root, "status", "--porcelain"):
+        return False
+    return not changed - update_written(root, base, changed, found)
 
 
 def _verdict(
@@ -133,6 +165,8 @@ def _verdict(
         }
         | names.intersection(untracked)
     )
+    if SOURCE_FILE in added:
+        return False, "this branch installs Hard Eng"
     if added:
         return False, f"it adds, deletes or renames the file {added[0]}"
     counted = _counted_lines(counts, names)
@@ -147,9 +181,28 @@ def _verdict(
     return True, f"{len(names)} {plural}, {total} changed lines"
 
 
+def merge_point(root: Path) -> str | None:
+    """While a merge is in progress: the merge base of the release reference with both merge parents."""
+    folder = root / ".git"
+    try:
+        if folder.is_file():
+            folder = root / folder.read_text().split("gitdir:", 1)[1].strip()
+        merging = (folder / "MERGE_HEAD").is_file()
+    except (OSError, IndexError):
+        return None
+    for reference in release_references(root) if merging else ():
+        try:
+            return _git_output(
+                root, "merge-base", reference, "HEAD", "MERGE_HEAD"
+            ).strip()
+        except (subprocess.CalledProcessError, OSError):
+            continue
+    return None
+
+
 def size_verdict(root: Path) -> tuple[bool, str]:
     """Whether the whole branch change, not just this session's, is small, and the first reason."""
-    point = default_branch_point(root)
+    point = merge_point(root) or default_branch_point(root)
     if point is None:
         return False, "the branch point with the default branch cannot be found"
     try:
@@ -159,22 +212,79 @@ def size_verdict(root: Path) -> tuple[bool, str]:
     names = {name for name in status[1::2] + untracked if name}
     if not names:
         return True, NO_CHANGE
-    names -= update_written(root, point)
+    names -= update_written(root, point, names)
     if not names:
         return True, "only files the verified Hard Eng update wrote"
     return _verdict(status, counts, untracked, names, configured_packages(root))
 
 
-def judges_branch(root: Path) -> bool:
-    """A check with no base judges the whole branch only when Hard Eng is on its branch point; a first install keeps its own check."""
+def judged_point(root: Path) -> str | None:
+    """The branch point that a check with no base judges from, once Hard Eng is on it; a first install keeps its own check."""
     point = default_branch_point(root)
     if point is None:
-        return False
+        return None
     try:
         _git_output(root, "cat-file", "-e", f"{point}:.hooks/hard-eng.py")
     except (subprocess.CalledProcessError, OSError):
-        return False
-    return True
+        return None
+    return point
+
+
+def _revision(root: Path, reference: str) -> str | None:
+    try:
+        return _git_output(
+            root, "rev-parse", "--verify", "-q", f"{reference}^{{commit}}"
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
+def released_plans(root: Path, base: str | None) -> set[str]:
+    """Plans changed since the release base, so a feature check sees what the release checks."""
+    references = release_references(root)
+    revisions = {name: _revision(root, name) for name in references}
+    tips = set(revisions.values())
+    remote = {tip for name, tip in revisions.items() if name.startswith("origin/")}
+    if base is None and remote - {None}:
+        # A caller's base names what is released; without one, origin does.
+        tips = remote
+    point = default_branch_point(root)
+    if point is None or _revision(root, base or "HEAD") in tips:
+        return set()
+    return {
+        name for name in changed_files(root, point) or () if is_plan_path(Path(name))
+    }
+
+
+def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
+    """Changed plan paths that only moved a plan the base holds."""
+    gone = [
+        name
+        for name in changed
+        if is_plan_path(Path(name)) and not (root / name).exists()
+    ]
+    if not gone:
+        return set()
+    references = [
+        reference for reference in (base, default_branch_point(root)) if reference
+    ]
+    held: dict[str, str] = {}
+    for name in gone:
+        for reference in references:
+            try:
+                held[_git_output(root, "show", f"{reference}:{name}")] = name
+                break
+            except (subprocess.CalledProcessError, OSError):
+                continue
+    moved = {
+        name
+        for name in changed
+        if held
+        and is_plan_path(Path(name))
+        and (root / name).is_file()
+        and (root / name).read_text() in held
+    }
+    return moved
 
 
 def plan_not_needed(root: Path) -> bool:
