@@ -646,6 +646,18 @@ def test_source_files_include_unexecuted_modules(
     } == {"app.dart", "journey.dart"}
 
 
+def test_a_listed_root_tool_config_keeps_its_coverage_demand(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/used.ts").write_text("export const value = 1;\n")
+    (tmp_path / "next.config.ts").write_text("export default {};\n")
+    (tmp_path / "postcss.config.mjs").write_text("export default {};\n")
+    group = {"language": "javascript", "sources": ["src", "next.config.ts"]}
+    files = runner.production_files(tmp_path, group)
+    assert {path.name for path in files} == {"used.ts", "next.config.ts"}
+
+
 def test_coverage_excludes_native_generated_and_vendor_attributes(
     runner: ModuleType, tmp_path: Path
 ) -> None:
