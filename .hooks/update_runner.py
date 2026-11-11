@@ -652,12 +652,50 @@ def published(root: Path, base: str) -> bool:
     return found.returncode == 0
 
 
+def repair_checkout(root: Path, previous: str) -> str:
+    """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
+    import hook_chain
+    import update
+
+    hook_chain.install_worktree_hook(root)
+    needs_hook = update.pre_push_missing(root) or hook_chain.foreign_hook(
+        root, hook_chain.locate(root)[1]
+    )
+    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
+        try:
+            source, old = update.fetch_sources(Path(temporary), previous, previous)
+            changes, _, hook, _ = update.update_plan(root, source, old)
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            if needs_hook:
+                raise
+            refused = isinstance(error, ValueError)
+            reason = "" if refused else "the installed release could not be fetched: "
+            return f"This checkout is unchanged: {reason}{error}."
+    notes = []
+    if needs_hook:
+        update.install_planned_hook(root, hook)
+        notes.append("installed the missing pre-push hook")
+    written = {
+        name: content
+        for name, content in sorted(changes.items())
+        if content is not None
+        and not update.maybe_installed(name)
+        and (name == "hard-eng.gates.json" or not (root / name).exists())
+    }
+    for name, content in written.items():
+        update.replace_file(root / name, content.encode())
+    if written:
+        notes.append(
+            f"setup wrote {', '.join(written)} to match the project's files; "
+            "review and commit with your change"
+        )
+    return f"This checkout: {'; '.join(notes)}." if notes else ""
+
+
 def prepare_update(root: Path, repair: bool = False) -> str:
     """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
     note = ""
     if repair:
-        from update import repair_checkout
-
         note = repair_checkout(
             root, json.loads((root / SOURCE_FILE).read_text())["revision"]
         )

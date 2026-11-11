@@ -850,6 +850,17 @@ def test_a_rerun_goes_on_when_setup_refuses_the_checkout(
     assert skill.read_text().endswith("\nA local line.\n")
 
 
+def test_a_rerun_with_no_remote_keeps_the_pushed_line_when_the_fetch_fails(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = installed_python_project(release, monkeypatch, False)
+    failure = subprocess.CalledProcessError(128, ["git", "checkout"])
+    monkeypatch.setattr(update, "fetch_sources", Mock(side_effect=failure))
+    outcome = update_runner.locked_update(project, repair=True)
+    assert outcome.startswith(update_runner.NOT_PUBLISHED)
+    assert "This checkout is unchanged: the installed release could not be" in outcome
+
+
 def test_a_rerun_the_plan_refuses_writes_nothing(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
