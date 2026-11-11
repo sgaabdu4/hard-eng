@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from conftest import commit, init
-from gate_config import GateConfig
+from gate_config import GateConfig, validate_file_sizes
 from project_setup import (
     adapt_packages,
     validate_dart_exclusions,
@@ -54,3 +54,19 @@ def test_the_exclusion_refusal_names_the_file_and_the_entry(tmp_path: Path) -> N
     with pytest.raises(TypeError, match="must be a list of patterns"):
         validate_dart_exclusions(tmp_path, "**/*.g.dart")
     validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
+
+
+def test_the_line_limit_refusal_names_the_ways_out(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / "big.py").write_text("value = 1\n" * 1001)
+    with pytest.raises(ValueError, match="big.py: 1001 lines") as refused:
+        validate_file_sizes(root, {})
+    message = str(refused.value)
+    assert "Split the file" in message
+    assert "linguist-generated=true" in message
+    assert ".gitattributes" in message
+    assert "file_size_exceptions" in message
+    assert "reason" in message
+    assert "evidence" in message
+    assert "hard-eng.gates.json" in message

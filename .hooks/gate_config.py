@@ -366,6 +366,8 @@ def validate_file_sizes(
         raise ValueError(
             "HE-FILE-LENGTH: Handwritten files exceed 1000 physical lines: "
             + "; ".join(failures)
+            + ". Split the file; or mark generator output with `<pattern> linguist-generated=true` in .gitattributes;"
+            + " or add a `file_size_exceptions` entry for the exact file, with `reason` and `evidence`, in hard-eng.gates.json"
         )
 
 
