@@ -173,7 +173,7 @@ def poetry_rows(text: str) -> list[Stale]:
 
 
 UPGRADES = {
-    "bun": "bun update {recursive}--latest {names}",
+    "bun": "bun update {recursive}--latest --minimum-release-age={age} {names}",
     "dart": "dart pub upgrade --major-versions {names}",
     "flutter": "flutter pub upgrade --major-versions {names}",
     "uv": "uv add [--group <group>] {minimums}",
@@ -335,7 +335,7 @@ def validate_freshness(
         raise ValueError(
             "Outdated direct dependencies: "
             + "; ".join(f"{n} {c} → {t}" for n, c, t in stale)
-            + f". Run `{UPGRADES[tool].format(recursive=recursive, names=names, latest=latest, minimums=minimums)}` in a "
+            + f". Run `{UPGRADES[tool].format(recursive=recursive, names=names, latest=latest, minimums=minimums, age=RELEASE_AGE_SECONDS)}` in a "
             "separate PR first (baseline repair)."
         )
     print("Every direct dependency is on its newest release at least 2 days old")

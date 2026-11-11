@@ -783,3 +783,41 @@ def test_stop_after_a_source_edit_starts_few_git_processes(
     with counted_git() as starts:
         assert runner.check(base=base, quick=True) == 0
     assert len(starts) == 31, starts
+
+
+LOAD_AFTER_CHECK = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import comments
+try:
+    comments.validate_suppressions(Path(sys.argv[2]), "HEAD")
+except ValueError:
+    pass
+print("retry_forms" in sys.modules)
+"""
+
+
+@pytest.mark.parametrize(
+    ("name", "text", "loaded"),
+    [
+        ("app.py", "value = 2\n", "False"),
+        ("tests/api.test.ts", "}, { re" + "try: 3 });\n", "True"),
+    ],
+)
+def test_only_a_change_with_a_retry_word_loads_the_retry_rules(
+    tmp_path: Path, name: str, text: str, loaded: str
+) -> None:
+    root = tmp_path / "repo"
+    init(root)
+    (root / "README.md").write_text("fixture\n")
+    commit(root, "baseline")
+    (root / name).parent.mkdir(parents=True, exist_ok=True)
+    (root / name).write_text(text)
+    result = subprocess.run(
+        [sys.executable, "-c", LOAD_AFTER_CHECK, str(SOURCE / ".hooks"), str(root)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == loaded

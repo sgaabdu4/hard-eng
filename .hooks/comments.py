@@ -355,6 +355,7 @@ SECURITY_OFF = re.compile(
     r"|shellcheck\s+disable=|zizmor:\s*ignore|coverage:ignore-",
     re.IGNORECASE,
 )
+RETRY_WORDS = ("retr", "Retr", "rerun", "flaky")
 SCAN_IGNORES = {".gitleaksignore", ".semgrepignore", ".gitleaks.toml"}
 UNOWNED = (".hooks/", ".agents/", ".claude/")
 
@@ -621,7 +622,7 @@ def lost_assertions(
 def security_switch_offs(
     root: Path, added: dict[str, list[tuple[int, str]]]
 ) -> list[str]:
-    """Inline markers and ignore entries in any file hide a scanner's findings."""
+    """Inline markers, ignore entries and test retries in any file hide a failing check."""
     names = sorted(name for name in added if not name.startswith(UNOWNED))
     skipped = generated_sources(root, names)
     found: list[str] = []
@@ -633,6 +634,11 @@ def security_switch_offs(
                 found.append(f"{name}:{number} adds {hit[0]!r}")
             elif ignore and entry and not entry.startswith("#"):
                 found.append(f"{name}:{number} adds {entry!r}")
+            elif any(word in text for word in RETRY_WORDS):
+                from retry_forms import retry_form
+
+                if form := retry_form(name, text):
+                    found.append(f"{name}:{number} adds {form!r}")
     return found
 
 
@@ -707,7 +713,7 @@ def validate_suppressions(root: Path, base: str | None) -> None:
     if found:
         raise ValueError(
             "HE-NO-SWITCH-OFF: A change must not switch a check off: fix the cause instead of "
-            "suppressing, skipping or deleting the check. " + "; ".join(found)
+            "suppressing, skipping, retrying or deleting the check. " + "; ".join(found)
         )
     if not empty:
         ui_source_check(root, added)
