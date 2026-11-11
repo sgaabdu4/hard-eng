@@ -59,6 +59,87 @@ def test_mermaid_blocks_in_tilde_fences_count_like_backtick_fences() -> None:
     assert body_problem("Undo: revert.\n" + tilde + "Not checked: x\n") is not None
 
 
+def _lines(count: int, width: int = 49) -> str:
+    return ("a" * width + "\n") * count
+
+
+def _fold(text: str) -> str:
+    return f"<details>\n{text}</details>\n"
+
+
+def test_a_wall_of_visible_text_is_refused_but_folded_text_does_not_count() -> None:
+    wall = _VALID + _lines(133)
+    problem = body_problem(wall)
+    assert problem is not None
+    assert "limit is 6,000" in problem
+    assert "<details>" in problem
+    assert body_problem(_VALID + _lines(72) + _fold(_lines(61))) is None
+
+
+def test_a_line_over_the_limit_is_refused_with_its_number_and_start() -> None:
+    long = "start of a long line " + "b" * 700
+    body = _VALID + "short\n" + long + "\n"
+    problem = body_problem(body)
+    lines = body.split("\n")
+    assert problem is not None
+    assert f"line {lines.index(long) + 1} " in problem
+    assert '(it starts "start of a long line bbbbbbbbbbbbbbbbbbb")' in problem
+    assert "the limit is 600" in problem
+
+
+@pytest.mark.parametrize(
+    "hidden",
+    [
+        "```\n{}\n```\n",
+        "~~~\n{}\n~~~\n",
+        "<details>\n{}\n</details>\n",
+        "<details>\n<details>\n{}\n</details>\n</details>\n",
+        "<details>\n{}\n",
+        "<!-- {} -->\n",
+        "[x](https://example.com/{})\n",
+    ],
+)
+def test_long_text_in_a_code_block_fold_comment_or_link_target_is_not_visible(
+    hidden: str,
+) -> None:
+    assert body_problem(_VALID + hidden.format("c" * 700)) is None
+
+
+def test_text_after_an_unclosed_details_block_does_not_count() -> None:
+    assert body_problem(_VALID + "<details>\n" + _lines(200)) is None
+
+
+def test_a_big_mermaid_block_does_not_count() -> None:
+    big = "```mermaid\nflowchart TD\n" + "    A --> B\n" * 900 + "```\n"
+    assert body_problem(_VALID + big) is None
+
+
+def test_a_long_undo_line_is_refused_as_a_long_line() -> None:
+    body = "Undo: " + "revert the commits, " * 100 + "\n" + _DIAGRAM * 2
+    problem = body_problem(body + "Not checked: the Mac canary\n")
+    assert problem is not None
+    assert "line 1 " in problem
+
+
+def test_crlf_line_ends_give_the_same_line_number() -> None:
+    body = _VALID + "d" * 700 + "\n"
+    assert body_problem(body.replace("\n", "\r\n")) == body_problem(body)
+
+
+def test_a_missing_undo_line_is_named_before_a_wall() -> None:
+    problem = body_problem(_lines(200))
+    assert problem is not None
+    assert "Undo:" in problem
+
+
+def test_event_problem_ends_a_wall_refusal_with_the_edit_hint(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    problem = event_problem(_event(tmp_path, _VALID + "e" * 700), root)
+    assert problem is not None
+    assert "the limit is 600" in problem
+    assert "Edit the PR text" in problem
+
+
 def test_not_checked_refusal_says_the_answer_goes_on_the_line_that_starts_it() -> None:
     problem = body_problem(f"{_GOOD}Not checked:\n- the Mac canary\n")
     assert problem is not None

@@ -2,6 +2,7 @@
 
 import re
 import subprocess
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
@@ -245,13 +246,9 @@ def usability_rules() -> list[tuple[str, list[str]]]:
         raise ValueError(
             f"UX Rules cannot read {UX_REFERENCE}: {error}; restore it with `git checkout HEAD -- {UX_REFERENCE}`"
         ) from error
-    start = next(
-        (n for n, line in enumerate(lines) if line.startswith("- Usability =")), None
-    )
-    if start is None:
-        raise ValueError(f"{UX_REFERENCE} has no '- Usability =' list")
+    start = [n for n, line in enumerate(lines) if line.startswith("- Usability =")]
     rules = []
-    for line in lines[start + 1 :]:
+    for line in lines[start[0] + 1 :] if start else []:
         if not line.startswith("  - "):
             break
         name, marker, rest = line[4:].partition(" (count: ")
@@ -260,6 +257,8 @@ def usability_rules() -> list[tuple[str, list[str]]]:
         else:
             name, units = name.partition(":")[0], list[str]()
         rules.append((name, units))
+    if not rules:
+        raise ValueError(f"{UX_REFERENCE} has no '- Usability =' list")
     return rules
 
 
@@ -365,17 +364,18 @@ def uncounted(text: str, units: list[str]) -> list[str]:
     ]
 
 
-def judged_rules(content: str, path: Path | None) -> None:
-    """A plan untouched since the last Hard Eng update may predate the Rules field."""
+def judged_rules(content: str, age: Callable[[], bool] | None) -> None:
+    """A Complete plan untouched since the last Hard Eng update may predate the Rules field."""
     try:
         ux_rules(content)
     except ValueError:
-        held = "\nRules:" in f"\n{content}"
-        if held or path is None or touched_since_update(path):
+        if "\nRules:" in f"\n{content}" or age is None or age():
             raise
 
 
-def ux_proof(content: str, *, legacy: bool = False, path: Path | None = None) -> None:
+def ux_proof(
+    content: str, *, legacy: bool = False, age: Callable[[], bool] | None = None
+) -> None:
     if NOT_APPLICABLE_WITH_REASON.fullmatch(content.strip()):
         return
     proof(content, {"Passed"})
@@ -410,7 +410,7 @@ def ux_proof(content: str, *, legacy: bool = False, path: Path | None = None) ->
     for name in ("Capture", "Review"):
         evidence_field(content, name)
     if not legacy:
-        judged_rules(content, path)
+        judged_rules(content, age)
 
 
 def readiness_errors(
@@ -418,7 +418,7 @@ def readiness_errors(
     status: str = "Ready",
     *,
     legacy: bool = False,
-    path: Path | None = None,
+    age: Callable[[], bool] | None = None,
 ) -> list[str]:
     errors = []
     for name in ("Baseline + execution", "ux_reference", "Verification"):
@@ -426,7 +426,7 @@ def readiness_errors(
             if name == "Baseline + execution":
                 proof(sections[name], {"Passed"})
             elif name == "ux_reference":
-                ux_proof(sections[name], legacy=legacy, path=path)
+                ux_proof(sections[name], legacy=legacy, age=age)
             else:
                 e2e_proof(sections[name], status, legacy=legacy)
         except ValueError as error:
@@ -458,7 +458,7 @@ def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, lis
     return handoff, blockers, errors
 
 
-def _draft_errors(content: str, path: Path) -> tuple[list[str], bool]:
+def _draft_errors(content: str) -> tuple[list[str], bool]:
     """What stops a Draft plan, and whether that leaves it unfinished."""
     try:
         sections = plan_sections(content, allow_placeholders=True)
@@ -468,7 +468,7 @@ def _draft_errors(content: str, path: Path) -> tuple[list[str], bool]:
                 plan_sections(content)
             except ValueError as error:
                 errors.append(str(error))
-            errors.extend(readiness_errors(sections, path=path))
+            errors.extend(readiness_errors(sections))
         if not errors and handoff == "Clarification":
             return [f"waiting for: {blockers}"], False
         if errors:
@@ -490,7 +490,7 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
         content = path.read_text()
         if plan_status(content) != "Draft":
             continue
-        errors, stuck = _draft_errors(content, path)
+        errors, stuck = _draft_errors(content)
         if stuck and not selected:
             from change_size import held_by_base
 
@@ -578,7 +578,7 @@ def newer_fields(
     *,
     legacy: bool,
     changed: bool,
-    path: Path,
+    age: Callable[[], bool] | None,
 ) -> None:
     """Old Complete plans skip Same cause; Single source and Retro bind only edited plans."""
     if not legacy:
@@ -591,7 +591,7 @@ def newer_fields(
         if status == "Complete":
             reasoned(field(sections["Verification"], "Retro"), "Retro")
     except ValueError:
-        if status != "Complete" or touched_since_update(path):
+        if age is None or age():
             raise
 
 
@@ -611,10 +611,17 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     if not no_blockers(field(sections["Decisions + authorization"], "Blockers")):
         raise ValueError("ready/complete plan has unresolved Blockers")
     legacy = status == "Complete" and not changed
-    errors = readiness_errors(sections, status, legacy=legacy, path=path)
+    asked: list[bool] = []
+
+    def age() -> bool:
+        asked[:] = asked or [touched_since_update(path)]
+        return asked[0]
+
+    soft = age if status == "Complete" else None
+    errors = readiness_errors(sections, status, legacy=legacy, age=soft)
     if errors:
         raise ValueError("; ".join(errors))
-    newer_fields(sections, status, legacy=legacy, changed=changed, path=path)
+    newer_fields(sections, status, legacy=legacy, changed=changed, age=soft)
     if status == "Complete":
         markers = CHECKBOX_LABEL.findall(content)
         if any(marker.lower() != "x" for marker in markers):
