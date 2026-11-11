@@ -329,6 +329,49 @@ def test_added_switch_off_fails_naming_file_line_and_pattern(
     assert "fix the cause" in str(error.value)
 
 
+RUFF_FORMS = [
+    ("# NO" + "QA", "# NO" + "QA"),
+    ("# No" + "QA: E501", "# No" + "QA"),
+    ("# ruff: no" + "qa", "# ruff: no" + "qa"),
+    ("# ruff: no" + "qa: E501", "# ruff: no" + "qa"),
+    ("# flake8: no" + "qa", "# flake8: no" + "qa"),
+    ("# flake8: NO" + "QA", "# flake8: NO" + "QA"),
+    ("# ruff: ig" + "nore[E501]", "# ruff: ig" + "nore["),
+    ("# ruff: file-ig" + "nore[E501]", "# ruff: file-ig" + "nore["),
+    ("# ruff: dis" + "able[E501]", "# ruff: dis" + "able["),
+    ("# isort: skip" + "_file", "# isort: skip" + "_file"),
+    ("# isort: sk" + "ip", "# isort: sk" + "ip"),
+    ("# isort: o" + "ff", "# isort: o" + "ff"),
+    ("# ruff: isort: skip" + "_file", "# ruff: isort: skip" + "_file"),
+    ("# ruff: isort: o" + "ff", "# ruff: isort: o" + "ff"),
+    ("# fmt: o" + "ff", "# fmt: o" + "ff"),
+    ("# fmt: sk" + "ip", "# fmt: sk" + "ip"),
+]
+
+
+@pytest.mark.parametrize(("text", "pattern"), RUFF_FORMS)
+def test_each_ruff_suppression_form_is_refused(
+    tmp_path: Path, text: str, pattern: str
+) -> None:
+    """HE-NO-SWITCH-OFF: every Ruff, isort and formatter off comment fails, in any letter case."""
+    root = switch_root(tmp_path, "app.py", "")
+    (root / "app.py").write_text(f"ok = 1\nx = 1  {text}\n")
+    with pytest.raises(ValueError, match=OFF) as error:
+        validate_suppressions(root, "HEAD")
+    assert f"app.py:2 adds {pattern!r}" in str(error.value)
+
+
+def test_the_word_for_a_ruff_comment_in_a_string_or_prose_passes(
+    tmp_path: Path,
+) -> None:
+    root = switch_root(tmp_path, "app.py", "")
+    (root / "app.py").write_text(
+        "word = 'no" + "qa'\nnote = 'fmt: o" + "ff'\nmsg = 'isort: sk" + "ip'\n"
+        "# the no" + "qa word is only prose here, and so is ruff: no" + "qa\n"
+    )
+    validate_suppressions(root, "HEAD")
+
+
 def test_an_external_diff_tool_does_not_hide_an_added_switch_off(
     tmp_path: Path,
 ) -> None:
