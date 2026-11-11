@@ -154,15 +154,19 @@ def fixture_manifest(root: Path, manifest: Path, manifests: list[Path]) -> bool:
     )
 
 
-def repository_files(root: Path) -> list[Path]:
+def listed_names(root: Path) -> list[str]:
     names = subprocess.check_output(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         cwd=root,
         text=True,
     )
+    return sorted(set(names.split("\0")) - {""})
+
+
+def repository_files(root: Path, names: list[str] | None = None) -> list[Path]:
     return [
         root / name
-        for name in sorted(set(names.split("\0")) - {""})
+        for name in (listed_names(root) if names is None else names)
         if (root / name).is_file() and not (root / name).is_symlink()
     ]
 
@@ -929,10 +933,11 @@ def load_groups(
         from shipping import load_policy
 
         load_policy(root)
-    listed = repository_files(root)
+    raw = listed_names(root)
+    listed = repository_files(root, raw)
     start = len(str(root)) + 1
     names = [str(path)[start:] for path in listed]
-    LISTED[root] = frozenset(names), generated_sources(root, names)
+    LISTED[root] = frozenset(raw), generated_sources(root, names)
     try:
         return checked_groups(root, config, listed, base, dependents, starting)
     finally:
