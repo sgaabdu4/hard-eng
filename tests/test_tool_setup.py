@@ -485,10 +485,13 @@ def test_a_quick_check_names_the_full_check_when_uv_lost_a_stored_scanner(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(sys, "argv", ["hard-eng.py", "check", "--quick"])
-    lost = "ruff was not found in the cache and you require ruff==0.4.0"
+    lost = "Because ruff==0.4.0 was not found in the cache and you require ruff==0.4.0"
     check = gate("lint", f"import sys; sys.exit({lost!r})")
     assert runner.run_gate({"path": ".", "checks": []}, check, 30, threading.Lock())
-    assert "ruff is not in uv's cache" in capsys.readouterr().out
+    assert "ruff==0.4.0 is not in uv's cache" in capsys.readouterr().out
+    other = gate("lint", "import sys; sys.exit('ruff found 2 errors')")
+    assert runner.run_gate({"path": ".", "checks": []}, other, 30, threading.Lock())
+    assert "uv's cache" not in capsys.readouterr().out
 
 
 def test_a_new_cutoff_hour_ends_the_stored_scanner_versions(

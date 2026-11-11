@@ -368,6 +368,11 @@ def test_a_branch_that_edits_the_open_plan_is_judged_by_it(
         ),
         (
             "Retro: None — fixture command, no check failed.",
+            "Retro: Fixed: see `tests/test_gone.py::test_gone`.",
+            "tests that do not exist: tests/test_gone.py::test_gone",
+        ),
+        (
+            "Retro: None — fixture command, no check failed.",
             "Retro: Fixed in `tests/test_real.py::test_real`.",
             None,
         ),
@@ -440,6 +445,41 @@ def test_a_test_named_in_a_later_field_is_not_counted_for_the_retro_line(
             RETRO_LINE + "\nDelivery: see `tests/test_gone.py::test_gone`.",
         )
     )
+    assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
+
+
+@pytest.mark.parametrize(
+    ("line", "ends"),
+    [
+        ("- a list item: with a colon", False),
+        ("see: a label in small letters", False),
+        ("Decided (14): a label with a bracket", False),
+        ("9 items: a label that starts with a digit", False),
+        ("Fixed in the next change", False),
+        ("", False),
+        ("### A heading", True),
+        ("A: a field of one letter", True),
+        ("Zone_a+b/c d: a field with each joining sign", True),
+    ],
+)
+def test_a_retro_value_ends_at_the_next_field_or_heading(
+    repository: Path, completed_plan: str, line: str, ends: bool
+) -> None:
+    later = f"{RETRO_LINE}\n{line}\nSee `tests/test_gone.py::test_gone`."
+    (repository / "PLAN.md").write_text(completed_plan.replace(RETRO_LINE, later))
+    if ends:
+        assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
+        return
+    with pytest.raises(ValueError, match="Retro names tests that do not exist"):
+        validate_plans(repository, "0" * 40, "Complete")
+
+
+def test_a_test_named_above_the_first_field_is_not_counted(
+    repository: Path, completed_plan: str
+) -> None:
+    above = "The test creates commands in a temporary Git repository."
+    named = f"{above} See `tests/test_gone.py::test_gone`."
+    (repository / "PLAN.md").write_text(completed_plan.replace(above, named))
     assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
 
 

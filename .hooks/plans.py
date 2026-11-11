@@ -18,8 +18,7 @@ SMALL_SIZE = "Size: small ("
 QUICK_PASS = (
     "Hard Eng: quick checks passed; the full check runs the tests and the other gates."
 )
-BARE_NONE = r"(?i)none\.?"
-CLAIM_VALUE = r"(?m)^(?P<field>Same cause|Retro):.*(?:\n(?![A-Z][\w+/ ]*:|#).*)*"
+LABEL_FILLER = str.maketrans("", "", "_+/ ")
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
 NOT_APPLICABLE_WORD = re.compile(r"(?i)\bN/A\b")
 TITLE_LINE = re.compile(r"(?m)^# \S.+$")
@@ -401,7 +400,7 @@ def touched_since_update(path: Path) -> bool:
 
 
 def reasoned(value: str, name: str) -> None:
-    if re.fullmatch(BARE_NONE, value):
+    if value.lower() in {"none", "none."}:
         raise ValueError(f"'{name}:' needs a reason; write `None — <reason>`")
 
 
@@ -409,12 +408,18 @@ def claimed_tests(sections: dict[str, str]) -> dict[str, list[tuple[str, str]]]:
     """The `path::test` names of test files in each Same cause and Retro value, by field."""
     found: dict[str, list[tuple[str, str]]] = {}
     for text in (sections["Repository context"], sections["Verification"]):
-        for claim in re.finditer(CLAIM_VALUE, text):
-            found.setdefault(claim["field"], []).extend(
-                (path, name.split("[", 1)[0])
-                for path, name in TEST_REFERENCE.findall(claim[0])
-                if _is_test(PurePosixPath(path))
-            )
+        name = ""
+        for line in text.split("\n"):
+            label = line.partition(":")[0]
+            titled = "A" <= label[:1] <= "Z" and label.translate(LABEL_FILLER).isalnum()
+            if line[:1] == "#" or (titled and label != line):
+                name = label if label in {"Same cause", "Retro"} else ""
+            if name:
+                found.setdefault(name, []).extend(
+                    (path, test.split("[", 1)[0])
+                    for path, test in TEST_REFERENCE.findall(line)
+                    if _is_test(PurePosixPath(path))
+                )
     return found
 
 
