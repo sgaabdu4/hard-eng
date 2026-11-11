@@ -414,7 +414,7 @@ def configure_python(
         )
         if gap:
             raise ValueError(
-                f"{package['path']}: existing Pyrefly settings need strict checking; ask the user before this change. {gap}"
+                f"{package['path']}: existing Pyrefly settings need strict checking. {gap}. Ask the user before you make that change"
             )
     else:
         changes[name] = (

@@ -268,7 +268,9 @@ def test_setup_refuses_the_pyrefly_settings_that_the_types_gate_refuses(
             f'[tool.pyrefly]\npreset = "strict"\n{setting}\n',
         },
     )
-    with pytest.raises(ValueError, match="ask the user before this change") as error:
+    with pytest.raises(
+        ValueError, match=r"\. Ask the user before you make that change$"
+    ) as error:
         configure_python(tmp_path, directory, package, {})
     assert "tools/cli/pyproject.toml" in str(error.value)
     assert key in str(error.value)
