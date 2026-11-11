@@ -818,6 +818,27 @@ def test_a_word_change_or_a_new_plan_still_needs_todays_fields(
         change_size.judged_stage(root, base, None)
 
 
+@pytest.mark.parametrize("change", ["white space only", "a word added"])
+def test_a_committed_reformat_of_an_old_plan_counts_as_unchanged_from_the_new_head(
+    tmp_path: Path, completed_plan: str, change: str
+) -> None:
+    """A Stop check judges from HEAD, after the commit that holds the reformat."""
+    root = tmp_path / "project"
+    old, _ = old_plan_in_a_repository(root, completed_plan)
+    git(root, "switch", "-qc", "task")
+    text = formatted_again(old)
+    if change == "a word added":
+        text = text.replace("Verify fixture", "Verify the fixture")
+    (root / OLD_NAME).write_text(text)
+    dated(root, 3, "format the plans")
+    (root / "README.md").write_text("base\nmore\n")
+    if change == "white space only":
+        assert change_size.judged_stage(root, "HEAD", None) == "Draft"
+    else:
+        with pytest.raises(ValueError, match="Same cause"):
+            change_size.judged_stage(root, "HEAD", None)
+
+
 def test_a_reformatted_old_plan_does_not_cover_new_code(
     tmp_path: Path, completed_plan: str
 ) -> None:

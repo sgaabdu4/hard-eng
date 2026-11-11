@@ -434,6 +434,7 @@ def judged_stage(root: Path, base: str | None, stage: str | None) -> str:
         except ValueError:
             point = base or judged_point(root)
             changed = changed_files(root, point or "HEAD") or set()
+            changed |= released_plans(root, base)
             found = reformatted_plans(root, point, changed)
             if not found:
                 raise
