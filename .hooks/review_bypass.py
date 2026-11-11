@@ -39,7 +39,8 @@ _RULE_QUERY = (
     "query($owner:String!,$name:String!,$number:Int!){"
     "repository(owner:$owner,name:$name){viewerCanAdminister "
     "pullRequest(number:$number){baseRef{branchProtectionRule{"
-    "requiredStatusCheckContexts} rules(first:100){totalCount nodes{type parameters{"
+    "requiredStatusCheckContexts} refUpdateRule{requiredStatusCheckContexts} "
+    "rules(first:100){totalCount nodes{type parameters{"
     "...on RequiredStatusChecksParameters{requiredStatusChecks{context}}}}}}}}}"
 )
 _PASSED = {"SUCCESS", "NEUTRAL", "SKIPPED"}
@@ -73,6 +74,21 @@ def _required_checks(
     return {name for name in names if isinstance(name, str)}
 
 
+def _dict(value: JsonValue) -> dict[str, JsonValue]:
+    return value if isinstance(value, dict) else {}
+
+
+def _visible_rules(ref: dict[str, JsonValue]) -> tuple[set[str], bool, bool]:
+    """Checks the visible rules require, if the rule list is whole, if a workflow rule applies."""
+    listed = _dict(ref.get("rules"))
+    nodes = listed.get("nodes")
+    seen = [n for n in nodes if isinstance(n, dict)] if isinstance(nodes, list) else []
+    required = _required_checks(_dict(ref.get("branchProtectionRule")), seen)
+    required |= _required_checks(_dict(ref.get("refUpdateRule")), [])
+    workflows = any(rule.get("type") == "WORKFLOWS" for rule in seen)
+    return required, _complete_nodes(listed) is not None, workflows
+
+
 def branch_rule_note(
     root: Path, policy: ShippingPolicy, identity: tuple[str, str, int]
 ) -> str | None:
@@ -81,31 +97,28 @@ def branch_rule_note(
     checks, base = policy["checks"], policy["base"]
     try:
         data, pull = _graphql_pull(root, owner, name, number, _RULE_QUERY)
-        ref = pull.get("baseRef")
-        rules = _complete_nodes(ref.get("rules") if isinstance(ref, dict) else None)
-        protection = ref.get("branchProtectionRule") if isinstance(ref, dict) else None
-        required = _required_checks(
-            protection if isinstance(protection, dict) else {}, rules or []
-        )
+        ref = _dict(pull.get("baseRef"))
+        required, complete, workflows = _visible_rules(ref)
         admin = _object(data.get("repository"), "repository").get("viewerCanAdminister")
     except ShippingError as error:
         return f"Not checked: whether {base} requires {', '.join(checks)} ({error})."
     missing = ", ".join(sorted(set(checks) - required))
     if not missing:
         return None
-    if rules is None:
-        return (
-            f"Not checked: whether {base} requires {missing} "
-            "(the base branch rules are unreadable or incomplete)."
-        )
-    if admin is not True:
-        return (
-            f"Not checked: whether {base} requires {missing}; "
-            "only a repository admin can read its branch protection."
-        )
+    unknown = f"Not checked: whether {base} requires {missing}"
+    if workflows:
+        return f"{unknown} (a required workflow rule may enforce it)."
+    readable = admin is True or isinstance(ref.get("refUpdateRule"), dict)
+    if not complete or not readable:
+        return f"{unknown} (the base branch rules are unreadable or incomplete)."
+    who = (
+        "A repository admin adds it"
+        if admin is True
+        else "Ask a repository admin to add it"
+    )
     return (
         f"Warning: {base} does not require {missing}, so a PR can merge while that "
-        f"check is missing or failed. A repository admin adds it at "
+        f"check is missing or failed. {who} at "
         f"https://github.com/{owner}/{name}/settings/rules (branch ruleset for "
         f"{base}, Require status checks to pass, add {missing})."
     )

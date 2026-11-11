@@ -921,25 +921,31 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         raise ShippingError("PR repository or head repository does not match origin")
     review_bypass, rule_note = False, None
     if stage == "ready":
-        review_bypass = _ready_state(
-            resolved_root, pull, policy, branch, local_head, (owner, name, number)
-        )
         from review_bypass import branch_rule_note
 
         rule_note = branch_rule_note(resolved_root, policy, (owner, name, number))
-        revision, merged_sha = pull.head_sha, None
-    else:
-        revision = _delivered(resolved_root, pull, policy["base"], origin_url)
-        merged_sha = revision
-    if policy["ui_paths"]:
-        paths = _changed_paths(resolved_root, owner, name, number)
-        _ui_evidence(resolved_root, pull, paths, policy)
-    _checks(resolved_root, repository, revision, policy, True)
-    if stage == "delivered" and target == "Deploy":
-        _delivery(resolved_root, policy, revision, url)
-    current = _pull(resolved_root, owner, name, number)
-    if current != pull:
-        raise ShippingError("PR changed during shipping verification")
+    try:
+        if stage == "ready":
+            review_bypass = _ready_state(
+                resolved_root, pull, policy, branch, local_head, (owner, name, number)
+            )
+            revision, merged_sha = pull.head_sha, None
+        else:
+            revision = _delivered(resolved_root, pull, policy["base"], origin_url)
+            merged_sha = revision
+        if policy["ui_paths"]:
+            paths = _changed_paths(resolved_root, owner, name, number)
+            _ui_evidence(resolved_root, pull, paths, policy)
+        _checks(resolved_root, repository, revision, policy, True)
+        if stage == "delivered" and target == "Deploy":
+            _delivery(resolved_root, policy, revision, url)
+        current = _pull(resolved_root, owner, name, number)
+        if current != pull:
+            raise ShippingError("PR changed during shipping verification")
+    except ShippingError as error:
+        if rule_note:
+            raise type(error)(f"{error}\n{rule_note}") from error
+        raise
     return Shipment(
         root=resolved_root,
         plan=resolved_plan,
