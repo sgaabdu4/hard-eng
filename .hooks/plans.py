@@ -285,8 +285,9 @@ def rule_lines(content: str) -> list[str]:
 def split_rule_line(line: str) -> tuple[str, str, str, str]:
     """The rule name without its marker, then the verdict, the text and the problem, if any."""
     head, marked, tail = line.partition("): ")
-    if marked and "(count" in head:
-        label, rest = head.partition(" (count")[0], tail
+    before = head.partition(" (count")[0]
+    if marked and "(count" in head and ": " not in before:
+        label, rest = before, tail
     else:
         label, _, rest = line.partition(": ")
     verdict, _, after = rest.partition(" ")

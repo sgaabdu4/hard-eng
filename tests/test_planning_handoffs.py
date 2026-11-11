@@ -648,3 +648,25 @@ def test_the_rule_labels_are_read_from_the_reference_file(
     monkeypatch.setattr(plans, "UX_REFERENCE", str(copy))
     labels = [label for label, _ in usability_rules()]
     assert len(labels) == 14 and "Extra" in labels
+
+
+def test_a_bracket_and_colon_in_the_free_text_is_not_a_marker(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    line = "- No clutter: Pass — 7 kept, 3 removed (counted on the 375 px image): the history note moved behind a tap"
+    path.write_text(visual_plan.replace("- No clutter: Pass — 4 kept, 4 removed", line))
+    assert line in path.read_text()
+    assert validate_plan(path) == "Complete"
+
+
+def test_a_failed_rule_with_its_marker_is_judged_as_failed(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    marked = "- No clutter (count: kept, removed): Fail — a helper sentence"
+    path.write_text(
+        visual_plan.replace("- No clutter: Pass — 4 kept, 4 removed", marked)
+    )
+    with pytest.raises(ValueError, match="UX Rules: No clutter is Fail"):
+        validate_plan(path)

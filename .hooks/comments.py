@@ -38,17 +38,6 @@ UI_SUFFIXES = (
     ".swift",
 )
 UI_MARKS = (
-    "transition-all",
-    "transition: all",
-    "transition:all",
-    "-property: all",
-    "-property:all",
-    "transitionProperty",
-    "transition: 'all",
-    'transition: "all',
-    'transition": "all',
-    "transition': 'all",
-    "transition: `all",
     "-[#",
     "-[rgb",
     "-[hsl",
@@ -700,9 +689,15 @@ def security_switch_offs(
     return found
 
 
+def ui_candidate(text: str) -> bool:
+    return ("transition" in text and "all" in text) or any(
+        mark in text for mark in UI_MARKS
+    )
+
+
 def ui_source_check(root: Path, added: dict[str, list[tuple[int, str]]]) -> None:
     marked = {
-        name: [(n, t) for n, t in lines if any(mark in t for mark in UI_MARKS)]
+        name: [(n, t) for n, t in lines if ui_candidate(t)]
         for name, lines in added.items()
         if name.endswith(UI_SUFFIXES)
     }
