@@ -14,13 +14,13 @@ Write the brief per the planning UX "Brief" rule: link planning UX, include its 
 
 1. Coverage table: each agreed item → the screen that shows it, or the automatic step that does it. An agreed item with no row, or a row with neither, fails.
 2. Nothing-lost list: each current action on the touched pages → its new place, or why it goes.
-3. Whole-page captures: each touched page, top to bottom, at 390 and 1280 px wide and at each other width the app supports. They are for your check, not for staff.
+3. Whole-page captures: each touched page, top to bottom, at 390 and 1280 px wide and at each other width the app supports. They are for the coordinator's check, not for staff.
 4. Taps table: taps per job, before and after, counted by clicking the real app. It goes in the worker's report and the card's plan, never in the staff image.
 5. Screens: the real app with fake data, as a local patch only. No live writes.
 6. Staff image: one combined image of the After screens only, a plain caption under each and red boxes around what is new. No Before screens and no taps table. The plan and the pull request still keep the real Before per planning UX.
 7. The plan's UX Rules block judges every Usability rule.
 
-Check the output and each picture against the proof rules; one fail → back to the worker, not to the card.
+The worker never writes proof files. The coordinator checks the output and each picture against the proof rules; one fail → back to the worker, not to the card.
 
 ## Proof rules
 
@@ -32,13 +32,13 @@ Check the output and each picture against the proof rules; one fail → back to 
 | `visualFatigue` | Planning UX "Hierarchy" and "No clutter": one focus, few elements, colours and words.                       |
 | `hierarchy`     | Planning UX "Hierarchy": the one action that matters is the strongest element.                              |
 | `noClutter`     | Planning UX "No clutter"; a messaging-app link is an icon with a screen-reader label, never a text label.   |
-| `coverage`      | Each coverage table row has its screen or automatic step in this picture, or this line names where it is.   |
-| `wholePage`     | Each touched page in this picture passed the whole-page captures; old clutter on it is removed too.         |
+| `coverage`      | Each coverage row shown in this picture has its screen; the proof line names where the other rows are.      |
+| `wholePage`     | Each touched page in this picture was checked in the whole-page captures; old clutter found there is gone.  |
 | `nothingLost`   | Each current action on the pages in this picture has its new place, or a reason it goes.                    |
 
 ## Proof file
 
-Open each picture, then write `<picture>.json` beside it (`home.png` → `home.png.json`). `comment`, `move` and `upload` refuse a `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp` whose proof file is missing, older than the picture or incomplete. Then nothing is uploaded, posted or moved.
+The coordinator opens each picture, then writes `<picture>.json` beside it (`home.png` → `home.png.json`). `comment`, `move` and `upload` refuse a `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp` whose proof file is missing, older than the picture or incomplete. Then nothing is uploaded, posted or moved.
 
 ```json
 {
@@ -50,9 +50,9 @@ Open each picture, then write `<picture>.json` beside it (`home.png` → `home.p
 ```
 
 - `change` = the change the picture proves; for evidence of current behaviour, such as an error, the behaviour it proves.
-- `showsChange: true` = you opened the picture and it shows that.
-- `uiRules` = one line of at least 20 characters for each key in the proof rules: what you checked on this picture.
-- A picture of a new or changed screen needs `uiRules`, testing pictures included. A picture with no new or changed screen, such as an error or evidence of current behaviour, has `"notNewUi": "<reason>"` instead.
+- `showsChange: true` = the coordinator opened the picture and it shows that.
+- `uiRules` = one line of at least 20 characters for each key in the proof rules: what the coordinator checked on this picture.
+- A picture of a new or changed design needs `uiRules`, testing pictures included; judge the After screens. A picture with no new design, such as a fix that keeps the layout, an error or evidence of current behaviour, has `"notNewUi": "<reason>"` instead.
 
 ## Post
 
