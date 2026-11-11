@@ -506,3 +506,25 @@ def test_force_push_base_outside_history_compares_with_parent(
     assert runner.check(base=rewritten_away) == 0
     assert (tmp_path / "ran").is_file()
     assert "not in this history" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("changed", "expected"),
+    [
+        ("mobile/tool/gen.py", {".", "mobile"}),
+        ("mobile/lib/main.dart", {"mobile"}),
+    ],
+)
+def test_a_file_of_another_language_also_selects_the_group_that_reads_it(
+    repository: Path, changed: str, expected: set[str]
+) -> None:
+    packages: list[Group] = [
+        {"path": ".", "language": "python", "checks": [], "depends_on": []},
+        {"path": "mobile", "language": "dart", "checks": [], "depends_on": []},
+    ]
+    path = repository / changed
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("change\n")
+    groups: list[Group] = [*packages, {"path": ".", "checks": []}]
+    selected = affected_groups(repository, groups, "HEAD")
+    assert {group["path"] for group in selected[:-1]} == expected
