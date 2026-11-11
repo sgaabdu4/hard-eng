@@ -146,6 +146,8 @@ class FakeGitHub:
         ]
         self.file_payload: object = [files or []]
         self.review: object = _review("0" * 40, viewerDidAuthor=False)
+        self.rules: object = None
+        self.job: object = None
         self.collaborators: object = [[_OWNER]]
         self.codeowners: dict[str, str] = {}
         self.comparison: object = {"behind_by": 0}
@@ -160,7 +162,7 @@ class FakeGitHub:
         if args[0] != "api":
             raise AssertionError(args)
         if args[1] == "graphql":
-            return json.dumps(self.review)
+            return json.dumps(self.rules if "Administer" in args[-1] else self.review)
         if "--method" in args:
             if "HEAD" in args:
                 raise shipping.ShippingError("gh query failed")
@@ -176,6 +178,7 @@ class FakeGitHub:
             "/check-runs?": self.check_payload,
             "/collaborators?": self.collaborators,
             "/compare/": self.comparison,
+            "/actions/jobs/": self.job,
         }
         for marker, payload in payloads.items():
             if marker in endpoint:

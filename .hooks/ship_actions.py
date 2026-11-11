@@ -587,6 +587,8 @@ def run(
         note := shipping_note(shipment.root, shipment.head_sha)
     ):
         print(note)
+    if shipment.rule_note:
+        print(shipment.rule_note)
     bypassed = shipment.review_bypass
     if stage == "merge":
         shipment = merge(target, plan_path, shipment, str(merge_method))

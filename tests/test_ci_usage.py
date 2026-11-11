@@ -1,10 +1,23 @@
 """Billed Actions minutes from GitHub's run and job records."""
 
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import Mock
 
+import plans
 import pytest
+import shipping
 from ci_usage import ci_usage
+from test_shipping import (
+    _PR_URL,
+    FakeGitHub,
+    Fixture,
+    _check,
+    _fixture,
+    _patch_gh,
+    _pull,
+)
 
 SOURCE = Path(__file__).resolve().parents[1]
 
@@ -177,3 +190,87 @@ def test_ci_usage_reads_only_the_newest_runs_across_pages(
     output = capsys.readouterr().out
     assert len(pages) == 2
     assert "last 150 runs: 150 runs, 150 jobs." in output
+
+
+def _ago(minutes: int) -> str:
+    return (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
+
+
+def _queued(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: object
+) -> tuple[Fixture, FakeGitHub]:
+    fixture = _fixture(tmp_path)
+    queued = _check(fixture.head, status="queued", conclusion=None, completed_at=None)
+    fake = FakeGitHub(_pull(fixture), [queued])
+    fake.job = job
+    _patch_gh(monkeypatch, fake)
+    return fixture, fake
+
+
+_WAITING = {"runner_name": None, "labels": ["self-hosted", "linux"]}
+
+
+def test_ready_names_a_required_check_that_no_runner_took(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, fake = _queued(tmp_path, monkeypatch, _WAITING | {"created_at": _ago(120)})
+    with pytest.raises(shipping.PendingCheck) as pending:
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert str(pending.value) == (
+        "required check has not completed: build; no runner has taken it for "
+        "120 min (labels: self-hosted, linux). Start a runner with those labels, "
+        "or ask its owner whether it serves this PR's author. GitHub fails a job "
+        "queued over 24 hours."
+    )
+    assert [call[-1] for call in fake.calls if "/actions/jobs/" in call[-1]] == [
+        "repos/acme/widget/actions/jobs/1"
+    ]
+
+
+@pytest.mark.parametrize(
+    "job",
+    [
+        _WAITING | {"created_at": _ago(1)},
+        _WAITING | {"created_at": _ago(120), "runner_name": "runner-1"},
+        _WAITING | {"created_at": _ago(120), "labels": []},
+        _WAITING | {"created_at": "yesterday"},
+        _WAITING,
+        ["not", "a", "job"],
+        None,
+    ],
+)
+def test_a_fresh_or_unreadable_queued_job_keeps_the_plain_pending_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: object
+) -> None:
+    fixture, _ = _queued(tmp_path, monkeypatch, job)
+    with pytest.raises(shipping.PendingCheck) as pending:
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert str(pending.value) == "required check has not completed: build"
+
+
+def test_completed_checks_make_no_job_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture), [_check(fixture.head)])
+    _patch_gh(monkeypatch, fake)
+    shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert not [call for call in fake.calls if "/actions/jobs/" in call[-1]]
+
+
+@pytest.mark.parametrize("path", ["checks", "branch_point"])
+def test_branch_point_and_push_reuse_never_look_up_jobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    fixture, fake = _queued(tmp_path, monkeypatch, _WAITING | {"created_at": _ago(120)})
+    monkeypatch.setattr(plans, "default_branch_point", Mock(return_value=fixture.head))
+    policy = shipping.load_policy(fixture.root)
+    assert policy is not None
+    if path == "branch_point":
+        assert shipping.passed_branch_point(fixture.root) is None
+    else:
+        with pytest.raises(shipping.PendingCheck) as pending:
+            shipping._checks(fixture.root, "acme/widget", fixture.head, policy, False)
+        assert str(pending.value) == "required check has not completed: build"
+    assert [call for call in fake.calls if "check-runs" in call[-1]]
+    assert not [call for call in fake.calls if "/actions/jobs/" in call[-1]]

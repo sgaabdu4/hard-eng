@@ -12,6 +12,7 @@ from shipping import (
     _PR_URL,
     _THREADS_QUERY,
     ShippingError,
+    ShippingPolicy,
     _api_items,
     _complete_nodes,
     _graphql_pull,
@@ -33,6 +34,13 @@ _REVIEW_QUERY = (
     "commits(last:1){nodes{commit{oid statusCheckRollup{state contexts(first:100){"
     "totalCount nodes{...on CheckRun{name conclusion} ...on StatusContext{context state}}"
     "}}}}}}}}"
+)
+_RULE_QUERY = (
+    "query($owner:String!,$name:String!,$number:Int!){"
+    "repository(owner:$owner,name:$name){viewerCanAdminister "
+    "pullRequest(number:$number){baseRef{branchProtectionRule{"
+    "requiredStatusCheckContexts} rules(first:100){totalCount nodes{type parameters{"
+    "...on RequiredStatusChecksParameters{requiredStatusChecks{context}}}}}}}}}"
 )
 _PASSED = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 _CODEOWNERS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
@@ -63,6 +71,44 @@ def _required_checks(
                 check.get("context") for check in checks if isinstance(check, dict)
             ]
     return {name for name in names if isinstance(name, str)}
+
+
+def branch_rule_note(
+    root: Path, policy: ShippingPolicy, identity: tuple[str, str, int]
+) -> str | None:
+    """A line when the base branch may not require every shipping check; never a refusal."""
+    owner, name, number = identity
+    checks, base = policy["checks"], policy["base"]
+    try:
+        data, pull = _graphql_pull(root, owner, name, number, _RULE_QUERY)
+        ref = pull.get("baseRef")
+        rules = _complete_nodes(ref.get("rules") if isinstance(ref, dict) else None)
+        protection = ref.get("branchProtectionRule") if isinstance(ref, dict) else None
+        required = _required_checks(
+            protection if isinstance(protection, dict) else {}, rules or []
+        )
+        admin = _object(data.get("repository"), "repository").get("viewerCanAdminister")
+    except ShippingError as error:
+        return f"Not checked: whether {base} requires {', '.join(checks)} ({error})."
+    missing = ", ".join(sorted(set(checks) - required))
+    if not missing:
+        return None
+    if rules is None:
+        return (
+            f"Not checked: whether {base} requires {missing} "
+            "(the base branch rules are unreadable or incomplete)."
+        )
+    if admin is not True:
+        return (
+            f"Not checked: whether {base} requires {missing}; "
+            "only a repository admin can read its branch protection."
+        )
+    return (
+        f"Warning: {base} does not require {missing}, so a PR can merge while that "
+        f"check is missing or failed. A repository admin adds it at "
+        f"https://github.com/{owner}/{name}/settings/rules (branch ruleset for "
+        f"{base}, Require status checks to pass, add {missing})."
+    )
 
 
 def _other_merge_requirement(
