@@ -10,7 +10,7 @@ import pytest
 import yaml
 from ci_setup import configure_ci
 from conftest import SOURCE, WORKFLOW_TEMPLATE, configure
-from gate_config import Gate, GateConfig
+from gate_config import Gate, GateConfig, Group, affected_groups
 from shards import split_test_shards
 from test_shards import serve
 
@@ -199,3 +199,21 @@ def test_a_run_that_selects_no_package_passes_in_the_gate_job_with_no_download(
         if path.is_file()
     )
     assert kept == ["coverage/shards/1/ran.txt", "coverage/shards/2/ran.txt"]
+
+
+OWN_GATES = SOURCE / "hard-eng.gates.json"
+
+
+@pytest.mark.parametrize("name", [".github/hard-eng.yml", OLD_PATH])
+def test_an_edit_under_github_selects_the_package_checks(
+    repository: Path, name: str
+) -> None:
+    config = json.loads(OWN_GATES.read_text())
+    groups: list[Group] = [
+        *config["packages"],
+        {"path": ".", "checks": config["shared"]},
+    ]
+    (repository / name).parent.mkdir(parents=True, exist_ok=True)
+    (repository / name).write_text("name: edited\n")
+    chosen = affected_groups(repository, groups, "HEAD")
+    assert "tests" in [gate["name"] for group in chosen for gate in group["checks"]]
