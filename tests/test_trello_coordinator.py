@@ -205,6 +205,7 @@ def test_check_reports_every_missed_item(project: Project) -> None:
         "unnumbered": {"sl8"},
         "overdue": {"9"},
         "realCases": {"11"},
+        "idle": {"1", "2", "5"},
     }
     assert {name: refs(items) for name, items in report.items()} == expected
     owner = report["owner"][0]
@@ -840,6 +841,12 @@ def sections(text: str) -> dict[str, str]:
 
 def first_cells(section: str) -> list[str]:
     return re.findall(r"^\| `(.+?)` +\|", section, flags=re.MULTILINE)
+
+
+def test_every_report_list_has_a_run_action(mods: Mods) -> None:
+    rules = sections((SKILL / "references/run.md").read_text())["Report lists"]
+    acted = {name for cell in first_cells(rules) for name in re.findall(r"\w+", cell)}
+    assert acted == set(mods.report.FIELDS)
 
 
 def test_cli_matches_the_reference_contract(mods: Mods) -> None:

@@ -2,11 +2,69 @@ from pathlib import Path
 
 import pytest
 from test_trello_board import ours
-from trello_fakes import Project, ago, comment, edit_comment, make_card, refs
+from trello_fakes import (
+    CONFIG,
+    Project,
+    ago,
+    comment,
+    edit_comment,
+    make_card,
+    move_action,
+    refs,
+)
 from trello_fixtures import load_mods, make_project
 
 mods = pytest.fixture(load_mods)
 project = pytest.fixture(make_project)
+
+
+def with_list(project: Project, role: str, name: str) -> None:
+    lists = CONFIG["lists"]
+    assert isinstance(lists, dict)
+    project.fake.lists.append({"id": f"l-{role}", "name": name})
+    project.configure(lists={**lists, role: name})
+
+
+def test_an_open_card_nobody_touched_is_listed_as_idle(project: Project) -> None:
+    with_list(project, "urgent", "Urgent")
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-todo", dateLastActivity=ago(50)),
+        make_card(2, "#2 Card", "l-doing", dateLastActivity=ago(50)),
+        make_card(3, "#3 Card", "l-urgent", dateLastActivity=ago(50)),
+        make_card(4, "#4 Card", "l-doing", dateLastActivity=ago(2)),
+    ]
+    idle = project.report()["idle"]
+    assert refs(idle) == {"1", "2", "3"}
+    doing = next(found for found in idle if found["card"] == "2")
+    assert doing["excerpt"] == "50 hours in Doing with no comment or move"
+
+
+def test_a_recent_comment_or_move_keeps_an_open_card_off_the_idle_list(
+    project: Project,
+) -> None:
+    with_list(project, "discuss", "Discuss")
+    old = {"dateLastActivity": ago(50)}
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing", **old),
+        make_card(2, "#2 Card", "l-todo", **old),
+        make_card(3, "#3 Card", "l-testing", **old),
+        make_card(4, "#4 Card", "l-done", **old),
+        make_card(5, "#5 Card", "l-discuss", **old),
+    ]
+    project.fake.actions += [
+        comment("c1", 1, "m-sam", "The total is 40.", 2),
+        move_action("v2", 2, "l-todo", 3, name="To do"),
+    ]
+    assert project.report()["idle"] == []
+
+
+def test_a_bumped_last_activity_does_not_hide_an_idle_card(project: Project) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 Card", "l-doing", dateLastActivity=ago(0.1)),
+        make_card(2, "#2 Card", "l-todo", id="65a1b2c30000000000000000"),
+    ]
+    project.fake.actions.append(comment("c1", 1, "m-sam", "The total is 40.", 50))
+    assert refs(project.report()["idle"]) == {"1", "2"}
 
 
 def test_a_ticked_due_date_is_not_overdue(project: Project) -> None:

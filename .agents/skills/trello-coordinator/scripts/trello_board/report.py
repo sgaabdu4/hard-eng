@@ -1,11 +1,11 @@
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from .board import QUESTION, TAG, Event, Snapshot, questions_in
 from .config import Config
-from .shapes import Obj, parse_time, text
+from .shapes import Obj, parse_time, stamp, text
 
 FIELDS = (
     "requests",
@@ -21,8 +21,11 @@ FIELDS = (
     "unnumbered",
     "overdue",
     "realCases",
+    "idle",
 )
 REAL_CASE = "Waiting for real case"
+OPEN_WORK = frozenset({"todo", "doing", "urgent"})
+TRELLO_ID = re.compile(r"[0-9a-f]{24}")
 WORKING = r"\b(?:I am (?:fixing|building|changing)|I will fix|being built|waits for the #\d+ fix)\b"
 INTENT = (
     r"\bI(?: am|['’]m) (?:fixing|building|changing|adding|checking|making|watching|writing|looking"
@@ -364,6 +367,29 @@ def real_cases(ctx: Context, view: View) -> list[Item]:
     return [item(view, text(view.card.get("dateLastActivity")), "", "")]
 
 
+def last_touch(ctx: Context, view: View) -> str:
+    card = text(view.card.get("id"))
+    dates = [event.date for event in ctx.snapshot.threads.get(card, [])]
+    if moved := ctx.snapshot.moves.get(card):
+        dates.append(moved)
+    if TRELLO_ID.fullmatch(card):
+        dates.append(stamp(datetime.fromtimestamp(int(card[:8], 16), UTC)))
+    if not dates:
+        return text(view.card.get("dateLastActivity"))
+    return max(dates, key=parse_time)
+
+
+def idle(ctx: Context, view: View) -> list[Item]:
+    if view.role not in OPEN_WORK:
+        return []
+    at = last_touch(ctx, view)
+    hours = hours_since(ctx.now, at)
+    if hours <= ctx.config.chase_hours:
+        return []
+    excerpt = f"{hours:.0f} hours in {view.list} with no comment or move"
+    return [item(view, at, "", excerpt)]
+
+
 CHECKS: dict[str, Callable[[Context, View], list[Item]]] = {
     "requests": requests,
     "information": information,
@@ -378,6 +404,7 @@ CHECKS: dict[str, Callable[[Context, View], list[Item]]] = {
     "unnumbered": unnumbered,
     "overdue": overdue,
     "realCases": real_cases,
+    "idle": idle,
 }
 
 
