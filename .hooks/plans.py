@@ -14,6 +14,8 @@ from gate_config import (
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
 SMALL_SIZE = "Size: small ("
+BARE_NONE = re.compile(r"(?i)none\.?")
+CLAIM_LINE = re.compile(r"(?m)^(?:Same cause|Retro): *(.*)$")
 NOT_APPLICABLE_PROOF = re.compile(r"\bN/A — \S")
 NOT_APPLICABLE_WORD = re.compile(r"(?i)\bN/A\b")
 TITLE_LINE = re.compile(r"(?m)^# \S.+$")
@@ -382,6 +384,24 @@ def touched_since_update(path: Path) -> bool:
     )
 
 
+def reasoned(value: str, name: str) -> None:
+    if BARE_NONE.fullmatch(value):
+        raise ValueError(f"'{name}:' needs a reason; write `None — <reason>`")
+
+
+def claimed_tests(sections: dict[str, str]) -> list[tuple[str, str]]:
+    """The `path::test` names of test files on the Same cause and Retro lines."""
+    lines = CLAIM_LINE.findall(
+        sections["Repository context"] + "\n" + sections["Verification"]
+    )
+    return [
+        (path, name.split("[", 1)[0])
+        for line in lines
+        for path, name in TEST_REFERENCE.findall(line)
+        if _is_test(PurePosixPath(path))
+    ]
+
+
 def newer_fields(
     sections: dict[str, str],
     status: str,
@@ -392,14 +412,14 @@ def newer_fields(
 ) -> None:
     """Old Complete plans skip Same cause; Single source and Retro bind only edited plans."""
     if not legacy:
-        field(sections["Repository context"], "Same cause")
+        reasoned(field(sections["Repository context"], "Same cause"), "Same cause")
         acceptance_tests(sections)
     if not changed:
         return
     try:
         field(sections["Repository context"], "Single source")
         if status == "Complete":
-            field(sections["Verification"], "Retro")
+            reasoned(field(sections["Verification"], "Retro"), "Retro")
     except ValueError:
         if status != "Complete" or touched_since_update(path):
             raise
@@ -502,6 +522,7 @@ def plan_stage(root: Path, path: Path, changed: set[str]) -> str:
         if status == "Complete" and edited:
             sections = plan_sections(path.read_text())
             references, requirements = acceptance_tests(sections)
+            references += claimed_tests(sections)
             if missing := missing_tests(root, references):
                 raise ValueError(
                     "acceptance names tests that do not exist: " + ", ".join(missing)
