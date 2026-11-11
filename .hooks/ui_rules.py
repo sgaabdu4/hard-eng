@@ -7,7 +7,11 @@ from gate_config import generated_sources
 from plans import _is_test as is_test_path
 
 UNOWNED = (".hooks/", ".agents/", ".claude/")
-THEME_WORDS = ("theme", "token", "color", "colour", "palette")
+THEME_WORDS = frozenset(
+    ("theme", "token", "color", "colour", "palette")
+    + ("themes", "tokens", "colors", "colours", "palettes")
+)
+NAME_WORDS = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+")
 COMMENT_LINE = re.compile(r"^\s*(?://|/\*|<!--|\*(?:\s|/|$))")
 TRANSITION_CLASS = re.compile(r"(?<![\w-])transition-all(?![\w-])")
 TRANSITION_STYLE = re.compile(
@@ -15,7 +19,7 @@ TRANSITION_STYLE = re.compile(
 )
 TAILWIND_COLOUR = re.compile(
     r"-\[(?:#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-fA-F\w])"
-    r"|(?:rgba?|hsla?|oklch)\()"
+    r"|(?:rgba?|hsla?|oklch)\((?!\s*var\())"
 )
 DART_COLOUR = re.compile(
     r"\bColor\(\s*0x|\bColor\.from(?:ARGB|RGBO)\(|\bColors\.(?!transparent\b)[A-Za-z]"
@@ -27,15 +31,17 @@ TRANSITION_STEP = (
 )
 COLOUR_STEP = (
     "Use a colour of the theme, or add the colour to a theme or token file "
-    "(a path that holds theme, token, color or palette)"
+    "(a folder or file named theme, token, color, colour or palette, or tailwind.config.*)"
 )
 
 
 def is_theme_path(name: str) -> bool:
     path = PurePosixPath(name)
-    lowered = [part.lower() for part in path.parts]
-    return path.name.startswith("tailwind.config.") or any(
-        word in part for part in lowered for word in THEME_WORDS
+    words = NAME_WORDS.findall(path.stem)
+    return (
+        path.name.startswith("tailwind.config.")
+        or any(part.lower() in THEME_WORDS for part in path.parts[:-1])
+        or bool(words and words[-1].lower() in THEME_WORDS)
     )
 
 
