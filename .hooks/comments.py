@@ -634,7 +634,8 @@ def validate_suppressions(root: Path, base: str | None) -> None:
             f"({len(lost)} removed, {gained} added); removed at {', '.join(lost)}. "
             "To remove a whole test, add `Removed test: <path> :: <test name> :: "
             "<what still proves it or why it is unneeded>` to the plan; the test name "
-            "is the function name alone. An assertion removed from a test that stays "
+            "is the function name for a Python test and the text between the quotes "
+            "for it(), test() and testWidgets(). An assertion removed from a test that stays "
             "must stay or get an equal check"
         )
     if found:
