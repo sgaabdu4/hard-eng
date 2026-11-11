@@ -332,11 +332,12 @@ PYTHON_OFF = re.compile(
     r"|ruff:\s*(?:file-ignore|ignore|disable)\["
     r"|(?:ruff:\s*)?isort:\s*(?:skip_file|skip|off)\b|fmt:\s*(?:off|skip)\b|yapf:\s*disable\b)|\b(pytest\.)?mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
     r"|\bunittest\.([Ss]kip\w*|expectedFailure)\b|\bskipTest\(|\bimportorskip\("
-    r"|^\s*@skip(If|Unless)?\(|^__test__\s*=\s*False\b"
+    r"|^\s*@skip(If|Unless)?\(|^\s*__test__\s*=\s*False\b|\braise\s+SkipTest\b"
+    r"|^\s*from\s+pytest\s+import\s[^#]*?\b(skip|xfail|importorskip)\b"
 )
 SCRIPT_OFF = re.compile(
     r"eslint-disable|@ts-(ignore|expect-error|nocheck)|biome-ignore"
-    r"|\b(it|test|describe|suite)(?:\.(?:concurrent|sequential|shuffle))*\.(skip|only|fixme|todo|failing|fails|if|runIf)(If)?[.(]"
+    r"|\b(it|test|describe|suite)(?:\.(?:concurrent|sequential|shuffle))*\.(skip|only|fixme|todo|failing|fails|if|runIf)(If)?(?:[.(]|\b)"
     r"|\b(xit|xtest|xdescribe|fit|fdescribe)\("
     r"|(/\*|//)\s*(istanbul|c8|v8) ignore"
 )

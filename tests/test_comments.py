@@ -308,6 +308,35 @@ def test_scaffold_paths_and_ordinary_words_are_not_flagged(tmp_path: Path) -> No
     validate_suppressions(root, "HEAD")
 
 
+def test_the_word_for_a_skipped_test_outside_a_raise_passes(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a class, a catch and a prose line that name the skip error stay allowed."""
+    root = switch_root(tmp_path, "app.py", "")
+    for name, text in (
+        ("src/app.py", "class Ski" + "pTest(Exception):\n    pass\n"),
+        ("src/errors.py", "try:\n    run()\nexcept Ski" + "pTest:\n    pass\n"),
+        ("notes.md", "A raise Ski" + "pTest is prose here.\n"),
+    ):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    validate_suppressions(root, "HEAD")
+
+
+def test_names_close_to_a_skip_form_pass(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a helper, a longer name and an ordinary pytest import stay allowed."""
+    root = switch_root(tmp_path, "app.py", "")
+    for name, text in (
+        (
+            "tests/test_rows.py",
+            "rows = ski" + "p_rows(data)\nfrom pytest import fixture\n",
+        ),
+        ("src/page.ts", "const slow = ski" + "p ? 1 : 2;\n"),
+        ("src/page.test.ts", "const testSki" + "p = 1;\nconst it_ski" + "p = 2;\n"),
+    ):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    validate_suppressions(root, "HEAD")
+
+
 def test_skip_argument_counts_only_in_test_files(tmp_path: Path) -> None:
     """HE-NO-SWITCH-OFF: a paging value named skip is data; a skipped test is not."""
     root = switch_root(tmp_path, "app.py", "")
@@ -318,7 +347,6 @@ def test_skip_argument_counts_only_in_test_files(tmp_path: Path) -> None:
             "src/page.test.ts",
             "const rows = find({ ski" + "p: 10, on" + "ly: 'admin' });\n",
         ),
-        ("tests/doubles.py", "class TestDouble:\n    __test__ " + "= False\n"),
     ):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_text(text)
