@@ -26,7 +26,7 @@ DART_LEAD = "^" + outside_calls("test|testWidgets|group")
 JS_KEY = r"(retry:|retries:)"
 JS_TEST = re.compile(
     r"(jest\.retryTimes\()|\bconfigure\(\s*\{[^}\n]*?(retries:)"
-    + COUNT
+    + NONZERO
     + "|"
     + JS_LEAD
     + r"\b(?:test|it|describe|bench|suite)\b"
@@ -53,7 +53,7 @@ PYTEST_SETTINGS = re.compile(
 )
 KEYS = re.compile(r"^\s*(retry)\s*[=:]" + NONZERO)
 COMMANDS = re.compile(
-    r'"(--retry|--retries|--reruns)"|(-retry-tests-on-failure)'
+    r'"(--retry|--retries|--reruns)(?:"|=(?!0")[^"]*")|(-retry-tests-on-failure)'
     r"|\b(?:vitest|playwright|jest|bun test|pytest)\b[^\n]*?(--retry|--retries|--reruns)\b(?![ =]+0\b)"
     r"|(?i:(retryonfailure))"
 )
@@ -68,22 +68,21 @@ BY_NAME = {
 }
 BY_SUFFIX = {".xctestplan": COMMANDS, ".xcscheme": COMMANDS}
 IN_TESTS = {".py": PYTHON, ".dart": DART_TEST, **dict.fromkeys(JAVASCRIPT, JS_TEST)}
-CONFIG_PREFIXES = (
-    "playwright.config.",
-    "playwright-ct.config.",
-    "vitest.config.",
-    "vitest.workspace.",
-    "vite.config.",
-    "jest.config.",
-    "jest.setup.",
-)
+CONFIG_STARTS = ("playwright", "vitest", "vite", "jest")
+CONFIG_PREFIXES = ("vitest.workspace.", "jest.setup.")
+
+
+def is_config(name: str) -> bool:
+    return name.startswith(CONFIG_PREFIXES) or (
+        name.startswith(CONFIG_STARTS) and ".config." in name
+    )
 
 
 def retry_pattern(name: str) -> re.Pattern[str] | None:
     path = PurePosixPath(name)
     if pattern := BY_NAME.get(path.name) or BY_SUFFIX.get(path.suffix):
         return pattern
-    if path.suffix in JAVASCRIPT and path.name.startswith(CONFIG_PREFIXES):
+    if path.suffix in JAVASCRIPT and is_config(path.name):
         return JS_CONFIG
     if path.name == "conftest.py" or _is_test(path):
         return IN_TESTS.get(path.suffix)
