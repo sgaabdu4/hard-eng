@@ -430,7 +430,16 @@ def prepare(
         return [("full check", local)]
     install_new(kind, value, source, work, log)
     # Public CI proves a new project's first full check; on the Mac the agents' Stop check runs it.
-    return [("full check", check)] if check_new else []
+    if not check_new:
+        return []
+    manifest = work / "package.json"
+    scripts = (
+        json.loads(manifest.read_text()).get("scripts", {})
+        if manifest.is_file()
+        else {}
+    )
+    lint = [("project lint", ["bun", "run", "lint"])] if "lint" in scripts else []
+    return [("full check", check), *lint]
 
 
 def agent_command(agent: str, work: Path) -> list[str]:

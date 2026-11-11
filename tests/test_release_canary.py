@@ -569,6 +569,36 @@ def test_a_new_project_gets_its_full_check_only_in_ci(
             assert [name for name, _ in checks] == ["full check"]
 
 
+def test_a_new_javascript_project_in_ci_also_runs_its_own_lint_script(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+
+    def install_new(*_: object) -> None:
+        pass
+
+    monkeypatch.setattr(release_canary, "install_new", install_new)
+    manifests = {
+        "with": (
+            '{"scripts": {"lint": "biome check"}}',
+            ["full check", "project lint"],
+        ),
+        "without": ('{"scripts": {"test": "x"}}', ["full check"]),
+        "none": ("", ["full check"]),
+    }
+    with (tmp_path / "log").open("w") as log:
+        for name, (text, expected) in manifests.items():
+            work = tmp_path / name
+            work.mkdir()
+            if text:
+                (work / "package.json").write_text(text)
+            args = (("scaffold", "x"), "a" * 40, tmp_path, work, log)
+            checks = release_canary.prepare(*args, check_new=True)
+            assert [n for n, _ in checks] == expected
+            lint = [c for n, c in checks if n == "project lint"]
+            assert lint in ([], [["bun", "run", "lint"]])
+            assert release_canary.prepare(*args) == []
+
+
 def test_ci_checks_new_projects_as_manual_full_checks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
