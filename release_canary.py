@@ -57,6 +57,17 @@ except ImportError:
     locked_update = update.update
 print(locked_update(Path(".").resolve()))
 """
+# Runs the full check, told that this release is verified, so no step asks a Hard Eng host.
+CHECK = """
+import runpy
+import sys
+sys.path.insert(0, ".hooks")
+import update
+verified = sys.argv[1]
+update.verified_revision = lambda revision: revision == verified
+sys.argv = [".hooks/hard-eng.py", "check"]
+runpy.run_path(".hooks/hard-eng.py", run_name="__main__")
+"""
 STACKS = ("flutter", "nextjs", "opennext", "vite")
 # A public project keeps the brownfield target reproducible and free of private names.
 BROWNFIELD = (
@@ -274,6 +285,16 @@ def on_update_branch(work: Path, revision: str, log: IO[str]) -> None:
         raise Failed("update did not apply")
 
 
+def local_source(source: Path) -> list[str]:
+    """The environment that sends Hard Eng's own address to a local copy."""
+    return [
+        "env",
+        "GIT_CONFIG_COUNT=1",
+        f"GIT_CONFIG_KEY_0=url.{source.as_uri()}.insteadOf",
+        f"GIT_CONFIG_VALUE_0=https://github.com/{UPSTREAM}.git",
+    ]
+
+
 def update_to(revision: str, source: Path, work: Path, log: IO[str]) -> None:
     """Update with the project's own updater, from a local copy of Hard Eng and a local origin."""
     origin = work.with_name(f"{work.name}.origin.git")
@@ -286,17 +307,22 @@ def update_to(revision: str, source: Path, work: Path, log: IO[str]) -> None:
         ["git", "remote", "add", "origin", str(origin)],
         ["git", "fetch", "-q", "origin"],
     )
-    local = [
-        "env",
-        "GIT_CONFIG_COUNT=1",
-        f"GIT_CONFIG_KEY_0=url.{source.as_uri()}.insteadOf",
-        f"GIT_CONFIG_VALUE_0=https://github.com/{UPSTREAM}.git",
-    ]
     try:
-        printed = output([*local, sys.executable, "-c", UPDATE, revision], work)
-    except subprocess.SubprocessError as error:
+        done = subprocess.run(
+            [*local_source(source), sys.executable, "-c", UPDATE, revision],
+            cwd=work,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired as error:
         raise Failed(f"update failed: {error}") from error
-    log.write(f"\n{printed}\n")
+    printed = done.stdout.strip()
+    log.write(f"\n{printed}\n{done.stderr}\n")
+    if done.returncode:
+        raise Failed(
+            f"update failed with exit {done.returncode}: {done.stderr.strip()}"
+        )
     if revision not in printed or "hard-eng/update" not in printed:
         raise Failed(f"update printed no ready step for this revision: {printed}")
     on_update_branch(work, revision, log)
@@ -399,7 +425,8 @@ def prepare(
     if kind == "update":
         install_last_release(value, revision, source, work, log)
         update_to(revision, source, work, log)
-        return [("full check", check)]
+        local = [*local_source(source), sys.executable, "-c", CHECK, revision]
+        return [("full check", local)]
     install_new(kind, value, source, work, log)
     # Public CI proves a new project's first full check; on the Mac the agents' Stop check runs it.
     return [("full check", check)] if check_new else []
