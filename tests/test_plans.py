@@ -960,6 +960,9 @@ def test_a_plan_stage_check_passes_a_small_change_with_no_plan(
     edit(repository, "a.py", 2)
     assert validate_plans(repository, stage="Complete") == "Complete"
     assert "Size: small (1 file, 4 changed lines)" in capsys.readouterr().out
+    new_file(repository)
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        validate_plans(repository, stage="Complete")
 
 
 def test_a_draft_plan_with_code_edits_names_the_ready_step(
