@@ -255,6 +255,20 @@ def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
         [edit, limited._replace(detail=limited.detail.replace("V'", "V or exit 127'"))],
         [
             edit,
+            limited._replace(
+                detail=limited.detail.replace(
+                    "perl", "env UV_OFFLINE=true UV_CACHE_DIR=/tmp/cache perl"
+                )
+            ),
+        ],
+        [
+            edit,
+            BASELINE._replace(
+                detail=BASELINE.detail.replace("python3", "UV_OFFLINE=1 python3")
+            ),
+        ],
+        [
+            edit,
             limited._replace(detail=limited.detail[:-1] + ' > "$TMPDIR/he.log" 2>&1"'),
         ],
     ):
