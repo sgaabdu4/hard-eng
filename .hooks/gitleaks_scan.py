@@ -29,7 +29,7 @@ def scan_paths(repository: Path) -> list[Path]:
     return sorted(paths)
 
 
-def repository_root(folder: Path) -> Path | None:
+def git_owner(folder: Path) -> Path | None:
     """Return the nearest folder at or above this one that holds a .git entry."""
     return next(
         (parent for parent in (folder, *folder.parents) if (parent / ".git").exists()),
@@ -46,7 +46,7 @@ class ScanCache:
 
     def paths(self, root: Path) -> list[Path]:
         if root not in self.listings:
-            owner = repository_root(root)
+            owner = git_owner(root)
             if owner is None or owner == root or owner not in self.listings:
                 self.listings[root] = scan_paths(root)
             else:
