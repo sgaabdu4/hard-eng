@@ -740,24 +740,32 @@ def test_the_update_target_moves_an_installed_project_to_the_candidate_from_a_lo
     assert git(target, "branch", "--show-current") == "hard-eng/update"
 
 
+@pytest.mark.parametrize(
+    "printed",
+    [
+        "Hard Eng updates start after the Hard Eng install is on the base branch of a remote.",
+        "Hard Eng holds unfinished work on hard-eng/update; kept; rerun.",
+        "Hard Eng update " + "a" * 40 + " is ready on the main branch.",
+    ],
+    ids=["neither", "branch only", "revision only"],
+)
 def test_an_update_that_prints_no_ready_step_fails_with_the_printed_text(
-    tmp_path: Path,
+    tmp_path: Path, printed: str
 ) -> None:
     work = tmp_path / "work"
     init(work)
     (work / ".hooks").mkdir()
     (work / ".hooks/update.py").write_text(
         "def latest_verified(previous):\n    return None\n\n\n"
-        "def update(root):\n"
-        "    return 'Hard Eng updates start after the Hard Eng install "
-        "is on the base branch of a remote.'\n"
+        f"def update(root):\n    return {printed!r}\n"
     )
     commit(work, "installed")
     with (
         (tmp_path / "log").open("w") as log,
-        pytest.raises(release_canary.Failed, match="base branch of a remote"),
+        pytest.raises(release_canary.Failed, match="no ready step") as failure,
     ):
         release_canary.update_to("a" * 40, tmp_path / "source", work, log)
+    assert printed in str(failure.value)
 
 
 def test_ci_runs_the_update_target_on_linux_only_and_the_release_gate_waits_for_it(
@@ -847,7 +855,12 @@ def test_the_update_targets_full_check_passes_its_plan_step_with_no_call_to_a_ha
             release_canary.UPDATE_TARGET, candidate, source, target, log
         )
         done = subprocess.run(
-            command, cwd=target, capture_output=True, text=True, timeout=900
+            command,
+            check=False,
+            cwd=target,
+            capture_output=True,
+            text=True,
+            timeout=900,
         )
     refusal = done.stdout + done.stderr
     assert "PLAN REFUSED" not in refusal and "applicable PLAN.md" not in refusal
