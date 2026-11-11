@@ -3,8 +3,19 @@ from pathlib import Path
 
 import pytest
 import ship_actions
+import shipping
 from conftest import add_origin, commit, init
 from shipping import Shipment, git
+from test_shipping import (
+    _PR_URL,
+    FakeGitHub,
+    Fixture,
+    _check,
+    _fixture,
+    _native,
+    _patch_gh,
+    _pull,
+)
 
 
 @pytest.fixture(
@@ -153,3 +164,20 @@ def test_the_cleanup_refusal_names_every_kept_path_and_the_step(
     (task / "notes.private").rename(root.parent / "notes.private")
     ship_actions.cleanup(root, shipment)
     assert not task.exists()
+
+
+@pytest.mark.parametrize("stage", ["ready", "delivered"])
+def test_a_leftover_file_in_a_merged_small_task_gets_the_clean_checkout_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    (fixture.root / "source.txt").write_text("fixture\nsmall fix\n")
+    _native(fixture.root, "commit", "-qam", "small fix")
+    head = _native(fixture.root, "rev-parse", "HEAD")
+    merged = {"state": "closed", "merged": True, "merged_at": "2026-09-10T11:00:00Z"}
+    changes = merged | {"merge_commit_sha": head} if stage == "delivered" else {}
+    fixture = Fixture(fixture.root, fixture.plan, head)
+    _patch_gh(monkeypatch, FakeGitHub(_pull(fixture, **changes), [_check(head)]))
+    (fixture.root / "scratch.txt").write_text("left behind\n")
+    with pytest.raises(shipping.ShippingError, match="clean task checkout"):
+        shipping.verify(fixture.root, None, _PR_URL, stage)

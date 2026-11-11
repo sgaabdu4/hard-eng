@@ -842,7 +842,6 @@ def _ready_state(
             raise ShippingError(f"PR mergeability is not clean: {problem}")
     elif pull.mergeable is not True or pull.mergeable_state != "clean":
         raise ShippingError("PR mergeability is not clean")
-    _clean(root)
     return bypass
 
 
@@ -876,6 +875,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     url = f"https://github.com/{owner}/{name}/pull/{number}"
     if repository != f"{owner}/{name}".lower():
         raise ShippingError("PR URL repository does not match origin")
+    _clean(resolved_root)
     resolved_plan, target = _delivery_scope(resolved_root, plan, policy["delivery"])
     if problem := target_problem(target, policy["delivery"]):
         raise ShippingError(problem)
@@ -892,7 +892,6 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         )
         revision, merged_sha = pull.head_sha, None
     else:
-        _clean(resolved_root)
         revision = _delivered(resolved_root, pull, policy["base"], origin_url)
         merged_sha = revision
     if policy["ui_paths"]:
