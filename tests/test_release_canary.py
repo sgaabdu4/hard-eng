@@ -599,7 +599,7 @@ def test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr(
     ],
 )
 def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
-    monkeypatch: pytest.MonkeyPatch, case: str
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], case: str
 ) -> None:
     failed = [*all_passed()[1:], all_passed()[0][:-7] + "failure"]
     rows = {"no runs at the head": [], "a failed job": failed}.get(case, all_passed())
@@ -611,7 +611,9 @@ def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
     )
     listed = [release_canary.folder(" ".join(t)) for t in release_canary.CI_TARGETS]
     got = release_canary.push_outputs(["setup.py"], PUSHED)
+    seen = capsys.readouterr()
     assert got == "targets=" + json.dumps(listed) and release_canary.ci_failures(PUSHED)
+    assert (seen.out, "merged PR failed" in seen.err) == ("", case == "a failed lookup")
 
 
 def test_the_release_gate_follows_a_reused_push_to_the_pr_head(

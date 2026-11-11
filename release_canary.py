@@ -628,7 +628,9 @@ def proven_revision(revision: str) -> str:
             if found == tree:
                 return head
     except subprocess.CalledProcessError:
-        print("The lookup of the merged PR failed; the new projects run.", flush=True)
+        print(
+            "The lookup of the merged PR failed; the new projects run.", file=sys.stderr
+        )
     return revision
 
 
