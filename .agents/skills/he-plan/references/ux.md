@@ -3,17 +3,21 @@
 Apply to visible changes; preview only the flow and states needed for the decision.
 
 - Grounding = inspect the actual website/screen, affected flow and token/theme/component owners in `DESIGN.md` + production code. A dashboard shell alone cannot support decisions about unseen workflows. Missing relevant context → expose the gap; never invent a baseline.
-- Usability = judge every proposal, mockup and review against these; send back a design that fails one:
+- Usability = judge every proposal, mockup, review and after screenshot against each rule; a Fail sends the design back before anyone sees it:
   - Mistake-proof: risky choices blocked, right answer prefilled; ask "how could a rushed person get this wrong?".
-  - Least effort: the app acts when sure and shows a person only what needs them, with a prefilled suggestion. Count the clicks per journey; remove any that are not essential.
-  - One-tap Undo instead of "Are you sure?"; delete, cancel, refund, access removal and reversing money always ask twice.
-  - Calm screens: one focus, clear hierarchy, few elements and colours, labels with one meaning, no unneeded subtitles.
-  - Messages say what happened and what to do next, in plain words, without blame, in the `PRODUCT.md` tone. A confused user means the screen changes, not the user.
+  - Least effort (count): the app acts when sure and shows a person only what needs them, with a prefilled suggestion. Count the clicks per journey; remove any that are not essential.
+  - Observe: never ask a person to record or confirm what the system can already see (messages, replies, logs, payments). Record it automatically and offer undo.
+  - Undo: one-tap Undo instead of "Are you sure?"; delete, cancel, refund, access removal and reversing money always ask twice.
+  - No clutter (count): for every element ask "would the user miss it?"; if not, remove it. No helper sentences, history notes, badges or repeated text buttons where an icon with a screen-reader label or colour says the same. Details one tap away. Count the elements kept and removed.
+  - Hierarchy: the one action that matters is the strongest element; everything else is quieter. One focus per screen, few colours, labels with one meaning.
+  - Messages: say what happened and what to do next, in plain calm words, without blame, in the `PRODUCT.md` tone. A confused user means the screen changes, not the user.
   - States: empty and first-use screens say what to do next; loading never shows 0 or stale numbers; a slow or failed connection keeps typed input and says so; one press saves once; an automatic job that stops, pauses or falls behind tells a person at once, with what to do.
-  - Times show in the user's local time; time logic gets time-zone and clock-change tests. In an app with staff or admin roles, each of their actions writes an audit row (who, when, what).
-  - Accessibility: targets at least 24 × 24 px (WCAG 2.5.8), larger for main controls and the platform's own size on native apps; strong contrast; screen-reader labels.
-  - Check each width the app supports.
+  - Time: times show in the user's local time; time logic gets time-zone and clock-change tests.
+  - Audit: in an app with staff or admin roles, each of their actions writes an audit row (who, when, what).
+  - Accessibility: touch targets at least 44 × 44 px (48 dp on Android), pointer-only controls at least 24 × 24 px (WCAG 2.5.8); strong contrast; screen-reader labels.
+  - Widths: check each width the app supports.
   - Performance: name the screen's data reads, payload size and what loads lazily, per [efficiency](../../he/references/efficiency.md).
+- Brief = a brief that asks a subagent for a design, mockup or preview links this file, includes the full Usability list and states the job, the users and the constraints. It never dictates the layout, the elements per row or the buttons. Process steps from the user are inputs to automate, not screen elements.
 - Pick the first surface below that fits ([HE-REAL-APP-PREVIEW](../../he/references/requirements.md#he-real-app-preview)). Planning may build the proposal in an isolated checkout; production implementation still waits for Ready + authorization. No mandatory video or extra visual-testing platform.
 
 | Surface                                           | Preview + baseline                                                                                                                                                                                                                                                                                                                   |
