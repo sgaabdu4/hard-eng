@@ -21,10 +21,13 @@ from shipping import (
     PendingCheck,
     Shipment,
     ShippingError,
+    _pr_url,
+    _pull,
     gh,
     git,
     load_policy,
     pushed_policy,
+    rebase_step,
     verify,
 )
 from submodules import update_submodules
@@ -523,16 +526,21 @@ def merge(target: Path, plan: Path | None, shipment: Shipment, method: str) -> S
     """Merge the verified head, then prove the merged revision."""
     if shipment.delivery_target == "PR":
         raise ValueError("The plan authorizes PR delivery, not merging")
-    gh(
-        target,
-        "pr",
-        "merge",
-        shipment.pr_url,
-        f"--{method}",
-        *(["--admin"] if shipment.review_bypass else []),
-        "--match-head-commit",
-        shipment.head_sha,
-    )
+    try:
+        gh(
+            target,
+            "pr",
+            "merge",
+            shipment.pr_url,
+            f"--{method}",
+            *(["--admin"] if shipment.review_bypass else []),
+            "--match-head-commit",
+            shipment.head_sha,
+        )
+    except ShippingError as failure:
+        if _pull(target, *_pr_url(shipment.pr_url)).rebaseable is False:
+            raise ShippingError(rebase_step(shipment.base)) from failure
+        raise
     try:
         return verify(target, plan, shipment.pr_url, "delivered")
     except PendingCheck as error:

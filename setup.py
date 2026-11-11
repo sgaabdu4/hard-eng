@@ -763,8 +763,7 @@ def plan_install(
     from update import local_settings, old_generation
 
     local_settings(root)
-    retired += old_generation(root, changes)
-    retired += configure_mcp(root, changes)
+    retired += old_generation(root, changes) + configure_mcp(root, changes)
     configure_ignores(root, changes)
     from gate_config import (
         SOURCE_FILE,
@@ -817,6 +816,9 @@ def plan_install(
         }.get(package.get("language", ""))
         if configure is not None:
             configure(root, root / package["path"], package, changes)
+    from untrusted_input import biome_ignores_hooks
+
+    biome_ignores_hooks(root, changes)
     from ci_setup import configure_github_ci
 
     configure_github_ci(root, SOURCE, config, changes)

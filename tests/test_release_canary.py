@@ -506,9 +506,15 @@ def test_ci_names_every_new_project_without_a_newest_passing_job(
         "new project (scaffold-vite, macos-latest)\tfailure",
         "new project (scaffold-vite, ubuntu-latest)\tsuccess",
         "new project (greenfield-python, ubuntu-latest)\t",
-        "new project (scaffold-nextjs, ubuntu-latest)\tsuccess",
-        "new project (scaffold-opennext, ubuntu-latest)\tsuccess",
-        "new project (brownfield-itsdangerous, ubuntu-latest)\tsuccess",
+        *(
+            f"new project ({name}, {system})\tsuccess"
+            for name in (
+                "scaffold-nextjs",
+                "scaffold-opennext",
+                "brownfield-itsdangerous",
+            )
+            for system in release_canary.CI_SYSTEMS
+        ),
         "new project (update-python, ubuntu-latest)\tsuccess",
         "hard-eng\tsuccess",
     ]
@@ -540,49 +546,6 @@ def test_the_workflow_job_names_are_the_ones_the_mac_canary_reads() -> None:
         assert found and found[1] == "scaffold-vite"
 
 
-def release_gate(monkeypatch: pytest.MonkeyPatch, changed: str, rows: list[str]) -> int:
-    def output(command: list[str]) -> str:
-        return changed if command[0] == "git" else "\n".join(rows)
-
-    monkeypatch.setattr(release_canary, "output", output)
-    return release_canary.release_pr_gate("b" * 40, "a" * 40)
-
-
-def test_a_release_pr_waits_for_develops_push_run_to_pass(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    passed = [
-        f"new project ({release_canary.folder(' '.join(target))}, {os_name})\tsuccess"
-        for target in release_canary.CI_TARGETS
-        for os_name in ("ubuntu-latest", "macos-latest")
-    ]
-    assert release_gate(monkeypatch, "setup.py", passed) == 0
-    assert release_gate(monkeypatch, "setup.py", passed[1:] + [passed[0][:-7]]) == 1
-    assert "Rerun this job" in capsys.readouterr().out
-    assert release_gate(monkeypatch, "setup.py", []) == 1
-    assert release_gate(monkeypatch, "README.md", []) == 0
-
-
-def test_a_release_pr_waits_while_develops_push_run_is_running(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    passed = [
-        f"new project ({release_canary.folder(' '.join(target))}, {os_name})\tsuccess"
-        for target in release_canary.CI_TARGETS
-        for os_name in ("ubuntu-latest", "macos-latest")
-    ]
-    replies = [passed[1:] + [passed[0][:-7] + "null"], passed, passed]
-    waits: list[float] = []
-
-    def output(command: list[str]) -> str:
-        return "setup.py" if command[0] == "git" else "\n".join(replies.pop(0))
-
-    monkeypatch.setattr(release_canary, "output", output)
-    monkeypatch.setattr(release_canary.time, "sleep", waits.append)
-    assert release_canary.release_pr_gate("b" * 40, "a" * 40) == 0
-    assert waits == [30]
-
-
 def test_the_canary_job_runs_the_release_gate_on_a_release_pr() -> None:
     workflow = yaml.safe_load(
         (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
@@ -610,6 +573,36 @@ def test_a_new_project_gets_its_full_check_only_in_ci(
             assert release_canary.prepare(*args) == []
             checks = release_canary.prepare(*args, check_new=True)
             assert [name for name, _ in checks] == ["full check"]
+
+
+def test_a_new_javascript_project_in_ci_also_runs_its_own_lint_script(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+
+    def install_new(*_: object) -> None:
+        pass
+
+    monkeypatch.setattr(release_canary, "install_new", install_new)
+    manifests = {
+        "with": (
+            '{"scripts": {"lint": "biome check"}}',
+            ["full check", "project lint"],
+        ),
+        "without": ('{"scripts": {"test": "x"}}', ["full check"]),
+        "none": ("", ["full check"]),
+    }
+    with (tmp_path / "log").open("w") as log:
+        for name, (text, expected) in manifests.items():
+            work = tmp_path / name
+            work.mkdir()
+            if text:
+                (work / "package.json").write_text(text)
+            args = (("scaffold", "x"), "a" * 40, tmp_path, work, log)
+            checks = release_canary.prepare(*args, check_new=True)
+            assert [n for n, _ in checks] == expected
+            lint = [c for n, c in checks if n == "project lint"]
+            assert lint in ([], [["bun", "run", "lint"]])
+            assert release_canary.prepare(*args) == []
 
 
 def test_ci_checks_new_projects_as_manual_full_checks(

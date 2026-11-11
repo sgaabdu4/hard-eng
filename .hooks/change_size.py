@@ -17,8 +17,9 @@ from plans import (
     plan_sections,
     plan_status,
     release_references,
+    validate_plan,
 )
-from project_files import keep, keeping
+from project_files import KEPT, keep, keeping
 
 NO_CHANGE = "no change"
 MAX_SMALL_LINES = 20
@@ -339,6 +340,57 @@ def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
     return moved
 
 
+def plan_words(text: str) -> list[str]:
+    """The words of a plan; every table rule counts as one form."""
+    return [
+        "---" if word.count("-") > 2 and not word.strip("-:") else word
+        for word in text.split()
+    ]
+
+
+def fails_todays_rules(path: Path) -> bool:
+    if plan_status(path.read_text()) != "Complete":
+        return False
+    try:
+        validate_plan(path)
+    except ValueError:
+        return True
+    return False
+
+
+def held_words(root: Path, reference: str, name: str) -> list[str] | None:
+    try:
+        return plan_words(_git_output(root, "show", f"{reference}:{name}"))
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
+def reformatted_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
+    """Changed Complete plans that fail today's rules but keep every word of the copy that the base and the branch point hold."""
+    failing = [
+        name
+        for name in changed
+        if is_plan_path(Path(name))
+        and (root / name).is_file()
+        and fails_todays_rules(root / name)
+    ]
+    if not failing:
+        return set()
+    references = {
+        reference
+        for reference in (base or "HEAD", default_branch_point(root))
+        if reference
+    }
+    return {
+        name
+        for name in failing
+        if all(
+            held_words(root, reference, name) == plan_words((root / name).read_text())
+            for reference in references
+        )
+    }
+
+
 def plan_not_needed(root: Path) -> bool:
     small, reason = size_verdict(root)
     if reason == NO_CHANGE:
@@ -356,6 +408,8 @@ def judged_plans(
     """The changed files with released plans added and moved plans out, every plan file, and the plans that judge the change."""
     changed = changed | released_plans(root, base)
     changed -= moved_plans(root, base, changed)
+    skipped: set[str] = keep("references", ("reformatted", str(root)), set)
+    changed -= skipped
     paths = plan_files(root)
     applicable = [path for path in paths if str(path.relative_to(root)) in changed]
     return (
@@ -368,6 +422,23 @@ def judged_plans(
             if plan_status(path.read_text()) not in {None, "Complete"}
         ],
     )
+
+
+def judged_stage(root: Path, base: str | None, stage: str | None) -> str:
+    """The stage that validate_plans reaches; a failing run is judged again without its reformatted old plans."""
+    from plans import validate_plans
+
+    with keeping("references"):
+        try:
+            return validate_plans(root, base, stage)
+        except ValueError:
+            point = base or judged_point(root)
+            changed = changed_files(root, point or "HEAD") or set()
+            found = reformatted_plans(root, point, changed)
+            if not found:
+                raise
+            KEPT["references"][("reformatted", str(root))] = found
+            return validate_plans(root, base, stage)
 
 
 def plan_tests(root: Path, base: str | None) -> set[str]:
@@ -397,3 +468,41 @@ def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) 
     if skipped:
         print("FAIL plan acceptance tests were skipped: " + ", ".join(skipped))
     return bool(skipped)
+
+
+MAX_PR_COMMITS = 100
+WARN_PR_COMMITS = 80
+
+
+def commits_problem(count: int) -> str | None:
+    """The refusal when a PR holds more commits than HE-PR-COMMITS allows."""
+    if count <= MAX_PR_COMMITS:
+        return None
+    return (
+        f"PR has {count} commits; HE-PR-COMMITS allows at most {MAX_PR_COMMITS}. "
+        "Move the oldest finished commits to a PR of their own, merge it, then rebase "
+        "the rest. Or join neighbour commits on the same base commit."
+    )
+
+
+def commit_note(root: Path) -> None:
+    """Warn, never refuse, when the branch nears or passes the HE-PR-COMMITS cap."""
+    point = default_branch_point(root)
+    if point is None:
+        return
+    try:
+        count = int(_git_output(root, "rev-list", "--count", f"{point}..HEAD"))
+    except (subprocess.CalledProcessError, OSError, ValueError):
+        return
+    if count < WARN_PR_COMMITS:
+        return
+    way = (
+        "Move the oldest finished commits to a PR of their own and merge it first, "
+        "or join neighbour commits."
+        if count > MAX_PR_COMMITS
+        else "Ship this work soon, then continue on a new branch."
+    )
+    print(
+        f"Hard Eng warning: this branch has {count} commits; ship refuses a PR "
+        f"with more than {MAX_PR_COMMITS} (HE-PR-COMMITS). {way}"
+    )

@@ -107,6 +107,7 @@ CI_KINDS = (*AGENT_KINDS, "update")
 # The public CI job (.github/workflows/canary.yml) that checks each new project.
 NOT_FOLDER_NAME = re.compile(r"[^a-z0-9]+")
 CI_JOB = re.compile(r"new project \(([a-z0-9-]+), [\w.-]+\)")
+CI_SYSTEMS = ("ubuntu-latest", "macos-latest")
 AGENTS = ("claude", "codex")
 TASK = (
     "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
@@ -430,7 +431,16 @@ def prepare(
         return [("full check", local)]
     install_new(kind, value, source, work, log)
     # Public CI proves a new project's first full check; on the Mac the agents' Stop check runs it.
-    return [("full check", check)] if check_new else []
+    if not check_new:
+        return []
+    manifest = work / "package.json"
+    scripts = (
+        json.loads(manifest.read_text()).get("scripts", {})
+        if manifest.is_file()
+        else {}
+    )
+    lint = [("project lint", ["bun", "run", "lint"])] if "lint" in scripts else []
+    return [("full check", check), *lint]
 
 
 def agent_command(agent: str, work: Path) -> list[str]:
@@ -612,15 +622,74 @@ def new_project_runs(revision: str) -> list[tuple[str, str]]:
     return [(name, conclusion) for name, conclusion in runs if CI_JOB.fullmatch(name)]
 
 
-def ci_failures(revision: str) -> list[str]:
-    """New projects without a passing public CI job for this revision; the newest try counts."""
+def proven_revision(revision: str) -> str:
+    """The commit itself, or the head of a merged PR with the same files when it has no runs."""
+    if new_project_runs(revision):
+        return revision
+    tree = output(["git", "rev-parse", f"{revision}^{{tree}}"])
+    try:
+        for head in merged_heads(revision):
+            found = output(
+                [
+                    *("gh", "api", "-q", ".tree.sha"),
+                    f"repos/{UPSTREAM}/git/commits/{head}",
+                ]
+            )
+            if found == tree:
+                return head
+    except subprocess.CalledProcessError:
+        print(
+            "The lookup of the merged PR failed; the new projects run.", file=sys.stderr
+        )
+    return revision
+
+
+def merged_heads(revision: str) -> list[str]:
+    return output(
+        [
+            *("gh", "api", "-q", ".[] | select(.merged_at != null) | .head.sha"),
+            f"repos/{UPSTREAM}/commits/{revision}/pulls",
+        ]
+    ).split()
+
+
+def ci_jobs(label: str) -> list[str]:
+    """The public CI job names of one new project; the update project runs on Linux only."""
+    update = folder(" ".join(UPDATE_TARGET))
+    systems = CI_SYSTEMS[:1] if label == update else CI_SYSTEMS
+    return [f"new project ({label}, {system})" for system in systems]
+
+
+def unproven(revision: str) -> list[str]:
+    """New projects without a passing public CI job on each system for this revision; each listed run of a job must pass."""
     passed: dict[str, bool] = {}
     for name, conclusion in new_project_runs(revision):
-        if found := CI_JOB.fullmatch(name):
-            label = found[1]
-            passed[label] = passed.get(label, True) and conclusion == "success"
+        passed[name] = passed.get(name, True) and conclusion == "success"
     labels = [folder(" ".join(target)) for target in CI_TARGETS]
-    return [label for label in labels if not passed.get(label)]
+    return [
+        label for label in labels if not all(passed.get(job) for job in ci_jobs(label))
+    ]
+
+
+def ci_failures(revision: str) -> list[str]:
+    """New projects without a passing public CI job for this revision or its merged PR head."""
+    return unproven(proven_revision(revision))
+
+
+def push_outputs(names: list[str], revision: str) -> str:
+    """The `targets` job outputs for a push: no jobs when the merged PR proved these files."""
+    listed = [folder(" ".join(target)) for target in CI_TARGETS]
+    if not needs_canary(names):
+        return "targets=[]"
+    try:
+        proven = proven_revision(revision)
+        if proven != revision and not unproven(proven):
+            return f"targets=[]\ncovered={proven}"
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        print(
+            "The lookup of the merged PR failed; the new projects run.", file=sys.stderr
+        )
+    return "targets=" + json.dumps(listed)
 
 
 def release_pr_gate(base: str, revision: str) -> int:
@@ -634,10 +703,18 @@ def release_pr_gate(base: str, revision: str) -> int:
     ):
         print("Waiting for develop's push run to finish.", flush=True)
         time.sleep(30)
-    if missing := ci_failures(revision):
-        print(f"New projects without a passing develop push run: {', '.join(missing)}")
+    proven = proven_revision(revision)
+    if missing := unproven(proven):
+        print(
+            f"New projects without a passing run for this commit: {', '.join(missing)}"
+        )
         print("Rerun this job once the Canary run for develop's push has finished.")
         return 1
+    if proven != revision:
+        print(
+            f"Every new project passed in PR head {proven}, which holds the same files."
+        )
+        return 0
     print("Every new project passed in develop's push run for this commit.")
     return 0
 

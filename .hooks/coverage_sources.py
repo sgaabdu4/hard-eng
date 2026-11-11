@@ -75,6 +75,53 @@ def erased_swift(files: set[Path]) -> set[Path]:
     return erased
 
 
+TOOL_CONFIGS = frozenset(
+    {
+        "astro",
+        "babel",
+        "capacitor",
+        "commitlint",
+        "cypress",
+        "drizzle",
+        "eslint",
+        "jest",
+        "knip",
+        "lint-staged",
+        "metro",
+        "next",
+        "next-sitemap",
+        "nuxt",
+        "open-next",
+        "panda",
+        "playwright",
+        "postcss",
+        "prettier",
+        "release",
+        "rollup",
+        "rsbuild",
+        "rspack",
+        "stylelint",
+        "svelte",
+        "tailwind",
+        "tsdown",
+        "tsup",
+        "uno",
+        "vite",
+        "vitest",
+        "vue",
+        "webpack",
+        "wxt",
+    }
+)
+CONFIG_EXTENSIONS = {"js", "mjs", "cjs", "ts", "mts", "cts"}
+
+
+def root_tool_config(name: str) -> bool:
+    """A name like `next.config.ts`: tool configuration that a framework needs at the package root."""
+    tool, _, extension = name.partition(".config.")
+    return extension in CONFIG_EXTENSIONS and tool in TOOL_CONFIGS
+
+
 def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:
     """Top-level names that hold a package's production code."""
     extensions = {
@@ -90,8 +137,13 @@ def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:
         ):
             continue
         relative = path.relative_to(directory)
-        if nonproduction_source(relative) or {".hooks", ".agents"} & set(
-            relative.parts
+        if (
+            language == "javascript"
+            and len(relative.parts) == 1
+            and root_tool_config(relative.name)
+        ) or (
+            nonproduction_source(relative)
+            or {".hooks", ".agents"} & set(relative.parts)
         ):
             continue
         sources.add(relative.parts[0])

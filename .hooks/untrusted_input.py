@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from itertools import takewhile
 from pathlib import Path
 
@@ -86,6 +87,199 @@ def fallow_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
     if "extends" in config and "ignorePatterns" not in config:
         raise ValueError(f"{advice}; a local list replaces the inherited one")
     updated = json_listed(name, text, "ignorePatterns", pattern, [])
+    if updated is not None:
+        changes[name] = updated
+
+
+BIOME_IGNORE = "!.hooks"
+
+
+def closing(text: str, start: int) -> int:
+    """Offset of the bracket that closes the object or list opening at start."""
+    depth = 0
+    index = start
+    while index < len(text):
+        char = text[index]
+        if char == '"':
+            index += 1
+            while text[index] != '"':
+                index += 2 if text[index] == "\\" else 1
+        elif char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    raise ValueError("unbalanced brackets")
+
+
+def value_starts(text: str, start: int) -> dict[str, int]:
+    """Offset of the value of each key that sits directly in the object opening at start."""
+    found: dict[str, int] = {}
+    depth = 0
+    index = start
+    while index < len(text):
+        char = text[index]
+        if char == '"':
+            end = index + 1
+            while text[end] != '"':
+                end += 2 if text[end] == "\\" else 1
+            after = text[end + 1 :].lstrip()
+            if depth == 1 and after.startswith(":"):
+                found[text[index + 1 : end]] = len(text) - len(after[1:].lstrip())
+            index = end
+        elif char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+            if depth == 0:
+                break
+        index += 1
+    return found
+
+
+def biome_setting(config: dict[str, object], key: str, default: int) -> int:
+    """json.formatter.<key>, else formatter.<key>, else the Biome default."""
+    for section in (config.get("json"), config):
+        formatter = section.get("formatter") if isinstance(section, dict) else None
+        value = formatter.get(key) if isinstance(formatter, dict) else None
+        if isinstance(value, int):
+            return value
+    return default
+
+
+def add_member(text: str, masked: str, brace: int, member: str) -> str:
+    """Put member before the first member of the object, with the gap the file already has."""
+    first = brace + 1
+    while masked[first] in " \t\r\n":
+        first += 1
+    gap = text[brace + 1 : first]
+    if gap.strip():
+        raise ValueError("a comment stands before the first member")
+    if masked[first] == "}":
+        return f"{text[:brace]}{{ {member} }}{text[first + 1 :]}"
+    return f"{text[:first]}{member},{gap}{text[first:]}"
+
+
+def add_line_entry(text: str, masked: str, end: int, close: int) -> str:
+    """Add the entry as a new line below the last entry of a list written over several lines."""
+    start = text.rfind("\n", 0, end) + 1
+    stop = text.find("\n", end)
+    line = text[start:end]
+    if stop < 0 or stop > close or "[" in masked[start:end]:
+        raise ValueError("the last entry shares its line")
+    indent = line[: len(line) - len(line.lstrip())]
+    comma = "" if masked[end - 1] == "," else ","
+    entry = f'\n{indent}"{BIOME_IGNORE}"'
+    return f"{text[:end]}{comma}{text[end:stop]}{entry}{text[stop:]}"
+
+
+def add_inline_entry(
+    text: str, masked: str, config: dict[str, object], start: int, close: int
+) -> str:
+    """Add the entry to a one-line list; write the list over several lines when the line gets too long."""
+    end = len(masked[:close].rstrip())
+    comma = "" if masked[end - 1] == "," else ","
+    edited = f'{text[:end]}{comma} "{BIOME_IGNORE}"{text[end:]}'
+    first = edited.rfind("\n", 0, start) + 1
+    last = edited.find("\n", start)
+    line = edited[first : None if last < 0 else last]
+    tab = " " * biome_setting(config, "indentWidth", 2)
+    if len(line.replace("\t", tab)) <= biome_setting(config, "lineWidth", 80):
+        return edited
+    key = line[: line.index("[")]
+    after = line[line.index("]") + 1 :]
+    if not key.strip().startswith('"includes"') or after not in {"", ","}:
+        raise ValueError("the list shares its line")
+    if masked[start : close + 1] != text[start : close + 1]:
+        raise ValueError("a comment stands in the list")
+    indent = key[: len(key) - len(key.lstrip())]
+    inner = indent + ("\t" if indent.startswith("\t") else tab)
+    entries = [
+        *json.loads(text[start : close + 1]),
+        BIOME_IGNORE,
+    ]
+    body = ",\n".join(f"{inner}{json.dumps(entry)}" for entry in entries)
+    return f"{text[:start]}[\n{body}\n{indent}]{text[close + 1 :]}"
+
+
+def biome_edit(text: str, config: dict[str, object]) -> str | None:
+    """The text with BIOME_IGNORE as the last files.includes entry; None when it is there."""
+    masked = JSONC.sub(lambda match: match[1] or " " * len(match[0]), text)
+    top = value_starts(masked, masked.index("{"))
+    files = config.get("files")
+    if isinstance(files, dict) and isinstance(files.get("includes"), list):
+        if files["includes"] and files["includes"][-1] == BIOME_IGNORE:
+            return None
+        start = value_starts(masked, top["files"])["includes"]
+        close = closing(masked, start)
+        end = len(masked[:close].rstrip())
+        if not files["includes"]:
+            if text[start + 1 : close].strip():
+                raise ValueError("a comment stands in the empty list")
+            return f'{text[: start + 1]}"{BIOME_IGNORE}"{text[close:]}'
+        if "\n" in text[start:close]:
+            return add_line_entry(text, masked, end, close)
+        return add_inline_entry(text, masked, config, start, close)
+    if "extends" in config:
+        raise ValueError("a local list replaces the inherited one")
+    listed = f'"includes": ["**", "{BIOME_IGNORE}"]'
+    if isinstance(files, dict):
+        return add_member(text, masked, top["files"], listed)
+    if files is not None:
+        raise ValueError("files is not an object")
+    return add_member(text, masked, masked.index("{"), f'"files": {{ {listed} }}')
+
+
+def biome_proof(before: dict[str, object], after: dict[str, object]) -> bool:
+    """True when only the files.includes list differs and it now ends with BIOME_IGNORE."""
+
+    def rest(config: dict[str, object]) -> dict[str, object]:
+        others = {key: value for key, value in config.items() if key != "files"}
+        files = config.get("files")
+        if isinstance(files, dict):
+            kept = {key: value for key, value in files.items() if key != "includes"}
+            return {**others, "files": kept} if kept else others
+        return others
+
+    files = after.get("files")
+    includes = files.get("includes") if isinstance(files, dict) else None
+    ended = isinstance(includes, list) and includes[-1:] == [BIOME_IGNORE]
+    return ended and rest(before) == rest(after)
+
+
+def biome_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
+    """Keep the project's Biome from judging Hard Eng's .hooks declarations, which hold any[] and {} on purpose."""
+    name = next(
+        (name for name in ("biome.json", "biome.jsonc") if (root / name).exists()),
+        None,
+    )
+    if name is None:
+        return
+    text = changes.get(name) or (root / name).read_text()
+    try:
+        config = jsonc_config(name, text)
+        updated = biome_edit(text, config)
+        if updated is not None:
+            after = jsonc_config(name, updated)
+            if not biome_proof(config, after):
+                raise ValueError("the edit changed other settings")
+    except (ValueError, TypeError, KeyError) as error:
+        last = f'"{BIOME_IGNORE}" as the last entry'
+        step = f"add {last} of files.includes"
+        if "inherited" in str(error):
+            step = (
+                "it extends another configuration, and a local files.includes list "
+                "replaces the inherited one. Copy the inherited list into "
+                f'files.includes (use "**" when there is none) and add "{BIOME_IGNORE}" '
+                "as its last entry"
+            )
+        print(
+            f"{name}: {step}, so that your own Biome runs leave the Hard Eng files",
+            file=sys.stderr,
+        )
+        return
     if updated is not None:
         changes[name] = updated
 
