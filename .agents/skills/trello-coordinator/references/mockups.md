@@ -24,17 +24,17 @@ The worker never writes proof files. The coordinator checks the output and each 
 
 ## Proof rules
 
-| Key             | Check                                                                                                       |
-| --------------- | ----------------------------------------------------------------------------------------------------------- |
-| `idiotProof`    | Planning UX "Mistake-proof".                                                                                |
-| `leastLoad`     | Planning UX "Least effort" and "Observe".                                                                   |
-| `leastClicks`   | Planning UX "Least effort" click count and "Undo".                                                          |
-| `visualFatigue` | Planning UX "Hierarchy" and "No clutter": one focus, few elements, colours and words.                       |
-| `hierarchy`     | Planning UX "Hierarchy": the one action that matters is the strongest element.                              |
-| `noClutter`     | Planning UX "No clutter"; a messaging-app link is an icon with a screen-reader label, never a text label.   |
-| `coverage`      | Each coverage row shown in this picture has its screen; the proof line names where the other rows are.      |
-| `wholePage`     | Each touched page in this picture was checked in the whole-page captures; old clutter found there is gone.  |
-| `nothingLost`   | Each current action on the pages in this picture has its new place, or a reason it goes.                    |
+| Key             | Check                                                                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------- |
+| `idiotProof`    | Planning UX "Mistake-proof".                                                                               |
+| `leastLoad`     | Planning UX "Least effort" and "Observe".                                                                  |
+| `leastClicks`   | Planning UX "Least effort" click count and "Undo".                                                         |
+| `visualFatigue` | Planning UX "Hierarchy" and "No clutter": one focus, few elements, colours and words.                      |
+| `hierarchy`     | Planning UX "Hierarchy": the one action that matters is the strongest element.                             |
+| `noClutter`     | Planning UX "No clutter"; a messaging-app link is an icon with a screen-reader label, never a text label.  |
+| `coverage`      | Each coverage row shown in this picture has its screen; the proof line names where the other rows are.     |
+| `wholePage`     | Each touched page in this picture was checked in the whole-page captures; old clutter found there is gone. |
+| `nothingLost`   | Each current action on the pages in this picture has its new place, or a reason it goes.                   |
 
 ## Proof file
 
