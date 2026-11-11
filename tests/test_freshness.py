@@ -590,3 +590,20 @@ def test_a_root_line_with_no_version_is_read() -> None:
         stale_dependencies(
             "uv", "", Registry(records), moment("2024-12-08T00:00:00+00:00")
         )
+
+
+def test_the_target_is_a_version_that_the_python_range_can_install() -> None:
+    releases = {
+        version: [{"upload_time_iso_8601": "2024-01-01T00:00:00+00:00"}]
+        for version in ("4.26.0", "4.65.0", "4.67.13")
+    }
+    records = {PYPI + "tqdm/json": json.dumps({"releases": releases})}
+    now = moment("2024-12-08T00:00:00+00:00")
+    report = "app v0.1.0\n└── tqdm v4.26.0 (latest: v4.65.0)\n"
+    assert stale_dependencies("uv", report, Registry(records), now) == [
+        ("tqdm", "4.26.0", "4.65.0")
+    ]
+    newest = "app v0.1.0\n└── tqdm v4.26.0 (latest: v4.70.0)\n"
+    assert stale_dependencies("uv", newest, Registry(records), now) == [
+        ("tqdm", "4.26.0", "4.67.13")
+    ]
