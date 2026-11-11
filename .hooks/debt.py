@@ -358,7 +358,13 @@ def lone_install_step(root: Path, base: str) -> str:
     elif _git_output(root, "branch", "--show-current").strip() == target:
         undo = "git update-ref -d HEAD"
     else:
-        return f"{start} and holds only the install commit: switch to `{target}`, then run `adopt` again for the next step"
+        moved = _git_output(root, "branch", "--show-current").strip()
+        after = (
+            f"; after the commit move your branch with `git branch -f {moved} {target}`"
+            if moved
+            else ""
+        )
+        return f"{start} and holds only the install commit: switch to `{target}`, then run `adopt` again for the next step{after}"
     return f"{start}: run `{undo}`, then `adopt`, then commit the install and the debt file together"
 
 

@@ -436,9 +436,12 @@ def test_the_step_for_adopt_with_no_remote_can_be_done(
             *(["-c", "work"] if position == "other" else ["--detach"]),
         )
     monkeypatch.setattr(runner, "provision_tools", no_provisioning)
+    (tmp_path / "mine.txt").write_text("not committed\n")
+    (tmp_path / ".git/info/exclude").write_text("mine.txt\n")
     message = refused(runner)
+    last: list[str] = []
     if switch := re.search(r"switch to `([^`]+)`", message):
-        assert not re.findall(r"`git [^`]+`", message)
+        last = re.findall(r"`(git [^`]+)`", message)
         git(tmp_path, "switch", "-q", switch[1])
         message = refused(runner)
     for step in re.findall(r"`(git [^`]+)`", message):
@@ -446,6 +449,11 @@ def test_the_step_for_adopt_with_no_remote_can_be_done(
     debt.OUTPUTS.clear()
     assert runner.adopt() == 0
     commit(tmp_path, "install with debt")
+    for step in last:
+        git(tmp_path, *shlex.split(step)[1:])
+    if position == "other" and only_commit:
+        git(tmp_path, "merge-base", "main", "work")
+    assert (tmp_path / "mine.txt").is_file()
     head = git(tmp_path, "rev-parse", "HEAD")
     git(tmp_path, "switch", "-q", "main")
     git(tmp_path, "merge", "-q", "--no-edit", head)
