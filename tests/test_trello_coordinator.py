@@ -25,6 +25,7 @@ from trello_fakes import (
     make_action,
     make_card,
     move_action,
+    picture,
     refs,
     write_lease,
 )
@@ -282,9 +283,8 @@ def test_comment_posts_new_and_blocks_private_data(
 ) -> None:
     project.configure(privacy=[r"Project\s+Zed"])
     project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
-    note, image = tmp_path / "note.txt", tmp_path / "shot.png"
+    note, image = tmp_path / "note.txt", picture(tmp_path / "shot.png")
     note.write_text("The fix is live.")
-    image.write_bytes(b"fake image")
     first = project.run("comment", "1", str(note), "--image", str(image))
     second = project.run("comment", "#1", str(note))
     assert (first.code, second.code) == (0, 0), first.text + second.text
@@ -335,8 +335,7 @@ def write_note(tmp_path: Path, body: str = "") -> Path:
 
 def test_testing_move_needs_proof(project: Project, tmp_path: Path) -> None:
     project.fake.cards = [make_card(5, "#5 Move", "l-doing")]
-    proof = tmp_path / "proof.png"
-    proof.write_bytes(b"fake image")
+    proof = picture(tmp_path / "proof.png")
     note = write_note(tmp_path)
     shows = "The saved total now shows on the list"
     refused = project.run("move", "5", "testing", "--comment", str(note))
@@ -384,8 +383,8 @@ def test_testing_move_needs_proof(project: Project, tmp_path: Path) -> None:
         ("POST", "/cards/card5/idMembers"),
     ]
     post, put, label, member = project.fake.writes[1:]
-    picture = "![proof.png](https://files.example.test/att-1.png)"
-    assert post.form["text"] == note.read_text() + "\n\n" + picture
+    image_line = "![proof.png](https://files.example.test/att-1.png)"
+    assert post.form["text"] == note.read_text() + "\n\n" + image_line
     assert put.form == {"idList": "l-testing", "pos": "top"}
     assert (label.form, member.form) == ({"value": "lb-sam"}, {"value": "m-sam"})
     assert (project.state / "posted.log").read_text().split() == ["act-1", "act-2"]
@@ -520,8 +519,7 @@ def test_label_upload_and_member_dry_runs_write_nothing(
     project: Project, tmp_path: Path
 ) -> None:
     project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
-    shot = tmp_path / "shot.png"
-    shot.write_bytes(b"fake image")
+    shot = picture(tmp_path / "shot.png")
     for command in (
         ("label", "1", "add", "Needs Sam"),
         ("upload", "1", str(shot)),
@@ -564,14 +562,12 @@ def test_label_upload_and_download_use_the_card_endpoints(
         "Waiting for real case",
     )
     assert (add.path, add.form) == ("/cards/card1/idLabels", {"value": "lb-new-1"})
-    shot = tmp_path / "shot.png"
-    shot.write_bytes(b"fake image")
+    shot = picture(tmp_path / "shot.png")
     uploaded = project.run("upload", "1", str(shot))
     assert uploaded.payload["markdown"] == (
         "![shot.png](https://files.example.test/att-1.png)"
     )
-    other = tmp_path / "other.png"
-    other.write_bytes(b"fake image")
+    other = picture(tmp_path / "other.png")
     both = project.run("upload", "1", str(shot), str(other))
     assert both.payload["markdown"] == (
         "![shot.png](https://files.example.test/att-2.png)\n\n"

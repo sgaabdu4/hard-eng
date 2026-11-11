@@ -122,6 +122,18 @@ def test_a_testing_comment_keeps_the_tester_label(
     assert gap and "no open question" in gap[0]["excerpt"]
 
 
+def test_the_closing_line_does_not_make_our_comment_a_question(
+    project: Project,
+) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", "l-doing")]
+    shown = "![new.png](https://files.example.test/att-1.png)"
+    note = "**The new list is live.**\n\n@sam it shows the total."
+    ours(project, ("a1", 1, f"{note}\n\n{shown}\n\n{project.mods.board.CLOSING}", 60))
+    report = project.report()
+    for field in ("silent", "buried", "badTags", "labels"):
+        assert report[field] == [], field
+
+
 def test_buried_leaves_testers_on_testing_cards_alone(project: Project) -> None:
     project.fake.cards = [make_card(5, "#5 Job", "l-testing", idLabels=["lb-sam"])]
     ours(

@@ -33,6 +33,19 @@ WRITE_COMMANDS = (
     "archive",
 )
 PROOF_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+UI_RULES = (
+    "idiotProof",
+    "leastLoad",
+    "leastClicks",
+    "visualFatigue",
+    "hierarchy",
+    "noClutter",
+    "coverage",
+    "wholePage",
+    "nothingLost",
+)
+RULE_LINE = 20
+PROOF_FORMAT = "format: references/mockups.md in the trello-coordinator skill"
 CARD_LINK = re.compile(r"https?://trello\.com/c/([A-Za-z0-9]+)")
 
 
@@ -108,8 +121,11 @@ def attach(
     missing = [str(path) for path in paths if not path.is_file()]
     if missing:
         raise TrelloError(f"File not found: {', '.join(missing)}")
+    screens = [p.suffix.lower() in PROOF_SUFFIXES and new_screen(p) for p in paths]
     rows: list[Json] = []
-    for path, caption in zip(paths, captions or [p.name for p in paths], strict=True):
+    for path, caption, screen in zip(
+        paths, captions or [p.name for p in paths], screens, strict=True
+    ):
         reply = obj(
             session.client.request(
                 "POST",
@@ -124,9 +140,46 @@ def attach(
                 "id": text(reply.get("id")),
                 "url": url,
                 "markdown": f"![{path.name}]({url})",
+                "newScreen": screen,
             }
         )
     return rows
+
+
+def new_screen(path: Path) -> bool:
+    sidecar = Path(f"{path}.json")
+    if not sidecar.is_file():
+        raise TrelloError(
+            f"No proof file {sidecar} for {path.name}; open the picture, "
+            f"then write it ({PROOF_FORMAT})"
+        )
+    try:
+        proof = json.loads(sidecar.read_text())
+    except ValueError:
+        proof = None
+    if not isinstance(proof, dict):
+        raise TrelloError(f"Proof file {sidecar} is not a JSON object ({PROOF_FORMAT})")
+    if sidecar.stat().st_mtime < path.stat().st_mtime:
+        raise TrelloError(
+            f"Proof file {sidecar} is older than {path.name}; "
+            "open the picture again, then rewrite it"
+        )
+    if gaps := proof_gaps(proof):
+        raise TrelloError(
+            f"Proof file {sidecar} needs: {', '.join(gaps)} ({PROOF_FORMAT})"
+        )
+    return "notNewUi" not in proof
+
+
+def proof_gaps(proof: Obj) -> list[str]:
+    gaps = [key for key in ("change", "shows") if not text(proof.get(key)).strip()]
+    if proof.get("showsChange") is not True:
+        gaps.append("showsChange")
+    if "notNewUi" in proof:
+        return gaps + ([] if text(proof.get("notNewUi")).strip() else ["notNewUi"])
+    rules = obj(proof.get("uiRules"))
+    short = [r for r in UI_RULES if len(text(rules.get(r)).strip()) < RULE_LINE]
+    return gaps + [f"uiRules.{rule}" for rule in short]
 
 
 def probe(session: Session, args: argparse.Namespace) -> Obj:
@@ -195,7 +248,8 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     found = resolve_card(session, args.card)
     card = text(found.get("id"))
     images = attach(session, card, args.image)
-    action_id = post_comment(session, card, body, images)
+    end = board.CLOSING if any(obj(row).get("newScreen") for row in images) else ""
+    action_id = post_comment(session, card, body, images, end)
     labels, people = ask_people(session, found, body)
     return {
         "comment": action_id,
@@ -205,9 +259,11 @@ def comment(session: Session, args: argparse.Namespace) -> Obj:
     }
 
 
-def post_comment(session: Session, card: str, body: str, images: list[Json]) -> str:
+def post_comment(
+    session: Session, card: str, body: str, images: list[Json], end: str = ""
+) -> str:
     lines = "\n\n".join(text(obj(row).get("markdown")) for row in images)
-    full = body.rstrip() + ("\n\n" + lines if lines else "")
+    full = "\n\n".join(part for part in (body.rstrip(), lines, end) if part)
     reply = obj(
         session.client.request(
             "POST", f"/cards/{card}/actions/comments", {"text": full}
@@ -229,7 +285,7 @@ def member_ids(session: Session) -> dict[str, str]:
 def ask_people(
     session: Session, card: Obj, body: str, always: bool = False
 ) -> tuple[list[Json], list[Json]]:
-    if not always and not board.QUESTION.search(body):
+    if not always and not board.asks(body):
         return [], []
     asked = list(dict.fromkeys(name.lower() for name in board.TAG.findall(body)))
     return add_needs(session, card, asked), add_members(session, card, asked)
