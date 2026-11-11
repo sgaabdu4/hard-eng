@@ -88,6 +88,23 @@ def test_bun_fails_on_release_older_than_two_days(tmp_path: Path) -> None:
         check(tmp_path, "bun", "")
 
 
+def test_bun_skips_peer_rows_and_keeps_the_dev_row_of_the_same_name() -> None:
+    stale = stale_dependencies(
+        "bun",
+        fixture("bun-outdated-peers.txt"),
+        Registry({}),
+        moment("2026-10-26T00:00:00+00:00"),
+    )
+    assert stale == [
+        ("exact-mirror", "0.2.9", "1.2.7"),
+        ("typescript", "5.9.3", "7.0.2"),
+    ]
+
+
+def test_the_gate_passes_on_the_report_its_bun_step_leaves(tmp_path: Path) -> None:
+    check(tmp_path, "bun", fixture("bun-after-update.txt"))
+
+
 def dart_registry() -> Registry:
     return Registry(
         {
