@@ -36,7 +36,7 @@ Proof: check
 
 ## HE-COMMENT-LINES
 
-A changed source file holds no comment block longer than one line. Generated output and scaffold paths are exempt, and so are blocks a file already held before the change that installs Hard Eng.
+A changed source file holds no comment block longer than one line. Generated output and scaffold paths are exempt, and so are blocks a file already held when the change that installs Hard Eng is made. A later change that touches the file answers for each block.
 
 Proof: check
 
@@ -60,7 +60,7 @@ Proof: check
 
 ## HE-OUTPUT-PLAIN
 
-Agent replies and reports use plain, simplified technical English: one idea per sentence, active voice and common words. Reports state changes, proof and gaps.
+Agent replies, reports, PR texts and other text for people use plain, simplified technical English: one idea per sentence, active voice and common words. Reports state changes, proof and gaps. Text for agents (skills, AGENTS.md, briefs) keeps the Writing Great Skills style.
 
 Proof: guidance
 

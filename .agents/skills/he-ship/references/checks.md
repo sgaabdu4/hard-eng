@@ -91,6 +91,13 @@ Describe the actual comparison, not an assumed result. Missing proof is not unch
 
 The verifier checks the declaration or attachment availability/media type; E2E owns inspection of the actual comparison and behavior. Keep baseline/final context in the PR; do not upload sensitive content or fabricate a missing baseline.
 
+## PR text
+
+- Form = headings + sections + bold lead words. Plain simplified English for people (about 80% ASD-STE100), sentences of 20 words or fewer.
+- `Before and after` part = for each main change one Mermaid diagram of the old flow + one of the new flow; no old flow → two or more diagrams of the new flows. Use `flowchart TD`, quoted labels, no backticks inside labels. `ship --stage ready` refuses a body with fewer than two Mermaid blocks.
+- UI change = before and after screenshots with a red ring on each changed thing (drawn in the page before capture, or on the image) + a video of the whole flow when stills cannot show it. Formats: [UI evidence](#ui-evidence-in-the-pr).
+- The Hard Eng update PR keeps its generated text.
+
 ## Commands + proof boundaries
 
 From the task checkout, with its actual PR URL and plan (a change `check` reports as `Size: small` ships without a plan: omit `--plan`; delivery scope is Merge and every check still runs, while a big change without a plan is refused):
