@@ -13,7 +13,7 @@ from pathlib import Path
 import agent_hooks
 import hook_chain
 import source_trees
-from gate_config import SOURCE_FILE
+from gate_config import SOURCE_FILE, parse_config, repository_files
 from local_edits import refusal_reason
 from mcp_setup import retired_settings
 from release_history import StaleRelease, ordered
@@ -224,8 +224,6 @@ def revision_follows(revision: str, reference: str) -> bool:
 
 
 def scaffold_files(source: Path) -> set[str]:
-    from gate_config import repository_files
-
     skills = list((source / ".agents/skills").iterdir())
     if any(skill.is_symlink() and not skill.is_dir() for skill in skills):
         raise ValueError(
@@ -963,6 +961,12 @@ def check_scaffold_update(root: Path, base: str) -> bool:
             return False
     except (subprocess.CalledProcessError, StaleRelease):
         return False
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        from coverage_sources import require_listed_sources
+
+        gates = parse_config((root / "hard-eng.gates.json").read_text())
+        files = repository_files(root)
+        require_listed_sources(root, gates["packages"], files, python_only=False)
     print(
         "Scaffold-only update: source CI verified and the gate configuration accepted.",
         flush=True,
