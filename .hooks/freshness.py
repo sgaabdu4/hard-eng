@@ -12,7 +12,7 @@ from pathlib import Path
 from gate_config import Gate, JsonObject
 from tool_setup import RELEASE_AGE_SECONDS
 
-VERSION_LINE = re.compile(r"\S+ v\S+")
+VERSION_LINE = re.compile(r"\S+(?: v\S+|(?=\n[├└]──))")
 DIGIT_RUN = re.compile(r"\d+")
 RELEASE_VERSION = re.compile(r"(\d+(?:\.\d+)*)(?:\.post(\d+))?")
 PUB_PIN = re.compile(
