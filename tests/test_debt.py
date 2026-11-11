@@ -13,6 +13,7 @@ from conftest import commit, git
 from gate_config import Gate, Group
 from test_basic_mode import no_provisioning
 
+HINT = "  The debt file has no line numbers. Run the tool of this check on the files of this change to find the new ones."
 FINDINGS = "import pathlib, sys; text = pathlib.Path('findings.txt').read_text(); print(text, end=''); sys.exit(bool(text))"
 
 
@@ -83,7 +84,7 @@ def test_a_new_finding_beyond_the_debt_prints_its_real_line(
     assert debt.judge(tmp_path, group, lint, True, old + extra) is True
     printed = capsys.readouterr().out.splitlines()
     assert printed[1] == "  1 of these 26 lines are new; the others are recorded:"
-    assert len(printed) == 2 + 20 + 1
+    assert len(printed) == 3 + 20 + 1
     assert printed[-1] == "  6 more lines not shown"
     two = price + f"{tmp_path}/app/cart.tsx:3:1 lint/style/useConst\n"
     assert debt.judge(tmp_path, group, lint, True, old + extra + two) is True
@@ -93,6 +94,7 @@ def test_a_new_finding_beyond_the_debt_prints_its_real_line(
         "  ./app/cart.tsx:3:1 lint/style/useConst",
     ]
     assert mixed[3] == "  1 of these 26 lines are new; the others are recorded:"
+    assert mixed[4] == HINT
     assert mixed[-1] == "  8 more lines not shown"
 
 
@@ -559,3 +561,23 @@ def test_the_summary_line_of_biome_is_no_finding(
     assert "findings beyond" not in printed
     unchanged = f"{warning}\n{now}"
     assert debt.judge(repository, LINT_GROUP, LINT, True, unchanged) is False
+
+
+def test_new_lines_inside_a_recorded_form_get_a_hint(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tmp_path, lint, group = repository, LINT, LINT_GROUP
+    kind = "lint/suspicious/noDebugger"
+    recorded = {f"src/fN.ts:N:N {kind}": 2}
+    (tmp_path / debt.DEBT_FILE).write_text(
+        json.dumps({"version": 1, "gates": {"./lint": recorded}})
+    )
+    old = f"src/f1.ts:1:5 {kind}\nsrc/f2.ts:2:5 {kind}\n"
+    assert debt.judge(tmp_path, group, lint, True, old) is False
+    capsys.readouterr()
+    assert debt.judge(tmp_path, group, lint, True, old + f"src/f3.ts:3:5 {kind}\n")
+    printed = capsys.readouterr().out.splitlines()
+    assert printed[1] == "  1 of these 3 lines are new; the others are recorded:"
+    assert printed[2] == HINT
+    assert debt.judge(tmp_path, group, lint, True, "src/g.ts:1:1 lint/style/useConst\n")
+    assert HINT not in capsys.readouterr().out
