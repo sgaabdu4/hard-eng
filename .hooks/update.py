@@ -14,6 +14,7 @@ import agent_hooks
 import hook_chain
 import source_trees
 from gate_config import SOURCE_FILE
+from local_edits import refusal_reason
 from mcp_setup import retired_settings
 from release_history import StaleRelease, ordered
 from submodules import update_submodules
@@ -335,7 +336,7 @@ def update_plan(
     )
     sys.stderr.write(planned.stderr)
     if planned.returncode != 0:
-        reason = " | ".join(planned.stderr.strip().splitlines()[-5:])
+        reason = refusal_reason(planned.stderr)
         raise ValueError(f"setup refused the update: {reason or 'no reason printed'}")
     plan = json.loads(planned.stdout)
     hook = hook_chain.planned_hook(root, plan)
