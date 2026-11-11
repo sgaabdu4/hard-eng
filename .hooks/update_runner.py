@@ -16,7 +16,7 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TextIO
 
-from gate_config import SOURCE_FILE
+from gate_config import SOURCE_FILE, json_file
 
 RESULT_FILE = ".hard-eng/update-result.txt"
 LOG_FILE = ".hard-eng/update.log"
@@ -26,6 +26,7 @@ UPDATE_BRANCH = "hard-eng/update"
 UPDATE_REF = f"refs/heads/{UPDATE_BRANCH}"
 UPDATE_COMMAND = "python3 .hooks/hard-eng.py update-pr"
 REPAIR_SUBJECT = "Install Hard Eng"
+GATES_FILE = "hard-eng.gates.json"
 NOT_PUBLISHED = "Hard Eng updates start after the Hard Eng install is on the base branch of a remote."
 HEX_REVISION = re.compile(r"[0-9a-f]{40}")
 OWNER = re.compile(r"hard-eng-update (\d+)")
@@ -654,6 +655,28 @@ def published(root: Path, base: str) -> bool:
     return found.returncode == 0
 
 
+def without_workflow_gates(root: Path, changes: dict[str, str | None]) -> str | None:
+    """The planned gates file without the workflow gates the project lacks, while no workflow file exists."""
+    planned = changes.get(GATES_FILE)
+    workflows = root / ".github/workflows"
+    if (
+        planned is None
+        or not any(name.startswith(".github/workflows/") for name in changes)
+        or any(path.is_file() for path in workflows.rglob("*"))
+    ):
+        return None
+    config = json.loads(planned)
+    held = {
+        gate["name"] for gate in json.loads((root / GATES_FILE).read_text())["shared"]
+    }
+    config["shared"] = [
+        gate
+        for gate in config["shared"]
+        if gate.get("role") not in {"workflows", "ci-security"} or gate["name"] in held
+    ]
+    return json_file(root, config)
+
+
 def repair_checkout(root: Path, previous: str) -> str:
     """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
     import hook_chain
@@ -677,20 +700,28 @@ def repair_checkout(root: Path, previous: str) -> str:
     if needs_hook:
         update.install_planned_hook(root, hook)
         notes.append("installed the missing pre-push hook")
+    planned = changes.get(GATES_FILE)
+    waits = without_workflow_gates(root, changes)
+    if waits is not None and waits != planned:
+        changes[GATES_FILE] = (
+            None if waits == (root / GATES_FILE).read_text() else waits
+        )
     written = {
         name: content
         for name, content in sorted(changes.items())
         if content is not None
         and not update.maybe_installed(name)
-        and (name == "hard-eng.gates.json" or not (root / name).exists())
+        and (name == GATES_FILE or not (root / name).exists())
     }
     for name, content in written.items():
         update.replace_file(root / name, content.encode())
     if written:
         notes.append(
-            f"setup wrote {', '.join(written)} for the project's current packages; "
+            f"setup wrote {', '.join(written)}; "
             f"review and commit {'it' if len(written) == 1 else 'them'}"
         )
+    if waits is not None and waits != planned:
+        notes.append("the update brings the workflow files and their gates")
     return f"This checkout: {'; '.join(notes)}." if notes else ""
 
 
@@ -701,10 +732,21 @@ def prepare_update(root: Path, repair: bool = False) -> str:
         note = repair_checkout(
             root, json.loads((root / SOURCE_FILE).read_text())["revision"]
         )
-    base = update_base(root)
-    if not published(root, base):
-        return f"{NOT_PUBLISHED} {note}".strip()
-    return f"{build_update(root, base, repair)} {note}".strip()
+    try:
+        base = update_base(root)
+        if not published(root, base):
+            return f"{NOT_PUBLISHED} {note}".strip()
+        built = build_update(root, base, repair)
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        if not note:
+            raise
+        kind = (
+            subprocess.SubprocessError
+            if isinstance(error, subprocess.SubprocessError)
+            else type(error)
+        )
+        raise kind(f"{error} {note}") from error
+    return f"{built} {note}".strip()
 
 
 def free_step(root: Path, worktree: Path) -> str:
