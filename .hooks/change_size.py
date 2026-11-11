@@ -19,6 +19,7 @@ from plans import (
     release_references,
     requirement_tests,
 )
+from project_files import keep
 
 NO_CHANGE = "no change"
 MAX_SMALL_LINES = 20
@@ -237,6 +238,12 @@ def judged_point(root: Path) -> str | None:
 
 
 def _revision(root: Path, reference: str) -> str | None:
+    return keep(
+        "references", ("revision", str(root), reference), lambda: _tip(root, reference)
+    )
+
+
+def _tip(root: Path, reference: str) -> str | None:
     try:
         return _git_output(
             root, "rev-parse", "--verify", "-q", f"{reference}^{{commit}}"
