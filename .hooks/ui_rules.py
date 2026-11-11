@@ -25,7 +25,7 @@ DART_COLOUR = re.compile(
     r"\bColor\(\s*0x|\bColor\.from(?:ARGB|RGBO)?\(|\bColors\.(?!transparent\b)[A-Za-z]"
 )
 SWIFT_COLOUR = re.compile(
-    r"\b(?:UI|NS)?Color\(\s*(?:\.\w+\s*,\s*)?red:|#colorLiteral\("
+    r"\b(?:UI|NS)?Color\((?:\.(?:sRGB|sRGBLinear|displayP3)\s*,\s*)?red:|#colorLiteral\("
 )
 TRANSITION_STEP = (
     "List the properties that change, for example transition-[opacity,transform] "
@@ -39,11 +39,11 @@ COLOUR_STEP = (
 
 def is_theme_path(name: str) -> bool:
     path = PurePosixPath(name)
-    words = NAME_WORDS.findall(path.stem)
+    parts = (NAME_WORDS.findall(part) for part in path.stem.split("+"))
     return (
         path.name.startswith("tailwind.config.")
         or any(part.lower() in THEME_WORDS for part in path.parts[:-1])
-        or bool(words and words[-1].lower() in THEME_WORDS)
+        or any(words and words[-1].lower() in THEME_WORDS for words in parts)
     )
 
 
