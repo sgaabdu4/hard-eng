@@ -194,6 +194,27 @@ def test_a_branch_that_installs_hard_eng_names_the_install_as_the_reason(
     )
 
 
+def test_a_merge_of_an_older_branch_into_a_rebased_task_counts_only_its_files(
+    repository: Path,
+) -> None:
+    sized_branch(repository)
+    git(repository, "switch", "-qc", "older", "main")
+    (repository / "other.py").write_text("y = 1\n")
+    commit(repository, "older work")
+    git(repository, "switch", "-q", "main")
+    (repository / "base_new.py").write_text("x = 1\n")
+    commit(repository, "base moves")
+    git(repository, "switch", "-q", "work")
+    edit(repository, "a.py", 2)
+    commit(repository, "task edit")
+    git(repository, "rebase", "-q", "main")
+    git(repository, "merge", "--no-commit", "--no-ff", "older")
+    assert change_size.size_verdict(repository) == (
+        False,
+        "it adds, deletes or renames the file other.py",
+    )
+
+
 def started(spy: Mock) -> list[str]:
     return [call.args[0][1] for call in spy.call_args_list]
 
