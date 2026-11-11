@@ -14,6 +14,7 @@ WORD_CHARACTER = re.compile(r"\w")
 DIGIT_RUN = re.compile(r"\d+")
 COUNTED_WORDS = re.compile(r"(?<!\w)N((?: \w+){1,2})")
 WORD = re.compile(r"\w+")
+SPACE_RUN = re.compile(r"[ \t]+")
 TIME = re.compile(r"(?<!\w)N(?:\.N)?(?:ns|[µu]s|ms|s)(?!\w)")
 RULE_FOLDER = re.compile(r"[\w.-]*hard-eng-rules\.")
 CODE_FRAME = re.compile(r"[> ]*(?:N[ ]*)*[│|]")
@@ -134,7 +135,7 @@ def neutral(line: str) -> str:
 
     return COUNTED_WORDS.sub(
         lambda counted: "N" + WORD.sub(singular, counted.group(1)),
-        TIME.sub("Ntime", ANSI.sub("", stable_rules(line))),
+        TIME.sub("Ntime", ANSI.sub("", stable_rules(SPACE_RUN.sub(" ", line)))),
     )
 
 
