@@ -543,9 +543,7 @@ def touched_since_update(path: Path) -> bool:
 
 def reasoned(value: str, name: str) -> None:
     lowered = value.lower()
-    if lowered in {"none", "none."} or (
-        lowered.startswith("none") and lowered[4:].strip() in {"—", "–", "-"}
-    ):
+    if lowered.startswith("none") and not lowered[4:].strip(" \t—–-.:,;"):
         raise ValueError(f"'{name}:' needs a reason; write `None — <reason>`")
 
 
