@@ -12,7 +12,7 @@ import update
 import update_runner
 from conftest import commit, git
 from plans import validate_plans
-from test_plans import edit, new_file, sized_branch
+from test_plans import edit, new_file, released_branch, sized_branch
 from test_updates import select_release
 
 
@@ -213,6 +213,21 @@ def test_a_merge_of_an_older_branch_into_a_rebased_task_counts_only_its_files(
         False,
         "it adds, deletes or renames the file other.py",
     )
+
+
+def test_a_markdown_edit_beside_committed_code_keeps_the_ready_plan_refusal(
+    repository: Path, completed_plan: str
+) -> None:
+    released_branch(repository)
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace("Status: Complete", "Status: Ready")
+    )
+    commit(repository, "plan")
+    edit(repository, "a.py", 2)
+    commit(repository, "code")
+    (repository / "README.md").write_text("notes\n")
+    with pytest.raises(ValueError, match="plan is Ready; this check requires Complete"):
+        validate_plans(repository)
 
 
 def started(spy: Mock) -> list[str]:

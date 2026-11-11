@@ -944,16 +944,23 @@ def update_checkout(
     return fixing
 
 
-@pytest.mark.parametrize("repair", [True, False], ids=["repair", "update"])
+@pytest.mark.parametrize(
+    ("repair", "committed"),
+    [(True, True), (True, False), (False, False)],
+    ids=["repair committed", "repair left", "update left"],
+)
 def test_a_fix_on_the_update_branch_is_judged_without_the_update_files(
-    feature: tuple[Path, Path, Path], monkeypatch: pytest.MonkeyPatch, repair: bool
+    feature: tuple[Path, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    repair: bool,
+    committed: bool,
 ) -> None:
     fixing = update_checkout(feature, monkeypatch, repair)
     assert change_size.size_verdict(fixing)[1] == (
         "only files the verified Hard Eng update wrote"
     )
     edit(fixing, "app.py", 2)
-    if repair:
+    if committed:
         commit(fixing, "fix the project")
     assert change_size.size_verdict(fixing) == (True, "1 file, 4 changed lines")
 
