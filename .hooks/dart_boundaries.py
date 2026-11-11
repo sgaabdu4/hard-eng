@@ -3,8 +3,11 @@
 import json
 import subprocess
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
+
+if TYPE_CHECKING:
+    from gate_config import JsonObject
 
 SETTINGS_FILES = (
     ".dart-decimaterc",
@@ -48,6 +51,45 @@ DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
 }
 
 
+def dart_rule_settings(value: object) -> object:
+    if isinstance(value, list):
+        if not all(isinstance(rule, str) for rule in value):
+            raise ValueError("Dart lint rule names must be strings")
+        return {rule: True for rule in value}
+    if isinstance(value, dict):
+        for rule, enabled in value.items():
+            if enabled is False:
+                raise ValueError(
+                    f"analysis_options.yaml: {rule} is set to false, which turns off "
+                    "a lint rule of the included set; remove that entry"
+                )
+    return value
+
+
+def validate_dart_plugins(options: "JsonObject") -> None:
+    from project_setup import migrate_dart_plugins
+
+    plugins = options.get("plugins")
+    if not isinstance(plugins, dict):
+        return
+    migrated = dict(plugins)
+    updated: JsonObject = {"plugins": migrated}
+    migrate_dart_plugins(updated, Path(__file__).resolve().parents[1])
+    if updated["plugins"] != plugins:
+        versions = {
+            name: value.get("version") if isinstance(value, dict) else value
+            for name, value in plugins.items()
+        }
+        changes = ", ".join(
+            f"{name}: {versions[name]} -> {value.get('version') if isinstance(value, dict) else value}"
+            for name, value in migrated.items()
+            if value != plugins.get(name)
+        )
+        raise ValueError(
+            f"Analyzer plugin version is older than the installed canonical profile ({changes}); run the supported Hard Eng updater and verify application compatibility"
+        )
+
+
 def dart_options(path: Path) -> DartOptions:
     try:
         import yaml
@@ -72,7 +114,7 @@ def validate_dart_includes(
     if path in seen:
         raise ValueError(f"Recursive Dart analysis include: {path}")
     seen.add(path)
-    from gate_config import JsonObject, validate_dart_plugins
+    from gate_config import JsonObject
     from project_setup import validate_dart_exclusions
 
     options = dart_options(path)
@@ -191,7 +233,7 @@ def validate_dart_boundaries(
 def validate_dart_typing(
     directory: Path, sources: list[str] | tuple[str, ...], package_root: Path | None
 ) -> None:
-    from gate_config import JsonObject, dart_rule_settings
+    from gate_config import JsonObject
     from project_setup import validate_dart_exclusions
 
     options = dart_options(directory / "analysis_options.yaml")

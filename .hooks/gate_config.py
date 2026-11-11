@@ -259,45 +259,6 @@ def generated_sources(root: Path, names: list[str]) -> set[str]:
     }
 
 
-def dart_rule_settings(value: object) -> object:
-    if isinstance(value, list):
-        if not all(isinstance(rule, str) for rule in value):
-            raise ValueError("Dart lint rule names must be strings")
-        return {rule: True for rule in value}
-    if isinstance(value, dict):
-        for rule, enabled in value.items():
-            if enabled is False:
-                raise ValueError(
-                    f"analysis_options.yaml: {rule} is set to false, which turns off "
-                    "a lint rule of the included set; remove that entry"
-                )
-    return value
-
-
-def validate_dart_plugins(options: JsonObject) -> None:
-    from project_setup import migrate_dart_plugins
-
-    plugins = options.get("plugins")
-    if not isinstance(plugins, dict):
-        return
-    migrated = dict(plugins)
-    updated: JsonObject = {"plugins": migrated}
-    migrate_dart_plugins(updated, Path(__file__).resolve().parents[1])
-    if updated["plugins"] != plugins:
-        versions = {
-            name: value.get("version") if isinstance(value, dict) else value
-            for name, value in plugins.items()
-        }
-        changes = ", ".join(
-            f"{name}: {versions[name]} -> {value.get('version') if isinstance(value, dict) else value}"
-            for name, value in migrated.items()
-            if value != plugins.get(name)
-        )
-        raise ValueError(
-            f"Analyzer plugin version is older than the installed canonical profile ({changes}); run the supported Hard Eng updater and verify application compatibility"
-        )
-
-
 def validate_file_sizes(
     root: Path, exceptions: dict[str, dict[str, str]], listed: list[Path] | None = None
 ) -> None:
