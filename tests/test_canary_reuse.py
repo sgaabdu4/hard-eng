@@ -126,21 +126,30 @@ def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
         assert release_canary.ci_failures(PUSHED)
 
 
-def test_a_push_runs_the_new_projects_when_a_lookup_stalls(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+def stalled_lookups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: str
 ) -> None:
+    """A `gh` that waits past the named time limit; Git answers at once."""
     (tmp_path / "gh").write_text("#!/bin/sh\nexec sleep 2\n")
     (tmp_path / "gh").chmod(0o755)
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
     run = release_canary.output
 
     def output(command: list[str]) -> str:
-        return "t1" if command[0] == "git" else run(command)
+        if command[0] != "git":
+            return run(command)
+        return "setup.py" if command[1] == "diff" else "t1"
 
     monkeypatch.setattr(release_canary, "output", output)
-    monkeypatch.setattr(release_canary, "PUSH_LOOKUP_SECONDS", 0.2)
+    monkeypatch.setattr(release_canary, limit, 0.2)
+
+
+def test_a_push_runs_the_new_projects_when_a_lookup_stalls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    stalled_lookups(tmp_path, monkeypatch, "PUSH_LOOKUP_SECONDS")
     listed = [release_canary.folder(" ".join(t)) for t in release_canary.CI_TARGETS]
     got = release_canary.push_outputs(["setup.py"], PUSHED)
     assert got == "targets=" + json.dumps(listed)
@@ -180,6 +189,23 @@ def test_the_canary_summary_says_no_installed_file_changed_only_when_none_change
     printed = done.stdout.splitlines()
     assert len(printed) == 1
     assert line in printed[0]
+
+
+def test_the_release_gate_ends_before_the_canary_job_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    workflow = yaml.safe_load(
+        (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
+    )
+    limit = workflow["jobs"]["canary"]["timeout-minutes"] * 60
+    assert release_canary.RELEASE_GATE_SECONDS + 120 <= limit
+    stalled_lookups(tmp_path, monkeypatch, "RELEASE_GATE_SECONDS")
+    assert release_canary.release_pr_gate("b" * 40, PUSHED) == 1
+    printed = capsys.readouterr().out
+    assert "time limit" in printed
+    assert "Rerun this job once the Canary run" in printed
 
 
 def test_the_release_gate_follows_a_reused_push_to_the_pr_head(
