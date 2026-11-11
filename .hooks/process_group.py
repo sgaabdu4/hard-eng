@@ -103,9 +103,19 @@ def stopped_note(code: int) -> str:
     return f"\nThe check was stopped{cause}, so this gate was ended before it finished."
 
 
-def parallel_hint(code: int, tests: bool, command: list[str]) -> str:
+def parallel_hint(
+    code: int, tests: bool, command: list[str], report: Path | None = None
+) -> str:
+    """The advice for a failed parallel test run; none when its report holds no failed test."""
     if code in {0, 5} or not tests or "-n auto" not in " ".join(command):
         return ""
+    if report is not None:
+        from reports import junit_root
+
+        with suppress(OSError, SyntaxError):
+            tree = junit_root(report)
+            if not (tree.findall(".//failure") or tree.findall(".//error")):
+                return ""
     return (
         "\nThese tests ran in parallel (-n auto). If they pass serially, isolate "
         "the state they share, or set -n 0 in this gate's command."

@@ -519,7 +519,7 @@ def run_limited_gate(
             f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} "
             f"(exit {result.returncode}; elapsed {time.monotonic() - started:.3f}s)"
             f" @ {group['path']}"
-            + (stop or parallel_hint(result.returncode, tests, command)),
+            + (stop or parallel_hint(result.returncode, tests, command, report_path)),
             flush=True,
         )
         return result.returncode != 0

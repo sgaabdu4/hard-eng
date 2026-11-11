@@ -25,6 +25,25 @@ def test_a_run_with_no_tests_gets_no_parallel_hint() -> None:
     assert "-n 0" in parallel_hint(1, True, PARALLEL)
 
 
+def test_a_parallel_run_where_no_test_failed_gets_no_parallel_hint(
+    tmp_path: Path,
+) -> None:
+    """A coverage minimum that fails the gate is no sign of shared state."""
+    report = tmp_path / "junit.xml"
+    report.write_text(
+        '<testsuites><testsuite><testcase name="a"/></testsuite></testsuites>'
+    )
+    assert parallel_hint(1, True, PARALLEL, report) == ""
+    report.write_text(
+        '<testsuites><testsuite><testcase name="a"><failure message="no"/>'
+        "</testcase></testsuite></testsuites>"
+    )
+    assert "-n 0" in parallel_hint(1, True, PARALLEL, report)
+    report.write_text("<testsuites>")
+    assert "-n 0" in parallel_hint(1, True, PARALLEL, report)
+    assert "-n 0" in parallel_hint(1, True, PARALLEL, tmp_path / "none.xml")
+
+
 def test_a_failed_secret_scan_names_rule_file_and_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
