@@ -2,6 +2,7 @@
 
 import json
 import re
+import shlex
 import sys
 import threading
 from pathlib import Path
@@ -380,20 +381,29 @@ def test_adopt_refuses_first_when_check_would_refuse_the_debt_file(
     assert not (tmp_path / debt.DEBT_FILE).exists()
 
 
+@pytest.mark.parametrize("on_base", [True, False])
+@pytest.mark.parametrize("only_commit", [False, True])
 def test_the_step_for_adopt_with_no_remote_can_be_done(
-    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    only_commit: bool,
+    on_base: bool,
 ) -> None:
-    adoptable(tmp_path, "print('a.py:1:1: F1 bad'); raise SystemExit(1)", False)
+    adoptable(tmp_path, "print('a.py:1:1: F1 bad'); raise SystemExit(1)", only_commit)
     git(tmp_path, "switch", "-q", "main")
-    (tmp_path / ".hooks").mkdir()
-    (tmp_path / ".hooks/hard-eng-source.json").write_text("{}")
-    commit(tmp_path, "install")
+    if not only_commit:
+        (tmp_path / ".hooks").mkdir()
+        (tmp_path / ".hooks/hard-eng-source.json").write_text("{}")
+        commit(tmp_path, "install")
+    if not on_base:
+        git(tmp_path, "switch", "-q", "-c", "work")
     monkeypatch.setattr(runner, "provision_tools", no_provisioning)
     debt.OUTPUTS.clear()
     with pytest.raises(ValueError, match="only the change that installs") as refusal:
         runner.adopt()
-    assert "git reset --soft HEAD~1" in str(refusal.value)
-    git(tmp_path, "reset", "--soft", "HEAD~1")
+    for step in re.findall(r"`(git [^`]+)`", str(refusal.value)):
+        git(tmp_path, *shlex.split(step)[1:])
     debt.OUTPUTS.clear()
     assert runner.adopt() == 0
     commit(tmp_path, "install with debt")

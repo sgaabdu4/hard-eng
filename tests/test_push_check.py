@@ -56,7 +56,11 @@ def stub_snapshot(
     init(checkout)
     (checkout / ".hooks").mkdir()
     (checkout / ".hooks/hard-eng.py").write_text("")
-    monkeypatch.setattr(ship_actions, "snapshot", lambda *_args: nullcontext(checkout))
+
+    def snapshot(*_args: object) -> nullcontext[Path]:
+        return nullcontext(checkout)
+
+    monkeypatch.setattr(ship_actions, "snapshot", snapshot)
     hard_eng = Mock(return_value=status)
     monkeypatch.setattr(ship_actions, "run_hard_eng", hard_eng)
     return hard_eng
@@ -167,7 +171,14 @@ GATE_CODE = (
 
 
 class Pushed:
-    def __init__(self, runner: ModuleType, tmp_path: Path, policy: ShippingPolicy):
+    def __init__(
+        self,
+        runner: ModuleType,
+        tmp_path: Path,
+        policy: ShippingPolicy,
+        extra: list[dict[str, object]] | None = None,
+    ) -> None:
+        self.extra = extra or []
         self.root = tmp_path
         self.counter = tmp_path.parent / f"{tmp_path.name}-counter"
         self.bare = tmp_path.parent / f"{tmp_path.name}-origin.git"
@@ -180,7 +191,7 @@ class Pushed:
         hooks.mkdir()
         for source in (Path(__file__).resolve().parents[1] / ".hooks").glob("*.py"):
             (hooks / source.name).write_bytes(source.read_bytes())
-        (self.root / ".gitignore").write_text("__pycache__/\n")
+        (self.root / ".gitignore").write_text("__pycache__/\ninstalled.flag\n")
         self.write_config()
         git(self.root, "add", ".")
         git(self.root, "commit", "-qm", "initial base")
@@ -201,7 +212,8 @@ class Pushed:
                         "-c",
                         GATE_CODE.format(counter=str(self.counter)),
                     ],
-                }
+                },
+                *self.extra,
             ],
         } | changes
         (self.root / "hard-eng.gates.json").write_text(json.dumps(config))
@@ -318,7 +330,8 @@ def test_the_push_check_runs_when_the_pass_does_not_cover_the_pushed_commit(
     pushed: Pushed, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, row: str
 ) -> None:
     component = pushed.add_submodule(tmp_path) if row.startswith("submodule") else None
-    revision, old, base, arguments, env = pushed.task(), None, pushed.base, [], {}
+    revision, old = pushed.task(), None
+    env: dict[str, str] = {}
     if row == "later-push":
         git(pushed.root, "push", "-q", "origin", "feature/pass")
         old, revision = revision, pushed.task("second")
@@ -342,7 +355,7 @@ def test_the_push_check_runs_when_the_pass_does_not_cover_the_pushed_commit(
         "only-language": ["--only-language", "python"],
         "stage-ready": ["--plan-stage", "Ready"],
     }.get(row, [])
-    base = "" if row == "no-base" else base
+    base = "" if row == "no-base" else pushed.base
     assert pushed.check(*arguments, base=base, env=env) == 0
     before = pushed.runs()
     covers = row in {"amended", "later-push"} or row.endswith("-record")
@@ -429,3 +442,38 @@ def test_the_quick_check_starts_no_git_for_the_pass_record(
     assert [c[1:] for c in full].count(resolve) - [c[1:] for c in quick].count(
         resolve
     ) == 1
+
+
+def test_after_a_spared_check_the_mutation_report_runs_on_installed_dependencies(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install: dict[str, object] = {
+        "name": "install",
+        "role": "lockfiles",
+        "command": [sys.executable, "-c", "open('installed.flag', 'w').write('x')"],
+    }
+    pushed = Pushed(runner, tmp_path, shipping_policy, [install])
+    revision = pushed.task()
+    assert pushed.check() == 0
+    assert pushed.record().is_file()
+    calls: list[list[str]] = []
+    installed: list[bool] = []
+    run_check = ship_actions.run_hard_eng
+
+    def run(checkout: Path, arguments: list[str], environment: dict[str, str]) -> int:
+        calls.append(arguments)
+        if arguments[0] == "check":
+            return run_check(checkout, arguments, environment)
+        installed.append((checkout / "installed.flag").is_file())
+        return 0
+
+    monkeypatch.setattr(ship_actions, "run_hard_eng", run)
+    runs = pushed.runs()
+    assert pushed.push(monkeypatch, revision) == 0
+    assert calls[0] == ["check", "--base", pushed.base, "--quick"]
+    assert [call[0] for call in calls] == ["check", "mutation"]
+    assert installed == [True]
+    assert pushed.runs() == runs
