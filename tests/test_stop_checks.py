@@ -514,25 +514,12 @@ def test_failures_with_no_output_are_not_counted_as_repeats(tmp_path: Path) -> N
 def test_stop_passes_a_small_change_when_the_base_holds_an_open_plan(
     repository: Path, status: str
 ) -> None:
-    install_native_hooks(repository, "")
-    (repository / ".git/info/exclude").write_text(".hard-eng/\n__pycache__/\n")
-    (repository / "a.py").write_text("".join(f"line {n}\n" for n in range(30)))
-    (repository / "PLAN.md").write_text(
+    plan = (
         plan_document()
         .replace("Status: Complete", f"Status: {status}")
         .replace("## Verification\nResult: Passed", "## Verification\nResult: Pending")
     )
-    commit(repository, "open plan on the base")
-    add_origin(repository)
-    git(repository, "fetch", "-q", "origin")
-    git(repository, "switch", "-qc", "work")
-    payload: JsonObject = {"session_id": "small"}
-    assert agent_hooks.record_session(repository, payload)
-    (repository / "a.py").write_text(
-        "".join(f"changed {n}\n" for n in range(3))
-        + "".join(f"line {n}\n" for n in range(3, 30))
-    )
-    response = agent_hooks.completion(repository, payload)
+    response = small_edit_after_plan(repository, plan, own_plan=False)
     message = str(response)
     assert "decision" not in response
     assert "build in progress" not in message
