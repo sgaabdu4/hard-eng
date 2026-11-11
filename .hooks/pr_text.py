@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
-MERMAID_BLOCK = re.compile(r"^[ \t]*```[ \t]*mermaid\b", re.MULTILINE)
+MERMAID_BLOCK = re.compile(r"^[ \t]*(?:```|~~~)[ \t]*mermaid\b", re.MULTILINE)
 NOT_CHECKED_LINE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?Not checked:(.*)$", re.MULTILINE)
 EMPTY_ANSWER = re.compile(r"(?:none|nothing|n/a)?[ \t]*[-—–]*", re.IGNORECASE)
 

@@ -53,6 +53,12 @@ def test_not_checked_needs_what_was_not_checked_or_a_reason_for_none(
     assert (body_problem(body.replace("\n", "\r\n")) is None) is passes
 
 
+def test_mermaid_blocks_in_tilde_fences_count_like_backtick_fences() -> None:
+    tilde = _DIAGRAM.replace("```", "~~~")
+    assert body_problem("Undo: revert.\n" + tilde * 2 + "Not checked: x\n") is None
+    assert body_problem("Undo: revert.\n" + tilde + "Not checked: x\n") is not None
+
+
 def test_not_checked_refusal_says_the_answer_goes_on_the_line_that_starts_it() -> None:
     problem = body_problem(f"{_GOOD}Not checked:\n- the Mac canary\n")
     assert problem is not None
@@ -68,12 +74,19 @@ def test_ready_refuses_a_pr_body_without_a_not_checked_line(
 
 
 def _event(
-    tmp_path: Path, body: str | None, *, head: str = "task", base: str = "main"
+    tmp_path: Path,
+    body: str | None,
+    *,
+    head: str = "task",
+    base: str = "main",
+    draft: bool = False,
+    repo: str = "acme/widget",
 ) -> str:
     event = {
         "pull_request": {
             "body": body,
-            "head": {"ref": head, "repo": {"full_name": "acme/widget"}},
+            "draft": draft,
+            "head": {"ref": head, "repo": {"full_name": repo}},
             "base": {"ref": base},
         }
     }
@@ -82,12 +95,16 @@ def _event(
     return str(path)
 
 
-def _project(tmp_path: Path, *, shipping: bool = True) -> Path:
+def _project(
+    tmp_path: Path, *, shipping: bool = True, bad_shipping: bool = False
+) -> Path:
     root = _fixture(tmp_path).root
-    if not shipping:
+    if not shipping or bad_shipping:
         gates = root / "hard-eng.gates.json"
         payload = json.loads(gates.read_text())
         del payload["shipping"]
+        if bad_shipping:
+            payload["shipping"] = "develop"
         gates.write_text(json.dumps(payload))
     return root
 
@@ -118,6 +135,26 @@ def test_event_problem_exempts_only_the_update_pr_and_other_bases(
     assert (problem is not None) is refused
     if problem:
         assert "Edit the PR text" in problem
+
+
+@pytest.mark.parametrize(
+    ("draft", "repo"), [(True, "acme/widget"), (False, "outsider/widget")]
+)
+def test_event_problem_checks_draft_and_fork_prs(
+    tmp_path: Path, draft: bool, repo: str
+) -> None:
+    root = _project(tmp_path)
+    event = _event(tmp_path, _GOOD, draft=draft, repo=repo)
+    assert event_problem(event, root) is not None
+
+
+def test_event_problem_treats_a_gates_file_with_a_bad_shipping_value_as_no_shipping(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path, bad_shipping=True)
+    refused = event_problem(_event(tmp_path, _GOOD, base="develop"), root)
+    assert refused is not None
+    assert event_problem(_event(tmp_path, _VALID, base="develop"), root) is None
 
 
 def _workflow_text() -> str:
