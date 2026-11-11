@@ -914,8 +914,6 @@ def test_a_ruff_gate_never_fixes_files(runner: ModuleType, tmp_path: Path) -> No
     result = subprocess.run(
         offline, cwd=tmp_path, capture_output=True, text=True, check=False
     )
-    if "was not found in the cache" in result.stderr:
-        pytest.skip("ruff is not in the offline uv cache")
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "F401" in result.stdout
+    assert "F401" in result.stdout, result.stdout + result.stderr
     assert source.read_text() == "import os\n"
