@@ -8,7 +8,7 @@ import tomllib
 from itertools import pairwise
 from pathlib import Path
 
-from gate_config import Group, require_roles
+from gate_config import Gate, Group, require_roles
 from project_files import parse_project_text
 from project_setup import dependency_command
 
@@ -239,14 +239,17 @@ def import_contract_gap(directory: Path, package: Group) -> str | None:
 
 
 def require_imports(directory: Path, package: Group, roles: set[str]) -> None:
-    if "imports" not in roles:
-        if python_roots(directory, package):
-            step = imports_step(directory, package)
-            require_roles(package["path"], {"imports"}, roles, step)
-        return
-    gap = import_contract_gap(directory, package)
-    if gap:
-        raise ValueError(f"{package['path']}: {gap}")
+    if "imports" not in roles and python_roots(directory, package):
+        step = imports_step(directory, package)
+        require_roles(package["path"], {"imports"}, roles, step)
+
+
+def require_import_contract(directory: Path, package: Group, gate: Gate) -> None:
+    """Runs with the imports gate, not at the config load: each session start loads the config."""
+    if gate.get("role") == "imports" and package.get("language") == "python":
+        gap = import_contract_gap(directory, package)
+        if gap:
+            raise ValueError(f"{package['path']}: {gap}")
 
 
 def import_configuration(directory: Path, package: Group, content: str) -> str:
