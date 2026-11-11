@@ -808,7 +808,7 @@ def validate_scanner_report(
 
         validate_freshness(path, gate, waiting=freshness_waiting(gate, directory))
     elif scanner == "fallow":
-        validate_fallow(path, sdk_binaries(directory))
+        validate_fallow(path, sdk_binaries(directory), directory)
     else:
         SCANNERS[scanner](path)
 
