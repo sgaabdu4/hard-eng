@@ -186,7 +186,9 @@ def freshness_note(root: Path) -> str:
     if result == "none recorded yet":
         return "Hard Eng freshness unknown: no update result yet."
     if "failed" in result:
-        return f"Scaffold may be stale. Last Hard Eng update: {result}"
+        first, _, rest = result.partition("\n")
+        more = f" (the rest is in {RESULT_FILE})" if rest else ""
+        return f"Scaffold may be stale. Last Hard Eng update: {first}{more}"
     return ""
 
 
