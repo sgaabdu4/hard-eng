@@ -323,8 +323,9 @@ def test_a_ux_record_that_skips_a_rule_names_the_rule(
     with pytest.raises(ValueError) as error:
         validate_plan(path)
     assert str(error.value).removeprefix("ux_reference: ") == (
-        "UX Rules needs exactly one line for each Usability rule; no line: Observe; "
-        "two lines: Widths; add a line for each rule of references/ux.md"
+        "UX Rules needs one `- <rule>: Pass|Fail|N/A — text` line for each Usability rule; "
+        "no line: Observe; two lines: Widths; "
+        "add a line for each rule of .agents/skills/he-plan/references/ux.md"
     )
 
 
@@ -384,19 +385,77 @@ def test_a_failed_count_rule_needs_no_count(tmp_path: Path, visual_plan: str) ->
 @pytest.mark.parametrize(
     ("line", "message"),
     [
-        ("- Hierarchy: Pass — checked\n- Colour: Pass — checked", "Colour"),
+        ("- Hierarchy: Pass — checked\n- Colour: Pass — checked", "not a rule: Colour"),
         ("- Hierarchy: Maybe — checked", "Hierarchy.*Pass, Fail or N/A"),
-        ("- Hierarchy: Pass —", "Hierarchy.*text"),
+        ("- Hierarchy: Pass —", "Hierarchy.*text after the dash"),
+        ("- Hierarchy: Pass checked", "Hierarchy.*dash"),
+        ("Hierarchy is fine", "no line: .*Hierarchy"),
     ],
-    ids=["unknown-rule", "unknown-verdict", "no-text"],
+    ids=["unknown-rule", "unknown-verdict", "no-text", "no-dash", "no-label"],
 )
 def test_an_unknown_rule_line_is_refused(
     tmp_path: Path, visual_plan: str, line: str, message: str
 ) -> None:
     path = tmp_path / "PLAN.md"
     path.write_text(visual_plan.replace("- Hierarchy: Pass — checked", line))
-    with pytest.raises(ValueError, match=f"UX Rules.*{message}"):
+    with pytest.raises(ValueError, match=f"UX Rules.*{message}") as error:
         validate_plan(path)
+    if "no-text" in message or "text after" in message:
+        assert "Pass, Fail or N/A" not in str(error.value)
+
+
+def test_every_bad_rule_line_is_named_in_one_refusal(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    bad = "- Observe: Maybe — x\n- Hierarchy: Pass\n- Colour: Pass — x"
+    plan = visual_plan.replace("- Observe: Pass — checked\n", "")
+    path.write_text(plan.replace("- Hierarchy: Pass — checked", bad))
+    with pytest.raises(ValueError, match="UX Rules") as error:
+        validate_plan(path)
+    for name in ("Observe", "Hierarchy", "Colour"):
+        assert name in str(error.value)
+    assert str(error.value).count("UX Rules") == 1
+
+
+def block_lines(block: str, kind: str) -> str:
+    lines = block.splitlines()
+    forms = {
+        "star": "\n".join(line.replace("- ", "* ", 1) for line in lines[1:]),
+        "indent": "\n".join("  " + line for line in lines[1:]),
+        "hyphen": "\n".join(line.replace(" — ", " - ", 1) for line in lines[1:]),
+        "wrapped": "\n".join(line.replace(" — ", " —\n  ", 1) for line in lines[1:]),
+        "note": "\n".join(lines[1:]) + "\n\n- Note: judged by hand",
+        "plain": "\n".join(lines[1:]),
+    }
+    return "Rules:\n" + forms[kind]
+
+
+@pytest.mark.parametrize(
+    "kind", ["star", "indent", "hyphen", "wrapped", "note", "plain"]
+)
+def test_rule_lines_may_use_the_usual_forms_below_an_empty_rules_label(
+    tmp_path: Path, visual_plan: str, kind: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(
+        visual_plan.replace(ux_rules_block(), block_lines(ux_rules_block(), kind))
+    )
+    assert validate_plan(path) == "Complete"
+
+
+def test_the_refusals_print_the_reference_path_from_the_project_root(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(visual_plan.replace(ux_rules_block(), ""))
+    with pytest.raises(ValueError, match="UX Rules is missing") as error:
+        validate_plan(path)
+    assert "of .agents/skills/he-plan/references/ux.md" in str(error.value)
+    path.write_text(visual_plan.replace("- Observe: Pass — checked\n", ""))
+    with pytest.raises(ValueError, match="UX Rules needs") as error:
+        validate_plan(path)
+    assert "of .agents/skills/he-plan/references/ux.md" in str(error.value)
 
 
 def test_a_ux_record_with_one_line_for_each_rule_passes(
@@ -498,8 +557,6 @@ def test_the_step_named_by_a_missing_ux_reference_repairs_the_checkout(
     (target / "PLAN.md").write_text(
         visual_plan.replace("Status: Complete", "Status: Ready")
     )
-    git(target, "add", "PLAN.md")
-    git(target, "commit", "-qm", "plan")
     reference = target / ".agents/skills/he-plan/references/ux.md"
     reference.unlink()
     command = [

@@ -264,52 +264,74 @@ def usability_rules() -> list[tuple[str, list[str]]]:
 
 
 def rule_lines(content: str) -> list[str]:
-    """The `- <rule>: ...` lines after the `Rules:` label, up to the next field label."""
-    found = []
-    after = False
-    for line in content.split("\n"):
-        if after and line.strip() and not line.startswith("- "):
+    """The rule lines below the `Rules:` label: `-` or `*` bullets, a wrapped line joins the one above, a blank line or a field label ends them."""
+    found: list[str] = []
+    below = False
+    for raw in content.split("\n"):
+        line = raw.strip()
+        if below and not line and found:
             break
-        if after and line.startswith("- "):
+        if below and line[:2] in {"- ", "* "}:
             found.append(line[2:].strip())
-        after = after or line.startswith("Rules:")
+        elif below and line:
+            head = raw.partition(":")[0]
+            if not found or (raw[:1].isupper() and head.replace(" ", "").isalnum()):
+                break
+            found[-1] += " " + line
+        below = below or raw.startswith("Rules:")
     return found
+
+
+def split_rule_line(line: str) -> tuple[str, str, str, str]:
+    """The rule name without its marker, then the verdict, the text and the problem, if any."""
+    head, marked, tail = line.partition("): ")
+    if marked and "(count" in head:
+        label, rest = head.partition(" (count")[0], tail
+    else:
+        label, _, rest = line.partition(": ")
+    verdict, _, after = rest.partition(" ")
+    dash = after.strip()[:1] in {"—", "–", "-"}
+    text = after.strip()[1:].strip() if dash else ""
+    if verdict not in {"Pass", "Fail", "N/A"}:
+        return label, verdict, text, "needs Pass, Fail or N/A"
+    problem = "" if text else "needs text after the dash"
+    return label, verdict, text, problem if dash else "needs a dash after the verdict"
 
 
 def ux_rules(content: str) -> None:
     """Each Usability rule gets one Pass, Fail or N/A line; a Fail cannot be a Passed record."""
     if NOT_APPLICABLE_WITH_REASON.fullmatch(content.strip()):
         return
-    if "\nRules:" not in f"\n{content}":
+    labels = f"\n{content}".count("\nRules:")
+    if labels != 1:
         raise ValueError(
-            "UX Rules is missing; judge the inspected image against each Usability rule of references/ux.md and add one line per rule"
+            f"UX Rules is missing; judge the inspected image against each Usability rule of {UX_REFERENCE} and add one line per rule"
+            if not labels
+            else f"plan needs one 'Rules:' field, found {labels}"
         )
-    field(content, "Rules")
     rules = dict(usability_rules())
     given: dict[str, list[tuple[str, str]]] = {}
+    bad = []
     for line in rule_lines(content):
-        head, marked, tail = line.partition("): ")
-        if marked and "(count" in head:
-            line = head.partition(" (count")[0] + ": " + tail
-        label, _, verdict = line.partition(": ")
-        given.setdefault(label, []).append(partition_verdict(label, verdict))
-    unknown = [label for label in given if label not in rules]
-    missing = [label for label in rules if label not in given]
-    repeated = [label for label, lines in given.items() if len(lines) > 1]
+        label, verdict, text, problem = split_rule_line(line)
+        if problem:
+            bad.append(f"{label or line[:40]} {problem}")
+        given.setdefault(label, []).append((verdict, text))
     wrong = [
         f"{reason}: {', '.join(names)}"
         for reason, names in (
-            ("not a rule", unknown),
-            ("no line", missing),
-            ("two lines", repeated),
+            ("not a rule", [label for label in given if label not in rules]),
+            ("no line", [label for label in rules if label not in given]),
+            ("two lines", [label for label, lines in given.items() if len(lines) > 1]),
+            ("bad line", bad),
         )
         if names
     ]
     if wrong:
         raise ValueError(
-            "UX Rules needs exactly one line for each Usability rule; "
+            "UX Rules needs one `- <rule>: Pass|Fail|N/A — text` line for each Usability rule; "
             + "; ".join(wrong)
-            + "; add a line for each rule of references/ux.md"
+            + f"; add a line for each rule of {UX_REFERENCE}"
         )
     for label, ((verdict, text),) in given.items():
         if verdict == "Fail":
@@ -335,15 +357,6 @@ def uncounted(text: str, units: list[str]) -> list[str]:
             if n
         )
     ]
-
-
-def partition_verdict(label: str, verdict: str) -> tuple[str, str]:
-    name, _, text = verdict.partition(" — ")
-    if name not in {"Pass", "Fail", "N/A"} or not text.strip():
-        raise ValueError(
-            f"UX Rules: {label} needs 'Pass, Fail or N/A — text on what was checked'"
-        )
-    return name, text
 
 
 def judged_rules(content: str, path: Path | None) -> None:
