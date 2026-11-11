@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import shipping
 from test_shipping import (
+    _DIAGRAM,
     _MIXED_UI_BODY,
     _NATIVE_VIDEO_BODY,
     _NATIVE_VIDEO_BODY_CRLF,
@@ -18,6 +19,7 @@ from test_shipping import (
     _fixture,
     _patch_gh,
     _pull,
+    _ready_outcome,
     _ui_fake,
 )
 
@@ -159,3 +161,15 @@ def test_missing_ui_evidence_names_the_upload_command(
     _patch_gh(monkeypatch, _ui_fake(fixture, body="Pictures to follow."))
     with pytest.raises(shipping.ShippingError, match="gh pr edit .*--attach"):
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+
+
+@pytest.mark.parametrize(("labels", "passes"), [("**{}**", True), ("{}:", False)])
+def test_bold_diagram_labels_are_no_ui_evidence_labels(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, labels: str, passes: bool
+) -> None:
+    fixture = _fixture(tmp_path, ui_paths=["src/**"])
+    note = "UI appearance: unchanged — inspected the same dashboard, state and viewport before/after; no visible difference."
+    before, after = labels.format("Before"), labels.format("After")
+    body = f"{note}\n{before}\n\n{_DIAGRAM}\n{after}\n\n{_DIAGRAM}"
+    message = None if passes else "no Before/After attachments"
+    _ready_outcome(fixture, _ui_fake(fixture, body=body), monkeypatch, message)
