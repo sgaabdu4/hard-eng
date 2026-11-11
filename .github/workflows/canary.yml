@@ -23,8 +23,13 @@ jobs:
     name: canary targets
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read # A push reads the new project runs of the merged PR head.
+      pull-requests: read # A push finds the merged PR of the pushed commit.
     outputs:
       targets: ${{ steps.targets.outputs.targets }}
+      covered: ${{ steps.targets.outputs.covered }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,6 +38,7 @@ jobs:
       - name: List the new projects when an installed file changed
         id: targets
         env:
+          GH_TOKEN: ${{ github.token }}
           # A develop push is compared with main, as the release canary compares it.
           BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
           EVENT: ${{ github.event_name }}
@@ -42,6 +48,7 @@ jobs:
           # A release PR holds develop's tree, which develop's push already checked.
           if [ "$BASE_REF" = main ] && [ "$HEAD_REF" = develop ]; then echo 'targets=[]' >> "$GITHUB_OUTPUT"; exit 0; fi
           if [ "$EVENT" = workflow_dispatch ]; then names=setup.py; else names=$(git diff --name-only "$BASE...HEAD"); fi
+          if [ "$EVENT" = push ]; then printf '%s\n' "$names" | python3 -I -c 'import sys; sys.path.insert(0, "."); import release_canary as c; print(c.push_outputs(sys.stdin.read().split(), sys.argv[1]))' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"; exit 0; fi
           printf '%s\n' "$names" | python3 -I -c 'import json, sys; sys.path.insert(0, "."); import release_canary as c; names = sys.stdin.read().split(); print("targets=" + json.dumps([c.folder(" ".join(t)) for t in c.CI_TARGETS] if c.needs_canary(names) else []))' >> "$GITHUB_OUTPUT"
 
   new-project:
@@ -105,10 +112,12 @@ jobs:
       - name: Require every listed new project to pass
         env:
           LISTED: ${{ needs.targets.outputs.targets }}
+          COVERED: ${{ needs.targets.outputs.covered }}
           TARGETS: ${{ needs.targets.result }}
           PROJECTS: ${{ needs.new-project.result }}
         run: |
           [ "$TARGETS" = success ] || { echo "Listing the new projects failed: $TARGETS"; exit 1; }
+          if [ "$LISTED" = '[]' ] && [ -n "$COVERED" ]; then echo "PR head $COVERED passed every new project on these exact files; not repeating them."; exit 0; fi
           if [ "$LISTED" = '[]' ]; then echo "No installed file changed; no new project to check."; exit 0; fi
           [ "$PROJECTS" = success ] || { echo "A new project failed its checks: $PROJECTS"; exit 1; }
       - name: Check out the release PR

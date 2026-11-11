@@ -612,7 +612,27 @@ def new_project_runs(revision: str) -> list[tuple[str, str]]:
     return [(name, conclusion) for name, conclusion in runs if CI_JOB.fullmatch(name)]
 
 
-def ci_failures(revision: str) -> list[str]:
+def proven_revision(revision: str) -> str:
+    """The commit itself, or the head of a merged PR with the same files when it has no runs."""
+    if new_project_runs(revision):
+        return revision
+    tree = output(["git", "rev-parse", f"{revision}^{{tree}}"])
+    heads = output(
+        [
+            *("gh", "api", "-q", ".[] | select(.merged_at != null) | .head.sha"),
+            f"repos/{UPSTREAM}/commits/{revision}/pulls",
+        ]
+    ).split()
+    for head in heads:
+        found = output(
+            ["gh", "api", "-q", ".tree.sha", f"repos/{UPSTREAM}/git/commits/{head}"]
+        )
+        if found == tree:
+            return head
+    return revision
+
+
+def unproven(revision: str) -> list[str]:
     """New projects without a passing public CI job for this revision; the newest try counts."""
     passed: dict[str, bool] = {}
     for name, conclusion in new_project_runs(revision):
@@ -621,6 +641,22 @@ def ci_failures(revision: str) -> list[str]:
             passed[label] = passed.get(label, True) and conclusion == "success"
     labels = [folder(" ".join(target)) for target in CI_TARGETS]
     return [label for label in labels if not passed.get(label)]
+
+
+def ci_failures(revision: str) -> list[str]:
+    """New projects without a passing public CI job for this revision or its merged PR head."""
+    return unproven(proven_revision(revision))
+
+
+def push_outputs(names: list[str], revision: str) -> str:
+    """The `targets` job outputs for a push: no jobs when the merged PR proved these files."""
+    listed = [folder(" ".join(target)) for target in CI_TARGETS]
+    if not needs_canary(names):
+        return "targets=[]"
+    proven = proven_revision(revision)
+    if proven != revision and not unproven(proven):
+        return f"targets=[]\ncovered={proven}"
+    return "targets=" + json.dumps(listed)
 
 
 def release_pr_gate(base: str, revision: str) -> int:
@@ -634,10 +670,18 @@ def release_pr_gate(base: str, revision: str) -> int:
     ):
         print("Waiting for develop's push run to finish.", flush=True)
         time.sleep(30)
-    if missing := ci_failures(revision):
-        print(f"New projects without a passing develop push run: {', '.join(missing)}")
+    proven = proven_revision(revision)
+    if missing := unproven(proven):
+        print(
+            f"New projects without a passing run for this commit: {', '.join(missing)}"
+        )
         print("Rerun this job once the Canary run for develop's push has finished.")
         return 1
+    if proven != revision:
+        print(
+            f"Every new project passed in PR head {proven}, which holds the same files."
+        )
+        return 0
     print("Every new project passed in develop's push run for this commit.")
     return 0
 
