@@ -836,6 +836,20 @@ def scanner_result(
             lines[FINDING_LIMIT:] = [f"{more} more findings in {path}"]
         for line in lines:
             print(f"{gate['name']}: {line}")
+        if scanner == "import-linter" and missing_build_system(lines, directory):
+            print(
+                f"{gate['name']}: Add a [build-system] table to pyproject.toml and run `uv sync`."
+            )
+
+
+def missing_build_system(lines: list[str], directory: Path) -> bool:
+    """Import Linter cannot find the package when uv has no build system to install it with."""
+    project = directory / "pyproject.toml"
+    return (
+        any(line.startswith("Could not find package") for line in lines)
+        and project.is_file()
+        and "[build-system]" not in project.read_text()
+    )
 
 
 def commit_sha(item: JsonObject) -> str:

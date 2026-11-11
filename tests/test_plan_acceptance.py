@@ -419,6 +419,32 @@ def test_the_missing_reason_refusal_names_its_line(
     assert line[:61] not in str(error.value)
 
 
+def test_each_missing_na_reason_is_named_with_its_line_number(
+    repository: Path, completed_plan: str
+) -> None:
+    evidence = (
+        "Evidence: The test asserts the observed command exit; this is fixture data."
+    )
+    plan = completed_plan.replace(evidence, "Evidence: N/A for the whole run").replace(
+        "Retro: None — fixture command, no check failed.",
+        "Retro: N/A, no check failed.\nNote: N/A here too",
+    )
+    (repository / "PLAN.md").write_text(plan)
+    bare = [
+        number
+        for number, line in enumerate(plan.splitlines(), 1)
+        if "N/A" in line and "N/A —" not in line
+    ]
+    assert len(bare) == 3
+    with pytest.raises(ValueError, match="needs an inline reason") as error:
+        validate_plans(repository, "0" * 40, "Complete")
+    message = str(error.value)
+    for number in bare:
+        text = plan.splitlines()[number - 1].strip()[:60]
+        assert f"line {number}: {text}" in message
+    assert message.count("N/A — reason") == 1
+
+
 RETRO_LINE = "Retro: None — fixture command, no check failed."
 
 
