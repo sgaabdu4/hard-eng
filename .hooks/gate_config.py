@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -163,12 +164,16 @@ def listed_names(root: Path) -> list[str]:
     return sorted(set(names.split("\0")) - {""})
 
 
+def regular_file(path: Path) -> bool:
+    try:
+        return stat.S_ISREG(os.lstat(path).st_mode)
+    except OSError:
+        return False
+
+
 def repository_files(root: Path, names: list[str] | None = None) -> list[Path]:
-    return [
-        root / name
-        for name in (listed_names(root) if names is None else names)
-        if (root / name).is_file() and not (root / name).is_symlink()
-    ]
+    paths = [root / name for name in (listed_names(root) if names is None else names)]
+    return [path for path in paths if regular_file(path)]
 
 
 def nonproduction_source(relative: Path) -> bool:
