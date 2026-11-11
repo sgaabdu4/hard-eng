@@ -1,4 +1,5 @@
 import os
+import subprocess
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -114,3 +115,56 @@ def test_a_check_with_no_base_passes_a_clean_branch_with_no_branch_point(
     git(repository, "branch", "-M", "trunk")
     validate_plans(repository)
     assert "Size:" not in capsys.readouterr().out
+
+
+def merging(repository: Path, other: str, linked: bool, conflict: bool) -> Path:
+    sized_branch(repository)
+    edit(repository, "a.py", 2)
+    commit(repository, "task edit")
+    git(repository, "switch", "-q", "main")
+    (repository / "base_new.py").write_text("x = 1\n")
+    if conflict:
+        lines = (repository / "a.py").read_text().splitlines()
+        (repository / "a.py").write_text("\n".join(["base line", *lines[1:]]) + "\n")
+    commit(repository, "base moves")
+    git(repository, "switch", "-qc", "other", "main~1")
+    (repository / "other.py").write_text("y = 1\n")
+    commit(repository, "other work")
+    git(repository, "switch", "-q", "work")
+    root = repository
+    if linked:
+        git(repository, "branch", "work2", "work")
+        git(repository, "switch", "-q", "main")
+        root = repository.parent / "linked"
+        git(repository, "worktree", "add", "-q", str(root), "work2")
+    subprocess.run(
+        ["git", "merge", "--no-commit", "--no-ff", other],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    assert git(root, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+    assert bool(git(root, "ls-files", "--unmerged")) == conflict
+    return root
+
+
+@pytest.mark.parametrize("conflict", [True, False], ids=["conflict", "staged"])
+@pytest.mark.parametrize("linked", [False, True], ids=["main checkout", "linked"])
+def test_a_merge_of_the_base_in_progress_does_not_count_the_base_changes(
+    repository: Path, linked: bool, conflict: bool
+) -> None:
+    root = merging(repository, "main", linked, conflict)
+    small, reason = change_size.size_verdict(root)
+    assert small, reason
+    assert reason.startswith("1 file, ")
+
+
+@pytest.mark.parametrize("linked", [False, True], ids=["main checkout", "linked"])
+def test_a_merge_of_another_branch_in_progress_counts_its_files(
+    repository: Path, linked: bool
+) -> None:
+    root = merging(repository, "other", linked, False)
+    assert change_size.size_verdict(root) == (
+        False,
+        "it adds, deletes or renames the file other.py",
+    )

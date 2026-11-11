@@ -154,9 +154,28 @@ def _verdict(
     return True, f"{len(names)} {plural}, {total} changed lines"
 
 
+def merge_point(root: Path) -> str | None:
+    """While a merge is in progress: the merge base of the release reference with both merge parents."""
+    folder = root / ".git"
+    try:
+        if folder.is_file():
+            folder = root / folder.read_text().split("gitdir:", 1)[1].strip()
+        merging = (folder / "MERGE_HEAD").is_file()
+    except (OSError, IndexError):
+        return None
+    for reference in release_references(root) if merging else ():
+        try:
+            return _git_output(
+                root, "merge-base", reference, "HEAD", "MERGE_HEAD"
+            ).strip()
+        except (subprocess.CalledProcessError, OSError):
+            continue
+    return None
+
+
 def size_verdict(root: Path) -> tuple[bool, str]:
     """Whether the whole branch change, not just this session's, is small, and the first reason."""
-    point = default_branch_point(root)
+    point = merge_point(root) or default_branch_point(root)
     if point is None:
         return False, "the branch point with the default branch cannot be found"
     try:
