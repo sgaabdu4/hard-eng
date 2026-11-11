@@ -85,6 +85,6 @@ def test_a_new_screen_post_ends_with_the_closing_line(
 
 def test_mockup_rules_match_the_proof_gate(mods: Mods) -> None:
     text = (SKILL / "references/mockups.md").read_text()
-    rules = sections(text)["Rules brief"]
+    rules = sections(text)["Proof rules"]
     assert tuple(first_cells(rules)) == mods.commands.UI_RULES
     assert mods.commands.CLOSING in text
