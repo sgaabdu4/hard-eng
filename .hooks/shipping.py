@@ -509,9 +509,11 @@ def _checks(
             raise ShippingError(f"required check truncated: {name}")
         _check_revision(run, revision)
         if run.get("status") != "completed":
-            from ci_usage import queue_note
+            note = ""
+            if explain and run.get("status") == "queued":
+                from ci_usage import queue_note
 
-            note = queue_note(root, repository, run, policy["ci_seconds"], explain)
+                note = queue_note(root, repository, run, policy["ci_seconds"])
             raise PendingCheck(f"required check has not completed: {name}{note}")
         if run.get("conclusion") == "skipped":
             raise ShippingError(

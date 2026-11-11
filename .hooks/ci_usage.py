@@ -63,15 +63,13 @@ def phases(job: dict[str, JsonValue]) -> tuple[float, float, float] | None:
 
 
 def queue_note(
-    root: Path, repository: str, run: dict[str, JsonValue], budget: float, lookup: bool
+    root: Path, repository: str, run: dict[str, JsonValue], budget: float
 ) -> str:
     """Text to add to a queued check's message when no runner took it past the budget."""
     from datetime import UTC, datetime
 
     from shipping import ShippingError, _json, _object, _timestamp, gh
 
-    if not lookup:
-        return ""
     try:
         job = _object(
             _json(
@@ -86,9 +84,11 @@ def queue_note(
     except ShippingError:
         return ""
     labels = job.get("labels")
-    if job.get("runner_name") or waited <= budget or not labels:
-        return ""
     names = ", ".join(map(str, labels)) if isinstance(labels, list) else ""
+    if job.get("status") != "queued" or "self-hosted" not in names:
+        return ""
+    if job.get("runner_name") or waited <= budget:
+        return ""
     return (
         f"; no runner has taken it for {int(waited // 60)} min (labels: {names}). "
         "Start a runner with those labels, or ask its owner whether it serves this "
