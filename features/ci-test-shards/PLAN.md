@@ -120,6 +120,7 @@ Slice 12, the proof of a shard (`.hooks/shards.py`, `.hooks/hard-eng.py`):
 - [ ] The gate job passes on a marker, prints the shard, and never starts the proof, also with no `uv` → `tests/test_ci_usage.py::test_the_gate_job_takes_a_shard_proof_and_runs_none_itself`
 - [ ] With no marker and no reports, the gate job still refuses → `tests/test_shards.py::test_the_gate_job_without_a_shard_proof_still_needs_each_report`
 - [ ] The upload step runs for each shard and ignores an empty folder → `tests/test_shard_workflow.py::test_shards_split_the_ci_job_into_checks_tests_and_the_gate_job`
+- [ ] A run that selects no package passes in the gate job with no marker and no report, and starts no download → `tests/test_shard_workflow.py::test_a_run_that_selects_no_package_passes_in_the_gate_job_with_no_download`
 
 Slice 13, an edit under `.github` (`hard-eng.gates.json`):
 
@@ -134,6 +135,8 @@ Slice 15, time limits of the canary (`release_canary.py`):
 - [ ] A push lists each new project when a lookup stalls past the total limit → `tests/test_canary_reuse.py::test_a_push_runs_the_new_projects_when_a_lookup_stalls`
 - [ ] The lookup limit of a push is at most half the limit of the `targets` job → `tests/test_canary_reuse.py::test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr`
 - [ ] The release gate ends with a rerun step before the limit of the `canary` job → `tests/test_canary_reuse.py::test_the_release_gate_ends_before_the_canary_job_limit`
+
+- [ ] The update project of the canary fails when an update writes a shard workflow into a project with no shards → `tests/test_release_canary.py::test_the_update_target_refuses_a_shard_workflow_in_a_project_without_shards`
 
 Slice 16, the summary of a release PR (`.github/workflows/canary.yml`):
 
@@ -151,7 +154,8 @@ Execution: one builder on Sonnet in its own worktree builds slices 1 to 14 in th
 
 ## Risks + recovery
 
-- The download step may fail when no shard sent an artifact, as on a run with only docs. Recovery: a commit with only docs on the PR branch proves it before the merge; the step then gets the setting that allows no match.
+- A run that selects no package sends no artifact. Recovery: the gate job starts no download in that case, and slice 12 proves it; the plan does not depend on what the download action does with no match.
+- After the template move, the old workflow path in a release tree holds the six-shard file of this repository. An installed project runs the setup file of the new release for its update plan, so it reads the new template path. Recovery: the canary's update project installs the last release and updates to the candidate, and slice 15 makes it fail on a shard workflow; a run on a local release host from the last release proves it before the push.
 - The artifact action pins were not checked against GitHub. Recovery: the PR's own run uses them, and a failed upload or download fails the tests or gate job.
 - A self-hosted runner has a `python3` older than 3.12 first on its path. Then the gate job stops with "Hard Eng needs Python 3.12 or later". Recovery: that text names the step; the `impact` step already needs the same version.
 - Code in a PR could write a marker file during its tests. Recovery: the same PR code runs every job, so the marker adds no trust that the job result does not have.
@@ -169,4 +173,4 @@ E2E: N/A — no user journey changes; each behavior is a check, setup or CI resu
 Retro: Pending — written at task end.
 
 Delivery target: Merge
-Delivery: Pending — PR into `develop` with the `hard-eng` and `canary` checks green, then the release into `main`. The PR's own run gives the real CI time of the shard form against the old single job.
+Delivery: Pending — PR into `develop` with the `hard-eng` and `canary` checks green, then the release into `main`. The PR's own run gives the real CI time of the shard form against the old single job. One rerun of the green run proves that a second attempt uploads and downloads again.
