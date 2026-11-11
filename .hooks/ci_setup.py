@@ -706,6 +706,8 @@ def configure_ci(
 def adapt_ci(
     root: Path, source: Path, config: GateConfig, changes: dict[str, str]
 ) -> None:
+    from shards import split_test_shards
+
     name = ".github/workflows/hard-eng.yml"
     workflows = [
         path
@@ -729,6 +731,7 @@ def adapt_ci(
             config, migrate_runner_variable(migrate_launcher(source, migrated))
         )
         migrated = migrate_tool_environment(migrate_bun_version(migrated))
+        migrated = split_test_shards(config, migrated)
         if "\n  pull-requests:" not in migrated:
             migrated = migrated.replace(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
@@ -786,7 +789,9 @@ def adapt_ci(
         )
         .replace(block, triggers, 1)
     )
-    changes[name] = workflow_budget(root, migrate_swift_runner(config, changes[name]))
+    changes[name] = split_test_shards(
+        config, workflow_budget(root, migrate_swift_runner(config, changes[name]))
+    )
 
 
 def without_workflow_gates(root: Path, changes: dict[str, str | None]) -> str | None:

@@ -3,17 +3,65 @@
 import json
 import re
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import cast
 
-from gate_config import Gate, Group
+from ci_jobs import CHECKOUT, IMPACT_BASE, LINUX_HEADER
+from gate_config import Gate, GateConfig, Group
 from process_group import run_in_group
 from reports import junit_root
 
 COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
 KEPT = "coverage/shards"
+CHECK_LINE = re.compile(r'(\.hooks/hard-eng\.py check --base "\$BASE_SHA")')
+JOB_NAME = re.compile(r"(?m)^  ([\w-]+):\n")
+SHARD_LIST = re.compile(r"(?m)^(        shard: \[)[^\]]*\]$")
+UPLOAD = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1"
+DOWNLOAD = "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1"
+HEADER = "  hard-eng:\n    name: hard-eng\n"
+UPLOAD_STEP = f"""      - name: Keep the shard reports
+        if: steps.impact.outputs.docs_only != 'true'
+        uses: {UPLOAD}
+        with:
+          name: hard-eng-shard-${{{{ matrix.shard }}}}
+          path: {KEPT}
+          retention-days: 1
+          overwrite: true
+"""
+GATE_JOB = (
+    HEADER
+    + "    needs: [checks, tests]\n    if: ${{ !cancelled() }}\n"
+    + LINUX_HEADER
+    + f"""    timeout-minutes: 5
+    steps:
+%s      - uses: {DOWNLOAD}
+        with:
+          pattern: hard-eng-shard-*
+          merge-multiple: true
+          path: {KEPT}
+      - name: Merge the test shards
+        env:
+          CHECKS: ${{{{ needs.checks.result }}}}
+          TESTS: ${{{{ needs.tests.result }}}}
+"""
+    + IMPACT_BASE
+    + """          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$CHECKS" != success ] || [ "$TESTS" != success ]; then
+            echo "checks: $CHECKS, tests: $TESTS"
+            exit 1
+          fi
+          python3 .hooks/hard-eng.py check --base "$BASE_SHA" --shard merge
+"""
+)
+SHARD_NOTE = (
+    "CI shards not added: .github/workflows/hard-eng.yml is customised or split. "
+    "Split its hard-eng job into the checks, tests and hard-eng jobs of Hard "
+    "Eng's own workflow, or remove shards."
+)
 
 
 def split(sizes: dict[str, int], count: int) -> list[list[str]]:
@@ -256,3 +304,49 @@ def merge_reports(root: Path, group: Group, gate: Gate) -> None:
     directory = root / group["path"]
     merge_junit(tests, directory / report["tests"])
     (directory / report["coverage"]).write_text(json.dumps(merge_coverage(coverage)))
+
+
+def split_test_shards(config: GateConfig, content: str) -> str:
+    """The one-job workflow as checks, one tests job per shard and the required hard-eng job."""
+    count = max(
+        (
+            gate.get("shards", 0)
+            for group in config["packages"]
+            for gate in group["checks"]
+        ),
+        default=0,
+    )
+    if not count:
+        return content
+    require_pytest(config["packages"])
+    numbers = ", ".join(str(number) for number in range(1, count + 1))
+    names = JOB_NAME.findall(content.partition("\njobs:\n")[2])
+    if names == ["checks", "tests", "hard-eng"]:
+        return SHARD_LIST.sub(lambda match: match[1] + numbers + "]", content)
+    start, checkout = content.find(HEADER), CHECKOUT.search(content)
+    if (
+        names != ["hard-eng"]
+        or start < 0
+        or checkout is None
+        or len(CHECK_LINE.findall(content)) != 2
+        or "\n    env:\n" not in content
+    ):
+        print(SHARD_NOTE, file=sys.stderr)
+        return content
+    rest = content[start + len(HEADER) :].rstrip("\n") + "\n"
+    checks = CHECK_LINE.sub(lambda match: match[1] + " --shard rest", rest)
+    tests = CHECK_LINE.sub(lambda match: match[1] + ' --shard "$SHARD"', rest)
+    tests = tests.replace(
+        "    env:\n", "    env:\n      SHARD: ${{ matrix.shard }}\n", 1
+    )
+    return (
+        content[:start]
+        + "  checks:\n    name: hard-eng-checks\n"
+        + checks
+        + "\n  tests:\n    name: hard-eng-tests ${{ matrix.shard }}\n"
+        + f"    strategy:\n      matrix:\n        shard: [{numbers}]\n"
+        + tests
+        + UPLOAD_STEP
+        + "\n"
+        + GATE_JOB % checkout[0]
+    )
