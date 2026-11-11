@@ -1,5 +1,6 @@
 """HE-UI-SOURCE: added UI lines hold no every-property transition and no colour literal outside a theme or token file."""
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -73,6 +74,26 @@ def test_an_added_css_transition_on_every_property_is_refused(tmp_path: Path) ->
     assert "src/box.ts:3:" in found
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        '{"transition": "all 0.2s"}',
+        "{'transition': 'all 0.2s'}",
+    ],
+)
+def test_an_added_quoted_transition_key_on_every_property_is_refused(
+    tmp_path: Path, line: str
+) -> None:
+    """HE-UI-SOURCE: a transition key in quotes reaches the check and fails."""
+    root = change(
+        tmp_path,
+        "src/box.ts",
+        "export const a = 1;\n",
+        f"export const a = 1;\n{line}\n",
+    )
+    assert "src/box.ts:2:" in refused(root)
+
+
 def test_an_added_tailwind_colour_literal_is_refused_with_its_step(
     tmp_path: Path,
 ) -> None:
@@ -95,6 +116,7 @@ def test_an_added_tailwind_colour_literal_is_refused_with_its_step(
         "final c = Colors.red;",
         "final c = Color.fromRGBO(1, 2, 3, 1);",
         "final c = Color.fromARGB(255, 1, 2, 3);",
+        "final c = Color.from(alpha: 1, red: 1, green: 0, blue: 0);",
     ],
 )
 def test_an_added_dart_colour_literal_is_refused(tmp_path: Path, line: str) -> None:
@@ -109,6 +131,7 @@ def test_an_added_dart_colour_literal_is_refused(tmp_path: Path, line: str) -> N
     "line",
     [
         "let c = Color(red: 1, green: 0, blue: 0)",
+        "let c = Color(.sRGB, red: 1, green: 0, blue: 0)",
         "let c = UIColor(red: 1, green: 0, blue: 0, alpha: 1)",
         "let c = NSColor(red: 1, green: 0, blue: 0, alpha: 1)",
         "let c = #colorLiteral(red: 1, green: 0, blue: 0, alpha: 1)",
@@ -180,6 +203,7 @@ def test_the_colour_step_names_the_paths_that_pass_as_the_code_does(
         ("src/a.tsx", 'const c = <i className="transition-[opacity,transform]" />;'),
         ("src/a.css", "a { transition: opacity 150ms; }"),
         ("lib/a.dart", "final c = Colors.transparent;"),
+        ("Sources/a.swift", "let c = Color(.systemBackground)"),
         (
             "src/a.tsx",
             'const c = <i className="bg-[url(/a.png)] grid-cols-[1fr_2fr]" />;',
@@ -365,3 +389,21 @@ def test_the_nextjs_starter_holds_its_own_page_that_meets_the_rule() -> None:
     assert page.is_file()
     lines = list(enumerate(page.read_text().splitlines(), 1))
     assert ui_rules.line_findings("app/page.tsx", lines) == []
+
+
+def test_the_first_push_of_a_new_branch_with_a_merge_base_is_judged(
+    tmp_path: Path, shipping_policy: dict[str, object]
+) -> None:
+    """HE-UI-SOURCE: a zero base with a merge base to the remote base branch judges the added lines."""
+    root = change(tmp_path, "src/a.tsx", "// base\n", "// base\n")
+    git(root, "branch", "-M", "main")
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [], "shipping": shipping_policy})
+    )
+    commit(root, "default branch base")
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(root, "switch", "-qc", "task")
+    (root / "src/a.tsx").write_text('// base\n<i className="transition-all" />\n')
+    commit(root, "task work")
+    with pytest.raises(ValueError, match=RULE):
+        validate_suppressions(root, "0" * 40)
