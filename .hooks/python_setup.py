@@ -81,7 +81,7 @@ def python_gate_command(command: list[str], manager: str) -> list[str]:
 def leave_out_children(
     root: Path, command: list[str], group: Group, gate: Gate
 ) -> list[str]:
-    """Keep a Python parent's test and dependency commands out of the folders of its child groups."""
+    """Keep a Python parent's test and dependency commands out of the folders of its child groups, and the dependency gate out of a Sphinx docs folder."""
     role = gate.get("role")
     if group.get("language") != "python" or role not in {"tests", "dependencies"}:
         return command
@@ -93,11 +93,14 @@ def leave_out_children(
         for child in child_groups(group, role, list(configured_packages(root).values()))
     ]
     if role == "dependencies":
+        sphinx = (root / below / "docs/conf.py").is_file() and not any(
+            Path(source).parts[:1] == ("docs",) for source in group.get("sources", [])
+        )
         return [
             *command,
             *(
                 argument
-                for child in children
+                for child in [*children, *([Path("docs")] if sphinx else [])]
                 for argument in ("--extend-exclude", f"^{re.escape(str(child))}(/|$)")
             ),
         ]
