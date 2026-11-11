@@ -219,6 +219,17 @@ def test_a_change_with_no_installed_path_starts_no_update_lookup(
     assert len(lookups) <= 2
 
 
+def test_a_change_with_no_removed_plan_starts_no_moved_plan_lookup(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sized_branch(repository)
+    (repository / "PLAN.md").write_text("# Plan\n")
+    spy = Mock(side_effect=subprocess.check_output)
+    monkeypatch.setattr(subprocess, "check_output", spy)
+    assert change_size.moved_plans(repository, "main", {"a.py", "PLAN.md"}) == set()
+    assert started(spy) == []
+
+
 def two_commits_then_edit(root: Path) -> None:
     edit(root, "a.py", 6)
     commit(root, "first half")
