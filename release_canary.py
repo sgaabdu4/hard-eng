@@ -617,19 +617,28 @@ def proven_revision(revision: str) -> str:
     if new_project_runs(revision):
         return revision
     tree = output(["git", "rev-parse", f"{revision}^{{tree}}"])
-    heads = output(
+    try:
+        for head in merged_heads(revision):
+            found = output(
+                [
+                    *("gh", "api", "-q", ".tree.sha"),
+                    f"repos/{UPSTREAM}/git/commits/{head}",
+                ]
+            )
+            if found == tree:
+                return head
+    except subprocess.CalledProcessError:
+        print("The lookup of the merged PR failed; the new projects run.", flush=True)
+    return revision
+
+
+def merged_heads(revision: str) -> list[str]:
+    return output(
         [
             *("gh", "api", "-q", ".[] | select(.merged_at != null) | .head.sha"),
             f"repos/{UPSTREAM}/commits/{revision}/pulls",
         ]
     ).split()
-    for head in heads:
-        found = output(
-            ["gh", "api", "-q", ".tree.sha", f"repos/{UPSTREAM}/git/commits/{head}"]
-        )
-        if found == tree:
-            return head
-    return revision
 
 
 def unproven(revision: str) -> list[str]:

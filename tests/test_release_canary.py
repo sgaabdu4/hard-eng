@@ -553,6 +553,8 @@ def merged_pr_world(
             return "t1"
         if "check-runs" in text:
             return "\n".join(head_rows) if MERGED_HEAD in text else ""
+        if pulls == ["fail"]:
+            raise subprocess.CalledProcessError(1, command)
         if text.endswith("/pulls") or "/pulls " in text:
             return "\n".join([MERGED_HEAD] if pulls is None else pulls)
         assert f"git/commits/{MERGED_HEAD}" in text
@@ -588,26 +590,28 @@ def test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr(
 
 @pytest.mark.parametrize(
     "case",
-    ["no runs at the head", "a failed job", "other files", "no merged pull request"],
+    [
+        "no runs at the head",
+        "a failed job",
+        "other files",
+        "no merged pull request",
+        "a failed lookup",
+    ],
 )
 def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
     monkeypatch: pytest.MonkeyPatch, case: str
 ) -> None:
-    rows = {
-        "no runs at the head": [],
-        "a failed job": [*all_passed()[1:], all_passed()[0][:-7] + "failure"],
-    }.get(case, all_passed())
+    failed = [*all_passed()[1:], all_passed()[0][:-7] + "failure"]
+    rows = {"no runs at the head": [], "a failed job": failed}.get(case, all_passed())
     merged_pr_world(
         monkeypatch,
         rows,
-        pulls=[] if case == "no merged pull request" else None,
+        pulls={"a failed lookup": ["fail"], "no merged pull request": []}.get(case),
         head_tree="t2" if case == "other files" else "t1",
     )
     listed = [release_canary.folder(" ".join(t)) for t in release_canary.CI_TARGETS]
-    assert release_canary.push_outputs(["setup.py"], PUSHED) == (
-        "targets=" + json.dumps(listed)
-    )
-    assert release_canary.ci_failures(PUSHED)
+    got = release_canary.push_outputs(["setup.py"], PUSHED)
+    assert got == "targets=" + json.dumps(listed) and release_canary.ci_failures(PUSHED)
 
 
 def test_the_release_gate_follows_a_reused_push_to_the_pr_head(
