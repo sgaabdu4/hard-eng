@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path, PurePosixPath
 
 from dependency_graph import owner_language
-from gate_config import Group, changed_files, parse_config
+from gate_config import SOURCE_FILE, Group, changed_files, parse_config
 from plans import (
     _git_output,
     _is_test,
@@ -140,6 +140,8 @@ def _verdict(
         }
         | names.intersection(untracked)
     )
+    if SOURCE_FILE in added:
+        return False, "this branch installs Hard Eng"
     if added:
         return False, f"it adds, deletes or renames the file {added[0]}"
     counted = _counted_lines(counts, names)
