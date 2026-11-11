@@ -298,7 +298,7 @@ PYTHON_OFF = re.compile(
 )
 SCRIPT_OFF = re.compile(
     r"eslint-disable|@ts-(ignore|expect-error|nocheck)|biome-ignore"
-    r"|\b(it|test|describe|suite)\.(skip|only|fixme)(If)?[.(]"
+    r"|\b(it|test|describe|suite)\.(skip|only|fixme|todo|failing|fails|if|runIf)(If)?[.(]"
     r"|\b(xit|xtest|xdescribe|fit|fdescribe)\("
     r"|(/\*|//)\s*(istanbul|c8|v8) ignore"
 )
