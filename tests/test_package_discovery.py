@@ -13,6 +13,7 @@ from gate_config import (
     validate_required_checks,
 )
 from project_setup import javascript_manager
+from test_greenfield import PROJECT, uv_project
 from test_setup import repository
 
 
@@ -200,3 +201,16 @@ def test_a_package_with_no_group_names_the_rerun(tmp_path: Path) -> None:
             tmp_path, {"packages": [], "shared": []}, {("web", "javascript")}
         )
     assert str(caught.value).endswith(": web; rerun setup to add its group")
+
+
+def test_the_moved_source_message_names_the_replace_step(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    uv_project(tmp_path, PROJECT)
+    (tmp_path / "main.py").write_text("value = 1\n")
+    config = installer.gate_config(tmp_path)
+    validate_required_checks(tmp_path, config)
+    (tmp_path / "main.py").rename(tmp_path / "moved.py")
+    with pytest.raises(ValueError, match="outside its sources: moved.py;") as refused:
+        validate_required_checks(tmp_path, config)
+    assert "replace its old name in that list" in str(refused.value)

@@ -150,7 +150,7 @@ def require_listed_sources(
                 "dart": f"move each under lib/ (for example {first} to lib/{first}) and test it there. Or {add}. Tests must then cover that code, and those tests need `test` as a dev dependency and a setup rerun. {tests}",
             }[language]
             raise ValueError(
-                f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; {steps}"
+                f"{group['path']}: {label} code is outside its sources: {', '.join(missing)}; {steps.rstrip('.')}. If a file moved, replace its old name in that list"
             )
 
 
