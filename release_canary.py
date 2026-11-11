@@ -661,14 +661,14 @@ def ci_jobs(label: str) -> list[str]:
 
 
 def unproven(revision: str) -> list[str]:
-    """New projects without a passing public CI job on each system for this revision; the newest try counts."""
-    passed = {
-        name
-        for name, conclusion in new_project_runs(revision)
-        if conclusion == "success"
-    }
+    """New projects without a passing public CI job on each system for this revision; each listed run of a job must pass."""
+    passed: dict[str, bool] = {}
+    for name, conclusion in new_project_runs(revision):
+        passed[name] = passed.get(name, True) and conclusion == "success"
     labels = [folder(" ".join(target)) for target in CI_TARGETS]
-    return [label for label in labels if not passed.issuperset(ci_jobs(label))]
+    return [
+        label for label in labels if not all(passed.get(job) for job in ci_jobs(label))
+    ]
 
 
 def ci_failures(revision: str) -> list[str]:
