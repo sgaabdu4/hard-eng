@@ -78,8 +78,10 @@ def run_hard_eng(
 
 def snapshot_environment(root: Path) -> dict[str, str]:
     environment = os.environ.copy()
+    kept = {"GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT"}
     for name in git(root, "rev-parse", "--local-env-vars").splitlines():
-        environment.pop(name, None)
+        if name not in kept:
+            environment.pop(name, None)
     return environment
 
 

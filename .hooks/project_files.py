@@ -109,10 +109,10 @@ def group_locks(root: Path, groups: Iterable["Group"]) -> Generator[Path]:
 def refuse_ignored_locks(
     root: Path, locks: Iterable[Path], listed: Container[str], *, ask_git: bool
 ) -> None:
-    """A lock file that Git ignores is missing from a fresh clone; ask Git when the file is not on disk yet."""
+    """A lock file that Git ignores is missing from a fresh clone; ask Git when the file is not on disk yet or is a link at setup."""
     for lockfile in locks:
         relative = lockfile.relative_to(root)
-        written = lockfile.is_file()
+        written = lockfile.is_file() and not (ask_git and lockfile.is_symlink())
         if written:
             ignored = str(relative) not in listed
         else:

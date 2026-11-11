@@ -149,6 +149,25 @@ def test_prepare_checkout_fetches_when_main_has_no_submodule(
     _assert_pinned(_prepare(fresh, tmp_path), module_remote)
 
 
+@pytest.mark.parametrize("form", ["count", "parameters"])
+def test_the_push_snapshot_fetches_a_submodule_with_the_git_settings_of_the_push(
+    nested_project: tuple[Path, Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    form: str,
+) -> None:
+    root, _, module_remote = nested_project
+    fresh = tmp_path / "fresh"
+    _git(tmp_path, "clone", "-q", str(root), str(fresh))
+    if form == "count":
+        monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+        monkeypatch.setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+        monkeypatch.setenv("GIT_CONFIG_VALUE_0", "always")
+    else:
+        monkeypatch.setenv("GIT_CONFIG_PARAMETERS", "'protocol.file.allow=always'")
+    _assert_pinned(_prepare(fresh, tmp_path), module_remote)
+
+
 def test_previous_revision_tree_takes_its_submodules_from_the_current_tree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
