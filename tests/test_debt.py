@@ -558,6 +558,67 @@ def test_a_changed_source_line_in_a_code_frame_is_no_new_finding(
     assert debt.judge(repository, LINT_GROUP, LINT, True, after_fix) is False
 
 
+RUFF: Gate = {"name": "annotations", "role": "lint", "command": ["ruff", "check"]}
+RUFF_GROUP: Group = {"path": ".", "checks": [RUFF]}
+NO_FIX = """ANN201 Missing return type annotation for public function `greeting`
+ --> main.py:5:5
+  |
+5 | def greeting(name):
+  |     ^^^^^^^^
+6 |     return "Hello from " + name + "!"
+  |
+help: Add return type annotation
+
+Found 1 error.
+"""
+WITH_FIX = """ANN201 Missing return type annotation for public function `greeting`
+  --> main.py:10:5
+   |
+10 | def greeting(name):
+   |     ^^^^^^^^
+11 |     return f"Hello from {name}!"
+   |
+help: Add return type annotation: `str`
+   |
+9  |
+   - def greeting(name):
+10 + def greeting(name) -> str:
+11 |     return f"Hello from {name}!"
+   |
+note: This is an unsafe fix and may change runtime behavior
+
+Found 1 error.
+1 unsafe fix available with `--fix --unsafe-fixes`.
+"""
+
+
+@pytest.mark.parametrize(("recorded", "now"), [(NO_FIX, WITH_FIX), (WITH_FIX, NO_FIX)])
+def test_a_fix_hint_that_ruff_adds_or_drops_for_an_old_finding_is_no_change(
+    repository: Path, capsys: pytest.CaptureFixture[str], recorded: str, now: str
+) -> None:
+    """An edit near an old finding changes what Ruff can fix, not what it found."""
+    failed = {"./annotations"}
+    outputs = {"./annotations": recorded}
+    assert debt.record(repository, [RUFF_GROUP], failed, outputs) == 0
+    capsys.readouterr()
+    assert debt.judge(repository, RUFF_GROUP, RUFF, True, now) is False
+    assert "no new finding" in capsys.readouterr().out
+    second = now.replace("Found 1 error.", NO_FIX.replace("greeting", "total"), 1)
+    assert debt.judge(repository, RUFF_GROUP, RUFF, True, second) is True
+    printed = capsys.readouterr().out
+    assert "findings beyond" in printed and "`total`" in printed
+
+
+def test_a_list_line_of_another_tool_is_still_a_finding(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recorded = {"./lint": "- unused file a.ts\n"}
+    assert debt.record(repository, [LINT_GROUP], {"./lint"}, recorded) == 0
+    now = "- unused file a.ts\n- unused file b.ts\n"
+    assert debt.judge(repository, LINT_GROUP, LINT, True, now) is True
+    assert "- unused file b.ts" in capsys.readouterr().out
+
+
 def test_a_debt_file_recorded_with_link_codes_still_matches(repository: Path) -> None:
     (repository / debt.DEBT_FILE).write_text(
         (SAMPLES / "biome-recorded-by-base.json").read_text()
