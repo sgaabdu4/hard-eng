@@ -254,18 +254,18 @@ def test_fallow_config_setup_cannot_edit_names_the_line_to_add(
         ),
         (
             "biome.json",
-            '{"overrides": [{"includes": ["a.ts"]}], "files": {"includes": ["**"]}}',
+            '{"overrides": [{"includes": ["a"]}], "files": {"includes": ["**"]}}',
             {
-                "overrides": [{"includes": ["a.ts"]}],
+                "overrides": [{"includes": ["a"]}],
                 "files": {"includes": ["**", "!.hooks"]},
             },
         ),
         (
             "biome.json",
-            '{"overrides": [{"includes": ["a.ts"]}], "linter": {"includes": ["x"]}}',
+            '{"overrides": [{"includes": ["a"]}], "linter": {"includes": ["x"]}}',
             {
                 "files": {"includes": ["**", "!.hooks"]},
-                "overrides": [{"includes": ["a.ts"]}],
+                "overrides": [{"includes": ["a"]}],
                 "linter": {"includes": ["x"]},
             },
         ),
@@ -310,6 +310,62 @@ def test_setup_adds_the_biome_entry_when_no_typescript_package_is_at_the_root(
     includes = jsonc_config("biome.json", changes["biome.json"])["files"]
     assert isinstance(includes, dict)
     assert includes["includes"] == ["**", "!.hooks"]
+
+
+LONG = "a" * 50
+LISTED = '"includes": ["**", "!.hooks"]'
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (
+            '{\n  "files": {\n    "ignoreUnknown": false\n  }\n}\n',
+            f'{{\n  "files": {{\n    {LISTED},\n    "ignoreUnknown": false\n  }}\n}}\n',
+        ),
+        (
+            '{\n\t"files": {\n\t\t"ignoreUnknown": false\n\t}\n}\n',
+            f'{{\n\t"files": {{\n\t\t{LISTED},\n\t\t"ignoreUnknown": false\n\t}}\n}}\n',
+        ),
+        (
+            '{\n  "linter": {\n    "enabled": true\n  }\n}\n',
+            f'{{\n  "files": {{ {LISTED} }},\n  "linter": {{\n    "enabled": true\n  }}\n}}\n',
+        ),
+        (
+            '{\n\t"linter": {\n\t\t"enabled": true\n\t}\n}\n',
+            f'{{\n\t"files": {{ {LISTED} }},\n\t"linter": {{\n\t\t"enabled": true\n\t}}\n}}\n',
+        ),
+        ("{}\n", f'{{ "files": {{ {LISTED} }} }}\n'),
+        ('{\n  "files": {}\n}\n', f'{{\n  "files": {{ {LISTED} }}\n}}\n'),
+        (
+            '{\n  "files": {\n    "includes": [\n      "**",\n      "!dist" // keep\n    ]\n  }\n}\n',
+            '{\n  "files": {\n    "includes": [\n      "**",\n      "!dist", // keep\n      "!.hooks"\n    ]\n  }\n}\n',
+        ),
+        (
+            f'{{\n\t"files": {{\n\t\t"includes": [\n\t\t\t"**",\n\t\t\t"!{LONG}",\n\t\t\t"!dist"\n\t\t]\n\t}}\n}}\n',
+            f'{{\n\t"files": {{\n\t\t"includes": [\n\t\t\t"**",\n\t\t\t"!{LONG}",\n\t\t\t"!dist",\n\t\t\t"!.hooks"\n\t\t]\n\t}}\n}}\n',
+        ),
+        (
+            f'{{\n  "files": {{\n    "includes": ["**", "!{LONG}"]\n  }}\n}}\n',
+            f'{{\n  "files": {{\n    "includes": [\n      "**",\n      "!{LONG}",\n      "!.hooks"\n    ]\n  }}\n}}\n',
+        ),
+        (
+            f'{{\n\t"files": {{\n\t\t"includes": ["**", "!{LONG}"]\n\t}}\n}}\n',
+            f'{{\n\t"files": {{\n\t\t"includes": [\n\t\t\t"**",\n\t\t\t"!{LONG}",\n\t\t\t"!.hooks"\n\t\t]\n\t}}\n}}\n',
+        ),
+        (
+            f'{{\n  "formatter": {{ "lineWidth": 120 }},\n  "files": {{\n    "includes": ["**", "!{LONG}"]\n  }}\n}}\n',
+            f'{{\n  "formatter": {{ "lineWidth": 120 }},\n  "files": {{\n    "includes": ["**", "!{LONG}", "!.hooks"]\n  }}\n}}\n',
+        ),
+    ],
+)
+def test_the_biome_edit_leaves_the_layout_that_the_biome_formatter_writes(
+    tmp_path: Path, before: str, after: str
+) -> None:
+    (tmp_path / "biome.json").write_text(before)
+    changes: dict[str, str] = {}
+    biome_ignores_hooks(tmp_path, changes)
+    assert changes["biome.json"] == after
 
 
 def test_setup_leaves_a_project_without_biome_settings_alone(tmp_path: Path) -> None:
