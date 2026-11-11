@@ -242,6 +242,25 @@ def test_the_strict_pyrefly_refusal_names_the_file_and_the_lines(
     assert "preset" not in text
 
 
+def test_the_strict_pyrefly_rule_refuses_permissive_ignores(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    project = '[project]\nname = "cli"\nversion = "1"\n'
+    directory = pyrefly_package(
+        tmp_path,
+        {
+            "pyproject.toml": project
+            + '[tool.pyrefly]\npreset = "strict"\npermissive-ignores = true\n'
+        },
+    )
+    with pytest.raises(ValueError, match="permissive-ignores"):
+        runner.validate_typing(directory, "python")
+    (directory / "pyproject.toml").write_text(
+        project + '[tool.pyrefly]\npreset = "strict"\npermissive-ignores = false\n'
+    )
+    runner.validate_typing(directory, "python")
+
+
 @pytest.mark.parametrize(
     ("setting", "key"),
     [
