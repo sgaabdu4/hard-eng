@@ -596,3 +596,46 @@ def test_a_rule_label_may_carry_its_marker(
     path = tmp_path / "PLAN.md"
     path.write_text(visual_plan.replace("- Least effort: Pass — 4 clicks", marked))
     assert validate_plan(path) == "Complete"
+
+
+def test_a_ready_plan_with_a_passed_ux_record_needs_rules(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    path = tmp_path / "PLAN.md"
+    path.write_text(
+        visual_plan.replace(ux_rules_block(), "").replace(
+            "Status: Complete", "Status: Ready"
+        )
+    )
+    with pytest.raises(ValueError, match="UX Rules is missing"):
+        validate_plan(path)
+
+
+def test_a_draft_approval_plan_with_a_passed_ux_record_needs_rules(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / "PLAN.md").write_text(
+        draft_plan(
+            visual_plan.replace(ux_rules_block(), ""),
+            "Approval",
+            "None",
+            pending_ux=False,
+        )
+    )
+    notice, unfinished = plans.planning_feedback(root, {"PLAN.md"})
+    assert unfinished and "UX Rules is missing" in notice
+
+
+def test_the_rule_labels_are_read_from_the_reference_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = (SOURCE / plans.UX_REFERENCE).read_text()
+    last = "  - Performance:"
+    assert last in text
+    copy = tmp_path / "ux.md"
+    copy.write_text(text.replace(last, "  - Extra: one more rule.\n" + last, 1))
+    monkeypatch.setattr(plans, "UX_REFERENCE", str(copy))
+    labels = [label for label, _ in usability_rules()]
+    assert len(labels) == 14 and "Extra" in labels
