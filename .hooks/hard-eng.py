@@ -69,7 +69,7 @@ from gate_config import (
 )
 from project_setup import package_script_arguments as test_arguments
 from project_setup import validate_dart_exclusions
-from python_setup import pytest_options
+from python_setup import pytest_options, require_import_contract
 from tool_setup import managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -397,6 +397,7 @@ def prepare_command(
             expected = production_files(directory, group)
             validate_typescript(ROOT, command, directory, expected, timeout)
     validate_dart_boundaries(command, ROOT / group["path"], timeout)
+    require_import_contract(ROOT / group["path"], group, gate)
     return command
 
 

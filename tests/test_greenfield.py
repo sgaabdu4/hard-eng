@@ -507,10 +507,12 @@ def test_a_python_root_with_no_import_contract_fails_the_check(
     add_package(tmp_path, "inventory", layout)
     if not layout:
         group["sources"].append("inventory")
-    with pytest.raises(ValueError, match="no import contract for inventory") as second:
-        validate_required_checks(tmp_path, config)
-    message = str(second.value)
-    assert message.startswith(".: pyproject.toml has no import contract")
+    validate_required_checks(tmp_path, config)
+    assert runner.run_gate(group, gate, 300, threading.Lock()) is True
+    refusal = capsys.readouterr().out
+    start = "FAIL imports: .: pyproject.toml has no import contract for inventory"
+    assert start in refusal
+    message = refusal[refusal.index(start) : refusal.index("; elapsed")]
     roots = re.search(r"root_packages = (\[.*?\])", message)
     assert roots
     text = project.read_text()
@@ -521,9 +523,8 @@ def test_a_python_root_with_no_import_contract_fails_the_check(
         + "\n"
         + message[message.index("[[tool.importlinter.contracts]]") :]
     )
-    validate_required_checks(tmp_path, config)
     base = tmp_path / layout / "inventory"
     (base / "a.py").write_text("from inventory import b\n")
     (base / "b.py").write_text("from inventory import a\n")
     assert runner.run_gate(group, gate, 300, threading.Lock()) is True
-    assert "FAIL imports" in capsys.readouterr().out
+    assert "FAIL imports (exit" in capsys.readouterr().out
