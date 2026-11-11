@@ -82,7 +82,8 @@ def _branch_change(root: Path, point: str) -> tuple[list[str], list[str], list[s
 
 def _counted_lines(counts: list[str], names: set[str]) -> tuple[int, list[str]] | str:
     """Changed lines, the test files that lose lines, or the first reason a file needs a plan."""
-    total, losing = 0, []
+    total = 0
+    losing: list[str] = []
     for entry in filter(None, counts):
         added, removed, name = entry.split("\t", 2)
         if name not in names:
