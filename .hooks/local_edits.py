@@ -39,6 +39,7 @@ def merge_local_edits(name: str, target: Path, old: Path, content: str) -> str:
         merged = subprocess.run(
             [
                 "git",
+                *("-c", "merge.conflictStyle=merge"),
                 "merge-file",
                 "-p",
                 *("-L", "local lines", "-L", "installed lines", "-L", "update lines"),
