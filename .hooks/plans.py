@@ -310,6 +310,36 @@ def draft_handoff(sections: dict[str, str]) -> tuple[str | None, str | None, lis
     return handoff, blockers, errors
 
 
+def _draft_errors(content: str) -> tuple[list[str], bool]:
+    """What stops a Draft plan, and whether that leaves it unfinished."""
+    try:
+        sections = plan_sections(content, allow_placeholders=True)
+        handoff, blockers, errors = draft_handoff(sections)
+        if handoff == "Approval":
+            try:
+                plan_sections(content)
+            except ValueError as error:
+                errors.append(str(error))
+            errors.extend(readiness_errors(sections))
+        if not errors and handoff == "Clarification":
+            return [f"waiting for: {blockers}"], False
+        if errors:
+            return errors, True
+        errors = ["approval handoff prepared; authorization remains outside this plan"]
+        if blockers and not no_blockers(blockers):
+            errors.append(f"decisions to resolve: {blockers}")
+        return errors, False
+    except ValueError as error:
+        return [str(error)], True
+
+
+def _held_by_base(root: Path, path: Path) -> bool:
+    """Whether the branch left this plan as the base holds it."""
+    from change_size import released_plans
+
+    return str(path.relative_to(root)) not in released_plans(root, None)
+
+
 def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
     paths = plan_files(root)
     selected = [path for path in paths if str(path.relative_to(root)) in changed]
@@ -319,28 +349,10 @@ def planning_feedback(root: Path, changed: set[str]) -> tuple[str, bool]:
         content = path.read_text()
         if plan_status(content) != "Draft":
             continue
-        try:
-            sections = plan_sections(content, allow_placeholders=True)
-            handoff, blockers, errors = draft_handoff(sections)
-            if handoff == "Approval":
-                try:
-                    plan_sections(content)
-                except ValueError as error:
-                    errors.append(str(error))
-                errors.extend(readiness_errors(sections))
-            if not errors and handoff == "Clarification":
-                errors = [f"waiting for: {blockers}"]
-            elif not errors and handoff == "Approval":
-                errors = [
-                    "approval handoff prepared; authorization remains outside this plan"
-                ]
-                if blockers and not no_blockers(blockers):
-                    errors.append(f"decisions to resolve: {blockers}")
-            else:
-                unfinished = True
-        except ValueError as error:
-            errors = [str(error)]
-            unfinished = True
+        errors, stuck = _draft_errors(content)
+        if stuck and not selected and _held_by_base(root, path):
+            continue
+        unfinished |= stuck
         messages.append(f"{path.relative_to(root)}: " + "; ".join(errors))
     notice = (
         "Hard Eng: Planning incomplete — " + " | ".join(messages) if messages else ""
