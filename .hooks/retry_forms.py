@@ -8,19 +8,44 @@ from plans import _is_test
 
 NONZERO = r"(?!\s*(?:0|false|null)\b)\s*\S"
 COUNT = r"\s*[1-9]\d*\s*(?:[,})]|$)"
+NAME = r"(?<![\w.$])(?!(?:%s)\b)[\w$]+(?:\.[\w$]+)*"
+CLOSED = r"\([^()]*\)"
+for _depth in range(3):
+    CLOSED = r"\((?:[^()]|" + CLOSED + r")*\)"
+
+
+def outside_calls(runners: str) -> str:
+    """Text where every call of a non-runner name is closed before the end of the text."""
+    name = NAME % runners
+    return r"(?:" + name + CLOSED + r"|(?!" + name + r"\().)*"
+
+
+JS_PLAIN = outside_calls("test|it|describe|bench|suite")
+JS_LEAD = "^" + JS_PLAIN
+DART_LEAD = "^" + outside_calls("test|testWidgets|group")
+JS_KEY = r"(retry:|retries:)"
 JS_TEST = re.compile(
     r"(jest\.retryTimes\()|\bconfigure\(\s*\{[^}\n]*?(retries:)"
     + COUNT
-    + r"|\b(?:test|it|describe|bench|suite)\b[^\n]*\{\s*(retry:)"
+    + "|"
+    + JS_LEAD
+    + r"\b(?:test|it|describe|bench|suite)\b"
+    + JS_PLAIN
+    + r"\{\s*"
+    + JS_KEY
     + COUNT
-    + r"|[})]\s*,\s*\{\s*(retry:)"
+    + "|"
+    + JS_LEAD
+    + r"[})]\s*,\s*\{\s*"
+    + JS_KEY
     + COUNT
-    + r"|^\s*\{\s*(retry:)"
+    + r"|^\s*\{\s*"
+    + JS_KEY
     + COUNT
 )
 JS_CONFIG = re.compile(r"(jest\.retryTimes\()|\b(retry:|retries:)" + NONZERO)
 PYTHON = re.compile(r"\b(mark\.flaky)\b|(@flaky)\b")
-DART_TEST = re.compile(r"(@Retry\()|\b(retry:)" + COUNT)
+DART_TEST = re.compile(r"(@Retry\()|" + DART_LEAD + r"\b(retry:)" + COUNT)
 PYTEST_SETTINGS = re.compile(
     r"(--force-reruns|--reruns)(?![ =]+0\b)|^\s*(reruns)\s*="
     + NONZERO

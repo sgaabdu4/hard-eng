@@ -3,6 +3,7 @@
 import json
 import re
 import subprocess
+import time
 from pathlib import Path
 from types import ModuleType
 
@@ -362,6 +363,16 @@ def test_a_class_mark_is_refused_only_when_the_class_holds_a_test(
     with pytest.raises(ValueError, match=OFF) as error:
         validate_suppressions(root, "HEAD")
     assert f"tests/doubles.py:{line} adds '__test__ " + "= False'" in str(error.value)
+
+
+@pytest.mark.parametrize("name", ["test/a_test.dart", "src/a.test.ts"])
+def test_a_long_line_of_open_brackets_ends_fast(name: str) -> None:
+    from retry_forms import retry_form
+
+    line = "test('x', " + "f(" * 1000 + ", re" + "try: 2)"
+    started = time.perf_counter()
+    retry_form(name, line)
+    assert time.perf_counter() - started < 1
 
 
 def test_names_close_to_a_skip_form_pass(tmp_path: Path) -> None:
