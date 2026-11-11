@@ -285,6 +285,20 @@ def test_integration_reminder_stops_once_existing_ci_runs_the_check(
     other.write_text(other.read_text().replace("pull_request", "workflow_dispatch"))
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
     assert "runs Hard Eng without --base" not in capsys.readouterr().err
+    other.unlink()
+    command = job.format("python3 .hooks/hard-eng.py check --base main")
+    for branches, filtered in (("[main]", True), ("[main, '**']", False)):
+        path.write_text(
+            command.replace(
+                "on: pull_request", f"on:\n  pull_request:\n    branches: {branches}"
+            )
+        )
+        configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
+        message = f"{name} runs Hard Eng only for PRs into main"
+        assert (message in capsys.readouterr().err) is filtered
+    path.write_text(command)
+    configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, {})
+    assert "only for PRs into" not in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
