@@ -608,12 +608,25 @@ def test_generated_sources_reads_paths_from_a_file_not_a_live_pipe(
     """Issue 375: writing paths into git's stdin while it wrote output deadlocked on macOS."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / ".gitattributes").write_text("*.g.dart linguist-generated=true\n")
-    spy = Mock(wraps=subprocess.check_output)
-    monkeypatch.setattr(subprocess, "check_output", spy)
+    spy = Mock(wraps=subprocess.run)
+    monkeypatch.setattr(subprocess, "run", spy)
     names = [f"lib/file_{index}{'.g' * (index % 2)}.dart" for index in range(5000)]
     assert generated_sources(tmp_path, names) == set(names[1::2])
     assert "input" not in spy.call_args.kwargs
     assert hasattr(spy.call_args.kwargs["stdin"], "fileno")
+
+
+def test_generated_sources_starts_one_git_process_in_a_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    names = ["lib/a.g.dart", "lib/b.dart"]
+    assert generated_sources(tmp_path, names) == set()
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitattributes").write_text("*.g.dart linguist-generated=true\n")
+    spy = Mock(wraps=subprocess.run)
+    monkeypatch.setattr(subprocess, "run", spy)
+    assert generated_sources(tmp_path, names) == {"lib/a.g.dart"}
+    assert spy.call_count == 1
 
 
 def test_the_missing_boundary_error_names_the_file_and_the_key(

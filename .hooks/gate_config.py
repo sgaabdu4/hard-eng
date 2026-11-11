@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
@@ -241,25 +242,30 @@ def typescript_packages(root: Path, files: list[Path]) -> set[str]:
 def generated_sources(root: Path, names: list[str]) -> set[str]:
     if not names:
         return set()
-    repository = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if repository.returncode:
-        return set()  # Standalone source directories have no Git attributes.
     # A live stdin pipe deadlocked against git's per-path output on macOS (issue 375).
     with tempfile.TemporaryFile() as paths:
         paths.write(("\0".join(names) + "\0").encode())
         paths.seek(0)
-        attributes = subprocess.check_output(
+        listed = subprocess.run(
             ["git", "check-attr", "-z", "--all", "--stdin"],
             cwd=root,
+            capture_output=True,
             text=True,
             stdin=paths,
-        ).split("\0")
+            check=False,
+        )
+    if listed.returncode:
+        repository = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
+        if repository.returncode:
+            return set()  # Standalone source directories have no Git attributes.
+        sys.stderr.write(listed.stderr)
+        listed.check_returncode()
+    attributes = listed.stdout.split("\0")
     return {
         name
         for name, key, value in zip(attributes[::3], attributes[1::3], attributes[2::3])
