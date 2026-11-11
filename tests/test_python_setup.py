@@ -4,10 +4,48 @@ import json
 from pathlib import Path
 from types import ModuleType
 
-from gate_config import Gate, GateConfig, parse_config
-from python_setup import import_configuration
+import pytest
+from gate_config import Gate, GateConfig, Group, parse_config
+from python_setup import import_configuration, import_contract_gap
 from reports import parallel_hint
 from test_setup import repository
+
+ONE_ROOT_INI = (
+    "[importlinter]\nroot_package = app\n\n[importlinter:contract:own]\nname = Own\n"
+    "type = acyclic_siblings\nancestors =\n    app\n    app.**\ndepth = 0\n"
+)
+ONE_ROOT_TOML = (
+    '[tool.importlinter]\nroot_package = "app"\n\n[[tool.importlinter.contracts]]\n'
+    'name = "Own"\ntype = "acyclic_siblings"\nancestors = ["app", "app.**"]\ndepth = 0\n'
+)
+
+
+@pytest.mark.parametrize(
+    ("name", "settings", "one_root"),
+    [
+        (".importlinter", ONE_ROOT_INI, "root_package = app"),
+        ("pyproject.toml", ONE_ROOT_TOML, 'root_package = "app"'),
+    ],
+)
+def test_the_import_contract_step_keeps_the_root_of_a_one_root_option(
+    tmp_path: Path, name: str, settings: str, one_root: str
+) -> None:
+    for root in ("app", "tools"):
+        (tmp_path / root).mkdir()
+        (tmp_path / root / "__init__.py").write_text("")
+        (tmp_path / root / "mod.py").write_text("value = 1\n")
+    owner = tmp_path / name
+    owner.write_text(settings)
+    group: Group = {"path": ".", "checks": [], "sources": ["app", "tools"]}
+    gap = import_contract_gap(tmp_path, group)
+    assert gap is not None
+    assert "has no import contract for tools, so" in gap
+    then = "\nThen add this contract:\n"
+    edit = gap[gap.index("root_packages =") : gap.index(then)]
+    block = gap[gap.index(then) + len(then) :]
+    owner.write_text(settings.replace(one_root, edit) + "\n" + block)
+    assert import_contract_gap(tmp_path, group) is None
+    assert "put this in place of the root_package line:" in gap
 
 
 def test_python_packages_receive_recursive_import_contract(

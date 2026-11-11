@@ -133,20 +133,19 @@ def import_linter_owner(
     return None
 
 
+def listed_roots(parser: configparser.ConfigParser) -> tuple[list[str], bool]:
+    """The roots that the settings list, and whether the one-root option lists them."""
+    one_root = not parser.has_option("importlinter", "root_packages")
+    option = "root_package" if one_root else "root_packages"
+    text = parser.get("importlinter", option, fallback="")
+    roots = [value.strip() for value in text.splitlines() if value.strip()]
+    return roots, one_root and bool(roots)
+
+
 def has_recursive_import_contract(
     parser: configparser.ConfigParser, roots: list[str]
 ) -> bool:
-    root_option = (
-        "root_packages"
-        if parser.has_option("importlinter", "root_packages")
-        else "root_package"
-    )
-    configured_roots = {
-        value.strip()
-        for value in parser.get("importlinter", root_option, fallback="").splitlines()
-        if value.strip()
-    }
-    if not set(roots).issubset(configured_roots):
+    if not set(roots).issubset(listed_roots(parser)[0]):
         return False
     contracts = [
         parser[section]
@@ -176,8 +175,8 @@ def toml_import_linter(table: object) -> configparser.ConfigParser:
 
     parser = configparser.ConfigParser(interpolation=None)
     settings = table if isinstance(table, dict) else {}
-    roots = settings.get("root_packages", settings.get("root_package", []))
-    parser["importlinter"] = {"root_packages": lines(roots)}
+    option = "root_packages" if "root_packages" in settings else "root_package"
+    parser["importlinter"] = {option: lines(settings.get(option, []))}
     contracts = settings.get("contracts")
     for index, contract in enumerate(contracts if isinstance(contracts, list) else []):
         if isinstance(contract, dict):
@@ -207,14 +206,9 @@ def import_contract_gap(directory: Path, package: Group) -> str | None:
         return None
     ancestors = [value for root in missing for value in (root, root + ".**")]
     name = "No sibling dependency cycles in " + ", ".join(missing)
-    kept = [
-        value.strip()
-        for value in parser.get(
-            "importlinter", "root_packages", fallback=""
-        ).splitlines()
-        if value.strip()
-    ]
+    kept, one_root = listed_roots(parser)
     listed = sorted({*kept, *missing})
+    how = "put this in place of the root_package line" if one_root else "set this"
     if kind == "toml":
         edit = "root_packages = " + json.dumps(listed)
         block = (
@@ -235,7 +229,7 @@ def import_contract_gap(directory: Path, package: Group) -> str | None:
     return (
         f"{owner.name} has no import contract for {', '.join(missing)}, so the imports "
         f"gate cannot find an import cycle there. In {Path(package['path'], owner.name)}, "
-        f"under [{table}], set this:\n{edit}\nThen add this contract:\n{block}"
+        f"under [{table}], {how}:\n{edit}\nThen add this contract:\n{block}"
     )
 
 
