@@ -494,7 +494,7 @@ def split_job(content: str, numbers: str) -> str | None:
         + CHECKS_HEADER
         + checks
         + "\n  tests:\n    name: hard-eng-tests ${{ matrix.shard }}\n"
-        + f"    strategy:\n      matrix:\n        shard: [{numbers}]\n"
+        + f"    strategy:\n      fail-fast: false\n      matrix:\n        shard: [{numbers}]\n"
         + tests
         + UPLOAD_STEP
         + "\n"
