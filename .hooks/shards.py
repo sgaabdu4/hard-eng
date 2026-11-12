@@ -21,9 +21,20 @@ COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
 KEPT = "coverage/shards"
 PROVEN = "proven.txt"
 RAN = "ran.txt"
-MOVED_OPTIONS = ("-c", "--config-file", "--cov-config", "--cov-precision")
+PYTEST_FILE = "Move those settings to a file that pytest reads with no option."
+COVERAGE_FILE = "a file that coverage.py reads with no option."
+MOVED_OPTIONS = {
+    "-c": PYTEST_FILE,
+    "--config-file": PYTEST_FILE,
+    "--cov-config": f"Move those settings to {COVERAGE_FILE}",
+    "--cov-precision": "Set precision in the settings file of coverage.py.",
+}
 OVERRIDE_OPTIONS = ("-o", "--override-ini")
-MOVED_VARIABLES = ("PYTEST_ADDOPTS", "COVERAGE_RCFILE")
+OVERRIDE_STEP = "Put those options in the tests command."
+MOVED_VARIABLES = {
+    "PYTEST_ADDOPTS": "Remove the variable and put its options in the tests command.",
+    "COVERAGE_RCFILE": f"Remove the variable and move its settings to {COVERAGE_FILE}",
+}
 SHORT_CONFIG = re.compile(r"-c(?!-)")
 CHECK_LINE = re.compile(r'(\.hooks/hard-eng\.py check --base "\$BASE_SHA")')
 JOB_NAME = re.compile(r"(?m)^  ([\w-]+):\n")
@@ -217,17 +228,15 @@ def override_given(arguments: list[str], index: int) -> tuple[str, str] | None:
     return None
 
 
-def moved_option(arguments: list[str]) -> str | None:
-    """The first option, as the refusal names it, that moves the pytest or coverage.py settings."""
+def moved_option(arguments: list[str]) -> tuple[str, str] | None:
+    """The first option that moves the pytest or coverage.py settings, as the refusal names it, with its step."""
     for index, argument in enumerate(arguments):
-        name = argument.partition("=")[0]
+        name = "-c" if SHORT_CONFIG.match(argument) else argument.partition("=")[0]
         if name in MOVED_OPTIONS:
-            return name
-        if SHORT_CONFIG.match(argument):
-            return "-c"
+            return name, MOVED_OPTIONS[name]
         override = override_given(arguments, index)
         if override and override[1].partition("=")[0] == "addopts":
-            return f"{override[0]} addopts"
+            return f"{override[0]} addopts", OVERRIDE_STEP
     return None
 
 
@@ -238,8 +247,8 @@ def require_default_settings(
     prefix = f"{group['path']}/{gate['name']}: "
     name, addopts = pytest_addopts(root / group["path"])
     gives = [
-        f"the environment sets {variable}"
-        for variable in MOVED_VARIABLES
+        (f"the environment sets {variable}", step)
+        for variable, step in MOVED_VARIABLES.items()
         if os.environ.get(variable)
     ]
     for arguments, place in (
@@ -247,15 +256,14 @@ def require_default_settings(
         (addopts, f"addopts in {name}"),
     ):
         if option := moved_option(arguments):
-            gives.append(f"{place} gives {option}")
+            gives.append((f"{place} gives {option[0]}", option[1]))
     if gives:
+        what, step = gives[0]
         raise ValueError(
-            f"{prefix}{gives[0]}, which moves the pytest or coverage.py settings. "
-            "The shard merge reads the settings from the tests command and from the "
-            "files that pytest and coverage.py read with no option, so it would "
-            "follow settings that it does not read. Put the value in the tests "
-            'command or in a default settings file, or remove "shards" from this '
-            "gate in hard-eng.gates.json."
+            f"{prefix}{what}, which moves the pytest or coverage.py settings. "
+            "The shard merge reads the settings only from the tests command and "
+            "from the files that pytest and coverage.py read with no option. "
+            f'{step} Or remove "shards" from this gate in hard-eng.gates.json.'
         )
 
 
