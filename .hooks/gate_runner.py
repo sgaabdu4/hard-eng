@@ -510,7 +510,14 @@ def run_limited_gate(
                 with output_lock:
                     print(f"OUTPUT {group['path']}/{gate['name']}", flush=True)
                     log.seek(0)
-                    sys.stdout.write(remember(group, gate, log.read()))
+                    text = log.read()
+                    if result is not None:
+                        from process_group import generated_files_note
+
+                        sys.stdout.write(
+                            generated_files_note(command, result.returncode, text)
+                        )
+                    sys.stdout.write(remember(group, gate, text))
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
         shard_reports(group, gate)
