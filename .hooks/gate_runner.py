@@ -373,6 +373,11 @@ def shard_command(
 ) -> tuple[list[str], Path | None]:
     """A shard gate runs its own files and skips the coverage minimum; others pass through."""
     if not gate.get("part"):
+        if gate.get("shards"):
+            from shards import require_default_settings, require_no_path
+
+            require_default_settings(ROOT, group, gate, command, variables=False)
+            require_no_path(ROOT, group, gate, command)
         return command, coverage
     from shards import part_command
 
