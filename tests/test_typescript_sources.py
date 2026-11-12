@@ -73,7 +73,12 @@ def write_files(root: Path, files: dict[str, str]) -> list[Path]:
 
 
 def refusal(root: Path, files: list[Path], listed: list[str]) -> str | None:
-    group: Group = {"path": ".", "language": "javascript", "sources": listed}
+    group: Group = {
+        "path": ".",
+        "language": "javascript",
+        "sources": listed,
+        "checks": [],
+    }
     try:
         require_listed_sources(root, [group], files, False)
     except ValueError as error:
