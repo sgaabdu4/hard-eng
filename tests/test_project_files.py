@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
+import project_files
 import pytest
 import yaml
 from conftest import SOURCE, gate, init
@@ -193,3 +194,13 @@ def test_a_setup_rerun_names_a_python_project_file_that_does_not_parse(
     text = '[project\nname = "x"\n'
     (project / "pyproject.toml").write_text(text)
     assert printed(install(project)).startswith(named("pyproject.toml", "TOML", text))
+
+
+def test_background_work_gives_its_answer_or_raises_its_error() -> None:
+    def broken() -> int:
+        raise OSError("no answer")
+
+    assert project_files.background(lambda: 7, (OSError,))() == 7
+    waiting = project_files.background(broken, (OSError,))
+    with pytest.raises(OSError, match="no answer"):
+        waiting()

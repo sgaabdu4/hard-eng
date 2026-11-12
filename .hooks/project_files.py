@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+import threading
 from collections.abc import Callable, Container, Generator, Iterable
 from contextlib import contextmanager
 from pathlib import Path
@@ -49,6 +50,31 @@ def keep[T](scope: str, key: tuple[str, ...], make: Callable[[], T]) -> T:
     if key not in store:
         store[key] = make()
     return cast(T, store[key])
+
+
+def background[T](
+    work: Callable[[], T], errors: tuple[type[Exception], ...]
+) -> Callable[[], T]:
+    """Start work on its own thread now; the returned call waits, then gives the answer or raises the named error that ended the work."""
+    done: list[T | Exception] = []
+
+    def run() -> None:
+        try:
+            done.append(work())
+        except errors as error:
+            done.append(error)
+
+    thread = threading.Thread(target=run)
+    thread.start()
+
+    def answer() -> T:
+        thread.join()
+        outcome = done[0] if done else OSError("background work stopped")
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    return answer
 
 
 def syntax_errors() -> tuple[type[Exception], ...]:

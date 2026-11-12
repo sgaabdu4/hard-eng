@@ -6,6 +6,7 @@ import re
 import signal
 import subprocess
 import sys
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
@@ -435,14 +436,20 @@ def session_state(root: Path, payload: JsonObject) -> Path | None:
     return root / ".hard-eng/sessions" / (identifier + ".json")
 
 
-def dirty_files(root: Path, base: str) -> dict[str, str]:
+def untracked(root: Path) -> list[str]:
+    return subprocess.check_output(
+        ["git", "ls-files", "-z", "--others", "--exclude-standard"], cwd=root, text=True
+    ).split("\0")
+
+
+def dirty_files(
+    root: Path, base: str, others: Callable[[], list[str]] | None = None
+) -> dict[str, str]:
     """Content hash of each file differing from base; absent files hash to ''."""
     names = subprocess.check_output(
         ["git", "diff", "--name-only", "-z", base, "--"], cwd=root, text=True
     ).split("\0")
-    names += subprocess.check_output(
-        ["git", "ls-files", "-z", "--others", "--exclude-standard"], cwd=root, text=True
-    ).split("\0")
+    names += others() if others else untracked(root)
     digests = dict.fromkeys(set(names) - {""}, "")
     for name in digests:
         if (root / name).is_file():
@@ -525,8 +532,15 @@ def record_session(root: Path, payload: JsonObject) -> bool:
 
 
 def session_context(root: Path, payload: JsonObject) -> str:
+    from project_files import background
     from update_runner import failed_update, start_update
 
+    failures = (OSError, ValueError, subprocess.SubprocessError)
+    gates, scan = background(lambda: gate_status(root), (*failures, TypeError)), None
+    if os.name == "posix":
+        from process_group import process_table, stop_idle_codex_brokers
+
+        scan = background(process_table, failures)
     recorded = record_session(root, payload)
     try:
         messages = [start_update(root)]
@@ -536,15 +550,11 @@ def session_context(root: Path, payload: JsonObject) -> str:
 
     if note := restore_note(root):
         messages.append(note)
-    if os.name == "posix":
-        from process_group import start_process_scan, stop_idle_codex_brokers
-
-        scan = start_process_scan()
-    messages.append(gate_status(root))
-    if os.name == "posix":
+    messages.append(gates())
+    if scan is not None:
         try:
             brokers, processes = stop_idle_codex_brokers(scan())
-        except (OSError, ValueError, subprocess.SubprocessError) as error:
+        except failures as error:
             messages.append(f"Idle Codex broker cleanup failed: {error}")
             brokers = processes = 0
         if brokers:
@@ -812,6 +822,7 @@ def paused_turn(payload: JsonObject) -> JsonObject | None:
 
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
     from plans import planning_feedback, planning_only
+    from project_files import background
 
     if (paused := paused_turn(payload)) is not None:
         return paused
@@ -819,13 +830,16 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
     recorded = state is not None and state.exists()
     base, before = saved_session(state)
     try:
+        others = background(
+            lambda: untracked(root), (OSError, subprocess.SubprocessError)
+        )
         base = subprocess.check_output(
             ["git", "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}"],
             cwd=root,
             text=True,
         ).strip()
         base = session_scope(root, base)
-        current = dirty_files(root, base)
+        current = dirty_files(root, base, others)
         changed = "".join(
             f"{name}\n"
             for name, digest in current.items()

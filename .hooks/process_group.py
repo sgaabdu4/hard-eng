@@ -7,7 +7,7 @@ import re
 import signal
 import subprocess
 import threading
-from collections.abc import Callable, Generator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import IO, NamedTuple
@@ -134,28 +134,6 @@ def process_table() -> list[Process]:
         pid, parent, command = (line.split(None, 2) + [""])[:3]
         rows.append(Process(int(pid), int(parent), command))
     return rows
-
-
-def start_process_scan() -> Callable[[], list[Process]]:
-    found: list[list[Process] | Exception] = []
-
-    def scan() -> None:
-        try:
-            found.append(process_table())
-        except (OSError, ValueError, subprocess.SubprocessError) as error:
-            found.append(error)
-
-    thread = threading.Thread(target=scan)
-    thread.start()
-
-    def result() -> list[Process]:
-        thread.join()
-        outcome = found[0] if found else OSError("process scan stopped")
-        if isinstance(outcome, Exception):
-            raise outcome
-        return outcome
-
-    return result
 
 
 def state_path(root: Path, name: str) -> Path:
