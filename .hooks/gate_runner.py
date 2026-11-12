@@ -324,8 +324,12 @@ def changed_dart_pass(
     groups: list[Group] | None,
 ) -> bool:
     """A quick check passes the Dart analysis on its changed files alone; a finding there leaves the verdict, and each record, to the package run."""
+    from gate_schedule import DART_ANALYSIS
+
+    if gate["command"] not in DART_ANALYSIS:
+        return False
     started = time.monotonic()
-    first: Gate = {**gate, "command": [*gate["command"][:3], *files]}
+    first: Gate = {**gate, "command": [*DART_ANALYSIS[0], *files]}
     try:
         command = prepare_command(group, first, timeout, groups)
         with tempfile.TemporaryFile(mode="w+") as log:
@@ -339,7 +343,7 @@ def changed_dart_pass(
         passed = False
     if not passed:
         print(
-            f"Dart analysis of the changed files @ {group['path']} gave a finding; "
+            f"Dart analysis of the changed files @ {group['path']} did not pass; "
             "the package analysis decides.",
             flush=True,
         )
