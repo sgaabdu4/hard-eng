@@ -455,20 +455,7 @@ rules:
   - id: await-in-loop-python
     languages:
       - python
-    paths:
-      exclude:
-        - .agents/
-        - test/
-        - tests/
-        - __tests__/
-        - "*Tests/"
-        - test_*.py
-        - "*_test.py"
-        - conftest.py
-        - "*.test.*"
-        - "*.spec.*"
-        - "*_test.dart"
-        - "*Tests.swift"
+    paths: *paths
     severity: ERROR
     message:
       "This loop awaits work inside each pass. Independent work: use the bounded-concurrency helper map_with_concurrency. Ordered work: use in_order
@@ -2361,20 +2348,7 @@ rules:
     languages:
       - javascript
       - typescript
-    paths:
-      exclude:
-        - .agents/
-        - test/
-        - tests/
-        - __tests__/
-        - "*Tests/"
-        - test_*.py
-        - "*_test.py"
-        - conftest.py
-        - "*.test.*"
-        - "*.spec.*"
-        - "*_test.dart"
-        - "*Tests.swift"
+    paths: *paths
     severity: ERROR
     message:
       "This loop awaits work inside each pass. Independent work: use the bounded-concurrency helper mapLimit. Ordered work: use inOrder or inOrderSteps
@@ -3939,20 +3913,7 @@ rules:
     message:
       Each loop pass waits for the last one. Start independent calls together with Future.wait. A loop passes when it stops early (break or return),
       reads a value it updates in its condition, or sleeps on purpose.
-    paths:
-      exclude:
-        - .agents/
-        - test/
-        - tests/
-        - __tests__/
-        - "*Tests/"
-        - test_*.py
-        - "*_test.py"
-        - conftest.py
-        - "*.test.*"
-        - "*.spec.*"
-        - "*_test.dart"
-        - "*Tests.swift"
+    paths: *paths
     patterns:
       - pattern-either:
           - patterns:
@@ -5418,20 +5379,7 @@ rules:
   - id: await-in-loop-swift
     languages:
       - swift
-    paths:
-      exclude:
-        - .agents/
-        - test/
-        - tests/
-        - __tests__/
-        - "*Tests/"
-        - test_*.py
-        - "*_test.py"
-        - conftest.py
-        - "*.test.*"
-        - "*.spec.*"
-        - "*_test.dart"
-        - "*Tests.swift"
+    paths: *paths
     severity: ERROR
     message:
       "This loop awaits work inside each pass. Independent work: use the bounded-concurrency helper mapWithConcurrency. Ordered work: use inOrder or
