@@ -87,6 +87,7 @@ def test_the_tool_directory_step_done_as_printed_leaves_no_note_and_no_pending_c
     assert "ci.yml:6 sets MISE_DATA_DIR from" in errors
     step = 'echo "MISE_DATA_DIR=${MISE_DATA_DIR:-$RUNNER_TEMP/hard-eng-tools/...}"'
     assert f'whose `run: |` block holds {step} >> "$GITHUB_ENV";' in errors
+    assert "then remove an `env:` key that has no lines left;" in errors
     done = step.replace("...", "mise/data") + ' >> "$GITHUB_ENV"'
     block = f"      - run: |\n          {done}\n"
     after = workflow("ubuntu-latest", f"{block}      - run: true\n")

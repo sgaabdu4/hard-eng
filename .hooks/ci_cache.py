@@ -43,6 +43,7 @@ def tool_directory_messages(relative: str, text: str) -> list[str]:
         f"{sets} {', '.join(names)} from the runner temp folder, so a runner that "
         "exports its own value is ignored and every run downloads the tools again. "
         f'Replace {lines} with a step whose `run: |` block holds {step} >> "$GITHUB_ENV"; '
+        "then remove an `env:` key that has no lines left; "
         "a job env mapping cannot read the runner's value."
     )
     return [message]
