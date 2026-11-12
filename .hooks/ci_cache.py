@@ -42,7 +42,7 @@ def tool_directory_messages(relative: str, text: str) -> list[str]:
         f"CI tool directories: {relative}:{','.join(number for number, _ in found)} "
         f"{sets} {', '.join(names)} from the runner temp folder, so a runner that "
         "exports its own value is ignored and every run downloads the tools again. "
-        f'Replace {lines} with a step that runs {step} >> "$GITHUB_ENV"; '
+        f'Replace {lines} with a step whose `run: |` block holds {step} >> "$GITHUB_ENV"; '
         "a job env mapping cannot read the runner's value."
     )
     return [message]
