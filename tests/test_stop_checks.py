@@ -53,6 +53,23 @@ def test_a_stop_lists_the_untracked_files_while_it_finds_the_session_base(
     assert "no code checks run" in str(agent_hooks.completion(repository, payload))
 
 
+def test_a_stop_gives_the_reason_when_the_listing_of_untracked_files_fails(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    payload: JsonObject = {"session_id": "reason"}
+    monkeypatch.setattr(process_group, "process_table", list)
+    agent_hooks.session_context(repository, payload)
+
+    def listed(_root: Path) -> list[str]:
+        return [b"caf\xe9.txt".decode()]
+
+    monkeypatch.setattr(agent_hooks, "untracked", listed)
+    blocked = agent_hooks.completion(repository, payload)
+    assert blocked["decision"] == "block"
+    assert "can't decode byte 0xe9" in str(blocked["reason"])
+
+
 def test_unchanged_turn_after_a_passing_check_does_not_rerun_it(
     repository: Path,
 ) -> None:

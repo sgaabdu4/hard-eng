@@ -829,10 +829,9 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
     state = session_state(root, payload)
     recorded = state is not None and state.exists()
     base, before = saved_session(state)
+    failures = (OSError, ValueError, TypeError, subprocess.SubprocessError)
     try:
-        others = background(
-            lambda: untracked(root), (OSError, subprocess.SubprocessError)
-        )
+        others = background(lambda: untracked(root), failures)
         base = subprocess.check_output(
             ["git", "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}"],
             cwd=root,
@@ -863,7 +862,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
         return checked_changes(
             root, payload, state, agent, (base, current, changed, notice)
         )
-    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+    except failures as error:
         return {
             "decision": "block",
             "reason": f"Verification could not run: {error}. Report it; repair only within the authorized task. No new authority.",
