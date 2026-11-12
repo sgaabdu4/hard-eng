@@ -1,6 +1,6 @@
 # Split the CI tests over shard jobs, and fix three canary faults
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -15,6 +15,7 @@ Non-goals:
 - Fewer runners on a reused push. Each job still starts and prints the reuse line.
 - A copy check of JavaScript, Dart and Swift test files: a later plan. The tools skip test files by default, and an update would fail on old copies.
 - One Git start in place of two in the config load: a later plan.
+- The hook script as a small launcher for a cached module: the next plan. Python compiles the script on each run, in 2.9 ms.
 
 ## Repository context
 
@@ -48,208 +49,208 @@ Constraints: the limit is 1,000 lines for each file. After the last slice, `.hoo
 
 Slice 1, the Dart move (`.hooks/gate_config.py`, `.hooks/dart_boundaries.py`, `setup.py`):
 
-- [ ] The two Dart settings checks are in `.hooks/dart_boundaries.py` → N/A — a move; the proof is that the Dart tests pass with only import lines changed
+- [x] The two Dart settings checks are in `.hooks/dart_boundaries.py` → N/A — a move; the proof is that the Dart tests pass with only import lines changed
 
 Slice 2, the `shards` field (`.hooks/gate_config.py`):
 
-- [ ] A tests gate accepts a whole number from 2 to 16 and refuses each other value → `tests/test_shards.py::test_shards_is_a_whole_number_from_2_to_16_on_a_tests_gate`
-- [ ] A Stop check with shards set loads no shard module → `tests/test_gate_speed.py::test_stop_with_shards_set_loads_no_shard_module`
+- [x] A tests gate accepts a whole number from 2 to 16 and refuses each other value → `tests/test_shards.py::test_shards_is_a_whole_number_from_2_to_16_on_a_tests_gate`
+- [x] A Stop check with shards set loads no shard module → `tests/test_gate_speed.py::test_stop_with_shards_set_loads_no_shard_module`
 
 Slice 3, the `--shard` flag (`.hooks/ci_jobs.py`, `.hooks/hard-eng.py`, `.hooks/shards.py`):
 
-- [ ] The flag takes a shard number, `rest` or `merge`, and refuses other values → `tests/test_shards.py::test_the_shard_flag_takes_a_number_rest_or_merge`
-- [ ] `rest` drops only the tests gates that have shards → `tests/test_shards.py::test_rest_drops_only_the_tests_gates_that_have_shards`
-- [ ] A numbered shard keeps its tests gate and the installs above it → `tests/test_shards.py::test_a_shard_keeps_its_tests_gate_and_the_installs_above_it`
-- [ ] A gate with fewer shards runs nothing in a higher shard → `tests/test_shards.py::test_a_gate_with_fewer_shards_runs_nothing_in_a_higher_shard`
-- [ ] With no shards, `rest` runs every gate and a numbered shard runs none → `tests/test_shards.py::test_without_shards_rest_runs_every_gate_and_a_shard_runs_none`
-- [ ] Shards need a command that runs pytest directly → `tests/test_shards.py::test_shards_need_a_direct_pytest_command`
+- [x] The flag takes a shard number, `rest` or `merge`, and refuses other values → `tests/test_shards.py::test_the_shard_flag_takes_a_number_rest_or_merge`
+- [x] `rest` drops only the tests gates that have shards → `tests/test_shards.py::test_rest_drops_only_the_tests_gates_that_have_shards`
+- [x] A numbered shard keeps its tests gate and the installs above it → `tests/test_shards.py::test_a_shard_keeps_its_tests_gate_and_the_installs_above_it`
+- [x] A gate with fewer shards runs nothing in a higher shard → `tests/test_shards.py::test_a_gate_with_fewer_shards_runs_nothing_in_a_higher_shard`
+- [x] With no shards, `rest` runs every gate and a numbered shard runs none → `tests/test_shards.py::test_without_shards_rest_runs_every_gate_and_a_shard_runs_none`
+- [x] Shards need a command that runs pytest directly → `tests/test_shards.py::test_shards_need_a_direct_pytest_command`
 
 Slice 4, a numbered shard runs its own files (`.hooks/shards.py`, `.hooks/hard-eng.py`):
 
-- [ ] The split gives each file to the lightest shard, largest file first → `tests/test_shards.py::test_split_gives_each_file_to_the_lightest_shard_largest_first`
-- [ ] A shard runs only the files that pytest collects for it → `tests/test_shards.py::test_a_shard_runs_only_the_files_pytest_collects_for_it`
-- [ ] A shard keeps its reports apart and skips the coverage minimum → `tests/test_shards.py::test_a_shard_keeps_its_reports_apart_and_skips_the_coverage_minimum`
-- [ ] A shard with no files starts no pytest → `tests/test_shards.py::test_an_empty_shard_starts_no_pytest`
-- [ ] The time of a shard does not shorten the limit of the full gate → `tests/test_shards.py::test_shard_time_does_not_shorten_the_full_gate_limit`
+- [x] The split gives each file to the lightest shard, largest file first → `tests/test_shards.py::test_split_gives_each_file_to_the_lightest_shard_largest_first`
+- [x] A shard runs only the files that pytest collects for it → `tests/test_shards.py::test_a_shard_runs_only_the_files_pytest_collects_for_it`
+- [x] A shard keeps its reports apart and skips the coverage minimum → `tests/test_shards.py::test_a_shard_keeps_its_reports_apart_and_skips_the_coverage_minimum`
+- [x] A shard with no files starts no pytest → `tests/test_shards.py::test_an_empty_shard_starts_no_pytest`
+- [x] The time of a shard does not shorten the limit of the full gate → `tests/test_shards.py::test_shard_time_does_not_shorten_the_full_gate_limit`
 
 Slice 5, the gate job merges the reports (`.hooks/shards.py`, `.hooks/reports.py`, `.hooks/hard-eng.py`):
 
-- [ ] The gate job applies the coverage minimum to the merged report → `tests/test_shards.py::test_the_gate_job_applies_the_coverage_minimum_to_the_merged_report`
-- [ ] The gate job refuses a missing shard report, with the step → `tests/test_shards.py::test_the_gate_job_refuses_missing_shard_reports`
-- [ ] Merged coverage equals one full run → `tests/test_shards.py::test_merged_shard_coverage_equals_one_full_run`
-- [ ] The merged test report holds each case and skip, and skipped plan tests still fail → `tests/test_shards.py::test_the_gate_job_fails_skipped_plan_acceptance_tests`
-- [ ] The gate job runs with bare `python3` and only Git on the path → `tests/test_shards.py::test_the_gate_job_runs_with_bare_python`
-- [ ] Only the gate job skips the tool setup → `tests/test_shards.py::test_only_the_gate_job_skips_tool_setup`
+- [x] The gate job applies the coverage minimum to the merged report → `tests/test_shards.py::test_the_gate_job_applies_the_coverage_minimum_to_the_merged_report`
+- [x] The gate job refuses a missing shard report, with the step → `tests/test_shards.py::test_the_gate_job_refuses_missing_shard_reports`
+- [x] Merged coverage equals one full run → `tests/test_shards.py::test_merged_shard_coverage_equals_one_full_run`
+- [x] The merged test report holds each case and skip, and skipped plan tests still fail → `tests/test_shards.py::test_the_gate_job_fails_skipped_plan_acceptance_tests`
+- [x] The gate job runs with bare `python3` and only Git on the path → `tests/test_shards.py::test_the_gate_job_runs_with_bare_python`
+- [x] Only the gate job skips the tool setup → `tests/test_shards.py::test_only_the_gate_job_skips_tool_setup`
 
 Slice 6, the template move (`.github/hard-eng.yml`, `.hooks/ci_setup.py`, `hard-eng.gates.json`, `tests/conftest.py`):
 
-- [ ] A project without shards gets the one-job workflow from the template → `tests/test_shard_workflow.py::test_a_project_without_shards_gets_the_one_job_workflow`
-- [ ] A release tree from before the move still gives the template → `tests/test_shard_workflow.py::test_an_older_release_tree_still_gives_the_template`
-- [ ] The template has the double-quoted lines, and an old workflow gets them at the next update → `tests/test_bun_workflow_migration.py::test_an_old_workflow_gets_double_quoted_mise_switches`
-- [ ] The format gate of the shipped files covers the template and each installed workflow → `tests/test_gate_tools.py::test_the_shipped_format_gate_covers_each_installed_workflow`
-- [ ] The template takes its runner from the variable → `tests/test_runner_variable.py::test_shipped_workflows_take_their_runner_from_the_variable`
-- [ ] The template holds the one release age → `tests/test_tool_execution.py::test_release_age_has_one_value`
+- [x] A project without shards gets the one-job workflow from the template → `tests/test_shard_workflow.py::test_a_project_without_shards_gets_the_one_job_workflow`
+- [x] A release tree from before the move still gives the template → `tests/test_shard_workflow.py::test_an_older_release_tree_still_gives_the_template`
+- [x] The template has the double-quoted lines, and an old workflow gets them at the next update → `tests/test_bun_workflow_migration.py::test_an_old_workflow_gets_double_quoted_mise_switches`
+- [x] The format gate of the shipped files covers the template and each installed workflow → `tests/test_gate_tools.py::test_the_shipped_format_gate_covers_each_installed_workflow`
+- [x] The template takes its runner from the variable → `tests/test_runner_variable.py::test_shipped_workflows_take_their_runner_from_the_variable`
+- [x] The template holds the one release age → `tests/test_tool_execution.py::test_release_age_has_one_value`
 
 Slice 7, the canary trigger (`release_canary.py`):
 
-- [ ] An edit of the own workflow alone starts no canary, and an edit of the template does → `tests/test_release_canary.py::test_only_changes_to_installed_files_need_a_canary_run`
+- [x] An edit of the own workflow alone starts no canary, and an edit of the template does → `tests/test_release_canary.py::test_only_changes_to_installed_files_need_a_canary_run`
 
 Slice 8, two sharded gates (`.hooks/shards.py`):
 
-- [ ] Two tests gates with shards in one package are refused → `tests/test_shards.py::test_two_sharded_gates_in_one_package_are_refused`
+- [x] Two tests gates with shards in one package are refused → `tests/test_shards.py::test_two_sharded_gates_in_one_package_are_refused`
 
 Slice 9, a path in a sharded command (`.hooks/shards.py`):
 
-- [ ] A path in the command of a sharded gate is refused, with the full step → `tests/test_shards.py::test_a_path_in_the_gate_command_is_refused_because_every_shard_would_run_it_whole`
-- [ ] An option value that names a folder, such as `--cov src`, gets the refusal with the `--option=value` form → `tests/test_shards.py::test_an_option_value_that_names_a_folder_gets_the_equals_form_in_the_refusal`
+- [x] A path in the command of a sharded gate is refused, with the full step → `tests/test_shards.py::test_a_path_in_the_gate_command_is_refused_because_every_shard_would_run_it_whole`
+- [x] An option value that names a folder, such as `--cov src`, gets the refusal with the `--option=value` form → `tests/test_shards.py::test_an_option_value_that_names_a_folder_gets_the_equals_form_in_the_refusal`
 
 Slice 10, a worker count (`tests/test_shards.py`):
 
-- [ ] A worker count in the pytest settings leaves the files of a shard exact → `tests/test_shards.py::test_a_worker_count_in_the_pytest_settings_leaves_the_shard_files_exact`
+- [x] A worker count in the pytest settings leaves the files of a shard exact → `tests/test_shards.py::test_a_worker_count_in_the_pytest_settings_leaves_the_shard_files_exact`
 
 Slice 11, the shard form of the workflow (`.hooks/shards.py`, `.hooks/ci_setup.py`, `.agents/skills/he/references/gates.md`):
 
-- [ ] Setup writes the checks job, one tests job for each shard and the required `hard-eng` job → `tests/test_shard_workflow.py::test_shards_split_the_ci_job_into_checks_tests_and_the_gate_job`
-- [ ] The shard jobs take the budget timeout and the gate job keeps five minutes → `tests/test_shard_workflow.py::test_shard_jobs_inherit_the_budget_timeout_and_the_gate_job_keeps_five`
-- [ ] A changed shard count rewrites the shard list → `tests/test_shard_workflow.py::test_a_changed_shard_count_rewrites_the_shard_list`
-- [ ] An update splits an installed one-job workflow → `tests/test_shard_workflow.py::test_update_splits_an_installed_one_job_workflow`
-- [ ] A customised or split workflow gets a note and no shards → `tests/test_shard_workflow.py::test_a_split_workflow_gets_a_note_and_no_shards`
-- [ ] Setup refuses shards on a gate that does not run pytest → `tests/test_shard_workflow.py::test_setup_refuses_shards_on_a_gate_that_does_not_run_pytest`
+- [x] Setup writes the checks job, one tests job for each shard and the required `hard-eng` job → `tests/test_shard_workflow.py::test_shards_split_the_ci_job_into_checks_tests_and_the_gate_job`
+- [x] The shard jobs take the budget timeout and the gate job keeps five minutes → `tests/test_shard_workflow.py::test_shard_jobs_inherit_the_budget_timeout_and_the_gate_job_keeps_five`
+- [x] A changed shard count rewrites the shard list → `tests/test_shard_workflow.py::test_a_changed_shard_count_rewrites_the_shard_list`
+- [x] An update splits an installed one-job workflow → `tests/test_shard_workflow.py::test_update_splits_an_installed_one_job_workflow`
+- [x] A customised or split workflow gets a note and no shards → `tests/test_shard_workflow.py::test_a_split_workflow_gets_a_note_and_no_shards`
+- [x] Setup refuses shards on a gate that does not run pytest → `tests/test_shard_workflow.py::test_setup_refuses_shards_on_a_gate_that_does_not_run_pytest`
 
 Slice 12, the proof of a shard (`.hooks/shards.py`, `.hooks/hard-eng.py`):
 
-- [ ] A shard job that reuses a passed commit prints the reuse line and writes its marker; the checks job writes none → `tests/test_ci_usage.py::test_a_shard_job_that_reuses_a_passed_commit_marks_its_shard`
-- [ ] The gate job passes on a marker, prints the shard, and never starts the proof, also with no `uv` → `tests/test_ci_usage.py::test_the_gate_job_takes_a_shard_proof_and_runs_none_itself`
-- [ ] With no marker and no reports, the gate job still refuses → `tests/test_shards.py::test_the_gate_job_without_a_shard_proof_still_needs_each_report`
-- [ ] The upload step runs for each shard and ignores an empty folder → `tests/test_shard_workflow.py::test_shards_split_the_ci_job_into_checks_tests_and_the_gate_job`
-- [ ] A run that selects no package leaves a marker in each shard, and the gate job passes on the markers that it downloads → `tests/test_shard_workflow.py::test_a_run_that_selects_no_package_leaves_a_marker_in_each_shard_for_the_gate_download`
+- [x] A shard job that reuses a passed commit prints the reuse line and writes its marker; the checks job writes none → `tests/test_ci_usage.py::test_a_shard_job_that_reuses_a_passed_commit_marks_its_shard`
+- [x] The gate job passes on a marker, prints the shard, and never starts the proof, also with no `uv` → `tests/test_ci_usage.py::test_the_gate_job_takes_a_shard_proof_and_runs_none_itself`
+- [x] With no marker and no reports, the gate job still refuses → `tests/test_shards.py::test_the_gate_job_without_a_shard_proof_still_needs_each_report`
+- [x] The upload step runs for each shard and ignores an empty folder → `tests/test_shard_workflow.py::test_shards_split_the_ci_job_into_checks_tests_and_the_gate_job`
+- [x] A run that selects no package leaves a marker in each shard, and the gate job passes on the markers that it downloads → `tests/test_shard_workflow.py::test_a_run_that_selects_no_package_leaves_a_marker_in_each_shard_for_the_gate_download`
 
 Slice 13, an edit under `.github` (`hard-eng.gates.json`):
 
-- [ ] An edit of the own workflow selects the package checks → `tests/test_shard_workflow.py::test_an_edit_under_github_selects_the_package_checks`
+- [x] An edit of the own workflow selects the package checks → `tests/test_shard_workflow.py::test_an_edit_under_github_selects_the_package_checks`
 
 Slice 14, six shards for this repository (`hard-eng.gates.json`, `.github/workflows/hard-eng.yml`):
 
-- [ ] The own workflow equals the generated shard form of six shards → `tests/test_shard_workflow.py::test_own_workflow_is_the_generated_shard_form`
+- [x] The own workflow equals the generated shard form of six shards → `tests/test_shard_workflow.py::test_own_workflow_is_the_generated_shard_form`
 
 Slice 15, time limits of the canary (`release_canary.py`):
 
-- [ ] A push lists each new project when a lookup stalls past the total limit → `tests/test_canary_reuse.py::test_a_push_runs_the_new_projects_when_a_lookup_stalls`
-- [ ] The lookup limit of a push is at most half the limit of the `targets` job → `tests/test_canary_reuse.py::test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr`
-- [ ] The release gate ends with a rerun step before the limit of the `canary` job → `tests/test_canary_reuse.py::test_the_release_gate_ends_before_the_canary_job_limit`
+- [x] A push lists each new project when a lookup stalls past the total limit → `tests/test_canary_reuse.py::test_a_push_runs_the_new_projects_when_a_lookup_stalls`
+- [x] The lookup limit of a push is at most half the limit of the `targets` job → `tests/test_canary_reuse.py::test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr`
+- [x] The release gate ends with a rerun step before the limit of the `canary` job → `tests/test_canary_reuse.py::test_the_release_gate_ends_before_the_canary_job_limit`
 
-- [ ] The update project of the canary fails when an update writes a shard workflow into a project with no shards → `tests/test_release_canary.py::test_the_update_target_refuses_a_shard_workflow_in_a_project_without_shards`
+- [x] The update project of the canary fails when an update writes a shard workflow into a project with no shards → `tests/test_release_canary.py::test_the_update_target_refuses_a_shard_workflow_in_a_project_without_shards`
 
 Slice 16, the summary of a release PR (`.github/workflows/canary.yml`):
 
-- [ ] A release PR summary names the next step, and only a push or PR with no installed file prints "No installed file changed" → `tests/test_canary_reuse.py::test_the_canary_summary_says_no_installed_file_changed_only_when_none_changed`
+- [x] A release PR summary names the next step, and only a push or PR with no installed file prints "No installed file changed" → `tests/test_canary_reuse.py::test_the_canary_summary_says_no_installed_file_changed_only_when_none_changed`
 
 Slice 17, the pass line of a new project (`release_canary.py`):
 
-- [ ] A passed new project names each unit that ran, such as `full check` and `project lint` → `tests/test_release_canary.py::test_a_passed_new_project_names_each_unit_that_ran`
+- [x] A passed new project names each unit that ran, such as `full check` and `project lint` → `tests/test_release_canary.py::test_a_passed_new_project_names_each_unit_that_ran`
 
 Slice 18, the retry count of pytest-retry (`.hooks/retry_forms.py`, `.hooks/comments.py`):
 
-- [ ] A `retries` count inside a pytest table is refused at its line, and the same key of another table passes → `tests/test_comments.py::test_a_retry_count_in_a_pytest_table_fails_at_its_line`
-- [ ] The colon form of an ini file, a table header with spaces and a count in `pytest.toml`, `.pytest.toml` or `.pytest.ini` are refused too → `tests/test_comments.py::test_a_retry_count_in_a_pytest_table_fails_at_its_line`
-- [ ] A rerun key or option in `pytest.toml`, `.pytest.toml` or `.pytest.ini` is refused → `tests/test_comments.py::test_an_added_retry_fails_naming_file_line_and_form`
+- [x] A `retries` count inside a pytest table is refused at its line, and the same key of another table passes → `tests/test_comments.py::test_a_retry_count_in_a_pytest_table_fails_at_its_line`
+- [x] The colon form of an ini file, a table header with spaces and a count in `pytest.toml`, `.pytest.toml` or `.pytest.ini` are refused too → `tests/test_comments.py::test_a_retry_count_in_a_pytest_table_fails_at_its_line`
+- [x] A rerun key or option in `pytest.toml`, `.pytest.toml` or `.pytest.ini` is refused → `tests/test_comments.py::test_an_added_retry_fails_naming_file_line_and_form`
 
 Slice 19, the commit cap step (`.hooks/change_size.py`):
 
-- [ ] The warning from 80 commits prints the empty diff check and the lease push → `tests/test_change_size.py::test_a_full_check_warns_from_80_commits_and_never_refuses`
-- [ ] The refusal over the cap prints the same step → `tests/test_ship_commits.py::test_ready_refuses_a_pr_over_the_commit_cap`
+- [x] The warning from 80 commits prints the empty diff check and the lease push → `tests/test_change_size.py::test_a_full_check_warns_from_80_commits_and_never_refuses`
+- [x] The refusal over the cap prints the same step → `tests/test_ship_commits.py::test_ready_refuses_a_pr_over_the_commit_cap`
 
 Slice 20, a committed reformat of an old plan (`.hooks/change_size.py`):
 
-- [ ] A committed white space reformat of an old plan counts as unchanged when the check starts from the new head, and a committed word change still needs today's fields → `tests/test_planning_handoffs.py::test_a_committed_reformat_of_an_old_plan_counts_as_unchanged_from_the_new_head`
+- [x] A committed white space reformat of an old plan counts as unchanged when the check starts from the new head, and a committed word change still needs today's fields → `tests/test_planning_handoffs.py::test_a_committed_reformat_of_an_old_plan_counts_as_unchanged_from_the_new_head`
 
 Slice 21, the parallel hint (`.hooks/process_group.py`, `.hooks/hard-eng.py`):
 
-- [ ] A parallel run where no test failed gets no hint, and a run with a failed test or an unreadable report keeps it → `tests/test_report_findings.py::test_a_parallel_run_where_no_test_failed_gets_no_parallel_hint`
+- [x] A parallel run where no test failed gets no hint, and a run with a failed test or an unreadable report keeps it → `tests/test_report_findings.py::test_a_parallel_run_where_no_test_failed_gets_no_parallel_hint`
 
 Slice 22, the Dart settings messages (`.hooks/dart_boundaries.py`):
 
-- [ ] A nested settings file that lacks the settings is named, with its step → `tests/test_dart_config.py::test_a_nested_settings_file_that_lacks_the_settings_is_named_with_its_step`
-- [ ] A fault in a file of an included package names the include to remove → `tests/test_dart_config.py::test_a_fault_in_an_included_package_names_the_include_to_remove`
+- [x] A nested settings file that lacks the settings is named, with its step → `tests/test_dart_config.py::test_a_nested_settings_file_that_lacks_the_settings_is_named_with_its_step`
+- [x] A fault in a file of an included package names the include to remove → `tests/test_dart_config.py::test_a_fault_in_an_included_package_names_the_include_to_remove`
 
 Slice 23, the coverage omit setting (`.hooks/coverage_sources.py`, `.hooks/reports.py`, `.hooks/shards.py`):
 
-- [ ] A Python file that an `omit` setting hides names that setting and its file → `tests/test_line_coverage.py::test_a_python_file_that_an_omit_setting_hides_names_that_setting`
-- [ ] An `omit` setting that does not hide the file adds no sentence: other files, a file that coverage.py does not read, a broken file → `tests/test_line_coverage.py::test_an_omit_setting_that_does_not_hide_the_file_adds_no_omit_sentence`
+- [x] A Python file that an `omit` setting hides names that setting and its file → `tests/test_line_coverage.py::test_a_python_file_that_an_omit_setting_hides_names_that_setting`
+- [x] An `omit` setting that does not hide the file adds no sentence: other files, a file that coverage.py does not read, a broken file → `tests/test_line_coverage.py::test_an_omit_setting_that_does_not_hide_the_file_adds_no_omit_sentence`
 
 Slice 24, Ruff's fix advice in the debt check (`.hooks/debt.py`, `.hooks/hard-eng.py`):
 
-- [ ] Fix advice that Ruff adds or drops for an old finding is no change → `tests/test_debt.py::test_a_fix_hint_that_ruff_adds_or_drops_for_an_old_finding_is_no_change`
-- [ ] A list line of another tool is still a finding → `tests/test_debt.py::test_a_list_line_of_another_tool_is_still_a_finding`
-- [ ] A new format fault beside an old one is a finding → `tests/test_debt.py::test_a_new_format_fault_beside_an_old_one_is_a_finding`
-- [ ] A `ruff check` through `uvx` leaves out the fix advice too → `tests/test_debt.py::test_a_ruff_check_through_uvx_leaves_out_the_fix_advice_too`
+- [x] Fix advice that Ruff adds or drops for an old finding is no change → `tests/test_debt.py::test_a_fix_hint_that_ruff_adds_or_drops_for_an_old_finding_is_no_change`
+- [x] A list line of another tool is still a finding → `tests/test_debt.py::test_a_list_line_of_another_tool_is_still_a_finding`
+- [x] A new format fault beside an old one is a finding → `tests/test_debt.py::test_a_new_format_fault_beside_an_old_one_is_a_finding`
+- [x] A `ruff check` through `uvx` leaves out the fix advice too → `tests/test_debt.py::test_a_ruff_check_through_uvx_leaves_out_the_fix_advice_too`
 
 Slice 25, a project's Biome settings (`.hooks/gate_config.py`, `.hooks/untrusted_input.py`):
 
-- [ ] The JSON layout follows a local file that the Biome settings extend → `tests/test_json_layout.py::test_an_extended_local_file_sets_the_json_layout`
-- [ ] The root formatter wins over the extended one → `tests/test_json_layout.py::test_the_root_formatter_overrides_the_extended_one`
-- [ ] An extended package name keeps the default layout, and a file that extends itself ends → `tests/test_json_layout.py::test_a_file_that_extends_itself_ends`
-- [ ] Setup adds `.hooks`, `.hard-eng` and the root report folder to the list, with `**` first in an empty list → `tests/test_biome_entries.py::test_setup_keeps_the_project_biome_run_away_from_the_hooks_folder`
-- [ ] An older install gets only the entries that it lacks → `tests/test_biome_entries.py::test_setup_adds_only_the_entries_that_an_older_install_lacks`
-- [ ] Setup prints the step when it cannot edit the settings → `tests/test_biome_entries.py::test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings`
-- [ ] The list names the report folder of each package that is not at the root, and a second run changes nothing → `tests/test_biome_entries.py::test_the_biome_list_names_the_report_folder_of_each_package`
-- [ ] The planned gates file wins over the file on disk → `tests/test_biome_entries.py::test_the_planned_gates_file_wins_over_the_one_on_disk`
-- [ ] An older install gets only the package folders that it lacks → `tests/test_biome_entries.py::test_an_older_install_gets_only_the_package_folders_it_lacks`
-- [ ] The edit takes its indent and line width from the extended file → `tests/test_biome_entries.py::test_the_biome_edit_takes_its_layout_from_the_extended_file`
+- [x] The JSON layout follows a local file that the Biome settings extend → `tests/test_json_layout.py::test_an_extended_local_file_sets_the_json_layout`
+- [x] The root formatter wins over the extended one → `tests/test_json_layout.py::test_the_root_formatter_overrides_the_extended_one`
+- [x] An extended package name keeps the default layout, and a file that extends itself ends → `tests/test_json_layout.py::test_a_file_that_extends_itself_ends`
+- [x] Setup adds `.hooks`, `.hard-eng` and the root report folder to the list, with `**` first in an empty list → `tests/test_biome_entries.py::test_setup_keeps_the_project_biome_run_away_from_the_hooks_folder`
+- [x] An older install gets only the entries that it lacks → `tests/test_biome_entries.py::test_setup_adds_only_the_entries_that_an_older_install_lacks`
+- [x] Setup prints the step when it cannot edit the settings → `tests/test_biome_entries.py::test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings`
+- [x] The list names the report folder of each package that is not at the root, and a second run changes nothing → `tests/test_biome_entries.py::test_the_biome_list_names_the_report_folder_of_each_package`
+- [x] The planned gates file wins over the file on disk → `tests/test_biome_entries.py::test_the_planned_gates_file_wins_over_the_one_on_disk`
+- [x] An older install gets only the package folders that it lacks → `tests/test_biome_entries.py::test_an_older_install_gets_only_the_package_folders_it_lacks`
+- [x] The edit takes its indent and line width from the extended file → `tests/test_biome_entries.py::test_the_biome_edit_takes_its_layout_from_the_extended_file`
 
 Slice 26, the freshness steps (`.hooks/poetry_freshness.py`, `.hooks/uv_freshness.py`):
 
-- [ ] The Poetry step is the add that its dry run proved → `tests/test_freshness_steps.py::test_the_poetry_step_is_the_add_its_dry_run_proved`
-- [ ] A split lock floors each entry at its oldest locked version → `tests/test_freshness_steps.py::test_a_split_lock_floors_each_entry_at_its_oldest_locked_version`
-- [ ] A capitalised name finds its entry on a split lock → `tests/test_freshness_steps.py::test_a_capitalised_name_finds_its_entry_on_a_split_lock`
-- [ ] The uv step raises each entry in its package and section → `tests/test_freshness_steps.py::test_the_uv_step_raises_each_entry_in_its_package_and_section`
-- [ ] A dynamic dependency list gets the hand step → `tests/test_freshness_steps.py::test_a_dynamic_dependency_list_gets_the_hand_step`
-- [ ] A single uv project gets a command that runs as printed → `tests/test_freshness_steps.py::test_a_single_uv_project_gets_a_command_it_can_run_as_printed`
-- [ ] The uv step keeps the marker and the extras of the declared entry → `tests/test_freshness_steps.py::test_the_uv_step_keeps_the_marker_and_the_extras_of_the_declared_entry`
-- [ ] The Poetry floor is never below the declared lower bound → `tests/test_freshness_steps.py::test_the_poetry_floor_is_never_below_the_declared_lower_bound`
+- [x] The Poetry step is the add that its dry run proved → `tests/test_freshness_steps.py::test_the_poetry_step_is_the_add_its_dry_run_proved`
+- [x] A split lock floors each entry at its oldest locked version → `tests/test_freshness_steps.py::test_a_split_lock_floors_each_entry_at_its_oldest_locked_version`
+- [x] A capitalised name finds its entry on a split lock → `tests/test_freshness_steps.py::test_a_capitalised_name_finds_its_entry_on_a_split_lock`
+- [x] The uv step raises each entry in its package and section → `tests/test_freshness_steps.py::test_the_uv_step_raises_each_entry_in_its_package_and_section`
+- [x] A dynamic dependency list gets the hand step → `tests/test_freshness_steps.py::test_a_dynamic_dependency_list_gets_the_hand_step`
+- [x] A single uv project gets a command that runs as printed → `tests/test_freshness_steps.py::test_a_single_uv_project_gets_a_command_it_can_run_as_printed`
+- [x] The uv step keeps the marker and the extras of the declared entry → `tests/test_freshness_steps.py::test_the_uv_step_keeps_the_marker_and_the_extras_of_the_declared_entry`
+- [x] The Poetry floor is never below the declared lower bound → `tests/test_freshness_steps.py::test_the_poetry_floor_is_never_below_the_declared_lower_bound`
 
 Slice 27, the mutation run of a Poetry project (`.hooks/mutation.py`):
 
-- [ ] The mutation tool starts through the managed command, as the gates do → `tests/test_mutation.py::test_the_mutation_run_starts_poetry_the_way_the_gates_do`
+- [x] The mutation tool starts through the managed command, as the gates do → `tests/test_mutation.py::test_the_mutation_run_starts_poetry_the_way_the_gates_do`
 
 Slice 28, a local shard run (`.hooks/hard-eng.py`):
 
-- [ ] A local `--shard` run records no full pass → `tests/test_shards.py::test_a_local_shard_run_records_no_full_pass`
+- [x] A local `--shard` run records no full pass → `tests/test_shards.py::test_a_local_shard_run_records_no_full_pass`
 
 Slice 29, the test listing of a shard (`.hooks/shards.py`):
 
-- [ ] A `-v` or `-vv` in the project's pytest settings leaves the files of a shard exact → `tests/test_shards.py::test_a_verbose_setting_in_the_pytest_settings_leaves_the_shard_files_exact`
-- [ ] A listing that ends well and names no file is refused → `tests/test_shards.py::test_a_listing_that_names_no_file_is_refused`
+- [x] A `-v` or `-vv` in the project's pytest settings leaves the files of a shard exact → `tests/test_shards.py::test_a_verbose_setting_in_the_pytest_settings_leaves_the_shard_files_exact`
+- [x] A listing that ends well and names no file is refused → `tests/test_shards.py::test_a_listing_that_names_no_file_is_refused`
 
 Slice 30, the project's own coverage minimum (`.hooks/shards.py`, `.hooks/coverage_sources.py`, `.hooks/retry_forms.py`):
 
-- [ ] A shard does not apply the coverage minimum of the project → `tests/test_shards.py::test_a_shard_does_not_apply_the_coverage_minimum_of_the_project`
-- [ ] The gate job applies that minimum to the merged total and names the place that sets it → `tests/test_shards.py::test_the_gate_job_applies_the_coverage_minimum_of_the_project_to_the_merged_total`
-- [ ] The minimum comes from the command, then the pytest settings, then the first coverage settings file → `tests/test_shard_coverage_minimum.py::test_the_minimum_comes_from_the_command_then_the_pytest_settings_then_the_first_coverage_file`
-- [ ] The total counts branches when the report has them → `tests/test_shard_coverage_minimum.py::test_the_total_counts_branches_when_the_report_has_them`
-- [ ] The verdict equals the verdict of the coverage tool → `tests/test_shard_coverage_minimum.py::test_the_verdict_is_the_one_of_the_coverage_tool`
-- [ ] The minimum of the pytest settings is in the `addopts` of the one file that pytest reads: a list of two items, `pytest.toml`, the native table, no tox environment, no script of another tool, no comment → `tests/test_shard_coverage_minimum.py::test_the_minimum_of_the_pytest_settings_is_in_the_addopts_of_the_file_that_pytest_reads`
-- [ ] The pytest settings of a parent folder apply to the package → `tests/test_shard_coverage_minimum.py::test_the_pytest_settings_of_a_parent_folder_apply_to_the_package`
-- [ ] A settings file that cannot be read is named → `tests/test_shard_coverage_minimum.py::test_a_settings_file_that_cannot_be_read_is_named`
-- [ ] The printed total equals the one of the coverage tool → `tests/test_shard_coverage_minimum.py::test_the_printed_total_is_the_one_of_the_coverage_tool`
+- [x] A shard does not apply the coverage minimum of the project → `tests/test_shards.py::test_a_shard_does_not_apply_the_coverage_minimum_of_the_project`
+- [x] The gate job applies that minimum to the merged total and names the place that sets it → `tests/test_shards.py::test_the_gate_job_applies_the_coverage_minimum_of_the_project_to_the_merged_total`
+- [x] The minimum comes from the command, then the pytest settings, then the first coverage settings file → `tests/test_shard_coverage_minimum.py::test_the_minimum_comes_from_the_command_then_the_pytest_settings_then_the_first_coverage_file`
+- [x] The total counts branches when the report has them → `tests/test_shard_coverage_minimum.py::test_the_total_counts_branches_when_the_report_has_them`
+- [x] The verdict equals the verdict of the coverage tool → `tests/test_shard_coverage_minimum.py::test_the_verdict_is_the_one_of_the_coverage_tool`
+- [x] The minimum of the pytest settings is in the `addopts` of the one file that pytest reads: a list of two items, `pytest.toml`, the native table, no tox environment, no script of another tool, no comment → `tests/test_shard_coverage_minimum.py::test_the_minimum_of_the_pytest_settings_is_in_the_addopts_of_the_file_that_pytest_reads`
+- [x] The pytest settings of a parent folder apply to the package → `tests/test_shard_coverage_minimum.py::test_the_pytest_settings_of_a_parent_folder_apply_to_the_package`
+- [x] A settings file that cannot be read is named → `tests/test_shard_coverage_minimum.py::test_a_settings_file_that_cannot_be_read_is_named`
+- [x] The printed total equals the one of the coverage tool → `tests/test_shard_coverage_minimum.py::test_the_printed_total_is_the_one_of_the_coverage_tool`
 
 Slice 31, the way back to one job (`.hooks/shards.py`, `.hooks/update.py`):
 
-- [ ] Setup writes the one-job workflow back when no gate holds `shards` → `tests/test_shard_workflow.py::test_removing_shards_gives_the_one_job_workflow_back`
-- [ ] A workflow that is not the generated form stays as it is, and setup prints a note → `tests/test_shard_workflow.py::test_removing_shards_leaves_a_workflow_that_is_not_the_generated_form`
-- [ ] A setup rerun at the installed release writes the workflow form that the `shards` field asks for: split, a new count, and one job again → `tests/test_shard_rerun.py::test_a_setup_rerun_writes_the_workflow_form_that_the_shards_field_asks_for`
+- [x] Setup writes the one-job workflow back when no gate holds `shards` → `tests/test_shard_workflow.py::test_removing_shards_gives_the_one_job_workflow_back`
+- [x] A workflow that is not the generated form stays as it is, and setup prints a note → `tests/test_shard_workflow.py::test_removing_shards_leaves_a_workflow_that_is_not_the_generated_form`
+- [x] A setup rerun at the installed release writes the workflow form that the `shards` field asks for: split, a new count, and one job again → `tests/test_shard_rerun.py::test_a_setup_rerun_writes_the_workflow_form_that_the_shards_field_asks_for`
 
 Slice 32, the gate job and the matrix (`.hooks/shards.py`, `.github/workflows/hard-eng.yml`):
 
-- [ ] The gate job runs after a failed job and merges only after two successes → `tests/test_shard_workflow.py::test_the_gate_job_runs_after_a_failed_job_and_merges_only_after_two_successes`
-- [ ] One failed shard does not cancel the others → `tests/test_shard_workflow.py::test_shards_split_the_ci_job_into_checks_tests_and_the_gate_job`
-- [ ] The refusal for a missing shard report says to rerun all jobs → `tests/test_shards.py::test_the_gate_job_refuses_missing_shard_reports`
+- [x] The gate job runs after a failed job and merges only after two successes → `tests/test_shard_workflow.py::test_the_gate_job_runs_after_a_failed_job_and_merges_only_after_two_successes`
+- [x] One failed shard does not cancel the others → `tests/test_shard_workflow.py::test_shards_split_the_ci_job_into_checks_tests_and_the_gate_job`
+- [x] The refusal for a missing shard report says to rerun all jobs → `tests/test_shards.py::test_the_gate_job_refuses_missing_shard_reports`
 
 ## Baseline + execution
 
 Result: Passed
 Evidence: the starting tree is `develop` 6dde3718, the rebase merge of PR 577. On that commit the required CI checks passed on 2026-11-11: each push run reused the pass of the PR head on the same files, and that head passed the full check and each new-project job. `python3 .hooks/hard-eng.py check --plan-stage Draft --base origin/develop` on this branch, with this plan as the only change: exit 0.
-Execution: one builder on Sonnet in its own worktree builds slices 1 to 14 in this order, with a failing test before each behavior and each static gate command in its brief. The push limit of slice 15 is built with its failing test first and joins as its own commit; the release gate limit and slices 16 and 17 follow. The coordinator reviews each slice. Then a new reviewer on Opus reads the joined change, the independent review runs on the final commit, and the Complete check runs once. The audit fixes of slices 18 to 27 were built by the coordinator and by two more builders on Sonnet, each in its own worktree, and joined by cherry-pick. A reviewer on Opus read the shard change, and one more builder fixed its findings in slices 28 to 32. A second reviewer on Opus read the audit fixes. A reader on Opus who did not write the text compared the old and the new shard sentences of `.agents/skills/he/references/gates.md` two times; each sentence that the reader quoted was reworded. A third reviewer on Opus read the shard fixes. The coordinator fixed its findings and compared the minimum reader with real pytest and pytest-cov on 15 settings layouts.
+Execution: one builder on Sonnet in its own worktree builds slices 1 to 14 in this order, with a failing test before each behavior and each static gate command in its brief. The push limit of slice 15 is built with its failing test first and joins as its own commit; the release gate limit and slices 16 and 17 follow. The coordinator reviews each slice. Then a new reviewer on Opus reads the joined change, the independent review runs on the final commit, and the Complete check runs once. The audit fixes of slices 18 to 27 were built by the coordinator and by two more builders on Sonnet, each in its own worktree, and joined by cherry-pick. A reviewer on Opus read the shard change, and one more builder fixed its findings in slices 28 to 32. A second reviewer on Opus read the audit fixes. A reader on Opus who did not write the text compared the old and the new shard sentences of `.agents/skills/he/references/gates.md` two times; each sentence that the reader quoted was reworded. A third reviewer on Opus read the shard fixes. The coordinator fixed its findings and compared the minimum reader with real pytest and pytest-cov on 15 settings layouts. A reader on Opus read the new rule of `AGENTS.override.md`; each of the four parts that the reader quoted was reworded.
 
 ## Risks + recovery
 
@@ -268,10 +269,10 @@ N/A — check rules, CI files and printed lines with no visual surface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — the static gates, the whole suite and the Complete check on the joined branch, and the review results.
+Result: Passed
+Evidence: on commit 2e2aabe3, the last commit that changes code: each of the 14 static gate commands gave exit 0 and the line limit list was empty; the 33 changed test files gave 1,685 passed; the 97 tests that this plan names gave 502 passed. Real tools: pytest 9.2 with pytest-cov and the merged shards gave the same verdict on 15 of 15 settings layouts; coverage.py 7.16 left a file out exactly when the omit sentence prints, on 7 of 7 patterns; uv ran each of 5 printed steps and kept one entry for each name, with its marker and extras; Biome 2.6.6 accepted the edited settings of each layout case and still checked a source folder named `coverage`. Update proof on a local release host, from the last release to this code: the update gave the one-job workflow to a project with no shards; with `"shards": 2` on the base branch, a setup rerun put the split workflow on the update branch; a second rerun changed nothing; with the field removed, a rerun gave the one-job workflow back. Speed, the last release against this code, 41 alternate runs, two passes: session start 137.2 against 137.9 ms and 146.1 against 146.0 ms; clean Stop 116.2 against 116.9 ms and 128.9 against 130.6 ms; a clean Stop makes 27,374 against 27,408 Python calls and loads the same modules. The hook script grew by 58 lines, which adds 0.13 ms of compile time to each hook run. The Complete check and the independent review run on the final commit; the PR records their results.
 E2E: N/A — no user journey changes; each behavior is a check, setup or CI result that its test runs directly, and the real shard run is in Delivery.
-Retro: Pending — written at task end.
+Retro: (1) Three independent reviews found faults in code that copies how another tool behaves: the shard listing and the coverage minimum, the Ruff, Biome, uv, Poetry and `omit` fixes, and the pytest settings reader. Tests from the builder's own reading had passed → the last rule of `AGENTS.override.md`; each fault has its test in slices 18 and 23 to 32. (2) The host proof found that a setup rerun wrote no workflow → `tests/test_shard_rerun.py::test_a_setup_rerun_writes_the_workflow_form_that_the_shards_field_asks_for`. (3) The audit of the released code found ten kinds of fault that had passed each gate of their PR → the tests of slices 18 to 27, each written before its fix. (4) The format gate failed two times on new long lines, one new test had a wrong assert, and the first form of the plan reformat fix broke two tests → None — the focused run after each edit found each one before its commit. (5) Two proof tries in a fixture were invalid, because the check read hooks that were not committed there; one timing run had no fixture; one fetch got a short commit ID → None — faults of the coordinator's proof method, each seen at once in its output; no product check can find them. (6) The coordinator dropped its own trial edit with a Git command that the maintainer's local rules forbid; nothing was lost → None — a rule of the maintainer's machine, outside this repository. (7) Python compiles the hook script on each run, so its 58 new lines cost 0.13 ms → the next plan makes the script a small launcher for a cached module.
 
 Delivery target: Merge
 Delivery: Pending — PR into `develop` with the `hard-eng` and `canary` checks green, then the release into `main`. The PR's own run gives the real CI time of the shard form against the old single job. One rerun of the green run proves that a second attempt uploads and downloads again.
