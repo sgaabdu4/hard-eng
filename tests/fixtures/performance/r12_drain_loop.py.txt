@@ -38,3 +38,20 @@ async def one_item(a):
     while a:
         # ruleid: await-in-loop-python
         await a[0]
+
+
+async def one_from_queue(queue):
+    while queue:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(process(queue.pop()))
+
+
+async def one_part(queue):
+    while queue:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*[process(item) for item in queue[:1]])
+
+
+async def drain_keeping_errors(pending):
+    while pending:
+        await asyncio.gather(*pending, return_exceptions=True)

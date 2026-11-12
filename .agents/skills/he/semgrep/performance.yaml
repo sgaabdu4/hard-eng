@@ -1025,7 +1025,8 @@ rules:
                     pattern-not-inside: "async for $X in $Y:\n  ...\n"
                   - &await_in_loop_python_id004
                     pattern-not-inside: "while True:\n  ...\n"
-                  - pattern-not-inside: "while $X:\n  await asyncio.gather(<... $X ...>)\n"
+                  - pattern-not-inside: "while $X:\n  await asyncio.gather(*$X, ...)\n"
+                  - pattern-not-inside: "while $X:\n  await asyncio.gather(*list($X), ...)\n"
                   - &await_in_loop_python_id005
                     pattern-not-inside:
                       patterns:
@@ -2617,10 +2618,14 @@ rules:
                         regex: ^\s*for(?:\s|//[^\n]*(?:\n|$)|/\*[\s\S]*?\*/)+await\b
               - &await_in_loop_javascript_id005
                 pattern-not-inside: while (true) { ... }
-              - pattern-not-inside: while ($X.size > 0) { await Promise.all(<... $X ...>); }
-              - pattern-not-inside: while ($X.size > 0) { await Promise.allSettled(<... $X ...>); }
-              - pattern-not-inside: while ($X.length > 0) { await Promise.all(<... $X ...>); }
-              - pattern-not-inside: while ($X.length > 0) { await Promise.allSettled(<... $X ...>); }
+              - pattern-not-inside: while ($X.size > 0) { await Promise.all($X); }
+              - pattern-not-inside: while ($X.size > 0) { await Promise.all([...$X]); }
+              - pattern-not-inside: while ($X.size > 0) { await Promise.allSettled($X); }
+              - pattern-not-inside: while ($X.size > 0) { await Promise.allSettled([...$X]); }
+              - pattern-not-inside: while ($X.length > 0) { await Promise.all($X); }
+              - pattern-not-inside: while ($X.length > 0) { await Promise.all([...$X]); }
+              - pattern-not-inside: while ($X.length > 0) { await Promise.allSettled($X); }
+              - pattern-not-inside: while ($X.length > 0) { await Promise.allSettled([...$X]); }
               - &await_in_loop_javascript_id006
                 pattern-not-inside:
                   patterns:
@@ -3962,7 +3967,9 @@ rules:
       - pattern-not-inside: while ($C) { ... <... (...) async { ... <... await $E ...>; ... } ...>; ... }
       - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\((?:[^;{]*?\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
-      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait(<... $X ...>); }
+      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait($X); }
+      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait($X.toList()); }
+      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait([...$X]); }
       - pattern-not-inside: for ($I in $C) { ... break; }
       - pattern-not-inside: for ($I in $C) { ... return; }
       - pattern-not-inside: for ($I in $C) { ... return $R; }
