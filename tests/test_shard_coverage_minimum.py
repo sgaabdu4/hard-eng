@@ -1,12 +1,23 @@
 """A project's own coverage minimum: where the shard merge reads it and how it judges the total."""
 
+import json
+from itertools import product
 from pathlib import Path
 from typing import cast
 
 import pytest
 from coverage.results import display_covered, should_fail_under
 from gate_config import Gate, Group
-from shards import below_minimum, coverage_minimum, merged_total, part_command, shown
+from shards import (
+    below_minimum,
+    coverage_minimum,
+    merge_reports,
+    merged_total,
+    part_command,
+    shown,
+)
+
+from coverage import __version__ as installed_release
 
 PYTEST = ["uv", "run", "pytest", "--cov"]
 COVERAGERC = "[report]\nfail_under = 71\nprecision = 1\n"
@@ -244,9 +255,107 @@ def test_the_total_counts_branches_when_the_report_has_them() -> None:
 def test_the_verdict_is_the_one_of_the_coverage_tool(
     total: float, minimum: float, precision: int
 ) -> None:
-    assert below_minimum(total, minimum, precision) is should_fail_under(
-        total, minimum, precision
+    assert below_minimum(
+        total, minimum, precision, installed_release
+    ) is should_fail_under(total, minimum, precision)
+
+
+TOTALS = [0.0, 0.04, 33.33, 49.95, 66.666, 66.67, 69.94, 69.95, 70.0, 70.04, 70.05]
+TOTALS += [70.349, 70.35, 70.37, 79.994, 79.995, 80.0, 99.95, 99.994, 99.999, 100.0]
+MINIMUMS = [0.0, 50.0, 66.9, 67.0, 70.0, 70.3, 70.35, 70.375, 79.99, 80.0, 99.9]
+MINIMUMS += [99.99, 100.0]
+OLD_VERDICTS = (
+    "0001111111111111111111111111111111111110001111111111111111111111"
+    "1111111111111100011111111111111111111111111111111111100000111111"
+    "1111111111111111111111111111000000011011111111111111111111111111"
+    "1110000000110111111111111111111111111111110000000000000111111111"
+    "1111111111111111100000000000000111111111111111111111111100000000"
+    "0000000111111111111111111111111000000000000000111111111111111111"
+    "1111110000000000000001111111111111111111111110000000000000001001"
+    "1011111111111111111100000000000000010011011111111111111111100000"
+    "0000000000100100101111111111111111000000000000000000000000000001"
+    "1111111110000000000000000000000000000001111111110000000000000000"
+    "0000000000000011111111100000000000000000000000000000000000111100"
+    "0000000000000000000000000000000000111000000000000000000000000000"
+    "000000000111000000000000000000000000000000000000000"
+)
+NEW_VERDICTS = (
+    "0001111111111111111111111111111111111110001111111111111111111111"
+    "1111111111111100011111111111111111111111111111111111100000111111"
+    "1111111111111111111111111111000000111011111111111111111111111111"
+    "1110000001110111111111111111111111111111110000000000000111111111"
+    "1111111111111111100000000000000111111111111111111111111100000000"
+    "0000000111111111111111111111111000000000000000111111111111111111"
+    "1111110000000000000001111111111111111111111110000000000000000000"
+    "0011111111111111111100000000000000000000011111111111111111100000"
+    "0000000000000000111111111111111111000000000000000000000000000001"
+    "1111111110000000000000000000000000000001111111110000000000000000"
+    "0000000000000011111111100000000000000000000000000000000011111100"
+    "0000000000000000000000000000000000111000000000000000000000000000"
+    "000000000111000000000000000000000000000000000000000"
+)
+
+
+@pytest.mark.parametrize(
+    ("release", "verdicts"), [("7.16.2", OLD_VERDICTS), ("7.17.2", NEW_VERDICTS)]
+)
+def test_the_verdict_is_the_one_of_each_release_of_the_coverage_tool(
+    release: str, verdicts: str
+) -> None:
+    grid = list(product(TOTALS, MINIMUMS, (0, 1, 2)))
+    assert len(grid) == len(verdicts)
+    got = "".join("1" if below_minimum(*row, release) else "0" for row in grid)
+    assert got == verdicts
+
+
+def merge_with_release(
+    tmp_path: Path, release: str, minimum: float, covered: int
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        f"[tool.coverage.report]\nfail_under = {minimum}\n"
     )
+    entry = {
+        "executed_lines": list(range(1, covered + 1)),
+        "missing_lines": list(range(covered + 1, 10001)),
+    }
+    report = {"meta": {"version": release}, "files": {"a.py": entry}}
+    folder = tmp_path / "coverage/shards/1"
+    folder.mkdir(parents=True)
+    (folder / "shard-files.txt").write_text("a\n")
+    (folder / "j.xml").write_text("<testsuite/>")
+    (folder / "c.json").write_text(json.dumps(report))
+    gate = cast(
+        Gate,
+        {
+            "name": "tests",
+            "command": ["uv", "run", "pytest", "--cov"],
+            "shards": 1,
+            "part": "merge",
+            "report": {"tests": "j.xml", "coverage": "c.json"},
+        },
+    )
+    group = cast(Group, {"path": ".", "checks": [gate]})
+    merge_reports(tmp_path, group, gate, gate["command"])
+
+
+@pytest.mark.parametrize(
+    ("covered", "minimum", "fails_with_new_release"),
+    [(6667, 66.9, True), (7037, 70.3, False)],
+)
+def test_the_merge_judges_by_the_release_that_wrote_the_reports(
+    tmp_path: Path, covered: int, minimum: float, fails_with_new_release: bool
+) -> None:
+    new, old = tmp_path / "new", tmp_path / "old"
+    for folder, release, fails in (
+        (new, "7.17.2", fails_with_new_release),
+        (old, "7.16.2", not fails_with_new_release),
+    ):
+        folder.mkdir()
+        if fails:
+            with pytest.raises(ValueError, match="below the minimum"):
+                merge_with_release(folder, release, minimum, covered)
+        else:
+            merge_with_release(folder, release, minimum, covered)
 
 
 @pytest.mark.parametrize(
